@@ -10,8 +10,8 @@ import pandas as pd
 from scipy import sparse as sp
 from scipy.sparse.sputils import IndexMixin
 
-from .. import logging as logg
-from ..utils import merge_dicts
+import logging as logg
+import warnings
 
 
 class StorageType(Enum):
@@ -234,10 +234,10 @@ class AnnData(IndexMixin):
     def var_keys(self):
         """Return keys of variable annotation."""
         return self._keys('var')
-    
+
     def _keys(self, a):
         keys = []
-        for key in self.smp.columns:
+        for key in getattr(self, a).columns:
             mk = _find_corresponding_multicol_key(
                 key, getattr(self, '_keys_multicol_' + a))
             if mk is None: keys.append(key)
@@ -246,7 +246,7 @@ class AnnData(IndexMixin):
 
     @property
     def add(self):
-        raise DeprecationWarning('Use `.self.uns` instead of `.add` in the future.')
+        warnings.warn('Use `.self.uns` instead of `.add` in the future.', DeprecationWarning)
         return self.uns
 
     @property
@@ -492,24 +492,55 @@ class AnnData(IndexMixin):
                 if k in uns:
                     del uns[k]
 
-        smp = pd.DataFrame.from_records(smp, index='index')
-        var = pd.DataFrame.from_records(var, index='index')
+        # transform recarray to dataframe
+        if isinstance(smp, np.ndarray) and isinstance(var, np.ndarray):
 
-        k_to_delete = []
-        for k in uns.keys():
-            if k.endswith('_categories'):
-                k_stripped = k.replace('_categories', '')
-                if k_stripped in smp:
-                    smp[k_stripped] = pd.Categorical.from_codes(
-                        codes=smp[k_stripped].values,
-                        categories=uns[k])
-                if k_stripped in var:
-                    var[k_stripped] = pd.Categorical.from_codes(
-                        codes=smp[k_stripped].values,
-                        categories=uns[k])
-                k_to_delete.append(k)
+            if 'smp_names' in smp.dtype.names:
+                smp = pd.DataFrame.from_records(smp, index='smp_names')
+            elif 'row_names' in smp.dtype.names:
+                smp = pd.DataFrame.from_records(smp, index='row_names')
+            elif 'index' in smp.dtype.names:
+                smp = pd.DataFrame.from_records(smp, index='index')
+            else:
+                smp = pd.DataFrame.from_records(smp)
 
-        for k in k_to_delete:
-            del uns[k]
+            if 'var_names' in var.dtype.names:
+                var = pd.DataFrame.from_records(var, index='var_names')
+            elif 'col_names' in var.dtype.names:
+                var = pd.DataFrame.from_records(var, index='col_names')
+            elif 'index' in var.dtype.names:
+                var = pd.DataFrame.from_records(var, index='index')
+            else:
+                var = pd.DataFrame.from_records(var)
+
+            k_to_delete = []
+            for k in uns.keys():
+                if k.endswith('_categories'):
+                    k_stripped = k.replace('_categories', '')
+                    if k_stripped in smp:
+                        smp[k_stripped] = pd.Categorical.from_codes(
+                            codes=smp[k_stripped].values,
+                            categories=uns[k])
+                    if k_stripped in var:
+                        var[k_stripped] = pd.Categorical.from_codes(
+                            codes=smp[k_stripped].values,
+                            categories=uns[k])
+                    k_to_delete.append(k)
+
+            for k in k_to_delete:
+                del uns[k]
 
         return X, smp, var, uns
+
+
+def merge_dicts(*ds):
+    """Given any number of dicts, shallow copy and merge into a new dict,
+    precedence goes to key value pairs in latter dicts.
+    Note
+    ----
+    http://stackoverflow.com/questions/38987/how-to-merge-two-python-dictionaries-in-a-single-expression
+    """
+    result = ds[0]
+    for d in ds[1:]:
+        result.update(d)
+    return result
