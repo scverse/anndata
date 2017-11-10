@@ -2,14 +2,16 @@ from setuptools import setup, find_packages
 from pathlib import Path
 import versioneer
 
+package_name = 'anndata'
+
 req_path = Path('requires.txt')
 if not req_path.is_file():
-    req_path = Path('scanpy.egg-info') / req_path
+    req_path = Path(package_name + '.egg-info') / req_path
 with req_path.open() as requirements:
     requires = [l.strip() for l in requirements]
 
 setup(
-    name='anndata',
+    name=package_name,
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description='Class for storing an annotated data matrix.',
