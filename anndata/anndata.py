@@ -9,6 +9,7 @@ from enum import Enum
 import numpy as np
 from numpy import ma
 import pandas as pd
+from pandas.core.index import RangeIndex
 from scipy import sparse as sp
 from scipy.sparse.sputils import IndexMixin
 
@@ -42,9 +43,8 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
 
 
 def df_to_records_fixed_width(df):
-    # unstructured array for storing categories
     from pandas.api.types import is_string_dtype, is_categorical
-    uns = {}
+    uns = {}  # unstructured dictionary for storing categories
     names = ['index']
     if is_string_dtype(df.index):
         max_len_index = df.index.map(len).max()
@@ -83,14 +83,14 @@ class AnnData(IndexMixin):
         must contain `X` as ``'X'`` and optionally a field ``'row_names'``
         (``'smp_names'``) that stores sample names; similar for ``'col_names'``
         (``'var_names'``).
-    smp :  pd.DataFrame, np.ndarray, dictionary or None, optional (default: None)
+    smp : pd.DataFrame, dictionary, np.ndarray or None, optional (default: ``None``)
         A #samples × #sample_keys array containing sample names (`index`) and
         other sample annotation in the columns. A passed dict is converted to a
         record array.
-    var : np.ndarray, dict or None, optional (default: None)
-        The same as `smp`, but of shape `n_vars` × `n_var_keys` for annotation of
-        variables.
-    uns : dict or None, optional (default: None)
+    var : pd.DataFrame, dictionary, np.ndarray or None, optional (default: ``None``)
+        The same as `smp`, but of shape #variables × #variable_keys for
+        annotation of variables.
+    uns : dictionary or None, optional (default: ``None``)
         Unstructured annotation for the whole dataset.
     dtype : simple `np.dtype`, optional (default: ``'float32'``)
         Convert data matrix to this type upon initialization.
@@ -159,19 +159,19 @@ class AnnData(IndexMixin):
         # multicolumn keys
         smp_keys_multicol = None
         if uns and '_smp_keys_multicol' in uns:
-            self._keys_multicol_smp = uns['_smp_keys_multicol']
+            self._keys_multicol_smp = list(uns['_smp_keys_multicol'])
             del uns['_smp_keys_multicol']
         elif uns and 'smp_keys_multicol' in uns:
-            self._keys_multicol_smp = uns['smp_keys_multicol']
+            self._keys_multicol_smp = list(uns['smp_keys_multicol'])
             del uns['smp_keys_multicol']
         else:
             self._keys_multicol_smp = []
         var_keys_multicol = None
         if uns and '_var_keys_multicol' in uns:
-            self._keys_multicol_var = uns['_var_keys_multicol']
+            self._keys_multicol_var = list(uns['_var_keys_multicol'])
             del uns['_var_keys_multicol']
         elif uns and 'var_keys_multicol' in uns:
-            self._keys_multicol_var = uns['var_keys_multicol']
+            self._keys_multicol_var = list(uns['var_keys_multicol'])
             del uns['var_keys_multicol']
         else:
             self._keys_multicol_var = []
@@ -185,8 +185,11 @@ class AnnData(IndexMixin):
         elif 'row_names' in smp:
             self.smp = pd.DataFrame(smp, index=smp['row_names'],
                                     columns=[k for k in smp.keys() if k != 'row_names'])
-        else:
+        elif smp is not None and len(smp) > 0:
             self.smp = pd.DataFrame(smp)
+        else:
+            self.smp = pd.DataFrame(index=RangeIndex(0, self.n_smps, name=None))
+
         if var is None:
             self.var = pd.DataFrame(index=np.arange(self.n_vars))
         elif 'var_names' in var:
@@ -195,8 +198,10 @@ class AnnData(IndexMixin):
         elif 'col_names' in var:
             self.var = pd.DataFrame(var, index=var['col_names'],
                                     columns=[k for k in var.keys() if k != 'col_names'])
-        else:
+        elif var is not None and len(var) > 0:
             self.var = pd.DataFrame(var)
+        else:
+            self.var = pd.DataFrame(index=RangeIndex(0, self.n_vars, name=None))
         self._check_dimensions()
 
         # unstructured annotations
@@ -238,7 +243,7 @@ class AnnData(IndexMixin):
         keys_set = set(keys)
         for k in getattr(self, a).columns:
             if k.startswith(key_multicol) and k not in keys_set:
-                getattr(self, a).drop(k, axis='column', inplace=True)
+                getattr(self, a).drop(k, axis=1, inplace=True)
         for ik, k in enumerate(keys):
             getattr(self, a)[k] = values[:, ik]
 
@@ -276,7 +281,7 @@ class AnnData(IndexMixin):
 
     @property
     def add(self):
-        warnings.warn('Use `.self.uns` instead of `.add`, `.add` will bre removed in the future.', FutureWarning)
+        warnings.warn('Use `.self.uns` instead of `.add`, `.add` will bre removed in the future.', UserWarning)
         return self.uns
 
     @property
@@ -375,8 +380,8 @@ class AnnData(IndexMixin):
         Same as adata = adata[:, index], but inplace.
         """
         self.X = self.X[:, index]
-        self.var = self.var.iloc[index]
         self.n_vars = self.X.shape[1]
+        self.var = self.var.iloc[index]
         return None
 
     def inplace_subset_smp(self, index):
@@ -385,7 +390,6 @@ class AnnData(IndexMixin):
         Same as adata = adata[index, :], but inplace.
         """
         self.X = self.X[index, :]
-        self.smp = self.smp.iloc[index]
         raised_warning = False
         for k, v in self.uns.items():
             if isinstance(v, sp.spmatrix) and v.shape == (self.n_smps, self.n_smps):
@@ -395,6 +399,7 @@ class AnnData(IndexMixin):
                               'Consider recomputing the data graph.')
                     raised_warning = True
         self.n_smps = self.X.shape[0]
+        self.smp = self.smp.iloc[index]
         return None
 
     def get_smp_array(self, k):
@@ -455,7 +460,7 @@ class AnnData(IndexMixin):
                              'rows as data has columns ({}), but has {} rows'
                              .format(self.n_vars, self.var.shape[0]))
 
-    def to_dict(self):
+    def to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
 
         It is sufficient for reconstructing the object.
@@ -468,6 +473,13 @@ class AnnData(IndexMixin):
              '_smp_keys_multicol': self._keys_multicol_smp,
              '_var_keys_multicol': self._keys_multicol_var}
         d = merge_dicts(d, self.uns, uns_smp, uns_var)
+        return d
+
+    def to_dict_dataframes(self):
+        d = {'_X': pd.DataFrame(self.X, index=self.smp.index),
+             '_smp': self.smp,
+             '_var': self.var}
+        d = merge_dicts(d, self.uns)
         return d
 
     def from_dict(self, ddata):

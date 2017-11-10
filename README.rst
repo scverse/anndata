@@ -8,8 +8,6 @@
 AnnData
 =======
 
-``anndata.AnnData`` stores a data matrix ``.X`` as an array or sparse matrix,
-    annotation of samples ``.smp`` and variables ``.var`` as dataframes and
-    unstructured annotation ``.uns`` as dictionary.
+``anndata.AnnData`` stores a data matrix ``.X`` as an array or sparse matrix, annotation of samples ``.smp`` and variables ``.var`` as dataframes and unstructured annotation ``.uns`` as dictionary.
 
 Read the `documentation <http://scanpy.readthedocs.io/api/scanpy.api.AnnData.html>`_.

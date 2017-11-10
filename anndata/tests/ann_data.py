@@ -5,11 +5,12 @@ from scipy import sparse as sp
 # we don’t need this in requirements.txt, as it’s only needed for testing
 from pytest import mark
 
-from .ann_data import AnnData
+from anndata import AnnData
 
 
 def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]))
+    AnnData(np.array([[1, 2], [3, 4]]), {}, {})    
     AnnData(ma.array([[1, 2], [3, 4]]), uns={'mask': [0, 1, 1, 0]})
     AnnData(sp.eye(2))
     AnnData(
