@@ -41,6 +41,34 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
     return keys
 
 
+def df_to_records_fixed_width(df):
+    # unstructured array for storing categories
+    from pandas.api.types import is_string_dtype, is_categorical
+    uns = {}
+    names = ['index']
+    if is_string_dtype(df.index):
+        max_len_index = df.index.map(len).max()
+        index = df.index.values.astype('S{}'.format(max_len_index))
+    else:
+        index = df.index.values
+    arrays = [index]
+    for k in df.columns:
+        names.append(k)
+        if is_string_dtype(df[k]):
+            c = df[k].astype('category')
+            uns[k + '_categories'] = c.cat.categories.values
+            arrays.append(c.cat.codes)
+        elif is_categorical(df[k]):
+            uns[k + '_categories'] = df[k].cat.categories
+            arrays.append(df[k].cat.codes)
+        else:
+            arrays.append(df[k].values)
+    formats = [v.dtype for v in arrays]
+    return np.rec.fromarrays(
+        arrays,
+        dtype={'names': names, 'formats': formats}), uns
+
+
 class AnnData(IndexMixin):
     """Store an annotated data matrix.
 
@@ -248,7 +276,7 @@ class AnnData(IndexMixin):
 
     @property
     def add(self):
-        warnings.warn('Use `.self.uns` instead of `.add` in the future.', DeprecationWarning)
+        warnings.warn('Use `.self.uns` instead of `.add`, `.add` will bre removed in the future.', FutureWarning)
         return self.uns
 
     @property
@@ -432,21 +460,14 @@ class AnnData(IndexMixin):
 
         It is sufficient for reconstructing the object.
         """
-        from pandas.api.types import is_string_dtype, is_categorical
-        for c in self.smp.columns:
-            if is_string_dtype(self.smp[c]):
-                cat = self.smp[c].astype('category')
-                self.uns[c + '_categories'] = cat.cat.categories.values
-                self.smp[c] = cat.cat.codes
-            if is_categorical(self.smp[c]):
-                self.uns[c + '_categories'] = self.smp[c].categories
+        smp_rec, uns_smp = df_to_records_fixed_width(self.smp)
+        var_rec, uns_var = df_to_records_fixed_width(self.var)
         d = {'_X': self.X,
-             '_smp': self.smp.to_records(),
-             '_var': self.var.to_records()}
-        for k, v in self.uns.items():
-            d[k] = v
-        d['_smp_keys_multicol'] = self._keys_multicol_smp
-        d['_var_keys_multicol'] = self._keys_multicol_var
+             '_smp': smp_rec,
+             '_var': var_rec,
+             '_smp_keys_multicol': self._keys_multicol_smp,
+             '_var_keys_multicol': self._keys_multicol_var}
+        d = merge_dicts(d, self.uns, uns_smp, uns_var)
         return d
 
     def from_dict(self, ddata):
@@ -506,6 +527,8 @@ class AnnData(IndexMixin):
             else:
                 smp = pd.DataFrame.from_records(smp)
 
+            smp.index = smp.index.astype('U')
+
             if 'var_names' in var.dtype.names:
                 var = pd.DataFrame.from_records(var, index='var_names')
             elif 'col_names' in var.dtype.names:
@@ -514,6 +537,8 @@ class AnnData(IndexMixin):
                 var = pd.DataFrame.from_records(var, index='index')
             else:
                 var = pd.DataFrame.from_records(var)
+
+            var.index = var.index.astype('U')
 
             k_to_delete = []
             for k in uns.keys():
@@ -538,8 +563,7 @@ class AnnData(IndexMixin):
 def merge_dicts(*ds):
     """Given any number of dicts, shallow copy and merge into a new dict,
     precedence goes to key value pairs in latter dicts.
-    Note
-    ----
+
     http://stackoverflow.com/questions/38987/how-to-merge-two-python-dictionaries-in-a-single-expression
     """
     result = ds[0]
