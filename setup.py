@@ -10,11 +10,15 @@ if not req_path.is_file():
 with req_path.open() as requirements:
     requires = [l.strip() for l in requirements]
 
+with open('README.rst') as readme_f:
+    readme = readme_f.read()
+
 setup(
     name=package_name,
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description='Class for storing an annotated data matrix.',
+    long_description=readme,
     url='http://github.com/theislab/anndata',
     author='Alex Wolf, Philipp Angerer',
     author_email='alex.wolf@helmholtz-muenchen.de',
