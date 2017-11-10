@@ -1,3 +1,5 @@
+# Author: Alex Wolf (http://falexwolf.de)
+#         P. Angerer
 """Store an annotated data matrix.
 """
 from collections import Mapping, Sequence
