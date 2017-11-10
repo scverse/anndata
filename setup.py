@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages
 from pathlib import Path
+import versioneer
 
 req_path = Path('requires.txt')
 if not req_path.is_file():
@@ -10,7 +11,7 @@ with req_path.open() as requirements:
 setup(
     name='anndata',
     version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(cmdclass),
+    cmdclass=versioneer.get_cmdclass(),
     description='Class for storing an annotated data matrix.',
     url='http://github.com/theislab/anndata',
     author='Alex Wolf, Philipp Angerer',
