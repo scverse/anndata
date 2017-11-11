@@ -1,5 +1,5 @@
-# Author: Alex Wolf (http://falexwolf.de)
-#         P. Angerer
+# Author: P. Angerer
+#         Alex Wolf (http://falexwolf.de)
 """Store an annotated data matrix.
 """
 from collections import Mapping, Sequence
@@ -12,6 +12,7 @@ import pandas as pd
 from pandas.core.index import RangeIndex
 from scipy import sparse as sp
 from scipy.sparse.sputils import IndexMixin
+from numpy.lib.recfunctions import merge_arrays
 
 import logging as logg
 import warnings
@@ -27,6 +28,91 @@ class StorageType(Enum):
         return tuple(c.value for c in cls.__members__.values())
 
 
+class BoundRecArr(np.recarray):
+    """A np.recarray to which fields can be added using [].
+
+    To enable this, it is bound to a instance of AnnData.
+
+    Parameters
+    ----------
+    source : np.ndarray
+        A (structured) numpy array.
+    parent : object
+        Any object to which the BoundRecArr shall be bound to.
+    attr : string
+        The name of the attribute as which it appears in parent.
+    """
+    _attr_choices = ['smpm', 'varm']
+
+    def __new__(cls, input_array, parent, attr):
+        arr = np.asarray(input_array).view(cls)
+        arr._parent = parent
+        arr._attr = attr
+        return arr
+
+    def __array_finalize__(self, obj):
+        # see InfoArray.__array_finalize__ for comments
+        if obj is None: return
+        self._parent = getattr(obj, '_parent', None)
+        self._attr = getattr(obj, '_attr', None)
+
+    def copy(self):
+        new = super(BoundRecArr, self).copy()
+        new._parent = self._parent
+        return new
+
+    def flipped(self):
+        new_attr = (self._attr_choices[1] if self._attr == self._attr_choices[0]
+                    else self._attr_choices[0])
+        return BoundRecArr(self, self._parent, new_attr)
+
+    def keys(self):
+        return self.dtype.names
+
+    def __setitem__(self, key, arr):
+        if arr.ndim == 1:
+            raise ValueError('Use adata.smp or adata.var for 1-dimensional arrays.')
+        if self.shape[0] != arr.shape[0]:
+            raise ValueError('Can only assign an array of same length ({}), '
+                             'not of length {}.'
+                             .format(self.shape[0], arr.shape[0]))
+        # the following always allocates a new array
+        # even if the key already exists and dimensions match
+        # - TODO: one could check for this case
+        # dtype
+        merged_dtype = []
+        found_key = False
+        for descr in self.dtype.descr:
+            if descr[0] == key:
+                merged_dtype.append((key, arr.dtype, arr.shape[1]))
+                found_key = True
+            else:
+                merged_dtype.append(descr)
+        if not found_key:
+            merged_dtype.append((key, arr.dtype, arr.shape[1]))
+        # create new array
+        new = np.empty(len(self), dtype=merged_dtype)
+        # fill the array
+        for name in new.dtype.names:
+            if name == key:
+                new[name] = arr
+            else:
+                new[name] = self[name]
+        # make it a BoundRecArr
+        # - TODO: why can we not do this step before filling the array?
+        new = BoundRecArr(new, self._parent, self._attr)
+        setattr(self._parent, self._attr, new)
+
+    def to_dataframe(self):
+        """Convert to pandas dataframe."""
+        df = pd.DataFrame(index=RangeIndex(0, self.shape[0], name=None))
+        for key in self.keys():
+            value = self[key]
+            for icolumn, column in enumerate(value.T):
+                df['{}{}'.format(key, icolumn+1)] = column
+        return df
+
+# for backwards compat
 def _find_corresponding_multicol_key(key, keys_multicol):
     """Find the corresponding multicolumn key."""
     for mk in keys_multicol:
@@ -34,7 +120,7 @@ def _find_corresponding_multicol_key(key, keys_multicol):
             return mk
     return None
 
-
+# for backwards compat
 def _gen_keys_from_multicol_key(key_multicol, n_keys):
     """Generates single-column keys from multicolumn key."""
     keys = [('{}{:03}of{:03}')
@@ -85,15 +171,21 @@ class AnnData(IndexMixin):
         (``'var_names'``).
     smp : pd.DataFrame, dictionary, np.ndarray or None, optional (default: ``None``)
         A #samples × #sample_keys array containing sample names (`index`) and
-        other sample annotation in the columns. A passed dict is converted to a
-        record array.
+        other sample annotation in the columns.
     var : pd.DataFrame, dictionary, np.ndarray or None, optional (default: ``None``)
         The same as `smp`, but of shape #variables × #variable_keys for
         annotation of variables.
     uns : dictionary or None, optional (default: ``None``)
         Unstructured annotation for the whole dataset.
+    smpm : np.ndarray, optional (default: ``None``)
+        A structured numpy array with length #samples, intended for storing
+        multidimensional annotation of numeric data types.
+    varm : np.ndarray, optional (default: ``None``)
+        A structured numpy array with length #variables, intended for storing
+        multidimensional annotation of numeric data types.
     dtype : simple `np.dtype`, optional (default: ``'float32'``)
-        Convert data matrix to this type upon initialization.
+        Convert data matrix, smpm and varm to this data type upon
+        initialization.
     single_col : bool, optional (default: ``False``)
         Interpret one-dimensional input array as column.
 
@@ -104,11 +196,13 @@ class AnnData(IndexMixin):
     adata.X[:, 0]``).
     """
 
-    def __init__(self, data, smp=None, var=None, uns=None, dtype='float32', single_col=False):
+    def __init__(self, data, smp=None, var=None, uns=None, smpm=None, varm=None,
+                 dtype='float32', single_col=False):
         if isinstance(data, Mapping):
-            if any((smp, var, uns)):
-                raise ValueError('If `data` is a dict no further arguments must be provided.')
-            X, smp, var, uns = self.from_dict(data)
+            if any((smp, var, uns, smpm, varm)):
+                raise ValueError(
+                    'If `data` is a dict no further arguments must be provided.')
+            X, smp, var, uns, smpm, varm = self.from_dict(data)
         else:
             X = data
 
@@ -156,29 +250,9 @@ class AnnData(IndexMixin):
             self.n_vars = 1
             self.n_smps = 1
 
-        # multicolumn keys
-        smp_keys_multicol = None
-        if uns and '_smp_keys_multicol' in uns:
-            self._keys_multicol_smp = list(uns['_smp_keys_multicol'])
-            del uns['_smp_keys_multicol']
-        elif uns and 'smp_keys_multicol' in uns:
-            self._keys_multicol_smp = list(uns['smp_keys_multicol'])
-            del uns['smp_keys_multicol']
-        else:
-            self._keys_multicol_smp = []
-        var_keys_multicol = None
-        if uns and '_var_keys_multicol' in uns:
-            self._keys_multicol_var = list(uns['_var_keys_multicol'])
-            del uns['_var_keys_multicol']
-        elif uns and 'var_keys_multicol' in uns:
-            self._keys_multicol_var = list(uns['var_keys_multicol'])
-            del uns['var_keys_multicol']
-        else:
-            self._keys_multicol_var = []
-
         # annotations
         if smp is None:
-            self.smp = pd.DataFrame(index=np.arange(self.n_smps))
+            self.smp = pd.DataFrame(index=RangeIndex(0, self.n_smps, name=None))
         elif 'smp_names' in smp:
             self.smp = pd.DataFrame(smp, index=smp['smp_names'],
                                     columns=[k for k in smp.keys() if k != 'smp_names'])
@@ -191,7 +265,7 @@ class AnnData(IndexMixin):
             self.smp = pd.DataFrame(index=RangeIndex(0, self.n_smps, name=None))
 
         if var is None:
-            self.var = pd.DataFrame(index=np.arange(self.n_vars))
+            self.var = pd.DataFrame(index=RangeIndex(0, self.n_vars, name=None))
         elif 'var_names' in var:
             self.var = pd.DataFrame(var, index=var['var_names'],
                                     columns=[k for k in var.keys() if k != 'var_names'])
@@ -202,10 +276,43 @@ class AnnData(IndexMixin):
             self.var = pd.DataFrame(var)
         else:
             self.var = pd.DataFrame(index=RangeIndex(0, self.n_vars, name=None))
-        self._check_dimensions()
 
         # unstructured annotations
         self.uns = uns or {}
+
+        # multi-dimensional array annotations
+        if smpm is None: smpm = np.empty(self.n_smps, dtype=[])
+        if varm is None: varm = np.empty(self.n_vars, dtype=[])
+        self.smpm = BoundRecArr(smpm, self, 'smpm')
+        self.varm = BoundRecArr(varm, self, 'varm')
+
+        self._check_dimensions()
+
+        # multicolumn keys
+        # all of the rest is only for backwards compat
+        if uns and '_smp_keys_multicol' in uns:
+            _keys_multicol_smp = list(uns['_smp_keys_multicol'])
+            del uns['_smp_keys_multicol']
+        elif uns and 'smp_keys_multicol' in uns:
+            _keys_multicol_smp = list(uns['smp_keys_multicol'])
+            del uns['smp_keys_multicol']
+        else:
+            _keys_multicol_smp = []
+        if uns and '_var_keys_multicol' in uns:
+            _keys_multicol_var = list(uns['_var_keys_multicol'])
+            del uns['_var_keys_multicol']
+        elif uns and 'var_keys_multicol' in uns:
+            _keys_multicol_var = list(uns['var_keys_multicol'])
+            del uns['var_keys_multicol']
+        else:
+            _keys_multicol_var = []
+
+        # now, for compat, fill the old multicolumn entries into smpm and varm
+        # and remove them from smp and var
+        for key in _keys_multicol_smp:
+            self.smpm[key] = self._get_multicol_field_smp(key)
+        for key in _keys_multicol_var:
+            self.varm[key] = self._get_multicol_field_var(key)
 
     def __setattr__(self, key, value):
         if key in {'smp', 'var'}:
@@ -219,65 +326,50 @@ class AnnData(IndexMixin):
             self._check_dimensions(key)
 
     def __contains__(self, key):
-        raise AttributeError("AnnData has no attribute __contains__, don't check `in adata`.")
+        raise AttributeError('AnnData has no attribute __contains__, don\'t check `in adata`.')
 
     def __repr__(self):
         return ('AnnData object with n_smps × n_vars= {} × {}\n'
                 '    smp_keys = {}\n'
                 '    var_keys = {}\n'
-                '    uns_keys = {}'
+                '    uns_keys = {}\n'
+                '    smpm_keys = {}\n'
+                '    varm_keys = {}'
                 .format(self.n_smps, self.n_vars,
-                        self.smp_keys(), self.var_keys(), sorted(list(self.uns.keys()))))
+                        self.smp_keys(), self.var_keys(),
+                        sorted(list(self.uns.keys())),
+                        self.smpm_keys(), self.varm_keys()))
 
-    def set_multicol_field_smp(self, key_multicol, values):
-        self._set_multicol_field('smp', key_multicol, values)
+    def _get_multicol_field_smp(self, key_multicol):
+        return self._get_and_delete_multicol_field('smp', key_multicol)
 
-    def set_multicol_field_var(self, key_multicol, values):
-        self._set_multicol_field('var', key_multicol, values)
+    def _get_multicol_field_var(self, key_multicol):
+        return self._get_and_delete_multicol_field('var', key_multicol)
 
-    def _set_multicol_field(self, a, key_multicol, values):
-        if key_multicol not in getattr(self, '_keys_multicol_' + a):
-            getattr(self, '_keys_multicol_' + 'smp').append(key_multicol)
-        keys = _gen_keys_from_multicol_key(key_multicol, len(values[0]))
-        # remove all fields from the array that are not among the new keys
-        keys_set = set(keys)
-        for k in getattr(self, a).columns:
-            if k.startswith(key_multicol) and k not in keys_set:
-                getattr(self, a).drop(k, axis=1, inplace=True)
-        for ik, k in enumerate(keys):
-            getattr(self, a)[k] = values[:, ik]
-
-    def get_multicol_field_smp(self, key_multicol):
-        return self._get_multicol_field('smp', key_multicol)
-
-    def get_multicol_field_var(self, key_multicol):
-        return self._get_multicol_field('var', key_multicol)
-
-    def _get_multicol_field(self, a, key_multicol):
-        if key_multicol not in getattr(self, '_keys_multicol_' + a):
-            raise KeyError('Only multicolumn keys are valid.')
+    def _get_and_delete_multicol_field(self, a, key_multicol):
         keys = []
         for k in getattr(self, a).columns:
             if k.startswith(key_multicol):
                 keys.append(k)
-        return getattr(self, a)[keys].values
+        values = getattr(self, a)[keys].values
+        getattr(self, a).drop(keys, axis=1, inplace=True)
+        return values
 
     def smp_keys(self):
-        """Return keys of sample annotation."""
-        return self._keys('smp')
+        """Return keys of sample annotation ``smp``."""
+        return self.smp.keys().tolist()
 
     def var_keys(self):
-        """Return keys of variable annotation."""
-        return self._keys('var')
+        """Return keys of variable annotation ``var``."""
+        return self.var.keys().tolist()
 
-    def _keys(self, a):
-        keys = []
-        for key in getattr(self, a).columns:
-            mk = _find_corresponding_multicol_key(
-                key, getattr(self, '_keys_multicol_' + a))
-            if mk is None: keys.append(key)
-            elif mk not in keys: keys.append(mk)
-        return keys
+    def smpm_keys(self):
+        """Return keys of sample annotation ``smpm``."""
+        return list(self.smpm.keys())
+
+    def varm_keys(self):
+        """Return keys of variable annotation ``varm``."""
+        return list(self.varm.keys())
 
     @property
     def add(self):
@@ -303,7 +395,7 @@ class AnnData(IndexMixin):
         self.var.index = names
 
     def uns_keys(self):
-        """Return keys of unstional unstructured annotation."""
+        """Return keys of unstructured annotation."""
         return self.uns.keys()
 
     def _normalize_indices(self, packed_index):
@@ -355,23 +447,25 @@ class AnnData(IndexMixin):
         # http://stackoverflow.com/questions/31916617/using-keyword-arguments-in-getitem-method-in-python
         smp, var = self._normalize_indices(index)
         X = self.X[smp, var]
-        smp_ann = self.smp.iloc[smp]
-        var_ann = self.var.iloc[var]
-        assert smp_ann.shape[0] == X.shape[0], (smp, smp_ann)
-        assert var_ann.shape[0] == X.shape[1], (var, var_ann)
-        uns_ann = self.uns.copy()
+        smp_new = self.smp.iloc[smp]
+        smpm_new = self.smpm[smp]
+        var_new = self.var.iloc[var]
+        varm_new = self.varm[var]
+        assert smp_new.shape[0] == X.shape[0], (smp, smp_new)
+        assert var_new.shape[0] == X.shape[1], (var, var_new)
+        uns_new = self.uns.copy()
         # slice sparse spatrices of n_smps × n_smps in self.uns
         if not (isinstance(smp, slice) and
                 smp.start is None and smp.step is None and smp.stop is None):
             raised_warning = False
             for k, v in self.uns.items():  # TODO: make sure this really works as expected
                 if isinstance(v, sp.spmatrix) and v.shape == (self.n_smps, self.n_smps):
-                    uns_ann[k] = v.tocsc()[:, smp].tocsr()[smp, :]
+                    uns_new[k] = v.tocsc()[:, smp].tocsr()[smp, :]
                     if not raised_warning:
                         logg.warn('Slicing adjacency matrices can be dangerous. '
                                   'Consider recomputing the data graph.')
                         raised_warning = True
-        adata = AnnData(X, smp_ann, var_ann, uns_ann)
+        adata = AnnData(X, smp_new, var_new, uns_new, smpm_new, varm_new)
         return adata
 
     def inplace_subset_var(self, index):
@@ -382,6 +476,7 @@ class AnnData(IndexMixin):
         self.X = self.X[:, index]
         self.n_vars = self.X.shape[1]
         self.var = self.var.iloc[index]
+        self.varm = self.varm[index]
         return None
 
     def inplace_subset_smp(self, index):
@@ -391,6 +486,7 @@ class AnnData(IndexMixin):
         """
         self.X = self.X[index, :]
         raised_warning = False
+        # TODO: solve this in a better way, also for var
         for k, v in self.uns.items():
             if isinstance(v, sp.spmatrix) and v.shape == (self.n_smps, self.n_smps):
                 self.uns[k] = v.tocsc()[:, index].tocsr()[index, :]
@@ -400,6 +496,7 @@ class AnnData(IndexMixin):
                     raised_warning = True
         self.n_smps = self.X.shape[0]
         self.smp = self.smp.iloc[index]
+        self.smpm = self.smpm[index]
         return None
 
     def get_smp_array(self, k):
@@ -437,28 +534,48 @@ class AnnData(IndexMixin):
         Sample axis (rows) and variable axis are interchanged. No additional memory.
         """
         if sp.isspmatrix_csr(self.X):
-            return AnnData(self.X.T.tocsr(), self.var, self.smp, self.uns)
-        return AnnData(self.X.T, self.var, self.smp, self.uns)
+            return AnnData(self.X.T.tocsr(), self.var, self.smp, self.uns,
+                           self.varm.flipped(), self.smpm.flipped())
+        return AnnData(self.X.T, self.var, self.smp, self.uns,
+                       self.varm.flipped(), self.smpm.flipped())
 
     T = property(transpose)
 
     def copy(self):
         """Full copy with memory allocated."""
-        return AnnData(self.X.copy(), self.smp.copy(), self.var.copy(), self.uns.copy())
+        return AnnData(self.X.copy(), self.smp.copy(), self.var.copy(), self.uns.copy(),
+                       self.smpm.copy(), self.varm.copy())
 
     def _check_dimensions(self, key=None):
         if key is None:
-            key = {'smp', 'var'}
+            key = {'smp', 'var', 'smpm', 'varm'}
         else:
             key = {key}
         if 'smp' in key and len(self.smp) != self.n_smps:
-            raise ValueError('Sample annotation needs to have the same amount of '
-                             'rows as data has ({}), but has {} rows'
+            raise ValueError('Sample annotation `smp` needs to have the same amount of '
+                             'rows as data ({}), but has {} rows'
                              .format(self.n_smps, self.smp.shape[0]))
         if 'var' in key and len(self.var) != self.n_vars:
-            raise ValueError('Feature annotation needs to have the same amount of '
-                             'rows as data has columns ({}), but has {} rows'
+            raise ValueError('Variable annotation `var` needs to have the same amount of '
+                             'columns as data  ({}), but has {} rows'
                              .format(self.n_vars, self.var.shape[0]))
+        if 'smpm' in key and len(self.smpm) != self.n_smps:
+            raise ValueError('Sample annotation `smpm` needs to have the same amount of '
+                             'rows as data ({}), but has {} rows'
+                             .format(self.n_smps, self.smp.shape[0]))
+        if 'varm' in key and len(self.varm) != self.n_vars:
+            raise ValueError('Variable annotation `varm` needs to have the same amount of '
+                             'columns as data ({}), but has {} rows'
+                             .format(self.n_vars, self.var.shape[0]))
+
+    def to_dict_dataframes(self):
+        d = {'X': pd.DataFrame(self.X, index=self.smp.index),
+             'smp': self.smp,
+             'var': self.var,
+             'smpm': self.smpm.to_dataframe(),
+             'varm': self.varm.to_dataframe()}
+        d = merge_dicts(d, self.uns)
+        return d
 
     def to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
@@ -470,62 +587,56 @@ class AnnData(IndexMixin):
         d = {'_X': self.X,
              '_smp': smp_rec,
              '_var': var_rec,
-             '_smp_keys_multicol': self._keys_multicol_smp,
-             '_var_keys_multicol': self._keys_multicol_var}
+             '_smpm': self.smpm,
+             '_varm': self.varm}
         d = merge_dicts(d, self.uns, uns_smp, uns_var)
-        return d
-
-    def to_dict_dataframes(self):
-        d = {'_X': pd.DataFrame(self.X, index=self.smp.index),
-             '_smp': self.smp,
-             '_var': self.var}
-        d = merge_dicts(d, self.uns)
         return d
 
     def from_dict(self, ddata):
         """Allows to construct an instance of AnnData from a dictionary.
+
+        In particular, from a dict that has been written using
+        ``AnnData.to_dict_fixed_width_arrays``.
         """
-        uns = dict(ddata.items())
-        del ddata
-        if '_X' in uns:
-            X = uns['_X']
-            del uns['_X']
-        elif 'X' in uns:
-            X = uns['X']
-            del uns['X']
-        if ('_smp' in uns and isinstance(uns['_smp'], (np.ndarray, pd.DataFrame))
-            and '_var' in uns and isinstance(uns['_var'], (np.ndarray, pd.DataFrame))):
-            smp = uns['_smp']
-            del uns['_smp']
-            var = uns['_var']
-            del uns['_var']
-        elif ('smp' in uns and isinstance(uns['smp'], (np.ndarray, pd.DataFrame))
-              and 'var' in uns and isinstance(uns['var'], (np.ndarray, pd.DataFrame))):
-            smp = uns['smp']
-            del uns['smp']
-            var = uns['var']
-            del uns['var']
+        # data matrix
+        if '_X' in ddata:
+            X = ddata['_X']
+            del ddata['_X']
+        elif 'X' in ddata:
+            X = ddata['X']
+            del ddata['X']
+        # simple annotation
+        if ('_smp' in ddata and isinstance(ddata['_smp'], (np.ndarray, pd.DataFrame))
+            and '_var' in ddata and isinstance(ddata['_var'], (np.ndarray, pd.DataFrame))):
+            smp = ddata['_smp']
+            del ddata['_smp']
+            var = ddata['_var']
+            del ddata['_var']
+        elif ('smp' in ddata and isinstance(ddata['smp'], (np.ndarray, pd.DataFrame))
+              and 'var' in ddata and isinstance(ddata['var'], (np.ndarray, pd.DataFrame))):
+            smp = ddata['smp']
+            del ddata['smp']
+            var = ddata['var']
+            del ddata['var']
         else:
             smp, var = OrderedDict(), OrderedDict()
-            if 'row_names' in uns:
-                smp['smp_names'] = uns['row_names']
-                del uns['row_names']
-            elif 'smp_names' in uns:
-                smp['smp_names'] = uns['smp_names']
-                del uns['smp_names']
-
-            if 'col_names' in uns:
-                var['var_names'] = uns['col_names']
-                del uns['col_names']
-            elif 'var_names' in uns:
-                var['var_names'] = uns['var_names']
-                del uns['var_names']
-
-            smp = merge_dicts(smp, uns.get('row', {}), uns.get('smp', {}))
-            var = merge_dicts(var, uns.get('col', {}), uns.get('var', {}))
+            if 'row_names' in ddata:
+                smp['smp_names'] = ddata['row_names']
+                del ddata['row_names']
+            elif 'smp_names' in ddata:
+                smp['smp_names'] = ddata['smp_names']
+                del ddata['smp_names']
+            if 'col_names' in ddata:
+                var['var_names'] = ddata['col_names']
+                del ddata['col_names']
+            elif 'var_names' in ddata:
+                var['var_names'] = ddata['var_names']
+                del ddata['var_names']
+            smp = merge_dicts(smp, ddata.get('row', {}), ddata.get('smp', {}))
+            var = merge_dicts(var, ddata.get('col', {}), ddata.get('var', {}))
             for k in ['row', 'smp', 'col', 'var']:
-                if k in uns:
-                    del uns[k]
+                if k in ddata:
+                    del ddata[k]
 
         # transform recarray to dataframe
         if isinstance(smp, np.ndarray) and isinstance(var, np.ndarray):
@@ -538,7 +649,6 @@ class AnnData(IndexMixin):
                 smp = pd.DataFrame.from_records(smp, index='index')
             else:
                 smp = pd.DataFrame.from_records(smp)
-
             smp.index = smp.index.astype('U')
 
             if 'var_names' in var.dtype.names:
@@ -549,27 +659,48 @@ class AnnData(IndexMixin):
                 var = pd.DataFrame.from_records(var, index='index')
             else:
                 var = pd.DataFrame.from_records(var)
-
             var.index = var.index.astype('U')
 
+            # these are the category fields
             k_to_delete = []
-            for k in uns.keys():
+            for k in ddata.keys():
                 if k.endswith('_categories'):
                     k_stripped = k.replace('_categories', '')
                     if k_stripped in smp:
                         smp[k_stripped] = pd.Categorical.from_codes(
                             codes=smp[k_stripped].values,
-                            categories=uns[k])
+                            categories=ddata[k])
                     if k_stripped in var:
                         var[k_stripped] = pd.Categorical.from_codes(
                             codes=smp[k_stripped].values,
-                            categories=uns[k])
+                            categories=ddata[k])
                     k_to_delete.append(k)
 
             for k in k_to_delete:
-                del uns[k]
+                del ddata[k]
 
-        return X, smp, var, uns
+        # multicolumn annotation
+        if 'smpm' in ddata:
+            smpm = ddata['smpm']
+            del ddata['smpm']
+        elif '_smpm' in ddata:
+            smpm = ddata['_smpm']
+            del ddata['_smpm']
+        else:
+            smpm = None
+        if 'varm' in ddata:
+            varm = ddata['varm']
+            del ddata['varm']
+        elif '_varm' in ddata:
+            varm = ddata['_varm']
+            del ddata['_varm']
+        else:
+            varm = None
+
+        # the remaining fields are the unstructured annotation
+        uns = ddata
+
+        return X, smp, var, uns, smpm, varm
 
 
 def merge_dicts(*ds):

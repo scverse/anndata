@@ -10,7 +10,7 @@ from anndata import AnnData
 
 def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]))
-    AnnData(np.array([[1, 2], [3, 4]]), {}, {})    
+    AnnData(np.array([[1, 2], [3, 4]]), {}, {})
     AnnData(ma.array([[1, 2], [3, 4]]), uns={'mask': [0, 1, 1, 0]})
     AnnData(sp.eye(2))
     AnnData(
@@ -164,25 +164,13 @@ def test_set_add():
 #     print(adata.smp)
 
 
-def test_multicol_getitem():
-    adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
-    # 'a' and 'b' label columns
-    adata.smp['a'] = [0, 2]
-    adata.smp['b'] = [1, 3]
-    assert 0 in adata.smp['a']
-    assert adata.smp['b'].tolist() == [1, 3]
-    assert adata.smp[['a', 'b']].values.tolist() == [[0, 1], [2, 3]]
-
-
-def test_set_multicol_field():
+def test_multicol():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
     # 'c' keeps the columns as should be
-    adata.set_multicol_field_smp('c', np.array([[0, 1], [2, 3]]))
-    assert adata.smp_keys() == ['c']
-    assert adata.smp.columns.tolist() == ['c001of002', 'c002of002']
-    assert adata.smp[['c001of002', 'c002of002']].values.tolist() == [[0, 1], [2, 3]]
-    assert adata.get_multicol_field_smp('c').tolist() == [[0, 1], [2, 3]]
-
+    adata.smpm['c'] = np.array([[0., 1.], [2, 3]])
+    assert adata.smpm_keys() == ['c']
+    assert adata.smpm['c'].tolist() == [[0., 1.], [2, 3]]
+    
 
 def test_n_smps():
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
