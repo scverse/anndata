@@ -143,7 +143,7 @@ def test_append_col():
         adata.smp['new4'] = 'far too long'.split()
 
 
-def test_set_add():
+def test_set_smp():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
     adata.smp = pd.DataFrame({'a': [3, 4]})
