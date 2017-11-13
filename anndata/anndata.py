@@ -309,8 +309,24 @@ class AnnData(IndexMixin):
         """Data matrix of shape `n_smps` × `n_vars` (`np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`)."""
         return self._data
 
-    X = property(data)
-    """Shortcut for data matrix `data`."""
+    @data.setter
+    def data(self, value):
+        if not self._data.shape == value.shape:
+            raise ValueError('Data matrix has wrong shape {}, need to be {}'
+                             .format(value.shape, self._data.shape))
+        self._data = value
+
+    @property
+    def X(self):
+        """Shortcut for data matrix `data`."""
+        return self._data
+
+    @X.setter
+    def X(self, value):
+        if not self._data.shape == value.shape:
+            raise ValueError('Data matrix has wrong shape {}, need to be {}'
+                             .format(value.shape, self._data.shape))
+        self._data = value
 
     @property
     def n_smps(self):
@@ -512,7 +528,8 @@ class AnnData(IndexMixin):
         self._data = self._data[:, index]
         self._n_vars = self._data.shape[1]
         self._var = self._var.iloc[index]
-        self._varm = self._varm[index]
+        # TODO: the following should not be necessary!
+        self._varm = BoundRecArr(self._varm[index], self, 'varm')
         return None
 
     def _inplace_subset_smp(self, index):
@@ -532,7 +549,8 @@ class AnnData(IndexMixin):
                     raised_warning = True
         self._n_smps = self._data.shape[0]
         self._smp = self._smp.iloc[index]
-        self._smpm = self._smpm[index]
+        # TODO: the following should not be necessary!
+        self._smpm = BoundRecArr(self._smpm[index], self, 'smpm')
         return None
 
     def _get_smp_array(self, k):
@@ -645,10 +663,10 @@ class AnnData(IndexMixin):
             data = ddata['data']
             del ddata['data']
         elif '_X' in ddata:
-            X = ddata['_X']
+            data = ddata['_X']
             del ddata['_X']
         elif 'X' in ddata:
-            X = ddata['X']
+            data = ddata['X']
             del ddata['X']
         # simple annotation
         if ('_smp' in ddata and isinstance(ddata['_smp'], (np.ndarray, pd.DataFrame))
@@ -745,7 +763,7 @@ class AnnData(IndexMixin):
         # the remaining fields are the unstructured annotation
         uns = ddata
 
-        return X, smp, var, uns, smpm, varm
+        return data, smp, var, uns, smpm, varm
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
