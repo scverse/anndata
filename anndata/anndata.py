@@ -287,11 +287,6 @@ class AnnData(IndexMixin):
         # clean up old formats
         self._clean_up_old_format(uns)
 
-        # just for backwards compatibility
-        # TODO: we do not make it a property as then, it appears as the very
-        #       first item in the docs
-        self.add = self._uns
-
     def __repr__(self):
         return ('AnnData object with n_smps × n_vars= {} × {}\n'
                 '    smp_keys = {}\n'
@@ -371,7 +366,20 @@ class AnnData(IndexMixin):
 
     @uns.setter
     def uns(self, value):
-        """Unstructured annotation (ordered dictionary)."""
+        self._uns = value
+
+    @property
+    def add(self):
+        """Deprecated, remains for backwards compatibility."""
+        # FutureWarning and DeprecationWarning are not visible by default, use print
+        print('WARNING: use attribute `.uns` instead of `.add`, '
+              '`.add` will be removed in the future.')
+        return self._uns
+
+    @add.setter
+    def add(self, value):
+        print('WARNING: use attribute `.uns` instead of `.add`, '
+              '`.add` will be removed in the future.')
         self._uns = value
 
     @property
@@ -448,7 +456,7 @@ class AnnData(IndexMixin):
 
     def uns_keys(self):
         """List keys of unstructured annotation."""
-        return list(self._uns.keys())
+        return sorted(list(self._uns.keys()))
 
     def _normalize_indices(self, packed_index):
         smp, var = super(AnnData, self)._unpack_index(packed_index)
