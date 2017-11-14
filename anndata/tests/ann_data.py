@@ -209,8 +209,12 @@ def test_concatenate():
     adata = adata1.concatenate([adata2, adata3])
     assert adata.n_vars == 2
     assert adata.smp_keys() == ['anno1', 'anno2', 'batch']
+    adata = adata1.concatenate([adata2, adata3], batch_key='batch1')
+    assert adata.smp_keys() == ['anno1', 'anno2', 'batch1']
+    adata = adata1.concatenate([adata2, adata3], batch_categories=['a1', 'a2', 'a3'])
+    assert adata.smp['batch'].cat.categories.tolist() == ['a1', 'a2', 'a3']
 
-
+    
 def test_concatenate_sparse():
     from scipy.sparse import csr_matrix
     adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),

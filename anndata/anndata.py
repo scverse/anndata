@@ -648,7 +648,7 @@ class AnnData(IndexMixin):
         return AnnData(self._data.copy(), self._smp.copy(), self._var.copy(), self._uns.copy(),
                        self._smpm.copy(), self._varm.copy())
 
-    def concatenate(self, adatas):
+    def concatenate(self, adatas, batch_key='batch', batch_categories=None):
         """Concatenate along the samples axis after intersecting the variables names.
 
         The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
@@ -657,7 +657,11 @@ class AnnData(IndexMixin):
         ----------
         adatas : AnnData or list of AnnData
             AnnData matrices to concatenate with.
-
+        batch_key : `str` (default: 'batch')
+            Add the batch annotation to `.smp` using this key.
+        batch_categories : list (default: `range(len(adatas)+1)`)
+            Use these as categories for the batch annotation.
+  
         Returns
         -------
         adata : AnnData
@@ -670,10 +674,15 @@ class AnnData(IndexMixin):
             joint_variables = np.intersect1d(
                 joint_variables, adata2.var_names, assume_unique=True)
         adatas_to_concat = []
-        categories = [str(i) for i in range(len(adatas)+1)]
+        if batch_categories is None:
+            categories = [str(i) for i in range(len(adatas)+1)]
+        elif len(batch_categories) == len(adatas)+1:
+            categories = batch_categories
+        else:
+            raise ValueError('Provide as many `batch_categories` as `adatas`.')
         for i, ad in enumerate([self] + adatas):
             ad = ad[:, joint_variables]
-            ad.smp['batch'] = pd.Categorical(
+            ad.smp[batch_key] = pd.Categorical(
                 ad.n_smps*[categories[i]], categories=categories)
             adatas_to_concat.append(ad)
         Xs = [ad.X for ad in adatas_to_concat]
