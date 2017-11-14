@@ -237,6 +237,38 @@ class AnnData(IndexMixin):
 
         ad = AnnData(np.ones((2, 2)))
         ad[:, 0].X == ad.X[:, 0]
+
+    Examples
+    --------
+    >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+    >>>                  {'smp_names': ['s1', 's2'],
+    >>>                   'anno1': ['c1', 'c2']},
+    >>>                  {'var_names': ['a', 'b', 'c']})
+    >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+    >>>                  {'smp_names': ['s3', 's4'],
+    >>>                   'anno1': ['c3', 'c4']},
+    >>>                  {'var_names': ['b', 'c', 'd']})
+    >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+    >>>                  {'smp_names': ['s5', 's6'],
+    >>>                   'anno2': ['d3', 'd4']},
+    >>>                  {'var_names': ['b', 'c', 'd']})
+    >>>
+    >>> adata = adata1.concatenate([adata2, adata3])
+    >>> adata.X
+    [[ 2.  3.]
+     [ 5.  6.]
+     [ 1.  2.]
+     [ 4.  5.]
+     [ 1.  2.]
+     [ 4.  5.]]
+    >>> adata.smp
+       anno1 anno2 batch
+    s1    c1   NaN     0
+    s2    c2   NaN     0
+    s3    c3   NaN     1
+    s4    c4   NaN     1
+    s5   NaN    d3     2
+    s6   NaN    d4     2
     """
 
     def __init__(self, data, smp=None, var=None, uns=None, smpm=None, varm=None,
@@ -607,6 +639,42 @@ class AnnData(IndexMixin):
         """Full copy with memory allocated."""
         return AnnData(self._data.copy(), self._smp.copy(), self._var.copy(), self._uns.copy(),
                        self._smpm.copy(), self._varm.copy())
+
+    def concatenate(self, adatas):
+        """Concatenate along the samples axis after intersecting the variables names.
+
+        The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
+
+        Parameters
+        ----------
+        adatas : AnnData or list of AnnData
+            AnnData matrices to concatenate with.
+
+        Returns
+        -------
+        adata : AnnData
+            The concatenated AnnData, where `adata.smp['batch']` stores a
+            categorical variable labeling the batch.
+        """
+        if isinstance(adatas, AnnData): adatas = [adatas]
+        joint_variables = self.var_names
+        for adata2 in adatas:
+            joint_variables = np.intersect1d(
+                joint_variables, adata2.var_names, assume_unique=True)
+        adatas_to_concat = []
+        categories = [str(i) for i in range(len(adatas)+1)]
+        for i, ad in enumerate([self] + adatas):
+            ad = ad[:, joint_variables]
+            ad.smp['batch'] = pd.Categorical(
+                ad.n_smps*[categories[i]], categories=categories)
+            adatas_to_concat.append(ad)
+        X = np.concatenate([ad.X for ad in adatas_to_concat])
+        smp = pd.concat([ad.smp for ad in adatas_to_concat])
+        smpm = np.concatenate([ad.smpm for ad in adatas_to_concat])
+        var = adatas_to_concat[0].var
+        varm = adatas_to_concat[0].varm
+        uns = adatas_to_concat[0].uns
+        return AnnData(X, smp, var, uns, smpm, varm)
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, don\'t check `in adata`.')
