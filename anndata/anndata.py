@@ -668,7 +668,12 @@ class AnnData(IndexMixin):
             ad.smp['batch'] = pd.Categorical(
                 ad.n_smps*[categories[i]], categories=categories)
             adatas_to_concat.append(ad)
-        X = np.concatenate([ad.X for ad in adatas_to_concat])
+        Xs = [ad.X for ad in adatas_to_concat]
+        if sp.issparse(self.X):
+            from scipy.sparse import vstack
+            X = vstack(Xs)
+        else:
+            X = np.concatenate(Xs)
         smp = pd.concat([ad.smp for ad in adatas_to_concat])
         smpm = np.concatenate([ad.smpm for ad in adatas_to_concat])
         var = adatas_to_concat[0].var

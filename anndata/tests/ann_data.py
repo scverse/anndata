@@ -196,6 +196,24 @@ def test_concatenate():
     assert adata.n_vars == 2
     assert adata.smp_keys() == ['anno1', 'anno2', 'batch']
 
+
+def test_concatenate_sparse():
+    from scipy.sparse import csr_matrix
+    adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
+                     {'smp_names': ['s1', 's2'],
+                      'anno1': ['c1', 'c2']},
+                     {'var_names': ['a', 'b', 'c']})
+    adata2 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
+                     {'smp_names': ['s3', 's4'],
+                      'anno1': ['c3', 'c4']},
+                     {'var_names': ['b', 'c', 'd']})
+    adata3 = AnnData(csr_matrix([[1, 2, 0], [0, 5, 6]]),
+                     {'smp_names': ['s5', 's6'],
+                      'anno2': ['d3', 'd4']},
+                     {'var_names': ['b', 'c', 'd']})
+    adata = adata1.concatenate([adata2, adata3])
+    assert adata.n_vars == 2
+
     
 # TODO: remove logging and actually test values
 # from scanpy import logging as logg
