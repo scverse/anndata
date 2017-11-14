@@ -100,6 +100,20 @@ def test_slicing_strings():
     with raises(IndexError): _ = adata[:, 'a':'X']
 
 
+def test_slicing_series():
+    adata = AnnData(
+        np.array([[1, 2], [3, 4], [5, 6]]),
+        dict(smp_names=['A', 'B', 'C']),
+        dict(var_names=['a', 'b']))
+    df = pd.DataFrame({'a': ['1', '2', '2']})
+    df1 = pd.DataFrame({'b': ['1', '2']})
+    print(adata[df['a'].values == '2'].X)
+    print(adata[df['a'] == '2'].X)
+    print(adata[:, df1['b'].values == '2'].X)
+    print(adata[:, df1['b'] == '2'].X)
+    assert adata[df['a'].values == '2'].X.tolist() == adata[df['a'] == '2'].X.tolist()
+    assert adata[:, df1['b'].values == '2'].X.tolist() == adata[:, df1['b'] == '2'].X.tolist()
+
 def test_get_subset_annotation():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                     dict(S=['A', 'B']),
@@ -170,7 +184,7 @@ def test_multicol():
     adata.smpm['c'] = np.array([[0., 1.], [2, 3]])
     assert adata.smpm_keys() == ['c']
     assert adata.smpm['c'].tolist() == [[0., 1.], [2, 3]]
-    
+
 
 def test_n_smps():
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
@@ -214,7 +228,7 @@ def test_concatenate_sparse():
     adata = adata1.concatenate([adata2, adata3])
     assert adata.n_vars == 2
 
-    
+
 # TODO: remove logging and actually test values
 # from scanpy import logging as logg
 

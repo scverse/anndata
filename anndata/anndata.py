@@ -491,6 +491,14 @@ class AnnData(IndexMixin):
         return sorted(list(self._uns.keys()))
 
     def _normalize_indices(self, packed_index):
+        # deal with slicing with pd.Series
+        if isinstance(packed_index, pd.Series):
+            packed_index = packed_index.values
+        if isinstance(packed_index, tuple) and len(packed_index) == 2:
+            if isinstance(packed_index[1], pd.Series):
+                packed_index = packed_index[0], packed_index[1].values
+            if isinstance(packed_index[0], pd.Series):
+                packed_index = packed_index[0].values, packed_index[1]
         smp, var = super(AnnData, self)._unpack_index(packed_index)
         smp = self._normalize_index(smp, self.smp_names)
         var = self._normalize_index(var, self.var_names)
