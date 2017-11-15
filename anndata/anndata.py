@@ -204,9 +204,27 @@ def _gen_dataframe(anno, length, index_name1, index_name2):
 class AnnData(IndexMixin):
     """Store an annotated data matrix.
 
-    Stores a data matrix ``.data`` as an array or sparse matrix, annotation of
-    samples ``.smp`` and variables ``.var`` as dataframes and unstructured
-    annotation ``.uns`` as dictionary.
+    Stores a data matrix (``.data``), dataframe-like sample (``.smp``)
+    and variable (``.var``) annotation and unstructured dict-like
+    annotation (``.uns``).
+
+    .. raw:: html
+
+        <img src="http://falexwolf.de/img/scanpy/anndata.svg" style="width: 300px; margin: 10px 0px 15px 20px">
+
+    Values can be retrieved and appended via ``.smp['key1']`` and
+    ``.var['key2']``. Sample and variable names can be accessed via
+    ``.smp_names`` and ``.var_names``, respectively. An AnnData object ``adata``
+    can be sliced like a dataframe, for example, ``adata_subset = adata[:,
+    list_of_gene_names]``. The AnnData class is similar to R's ExpressionSet
+    [Huber15]_.
+
+    One-dimensional annotation can be directly visualized and interpreted, which
+    does not hold true for multi-dimensional annotation. Hence,
+    multi-dimensional annotation plays a very different role in a typical data
+    analysis workflow and, within AnnData, it is stored in two further
+    attributes: ``.smpm``, ``.varm`` (mutable structured arrays, dataframes are
+    intrinsically one-dimensional).
 
     Parameters
     ----------
@@ -661,7 +679,7 @@ class AnnData(IndexMixin):
             Add the batch annotation to `.smp` using this key.
         batch_categories : list (default: `range(len(adatas)+1)`)
             Use these as categories for the batch annotation.
-  
+
         Returns
         -------
         adata : AnnData
