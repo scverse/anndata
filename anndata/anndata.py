@@ -771,6 +771,7 @@ class AnnData(IndexMixin):
         In particular, from a dict that has been written using
         ``AnnData._to_dict_fixed_width_arrays``.
         """
+        ddata = ddata.copy()
         # data matrix
         if '_data' in ddata:
             data = ddata['_data']
