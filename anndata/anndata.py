@@ -2,6 +2,8 @@
 #         Alex Wolf (http://falexwolf.de)
 """Store an annotated data matrix.
 """
+import logging as logg
+import warnings
 from collections import Mapping, Sequence
 from collections import OrderedDict
 from enum import Enum
@@ -14,8 +16,11 @@ from scipy import sparse as sp
 from scipy.sparse.sputils import IndexMixin
 from numpy.lib.recfunctions import merge_arrays
 
-import logging as logg
-import warnings
+from ._version import get_versions
+
+__all__ = ['AnnData', 'BoundRecArr', 'StorageType']
+__version__ = get_versions()['version']
+del get_versions
 
 
 class StorageType(Enum):

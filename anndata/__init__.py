@@ -1,5 +1,1 @@
-from .anndata import AnnData
-
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+from .anndata import AnnData, __version__
