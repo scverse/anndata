@@ -747,8 +747,7 @@ class AnnData(IndexMixin):
              'var': self._var,
              'smpm': self._smpm.to_df(),
              'varm': self._varm.to_df()}
-        d = merge_dicts(d, self._uns)
-        return d
+        return {**d, **self._uns}
 
     def _to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
@@ -762,8 +761,7 @@ class AnnData(IndexMixin):
              '_var': var_rec,
              '_smpm': self._smpm,
              '_varm': self._varm}
-        d = merge_dicts(d, self._uns, uns_smp, uns_var)
-        return d
+        return {**d, **self._uns, **uns_smp, **uns_var}
 
     def _from_dict(self, ddata):
         """Allows to construct an instance of AnnData from a dictionary.
@@ -812,8 +810,8 @@ class AnnData(IndexMixin):
             elif 'var_names' in ddata:
                 var['var_names'] = ddata['var_names']
                 del ddata['var_names']
-            smp = merge_dicts(smp, ddata.get('row', {}), ddata.get('smp', {}))
-            var = merge_dicts(var, ddata.get('col', {}), ddata.get('var', {}))
+            smp = {**smp, **ddata.get('row', {}), **ddata.get('smp', {})}
+            var = {**var, **ddata.get('col', {}), **ddata.get('var', {})}
             for k in ['row', 'smp', 'col', 'var']:
                 if k in ddata:
                     del ddata[k]
@@ -923,15 +921,3 @@ class AnnData(IndexMixin):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
-
-
-def merge_dicts(*ds):
-    """Given any number of dicts, shallow copy and merge into a new dict,
-    precedence goes to key value pairs in latter dicts.
-
-    http://stackoverflow.com/questions/38987/how-to-merge-two-python-dictionaries-in-a-single-expression
-    """
-    result = ds[0]
-    for d in ds[1:]:
-        result.update(d)
-    return result
