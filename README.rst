@@ -16,10 +16,7 @@ and unstructured dict-like annotation (``adata.uns``).
 
 Read the `documentation <http://scanpy.readthedocs.io/en/latest/api/scanpy.api.AnnData.html>`_.
 
-You can install ``anndata`` independently of Scanpy from `PyPI <https://pypi.python.org/pypi/anndata/>`__.
-```
-pip install anndata
-```
+You can install ``anndata`` independently of Scanpy from `PyPI <https://pypi.python.org/pypi/anndata/>`__: ``pip install anndata``.
 
 We will slowly support all of AnnData's generic functions (plotting,
 preprocessing, reading, writing from disk, hdf5 backing on disk) via the anndata
