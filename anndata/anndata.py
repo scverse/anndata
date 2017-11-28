@@ -850,7 +850,7 @@ class AnnData(IndexMixin):
                             categories=ddata[k])
                     if k_stripped in var:
                         var[k_stripped] = pd.Categorical.from_codes(
-                            codes=smp[k_stripped].values,
+                            codes=var[k_stripped].values,
                             categories=ddata[k])
                     k_to_delete.append(k)
 
