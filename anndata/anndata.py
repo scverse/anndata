@@ -146,7 +146,7 @@ def df_to_records_fixed_width(df):
             c = df[k].astype('category')
             # transform to category only if there are less categories than
             # samples
-            if len(c.cat.codes) < len(c):
+            if len(c.cat.categories) < len(c):
                 uns[k + '_categories'] = c.cat.categories.values
                 arrays.append(c.cat.codes)
             else:
