@@ -144,8 +144,14 @@ def df_to_records_fixed_width(df):
         names.append(k)
         if is_string_dtype(df[k]):
             c = df[k].astype('category')
-            uns[k + '_categories'] = c.cat.categories.values
-            arrays.append(c.cat.codes)
+            # transform to category only if there are less categories than
+            # samples
+            if len(c.cat.codes) < len(c):
+                uns[k + '_categories'] = c.cat.categories.values
+                arrays.append(c.cat.codes)
+            else:
+                max_len_index = df[k].map(len).max()
+                arrays.append(df[k].values.astype('S{}'.format(max_len_index)))
         elif is_categorical(df[k]):
             uns[k + '_categories'] = df[k].cat.categories
             arrays.append(df[k].cat.codes)
@@ -818,6 +824,8 @@ class AnnData(IndexMixin):
 
         # transform recarray to dataframe
         if isinstance(smp, np.ndarray) and isinstance(var, np.ndarray):
+            from pandas.api.types import is_string_dtype
+            from pandas import Index
 
             if 'smp_names' in smp.dtype.names:
                 smp = pd.DataFrame.from_records(smp, index='smp_names')
@@ -828,6 +836,11 @@ class AnnData(IndexMixin):
             else:
                 smp = pd.DataFrame.from_records(smp)
             smp.index = smp.index.astype('U')
+            # transform to unicode string
+            # TODO: this is quite a hack...
+            for c in smp.columns:
+                if is_string_dtype(smp[c]):
+                    smp[c] = Index(smp[c]).astype('U').values
 
             if 'var_names' in var.dtype.names:
                 var = pd.DataFrame.from_records(var, index='var_names')
@@ -838,7 +851,10 @@ class AnnData(IndexMixin):
             else:
                 var = pd.DataFrame.from_records(var)
             var.index = var.index.astype('U')
-
+            for c in var.columns:
+                if is_string_dtype(var[c]):
+                    var[c] = Index(var[c]).astype('U').values
+                    
             # these are the category fields
             k_to_delete = []
             for k in ddata.keys():
