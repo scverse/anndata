@@ -195,13 +195,13 @@ def _fix_shapes(X, single_col=False):
 
 def _gen_dataframe(anno, length, index_name1, index_name2):
     if anno is None or len(anno) == 0:
-        _anno = pd.DataFrame(index=RangeIndex(0, length, name=None))
+        _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
     elif index_name1 in anno:
         _anno = pd.DataFrame(anno, index=anno[index_name1],
-                                columns=[k for k in anno.keys() if k != index_name1])
+                             columns=[k for k in anno.keys() if k != index_name1])
     elif index_name2 in anno:
         _anno = pd.DataFrame(anno, index=anno[index_name2],
-                                columns=[k for k in anno.keys() if k != index_name2])
+                             columns=[k for k in anno.keys() if k != index_name2])
     else:
         _anno = pd.DataFrame(anno)
     return _anno
