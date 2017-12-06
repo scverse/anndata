@@ -12,10 +12,8 @@ import pandas as pd
 from pandas.core.index import RangeIndex
 from scipy import sparse as sp
 from scipy.sparse.sputils import IndexMixin
-from numpy.lib.recfunctions import merge_arrays
 
 import logging as logg
-import warnings
 
 
 class StorageType(Enum):
@@ -42,7 +40,7 @@ class BoundRecArr(np.recarray):
     attr : string
         The name of the attribute as which it appears in parent.
     """
-    _attr_choices = ['smpm', 'varm']
+    _attr_choices = ['obsm', 'varm']
 
     def __new__(cls, input_array, parent, attr):
         arr = np.asarray(input_array).view(cls)
@@ -71,7 +69,7 @@ class BoundRecArr(np.recarray):
 
     def __setitem__(self, key, arr):
         if arr.ndim == 1:
-            raise ValueError('Use adata.smp or adata.var for 1-dimensional arrays.')
+            raise ValueError('Use adata.obs or adata.var for 1-dimensional arrays.')
         if self.shape[0] != arr.shape[0]:
             raise ValueError('Can only assign an array of same length ({}), '
                              'not of length {}.'
@@ -145,7 +143,7 @@ def df_to_records_fixed_width(df):
         if is_string_dtype(df[k]):
             c = df[k].astype('category')
             # transform to category only if there are less categories than
-            # samples
+            # observations
             if len(c.cat.categories) < len(c):
                 uns[k + '_categories'] = c.cat.categories.values
                 arrays.append(c.cat.codes)
@@ -175,80 +173,75 @@ def _fix_shapes(X, single_col=False):
     if len(X.shape) == 2:
         # TODO: int immutable, copy of references to ints in X.shape
         # only valid until accidental change
-        n_smps, n_vars = X.shape
-        if n_smps == 1 and n_vars == 1:
+        n_obs, n_vars = X.shape
+        if n_obs == 1 and n_vars == 1:
             X = X[0, 0]
-        elif n_smps == 1 or n_vars == 1:
+        elif n_obs == 1 or n_vars == 1:
             if sp.issparse(X): X = X.toarray()
             X = X.flatten()
     elif len(X.shape) == 1:
         n_vars = X.shape[0]
-        n_smps = 1
+        n_obs = 1
     elif len(X.shape) == 1 and single_col:
-        n_smps = X.shape[0]
+        n_obs = X.shape[0]
         n_vars = 1
     else:
         n_vars = 1
-        n_smps = 1
-    return X, n_smps, n_vars
+        n_obs = 1
+    return X, n_obs, n_vars
 
 
-def _gen_dataframe(anno, length, index_name1, index_name2):
+def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
         _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
-    elif index_name1 in anno:
-        _anno = pd.DataFrame(anno, index=anno[index_name1],
-                             columns=[k for k in anno.keys() if k != index_name1])
-    elif index_name2 in anno:
-        _anno = pd.DataFrame(anno, index=anno[index_name2],
-                             columns=[k for k in anno.keys() if k != index_name2])
     else:
-        _anno = pd.DataFrame(anno)
+        for index_name in index_names:
+            if index_name in anno:
+                _anno = pd.DataFrame(
+                    anno, index=anno[index_name],
+                    columns=[k for k in anno.keys() if k != index_name])
+                break
+        else:
+            _anno = pd.DataFrame(anno)
     return _anno
 
 
 class AnnData(IndexMixin):
-    """Store an annotated data matrix.
+    """Annotated data matrix.
 
-    Stores a data matrix (``.data``), dataframe-like sample (``.smp``)
-    and variable (``.var``) annotation and unstructured dict-like
-    annotation (``.uns``).
+    Stores a data matrix (``.X``) together with annotations of observations
+    (``.obs``) / variables (``.var``) and unstructured dict-like annotation
+    (``.uns``).
 
     .. raw:: html
 
-        <img src="http://falexwolf.de/img/scanpy/anndata.svg" style="width: 300px; margin: 10px 0px 15px 20px">
+        <img src="http://falexwolf.de/img/scanpy/anndata.svg"
+             style="width: 300px; margin: 10px 0px 15px 20px">
 
-    Values can be retrieved and appended via ``.smp['key1']`` and
-    ``.var['key2']``. Sample and variable names can be accessed via
-    ``.smp_names`` and ``.var_names``, respectively. An AnnData object ``adata``
+    Observation and variable names can be accessed via
+    ``.obs_names`` and ``.var_names``, respectively. An AnnData object ``adata``
     can be sliced like a dataframe, for example, ``adata_subset = adata[:,
     list_of_gene_names]``. The AnnData class is similar to R's ExpressionSet
     [Huber15]_.
 
-    One-dimensional annotation can be directly visualized and interpreted, which
-    does not hold true for multi-dimensional annotation. Hence,
-    multi-dimensional annotation plays a very different role in a typical data
-    analysis workflow and, within AnnData, it is stored in two further
-    attributes: ``.smpm``, ``.varm`` (mutable structured arrays, dataframes are
-    intrinsically one-dimensional).
+    Multi-dimensional annotation is stored in two further attributes: ``.obsm``,
+    ``.varm``.
 
     Parameters
     ----------
-    data : `np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray` or `dict`
-        If not a `dict`, this is a #samples × #variables data matrix. A view of
-        the data is used if the data type matches, otherwise, a copy is made. If
-        a `dict`, it must contain `data` as `'data'` and optionally arrays for
-        `'row_names'` (`'smp_names'`) and `'col_names'` (`'var_names'`).
-    smp : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
-        Key-indexed one-dimensional sample annotation of length #samples.
+    X : `np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`
+        A #observations × #variables data matrix. A view of the data is used if the
+        data type matches, otherwise, a copy is made.
+    obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+        Key-indexed one-dimensional observation annotation of length #observations.
     var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
         Key-indexed one-dimensional variable annotation of length #variables.
     uns : `dict` or `None`, optional (default: `None`)
         Unstructured annotation for the whole dataset.
-    smpm : structured `np.ndarray`, optional (default: `None`)
-        Key-indexed multi-dimensional sample annotation of length #samples.
+    obsm : structured `np.ndarray`, optional (default: `None`)
+        Key-indexed multi-dimensional observation annotation of length #observations.
     varm : structured `np.ndarray`, optional (default: `None`)
-        Key-indexed multi-dimensional sample annotation of length #samples.
+        Key-indexed multi-dimensional observation annotation of length #observations.
     dtype : simple `np.dtype`, optional (default: 'float32')
         Data type used for storage.
     single_col : `bool`, optional (default: `False`)
@@ -256,24 +249,24 @@ class AnnData(IndexMixin):
 
     Notes
     -----
-    A data matrix is flattened if either #samples (`n_smps`) or #variables
+    A data matrix is flattened if either #observations (`n_obs`) or #variables
     (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
 
-        ad = AnnData(np.ones((2, 2)))
-        ad[:, 0].X == ad.X[:, 0]
+        adata = AnnData(np.ones((2, 2)))
+        adata[:, 0].X == adata.X[:, 0]
 
     Examples
     --------
     >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-    >>>                  {'smp_names': ['s1', 's2'],
+    >>>                  {'obs_names': ['s1', 's2'],
     >>>                   'anno1': ['c1', 'c2']},
     >>>                  {'var_names': ['a', 'b', 'c']})
     >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-    >>>                  {'smp_names': ['s3', 's4'],
+    >>>                  {'obs_names': ['s3', 's4'],
     >>>                   'anno1': ['c3', 'c4']},
     >>>                  {'var_names': ['b', 'c', 'd']})
     >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-    >>>                  {'smp_names': ['s5', 's6'],
+    >>>                  {'obs_names': ['s5', 's6'],
     >>>                   'anno2': ['d3', 'd4']},
     >>>                  {'var_names': ['b', 'c', 'd']})
     >>>
@@ -285,7 +278,7 @@ class AnnData(IndexMixin):
      [ 4.  5.]
      [ 1.  2.]
      [ 4.  5.]]
-    >>> adata.smp
+    >>> adata.obs
        anno1 anno2 batch
     s1    c1   NaN     0
     s2    c2   NaN     0
@@ -295,15 +288,15 @@ class AnnData(IndexMixin):
     s6   NaN    d4     2
     """
 
-    def __init__(self, data, smp=None, var=None, uns=None, smpm=None, varm=None,
+    def __init__(self, data, obs=None, var=None, uns=None, obsm=None, varm=None,
                  dtype='float32', single_col=False):
 
         # generate from a dictionary
         if isinstance(data, Mapping):
-            if any((smp, var, uns, smpm, varm)):
+            if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `data` is a dict no further arguments must be provided.')
-            data, smp, var, uns, smpm, varm = self._from_dict(data)
+            data, obs, var, uns, obsm, varm = self._from_dict(data)
 
         # check data type of data
         for s_type in StorageType:
@@ -311,7 +304,7 @@ class AnnData(IndexMixin):
                 break
         else:
             class_names = ', '.join(c.__name__ for c in StorageType.classes())
-            raise ValueError('data needs to be of one of {}, not {}'
+            raise ValueError('`X` needs to be of one of {}, not {}.'
                              .format(class_names, type(data)))
 
         # if type doesn't match, a copy is made, otherwise, use a view
@@ -323,19 +316,19 @@ class AnnData(IndexMixin):
             data = data.astype(dtype, copy=False)
 
         # data matrix and shape
-        self._data, self._n_smps, self._n_vars = _fix_shapes(data)
+        self._X, self._n_obs, self._n_vars = _fix_shapes(data)
 
         # annotations
-        self._smp = _gen_dataframe(smp, self._n_smps, 'smp_names', 'row_names')
-        self._var = _gen_dataframe(var, self._n_vars, 'var_names', 'col_names')
+        self._obs = _gen_dataframe(obs, self._n_obs, ['obs_names', 'row_names', 'smp_names'])
+        self._var = _gen_dataframe(var, self._n_vars, ['var_names', 'col_names'])
 
         # unstructured annotations
         self._uns = uns or {}
 
         # multi-dimensional array annotations
-        if smpm is None: smpm = np.empty(self._n_smps, dtype=[])
+        if obsm is None: obsm = np.empty(self._n_obs, dtype=[])
         if varm is None: varm = np.empty(self._n_vars, dtype=[])
-        self._smpm = BoundRecArr(smpm, self, 'smpm')
+        self._obsm = BoundRecArr(obsm, self, 'obsm')
         self._varm = BoundRecArr(varm, self, 'varm')
 
         self._check_dimensions()
@@ -344,63 +337,89 @@ class AnnData(IndexMixin):
         self._clean_up_old_format(uns)
 
     def __repr__(self):
-        return ('AnnData object with n_smps × n_vars= {} × {}\n'
-                '    smp_keys = {}\n'
+        return ('AnnData object with n_obs × n_vars= {} × {}\n'
+                '    obs_keys = {}\n'
                 '    var_keys = {}\n'
                 '    uns_keys = {}\n'
-                '    smpm_keys = {}\n'
+                '    obsm_keys = {}\n'
                 '    varm_keys = {}'
-                .format(self._n_smps, self._n_vars,
-                        self.smp_keys(), self.var_keys(),
+                .format(self._n_obs, self._n_vars,
+                        self.obs_keys(), self.var_keys(),
                         self.uns_keys(),
-                        self.smpm_keys(), self.varm_keys()))
+                        self.obsm_keys(), self.varm_keys()))
 
+    # for backwards compat
     @property
     def data(self):
-        """Data matrix of shape `n_smps` × `n_vars` (`np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`)."""
-        return self._data
+        """Deprecated access to X."""
+        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
+              '`.data` will be removed in the future.')
+        return self._X
 
+    # for backwards compat
     @data.setter
     def data(self, value):
-        if not self._data.shape == value.shape:
+        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
+              '`.data` will be removed in the future.')
+        if not self._X.shape == value.shape:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
-                             .format(value.shape, self._data.shape))
-        self._data = value
+                             .format(value.shape, self._X.shape))
+        self._X = value
 
     @property
     def X(self):
-        """Shortcut for data matrix `data`."""
-        return self._data
+        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`)."""
+        return self._X
 
     @X.setter
     def X(self, value):
-        if not self._data.shape == value.shape:
+        if not self._X.shape == value.shape:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
-                             .format(value.shape, self._data.shape))
-        self._data = value
+                             .format(value.shape, self._X.shape))
+        self._X = value
 
     @property
     def n_smps(self):
-        """Number of samples (rows)."""
-        return self._n_smps
+        """Deprecated: Number of observations."""
+        return self._n_obs
+
+    @property
+    def n_obs(self):
+        """Number of observations (rows)."""
+        return self._n_obs
 
     @property
     def n_vars(self):
-        """Number of variables/ features (columns)."""
+        """Number of variables / features."""
         return self._n_vars
 
     @property
-    def smp(self):
-        """One-dimensional annotation of samples (`pd.DataFrame`)."""
-        return self._smp
+    def obs(self):
+        """One-dimensional annotation of observations (`pd.DataFrame`)."""
+        return self._obs
 
+    # for backwards compat
+    @property
+    def smp(self):
+        """One-dimensional annotation of observations (`pd.DataFrame`)."""
+        return self._obs
+
+    @obs.setter
+    def obs(self, value):
+        if not isinstance(value, pd.DataFrame):
+            raise ValueError('Can only assign pd.DataFrame.')
+        if len(value) != self.n_obs:
+            raise ValueError('Length does not match.')
+        self._obs = value
+
+    # for backwards compat
     @smp.setter
     def smp(self, value):
         if not isinstance(value, pd.DataFrame):
             raise ValueError('Can only assign pd.DataFrame.')
-        if len(value) != self.n_smps:
+        if len(value) != self.n_obs:
             raise ValueError('Length does not match.')
-        self._smp = value
+        self._obs = value
 
     @property
     def var(self):
@@ -428,34 +447,55 @@ class AnnData(IndexMixin):
     def add(self):
         """Deprecated, remains for backwards compatibility."""
         # FutureWarning and DeprecationWarning are not visible by default, use print
-        print('WARNING: use attribute `.uns` instead of `.add`, '
+        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
               '`.add` will be removed in the future.')
         return self._uns
 
     @add.setter
     def add(self, value):
-        print('WARNING: use attribute `.uns` instead of `.add`, '
+        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
               '`.add` will be removed in the future.')
         self._uns = value
 
     @property
-    def smpm(self):
-        """Multi-dimensional annotation of samples (mutable structured `np.ndarray`).
+    def obsm(self):
+        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`).
 
         Stores for each key, a two or higher-dimensional `np.ndarray` of length
-        `n_smps`. Is sliced with `data` and `smp` but behaves otherwise like a
+        `n_obs`. Is sliced with `data` and `obs` but behaves otherwise like a
         `dict`.
         """
-        return self._smpm
+        return self._obsm
 
+    # for backwards compat
+    @property
+    def smpm(self):
+        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`).
+
+        Stores for each key, a two or higher-dimensional `np.ndarray` of length
+        `n_obs`. Is sliced with `data` and `obs` but behaves otherwise like a
+        `dict`.
+        """
+        return self._obsm
+
+    @obsm.setter
+    def obsm(self, value):
+        if not isinstance(value, np.ndarray):
+            raise ValueError('Can only assign np.ndarray.')
+        if len(value) != self.n_obs:
+            raise ValueError('Length does not match.')
+        value = BoundRecArr(value, self, 'obsm')
+        self._obsm = value
+
+    # for backwards compat
     @smpm.setter
     def smpm(self, value):
         if not isinstance(value, np.ndarray):
             raise ValueError('Can only assign np.ndarray.')
-        if len(value) != self.n_smps:
+        if len(value) != self.n_obs:
             raise ValueError('Length does not match.')
-        value = BoundRecArr(value, self, 'smpm')
-        self._smpm = value
+        value = BoundRecArr(value, self, 'obsm')
+        self._obsm = value
 
     @property
     def varm(self):
@@ -477,13 +517,24 @@ class AnnData(IndexMixin):
         self._varm = value
 
     @property
-    def smp_names(self):
-        """Index for samples (`smp.index`)."""
-        return self._smp.index.values
+    def obs_names(self):
+        """Index for observations (`obs.index`)."""
+        return self._obs.index.values
 
+    # backwards compat
+    @property
+    def smp_names(self):
+        """Index for observations (`obs.index`)."""
+        return self._obs.index.values
+
+    @obs_names.setter
+    def obs_names(self, names):
+        self._obs.index = names
+
+    # backwards compat
     @smp_names.setter
     def smp_names(self, names):
-        self._smp.index = names
+        self._obs.index = names
 
     @property
     def var_names(self):
@@ -494,17 +545,27 @@ class AnnData(IndexMixin):
     def var_names(self, names):
         self._var.index = names
 
+    def obs_keys(self):
+        """List keys of observation annotation `obs`."""
+        return self._obs.keys().tolist()
+
+    # for backwards compat
     def smp_keys(self):
-        """List keys of sample annotation `smp`."""
-        return self._smp.keys().tolist()
+        """List keys of observation annotation `obs`."""
+        return self._obs.keys().tolist()
 
     def var_keys(self):
         """List keys of variable annotation `var`."""
         return self._var.keys().tolist()
 
+    def obsm_keys(self):
+        """List keys of observation annotation `obsm`."""
+        return list(self._obsm.keys())
+
+    # for backwards compat
     def smpm_keys(self):
-        """List keys of sample annotation `smpm`."""
-        return list(self._smpm.keys())
+        """List keys of observation annotation `obsm`."""
+        return list(self._obsm.keys())
 
     def varm_keys(self):
         """List keys of variable annotation `varm`."""
@@ -523,10 +584,10 @@ class AnnData(IndexMixin):
                 packed_index = packed_index[0], packed_index[1].values
             if isinstance(packed_index[0], pd.Series):
                 packed_index = packed_index[0].values, packed_index[1]
-        smp, var = super(AnnData, self)._unpack_index(packed_index)
-        smp = self._normalize_index(smp, self.smp_names)
+        obs, var = super(AnnData, self)._unpack_index(packed_index)
+        obs = self._normalize_index(obs, self.obs_names)
         var = self._normalize_index(var, self.var_names)
-        return smp, var
+        return obs, var
 
     def _normalize_index(self, index, names):
         def name_idx(i):
@@ -534,7 +595,7 @@ class AnnData(IndexMixin):
                 # `where` returns an 1-tuple (1D array) of found indices
                 i = np.where(names == i)[0]
                 if len(i) == 0:  # returns array of length 0 if nothing is found
-                    raise IndexError('Name "{}" is not valid variable or sample index.'
+                    raise IndexError('Name "{}" is not valid variable or observation index.'
                                      .format(index))
                 i = i[0]
             return i
@@ -559,37 +620,37 @@ class AnnData(IndexMixin):
         return slice(start, stop, step)
 
     def __delitem__(self, index):
-        smp, var = self._normalize_indices(index)
-        del self._data[smp, var]
+        obs, var = self._normalize_indices(index)
+        del self._X[obs, var]
         if var == slice(None):
-            del self._smp.iloc[smp, :]
-        if smp == slice(None):
+            del self._obs.iloc[obs, :]
+        if obs == slice(None):
             del self._var.iloc[var, :]
 
     def __getitem__(self, index):
         # Note: this cannot be made inplace
         # http://stackoverflow.com/questions/31916617/using-keyword-arguments-in-getitem-method-in-python
-        smp, var = self._normalize_indices(index)
-        data = self._data[smp, var]
-        smp_new = self._smp.iloc[smp]
-        smpm_new = self._smpm[smp]
+        obs, var = self._normalize_indices(index)
+        data = self._X[obs, var]
+        obs_new = self._obs.iloc[obs]
+        obsm_new = self._obsm[obs]
         var_new = self._var.iloc[var]
         varm_new = self._varm[var]
-        assert smp_new.shape[0] == data.shape[0], (smp, smp_new)
+        assert obs_new.shape[0] == data.shape[0], (obs, obs_new)
         assert var_new.shape[0] == data.shape[1], (var, var_new)
         uns_new = self._uns.copy()
-        # slice sparse spatrices of n_smps × n_smps in self._uns
-        if not (isinstance(smp, slice) and
-                smp.start is None and smp.step is None and smp.stop is None):
+        # slice sparse spatrices of n_obs × n_obs in self._uns
+        if not (isinstance(obs, slice) and
+                obs.start is None and obs.step is None and obs.stop is None):
             raised_warning = False
             for k, v in self._uns.items():  # TODO: make sure this really works as expected
-                if isinstance(v, sp.spmatrix) and v.shape == (self._n_smps, self._n_smps):
-                    uns_new[k] = v.tocsc()[:, smp].tocsr()[smp, :]
+                if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
+                    uns_new[k] = v.tocsc()[:, obs].tocsr()[obs, :]
                     if not raised_warning:
                         logg.warn('Slicing adjacency matrices can be dangerous. '
                                   'Consider recomputing the data graph.')
                         raised_warning = True
-        adata = AnnData(data, smp_new, var_new, uns_new, smpm_new, varm_new)
+        adata = AnnData(data, obs_new, var_new, uns_new, obsm_new, varm_new)
         return adata
 
     def _inplace_subset_var(self, index):
@@ -597,83 +658,83 @@ class AnnData(IndexMixin):
 
         Same as adata = adata[:, index], but inplace.
         """
-        self._data = self._data[:, index]
-        self._n_vars = self._data.shape[1]
+        self._X = self._X[:, index]
+        self._n_vars = self._X.shape[1]
         self._var = self._var.iloc[index]
         # TODO: the following should not be necessary!
         self._varm = BoundRecArr(self._varm[index], self, 'varm')
         return None
 
-    def _inplace_subset_smp(self, index):
+    def _inplace_subset_obs(self, index):
         """Inplace subsetting along variables dimension.
 
         Same as adata = adata[index, :], but inplace.
         """
-        self._data = self._data[index, :]
+        self._X = self._X[index, :]
         raised_warning = False
         # TODO: solve this in a better way, also for var
         for k, v in self._uns.items():
-            if isinstance(v, sp.spmatrix) and v.shape == (self._n_smps, self._n_smps):
+            if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
                 self._uns[k] = v.tocsc()[:, index].tocsr()[index, :]
                 if not raised_warning:
                     logg.warn('Slicing adjacency matrices can be dangerous. '
                               'Consider recomputing the data graph.')
                     raised_warning = True
-        self._n_smps = self._data.shape[0]
-        self._smp = self._smp.iloc[index]
+        self._n_obs = self._X.shape[0]
+        self._obs = self._obs.iloc[index]
         # TODO: the following should not be necessary!
-        self._smpm = BoundRecArr(self._smpm[index], self, 'smpm')
+        self._obsm = BoundRecArr(self._obsm[index], self, 'obsm')
         return None
 
-    def _get_smp_array(self, k):
-        """Get an array along the sample dimension by first looking up
-        smp_keys and then var_names."""
-        x = (self._smp[k] if k in self.smp_keys()
+    def _get_obs_array(self, k):
+        """Get an array along the observation dimension by first looking up
+        obs_keys and then var_names."""
+        x = (self._obs[k] if k in self.obs_keys()
              else self[:, k].data if k in set(self.var_names)
              else None)
         if x is None:
-            raise ValueError('Did not find {} in smp_keys or var_names.'
+            raise ValueError('Did not find {} in obs_keys or var_names.'
                              .format(k))
         return x
 
     def _get_var_array(self, k):
         """Get an array along the variables dimension by first looking up
-        var_keys and then smp_names."""
+        var_keys and then obs_names."""
         x = (self._var[k] if k in self.var_keys()
-             else self[k] if k in set(self.smp_names)
+             else self[k] if k in set(self.obs_names)
              else None)
         if x is None:
-            raise ValueError('Did not find {} in var_keys or smp_names.'
+            raise ValueError('Did not find {} in var_keys or obs_names.'
                              .format(k))
         return x
 
     def __setitem__(self, index, val):
-        smp, var = self._normalize_indices(index)
-        self._data[smp, var] = val
+        obs, var = self._normalize_indices(index)
+        self._X[obs, var] = val
 
     def __len__(self):
-        return self._data.shape[0]
+        return self._X.shape[0]
 
     def transpose(self):
         """Transpose whole object.
 
-        Data matrix is transposed, samples and variables are interchanged.
+        Data matrix is transposed, observations and variables are interchanged.
         """
-        if sp.isspmatrix_csr(self._data):
-            return AnnData(self._data.T.tocsr(), self._var, self._smp, self._uns,
-                           self._varm.flipped(), self._smpm.flipped())
-        return AnnData(self._data.T, self._var, self._smp, self._uns,
-                       self._varm.flipped(), self._smpm.flipped())
+        if sp.isspmatrix_csr(self._X):
+            return AnnData(self._X.T.tocsr(), self._var, self._obs, self._uns,
+                           self._varm.flipped(), self._obsm.flipped())
+        return AnnData(self._X.T, self._var, self._obs, self._uns,
+                       self._varm.flipped(), self._obsm.flipped())
 
     T = property(transpose)
 
     def copy(self):
         """Full copy with memory allocated."""
-        return AnnData(self._data.copy(), self._smp.copy(), self._var.copy(), self._uns.copy(),
-                       self._smpm.copy(), self._varm.copy())
+        return AnnData(self._X.copy(), self._obs.copy(), self._var.copy(), self._uns.copy(),
+                       self._obsm.copy(), self._varm.copy())
 
     def concatenate(self, adatas, batch_key='batch', batch_categories=None):
-        """Concatenate along the samples axis after intersecting the variables names.
+        """Concatenate along the observations axis after intersecting the variables names.
 
         The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
 
@@ -682,15 +743,47 @@ class AnnData(IndexMixin):
         adatas : AnnData or list of AnnData
             AnnData matrices to concatenate with.
         batch_key : `str` (default: 'batch')
-            Add the batch annotation to `.smp` using this key.
+            Add the batch annotation to `.obs` using this key.
         batch_categories : list (default: `range(len(adatas)+1)`)
             Use these as categories for the batch annotation.
 
         Returns
         -------
         adata : AnnData
-            The concatenated AnnData, where `adata.smp['batch']` stores a
+            The concatenated AnnData, where `adata.obs['batch']` stores a
             categorical variable labeling the batch.
+
+        Examples
+        --------
+        >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['s1', 's2'],
+        >>>                   'anno1': ['c1', 'c2']},
+        >>>                  {'var_names': ['a', 'b', 'c']})
+        >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['s3', 's4'],
+        >>>                   'anno1': ['c3', 'c4']},
+        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['s5', 's6'],
+        >>>                   'anno2': ['d3', 'd4']},
+        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>>
+        >>> adata = adata1.concatenate([adata2, adata3])
+        >>> adata.X
+        [[ 2.  3.]
+         [ 5.  6.]
+         [ 1.  2.]
+         [ 4.  5.]
+         [ 1.  2.]
+         [ 4.  5.]]
+        >>> adata.obs
+           anno1 anno2 batch
+        s1    c1   NaN     0
+        s2    c2   NaN     0
+        s3    c3   NaN     1
+        s4    c4   NaN     1
+        s5   NaN    d3     2
+        s6   NaN    d4     2
         """
         if isinstance(adatas, AnnData): adatas = [adatas]
         joint_variables = self.var_names
@@ -706,8 +799,8 @@ class AnnData(IndexMixin):
             raise ValueError('Provide as many `batch_categories` as `adatas`.')
         for i, ad in enumerate([self] + adatas):
             ad = ad[:, joint_variables]
-            ad.smp[batch_key] = pd.Categorical(
-                ad.n_smps*[categories[i]], categories=categories)
+            ad.obs[batch_key] = pd.Categorical(
+                ad.n_obs*[categories[i]], categories=categories)
             adatas_to_concat.append(ad)
         Xs = [ad.X for ad in adatas_to_concat]
         if sp.issparse(self.X):
@@ -715,43 +808,43 @@ class AnnData(IndexMixin):
             X = vstack(Xs)
         else:
             X = np.concatenate(Xs)
-        smp = pd.concat([ad.smp for ad in adatas_to_concat])
-        smpm = np.concatenate([ad.smpm for ad in adatas_to_concat])
+        obs = pd.concat([ad.obs for ad in adatas_to_concat])
+        obsm = np.concatenate([ad.obsm for ad in adatas_to_concat])
         var = adatas_to_concat[0].var
         varm = adatas_to_concat[0].varm
         uns = adatas_to_concat[0].uns
-        return AnnData(X, smp, var, uns, smpm, varm)
+        return AnnData(X, obs, var, uns, obsm, varm)
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, don\'t check `in adata`.')
 
     def _check_dimensions(self, key=None):
         if key is None:
-            key = {'smp', 'var', 'smpm', 'varm'}
+            key = {'obs', 'var', 'obsm', 'varm'}
         else:
             key = {key}
-        if 'smp' in key and len(self._smp) != self._n_smps:
-            raise ValueError('Sample annotation `smp` needs to have the same amount of '
+        if 'obs' in key and len(self._obs) != self._n_obs:
+            raise ValueError('Observations annotation `obs` needs to have the same amount of '
                              'rows as data ({}), but has {} rows'
-                             .format(self._n_smps, self._smp.shape[0]))
+                             .format(self._n_obs, self._obs.shape[0]))
         if 'var' in key and len(self._var) != self._n_vars:
-            raise ValueError('Variable annotation `var` needs to have the same amount of '
+            raise ValueError('Variables annotation `var` needs to have the same amount of '
                              'columns as data  ({}), but has {} rows'
                              .format(self._n_vars, self._var.shape[0]))
-        if 'smpm' in key and len(self._smpm) != self._n_smps:
-            raise ValueError('Sample annotation `smpm` needs to have the same amount of '
+        if 'obsm' in key and len(self._obsm) != self._n_obs:
+            raise ValueError('Observations annotation `obsm` needs to have the same amount of '
                              'rows as data ({}), but has {} rows'
-                             .format(self._n_smps, self._smp.shape[0]))
+                             .format(self._n_obs, self._obs.shape[0]))
         if 'varm' in key and len(self._varm) != self._n_vars:
-            raise ValueError('Variable annotation `varm` needs to have the same amount of '
+            raise ValueError('Variables annotation `varm` needs to have the same amount of '
                              'columns as data ({}), but has {} rows'
                              .format(self._n_vars, self._var.shape[0]))
 
     def _to_dict_dataframes(self):
-        d = {'data': pd.DataFrame(self._data, index=self._smp.index),
-             'smp': self._smp,
+        d = {'data': pd.DataFrame(self._X, index=self._obs.index),
+             'obs': self._obs,
              'var': self._var,
-             'smpm': self._smpm.to_df(),
+             'obsm': self._obsm.to_df(),
              'varm': self._varm.to_df()}
         return {**d, **self._uns}
 
@@ -760,14 +853,14 @@ class AnnData(IndexMixin):
 
         It is sufficient for reconstructing the object.
         """
-        smp_rec, uns_smp = df_to_records_fixed_width(self._smp)
+        obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
         var_rec, uns_var = df_to_records_fixed_width(self._var)
-        d = {'_data': self._data,
-             '_smp': smp_rec,
+        d = {'_X': self._X,
+             '_obs': obs_rec,
              '_var': var_rec,
-             '_smpm': self._smpm,
+             '_obsm': self._obsm,
              '_varm': self._varm}
-        return {**d, **self._uns, **uns_smp, **uns_var}
+        return {**d, **self._uns, **uns_obs, **uns_var}
 
     def _from_dict(self, ddata):
         """Allows to construct an instance of AnnData from a dictionary.
@@ -790,25 +883,40 @@ class AnnData(IndexMixin):
             data = ddata['X']
             del ddata['X']
         # simple annotation
-        if ('_smp' in ddata and isinstance(ddata['_smp'], (np.ndarray, pd.DataFrame))
+        if ('_obs' in ddata and isinstance(ddata['_obs'], (np.ndarray, pd.DataFrame))
             and '_var' in ddata and isinstance(ddata['_var'], (np.ndarray, pd.DataFrame))):
-            smp = ddata['_smp']
+            obs = ddata['_obs']
+            del ddata['_obs']
+            var = ddata['_var']
+            del ddata['_var']
+        elif ('_smp' in ddata and isinstance(ddata['_smp'], (np.ndarray, pd.DataFrame))
+              and '_var' in ddata and isinstance(ddata['_var'], (np.ndarray, pd.DataFrame))):
+            obs = ddata['_smp']
             del ddata['_smp']
             var = ddata['_var']
             del ddata['_var']
+        elif ('obs' in ddata and isinstance(ddata['obs'], (np.ndarray, pd.DataFrame))
+              and 'var' in ddata and isinstance(ddata['var'], (np.ndarray, pd.DataFrame))):
+            obs = ddata['obs']
+            del ddata['obs']
+            var = ddata['var']
+            del ddata['var']
         elif ('smp' in ddata and isinstance(ddata['smp'], (np.ndarray, pd.DataFrame))
               and 'var' in ddata and isinstance(ddata['var'], (np.ndarray, pd.DataFrame))):
-            smp = ddata['smp']
+            obs = ddata['smp']
             del ddata['smp']
             var = ddata['var']
             del ddata['var']
         else:
-            smp, var = OrderedDict(), OrderedDict()
+            obs, var = OrderedDict(), OrderedDict()
             if 'row_names' in ddata:
-                smp['smp_names'] = ddata['row_names']
+                obs['obs_names'] = ddata['row_names']
                 del ddata['row_names']
+            elif 'obs_names' in ddata:
+                obs['obs_names'] = ddata['obs_names']
+                del ddata['obs_names']
             elif 'smp_names' in ddata:
-                smp['smp_names'] = ddata['smp_names']
+                obs['obs_names'] = ddata['smp_names']
                 del ddata['smp_names']
             if 'col_names' in ddata:
                 var['var_names'] = ddata['col_names']
@@ -816,31 +924,33 @@ class AnnData(IndexMixin):
             elif 'var_names' in ddata:
                 var['var_names'] = ddata['var_names']
                 del ddata['var_names']
-            smp = {**smp, **ddata.get('row', {}), **ddata.get('smp', {})}
+            obs = {**obs, **ddata.get('row', {}), **ddata.get('obs', {})}
             var = {**var, **ddata.get('col', {}), **ddata.get('var', {})}
-            for k in ['row', 'smp', 'col', 'var']:
+            for k in ['row', 'obs', 'col', 'var']:
                 if k in ddata:
                     del ddata[k]
 
         # transform recarray to dataframe
-        if isinstance(smp, np.ndarray) and isinstance(var, np.ndarray):
+        if isinstance(obs, np.ndarray) and isinstance(var, np.ndarray):
             from pandas.api.types import is_string_dtype
             from pandas import Index
 
-            if 'smp_names' in smp.dtype.names:
-                smp = pd.DataFrame.from_records(smp, index='smp_names')
-            elif 'row_names' in smp.dtype.names:
-                smp = pd.DataFrame.from_records(smp, index='row_names')
-            elif 'index' in smp.dtype.names:
-                smp = pd.DataFrame.from_records(smp, index='index')
+            if 'obs_names' in obs.dtype.names:
+                obs = pd.DataFrame.from_records(obs, index='obs_names')
+            elif 'smp_names' in obs.dtype.names:
+                obs = pd.DataFrame.from_records(obs, index='smp_names')
+            elif 'row_names' in obs.dtype.names:
+                obs = pd.DataFrame.from_records(obs, index='row_names')
+            elif 'index' in obs.dtype.names:
+                obs = pd.DataFrame.from_records(obs, index='index')
             else:
-                smp = pd.DataFrame.from_records(smp)
-            smp.index = smp.index.astype('U')
+                obs = pd.DataFrame.from_records(obs)
+            obs.index = obs.index.astype('U')
             # transform to unicode string
-            # TODO: this is quite a hack...
-            for c in smp.columns:
-                if is_string_dtype(smp[c]):
-                    smp[c] = Index(smp[c]).astype('U').values
+            # TODO: this is quite a hack
+            for c in obs.columns:
+                if is_string_dtype(obs[c]):
+                    obs[c] = Index(obs[c]).astype('U').values
 
             if 'var_names' in var.dtype.names:
                 var = pd.DataFrame.from_records(var, index='var_names')
@@ -854,15 +964,15 @@ class AnnData(IndexMixin):
             for c in var.columns:
                 if is_string_dtype(var[c]):
                     var[c] = Index(var[c]).astype('U').values
-                    
+
             # these are the category fields
             k_to_delete = []
             for k in ddata.keys():
                 if k.endswith('_categories'):
                     k_stripped = k.replace('_categories', '')
-                    if k_stripped in smp:
-                        smp[k_stripped] = pd.Categorical.from_codes(
-                            codes=smp[k_stripped].values,
+                    if k_stripped in obs:
+                        obs[k_stripped] = pd.Categorical.from_codes(
+                            codes=obs[k_stripped].values,
                             categories=ddata[k])
                     if k_stripped in var:
                         var[k_stripped] = pd.Categorical.from_codes(
@@ -874,14 +984,20 @@ class AnnData(IndexMixin):
                 del ddata[k]
 
         # multicolumn annotation
-        if 'smpm' in ddata:
-            smpm = ddata['smpm']
+        if 'obsm' in ddata:
+            obsm = ddata['obsm']
+            del ddata['obsm']
+        elif '_obsm' in ddata:
+            obsm = ddata['_obsm']
+            del ddata['_obsm']
+        elif 'smpm' in ddata:
+            obsm = ddata['smpm']
             del ddata['smpm']
         elif '_smpm' in ddata:
-            smpm = ddata['_smpm']
+            obsm = ddata['_smpm']
             del ddata['_smpm']
         else:
-            smpm = None
+            obsm = None
         if 'varm' in ddata:
             varm = ddata['varm']
             del ddata['varm']
@@ -894,19 +1010,25 @@ class AnnData(IndexMixin):
         # the remaining fields are the unstructured annotation
         uns = ddata
 
-        return data, smp, var, uns, smpm, varm
+        return data, obs, var, uns, obsm, varm
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
         # all of the rest is only for backwards compat
-        if uns and '_smp_keys_multicol' in uns:
-            _keys_multicol_smp = list(uns['_smp_keys_multicol'])
+        if uns and '_obs_keys_multicol' in uns:
+            _keys_multicol_obs = list(uns['_obs_keys_multicol'])
+            del uns['_obs_keys_multicol']
+        elif uns and 'obs_keys_multicol' in uns:
+            _keys_multicol_obs = list(uns['obs_keys_multicol'])
+            del uns['obs_keys_multicol']
+        elif uns and '_smp_keys_multicol' in uns:
+            _keys_multicol_obs = list(uns['_smp_keys_multicol'])
             del uns['_smp_keys_multicol']
         elif uns and 'smp_keys_multicol' in uns:
-            _keys_multicol_smp = list(uns['smp_keys_multicol'])
+            _keys_multicol_obs = list(uns['smp_keys_multicol'])
             del uns['smp_keys_multicol']
         else:
-            _keys_multicol_smp = []
+            _keys_multicol_obs = []
         if uns and '_var_keys_multicol' in uns:
             _keys_multicol_var = list(uns['_var_keys_multicol'])
             del uns['_var_keys_multicol']
@@ -916,15 +1038,15 @@ class AnnData(IndexMixin):
         else:
             _keys_multicol_var = []
 
-        # now, for compat, fill the old multicolumn entries into smpm and varm
-        # and remove them from smp and var
-        for key in _keys_multicol_smp:
-            self._smpm[key] = self._get_multicol_field_smp(key)
+        # now, for compat, fill the old multicolumn entries into obsm and varm
+        # and remove them from obs and var
+        for key in _keys_multicol_obs:
+            self._obsm[key] = self._get_multicol_field_obs(key)
         for key in _keys_multicol_var:
             self._varm[key] = self._get_multicol_field_var(key)
 
-    def _get_multicol_field_smp(self, key_multicol):
-        return self._get_and_delete_multicol_field('smp', key_multicol)
+    def _get_multicol_field_obs(self, key_multicol):
+        return self._get_and_delete_multicol_field('obs', key_multicol)
 
     def _get_multicol_field_var(self, key_multicol):
         return self._get_and_delete_multicol_field('var', key_multicol)
