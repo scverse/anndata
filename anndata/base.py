@@ -1,19 +1,16 @@
-# Author: P. Angerer
-#         Alex Wolf (http://falexwolf.de)
-"""Store an annotated data matrix.
+"""Main class and helper functions.
 """
 from collections import Mapping, Sequence
 from collections import OrderedDict
 from enum import Enum
-
 import numpy as np
 from numpy import ma
 import pandas as pd
 from pandas.core.index import RangeIndex
 from scipy import sparse as sp
 from scipy.sparse.sputils import IndexMixin
-
 import logging as logg
+from textwrap import indent, dedent
 
 
 class StorageType(Enum):
@@ -27,7 +24,7 @@ class StorageType(Enum):
 
 
 class BoundRecArr(np.recarray):
-    """A np.recarray to which fields can be added using [].
+    """A `np.recarray` to which fields can be added using `.['key']`.
 
     To enable this, it is bound to a instance of AnnData.
 
@@ -207,116 +204,88 @@ def _gen_dataframe(anno, length, index_names):
 
 
 class AnnData(IndexMixin):
-    """Annotated data matrix.
+    
+    _main_narrative = dedent("""\
+        :class:`~anndata.AnnData` stores a data matrix (``.X``) together with
+        annotations of observations (``.obs``), variables (``.var``) and
+        unstructured annotations (``.uns``).
 
-    Stores a data matrix (``.X``) together with annotations of observations
-    (``.obs``) / variables (``.var``) and unstructured dict-like annotation
-    (``.uns``).
+        .. raw:: html
 
-    .. raw:: html
+            <img src="http://falexwolf.de/img/scanpy/anndata.svg"
+                 style="width: 300px; margin: 10px 0px 15px 20px">
 
-        <img src="http://falexwolf.de/img/scanpy/anndata.svg"
-             style="width: 300px; margin: 10px 0px 15px 20px">
+        An :class:`~anndata.AnnData` object ``adata`` can be sliced like a
+        pandas dataframe, for example, ``adata_subset = adata[:,
+        list_of_variable_names]``. Observation and variable names can be
+        accessed via ``.obs_names`` and ``.var_names``, respectively.
+        :class:`~anndata.AnnData` is similar to R's ExpressionSet [Huber15]_.
 
-    Observation and variable names can be accessed via
-    ``.obs_names`` and ``.var_names``, respectively. An AnnData object ``adata``
-    can be sliced like a dataframe, for example, ``adata_subset = adata[:,
-    list_of_gene_names]``. The AnnData class is similar to R's ExpressionSet
-    [Huber15]_.
+        If you find it useful, consider citing [Wolf17]_.
+        """)
 
-    Multi-dimensional annotation is stored in two further attributes: ``.obsm``,
-    ``.varm``.
+    _example_concatenate = dedent("""\
+        >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['o1', 'o2'],
+        >>>                   'anno1': ['c1', 'c2']},
+        >>>                  {'var_names': ['a', 'b', 'c']})
+        >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['o3', 'o4'],
+        >>>                   'anno1': ['c3', 'c4']},
+        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['o5', 'o6'],
+        >>>                   'anno2': ['d3', 'd4']},
+        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>>
+        >>> adata = adata1.concatenate([adata2, adata3])
+        >>> adata.X
+        [[ 2.  3.]
+         [ 5.  6.]
+         [ 1.  2.]
+         [ 4.  5.]
+         [ 1.  2.]
+         [ 4.  5.]]
+        >>> adata.obs
+           anno1 anno2 batch
+        o1    c1   NaN     0
+        o2    c2   NaN     0
+        o3    c3   NaN     1
+        o4    c4   NaN     1
+        o5   NaN    d3     2
+        o6   NaN    d4     2
+        """)
 
-    Parameters
-    ----------
-    X : `np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`
-        A #observations × #variables data matrix. A view of the data is used if the
-        data type matches, otherwise, a copy is made.
-    obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
-        Key-indexed one-dimensional observation annotation of length #observations.
-    var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
-        Key-indexed one-dimensional variable annotation of length #variables.
-    uns : `dict` or `None`, optional (default: `None`)
-        Unstructured annotation for the whole dataset.
-    obsm : structured `np.ndarray`, optional (default: `None`)
-        Key-indexed multi-dimensional observation annotation of length #observations.
-    varm : structured `np.ndarray`, optional (default: `None`)
-        Key-indexed multi-dimensional observation annotation of length #observations.
-    dtype : simple `np.dtype`, optional (default: 'float32')
-        Data type used for storage.
-    single_col : `bool`, optional (default: `False`)
-        Interpret one-dimensional input array as column.
-
-    Notes
-    -----
-    A data matrix is flattened if either #observations (`n_obs`) or #variables
-    (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
-
-        adata = AnnData(np.ones((2, 2)))
-        adata[:, 0].X == adata.X[:, 0]
-
-    Examples
-    --------
-    >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-    >>>                  {'obs_names': ['s1', 's2'],
-    >>>                   'anno1': ['c1', 'c2']},
-    >>>                  {'var_names': ['a', 'b', 'c']})
-    >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-    >>>                  {'obs_names': ['s3', 's4'],
-    >>>                   'anno1': ['c3', 'c4']},
-    >>>                  {'var_names': ['b', 'c', 'd']})
-    >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-    >>>                  {'obs_names': ['s5', 's6'],
-    >>>                   'anno2': ['d3', 'd4']},
-    >>>                  {'var_names': ['b', 'c', 'd']})
-    >>>
-    >>> adata = adata1.concatenate([adata2, adata3])
-    >>> adata.X
-    [[ 2.  3.]
-     [ 5.  6.]
-     [ 1.  2.]
-     [ 4.  5.]
-     [ 1.  2.]
-     [ 4.  5.]]
-    >>> adata.obs
-       anno1 anno2 batch
-    s1    c1   NaN     0
-    s2    c2   NaN     0
-    s3    c3   NaN     1
-    s4    c4   NaN     1
-    s5   NaN    d3     2
-    s6   NaN    d4     2
-    """
-
-    def __init__(self, data, obs=None, var=None, uns=None, obsm=None, varm=None,
+    
+    def __init__(self, X, obs=None, var=None, uns=None, obsm=None, varm=None,
                  dtype='float32', single_col=False):
 
         # generate from a dictionary
-        if isinstance(data, Mapping):
+        if isinstance(X, Mapping):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
-                    'If `data` is a dict no further arguments must be provided.')
-            data, obs, var, uns, obsm, varm = self._from_dict(data)
+                    'If `X` is a dict no further arguments must be provided.')
+            X, obs, var, uns, obsm, varm = self._from_dict(X)
 
-        # check data type of data
+        # check data type of X
         for s_type in StorageType:
-            if isinstance(data, s_type.value):
+            if isinstance(X, s_type.value):
                 break
         else:
             class_names = ', '.join(c.__name__ for c in StorageType.classes())
             raise ValueError('`X` needs to be of one of {}, not {}.'
-                             .format(class_names, type(data)))
+                             .format(class_names, type(X)))
 
         # if type doesn't match, a copy is made, otherwise, use a view
-        if sp.issparse(data) or isinstance(data, ma.MaskedArray):
+        if sp.issparse(X) or isinstance(X, ma.MaskedArray):
             # TODO: maybe use view on data attribute of sparse matrix
             #       as in readwrite.read_10x_h5
-            if data.dtype != np.dtype(dtype): data = data.astype(dtype)
+            if X.dtype != np.dtype(dtype): X = X.astype(dtype)
         else:  # is np.ndarray
-            data = data.astype(dtype, copy=False)
+            X = X.astype(dtype, copy=False)
 
         # data matrix and shape
-        self._X, self._n_obs, self._n_vars = _fix_shapes(data)
+        self._X, self._n_obs, self._n_vars = _fix_shapes(X)
 
         # annotations
         self._obs = _gen_dataframe(obs, self._n_obs, ['obs_names', 'row_names', 'smp_names'])
@@ -337,7 +306,7 @@ class AnnData(IndexMixin):
         self._clean_up_old_format(uns)
 
     def __repr__(self):
-        return ('AnnData object with n_obs × n_vars= {} × {}\n'
+        return ('AnnData object with n_obs × n_vars = {} × {}\n'
                 '    obs_keys = {}\n'
                 '    var_keys = {}\n'
                 '    uns_keys = {}\n'
@@ -734,57 +703,6 @@ class AnnData(IndexMixin):
                        self._obsm.copy(), self._varm.copy())
 
     def concatenate(self, adatas, batch_key='batch', batch_categories=None):
-        """Concatenate along the observations axis after intersecting the variables names.
-
-        The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
-
-        Parameters
-        ----------
-        adatas : AnnData or list of AnnData
-            AnnData matrices to concatenate with.
-        batch_key : `str` (default: 'batch')
-            Add the batch annotation to `.obs` using this key.
-        batch_categories : list (default: `range(len(adatas)+1)`)
-            Use these as categories for the batch annotation.
-
-        Returns
-        -------
-        adata : AnnData
-            The concatenated AnnData, where `adata.obs['batch']` stores a
-            categorical variable labeling the batch.
-
-        Examples
-        --------
-        >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['s1', 's2'],
-        >>>                   'anno1': ['c1', 'c2']},
-        >>>                  {'var_names': ['a', 'b', 'c']})
-        >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['s3', 's4'],
-        >>>                   'anno1': ['c3', 'c4']},
-        >>>                  {'var_names': ['b', 'c', 'd']})
-        >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['s5', 's6'],
-        >>>                   'anno2': ['d3', 'd4']},
-        >>>                  {'var_names': ['b', 'c', 'd']})
-        >>>
-        >>> adata = adata1.concatenate([adata2, adata3])
-        >>> adata.X
-        [[ 2.  3.]
-         [ 5.  6.]
-         [ 1.  2.]
-         [ 4.  5.]
-         [ 1.  2.]
-         [ 4.  5.]]
-        >>> adata.obs
-           anno1 anno2 batch
-        s1    c1   NaN     0
-        s2    c2   NaN     0
-        s3    c3   NaN     1
-        s4    c4   NaN     1
-        s5   NaN    d3     2
-        s6   NaN    d4     2
-        """
         if isinstance(adatas, AnnData): adatas = [adatas]
         joint_variables = self.var_names
         for adata2 in adatas:
@@ -815,6 +733,31 @@ class AnnData(IndexMixin):
         uns = adatas_to_concat[0].uns
         return AnnData(X, obs, var, uns, obsm, varm)
 
+    concatenate.__doc__ = dedent("""\
+        Concatenate along the observations axis after intersecting the variables names.
+
+        The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
+
+        Parameters
+        ----------
+        adatas : :class:`~anndata.AnnData` or list of :class:`~anndata.AnnData`
+            AnnData matrices to concatenate with.
+        batch_key : `str` (default: 'batch')
+            Add the batch annotation to `.obs` using this key.
+        batch_categories : list (default: `range(len(adatas)+1)`)
+            Use these as categories for the batch annotation.
+
+        Returns
+        -------
+        adata : :class:`~anndata.AnnData`
+            The concatenated AnnData, where `adata.obs['batch']` stores a
+            categorical variable labeling the batch.
+
+        Examples
+        --------
+        {example_concatenate}
+        """).format(example_concatenate=_example_concatenate)
+
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, don\'t check `in adata`.')
 
@@ -840,13 +783,48 @@ class AnnData(IndexMixin):
                              'columns as data ({}), but has {} rows'
                              .format(self._n_vars, self._var.shape[0]))
 
-    def _to_dict_dataframes(self):
-        d = {'data': pd.DataFrame(self._X, index=self._obs.index),
-             'obs': self._obs,
-             'var': self._var,
-             'obsm': self._obsm.to_df(),
-             'varm': self._varm.to_df()}
-        return {**d, **self._uns}
+    def write_anndata(self, filename, compression='gzip',
+                      compression_opts=None):
+        """Write `.anndata`-formatted hdf5 file.
+
+        Parameters
+        ----------
+        filename : `str`
+            Filename of data file.
+        compression : `None` or {'gzip', 'lzf'}, optional (default: `'gzip'`)
+            See http://docs.h5py.org/en/latest/high/dataset.html.
+        compression_opts : `int`, optional (default: `None`)
+            See http://docs.h5py.org/en/latest/high/dataset.html.
+        """
+        from .readwrite.write import write_anndata
+        write_anndata(filename, self, compression, compression_opts)
+
+    def write_csvs(self, dirname, skip_data=True):
+        """Write annotation to `.csv` files.
+
+        It is not possible to recover the full :class:`~anndata.AnnData` from the
+        output of this function. Use :func:`~anndata.write_anndata` for this.
+
+        Parameters
+        ----------
+        dirname : `str`
+            Name of directory to which to export.
+        skip_data : `bool`, optional (default: True)
+             Skip the data matrix `.X`.
+        """
+        from .readwrite.write import write_csvs
+        write_csvs(dirname, self, skip_data)
+
+    def write_loom(self, filename):
+        """Write `.loom`-formatted hdf5 file.
+
+        Parameters
+        ----------
+        filename : `str`
+            The filename.
+        """
+        from .readwrite.write import write_loom
+        write_loom(filename, self)
 
     def _to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
@@ -1059,3 +1037,47 @@ class AnnData(IndexMixin):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
+
+
+AnnData.__doc__ = dedent("""\
+    Annotated data matrix.
+
+    {main_narrative}
+
+    Multi-dimensional annotation is stored in two further attributes: ``.obsm``,
+    ``.varm``.
+
+    Parameters
+    ----------
+    X : `np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`
+        A #observations × #variables data matrix. A view of the data is used if the
+        data type matches, otherwise, a copy is made.
+    obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+        Key-indexed one-dimensional observation annotation of length #observations.
+    var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+        Key-indexed one-dimensional variable annotation of length #variables.
+    uns : `dict` or `None`, optional (default: `None`)
+        Unstructured annotation for the whole dataset.
+    obsm : structured `np.ndarray`, optional (default: `None`)
+        Key-indexed multi-dimensional observation annotation of length #observations.
+    varm : structured `np.ndarray`, optional (default: `None`)
+        Key-indexed multi-dimensional observation annotation of length #observations.
+    dtype : simple `np.dtype`, optional (default: 'float32')
+        Data type used for storage.
+    single_col : `bool`, optional (default: `False`)
+        Interpret one-dimensional input array as column.
+
+    Examples
+    --------
+    A data matrix is flattened if either #observations (`n_obs`) or #variables
+    (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
+
+        adata = AnnData(np.ones((2, 2)))
+        adata[:, 0].X == adata.X[:, 0]
+
+    AnnData objects can be concatenated via :func:`~anndata.AnnData.concatenate`.
+
+    {example_concatenate}
+
+    """).format(main_narrative=AnnData._main_narrative,
+                example_concatenate=AnnData._example_concatenate)

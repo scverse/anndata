@@ -107,12 +107,10 @@ def test_slicing_series():
         dict(var_names=['a', 'b']))
     df = pd.DataFrame({'a': ['1', '2', '2']})
     df1 = pd.DataFrame({'b': ['1', '2']})
-    print(adata[df['a'].values == '2'].X)
-    print(adata[df['a'] == '2'].X)
-    print(adata[:, df1['b'].values == '2'].X)
-    print(adata[:, df1['b'] == '2'].X)
-    assert adata[df['a'].values == '2'].X.tolist() == adata[df['a'] == '2'].X.tolist()
-    assert adata[:, df1['b'].values == '2'].X.tolist() == adata[:, df1['b'] == '2'].X.tolist()
+    assert (adata[df['a'].values == '2'].X.tolist()
+            == adata[df['a'] == '2'].X.tolist())
+    assert (adata[:, df1['b'].values == '2'].X.tolist()
+            == adata[:, df1['b'] == '2'].X.tolist())
 
 def test_get_subset_annotation():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),

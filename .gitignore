@@ -1,3 +1,12 @@
+# anndata
+test.*
+test_*
+docs/_build
+docs/anndata.*
+
+# Mac
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
