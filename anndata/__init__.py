@@ -1,4 +1,5 @@
 from .base import AnnData
+from .base import read_anndata as read
 
 __doc__ = """\
 anndata
@@ -54,7 +55,7 @@ References
 
 """.format(main_narrative=AnnData._main_narrative)
 
-from .readwrite import read_anndata, read_loom, \
+from .readwrite import read_loom, \
     read_csv, read_excel, read_text, read_hdf, read_mtx
 
 from ._version import get_versions

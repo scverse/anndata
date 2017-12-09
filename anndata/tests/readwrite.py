@@ -29,13 +29,26 @@ uns_dict = {  # unstructured annotation
 # -------------------------------------------------------------------------------
 
 
-def test_read_write_anndata():
+def test_readwrite_dynamic():
+    for typ in [np.array]:
+        X = typ(X_list)
+        adata = an.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+        adata.filename = './test.anndata'
+        adata.write()
+        adata = an.read('./test.anndata')
+        assert pd.api.types.is_categorical(adata.obs['oanno1'])
+        assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+        assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
+        assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+
+
+def test_readwrite_anndata():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)
         adata = an.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
         assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
-        adata.write_anndata('./test.h5')
-        adata = an.read_anndata('./test.h5')
+        adata.write('./test.anndata')
+        adata = an.read('./test.anndata')
         assert pd.api.types.is_categorical(adata.obs['oanno1'])
         assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
         assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
@@ -54,6 +67,7 @@ def test_readwrite_loom():
             # TODO: this should not be necessary
             assert np.allclose(adata.X, X.toarray())
 
+            
 def test_write_csv():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)

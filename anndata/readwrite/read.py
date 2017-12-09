@@ -1,49 +1,6 @@
 import h5py
 import numpy as np
-from . import utils
 from ..base import AnnData
-
-
-def read_anndata(filename):
-    """Read `.anndata`-formatted hdf5 file.
-
-    Parameters
-    ----------
-    filename : `str`
-        File name of data file.
-
-    Returns
-    -------
-    An :class:`~anndata.AnnData` object.
-    """
-    def postprocess_reading(key, value):
-        if value.ndim == 1 and len(value) == 1:
-            value = value[0]
-        if value.dtype.kind == 'S':
-            value = value.astype(str)
-            # recover a dictionary that has been stored as a string
-            if len(value) > 0:
-                if value[0] == '{' and value[-1] == '}': value = eval(value)
-        if (key != 'obs' and key != 'var' and key != '_obs' and key != '_var'
-            and not isinstance(value, dict) and value.dtype.names is not None):
-            # TODO: come up with a better way of solving this, see also below
-            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
-                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
-            value = value.astype(new_dtype)
-        return key, value
-    filename = str(filename)  # allow passing pathlib.Path objects
-    d = {}
-    with h5py.File(filename, 'r') as f:
-        for key in f.keys():
-            # the '()' means 'read everything' (by contrast, ':' only works
-            # if not reading a scalar type)
-            value = f[key][()]
-            key, value = postprocess_reading(key, value)
-            d[key] = value
-    csr_keys = [key.replace('_csr_data', '')
-                 for key in d if '_csr_data' in key]
-    for key in csr_keys: d = utils.load_sparse_csr(d, key=key)
-    return AnnData(d)
 
 
 def read_csv(filename, delimiter=',', first_column_names=None, dtype='float32'):

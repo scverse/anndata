@@ -1,5 +1,7 @@
 """Main class and helper functions.
 """
+import os
+import h5py
 from collections import Mapping, Sequence
 from collections import OrderedDict
 from enum import Enum
@@ -9,8 +11,7 @@ import pandas as pd
 from pandas.core.index import RangeIndex
 from scipy import sparse as sp
 from scipy.sparse.sputils import IndexMixin
-import logging as logg
-from textwrap import indent, dedent
+from textwrap import dedent
 
 
 class StorageType(Enum):
@@ -203,8 +204,146 @@ def _gen_dataframe(anno, length, index_names):
     return _anno
 
 
+def save_sparse_csr(X, key='X'):
+    from scipy.sparse.csr import csr_matrix
+    X = csr_matrix(X)
+    key_csr = key + '_csr'
+    return {key_csr + '_data': X.data,
+            key_csr + '_indices': X.indices,
+            key_csr + '_indptr': X.indptr,
+            key_csr + '_shape': np.array(X.shape)}
+
+
+def load_sparse_csr(d, key='X'):
+    from scipy.sparse.csr import csr_matrix
+    key_csr = key + '_csr'
+    d[key] = csr_matrix((d[key_csr + '_data'],
+                         d[key_csr + '_indices'],
+                         d[key_csr + '_indptr']),
+                        shape=d[key_csr + '_shape'])
+    del d[key_csr + '_data']
+    del d[key_csr + '_indices']
+    del d[key_csr + '_indptr']
+    del d[key_csr + '_shape']
+    return d
+
+
+def read_anndata(filename):
+    """Read `.anndata`-formatted hdf5 file.
+
+    Parameters
+    ----------
+    filename : `str`
+        File name of data file.
+
+    Returns
+    -------
+    An :class:`~anndata.AnnData` object.
+    """
+    return _read_anndata(filename)
+
+
+def _read_anndata(filename, attr=None):
+    def postprocess_reading(key, value):
+        if value.ndim == 1 and len(value) == 1:
+            value = value[0]
+        if value.dtype.kind == 'S':
+            value = value.astype(str)
+            # recover a dictionary that has been stored as a string
+            if len(value) > 0:
+                if value[0] == '{' and value[-1] == '}': value = eval(value)
+        if (key != 'obs' and key != 'var' and key != '_obs' and key != '_var'
+            and not isinstance(value, dict) and value.dtype.names is not None):
+            # TODO: come up with a better way of solving this, see also below
+            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
+                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
+            value = value.astype(new_dtype)
+        return key, value
+    filename = str(filename)  # allow passing pathlib.Path objects
+    d = {}
+    with h5py.File(filename, 'r') as f:
+        for key in f.keys():
+            if attr is not None:
+                if key != attr and not key.startswith(attr + '_csr'):
+                    continue
+            # the '()' means 'read everything' (by contrast, ':' only works
+            # if not reading a scalar type)
+            value = f[key][()]
+            key, value = postprocess_reading(key, value)
+            d[key] = value
+    csr_keys = [key.replace('_csr_data', '')
+                for key in d if '_csr_data' in key]
+    for key in csr_keys: d = load_sparse_csr(d, key=key)
+    if attr is not None: return d[attr]
+    return AnnData(d)
+
+
+def write_anndata(filename, adata,
+                  compression='gzip', compression_opts=None):
+    _write_anndata(filename, adata=adata,
+                   compression=compression, compression_opts=compression_opts)
+
+# attr_value needs to be a dict
+def _write_anndata(filename, adata=None, attr_value=None,
+                   compression='gzip', compression_opts=None):
+    def preprocess_writing(value):
+        if isinstance(value, dict):
+            # hack for storing dicts
+            value = np.array([str(value)])
+        else:
+            value = np.array(value)
+            if value.ndim == 0: value = np.array([value])
+        # make sure string format is chosen correctly
+        if value.dtype.kind == 'U': value = value.astype(np.string_)
+        return value
+    filename = str(filename)  # allow passing pathlib.Path objects
+    if not filename.endswith(('.h5', '.anndata')):
+        raise ValueError('Filename needs to end with \'.anndata\'.')
+    if not os.path.exists(os.path.dirname(filename)):
+        # logg.info('creating directory', directory + '/', 'for saving output files')
+        os.makedirs(directory)
+    if attr_value is None:
+        d = adata._to_dict_fixed_width_arrays()
+    else:
+        d = attr_value
+    d_write = {}
+    for key, value in d.items():
+        if sp.issparse(value):
+            for k, v in save_sparse_csr(value, key=key).items():
+                d_write[k] = v
+        else:
+            d_write[key] = preprocess_writing(value)
+            # some output about the data to write
+            # print(type(value), value.dtype, value.dtype.kind, value.shape)
+    with h5py.File(filename, 'w' if attr_value is None else 'r+') as f:
+        for key, value in d_write.items():
+            try:
+                # ignore arrays with empty dtypes
+                if value.dtype.descr:
+                    f.create_dataset(key, data=value,
+                                     compression=compression,
+                                     compression_opts=compression_opts)
+            except TypeError:
+                # try writing it as byte strings
+                try:
+                    if value.dtype.names is None:
+                        f.create_dataset(key, data=value.astype('S'),
+                                         compression=compression,
+                                         compression_opts=compression_opts)
+                    else:
+                        new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
+                                     for dt in value.dtype.descr]
+                        f.create_dataset(key, data=value.astype(new_dtype),
+                                         compression=compression,
+                                         compression_opts=compression_opts)
+                except Exception as e:
+                    # logg.info(str(e))
+                    warnings.warn('Could not save field with key = "{}" to hdf5 file.'
+                                  .format(key))
+
+
 class AnnData(IndexMixin):
-    
+
     _main_narrative = dedent("""\
         :class:`~anndata.AnnData` stores a data matrix (``.X``) together with
         annotations of observations (``.obs``), variables (``.var``) and
@@ -256,8 +395,9 @@ class AnnData(IndexMixin):
         o6   NaN    d4     2
         """)
 
-    
-    def __init__(self, X, obs=None, var=None, uns=None, obsm=None, varm=None,
+    def __init__(self, X, obs=None, var=None, uns=None,
+                 obsm=None, varm=None,
+                 filename=None,
                  dtype='float32', single_col=False):
 
         # generate from a dictionary
@@ -288,7 +428,8 @@ class AnnData(IndexMixin):
         self._X, self._n_obs, self._n_vars = _fix_shapes(X)
 
         # annotations
-        self._obs = _gen_dataframe(obs, self._n_obs, ['obs_names', 'row_names', 'smp_names'])
+        self._obs = _gen_dataframe(obs, self._n_obs,
+                                   ['obs_names', 'row_names', 'smp_names'])
         self._var = _gen_dataframe(var, self._n_vars, ['var_names', 'col_names'])
 
         # unstructured annotations
@@ -305,6 +446,12 @@ class AnnData(IndexMixin):
         # clean up old formats
         self._clean_up_old_format(uns)
 
+        # write to file
+        if filename is not None:
+            write_anndata(filename, self)
+            self._X = None
+        self._filename = filename
+
     def __repr__(self):
         return ('AnnData object with n_obs × n_vars = {} × {}\n'
                 '    obs_keys = {}\n'
@@ -316,6 +463,28 @@ class AnnData(IndexMixin):
                         self.obs_keys(), self.var_keys(),
                         self.uns_keys(),
                         self.obsm_keys(), self.varm_keys()))
+
+    def _read(self, attr):
+        return _read_anndata(self.filename, attr)
+
+    def _write(self, attr, value):
+        return _write_anndata(self.filename, attr_value={attr: value})
+
+    @property
+    def filename(self):
+        """Filename for backing AnnData object."""
+        return self._filename
+
+    @filename.setter
+    def filename(self, value):
+        write_anndata(value, self)
+        self._filename = value
+        self._X = None
+
+    @property
+    def shape(self):
+        """Shape of data matrix: (n_obs, n_vars)."""
+        return self.n_obs, self.n_vars
 
     # for backwards compat
     @property
@@ -330,22 +499,24 @@ class AnnData(IndexMixin):
     def data(self, value):
         print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
               '`.data` will be removed in the future.')
-        if not self._X.shape == value.shape:
+        if not self.shape == value.shape:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
-                             .format(value.shape, self._X.shape))
+                             .format(value.shape, self.shape))
         self._X = value
 
     @property
     def X(self):
-        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`)."""
-        return self._X
+        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.spmatrix`)."""
+        if self.filename is None: return self._X
+        else: return self._read('X')
 
     @X.setter
     def X(self, value):
-        if not self._X.shape == value.shape:
+        if not self.shape == value.shape:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
-                             .format(value.shape, self._X.shape))
-        self._X = value
+                             .format(value.shape, self.shape))
+        if self.filename is None: self._X = value
+        else: self._write('X', value)
 
     @property
     def n_smps(self):
@@ -370,7 +541,7 @@ class AnnData(IndexMixin):
     # for backwards compat
     @property
     def smp(self):
-        """One-dimensional annotation of observations (`pd.DataFrame`)."""
+        """Deprecated: One-dimensional annotation of observations (`pd.DataFrame`)."""
         return self._obs
 
     @obs.setter
@@ -588,9 +759,16 @@ class AnnData(IndexMixin):
 
         return slice(start, stop, step)
 
+    # TODO: this is not quite complete...
     def __delitem__(self, index):
         obs, var = self._normalize_indices(index)
-        del self._X[obs, var]
+        # TODO: does this really work?
+        if self.filename is None:
+            del self._X[obs, var]
+        else:
+            X = self._read('X')
+            del X[obs, var]
+            self._write('X', X)
         if var == slice(None):
             del self._obs.iloc[obs, :]
         if obs == slice(None):
@@ -600,35 +778,37 @@ class AnnData(IndexMixin):
         # Note: this cannot be made inplace
         # http://stackoverflow.com/questions/31916617/using-keyword-arguments-in-getitem-method-in-python
         obs, var = self._normalize_indices(index)
-        data = self._X[obs, var]
+        if self.filename is None: X = self._X[obs, var]
+        else: X = self._read('X')
         obs_new = self._obs.iloc[obs]
         obsm_new = self._obsm[obs]
         var_new = self._var.iloc[var]
         varm_new = self._varm[var]
-        assert obs_new.shape[0] == data.shape[0], (obs, obs_new)
-        assert var_new.shape[0] == data.shape[1], (var, var_new)
+        assert obs_new.shape[0] == X.shape[0], (obs, obs_new)
+        assert var_new.shape[0] == X.shape[1], (var, var_new)
         uns_new = self._uns.copy()
         # slice sparse spatrices of n_obs × n_obs in self._uns
         if not (isinstance(obs, slice) and
                 obs.start is None and obs.step is None and obs.stop is None):
             raised_warning = False
-            for k, v in self._uns.items():  # TODO: make sure this really works as expected
+            for k, v in self._uns.items():
                 if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
                     uns_new[k] = v.tocsc()[:, obs].tocsr()[obs, :]
-                    if not raised_warning:
-                        logg.warn('Slicing adjacency matrices can be dangerous. '
-                                  'Consider recomputing the data graph.')
-                        raised_warning = True
-        adata = AnnData(data, obs_new, var_new, uns_new, obsm_new, varm_new)
-        return adata
+        return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new)
 
     def _inplace_subset_var(self, index):
         """Inplace subsetting along variables dimension.
 
         Same as adata = adata[:, index], but inplace.
         """
-        self._X = self._X[:, index]
-        self._n_vars = self._X.shape[1]
+        if self.filename is None:
+            self._X = self._X[:, index]
+            self._n_vars = self._X.shape[1]
+        else:
+            X = self._read('X')
+            X = X[:, index]
+            self._n_vars = X.shape[1]
+            self._write('X', X)
         self._var = self._var.iloc[index]
         # TODO: the following should not be necessary!
         self._varm = BoundRecArr(self._varm[index], self, 'varm')
@@ -639,17 +819,17 @@ class AnnData(IndexMixin):
 
         Same as adata = adata[index, :], but inplace.
         """
-        self._X = self._X[index, :]
-        raised_warning = False
-        # TODO: solve this in a better way, also for var
+        if self.filename is None:
+            self._X = self._X[index, :]
+            self._n_obs = self._X.shape[0]
+        else:
+            X = self._read('X')
+            X = X[index, :]
+            self._n_obs = X.shape[0]
+            self._write('X', X)
         for k, v in self._uns.items():
             if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
                 self._uns[k] = v.tocsc()[:, index].tocsr()[index, :]
-                if not raised_warning:
-                    logg.warn('Slicing adjacency matrices can be dangerous. '
-                              'Consider recomputing the data graph.')
-                    raised_warning = True
-        self._n_obs = self._X.shape[0]
         self._obs = self._obs.iloc[index]
         # TODO: the following should not be necessary!
         self._obsm = BoundRecArr(self._obsm[index], self, 'obsm')
@@ -679,27 +859,40 @@ class AnnData(IndexMixin):
 
     def __setitem__(self, index, val):
         obs, var = self._normalize_indices(index)
-        self._X[obs, var] = val
+        if self.filename is None:
+            self._X[obs, var] = val
+        else:
+            X = self._read('X')
+            X[obs, var] = val
+            self._write('X', X)
 
     def __len__(self):
-        return self._X.shape[0]
+        return self.shape[0]
 
     def transpose(self):
         """Transpose whole object.
 
         Data matrix is transposed, observations and variables are interchanged.
         """
-        if sp.isspmatrix_csr(self._X):
-            return AnnData(self._X.T.tocsr(), self._var, self._obs, self._uns,
-                           self._varm.flipped(), self._obsm.flipped())
-        return AnnData(self._X.T, self._var, self._obs, self._uns,
-                       self._varm.flipped(), self._obsm.flipped())
+        if self.filename is None: X = self._X
+        else: X = _read('X')
+        if sp.isspmatrix_csr(X):
+            return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
+                           self._varm.flipped(), self._obsm.flipped(),
+                           filename=self.filename)
+        return AnnData(X.T, self._var, self._obs, self._uns,
+                       self._varm.flipped(), self._obsm.flipped(),
+                       filename=self.filename)
 
     T = property(transpose)
 
     def copy(self):
         """Full copy with memory allocated."""
-        return AnnData(self._X.copy(), self._obs.copy(), self._var.copy(), self._uns.copy(),
+        if self.filename is None: X = self._X
+        else: X = _read('X')
+        return AnnData(X.copy() if self.filename is None else X,
+                       self._obs.copy(),
+                       self._var.copy(), self._uns.copy(),
                        self._obsm.copy(), self._varm.copy())
 
     def concatenate(self, adatas, batch_key='batch', batch_categories=None):
@@ -731,7 +924,7 @@ class AnnData(IndexMixin):
         var = adatas_to_concat[0].var
         varm = adatas_to_concat[0].varm
         uns = adatas_to_concat[0].uns
-        return AnnData(X, obs, var, uns, obsm, varm)
+        return AnnData(X, obs, var, uns, obsm, varm, filename=self.filename)
 
     concatenate.__doc__ = dedent("""\
         Concatenate along the observations axis after intersecting the variables names.
@@ -767,37 +960,45 @@ class AnnData(IndexMixin):
         else:
             key = {key}
         if 'obs' in key and len(self._obs) != self._n_obs:
-            raise ValueError('Observations annotation `obs` needs to have the same amount of '
-                             'rows as data ({}), but has {} rows'
+            raise ValueError('Observations annot. `obs` must have number of '
+                             'rows of `X` ({}), but has {} rows.'
                              .format(self._n_obs, self._obs.shape[0]))
         if 'var' in key and len(self._var) != self._n_vars:
-            raise ValueError('Variables annotation `var` needs to have the same amount of '
-                             'columns as data  ({}), but has {} rows'
+            raise ValueError('Variables annot. `var` must have number of '
+                             'columns of `X` ({}), but has {} rows.'
                              .format(self._n_vars, self._var.shape[0]))
         if 'obsm' in key and len(self._obsm) != self._n_obs:
-            raise ValueError('Observations annotation `obsm` needs to have the same amount of '
-                             'rows as data ({}), but has {} rows'
+            raise ValueError('Observations annot. `obsm` must have number of '
+                             'rows of `X` ({}), but has {} rows.'
                              .format(self._n_obs, self._obs.shape[0]))
         if 'varm' in key and len(self._varm) != self._n_vars:
-            raise ValueError('Variables annotation `varm` needs to have the same amount of '
-                             'columns as data ({}), but has {} rows'
+            raise ValueError('Variables annot. `varm` must have number of '
+                             'columns of `X` ({}), but has {} rows.'
                              .format(self._n_vars, self._var.shape[0]))
 
-    def write_anndata(self, filename, compression='gzip',
-                      compression_opts=None):
+    def write(self, filename=None, compression='gzip',
+              compression_opts=None):
         """Write `.anndata`-formatted hdf5 file.
 
         Parameters
         ----------
-        filename : `str`
-            Filename of data file.
+        filename : `str`, optional (default: AnnData.filename)
+            Filename of data file. Defaults to filename of object.
         compression : `None` or {'gzip', 'lzf'}, optional (default: `'gzip'`)
             See http://docs.h5py.org/en/latest/high/dataset.html.
         compression_opts : `int`, optional (default: `None`)
             See http://docs.h5py.org/en/latest/high/dataset.html.
         """
-        from .readwrite.write import write_anndata
-        write_anndata(filename, self, compression, compression_opts)
+        if filename is None and self.filename is None:
+            raise ValueError('Provide a filename!')
+        if filename is None:
+            filename = self.filename
+        if self.filename is not None:
+            X = self._read('X')
+            adata = AnnData(X, self.obs, self.var, self.uns, self.obsm, self.varm)
+        else:
+            adata = self
+        write_anndata(filename, adata, compression, compression_opts)
 
     def write_csvs(self, dirname, skip_data=True):
         """Write annotation to `.csv` files.
@@ -833,11 +1034,12 @@ class AnnData(IndexMixin):
         """
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
         var_rec, uns_var = df_to_records_fixed_width(self._var)
-        d = {'_X': self._X,
-             '_obs': obs_rec,
-             '_var': var_rec,
-             '_obsm': self._obsm,
-             '_varm': self._varm}
+        d = {'obs': obs_rec,
+             'var': var_rec,
+             'obsm': self._obsm,
+             'varm': self._varm}
+        if self.filename is None: d['X'] = self._X
+        else: d['X'] = self._read('X')
         return {**d, **self._uns, **uns_obs, **uns_var}
 
     def _from_dict(self, ddata):
