@@ -1,0 +1,6 @@
+# stuff necessary for docs generation
+numpydoc
+# dependencies of anndata
+pandas>=0.21.0
+scipy
+h5py
