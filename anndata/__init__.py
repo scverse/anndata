@@ -1,28 +1,34 @@
 from .base import AnnData
-from .base import read_anndata as read
+from .base import read_h5ad as read
 
 __doc__ = """\
 anndata
 =======
 
-The `anndata` package provides functions for the :class:`~anndata.AnnData` data
-container, which extends pandas `DataFrames <https://pandas.pydata.org/pandas-docs/stable/dsintro.html#dataframe>`_: {main_narrative}
-
-The AnnData class
------------------
+The `anndata` package provides functions for :class:`~anndata.AnnData` objects and their native file format `.h5ad`: {main_narrative}
 
 .. autosummary::
   :toctree: .
 
    AnnData
 
+
 Reading
 -------
+
+Reading anndata's native file format `.h5ad`. Doing this, by default, only
+relevant contents of the file are loaded into memory.
 
 .. autosummary::
   :toctree: .
 
-   read_anndata
+   read
+
+Reading other file formats.
+
+.. autosummary::
+  :toctree: .
+
    read_csv
    read_excel
    read_hdf
@@ -30,29 +36,24 @@ Reading
    read_mtx
    read_text
 
+
 Writing
 -------
+
+Writing to anndata's native file format `.h5ad`.
 
 .. autosummary::
   :toctree: .
 
-   AnnData.write_anndata
+   AnnData.write
+
+Writing to other formats.
+
+.. autosummary::
+  :toctree: .
+
    AnnData.write_csvs
    AnnData.write_loom
-
-References
-----------
-
-.. [Huber15]
-   Huber *et al.* (2015),
-   *Orchestrating high-throughput genomic analysis with Bioconductor*,
-   `Nature Methods <https://doi.org/10.1038/nmeth.3252>`__.
-
-.. [Wolf17]
-   Wolf *et al.* (2017),
-   *Scanpy for analysis of large-scale single-cell gene expression data*,
-   `bioRxiv <https://doi.org/10.1101/174029>`__.
-
 """.format(main_narrative=AnnData._main_narrative)
 
 from .readwrite import read_loom, \

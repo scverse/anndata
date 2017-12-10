@@ -228,22 +228,37 @@ def load_sparse_csr(d, key='X'):
     return d
 
 
-def read_anndata(filename):
-    """Read `.anndata`-formatted hdf5 file.
+def read_h5ad(filename, init_filename=True):
+    """Read `.h5ad`-formatted hdf5 file.
 
     Parameters
     ----------
     filename : `str`
         File name of data file.
+    init_filename : `bool`, optional (default: `True`)
+        If `True`, `filename` initializes the ``.filename`` attribute of the
+        returned object and the data is *not* loaded into memory.
 
     Returns
     -------
     An :class:`~anndata.AnnData` object.
     """
-    return _read_anndata(filename)
+    if init_filename:
+        return AnnData(filename=filename)
+    else:
+        d = _read_h5ad(filename)
+        return AnnData(d)
 
 
-def _read_anndata(filename, attr=None):
+def _read_h5ad(filename, attr=None, skip_attrs=None):
+    """Return a dict with arrays for initializing AnnData.
+
+    Parameters
+    ----------
+    filename : `str`
+    attr : `str`
+    skip_attrs : `tuple` of `str`
+    """
     def postprocess_reading(key, value):
         if value.ndim == 1 and len(value) == 1:
             value = value[0]
@@ -259,12 +274,16 @@ def _read_anndata(filename, attr=None):
                           if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
             value = value.astype(new_dtype)
         return key, value
+
     filename = str(filename)  # allow passing pathlib.Path objects
     d = {}
     with h5py.File(filename, 'r') as f:
         for key in f.keys():
             if attr is not None:
                 if key != attr and not key.startswith(attr + '_csr'):
+                    continue
+            if skip_attrs is not None:
+                if key in skip_attrs or key.startswith(skip_attrs):
                     continue
             # the '()' means 'read everything' (by contrast, ':' only works
             # if not reading a scalar type)
@@ -275,16 +294,17 @@ def _read_anndata(filename, attr=None):
                 for key in d if '_csr_data' in key]
     for key in csr_keys: d = load_sparse_csr(d, key=key)
     if attr is not None: return d[attr]
-    return AnnData(d)
+
+    return d
 
 
-def write_anndata(filename, adata,
+def write_h5ad(filename, adata,
                   compression='gzip', compression_opts=None):
-    _write_anndata(filename, adata=adata,
+    _write_h5ad(filename, adata=adata,
                    compression=compression, compression_opts=compression_opts)
 
 # attr_value needs to be a dict
-def _write_anndata(filename, adata=None, attr_value=None,
+def _write_h5ad(filename, adata=None, attr_value=None,
                    compression='gzip', compression_opts=None):
     def preprocess_writing(value):
         if isinstance(value, dict):
@@ -297,8 +317,8 @@ def _write_anndata(filename, adata=None, attr_value=None,
         if value.dtype.kind == 'U': value = value.astype(np.string_)
         return value
     filename = str(filename)  # allow passing pathlib.Path objects
-    if not filename.endswith(('.h5', '.anndata')):
-        raise ValueError('Filename needs to end with \'.anndata\'.')
+    if not filename.endswith(('.h5', '.h5ad')):
+        raise ValueError('Filename needs to end with \'.h5ad\'.')
     if not os.path.exists(os.path.dirname(filename)):
         # logg.info('creating directory', directory + '/', 'for saving output files')
         os.makedirs(directory)
@@ -345,22 +365,25 @@ def _write_anndata(filename, adata=None, attr_value=None,
 class AnnData(IndexMixin):
 
     _main_narrative = dedent("""\
-        :class:`~anndata.AnnData` stores a data matrix (``.X``) together with
-        annotations of observations (``.obs``), variables (``.var``) and
-        unstructured annotations (``.uns``).
+        :class:`~anndata.AnnData` stores a data matrix ``.X`` together with
+        annotations of observations ``.obs``, variables ``.var`` and
+        unstructured annotations ``.uns``. If setting an `.h5ad` backing file
+        ``.filename``, data remains on the disk but is automatically loaded into
+        memory if needed.
 
         .. raw:: html
 
             <img src="http://falexwolf.de/img/scanpy/anndata.svg"
-                 style="width: 300px; margin: 10px 0px 15px 20px">
+                 style="width: 350px; margin: 10px 0px 15px 20px">
 
         An :class:`~anndata.AnnData` object ``adata`` can be sliced like a
         pandas dataframe, for example, ``adata_subset = adata[:,
         list_of_variable_names]``. Observation and variable names can be
         accessed via ``.obs_names`` and ``.var_names``, respectively.
-        :class:`~anndata.AnnData` is similar to R's ExpressionSet [Huber15]_.
+        :class:`~anndata.AnnData`'s basic structure is similar to R's
+        ExpressionSet [Huber15]_.
 
-        If you find it useful, consider citing [Wolf17]_.
+        If you find the `anndata` package useful, please consider citing [Wolf17]_.
         """)
 
     _example_concatenate = dedent("""\
@@ -395,12 +418,24 @@ class AnnData(IndexMixin):
         o6   NaN    d4     2
         """)
 
-    def __init__(self, X, obs=None, var=None, uns=None,
+    def __init__(self, X=None, obs=None, var=None, uns=None,
                  obsm=None, varm=None,
                  filename=None,
                  dtype='float32', single_col=False):
 
-        # generate from a dictionary
+        # init backing filename (might be `None`)
+        self._filename = filename
+
+        # init from file
+        if filename is not None:
+            if any((X, obs, var, uns, obsm, varm)):
+                raise ValueError(
+                    'If initializing from `filename`, '
+                    'no further arguments may be passed.')
+            # returns dictionary
+            X = _read_h5ad(filename, skip_attrs=('X',))
+
+        # generate from dictionary
         if isinstance(X, Mapping):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
@@ -408,24 +443,26 @@ class AnnData(IndexMixin):
             X, obs, var, uns, obsm, varm = self._from_dict(X)
 
         # check data type of X
-        for s_type in StorageType:
-            if isinstance(X, s_type.value):
-                break
+        if X is not None:
+            for s_type in StorageType:
+                if isinstance(X, s_type.value):
+                    break
+            else:
+                class_names = ', '.join(c.__name__ for c in StorageType.classes())
+                raise ValueError('`X` needs to be of one of {}, not {}.'
+                                 .format(class_names, type(X)))
+            # if type doesn't match, a copy is made, otherwise, use a view
+            if sp.issparse(X) or isinstance(X, ma.MaskedArray):
+                # TODO: maybe use view on data attribute of sparse matrix
+                #       as in readwrite.read_10x_h5
+                if X.dtype != np.dtype(dtype): X = X.astype(dtype)
+            else:  # is np.ndarray
+                X = X.astype(dtype, copy=False)
+            # data matrix and shape
+            self._X, self._n_obs, self._n_vars = _fix_shapes(X)
         else:
-            class_names = ', '.join(c.__name__ for c in StorageType.classes())
-            raise ValueError('`X` needs to be of one of {}, not {}.'
-                             .format(class_names, type(X)))
-
-        # if type doesn't match, a copy is made, otherwise, use a view
-        if sp.issparse(X) or isinstance(X, ma.MaskedArray):
-            # TODO: maybe use view on data attribute of sparse matrix
-            #       as in readwrite.read_10x_h5
-            if X.dtype != np.dtype(dtype): X = X.astype(dtype)
-        else:  # is np.ndarray
-            X = X.astype(dtype, copy=False)
-
-        # data matrix and shape
-        self._X, self._n_obs, self._n_vars = _fix_shapes(X)
+            self._n_obs = len(obs)
+            self._n_vars = len(var)
 
         # annotations
         self._obs = _gen_dataframe(obs, self._n_obs,
@@ -446,38 +483,38 @@ class AnnData(IndexMixin):
         # clean up old formats
         self._clean_up_old_format(uns)
 
-        # write to file
-        if filename is not None:
-            write_anndata(filename, self)
-            self._X = None
-        self._filename = filename
-
     def __repr__(self):
-        return ('AnnData object with n_obs × n_vars = {} × {}\n'
-                '    obs_keys = {}\n'
-                '    var_keys = {}\n'
-                '    uns_keys = {}\n'
-                '    obsm_keys = {}\n'
-                '    varm_keys = {}'
-                .format(self._n_obs, self._n_vars,
-                        self.obs_keys(), self.var_keys(),
-                        self.uns_keys(),
-                        self.obsm_keys(), self.varm_keys()))
+        if self.filename is not None:
+            backed_at = 'backed at \'{}\''.format(self.filename)
+        else:
+            backed_at = ''
+        descr = (
+            'AnnData object with n_obs × n_vars = {} × {} {}\n'
+            '    obs_keys = {}\n'
+            '    var_keys = {}\n'
+            '    uns_keys = {}\n'
+            '    obsm_keys = {}\n'
+            '    varm_keys = {}'
+            .format(self._n_obs, self._n_vars, backed_at,
+                    self.obs_keys(), self.var_keys(),
+                    self.uns_keys(),
+                    self.obsm_keys(), self.varm_keys()))
+        return descr
 
     def _read(self, attr):
-        return _read_anndata(self.filename, attr)
+        return _read_h5ad(self.filename, attr)
 
     def _write(self, attr, value):
-        return _write_anndata(self.filename, attr_value={attr: value})
+        return _write_h5ad(self.filename, attr_value={attr: value})
 
     @property
     def filename(self):
-        """Filename for backing AnnData object."""
+        """Filename for backing object as `.h5ad` file on disk."""
         return self._filename
 
     @filename.setter
     def filename(self, value):
-        write_anndata(value, self)
+        write_h5ad(value, self)
         self._filename = value
         self._X = None
 
@@ -978,7 +1015,7 @@ class AnnData(IndexMixin):
 
     def write(self, filename=None, compression='gzip',
               compression_opts=None):
-        """Write `.anndata`-formatted hdf5 file.
+        """Write `.h5ad`-formatted hdf5 file.
 
         Parameters
         ----------
@@ -998,13 +1035,13 @@ class AnnData(IndexMixin):
             adata = AnnData(X, self.obs, self.var, self.uns, self.obsm, self.varm)
         else:
             adata = self
-        write_anndata(filename, adata, compression, compression_opts)
+        write_h5ad(filename, adata, compression, compression_opts)
 
     def write_csvs(self, dirname, skip_data=True):
         """Write annotation to `.csv` files.
 
         It is not possible to recover the full :class:`~anndata.AnnData` from the
-        output of this function. Use :func:`~anndata.write_anndata` for this.
+        output of this function. Use :func:`~anndata.write` for this.
 
         Parameters
         ----------
@@ -1051,17 +1088,20 @@ class AnnData(IndexMixin):
         ddata = ddata.copy()
         # data matrix
         if '_data' in ddata:
-            data = ddata['_data']
+            X = ddata['_data']
             del ddata['_data']
         elif 'data' in ddata:
-            data = ddata['data']
+            X = ddata['data']
             del ddata['data']
         elif '_X' in ddata:
-            data = ddata['_X']
+            X = ddata['_X']
             del ddata['_X']
         elif 'X' in ddata:
-            data = ddata['X']
+            X = ddata['X']
             del ddata['X']
+        else:
+            X = None
+            
         # simple annotation
         if ('_obs' in ddata and isinstance(ddata['_obs'], (np.ndarray, pd.DataFrame))
             and '_var' in ddata and isinstance(ddata['_var'], (np.ndarray, pd.DataFrame))):
@@ -1190,7 +1230,7 @@ class AnnData(IndexMixin):
         # the remaining fields are the unstructured annotation
         uns = ddata
 
-        return data, obs, var, uns, obsm, varm
+        return X, obs, var, uns, obsm, varm
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
@@ -1242,12 +1282,9 @@ class AnnData(IndexMixin):
 
 
 AnnData.__doc__ = dedent("""\
-    Annotated data matrix.
+    An annotated data matrix.
 
     {main_narrative}
-
-    Multi-dimensional annotation is stored in two further attributes: ``.obsm``,
-    ``.varm``.
 
     Parameters
     ----------
@@ -1268,6 +1305,30 @@ AnnData.__doc__ = dedent("""\
         Data type used for storage.
     single_col : `bool`, optional (default: `False`)
         Interpret one-dimensional input array as column.
+
+    See Also
+    --------
+    read
+    read_csv
+    read_excel
+    read_hdf
+    read_loom
+    read_mtx
+    read_text
+
+    Notes
+    -----
+    Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
+
+    :class:`~anndata.AnnData` stores observations (samples) of variables
+    (features) in the rows of a matrix. This is the convention of the modern
+    classics of stats [Hastie09]_ and Machine Learning `(Murphy, 2012)
+    <https://mitpress.mit.edu/books/machine-learning-0>`_, the convention of
+    dataframes both in R and Python and the established stats and machine
+    learning packages in Python (`statsmodels
+    <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
+    <http://scikit-learn.org/>`_). It is the opposite of the convention for
+    storing genomic data.
 
     Examples
     --------
