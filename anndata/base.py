@@ -3,9 +3,8 @@
 import os
 import h5py
 import h5sparse
-from collections import Mapping, Sequence, namedtuple
-from collections import OrderedDict
 from enum import Enum
+from collections import Mapping, Sequence
 import numpy as np
 from numpy import ma
 import pandas as pd
@@ -415,7 +414,7 @@ class AnnData(IndexMixin):
             else:  # is np.ndarray
                 X = X.astype(dtype, copy=False)
             # data matrix and shape
-            self._X, self._n_obs, self._n_vars = _fix_shapes(X)
+            self.__X, self._n_obs, self._n_vars = _fix_shapes(X)
         else:
             self._n_obs = len(obs)
             self._n_vars = len(var)
@@ -446,24 +445,23 @@ class AnnData(IndexMixin):
             size += s
         return size
 
-    def __repr__(self):
-        if self.filename is not None:
+    def _gen_repr(self, n_obs, n_vars):
+        if self.isbacked():
             backed_at = 'backed at \'{}\''.format(self.filename)
         else:
             backed_at = ''
         descr = (
-            'AnnData object with n_obs × n_vars = {} × {} {}\n'
-            '    obs_keys = {}\n'
-            '    var_keys = {}\n'
-            '    uns_keys = {}\n'
-            '    obsm_keys = {}\n'
-            '    varm_keys = {}'
-            .format(self._n_obs, self._n_vars, backed_at,
-                    self.obs_keys(), self.var_keys(),
-                    self.uns_keys(),
-                    self.obsm_keys(), self.varm_keys()))
+            'AnnData object with n_obs × n_vars = {} × {} {}'
+            .format(n_obs, n_vars, backed_at))
+        for attr in ['obs_keys', 'var_keys', 'uns_keys', 'obsm_keys', 'varm_keys']:
+            keys = getattr(self, attr)()
+            if len(keys) > 0:
+                descr += '\n    {} = {}'.format(attr, keys)
         return descr
 
+    def __repr__(self):
+        return self._gen_repr(self.n_obs, self.n_vars)
+    
     def _from_dict(self, ddata):
         """Allows to construct an instance of AnnData from a dictionary.
 
@@ -540,7 +538,7 @@ class AnnData(IndexMixin):
         """
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
         var_rec, uns_var = df_to_records_fixed_width(self._var)
-        d = {'X': self._X,
+        d = {'X': self.__X,
              'obs': obs_rec,
              'var': var_rec,
              'obsm': self._obsm,
@@ -656,8 +654,9 @@ class AnnData(IndexMixin):
         if self.isbacked():
             # close so that we can reopen below
             self._f.file.close()
+        # create directory if it doesn't exist
         if not os.path.exists(os.path.dirname(filename)):
-            os.makedirs(directory)
+            os.makedirs(os.path.dirname(filename))
         d = self._to_dict_fixed_width_arrays()
         d_write = {}
         for key, value in d.items():
@@ -712,7 +711,7 @@ class AnnData(IndexMixin):
                                     f[key][()] = value.astype(new_dtype)
                                     continue
                                 else:
-                                    del f[key]                            
+                                    del f[key]
                             f.create_dataset(key, data=value.astype(new_dtype),
                                              compression=compression,
                                              compression_opts=compression_opts)
@@ -749,7 +748,7 @@ class AnnData(IndexMixin):
 
     def isopen(self):
         """State of backing file."""
-        return not adata._f.file.id
+        return not self._f.file.id
 
     @property
     def filename(self):
@@ -767,7 +766,7 @@ class AnnData(IndexMixin):
         # change from backing-mode back to full loading
         if filename is None:
             if self._f.name is not None:
-                self._X = self._read('X')[()]
+                self.__X = self._read('X')[()]
                 self._f.file.close()
                 self._f.name = None
                 self._f.file = None
@@ -789,8 +788,8 @@ class AnnData(IndexMixin):
             self._f.file = h5py.File(filename, 'r+')
             # set the filename
             self._f.name = filename
-            # as the data is stored on disk, we can safely set self._X to None
-            self._X = None
+            # as the data is stored on disk, we can safely set self.__X to None
+            self.__X = None
 
     @property
     def shape(self):
@@ -815,20 +814,29 @@ class AnnData(IndexMixin):
     @property
     def X(self):
         """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.spmatrix`)."""
-        if self.filename is None: return self._X
-        else: return self._read('X')
+        return self._X
+
+    @property
+    def _X(self):
+        # we need this additional layer for AnnDataView
+        if self.isbacked(): return self._read('X')
+        else: return self.__X
 
     @X.setter
     def X(self, value):
         if not self.shape == value.shape:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
                              .format(value.shape, self.shape))
-        if self.filename is None: self._X = value
-        else: self._write('X', value)
+        self._X = value
+
+    @_X.setter
+    def _X(self, value):
+        if self.isbacked(): self._write('X', value)
+        else: self.__X = value
 
     @property
     def n_smps(self):
-        """Deprecated: Number of observations."""
+        """Deprecated name for number of observations."""
         return self._n_obs
 
     @property
@@ -1039,8 +1047,9 @@ class AnnData(IndexMixin):
                 # `where` returns an 1-tuple (1D array) of found indices
                 i = np.where(names == i)[0]
                 if len(i) == 0:  # returns array of length 0 if nothing is found
-                    raise IndexError('Name "{}" is not valid variable or observation index.'
-                                     .format(index))
+                    raise IndexError(
+                        'Name "{}" is not valid observation/variable name.'
+                        .format(index))
                 i = i[0]
             return i
 
@@ -1051,24 +1060,21 @@ class AnnData(IndexMixin):
             if isinstance(index.stop, str):
                 stop = None if stop is None else stop + 1
             step = index.step
+            return slice(start, stop, step)
         elif isinstance(index, (int, str)):
-            start = name_idx(index)
-            stop = start + 1
-            step = 1
+            return name_idx(index)
         elif isinstance(index, (Sequence, np.ndarray)):
             return np.fromiter(map(name_idx, index), 'int64')
         else:
             raise IndexError('Unknown index {!r} of type {}'
                              .format(index, type(index)))
 
-        return slice(start, stop, step)
-
     # TODO: this is not quite complete...
     def __delitem__(self, index):
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
-        if self.filename is None:
-            del self._X[obs, var]
+        if not self.isbacked():
+            del self.__X[obs, var]
         else:
             X = self._read('X')
             del X[obs, var]
@@ -1079,35 +1085,43 @@ class AnnData(IndexMixin):
             del self._var.iloc[var, :]
 
     def __getitem__(self, index):
-        # Note: this cannot be made inplace
-        # http://stackoverflow.com/questions/31916617/using-keyword-arguments-in-getitem-method-in-python
-        obs, var = self._normalize_indices(index)
-        if self.filename is None: X = self._X[obs, var]
-        else: X = self._read('X')[obs, var]
-        obs_new = self._obs.iloc[obs]
-        obsm_new = self._obsm[obs]
-        var_new = self._var.iloc[var]
-        varm_new = self._varm[var]
-        assert obs_new.shape[0] == X.shape[0], (obs, obs_new)
-        assert var_new.shape[0] == X.shape[1], (var, var_new)
+        """Returns a sliced view of the object."""
+        return self._getitem_view(index)
+
+    def _getitem_view(self, index):
+        oidx, vidx = self._normalize_indices(index)
+        return AnnDataView(self, oidx, vidx)
+
+    def _getitem_copy(self, index):
+        oidx, vidx = self._normalize_indices(index)
+        if not self.isbacked(): X = self.__X[oidx, vidx]
+        else: X = self._read('X')[oidx, vidx]
+        obs_new = self._obs.iloc[oidx]
+        obsm_new = self._obsm[oidx]
+        var_new = self._var.iloc[vidx]
+        varm_new = self._varm[vidx]
+        assert obs_new.shape[0] == X.shape[0], (oidx, obs_new)
+        assert var_new.shape[0] == X.shape[1], (vidx, var_new)
         uns_new = self._uns.copy()
-        # slice sparse spatrices of n_obs × n_obs in self._uns
-        if not (isinstance(obs, slice) and
-                obs.start is None and obs.step is None and obs.stop is None):
-            raised_warning = False
-            for k, v in self._uns.items():
-                if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
-                    uns_new[k] = v.tocsc()[:, obs].tocsr()[obs, :]
+        self._slice_uns_sparse_matrices_inplace(uns_new)
         return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new)
+
+    def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
+        # slice sparse spatrices of n_obs × n_obs in self.uns
+        if not (isinstance(oidx, slice) and
+                oidx.start is None and oidx.step is None and oidx.stop is None):
+            for k, v in uns.items():
+                if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
+                    uns[k] = v.tocsc()[:, obs].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index):
         """Inplace subsetting along variables dimension.
 
         Same as adata = adata[:, index], but inplace.
         """
-        if self.filename is None:
-            self._X = self._X[:, index]
-            self._n_vars = self._X.shape[1]
+        if not self.isbacked():
+            self.__X = self.__X[:, index]
+            self._n_vars = self.__X.shape[1]
         else:
             X = self._read('X')
             X = X[:, index]
@@ -1123,17 +1137,15 @@ class AnnData(IndexMixin):
 
         Same as adata = adata[index, :], but inplace.
         """
-        if self.filename is None:
-            self._X = self._X[index, :]
-            self._n_obs = self._X.shape[0]
+        if not self.isbacked():
+            self.__X = self.__X[index, :]
+            self._n_obs = self.__X.shape[0]
         else:
             X = self._read('X')
             X = X[index, :]
             self._n_obs = X.shape[0]
             self._write('X', X)
-        for k, v in self._uns.items():
-            if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
-                self._uns[k] = v.tocsc()[:, index].tocsr()[index, :]
+        self._slice_uns_sparse_matrices_inplace(self._uns, index)
         self._obs = self._obs.iloc[index]
         # TODO: the following should not be necessary!
         self._obsm = BoundRecArr(self._obsm[index], self, 'obsm')
@@ -1163,8 +1175,8 @@ class AnnData(IndexMixin):
 
     def __setitem__(self, index, val):
         obs, var = self._normalize_indices(index)
-        if self.filename is None:
-            self._X[obs, var] = val
+        if not self.isbacked():
+            self.__X[obs, var] = val
         else:
             X = self._read('X')
             X[obs, var] = val
@@ -1178,7 +1190,7 @@ class AnnData(IndexMixin):
 
         Data matrix is transposed, observations and variables are interchanged.
         """
-        if self.filename is None: X = self._X
+        if not self.isbacked(): X = self.__X
         else: X = _read('X')
         if sp.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
@@ -1193,9 +1205,9 @@ class AnnData(IndexMixin):
     def copy(self, filename=None):
         """Full copy, optionally on disk."""
         if filename is None:
-            if self.filename is None: X = self._X
+            if not self.isbacked(): X = self.__X
             else: X = _read('X')
-            return AnnData(X.copy() if self.filename is None else X,
+            return AnnData(X.copy() if not self.isbacked() else X,
                            self._obs.copy(),
                            self._var.copy(), self._uns.copy(),
                            self._obsm.copy(), self._varm.copy())
@@ -1298,7 +1310,7 @@ class AnnData(IndexMixin):
         compression_opts : `int`, optional (default: `None`)
             See http://docs.h5py.org/en/latest/high/dataset.html.
         """
-        if filename is None and self.filename is None:
+        if filename is None and not self.isbacked():
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
@@ -1309,7 +1321,7 @@ class AnnData(IndexMixin):
     def flush(self):
         """Write `.h5ad`-formatted hdf5 file and leave the backing file open."""
         self._write_h5ad(filename, compression='gzip', compression_opts=None)
-        
+
     def write_csvs(self, dirname, skip_data=True):
         """Write annotation to `.csv` files.
 
@@ -1387,6 +1399,87 @@ class AnnData(IndexMixin):
 
 
 AnnData.__doc__ = AnnData._doc
+
+
+# let's not make this a subclass, but use composition
+# is more transparent
+# the view does not have to have all capabilities
+class AnnDataView():
+
+    def __init__(self, adata, oidx, vidx):
+        self._adata = adata
+        self._oidx = oidx
+        self._vidx = vidx
+        if isinstance(oidx, slice):
+            self.n_obs = len(self._adata.obs.index[oidx])
+        elif isinstance(oidx, (int, np.int64)):
+            self.n_obs = 1
+        else:
+            self.n_obs = len(oidx)
+        if isinstance(vidx, slice):
+            self.n_vars = len(self._adata.obs.index[vidx])
+        elif isinstance(vidx, (int, np.int64)):
+            self.n_vars = 1
+        else:
+            self.n_vars = len(vidx)
+
+    def __repr__(self):
+        return 'View of ' + self._adata._gen_repr(self.n_obs, self.n_vars)
+
+    @property
+    def X(self):
+        return self._adata._X[self._oidx, self._vidx]
+
+    @X.setter
+    def X(self, value):
+        self._adata._X[self._oidx, self._vidx] = value
+
+    @property
+    def obs(self):
+        return self._adata._obs.iloc[self._oidx]
+
+    @obs.setter
+    def obs(self, value):
+        self._adata._obs.iloc[self._oidx] = value
+
+    @property
+    def obsm(self):
+        return self._adata._obsm[self._oidx]
+
+    @obsm.setter
+    def obsm(self, value):
+        self._adata._obsm[self._oidx] = value
+
+    @property
+    def var(self):
+        return self._adata._var.iloc[self._vidx]
+
+    @var.setter
+    def var(self, value):
+        self._adata._var.iloc[self._vidx] = value
+
+    @property
+    def varm(self):
+        return self._adata._varm[self._vidx]
+
+    @varm.setter
+    def varm(self, value):
+        self._adata._varm[self._vidx] = value
+
+    @property
+    def uns(self):
+        uns_new = self._uns.copy()
+        self._adata._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
+        return uns_new
+
+    def copy(self):
+        return self._adata._getitem_copy((self._oidx, self._vidx))
+
+    def __getitem__(self, index):
+        raise ValueError('Object is view and cannot be accessed with [].')
+
+    def __setitem__(self, index, value):
+        raise ValueError('Object is view and cannot be accessed with [].')
 
 
 # all for backwards compat...
