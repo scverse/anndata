@@ -26,14 +26,6 @@ def test_creation():
            dict(TooLong=[1, 2, 3, 4]))
 
 
-def test_ddata():
-    ddata = dict(
-        X=np.array([[1, 2, 3], [4, 5, 6]]),
-        row_names=['A', 'B'],
-        col_names=['a', 'b', 'c'])
-    AnnData(ddata)
-
-
 def test_names():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),

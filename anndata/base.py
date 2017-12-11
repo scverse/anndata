@@ -2,7 +2,8 @@
 """
 import os
 import h5py
-from collections import Mapping, Sequence
+import h5sparse
+from collections import Mapping, Sequence, namedtuple
 from collections import OrderedDict
 from enum import Enum
 import numpy as np
@@ -204,30 +205,6 @@ def _gen_dataframe(anno, length, index_names):
     return _anno
 
 
-def save_sparse_csr(X, key='X'):
-    from scipy.sparse.csr import csr_matrix
-    X = csr_matrix(X)
-    key_csr = key + '_csr'
-    return {key_csr + '_data': X.data,
-            key_csr + '_indices': X.indices,
-            key_csr + '_indptr': X.indptr,
-            key_csr + '_shape': np.array(X.shape)}
-
-
-def load_sparse_csr(d, key='X'):
-    from scipy.sparse.csr import csr_matrix
-    key_csr = key + '_csr'
-    d[key] = csr_matrix((d[key_csr + '_data'],
-                         d[key_csr + '_indices'],
-                         d[key_csr + '_indptr']),
-                        shape=d[key_csr + '_shape'])
-    del d[key_csr + '_data']
-    del d[key_csr + '_indices']
-    del d[key_csr + '_indptr']
-    del d[key_csr + '_shape']
-    return d
-
-
 def read_h5ad(filename, init_filename=True):
     """Read `.h5ad`-formatted hdf5 file.
 
@@ -244,125 +221,39 @@ def read_h5ad(filename, init_filename=True):
     An :class:`~anndata.AnnData` object.
     """
     if init_filename:
+        # open in backed-mode
         return AnnData(filename=filename)
     else:
-        d = _read_h5ad(filename)
+        # load everything into memory
+        # TODO: do this with less of a hack...
+        #       the "0" currently replaces the "self"
+        d = AnnData._read_h5ad(0, filename)
         return AnnData(d)
 
 
-def _read_h5ad(filename, attr=None, skip_attrs=None):
-    """Return a dict with arrays for initializing AnnData.
-
-    Parameters
-    ----------
-    filename : `str`
-    attr : `str`
-    skip_attrs : `tuple` of `str`
-    """
-    def postprocess_reading(key, value):
-        if value.ndim == 1 and len(value) == 1:
-            value = value[0]
-        if value.dtype.kind == 'S':
-            value = value.astype(str)
-            # recover a dictionary that has been stored as a string
-            if len(value) > 0:
-                if value[0] == '{' and value[-1] == '}': value = eval(value)
-        if (key != 'obs' and key != 'var' and key != '_obs' and key != '_var'
-            and not isinstance(value, dict) and value.dtype.names is not None):
-            # TODO: come up with a better way of solving this, see also below
-            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
-                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
-            value = value.astype(new_dtype)
-        return key, value
-
-    filename = str(filename)  # allow passing pathlib.Path objects
-    d = {}
-    with h5py.File(filename, 'r') as f:
-        for key in f.keys():
-            if attr is not None:
-                if key != attr and not key.startswith(attr + '_csr'):
-                    continue
-            if skip_attrs is not None:
-                if key in skip_attrs or key.startswith(skip_attrs):
-                    continue
-            # the '()' means 'read everything' (by contrast, ':' only works
-            # if not reading a scalar type)
-            value = f[key][()]
-            key, value = postprocess_reading(key, value)
-            d[key] = value
-    csr_keys = [key.replace('_csr_data', '')
-                for key in d if '_csr_data' in key]
-    for key in csr_keys: d = load_sparse_csr(d, key=key)
-    if attr is not None: return d[attr]
-
-    return d
-
-
-def write_h5ad(filename, adata,
-                  compression='gzip', compression_opts=None):
-    _write_h5ad(filename, adata=adata,
-                   compression=compression, compression_opts=compression_opts)
-
-# attr_value needs to be a dict
-def _write_h5ad(filename, adata=None, attr_value=None,
-                   compression='gzip', compression_opts=None):
-    def preprocess_writing(value):
-        if isinstance(value, dict):
-            # hack for storing dicts
-            value = np.array([str(value)])
-        else:
-            value = np.array(value)
-            if value.ndim == 0: value = np.array([value])
-        # make sure string format is chosen correctly
-        if value.dtype.kind == 'U': value = value.astype(np.string_)
-        return value
-    filename = str(filename)  # allow passing pathlib.Path objects
-    if not filename.endswith(('.h5', '.h5ad')):
-        raise ValueError('Filename needs to end with \'.h5ad\'.')
-    if not os.path.exists(os.path.dirname(filename)):
-        # logg.info('creating directory', directory + '/', 'for saving output files')
-        os.makedirs(directory)
-    if attr_value is None:
-        d = adata._to_dict_fixed_width_arrays()
-    else:
-        d = attr_value
-    d_write = {}
-    for key, value in d.items():
-        if sp.issparse(value):
-            for k, v in save_sparse_csr(value, key=key).items():
-                d_write[k] = v
-        else:
-            d_write[key] = preprocess_writing(value)
-            # some output about the data to write
-            # print(type(value), value.dtype, value.dtype.kind, value.shape)
-    with h5py.File(filename, 'w' if attr_value is None else 'r+') as f:
-        for key, value in d_write.items():
-            try:
-                # ignore arrays with empty dtypes
-                if value.dtype.descr:
-                    f.create_dataset(key, data=value,
-                                     compression=compression,
-                                     compression_opts=compression_opts)
-            except TypeError:
-                # try writing it as byte strings
-                try:
-                    if value.dtype.names is None:
-                        f.create_dataset(key, data=value.astype('S'),
-                                         compression=compression,
-                                         compression_opts=compression_opts)
-                    else:
-                        new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
-                                     for dt in value.dtype.descr]
-                        f.create_dataset(key, data=value.astype(new_dtype),
-                                         compression=compression,
-                                         compression_opts=compression_opts)
-                except Exception as e:
-                    # logg.info(str(e))
-                    warnings.warn('Could not save field with key = "{}" to hdf5 file.'
-                                  .format(key))
+class NamedFile:
+    def __init__(self, name, file):
+        self.name = name
+        self.file = file
 
 
 class AnnData(IndexMixin):
+
+    _BACKED_ATTRS = ['X']
+
+    # backwards compat
+    _H5_ALIASES = {
+        'X': {'X', '_X', 'data', '_data'},
+        'obs': {'obs', '_obs', 'smp', '_smp'},
+        'var': {'var', '_var'},
+        'obsm': {'obsm', '_obsm', 'smpm', '_smpm'},
+        'varm': {'varm', '_varm'},
+    }
+
+    _H5_ALIASES_NAMES = {
+        'obs': {'obs_names', 'smp_names', 'row_names', 'index'},
+        'var': {'var_names', 'col_names', 'index'},
+    }
 
     _main_narrative = dedent("""\
         :class:`~anndata.AnnData` stores a data matrix ``.X`` together with
@@ -418,22 +309,87 @@ class AnnData(IndexMixin):
         o6   NaN    d4     2
         """)
 
+    _doc = dedent("""\
+        An annotated data matrix.
+
+        {main_narrative}
+
+        Parameters
+        ----------
+        X : `np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`
+            A #observations × #variables data matrix. A view of the data is used if the
+            data type matches, otherwise, a copy is made.
+        obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+            Key-indexed one-dimensional observation annotation of length #observations.
+        var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+            Key-indexed one-dimensional variable annotation of length #variables.
+        uns : `dict` or `None`, optional (default: `None`)
+            Unstructured annotation for the whole dataset.
+        obsm : structured `np.ndarray`, optional (default: `None`)
+            Key-indexed multi-dimensional observation annotation of length #observations.
+        varm : structured `np.ndarray`, optional (default: `None`)
+            Key-indexed multi-dimensional observation annotation of length #observations.
+        dtype : simple `np.dtype`, optional (default: 'float32')
+            Data type used for storage.
+        single_col : `bool`, optional (default: `False`)
+            Interpret one-dimensional input array as column.
+
+        See Also
+        --------
+        read
+        read_csv
+        read_excel
+        read_hdf
+        read_loom
+        read_mtx
+        read_text
+
+        Notes
+        -----
+        Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
+
+        :class:`~anndata.AnnData` stores observations (samples) of variables
+        (features) in the rows of a matrix. This is the convention of the modern
+        classics of stats [Hastie09]_ and Machine Learning `(Murphy, 2012)
+        <https://mitpress.mit.edu/books/machine-learning-0>`_, the convention of
+        dataframes both in R and Python and the established stats and machine
+        learning packages in Python (`statsmodels
+        <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
+        <http://scikit-learn.org/>`_). It is the opposite of the convention for
+        storing genomic data.
+
+        Examples
+        --------
+        A data matrix is flattened if either #observations (`n_obs`) or #variables
+        (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
+
+            adata = AnnData(np.ones((2, 2)))
+            adata[:, 0].X == adata.X[:, 0]
+
+        AnnData objects can be concatenated via :func:`~anndata.AnnData.concatenate`.
+
+        {example_concatenate}
+
+        """).format(main_narrative=_main_narrative,
+                    example_concatenate=_example_concatenate)
+
     def __init__(self, X=None, obs=None, var=None, uns=None,
                  obsm=None, varm=None,
                  filename=None,
                  dtype='float32', single_col=False):
 
-        # init backing filename (might be `None`)
-        self._filename = filename
-
         # init from file
-        if filename is not None:
+        if filename is None:
+            self._f = NamedFile(name=None, file=None)
+        else:
             if any((X, obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If initializing from `filename`, '
                     'no further arguments may be passed.')
-            # returns dictionary
-            X = _read_h5ad(filename, skip_attrs=('X',))
+            self._f = NamedFile(name=filename,
+                                file=h5py.File(filename, 'r+'))
+            # will read from backing file
+            X = self._read_h5ad()
 
         # generate from dictionary
         if isinstance(X, Mapping):
@@ -483,6 +439,13 @@ class AnnData(IndexMixin):
         # clean up old formats
         self._clean_up_old_format(uns)
 
+    def __sizeof__(self):
+        size = 0
+        for attr in ['_X', '_obs', '_var', '_uns', '_obsm', '_varm']:
+            s = getattr(self, attr).__sizeof__()
+            size += s
+        return size
+
     def __repr__(self):
         if self.filename is not None:
             backed_at = 'backed at \'{}\''.format(self.filename)
@@ -501,22 +464,333 @@ class AnnData(IndexMixin):
                     self.obsm_keys(), self.varm_keys()))
         return descr
 
+    def _from_dict(self, ddata):
+        """Allows to construct an instance of AnnData from a dictionary.
+
+        Acts as interface for the communication with the hdf5 file.
+
+        In particular, from a dict that has been written using
+        ``AnnData._to_dict_fixed_width_arrays``.
+        """
+        # TODO: remove the copy at some point, check consequences first...
+        ddata = ddata.copy()
+        d_true_keys = {}
+
+        for true_key, keys in AnnData._H5_ALIASES.items():
+            for key in keys:
+                if key in ddata:
+                    d_true_keys[true_key] = ddata[key]
+                    del ddata[key]
+                    break
+            else:
+                d_true_keys[true_key] = None
+
+        # transform recarray to dataframe
+        from pandas.api.types import is_string_dtype
+        from pandas import Index
+
+        for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
+            if d_true_keys[true_key] is not None:
+                for key in keys:
+                    if key in d_true_keys[true_key].dtype.names:
+                        d_true_keys[true_key] = pd.DataFrame.from_records(
+                            d_true_keys[true_key], index=key)
+                        break
+                d_true_keys[true_key].index = d_true_keys[true_key].index.astype('U')
+                # transform to unicode string
+                # TODO: this is quite a hack
+                for c in d_true_keys[true_key].columns:
+                    if is_string_dtype(d_true_keys[true_key][c]):
+                        d_true_keys[true_key][c] = Index(
+                            d_true_keys[true_key][c]).astype('U').values
+
+        # these are the category fields
+        k_to_delete = []
+        for k in ddata.keys():
+            if k.endswith('_categories'):
+                k_stripped = k.replace('_categories', '')
+                if k_stripped in d_true_keys['obs']:
+                    d_true_keys['obs'][k_stripped] = pd.Categorical.from_codes(
+                        codes=d_true_keys['obs'][k_stripped].values,
+                        categories=ddata[k])
+                if k_stripped in d_true_keys['var']:
+                    d_true_keys['var'][k_stripped] = pd.Categorical.from_codes(
+                        codes=d_true_keys['var'][k_stripped].values,
+                        categories=ddata[k])
+                k_to_delete.append(k)
+
+        for k in k_to_delete:
+            del ddata[k]
+
+        # assign the variables
+        X = d_true_keys['X']
+        obs = d_true_keys['obs']
+        obsm = d_true_keys['obsm']
+        var = d_true_keys['var']
+        varm = d_true_keys['varm']
+        # the remaining fields are the unstructured annotation
+        uns = ddata
+
+        return X, obs, var, uns, obsm, varm
+
+    def _to_dict_fixed_width_arrays(self):
+        """A dict of arrays that stores data and annotation.
+
+        It is sufficient for reconstructing the object.
+        """
+        obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
+        var_rec, uns_var = df_to_records_fixed_width(self._var)
+        d = {'X': self._X,
+             'obs': obs_rec,
+             'var': var_rec,
+             'obsm': self._obsm,
+             'varm': self._varm}
+        return {**d, **self._uns, **uns_obs, **uns_var}
+
+    def _read_h5ad(self, filename=None):
+        """Return a dict with arrays for initializing AnnData.
+
+        Parameters
+        ----------
+        filename : `str` or `None`, optional (default: `None`)
+            Defaults to the objects filename if `None`.
+        """
+        # we need to be able to call the function
+        # without reference to self
+        filename_was_none = False
+        if filename is None:
+            filename_was_none = True
+            filename = self.filename
+
+        def postprocess_reading(key, value):
+            if value is None:
+                return key, value
+            if value.ndim == 1 and len(value) == 1:
+                value = value[0]
+            if value.dtype.kind == 'S':
+                value = value.astype(str)
+                # recover a dictionary that has been stored as a string
+                if len(value) > 0:
+                    if value[0] == '{' and value[-1] == '}': value = eval(value)
+            # transform byte strings in recarrays to unicode strings
+            # TODO: come up with a better way of solving this, see also below
+            if (key not in AnnData._H5_ALIASES['obs']
+                and key not in AnnData._H5_ALIASES['var']
+                and not isinstance(value, dict) and value.dtype.names is not None):
+                new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
+                              if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
+                value = value.astype(new_dtype)
+            return key, value
+
+        filename = str(filename)  # allow passing pathlib.Path objects
+        d = {}
+        if filename_was_none:
+            f = self._f.file
+        else:
+            # open in editable mode to fix old file formats
+            f = h5py.File(filename, 'r+')
+        # TODO: this will still fail if trying to read a sparse matrix group
+        for key in f.keys():
+            if filename_was_none and key in AnnData._BACKED_ATTRS:
+                # we cannot simply assign an h5py dataset here, as we need to
+                # distinguish between dense and different sparse data types
+                value = None
+            else:
+                # the '()' means 'load everything into memory' (by contrast, ':'
+                # only works if not reading a scalar type)
+                value = f[key][()]
+            key, value = postprocess_reading(key, value)
+            d[key] = value
+        # backwards compat: save X with the correct name
+        if 'X' not in d:
+            for key in AnnData._H5_ALIASES['X']:
+                if key in d:
+                    del f[key]
+                    f.create_dataset('X', data=d[key])
+                    break
+        # backwards compat: store sparse matrices properly
+        csr_keys = [key.replace('_csr_data', '')
+                    for key in d if '_csr_data' in key]
+        for key in csr_keys:
+            d = load_sparse_csr(d, key=key)
+            # delete the old representation from the file
+            del_sparse_matrix_keys(f, key)
+            if key in AnnData._H5_ALIASES['X'] and key != 'X':
+                d['X'] = d[key]
+                del d[key]
+                key = 'X'
+            f.close()
+            # store the new representation
+            f = h5sparse.File(filename, 'r+')
+            f.create_dataset(key, data=d[key])
+            if filename_was_none is not None:
+                d[key] = None
+            f.close()
+            f = h5py.File(filename, 'r+')
+        if not filename_was_none:
+            f.close()
+        return d
+
+    def _write_h5ad(self, filename,
+                    compression='gzip', compression_opts=None):
+
+        def preprocess_writing(value):
+            if value is None:
+                # is already backed
+                return value
+            elif isinstance(value, dict):
+                # hack for storing dicts
+                value = np.array([str(value)])
+            else:
+                # make sure value is an array
+                value = np.array(value)
+                # hm, why that?
+                if value.ndim == 0: value = np.array([value])
+            # make sure string format is chosen correctly
+            if value.dtype.kind == 'U': value = value.astype(np.string_)
+            return value
+
+        filename = str(filename)  # allow passing pathlib.Path objects
+        if not filename.endswith(('.h5', '.h5ad')):
+            raise ValueError('Filename needs to end with \'.h5ad\'.')
+        if self.isbacked():
+            # close so that we can reopen below
+            self._f.file.close()
+        if not os.path.exists(os.path.dirname(filename)):
+            os.makedirs(directory)
+        d = self._to_dict_fixed_width_arrays()
+        d_write = {}
+        for key, value in d.items():
+            # store sparse values
+            if sp.issparse(value):
+                with h5sparse.File(filename, 'a') as f:
+                        f.create_dataset(key, data=value,
+                                         compression=compression,
+                                         compression_opts=compression_opts)
+            else:
+                d_write[key] = preprocess_writing(value)
+                # some output about the data to write
+                # print(type(value), value.dtype, value.dtype.kind, value.shape)
+        # store dense values
+        with h5py.File(filename, 'a') as f:
+            for key, value in d_write.items():
+                if value is None:
+                    continue
+                try:
+                    # ignore arrays with empty dtypes
+                    if value.dtype.descr:
+                        if key in set(f.keys()):
+                            if (f[key].shape == value.shape
+                                and f[key].dtype == value.dtype):
+                                f[key][()] = value
+                                continue
+                            else:
+                                del f[key]
+                        f.create_dataset(key, data=value,
+                                         compression=compression,
+                                         compression_opts=compression_opts)
+                except TypeError:
+                    # try writing it as byte strings
+                    try:
+                        if value.dtype.names is None:
+                            if key in set(f.keys()):
+                                if (f[key].shape == value.shape
+                                    and f[key].dtype == value.dtype):
+                                    f[key][()] = value.astype('S')
+                                    continue
+                                else:
+                                    del f[key]
+                            f.create_dataset(key, data=value.astype('S'),
+                                             compression=compression,
+                                             compression_opts=compression_opts)
+                        else:
+                            new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
+                                         for dt in value.dtype.descr]
+                            if key in set(f.keys()):
+                                if (f[key].shape == value.shape
+                                    and f[key].dtype == value.dtype):
+                                    f[key][()] = value.astype(new_dtype)
+                                    continue
+                                else:
+                                    del f[key]                            
+                            f.create_dataset(key, data=value.astype(new_dtype),
+                                             compression=compression,
+                                             compression_opts=compression_opts)
+                    except Exception as e:
+                        warnings.warn('Could not save field with key = "{}" '
+                                      'to hdf5 file.'.format(key))
+        if self.isbacked():
+            self._f.file = h5py.File(filename, 'r+')
+
     def _read(self, attr):
-        return _read_h5ad(self.filename, attr)
+        """Reading a single attribute."""
+        if attr in {'X'} and isinstance(self._f.file[attr], h5py.Group):
+            self._f.file.close()
+            self._f.file = h5sparse.File(self.filename, 'r+')
+            return self._f.file[attr]
+        return self._f.file[attr]
 
     def _write(self, attr, value):
-        return _write_h5ad(self.filename, attr_value={attr: value})
+        """Writing a single attribute."""
+        if sp.issparse(value):
+            if self._f.file[attr].shape == value.shape:
+                self._f.file[attr] = value
+            else:
+                del self._f.file[attr]
+                self._f.file.create_dataset(attr, data=value)
+
+    def isbacked(self):
+        """True if object is backed on disk, False otherwise."""
+        return self._f.name is not None
+
+    def close(self):
+        """Close the backing file."""
+        self._f.file.close()
+
+    def isopen(self):
+        """State of backing file."""
+        return not adata._f.file.id
 
     @property
     def filename(self):
-        """Filename for backing object as `.h5ad` file on disk."""
-        return self._filename
+        """Filename for backing object as `.h5ad` file on disk.
+
+        - Setting the filename writes the stored data to disk.
+        - Setting the filename when the filename was previously another filename
+          moves the backing file from the previous file to the new file. If you
+          want to copy the previous file, use copy(filename='new_filename').
+        """
+        return self._f.name
 
     @filename.setter
-    def filename(self, value):
-        write_h5ad(value, self)
-        self._filename = value
-        self._X = None
+    def filename(self, filename):
+        # change from backing-mode back to full loading
+        if filename is None:
+            if self._f.name is not None:
+                self._X = self._read('X')[()]
+                self._f.file.close()
+                self._f.name = None
+                self._f.file = None
+        else:
+            if self._f.name is not None:
+                # write the content of self to the old file
+                self.write()
+                if self._f.name != filename:
+                    self._f.file.close()
+                    os.rename(self._f.name, filename)
+                else:
+                    # do nothing
+                    return
+            else:
+                # change from full loading to backing-mode
+                # write the content of self to disk
+                self.write(filename)
+            # open new file for accessing
+            self._f.file = h5py.File(filename, 'r+')
+            # set the filename
+            self._f.name = filename
+            # as the data is stored on disk, we can safely set self._X to None
+            self._X = None
 
     @property
     def shape(self):
@@ -529,17 +803,14 @@ class AnnData(IndexMixin):
         """Deprecated access to X."""
         print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
               '`.data` will be removed in the future.')
-        return self._X
+        return self.X
 
     # for backwards compat
     @data.setter
     def data(self, value):
         print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
               '`.data` will be removed in the future.')
-        if not self.shape == value.shape:
-            raise ValueError('Data matrix has wrong shape {}, need to be {}'
-                             .format(value.shape, self.shape))
-        self._X = value
+        self.X = value
 
     @property
     def X(self):
@@ -575,12 +846,6 @@ class AnnData(IndexMixin):
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
         return self._obs
 
-    # for backwards compat
-    @property
-    def smp(self):
-        """Deprecated: One-dimensional annotation of observations (`pd.DataFrame`)."""
-        return self._obs
-
     @obs.setter
     def obs(self, value):
         if not isinstance(value, pd.DataFrame):
@@ -590,13 +855,15 @@ class AnnData(IndexMixin):
         self._obs = value
 
     # for backwards compat
+    @property
+    def smp(self):
+        """Deprecated: One-dimensional annotation of observations (`pd.DataFrame`)."""
+        return self.obs
+
+    # for backwards compat
     @smp.setter
     def smp(self, value):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError('Can only assign pd.DataFrame.')
-        if len(value) != self.n_obs:
-            raise ValueError('Length does not match.')
-        self._obs = value
+        self.obs = value
 
     @property
     def var(self):
@@ -816,7 +1083,7 @@ class AnnData(IndexMixin):
         # http://stackoverflow.com/questions/31916617/using-keyword-arguments-in-getitem-method-in-python
         obs, var = self._normalize_indices(index)
         if self.filename is None: X = self._X[obs, var]
-        else: X = self._read('X')
+        else: X = self._read('X')[obs, var]
         obs_new = self._obs.iloc[obs]
         obsm_new = self._obsm[obs]
         var_new = self._var.iloc[var]
@@ -923,14 +1190,19 @@ class AnnData(IndexMixin):
 
     T = property(transpose)
 
-    def copy(self):
-        """Full copy with memory allocated."""
-        if self.filename is None: X = self._X
-        else: X = _read('X')
-        return AnnData(X.copy() if self.filename is None else X,
-                       self._obs.copy(),
-                       self._var.copy(), self._uns.copy(),
-                       self._obsm.copy(), self._varm.copy())
+    def copy(self, filename=None):
+        """Full copy, optionally on disk."""
+        if filename is None:
+            if self.filename is None: X = self._X
+            else: X = _read('X')
+            return AnnData(X.copy() if self.filename is None else X,
+                           self._obs.copy(),
+                           self._var.copy(), self._uns.copy(),
+                           self._obsm.copy(), self._varm.copy())
+        else:
+            from shutil import copyfile
+            copyfile(self.filename, filename)
+            return AnnData(filename=filename)
 
     def concatenate(self, adatas, batch_key='batch', batch_categories=None):
         if isinstance(adatas, AnnData): adatas = [adatas]
@@ -1015,12 +1287,12 @@ class AnnData(IndexMixin):
 
     def write(self, filename=None, compression='gzip',
               compression_opts=None):
-        """Write `.h5ad`-formatted hdf5 file.
+        """Write `.h5ad`-formatted hdf5 file and close a potential backing file.
 
         Parameters
         ----------
-        filename : `str`, optional (default: AnnData.filename)
-            Filename of data file. Defaults to filename of object.
+        filename : `str`, optional (default: ``.filename``)
+            Filename of data file. Defaults to backing file.
         compression : `None` or {'gzip', 'lzf'}, optional (default: `'gzip'`)
             See http://docs.h5py.org/en/latest/high/dataset.html.
         compression_opts : `int`, optional (default: `None`)
@@ -1030,13 +1302,14 @@ class AnnData(IndexMixin):
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
-        if self.filename is not None:
-            X = self._read('X')
-            adata = AnnData(X, self.obs, self.var, self.uns, self.obsm, self.varm)
-        else:
-            adata = self
-        write_h5ad(filename, adata, compression, compression_opts)
+        self._write_h5ad(filename, compression, compression_opts)
+        if self.isbacked():
+            self.close()
 
+    def flush(self):
+        """Write `.h5ad`-formatted hdf5 file and leave the backing file open."""
+        self._write_h5ad(filename, compression='gzip', compression_opts=None)
+        
     def write_csvs(self, dirname, skip_data=True):
         """Write annotation to `.csv` files.
 
@@ -1063,174 +1336,6 @@ class AnnData(IndexMixin):
         """
         from .readwrite.write import write_loom
         write_loom(filename, self)
-
-    def _to_dict_fixed_width_arrays(self):
-        """A dict of arrays that stores data and annotation.
-
-        It is sufficient for reconstructing the object.
-        """
-        obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
-        var_rec, uns_var = df_to_records_fixed_width(self._var)
-        d = {'obs': obs_rec,
-             'var': var_rec,
-             'obsm': self._obsm,
-             'varm': self._varm}
-        if self.filename is None: d['X'] = self._X
-        else: d['X'] = self._read('X')
-        return {**d, **self._uns, **uns_obs, **uns_var}
-
-    def _from_dict(self, ddata):
-        """Allows to construct an instance of AnnData from a dictionary.
-
-        In particular, from a dict that has been written using
-        ``AnnData._to_dict_fixed_width_arrays``.
-        """
-        ddata = ddata.copy()
-        # data matrix
-        if '_data' in ddata:
-            X = ddata['_data']
-            del ddata['_data']
-        elif 'data' in ddata:
-            X = ddata['data']
-            del ddata['data']
-        elif '_X' in ddata:
-            X = ddata['_X']
-            del ddata['_X']
-        elif 'X' in ddata:
-            X = ddata['X']
-            del ddata['X']
-        else:
-            X = None
-            
-        # simple annotation
-        if ('_obs' in ddata and isinstance(ddata['_obs'], (np.ndarray, pd.DataFrame))
-            and '_var' in ddata and isinstance(ddata['_var'], (np.ndarray, pd.DataFrame))):
-            obs = ddata['_obs']
-            del ddata['_obs']
-            var = ddata['_var']
-            del ddata['_var']
-        elif ('_smp' in ddata and isinstance(ddata['_smp'], (np.ndarray, pd.DataFrame))
-              and '_var' in ddata and isinstance(ddata['_var'], (np.ndarray, pd.DataFrame))):
-            obs = ddata['_smp']
-            del ddata['_smp']
-            var = ddata['_var']
-            del ddata['_var']
-        elif ('obs' in ddata and isinstance(ddata['obs'], (np.ndarray, pd.DataFrame))
-              and 'var' in ddata and isinstance(ddata['var'], (np.ndarray, pd.DataFrame))):
-            obs = ddata['obs']
-            del ddata['obs']
-            var = ddata['var']
-            del ddata['var']
-        elif ('smp' in ddata and isinstance(ddata['smp'], (np.ndarray, pd.DataFrame))
-              and 'var' in ddata and isinstance(ddata['var'], (np.ndarray, pd.DataFrame))):
-            obs = ddata['smp']
-            del ddata['smp']
-            var = ddata['var']
-            del ddata['var']
-        else:
-            obs, var = OrderedDict(), OrderedDict()
-            if 'row_names' in ddata:
-                obs['obs_names'] = ddata['row_names']
-                del ddata['row_names']
-            elif 'obs_names' in ddata:
-                obs['obs_names'] = ddata['obs_names']
-                del ddata['obs_names']
-            elif 'smp_names' in ddata:
-                obs['obs_names'] = ddata['smp_names']
-                del ddata['smp_names']
-            if 'col_names' in ddata:
-                var['var_names'] = ddata['col_names']
-                del ddata['col_names']
-            elif 'var_names' in ddata:
-                var['var_names'] = ddata['var_names']
-                del ddata['var_names']
-            obs = {**obs, **ddata.get('row', {}), **ddata.get('obs', {})}
-            var = {**var, **ddata.get('col', {}), **ddata.get('var', {})}
-            for k in ['row', 'obs', 'col', 'var']:
-                if k in ddata:
-                    del ddata[k]
-
-        # transform recarray to dataframe
-        if isinstance(obs, np.ndarray) and isinstance(var, np.ndarray):
-            from pandas.api.types import is_string_dtype
-            from pandas import Index
-
-            if 'obs_names' in obs.dtype.names:
-                obs = pd.DataFrame.from_records(obs, index='obs_names')
-            elif 'smp_names' in obs.dtype.names:
-                obs = pd.DataFrame.from_records(obs, index='smp_names')
-            elif 'row_names' in obs.dtype.names:
-                obs = pd.DataFrame.from_records(obs, index='row_names')
-            elif 'index' in obs.dtype.names:
-                obs = pd.DataFrame.from_records(obs, index='index')
-            else:
-                obs = pd.DataFrame.from_records(obs)
-            obs.index = obs.index.astype('U')
-            # transform to unicode string
-            # TODO: this is quite a hack
-            for c in obs.columns:
-                if is_string_dtype(obs[c]):
-                    obs[c] = Index(obs[c]).astype('U').values
-
-            if 'var_names' in var.dtype.names:
-                var = pd.DataFrame.from_records(var, index='var_names')
-            elif 'col_names' in var.dtype.names:
-                var = pd.DataFrame.from_records(var, index='col_names')
-            elif 'index' in var.dtype.names:
-                var = pd.DataFrame.from_records(var, index='index')
-            else:
-                var = pd.DataFrame.from_records(var)
-            var.index = var.index.astype('U')
-            for c in var.columns:
-                if is_string_dtype(var[c]):
-                    var[c] = Index(var[c]).astype('U').values
-
-            # these are the category fields
-            k_to_delete = []
-            for k in ddata.keys():
-                if k.endswith('_categories'):
-                    k_stripped = k.replace('_categories', '')
-                    if k_stripped in obs:
-                        obs[k_stripped] = pd.Categorical.from_codes(
-                            codes=obs[k_stripped].values,
-                            categories=ddata[k])
-                    if k_stripped in var:
-                        var[k_stripped] = pd.Categorical.from_codes(
-                            codes=var[k_stripped].values,
-                            categories=ddata[k])
-                    k_to_delete.append(k)
-
-            for k in k_to_delete:
-                del ddata[k]
-
-        # multicolumn annotation
-        if 'obsm' in ddata:
-            obsm = ddata['obsm']
-            del ddata['obsm']
-        elif '_obsm' in ddata:
-            obsm = ddata['_obsm']
-            del ddata['_obsm']
-        elif 'smpm' in ddata:
-            obsm = ddata['smpm']
-            del ddata['smpm']
-        elif '_smpm' in ddata:
-            obsm = ddata['_smpm']
-            del ddata['_smpm']
-        else:
-            obsm = None
-        if 'varm' in ddata:
-            varm = ddata['varm']
-            del ddata['varm']
-        elif '_varm' in ddata:
-            varm = ddata['_varm']
-            del ddata['_varm']
-        else:
-            varm = None
-
-        # the remaining fields are the unstructured annotation
-        uns = ddata
-
-        return X, obs, var, uns, obsm, varm
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
@@ -1281,66 +1386,32 @@ class AnnData(IndexMixin):
         return values
 
 
-AnnData.__doc__ = dedent("""\
-    An annotated data matrix.
+AnnData.__doc__ = AnnData._doc
 
-    {main_narrative}
 
-    Parameters
-    ----------
-    X : `np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`
-        A #observations × #variables data matrix. A view of the data is used if the
-        data type matches, otherwise, a copy is made.
-    obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
-        Key-indexed one-dimensional observation annotation of length #observations.
-    var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
-        Key-indexed one-dimensional variable annotation of length #variables.
-    uns : `dict` or `None`, optional (default: `None`)
-        Unstructured annotation for the whole dataset.
-    obsm : structured `np.ndarray`, optional (default: `None`)
-        Key-indexed multi-dimensional observation annotation of length #observations.
-    varm : structured `np.ndarray`, optional (default: `None`)
-        Key-indexed multi-dimensional observation annotation of length #observations.
-    dtype : simple `np.dtype`, optional (default: 'float32')
-        Data type used for storage.
-    single_col : `bool`, optional (default: `False`)
-        Interpret one-dimensional input array as column.
+# all for backwards compat...
+def save_sparse_csr(X, key='X'):
+    from scipy.sparse.csr import csr_matrix
+    X = csr_matrix(X)
+    key_csr = key + '_csr'
+    return {key_csr + '_data': X.data,
+            key_csr + '_indices': X.indices,
+            key_csr + '_indptr': X.indptr,
+            key_csr + '_shape': np.array(X.shape)}
 
-    See Also
-    --------
-    read
-    read_csv
-    read_excel
-    read_hdf
-    read_loom
-    read_mtx
-    read_text
 
-    Notes
-    -----
-    Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
+def load_sparse_csr(d, key='X'):
+    from scipy.sparse.csr import csr_matrix
+    key_csr = key + '_csr'
+    d[key] = csr_matrix((d[key_csr + '_data'],
+                         d[key_csr + '_indices'],
+                         d[key_csr + '_indptr']),
+                        shape=d[key_csr + '_shape'])
+    del_sparse_matrix_keys(d)
+    return d
 
-    :class:`~anndata.AnnData` stores observations (samples) of variables
-    (features) in the rows of a matrix. This is the convention of the modern
-    classics of stats [Hastie09]_ and Machine Learning `(Murphy, 2012)
-    <https://mitpress.mit.edu/books/machine-learning-0>`_, the convention of
-    dataframes both in R and Python and the established stats and machine
-    learning packages in Python (`statsmodels
-    <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
-    <http://scikit-learn.org/>`_). It is the opposite of the convention for
-    storing genomic data.
-
-    Examples
-    --------
-    A data matrix is flattened if either #observations (`n_obs`) or #variables
-    (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
-
-        adata = AnnData(np.ones((2, 2)))
-        adata[:, 0].X == adata.X[:, 0]
-
-    AnnData objects can be concatenated via :func:`~anndata.AnnData.concatenate`.
-
-    {example_concatenate}
-
-    """).format(main_narrative=AnnData._main_narrative,
-                example_concatenate=AnnData._example_concatenate)
+def del_sparse_matrix_keys(mapping):
+    del mapping[key_csr + '_data']
+    del mapping[key_csr + '_indices']
+    del mapping[key_csr + '_indptr']
+    del mapping[key_csr + '_shape']

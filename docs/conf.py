@@ -53,6 +53,8 @@ autodoc_mock_imports = ['_tkinter']
 # autodoc_member_order = 'bysource'
 # autodoc_default_flags = ['members']
 numpydoc_show_class_members = True
+# we would like to document the class members as well
+# but they are not clickable, why?
 numpydoc_class_members_toctree = False
 
 templates_path = ['_templates']

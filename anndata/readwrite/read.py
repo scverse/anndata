@@ -44,17 +44,14 @@ def read_excel(filename, sheet):
     -------
     An :class:`~anndata.AnnData` object.
     """
-    def ddata_from_df(df):
-        ddata = {
-            'X': df.values[:, 1:].astype(float),
-            'row_names': df.iloc[:, 0].values.astype(str),
-            'col_names': np.array(df.columns[1:], dtype=str)}
-        return ddata
     filename = str(filename)  # allow passing pathlib.Path objects
     # rely on pandas for reading an excel file
     from pandas import read_excel
     df = read_excel(filename, sheet)
-    return AnnData(ddata_from_df(df))
+    X = df.values[:, 1:].astype(float)
+    row = {'row_names': df.iloc[:, 0].values.astype(str)}
+    col = {'col_names': np.array(df.columns[1:], dtype=str)}
+    return AnnData(X, row, col)
 
 
 def read_hdf(filename, key):
@@ -85,13 +82,12 @@ def read_hdf(filename, key):
                              '\n Call read/read_hdf5 with one of them.')
         # read array
         X = f[key][()]
-        # init dict
-        ddata = {'X': X}
         # try to find row and column names
-        for name in ['row_names', 'col_names']:
+        rows_cols = [{}, {}]
+        for iname, name in enumerate(['row_names', 'col_names']):
             if name in keys:
-                ddata[name] = f[name][()]
-    adata = AnnData(ddata)
+                rows_cols[iname][name] = f[name][()]
+    adata = AnnData(X, rows_cols[0], rows_cols[1])
     return adata
 
 
