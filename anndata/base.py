@@ -1,23 +1,23 @@
 """Main class and helper functions.
 """
 import os
-import h5py
-import h5sparse
 from enum import Enum
 from collections import Mapping, Sequence
 import numpy as np
 from numpy import ma
 import pandas as pd
 from pandas.core.index import RangeIndex
-from scipy import sparse as sp
+from scipy import sparse
+from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
 from textwrap import dedent
+from . import h5py
 
 
 class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
-    Sparse = sp.spmatrix
+    Sparse = sparse.spmatrix
 
     @classmethod
     def classes(cls):
@@ -175,7 +175,7 @@ def _fix_shapes(X, single_col=False):
         if n_obs == 1 and n_vars == 1:
             X = X[0, 0]
         elif n_obs == 1 or n_vars == 1:
-            if sp.issparse(X): X = X.toarray()
+            if issparse(X): X = X.toarray()
             X = X.flatten()
     elif len(X.shape) == 1:
         n_vars = X.shape[0]
@@ -234,34 +234,34 @@ class AnnDataFileManager():
     """Lightweight backing file manager for AnnData.
     """
 
-    def __init__(adata, filename=None):
+    def __init__(self, adata, filename=None):
         self._adata = adata
         self._open(filename)
 
-    def __repr__():
-        if self._name is None:
+    def __repr__(self):
+        if self._filename is None:
             return 'Backing file manager: no file is set.'
         else:
-            return 'Backing file manager of file {}.'.format(self._name)
+            return 'Backing file manager of file {}.'.format(self._filename)
 
-    def _open(filename):
+    def _open(self, filename):
         """Init the file manager."""
-        self._name = filename
+        self._filename = filename
         if filename is None:
             self._file = None
         else:
             self._file = h5py.File(filename, 'r+')
-        
-    def close():
+
+    def close(self):
         """Close the backing file, remember filename, do *not* change to memory mode."""
         self._file.close()
 
-    def _to_memory_mode():
+    def _to_memory_mode(self):
         """Close the backing file, forget filename, *do* change to memory mode."""
         self.adata.__X = self.adata._read('X')[()]
         self._file.close()
         self._file = None
-        self._name = None
+        self._filename = None
 
     def isopen(self):
         """State of backing file."""
@@ -353,7 +353,7 @@ class AnnData(IndexMixin):
 
         Parameters
         ----------
-        X : `np.ndarray`, `sp.spmatrix`, `np.ma.MaskedArray`
+        X : `np.ndarray`, `sparse.spmatrix`, `np.ma.MaskedArray`
             A #observations × #variables data matrix. A view of the data is used if the
             data type matches, otherwise, a copy is made.
         obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
@@ -446,7 +446,7 @@ class AnnData(IndexMixin):
                 raise ValueError('`X` needs to be of one of {}, not {}.'
                                  .format(class_names, type(X)))
             # if type doesn't match, a copy is made, otherwise, use a view
-            if sp.issparse(X) or isinstance(X, ma.MaskedArray):
+            if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
                 if X.dtype != np.dtype(dtype): X = X.astype(dtype)
@@ -658,7 +658,7 @@ class AnnData(IndexMixin):
                 key = 'X'
             f.close()
             # store the new representation
-            f = h5sparse.File(filename, 'r+')
+            f = h5py.File(filename, 'r+')
             f.create_dataset(key, data=d[key])
             if filename_was_none is not None:
                 d[key] = None
@@ -668,12 +668,10 @@ class AnnData(IndexMixin):
             f.close()
         return d
 
-    def _write_h5ad(self, filename,
-                    compression='gzip', compression_opts=None):
+    def _write_h5ad(self, filename, **kwargs):
 
         def preprocess_writing(value):
-            if value is None:
-                # is already backed
+            if issparse(value):
                 return value
             elif isinstance(value, dict):
                 # hack for storing dicts
@@ -697,36 +695,23 @@ class AnnData(IndexMixin):
         if not os.path.exists(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
         d = self._to_dict_fixed_width_arrays()
-        d_write = {}
-        for key, value in d.items():
-            # store sparse values
-            if sp.issparse(value):
-                with h5sparse.File(filename, 'a') as f:
-                        f.create_dataset(key, data=value,
-                                         compression=compression,
-                                         compression_opts=compression_opts)
-            else:
-                d_write[key] = preprocess_writing(value)
-                # some output about the data to write
-                # print(type(value), value.dtype, value.dtype.kind, value.shape)
         # store dense values
         with h5py.File(filename, 'a') as f:
-            for key, value in d_write.items():
-                if value is None:
-                    continue
-                try:
+            for key, value in d.items():
+                if (value is None
                     # ignore arrays with empty dtypes
-                    if value.dtype.descr:
-                        if key in set(f.keys()):
-                            if (f[key].shape == value.shape
-                                and f[key].dtype == value.dtype):
-                                f[key][()] = value
-                                continue
-                            else:
-                                del f[key]
-                        f.create_dataset(key, data=value,
-                                         compression=compression,
-                                         compression_opts=compression_opts)
+                    or not value.dtype.descr):
+                    continue
+                value = preprocess_writing(value)
+                try:
+                    if key in set(f.keys()):
+                        if (f[key].shape == value.shape
+                            and f[key].dtype == value.dtype):
+                            f[key][()] = value
+                            continue
+                        else:
+                            del f[key]
+                    f.create_dataset(key, data=value, **kwargs)
                 except TypeError:
                     # try writing it as byte strings
                     try:
@@ -738,9 +723,7 @@ class AnnData(IndexMixin):
                                     continue
                                 else:
                                     del f[key]
-                            f.create_dataset(key, data=value.astype('S'),
-                                             compression=compression,
-                                             compression_opts=compression_opts)
+                            f.create_dataset(key, data=value.astype('S'), **kwargs)
                         else:
                             new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
                                          for dt in value.dtype.descr]
@@ -751,31 +734,13 @@ class AnnData(IndexMixin):
                                     continue
                                 else:
                                     del f[key]
-                            f.create_dataset(key, data=value.astype(new_dtype),
-                                             compression=compression,
-                                             compression_opts=compression_opts)
+                            f.create_dataset(
+                                key, data=value.astype(new_dtype), **kwargs)
                     except Exception as e:
                         warnings.warn('Could not save field with key = "{}" '
                                       'to hdf5 file.'.format(key))
         if self.isbacked():
             self.file._file = h5py.File(filename, 'r+')
-
-    def _read_backed(self, attr):
-        """Reading a single attribute."""
-        if attr in {'X'} and isinstance(self.file._file[attr], h5py.Group):
-            self.file._file.close()
-            self.file._file = h5sparse.File(self.filename, 'r+')
-            return self.file._file[attr]
-        return self.file._file[attr]
-
-    def _write_backed(self, attr, value):
-        """Writing a single attribute."""
-        if sp.issparse(value):
-            if self.file._file[attr].shape == value.shape:
-                self.file._file[attr] = value
-            else:
-                del self.file._file[attr]
-                self.file._file.create_dataset(attr, data=value)
 
     def isbacked(self):
         """`True` if object is backed on disk, `False` otherwise."""
@@ -783,14 +748,14 @@ class AnnData(IndexMixin):
 
     @property
     def filename(self):
-        """Filename for backing object as `.h5ad` file on disk.
+        """Change to backing mode by setting the filename of a `.h5ad` file.
 
         - Setting the filename writes the stored data to disk.
         - Setting the filename when the filename was previously another name
           moves the backing file from the previous file to the new file. If you
           want to copy the previous file, use copy(filename='new_filename').
         """
-        return self.file._name
+        return self.file._filename
 
     @filename.setter
     def filename(self, filename):
@@ -843,7 +808,7 @@ class AnnData(IndexMixin):
 
     @property
     def X(self):
-        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.spmatrix`)."""
+        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sparse.spmatrix`)."""
         return self._X
 
     @property
@@ -864,6 +829,18 @@ class AnnData(IndexMixin):
         if self.isbacked(): self._write_backed('X', value)
         else: self.__X = value
 
+    def _read_backed(self, attr):
+        return self.file._file[attr]
+
+    def _write_backed(self, attr, value):
+        if (self.file._file[attr].shape == value.shape
+            and not isinstance(self.file._file[attr], h5py.SparseDataset)
+            and not issparse(value)):
+            self.file._file[attr] = value
+        else:
+            del self.file._file[attr]
+            self.file._file.create_dataset(attr, data=value)
+
     @property
     def n_smps(self):
         """Deprecated name for number of observations."""
@@ -871,12 +848,12 @@ class AnnData(IndexMixin):
 
     @property
     def n_obs(self):
-        """Number of observations (rows)."""
+        """Number of observations."""
         return self._n_obs
 
     @property
     def n_vars(self):
-        """Number of variables / features."""
+        """Number of variables/features."""
         return self._n_vars
 
     @property
@@ -1141,7 +1118,7 @@ class AnnData(IndexMixin):
         if not (isinstance(oidx, slice) and
                 oidx.start is None and oidx.step is None and oidx.stop is None):
             for k, v in uns.items():
-                if isinstance(v, sp.spmatrix) and v.shape == (self._n_obs, self._n_obs):
+                if isinstance(v, sparse.spmatrix) and v.shape == (self._n_obs, self._n_obs):
                     uns[k] = v.tocsc()[:, obs].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index):
@@ -1222,7 +1199,7 @@ class AnnData(IndexMixin):
         """
         if not self.isbacked(): X = self.__X
         else: X = _read_backed('X')
-        if sp.isspmatrix_csr(X):
+        if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
                            filename=self.filename)
@@ -1265,7 +1242,7 @@ class AnnData(IndexMixin):
                 ad.n_obs*[categories[i]], categories=categories)
             adatas_to_concat.append(ad)
         Xs = [ad.X for ad in adatas_to_concat]
-        if sp.issparse(self.X):
+        if issparse(self.X):
             from scipy.sparse import vstack
             X = vstack(Xs)
         else:
@@ -1327,8 +1304,7 @@ class AnnData(IndexMixin):
                              'columns of `X` ({}), but has {} rows.'
                              .format(self._n_vars, self._var.shape[0]))
 
-    def write(self, filename=None, compression='gzip',
-              compression_opts=None):
+    def write(self, filename=None, compression='gzip', compression_opts=None):
         """Write `.h5ad`-formatted hdf5 file and close a potential backing file.
 
         Parameters
@@ -1344,7 +1320,8 @@ class AnnData(IndexMixin):
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
-        self._write_h5ad(filename, compression, compression_opts)
+        self._write_h5ad(filename,
+            compression=compression, compression_opts=compression_opts)
         if self.isbacked():
             self.file.close()
 
