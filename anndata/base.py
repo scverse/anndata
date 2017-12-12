@@ -230,10 +230,48 @@ def read_h5ad(filename, init_filename=True):
         return AnnData(d)
 
 
-class NamedFile:
-    def __init__(self, name, file):
-        self.name = name
-        self.file = file
+class AnnDataFileManager():
+    """Lightweight backing file manager for AnnData.
+    """
+
+    def __init__(adata, filename=None):
+        self._adata = adata
+        self._open(filename)
+
+    def __repr__():
+        if self._name is None:
+            return 'Backing file manager: no file is set.'
+        else:
+            return 'Backing file manager of file {}.'.format(self._name)
+
+    def _open(filename):
+        """Init the file manager."""
+        self._name = filename
+        if filename is None:
+            self._file = None
+        else:
+            self._file = h5py.File(filename, 'r+')
+        
+    def close():
+        """Close the backing file, remember filename, do *not* change to memory mode."""
+        self._file.close()
+
+    def _to_memory_mode():
+        """Close the backing file, forget filename, *do* change to memory mode."""
+        self.adata.__X = self.adata._read('X')[()]
+        self._file.close()
+        self._file = None
+        self._name = None
+
+    def isopen(self):
+        """State of backing file."""
+        if self._file is None:
+            return False
+        try:
+            # try accessing the id attribute to see if the file is open
+            return bool(self.file._file.id)
+        except:
+            return False
 
 
 class AnnData(IndexMixin):
@@ -379,15 +417,16 @@ class AnnData(IndexMixin):
 
         # init from file
         if filename is None:
-            self._f = NamedFile(name=None, file=None)
+            self.file = AnnDataFileManager(self, None)
         else:
             if any((X, obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If initializing from `filename`, '
                     'no further arguments may be passed.')
-            self._f = NamedFile(name=filename,
-                                file=h5py.File(filename, 'r+'))
+            self.file = AnnDataFileManager(self, filename)
             # will read from backing file
+            # what is returned is, at this stage, a dict
+            # that needs to be processed
             X = self._read_h5ad()
 
         # generate from dictionary
@@ -461,7 +500,7 @@ class AnnData(IndexMixin):
 
     def __repr__(self):
         return self._gen_repr(self.n_obs, self.n_vars)
-    
+
     def _from_dict(self, ddata):
         """Allows to construct an instance of AnnData from a dictionary.
 
@@ -583,7 +622,7 @@ class AnnData(IndexMixin):
         filename = str(filename)  # allow passing pathlib.Path objects
         d = {}
         if filename_was_none:
-            f = self._f.file
+            f = self.file._file
         else:
             # open in editable mode to fix old file formats
             f = h5py.File(filename, 'r+')
@@ -653,7 +692,7 @@ class AnnData(IndexMixin):
             raise ValueError('Filename needs to end with \'.h5ad\'.')
         if self.isbacked():
             # close so that we can reopen below
-            self._f.file.close()
+            self.file._file.close()
         # create directory if it doesn't exist
         if not os.path.exists(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
@@ -719,75 +758,66 @@ class AnnData(IndexMixin):
                         warnings.warn('Could not save field with key = "{}" '
                                       'to hdf5 file.'.format(key))
         if self.isbacked():
-            self._f.file = h5py.File(filename, 'r+')
+            self.file._file = h5py.File(filename, 'r+')
 
-    def _read(self, attr):
+    def _read_backed(self, attr):
         """Reading a single attribute."""
-        if attr in {'X'} and isinstance(self._f.file[attr], h5py.Group):
-            self._f.file.close()
-            self._f.file = h5sparse.File(self.filename, 'r+')
-            return self._f.file[attr]
-        return self._f.file[attr]
+        if attr in {'X'} and isinstance(self.file._file[attr], h5py.Group):
+            self.file._file.close()
+            self.file._file = h5sparse.File(self.filename, 'r+')
+            return self.file._file[attr]
+        return self.file._file[attr]
 
-    def _write(self, attr, value):
+    def _write_backed(self, attr, value):
         """Writing a single attribute."""
         if sp.issparse(value):
-            if self._f.file[attr].shape == value.shape:
-                self._f.file[attr] = value
+            if self.file._file[attr].shape == value.shape:
+                self.file._file[attr] = value
             else:
-                del self._f.file[attr]
-                self._f.file.create_dataset(attr, data=value)
+                del self.file._file[attr]
+                self.file._file.create_dataset(attr, data=value)
 
     def isbacked(self):
-        """True if object is backed on disk, False otherwise."""
-        return self._f.name is not None
-
-    def close(self):
-        """Close the backing file."""
-        self._f.file.close()
-
-    def isopen(self):
-        """State of backing file."""
-        return not self._f.file.id
+        """`True` if object is backed on disk, `False` otherwise."""
+        return self.filename is not None
 
     @property
     def filename(self):
         """Filename for backing object as `.h5ad` file on disk.
 
         - Setting the filename writes the stored data to disk.
-        - Setting the filename when the filename was previously another filename
+        - Setting the filename when the filename was previously another name
           moves the backing file from the previous file to the new file. If you
           want to copy the previous file, use copy(filename='new_filename').
         """
-        return self._f.name
+        return self.file._name
 
     @filename.setter
     def filename(self, filename):
-        # change from backing-mode back to full loading
+        # change from backing-mode back to full loading into memory
         if filename is None:
-            if self._f.name is not None:
-                self.__X = self._read('X')[()]
-                self._f.file.close()
-                self._f.name = None
-                self._f.file = None
+            if self.filename is not None:
+                self.file._to_memory_mode()
+            else:
+                # both filename and self.filename are None
+                # do nothing
+                return
         else:
-            if self._f.name is not None:
-                # write the content of self to the old file
-                self.write()
-                if self._f.name != filename:
-                    self._f.file.close()
-                    os.rename(self._f.name, filename)
+            if self.filename is not None:
+                if self.filename != filename:
+                    # write the content of self to the old file
+                    # and close the file
+                    self.write()
+                    os.rename(self.filename, filename)
                 else:
                     # do nothing
                     return
             else:
-                # change from full loading to backing-mode
+                # change from memory to backing-mode
                 # write the content of self to disk
                 self.write(filename)
             # open new file for accessing
-            self._f.file = h5py.File(filename, 'r+')
-            # set the filename
-            self._f.name = filename
+            self.file._open(filename)
             # as the data is stored on disk, we can safely set self.__X to None
             self.__X = None
 
@@ -819,7 +849,7 @@ class AnnData(IndexMixin):
     @property
     def _X(self):
         # we need this additional layer for AnnDataView
-        if self.isbacked(): return self._read('X')
+        if self.isbacked(): return self._read_backed('X')
         else: return self.__X
 
     @X.setter
@@ -831,7 +861,7 @@ class AnnData(IndexMixin):
 
     @_X.setter
     def _X(self, value):
-        if self.isbacked(): self._write('X', value)
+        if self.isbacked(): self._write_backed('X', value)
         else: self.__X = value
 
     @property
@@ -865,7 +895,7 @@ class AnnData(IndexMixin):
     # for backwards compat
     @property
     def smp(self):
-        """Deprecated: One-dimensional annotation of observations (`pd.DataFrame`)."""
+        """Deprecated access to one-dimensional annotation of observations (`pd.DataFrame`)."""
         return self.obs
 
     # for backwards compat
@@ -970,14 +1000,14 @@ class AnnData(IndexMixin):
 
     @property
     def obs_names(self):
-        """Index for observations (`obs.index`)."""
-        return self._obs.index.values
+        """Names of observations (`.obs.index`)."""
+        return self._obs.index
 
     # backwards compat
     @property
     def smp_names(self):
-        """Index for observations (`obs.index`)."""
-        return self._obs.index.values
+        """Deprecated access to names of observations."""
+        return self._obs.index
 
     @obs_names.setter
     def obs_names(self, names):
@@ -990,15 +1020,15 @@ class AnnData(IndexMixin):
 
     @property
     def var_names(self):
-        """Index for variables (`var.index`)."""
-        return self._var.index.values
+        """Names of variables (`.var.index`)."""
+        return self._var.index
 
     @var_names.setter
     def var_names(self, names):
         self._var.index = names
 
     def obs_keys(self):
-        """List keys of observation annotation `obs`."""
+        """List keys of observation annotation `.obs`."""
         return self._obs.keys().tolist()
 
     # for backwards compat
@@ -1076,9 +1106,9 @@ class AnnData(IndexMixin):
         if not self.isbacked():
             del self.__X[obs, var]
         else:
-            X = self._read('X')
+            X = self._read_backed('X')
             del X[obs, var]
-            self._write('X', X)
+            self._write_backed('X', X)
         if var == slice(None):
             del self._obs.iloc[obs, :]
         if obs == slice(None):
@@ -1095,7 +1125,7 @@ class AnnData(IndexMixin):
     def _getitem_copy(self, index):
         oidx, vidx = self._normalize_indices(index)
         if not self.isbacked(): X = self.__X[oidx, vidx]
-        else: X = self._read('X')[oidx, vidx]
+        else: X = self._read_backed('X')[oidx, vidx]
         obs_new = self._obs.iloc[oidx]
         obsm_new = self._obsm[oidx]
         var_new = self._var.iloc[vidx]
@@ -1123,10 +1153,10 @@ class AnnData(IndexMixin):
             self.__X = self.__X[:, index]
             self._n_vars = self.__X.shape[1]
         else:
-            X = self._read('X')
+            X = self._read_backed('X')
             X = X[:, index]
             self._n_vars = X.shape[1]
-            self._write('X', X)
+            self._write_backed('X', X)
         self._var = self._var.iloc[index]
         # TODO: the following should not be necessary!
         self._varm = BoundRecArr(self._varm[index], self, 'varm')
@@ -1141,10 +1171,10 @@ class AnnData(IndexMixin):
             self.__X = self.__X[index, :]
             self._n_obs = self.__X.shape[0]
         else:
-            X = self._read('X')
+            X = self._read_backed('X')
             X = X[index, :]
             self._n_obs = X.shape[0]
-            self._write('X', X)
+            self._write_backed('X', X)
         self._slice_uns_sparse_matrices_inplace(self._uns, index)
         self._obs = self._obs.iloc[index]
         # TODO: the following should not be necessary!
@@ -1178,9 +1208,9 @@ class AnnData(IndexMixin):
         if not self.isbacked():
             self.__X[obs, var] = val
         else:
-            X = self._read('X')
+            X = self._read_backed('X')
             X[obs, var] = val
-            self._write('X', X)
+            self._write_backed('X', X)
 
     def __len__(self):
         return self.shape[0]
@@ -1191,7 +1221,7 @@ class AnnData(IndexMixin):
         Data matrix is transposed, observations and variables are interchanged.
         """
         if not self.isbacked(): X = self.__X
-        else: X = _read('X')
+        else: X = _read_backed('X')
         if sp.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
@@ -1206,7 +1236,7 @@ class AnnData(IndexMixin):
         """Full copy, optionally on disk."""
         if filename is None:
             if not self.isbacked(): X = self.__X
-            else: X = _read('X')
+            else: X = _read_backed('X')
             return AnnData(X.copy() if not self.isbacked() else X,
                            self._obs.copy(),
                            self._var.copy(), self._uns.copy(),
@@ -1316,7 +1346,7 @@ class AnnData(IndexMixin):
             filename = self.filename
         self._write_h5ad(filename, compression, compression_opts)
         if self.isbacked():
-            self.close()
+            self.file.close()
 
     def flush(self):
         """Write `.h5ad`-formatted hdf5 file and leave the backing file open."""
@@ -1401,9 +1431,8 @@ class AnnData(IndexMixin):
 AnnData.__doc__ = AnnData._doc
 
 
-# let's not make this a subclass, but use composition
-# is more transparent
-# the view does not have to have all capabilities
+# let's not make this a subclass, but use composition:
+# the view only has a subset of AnnData's capabilities
 class AnnDataView():
 
     def __init__(self, adata, oidx, vidx):
