@@ -91,37 +91,29 @@ class Group(object):
     def keys(self):
         return self.h5py_group.keys()
 
-    def create_dataset(self, name, shape=None, dtype=None, data=None,
-                       format='csr', indptr_dtype=np.int64, indices_dtype=np.int32,
-                       **kwargs):
-        """Create 4 datasets in a group to represent the sparse array."""
+    def create_dataset(self, name, data=None, **kwargs):
         if data is None:
             raise NotImplementedError("Only support create_dataset with "
-                                      "existing data.")
+                                      "if `data` is passed.")
         elif isinstance(data, SparseDataset):
             group = self.h5py_group.create_group(name)
             group.attrs['h5sparse_format'] = data.h5py_group.attrs['h5sparse_format']
             group.attrs['h5sparse_shape'] = data.h5py_group.attrs['h5sparse_shape']
-            group.create_dataset('data', data=data.h5py_group['data'],
-                                 dtype=dtype, **kwargs)
-            group.create_dataset('indices', data=data.h5py_group['indices'],
-                                 dtype=indices_dtype, **kwargs)
-            group.create_dataset('indptr', data=data.h5py_group['indptr'],
-                                 dtype=indptr_dtype, **kwargs)
+            group.create_dataset('data', data=data.h5py_group['data'], **kwargs)
+            group.create_dataset('indices', data=data.h5py_group['indices'], **kwargs)
+            group.create_dataset('indptr', data=data.h5py_group['indptr'], **kwargs)
             return SparseDataset(group)
         elif ss.issparse(data):
             group = self.h5py_group.create_group(name)
             group.attrs['h5sparse_format'] = get_format_str(data)
             group.attrs['h5sparse_shape'] = data.shape
-            group.create_dataset('data', data=data.data, dtype=dtype, **kwargs)
-            group.create_dataset('indices', data=data.indices,
-                                 dtype=indices_dtype, **kwargs)
-            group.create_dataset('indptr', data=data.indptr,
-                                 dtype=indptr_dtype, **kwargs)
+            group.create_dataset('data', data=data.data, **kwargs)
+            group.create_dataset('indices', data=data.indices, **kwargs)
+            group.create_dataset('indptr', data=data.indptr, **kwargs)
             return SparseDataset(group)
         else:
             return self.h5py_group.create_dataset(
-                name=name, shape=shape, dtype=dtype, data=data, **kwargs)
+                name=name, data=data, **kwargs)
 
 
 class File(Group):
@@ -162,56 +154,71 @@ class SparseDataset(IndexMixin):
                 .format(
                     self.format_str,
                     self.shape, self.h5py_group['data'].dtype.str))
-    
+
     @property
     def format_str(self):
         return self.h5py_group.attrs['h5sparse_format']
 
-    def __getitem__(self, key):
-        row, col = self._unpack_index(key)
-        if self.format_str == 'csr':
-            if (isinstance(col, (int, np.int))
-                or any((col.start, col.stop, col.step))):
-                raise ValueError(
-                    'Slicing csr matrices is only possible along rows.')
-            key = row
-        else:
-            if (isinstance(row, (int, np.int))
-                or any((row.start, row.stop, row.step))):
-                raise ValueError(
-                    'Slicing csc matrices is only possible along columns.')
-            key = col
-        if isinstance(key, (int, np.int)):
-            start = key
-            stop = start + 1
-            key = slice(start, stop)
-        if isinstance(key, slice):
-            if key.step not in {None, 1}:
-                raise NotImplementedError("Index step is not supported.")
-            start = key.start
-            stop = key.stop
-            if stop is not None and stop > 0:
-                stop += 1
-            if start is not None and start < 0:
-                start -= 1
-            indptr_slice = slice(start, stop)
-            indptr = self.h5py_group['indptr'][indptr_slice]
-            data = self.h5py_group['data'][indptr[0]:indptr[-1]]
-            indices = self.h5py_group['indices'][indptr[0]:indptr[-1]]
-            indptr -= indptr[0]
-            if self.format_str == 'csr':
-                shape = (indptr.size - 1, self.shape[1])
-            else:
-                shape = (self.shape[0], indptr.size - 1)
-        else:
-            raise NotImplementedError("Only support one slice as index.")
-
+    def __getitem__(self, index):
+        row, col = self._unpack_index(index)
         format_class = get_format_class(self.format_str)
-        return format_class((data, indices, indptr), shape=shape)
+        mock_matrix = format_class(self.shape, dtype=self.dtype)
+        mock_matrix.data = self.h5py_group['data']
+        mock_matrix.indices = self.h5py_group['indices']
+        mock_matrix.indptr = self.h5py_group['indptr']
+        return mock_matrix[row, col]
+
+    # the new solution above seems to do the job much better:
+    # it allows much more powerful indexing
+    # TODO: need to check that everything is really going right...
+    # def __getitem__(self, key):
+    #     row, col = self._unpack_index(key)
+    #     if self.format_str == 'csr':
+    #         if (isinstance(col, (int, np.int))
+    #             or any((col.start, col.stop, col.step))):
+    #             raise ValueError(
+    #                 'Slicing csr matrices is only possible along rows.')
+    #         key = row
+    #     else:
+    #         if (isinstance(row, (int, np.int))
+    #             or any((row.start, row.stop, row.step))):
+    #             raise ValueError(
+    #                 'Slicing csc matrices is only possible along columns.')
+    #         key = col
+    #     if isinstance(key, (int, np.int)):
+    #         start = key
+    #         stop = start + 1
+    #         key = slice(start, stop)
+    #     if isinstance(key, slice):
+    #         if key.step not in {None, 1}:
+    #             raise NotImplementedError("Index step is not supported.")
+    #         start = key.start
+    #         stop = key.stop
+    #         if stop is not None and stop > 0:
+    #             stop += 1
+    #         if start is not None and start < 0:
+    #             start -= 1
+    #         indptr_slice = slice(start, stop)
+    #         indptr = self.h5py_group['indptr'][indptr_slice]
+    #         data = self.h5py_group['data'][indptr[0]:indptr[-1]]
+    #         indices = self.h5py_group['indices'][indptr[0]:indptr[-1]]
+    #         indptr -= indptr[0]
+    #         if self.format_str == 'csr':
+    #             shape = (indptr.size - 1, self.shape[1])
+    #         else:
+    #             shape = (self.shape[0], indptr.size - 1)
+    #     else:
+    #         raise NotImplementedError("Only support one slice as index.")
+    #     format_class = get_format_class(self.format_str)
+    #     return format_class((data, indices, indptr), shape=shape)
 
     @property
     def shape(self):
         return tuple(self.h5py_group.attrs['h5sparse_shape'])
+
+    @property
+    def dtype(self):
+        return self.h5py_group['data'].dtype
 
     @property
     def value(self):
