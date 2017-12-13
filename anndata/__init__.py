@@ -5,12 +5,22 @@ __doc__ = """\
 anndata
 =======
 
-The `anndata` package provides functions for :class:`~anndata.AnnData` objects and their native file format `.h5ad`: {main_narrative}
+The :class:`anndata` package provides functions for :class:`~anndata.AnnData` objects and their native file format `.h5ad`: {main_narrative}
 
 .. autosummary::
   :toctree: .
 
    AnnData
+
+
+Furthermore, as submodule :class:`anndata.h5py`, it provides a thin wrapper of `h5py
+<http://www.h5py.org/>`_ that is able to handle sparse matrices in addition to
+the standard functionality.
+
+.. autosummary::
+  :toctree: .
+
+   h5py
 
 
 Reading

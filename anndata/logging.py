@@ -8,7 +8,7 @@ def get_memory_usage():
     process = psutil.Process(os.getpid())
     meminfo_attr = ('memory_info' if hasattr(process, 'memory_info')
                     else 'get_memory_info')
-    mem = getattr(process, meminfo_attr)()[0] / 2**20  # output in MB
+    mem = getattr(process, meminfo_attr)()[0] / 2**30  # output in GB
     mem_diff = mem
     global _previous_memory_usage
     if _previous_memory_usage != -1:

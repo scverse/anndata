@@ -55,6 +55,7 @@ autodoc_mock_imports = ['_tkinter']
 numpydoc_show_class_members = True
 # we would like to document the class members as well
 # but they are not clickable, why?
+# so, to avoid all these warnings, set this to False
 numpydoc_class_members_toctree = False
 
 templates_path = ['_templates']
@@ -65,8 +66,8 @@ copyright = '{}, Alex Wolf, Philipp Angerer'.format(time.strftime("%Y"))
 author = 'Alex Wolf, Philipp Angerer'
 
 import anndata
-version = anndata.__version__
-release = anndata.__version__
+version = anndata.__version__.replace('.dirty', '')
+release = version
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 pygments_style = 'sphinx'
 todo_include_todos = False

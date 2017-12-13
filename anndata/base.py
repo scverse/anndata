@@ -311,7 +311,8 @@ class AnnData(IndexMixin):
         :class:`~anndata.AnnData`'s basic structure is similar to R's
         ExpressionSet [Huber15]_.
 
-        If you find the `anndata` package useful, please consider citing [Wolf17]_.
+        If you find :class:`anndata.AnnData` useful, please consider citing
+        [Wolf17]_.
         """)
 
     _example_concatenate = dedent("""\
@@ -387,8 +388,7 @@ class AnnData(IndexMixin):
 
         :class:`~anndata.AnnData` stores observations (samples) of variables
         (features) in the rows of a matrix. This is the convention of the modern
-        classics of stats [Hastie09]_ and Machine Learning `(Murphy, 2012)
-        <https://mitpress.mit.edu/books/machine-learning-0>`_, the convention of
+        classics of stats [Hastie09]_ and Machine Learning [Murphy12]_, the convention of
         dataframes both in R and Python and the established stats and machine
         learning packages in Python (`statsmodels
         <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
@@ -706,7 +706,9 @@ class AnnData(IndexMixin):
                 try:
                     if key in set(f.keys()):
                         if (f[key].shape == value.shape
-                            and f[key].dtype == value.dtype):
+                            and f[key].dtype == value.dtype
+                            and not isinstance(f[key], h5py.SparseDataset)
+                            and not isinstance(value, sparse.spmatrix)):
                             f[key][()] = value
                             continue
                         else:

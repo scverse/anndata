@@ -1,35 +1,6 @@
-# anndata.h5py is based on h5sparse by Appier Inc. See the copyright and license
-# note below.
-#
-# The design choices of anndata.h5py, however, are fundamentally different. In
-# particular, anndata.h5py should be viewed as thin wrapper for h5py that allows
-# handling sparse and non-sparse data at the same time. It achieves this by
-# extending the functionality of `File` and `Group` objects in the h5py API,
-# and providing a new `SparseDataset` object.
-
-# MIT License
-#
-# Copyright (c) 2017 Appier Inc
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-# TODO: think about making all of the below subclasses
+# TODO:
+# - think about making all of the below subclasses
+# - think about supporting the COO format
 
 import six
 import h5py
@@ -59,11 +30,7 @@ def get_format_class(format_str):
 
 
 class Group(object):
-    """The HDF5 group that can detect and create sparse matrix.
-
-    Parameters
-    ==========
-    h5py_group: h5py.Group
+    """Like `h5py.Group`, but able to handle sparse matrices.
     """
 
     def __init__(self, h5py_group):
@@ -117,11 +84,7 @@ class Group(object):
 
 
 class File(Group):
-    """The HDF5 file object that can detect and create sparse matrix.
-
-    Parameters
-    ==========
-    *args, **kwargs: the parameters from h5py.File
+    """Like `h5py.File`, but able to handle sparse matrices.
     """
 
     def __init__(self, *args, **kwargs):
@@ -139,11 +102,7 @@ class File(Group):
 
 
 class SparseDataset(IndexMixin):
-    """The HDF5 sparse matrix dataset.
-
-    Parameters
-    ==========
-    h5py_group: h5py.Dataset
+    """Analogous to `h5py.Dataset`, but for sparse matrices.
     """
 
     def __init__(self, h5py_group):
