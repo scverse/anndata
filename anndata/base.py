@@ -311,7 +311,7 @@ class AnnData(IndexMixin):
         :class:`~anndata.AnnData`'s basic structure is similar to R's
         ExpressionSet [Huber15]_.
 
-        If you find :class:`anndata.AnnData` useful, please consider citing
+        If you find :class:`~anndata.AnnData` useful, please consider citing
         [Wolf17]_.
         """)
 
