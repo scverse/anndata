@@ -204,14 +204,14 @@ def _gen_dataframe(anno, length, index_names):
     return _anno
 
 
-def read_h5ad(filename, init_filename=True):
+def read_h5ad(filename, backed=False):
     """Read `.h5ad`-formatted hdf5 file.
 
     Parameters
     ----------
     filename : `str`
         File name of data file.
-    init_filename : `bool`, optional (default: `True`)
+    backed : `bool`, optional (default: `True`)
         If `True`, `filename` initializes the ``.filename`` attribute of the
         returned object and the data is *not* loaded into memory.
 
@@ -219,7 +219,7 @@ def read_h5ad(filename, init_filename=True):
     -------
     An :class:`~anndata.AnnData` object.
     """
-    if init_filename:
+    if backed:
         # open in backed-mode
         return AnnData(filename=filename)
     else:
@@ -651,19 +651,19 @@ class AnnData(IndexMixin):
         for key in csr_keys:
             d = load_sparse_csr(d, key=key)
             # delete the old representation from the file
-            del_sparse_matrix_keys(f, key)
-            if key in AnnData._H5_ALIASES['X'] and key != 'X':
-                d['X'] = d[key]
-                del d[key]
-                key = 'X'
-            f.close()
-            # store the new representation
-            f = h5py.File(filename, 'r+')
-            f.create_dataset(key, data=d[key])
-            if filename_was_none is not None:
-                d[key] = None
-            f.close()
-            f = h5py.File(filename, 'r+')
+            # del_sparse_matrix_keys(f, key)
+            # if key in AnnData._H5_ALIASES['X'] and key != 'X':
+            #     d['X'] = d[key]
+            #     del d[key]
+            #     key = 'X'
+            # f.close()
+            # # store the new representation
+            # f = h5py.File(filename, 'r+')
+            # f.create_dataset(key, data=d[key])
+            # if filename_was_none is not None:
+            #     d[key] = None
+            # f.close()
+            # f = h5py.File(filename, 'r+')
         if not filename_was_none:
             f.close()
         return d
@@ -1508,10 +1508,10 @@ def load_sparse_csr(d, key='X'):
                          d[key_csr + '_indices'],
                          d[key_csr + '_indptr']),
                         shape=d[key_csr + '_shape'])
-    del_sparse_matrix_keys(d)
+    del_sparse_matrix_keys(d, key_csr)
     return d
 
-def del_sparse_matrix_keys(mapping):
+def del_sparse_matrix_keys(mapping, key_csr):
     del mapping[key_csr + '_data']
     del mapping[key_csr + '_indices']
     del mapping[key_csr + '_indptr']
