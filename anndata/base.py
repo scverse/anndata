@@ -354,7 +354,7 @@ class AnnData(IndexMixin):
 
         Parameters
         ----------
-        X : `np.ndarray`, `sparse.spmatrix`, `np.ma.MaskedArray`
+        X : `np.ndarray`, `sparse.spmatrix`
             A #observations × #variables data matrix. A view of the data is used if the
             data type matches, otherwise, a copy is made.
         obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)

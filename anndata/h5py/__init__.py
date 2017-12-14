@@ -11,7 +11,7 @@ non-sparse data at the same time. It achieves this by extending the
 functionality of `File` and `Group` objects in the h5py API, and by providing a
 new `SparseDataset` object.
 
-For examples and further information, see this `blog post <https://falexwolf.de/1712122_sparse_matrices_with_h5py>`_.
+For examples and further information, see this `blog post <https://falexwolf.de/blog/1712122_sparse_matrices_with_h5py>`_.
 
 .. autosummary::
   :toctree: .
