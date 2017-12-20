@@ -1,7 +1,9 @@
-|Docs| |Build Status| |Coverage|
+|Docs| |PyPI| |Build Status| |Coverage|
 
 .. |Docs| image:: https://readthedocs.org/projects/scanpy/badge/?version=latest
    :target: https://scanpy.readthedocs.io
+.. |PyPI| image:: https://badge.fury.io/py/anndata.svg
+   :target: https://pypi.python.org/pypi/anndata
 .. |Build Status| image:: https://travis-ci.org/theislab/anndata.svg?branch=master
    :target: https://travis-ci.org/theislab/anndata
 .. |Coverage| image:: https://codecov.io/gh/theislab/anndata/branch/master/graph/badge.svg
