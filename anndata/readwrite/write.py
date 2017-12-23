@@ -5,7 +5,9 @@ import numpy as np
 from scipy.sparse import issparse
 
 
-def write_csvs(dirname, adata, skip_data=True):
+def write_csvs(dirname, adata, skip_data=True, sep=','):
+    """See :class:`~anndata.AnnData.write_csvs`.
+    """
     if dirname.endswith('.csv'):
         dirname = dirname.replace('.csv', '/')
     if not dirname.endswith('/'): dirname += '/'
@@ -42,7 +44,7 @@ def write_csvs(dirname, adata, skip_data=True):
             except:
                 warnings.warn('Omitting to write \'{}\'.'.format(key))
                 continue
-        df.to_csv(filename,
+        df.to_csv(filename, sep=sep,
                   header=True if key in {'obs', 'var', 'obsm', 'varm'} else False,
                   index=True if key in {'obs', 'var'} else False)
 

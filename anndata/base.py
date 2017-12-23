@@ -1,6 +1,7 @@
 """Main class and helper functions.
 """
 import os
+import warnings
 from enum import Enum
 from collections import Mapping, Sequence
 import numpy as np
@@ -47,7 +48,6 @@ class BoundRecArr(np.recarray):
         return arr
 
     def __array_finalize__(self, obj):
-        # see InfoArray.__array_finalize__ for comments
         if obj is None: return
         self._parent = getattr(obj, '_parent', None)
         self._attr = getattr(obj, '_attr', None)
@@ -169,8 +169,6 @@ def _fix_shapes(X, single_col=False):
         raise ValueError('X needs to be 2-dimensional, not '
                          '{}-dimensional.'.format(len(X.shape)))
     if len(X.shape) == 2:
-        # TODO: int immutable, copy of references to ints in X.shape
-        # only valid until accidental change
         n_obs, n_vars = X.shape
         if n_obs == 1 and n_vars == 1:
             X = X[0, 0]
@@ -211,9 +209,11 @@ def read_h5ad(filename, backed=False):
     ----------
     filename : `str`
         File name of data file.
-    backed : `bool`, optional (default: `True`)
-        If `True`, `filename` initializes the ``.filename`` attribute of the
-        returned object and the data is *not* loaded into memory.
+    backed : {`False`, `True`, 'r', 'r+'}, optional (default: `False`)
+        Load :class:`~scanpy.api.AnnData` in `backed` mode instead of fully
+        loading it into memory (`memory` mode). `True` and 'r' are
+        equivalent. If you want to modify backed attributes of the AnnData
+        object, you need to choose 'r+'.
 
     Returns
     -------
@@ -221,7 +221,7 @@ def read_h5ad(filename, backed=False):
     """
     if backed:
         # open in backed-mode
-        return AnnData(filename=filename)
+        return AnnData(filename=filename, filemode=backed)
     else:
         # load everything into memory
         # TODO: do this with less of a hack...
@@ -230,13 +230,121 @@ def read_h5ad(filename, backed=False):
         return AnnData(d)
 
 
+def _write_key_value_to_h5(f, key, value, **kwargs):
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            if not isinstance(k, str):
+                warnings.warn('dict key {} transformed to str upon writing to h5,'
+                              'using string keys is recommended'
+                              .format(k))
+            _write_key_value_to_h5(f, key + '/' + str(k), v, **kwargs)
+        return
+
+    def preprocess_writing(value):
+        if value is None:
+            return value
+        elif issparse(value):
+            return value
+        elif isinstance(value, dict):
+            # hack for storing dicts
+            value = np.array([str(value)])
+        else:
+            # make sure value is an array
+            value = np.array(value)
+            # hm, why that?
+            if value.ndim == 0: value = np.array([value])
+        # make sure string format is chosen correctly
+        if value.dtype.kind == 'U': value = value.astype(np.string_)
+        return value
+
+    value = preprocess_writing(value)
+    if (value is None
+        # ignore arrays with empty dtypes
+        or not value.dtype.descr):
+        return
+    try:
+        if key in set(f.keys()):
+            if (not isinstance(f[key], h5py.Group)
+                and f[key].shape == value.shape
+                and f[key].dtype == value.dtype
+                and not isinstance(f[key], h5py.SparseDataset)
+                and not isinstance(value, sparse.spmatrix)):
+                f[key][()] = value
+                return
+            else:
+                del f[key]
+        f.create_dataset(key, data=value, **kwargs)
+    except TypeError:
+        # try writing as byte strings
+        try:
+            if value.dtype.names is None:
+                if key in set(f.keys()):
+                    if (f[key].shape == value.shape
+                        and f[key].dtype == value.dtype):
+                        f[key][()] = value.astype('S')
+                        return
+                    else:
+                        del f[key]
+                f.create_dataset(key, data=value.astype('S'), **kwargs)
+            else:
+                new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
+                             for dt in value.dtype.descr]
+                if key in set(f.keys()):
+                    if (f[key].shape == value.shape
+                        and f[key].dtype == value.dtype):
+                        f[key][()] = value.astype(new_dtype)
+                        return
+                    else:
+                        del f[key]
+                f.create_dataset(
+                    key, data=value.astype(new_dtype), **kwargs)
+        except Exception as e:
+            warnings.warn('Could not save field with key = "{}" '
+                          'to hdf5 file.'.format(key))
+
+
+def _read_key_value_from_h5(f, d, key, key_write=None):
+    if key_write is None: key_write = key
+    if isinstance(f[key], h5py.Group):
+        d[key_write] = {}
+        for k in f[key].keys():
+            _read_key_value_from_h5(f, d[key_write], key + '/' + k, k)
+        return
+    # the '()' means 'load everything into memory' (by contrast, ':'
+    # only works if not reading a scalar type)
+    value = f[key][()]
+
+    def postprocess_reading(key, value):
+        if value.ndim == 1 and len(value) == 1:
+            value = value[0]
+        if value.dtype.kind == 'S':
+            value = value.astype(str)
+            # backwards compat:
+            # recover a dictionary that has been stored as a string
+            if len(value) > 0:
+                if value[0] == '{' and value[-1] == '}': value = eval(value)
+        # transform byte strings in recarrays to unicode strings
+        # TODO: come up with a better way of solving this, see also below
+        if (key not in AnnData._H5_ALIASES['obs']
+            and key not in AnnData._H5_ALIASES['var']
+            and not isinstance(value, dict) and value.dtype.names is not None):
+            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
+                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
+            value = value.astype(new_dtype)
+        return key, value
+
+    key, value = postprocess_reading(key, value)
+    d[key_write] = value
+    return
+
+
 class AnnDataFileManager():
-    """Lightweight backing file manager for AnnData.
+    """Backing file manager for AnnData.
     """
 
-    def __init__(self, adata, filename=None):
+    def __init__(self, adata, filename=None, filemode=None):
         self._adata = adata
-        self._open(filename)
+        self._init(filename, filemode)
 
     def __repr__(self):
         if self._filename is None:
@@ -244,13 +352,20 @@ class AnnDataFileManager():
         else:
             return 'Backing file manager of file {}.'.format(self._filename)
 
-    def _open(self, filename):
+    def _init(self, filename, filemode=None):
         """Init the file manager."""
         self._filename = filename
         if filename is None:
             self._file = None
         else:
-            self._file = h5py.File(filename, 'r+')
+            if filemode is None: filemode = 'r'
+            self._file = h5py.File(filename, filemode)
+
+    def open(self, filemode='r+'):
+        if self._filename is None:
+            raise ValueError(
+                'Cannot open backing file if backing not initialized.')
+        self._file = h5py.File(self._filename, filemode)
 
     def close(self):
         """Close the backing file, remember filename, do *not* change to memory mode."""
@@ -263,15 +378,159 @@ class AnnDataFileManager():
         self._file = None
         self._filename = None
 
+    @property
     def isopen(self):
         """State of backing file."""
         if self._file is None:
             return False
+        # try accessing the id attribute to see if the file is open
+        return bool(self._file.id)
+
+
+class AnnDataAttributeView():
+    """View on AnnData attributes."""
+
+    def __init__(self, adata_view, adata_ref,
+                 oidx, vidx, attribute, attribute_name):
+        self._adata_view = adata_view
+        self._adata_ref = adata_ref
+        self._oidx = oidx
+        self._vidx = vidx
+        self._attr = attribute
+        self._attr_name = attribute_name
+
+    def __repr__(self):
+        return 'view of ' + self._attr.__repr__()
+
+    def __str__(self):
+        return 'view of ' + self._attr.__str__()
+
+    @property
+    def shape(self):
+        return self._attr.shape
+
+    @property
+    def dtype(self):
+        return self._attr.dtype
+
+    @property
+    def size(self):
+        return self._attr.size
+
+    @property
+    def index(self):
+        return self._attr.index
+
+    def head(self):
+        return self._attr.head()
+
+    def keys(self):
         try:
-            # try accessing the id attribute to see if the file is open
-            return bool(self.file._file.id)
-        except:
-            return False
+            return self._attr.keys()
+        except AttributeError:
+            # it's a structured array
+            return self._attr.dtype.names
+
+    def __getitem__(self, idx):
+        return self._attr[idx]
+
+    def __setitem__(self, idx, value):
+        adata = self._adata_ref._getitem_copy((self._oidx, self._vidx))
+        self._adata_view._init_as_actual(adata)
+        getattr(self._adata_view, self._attr_name)[idx] = value
+
+    def copy(self):
+        return self._attr.copy()
+
+
+class ArrayView(np.ndarray):
+
+    def __new__(cls, input_array, view_args=None):
+        arr = np.asarray(input_array).view(cls)
+        arr._view_args = view_args
+        return arr
+
+    def __array_finalize__(self, obj):
+        if obj is None: return
+        self._view_args = getattr(obj, '_view_args', None)
+
+    def __setitem__(self, idx, value):
+        if self._view_args is None:
+            super(type(self), self).__setitem__(idx, value)
+        else:
+            adata_view, attr_name = self._view_args
+            adata_view._init_as_actual(adata_view.copy())
+            getattr(adata_view, attr_name)[idx] = value
+
+    def keys(self):
+        # it's a structured array
+        return self.dtype.names
+
+    def copy(self):
+        # we want a conventional array
+        return np.array(self)
+
+
+# the following two definitions are exactly equivalent
+
+class SparseCSRView(sparse.csr_matrix):
+
+    def __init__(self, *args, view_args=None, **kwargs):
+        self._view_args = view_args
+        super(type(self), self).__init__(*args, **kwargs)
+
+    def __setitem__(self, idx, value):
+        if self._view_args is None:
+            super(type(self), self).__setitem__(idx, value)
+        else:
+            adata_view, attr_name = self._view_args
+            adata_view._init_as_actual(adata_view.copy())
+            getattr(adata_view, attr_name)[idx] = value
+
+
+class SparseCSCView(sparse.csc_matrix):
+
+    def __init__(self, *args, view_args=None, **kwargs):
+        self._view_args = view_args
+        super(type(self), self).__init__(*args, **kwargs)
+
+    def __setitem__(self, idx, value):
+        adata_view, adata_ref, oidx, vidx, attr_name = self._view_args
+        adata = adata_ref._getitem_copy((oidx, vidx))
+        adata_view._init_as_actual(adata)
+        getattr(adata_view, attr_name)[idx] = value
+
+
+class DictView(dict):
+
+    def __init__(self, *args, view_args=None, **kwargs):
+        self._view_args = view_args
+        super(type(self), self).__init__(*args, **kwargs)
+
+    def __setitem__(self, idx, value):
+        if self._view_args is None:
+            super(type(self), self).__setitem__(idx, value)
+        else:
+            adata_view, attr_name = self._view_args
+            adata_view._init_as_actual(adata_view.copy())
+            getattr(adata_view, attr_name)[idx] = value
+
+
+class DataFrameView(pd.DataFrame):
+
+    _metadata = ['_view_args']
+
+    def __init__(self, *args, view_args=None, **kwargs):
+        self._view_args = view_args
+        super(type(self), self).__init__(*args, **kwargs)
+
+    def __setitem__(self, idx, value):
+        if self._view_args is None:
+            super(type(self), self).__setitem__(idx, value)
+        else:
+            adata_view, attr_name = self._view_args
+            adata_view._init_as_actual(adata_view.copy())
+            getattr(adata_view, attr_name)[idx] = value
 
 
 class AnnData(IndexMixin):
@@ -283,6 +542,7 @@ class AnnData(IndexMixin):
         'X': {'X', '_X', 'data', '_data'},
         'obs': {'obs', '_obs', 'smp', '_smp'},
         'var': {'var', '_var'},
+        'uns': {'uns'},
         'obsm': {'obsm', '_obsm', 'smpm', '_smpm'},
         'varm': {'varm', '_varm'},
     }
@@ -410,10 +670,89 @@ class AnnData(IndexMixin):
         """).format(main_narrative=_main_narrative,
                     example_concatenate=_example_concatenate)
 
-    def __init__(self, X=None, obs=None, var=None, uns=None,
-                 obsm=None, varm=None,
-                 filename=None,
-                 dtype='float32', single_col=False):
+    def __init__(
+            self, X=None, obs=None, var=None, uns=None,
+            obsm=None, varm=None,
+            dtype='float32', single_col=False,
+            filename=None, filemode=None,
+            asview=False, oidx=None, vidx=None):
+        if asview:
+            if not isinstance(X, AnnData):
+                raise ValueError('`X` has to be an AnnData object.')
+            self._init_as_view(X, oidx, vidx)
+        else:
+            self._init_as_actual(
+                X=X, obs=obs, var=var, uns=uns,
+                obsm=obsm, varm=varm,
+                dtype=dtype, single_col=single_col,
+                filename=filename, filemode=filemode)
+
+    def _init_as_view(self, adata_ref, oidx, vidx):
+        self._isview = True
+        self._adata_ref = adata_ref
+        self._oidx = oidx
+        self._vidx = vidx
+        # the file is the same as of the reference object
+        self.file = adata_ref.file
+        # views on attributes of adata_ref
+        self._obs = DataFrameView(adata_ref.obs.iloc[oidx], view_args=(self, 'obs'))
+        self._var = DataFrameView(adata_ref.var.iloc[vidx], view_args=(self, 'var'))
+        self._obsm = ArrayView(adata_ref.obsm[oidx], view_args=(self, 'obsm'))
+        self._varm = ArrayView(adata_ref.varm[vidx], view_args=(self, 'varm'))
+        # hackish solution here, no copy should be necessary
+        uns_new = self._adata_ref._uns.copy()
+        self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
+        self._uns = DictView(uns_new, view_args=(self, 'uns'))
+        # fix _n_obs, _n_vars
+        if isinstance(oidx, slice):
+            self._n_obs = len(self._obs.index)
+        elif isinstance(oidx, (int, np.int64)):
+            self._n_obs = 1
+        else:
+            self._n_obs = len(oidx)
+        if isinstance(vidx, slice):
+            self._n_vars = len(self._var.index)
+        elif isinstance(vidx, (int, np.int64)):
+            self._n_vars = 1
+        else:
+            self._n_vars = len(vidx)
+        # set data
+        if self.isbacked: self._X = None
+        else: self._init_X_as_view()
+
+    def _init_X_as_view(self):
+        X = self._adata_ref.X[self._oidx, self._vidx]
+        if len(X.shape) == 2:
+            n_obs, n_vars = X.shape
+            if n_obs == 1 and n_vars == 1:
+                X = X[0, 0]
+            elif n_obs == 1 or n_vars == 1:
+                if issparse(X): X = X.toarray()
+                X = X.flatten()
+        if isinstance(X, sparse.csr_matrix):
+            self._X = SparseCSRView(X, view_args=(self, 'X'))
+        elif isinstance(X, sparse.csc_matrix):
+            self._X = SparseCSCView(X, view_args=(self, 'X'))
+        elif issparse(X):
+            raise ValueError('View on non-csr/csc sparse matrices not implemented.')
+        else:
+            self._X = ArrayView(X, view_args=(self, 'X'))
+
+    def _init_as_actual(
+            self, X=None, obs=None, var=None, uns=None,
+            obsm=None, varm=None,
+            dtype='float32', single_col=False,
+            filename=None, filemode=None):
+
+        # view attributes
+        self._isview = False
+        self._adata_ref = None
+        self._oidx = None
+        self._vidx = None
+
+        # ----------------------------------------------------------------------
+        # various ways of initializing the data
+        # ----------------------------------------------------------------------
 
         # init from file
         if filename is None:
@@ -423,18 +762,29 @@ class AnnData(IndexMixin):
                 raise ValueError(
                     'If initializing from `filename`, '
                     'no further arguments may be passed.')
-            self.file = AnnDataFileManager(self, filename)
+            self.file = AnnDataFileManager(self, filename, filemode)
             # will read from backing file
             # what is returned is, at this stage, a dict
             # that needs to be processed
-            X = self._read_h5ad()
+            X = self._read_h5ad(mode=filemode)
 
-        # generate from dictionary
+        # init from dictionary
         if isinstance(X, Mapping):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
             X, obs, var, uns, obsm, varm = self._from_dict(X)
+
+        # init from AnnData
+        if isinstance(X, AnnData):
+            if any((obs, var, uns, obsm, varm)):
+                raise ValueError(
+                    'If `X` is a dict no further arguments must be provided.')
+            X, obs, var, uns, obsm, varm = X.X, X.obs, X.var, X.uns, X.obsm, X.varm
+
+        # ----------------------------------------------------------------------
+        # actually process the data
+        # ----------------------------------------------------------------------
 
         # check data type of X
         if X is not None:
@@ -453,7 +803,7 @@ class AnnData(IndexMixin):
             else:  # is np.ndarray
                 X = X.astype(dtype, copy=False)
             # data matrix and shape
-            self.__X, self._n_obs, self._n_vars = _fix_shapes(X)
+            self._X, self._n_obs, self._n_vars = _fix_shapes(X)
         else:
             self._n_obs = len(obs)
             self._n_vars = len(var)
@@ -467,7 +817,14 @@ class AnnData(IndexMixin):
         self._uns = uns or {}
 
         # multi-dimensional array annotations
-        if obsm is None: obsm = np.empty(self._n_obs, dtype=[])
+        if obsm is None:
+            try:
+                obsm = np.empty(self._n_obs, dtype=[])
+            except TypeError:
+                raise TypeError(
+                    'TypeError: Empty data-type'
+                    '--> try installing a more recent numpy version: '
+                    '    pip install numpy --upgrade')
         if varm is None: varm = np.empty(self._n_vars, dtype=[])
         self._obsm = BoundRecArr(obsm, self, 'obsm')
         self._varm = BoundRecArr(varm, self, 'varm')
@@ -485,7 +842,7 @@ class AnnData(IndexMixin):
         return size
 
     def _gen_repr(self, n_obs, n_vars):
-        if self.isbacked():
+        if self.isbacked:
             backed_at = 'backed at \'{}\''.format(self.filename)
         else:
             backed_at = ''
@@ -499,254 +856,188 @@ class AnnData(IndexMixin):
         return descr
 
     def __repr__(self):
-        return self._gen_repr(self.n_obs, self.n_vars)
-
-    def _from_dict(self, ddata):
-        """Allows to construct an instance of AnnData from a dictionary.
-
-        Acts as interface for the communication with the hdf5 file.
-
-        In particular, from a dict that has been written using
-        ``AnnData._to_dict_fixed_width_arrays``.
-        """
-        # TODO: remove the copy at some point, check consequences first...
-        ddata = ddata.copy()
-        d_true_keys = {}
-
-        for true_key, keys in AnnData._H5_ALIASES.items():
-            for key in keys:
-                if key in ddata:
-                    d_true_keys[true_key] = ddata[key]
-                    del ddata[key]
-                    break
-            else:
-                d_true_keys[true_key] = None
-
-        # transform recarray to dataframe
-        from pandas.api.types import is_string_dtype
-        from pandas import Index
-
-        for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
-            if d_true_keys[true_key] is not None:
-                for key in keys:
-                    if key in d_true_keys[true_key].dtype.names:
-                        d_true_keys[true_key] = pd.DataFrame.from_records(
-                            d_true_keys[true_key], index=key)
-                        break
-                d_true_keys[true_key].index = d_true_keys[true_key].index.astype('U')
-                # transform to unicode string
-                # TODO: this is quite a hack
-                for c in d_true_keys[true_key].columns:
-                    if is_string_dtype(d_true_keys[true_key][c]):
-                        d_true_keys[true_key][c] = Index(
-                            d_true_keys[true_key][c]).astype('U').values
-
-        # these are the category fields
-        k_to_delete = []
-        for k in ddata.keys():
-            if k.endswith('_categories'):
-                k_stripped = k.replace('_categories', '')
-                if k_stripped in d_true_keys['obs']:
-                    d_true_keys['obs'][k_stripped] = pd.Categorical.from_codes(
-                        codes=d_true_keys['obs'][k_stripped].values,
-                        categories=ddata[k])
-                if k_stripped in d_true_keys['var']:
-                    d_true_keys['var'][k_stripped] = pd.Categorical.from_codes(
-                        codes=d_true_keys['var'][k_stripped].values,
-                        categories=ddata[k])
-                k_to_delete.append(k)
-
-        for k in k_to_delete:
-            del ddata[k]
-
-        # assign the variables
-        X = d_true_keys['X']
-        obs = d_true_keys['obs']
-        obsm = d_true_keys['obsm']
-        var = d_true_keys['var']
-        varm = d_true_keys['varm']
-        # the remaining fields are the unstructured annotation
-        uns = ddata
-
-        return X, obs, var, uns, obsm, varm
-
-    def _to_dict_fixed_width_arrays(self):
-        """A dict of arrays that stores data and annotation.
-
-        It is sufficient for reconstructing the object.
-        """
-        obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
-        var_rec, uns_var = df_to_records_fixed_width(self._var)
-        d = {'X': self.__X,
-             'obs': obs_rec,
-             'var': var_rec,
-             'obsm': self._obsm,
-             'varm': self._varm}
-        return {**d, **self._uns, **uns_obs, **uns_var}
-
-    def _read_h5ad(self, filename=None):
-        """Return a dict with arrays for initializing AnnData.
-
-        Parameters
-        ----------
-        filename : `str` or `None`, optional (default: `None`)
-            Defaults to the objects filename if `None`.
-        """
-        # we need to be able to call the function
-        # without reference to self
-        filename_was_none = False
-        if filename is None:
-            filename_was_none = True
-            filename = self.filename
-
-        def postprocess_reading(key, value):
-            if value is None:
-                return key, value
-            if value.ndim == 1 and len(value) == 1:
-                value = value[0]
-            if value.dtype.kind == 'S':
-                value = value.astype(str)
-                # recover a dictionary that has been stored as a string
-                if len(value) > 0:
-                    if value[0] == '{' and value[-1] == '}': value = eval(value)
-            # transform byte strings in recarrays to unicode strings
-            # TODO: come up with a better way of solving this, see also below
-            if (key not in AnnData._H5_ALIASES['obs']
-                and key not in AnnData._H5_ALIASES['var']
-                and not isinstance(value, dict) and value.dtype.names is not None):
-                new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
-                              if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
-                value = value.astype(new_dtype)
-            return key, value
-
-        filename = str(filename)  # allow passing pathlib.Path objects
-        d = {}
-        if filename_was_none:
-            f = self.file._file
+        if self.isview:
+            return 'View of ' + self._gen_repr(self.n_obs, self.n_vars)
         else:
-            # open in editable mode to fix old file formats
-            f = h5py.File(filename, 'r+')
-        # TODO: this will still fail if trying to read a sparse matrix group
-        for key in f.keys():
-            if filename_was_none and key in AnnData._BACKED_ATTRS:
-                # we cannot simply assign an h5py dataset here, as we need to
-                # distinguish between dense and different sparse data types
-                value = None
+            return self._gen_repr(self.n_obs, self.n_vars)
+
+    @property
+    def shape(self):
+        """Shape of data matrix: (n_obs, n_vars)."""
+        return self.n_obs, self.n_vars
+
+    @property
+    def X(self):
+        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sparse.spmatrix`)."""
+        if self.isbacked:
+            if not self.file.isopen: self.file.open()
+            X = self.file._file['X']
+            if self.isview: return X[self._oidx, self._vidx]
+            else: return X
+        else: return self._X
+
+    @X.setter
+    def X(self, value):
+        if ((self.n_vars == 1 and self.n_obs == len(value))
+            or (self.n_obs == 1 and self.n_vars == len(value))
+            or self.shape == value.shape):
+            if self.isbacked:
+                if self.isview:
+                    self.file._file['X'][self._oidx, self._vidx] = value
+                else:
+                    self.file._file['X'] = value
             else:
-                # the '()' means 'load everything into memory' (by contrast, ':'
-                # only works if not reading a scalar type)
-                value = f[key][()]
-            key, value = postprocess_reading(key, value)
-            d[key] = value
-        # backwards compat: save X with the correct name
-        if 'X' not in d:
-            for key in AnnData._H5_ALIASES['X']:
-                if key in d:
-                    del f[key]
-                    f.create_dataset('X', data=d[key])
-                    break
-        # backwards compat: store sparse matrices properly
-        csr_keys = [key.replace('_csr_data', '')
-                    for key in d if '_csr_data' in key]
-        for key in csr_keys:
-            d = load_sparse_csr(d, key=key)
-            # delete the old representation from the file
-            # del_sparse_matrix_keys(f, key)
-            # if key in AnnData._H5_ALIASES['X'] and key != 'X':
-            #     d['X'] = d[key]
-            #     del d[key]
-            #     key = 'X'
-            # f.close()
-            # # store the new representation
-            # f = h5py.File(filename, 'r+')
-            # f.create_dataset(key, data=d[key])
-            # if filename_was_none is not None:
-            #     d[key] = None
-            # f.close()
-            # f = h5py.File(filename, 'r+')
-        if not filename_was_none:
-            f.close()
-        return d
+                if self.isview:
+                    self._adata_ref._X[self._oidx, self._vidx] = value
+                    self._init_X_as_view()
+                else:
+                    self._X = value
+        else:
+            raise ValueError('Data matrix has wrong shape {}, need to be {}'
+                             .format(value.shape, self.shape))
 
-    def _write_h5ad(self, filename, **kwargs):
+    @property
+    def n_obs(self):
+        """Number of observations."""
+        return self._n_obs
 
-        def preprocess_writing(value):
-            if issparse(value):
-                return value
-            elif isinstance(value, dict):
-                # hack for storing dicts
-                value = np.array([str(value)])
-            else:
-                # make sure value is an array
-                value = np.array(value)
-                # hm, why that?
-                if value.ndim == 0: value = np.array([value])
-            # make sure string format is chosen correctly
-            if value.dtype.kind == 'U': value = value.astype(np.string_)
-            return value
+    @property
+    def n_vars(self):
+        """Number of variables/features."""
+        return self._n_vars
 
-        filename = str(filename)  # allow passing pathlib.Path objects
-        if not filename.endswith(('.h5', '.h5ad')):
-            raise ValueError('Filename needs to end with \'.h5ad\'.')
-        if self.isbacked():
-            # close so that we can reopen below
-            self.file._file.close()
-        # create directory if it doesn't exist
-        if not os.path.exists(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        d = self._to_dict_fixed_width_arrays()
-        # store dense values
-        with h5py.File(filename, 'a') as f:
-            for key, value in d.items():
-                if (value is None
-                    # ignore arrays with empty dtypes
-                    or not value.dtype.descr):
-                    continue
-                value = preprocess_writing(value)
-                try:
-                    if key in set(f.keys()):
-                        if (f[key].shape == value.shape
-                            and f[key].dtype == value.dtype
-                            and not isinstance(f[key], h5py.SparseDataset)
-                            and not isinstance(value, sparse.spmatrix)):
-                            f[key][()] = value
-                            continue
-                        else:
-                            del f[key]
-                    f.create_dataset(key, data=value, **kwargs)
-                except TypeError:
-                    # try writing it as byte strings
-                    try:
-                        if value.dtype.names is None:
-                            if key in set(f.keys()):
-                                if (f[key].shape == value.shape
-                                    and f[key].dtype == value.dtype):
-                                    f[key][()] = value.astype('S')
-                                    continue
-                                else:
-                                    del f[key]
-                            f.create_dataset(key, data=value.astype('S'), **kwargs)
-                        else:
-                            new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
-                                         for dt in value.dtype.descr]
-                            if key in set(f.keys()):
-                                if (f[key].shape == value.shape
-                                    and f[key].dtype == value.dtype):
-                                    f[key][()] = value.astype(new_dtype)
-                                    continue
-                                else:
-                                    del f[key]
-                            f.create_dataset(
-                                key, data=value.astype(new_dtype), **kwargs)
-                    except Exception as e:
-                        warnings.warn('Could not save field with key = "{}" '
-                                      'to hdf5 file.'.format(key))
-        if self.isbacked():
-            self.file._file = h5py.File(filename, 'r+')
+    @property
+    def obs(self):
+        """One-dimensional annotation of observations (`pd.DataFrame`)."""
+        return self._obs
 
+    @obs.setter
+    def obs(self, value):
+        if not isinstance(value, pd.DataFrame):
+            raise ValueError('Can only assign pd.DataFrame.')
+        if len(value) != self.n_obs:
+            raise ValueError('Length does not match.')
+        if self.isview: self._adata_ref._obs.iloc[self._oidx] = value
+        else: self._obs = value
+
+    @property
+    def var(self):
+        """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
+        return self._var
+
+    @var.setter
+    def var(self, value):
+        if not isinstance(value, pd.DataFrame):
+            raise ValueError('Can only assign pd.DataFrame.')
+        if len(value) != self.n_vars:
+            raise ValueError('Length does not match.')
+        if self.isview: self._adata_ref._var.iloc[self._vidx] = value
+        else: self._var = value
+
+    @property
+    def uns(self):
+        """Unstructured annotation (ordered dictionary)."""
+        return self._uns
+
+    @uns.setter
+    def uns(self, value):
+        if self.isview:
+            # here, we directly generate the copy
+            adata = self._adata_ref._getitem_copy((self.oidx, self.vidx))
+            self._init_as_actual(adata)
+        self._uns = value
+
+    @property
+    def obsm(self):
+        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`).
+
+        Stores for each key, a two or higher-dimensional `np.ndarray` of length
+        `n_obs`. Is sliced with `data` and `obs` but behaves otherwise like a
+        `dict`.
+        """
+        return self._obsm
+
+    @obsm.setter
+    def obsm(self, value):
+        if not isinstance(value, np.ndarray):
+            raise ValueError('Can only assign np.ndarray.')
+        if len(value) != self.n_obs:
+            raise ValueError('Length does not match.')
+        if self.isview:
+            self._adata_ref._obsm[self._oidx] = value
+        else:
+            value = BoundRecArr(value, self, 'obsm')
+            self._obsm = value
+
+    @property
+    def varm(self):
+        """Multi-dimensional annotation of variables/ features (mutable structured `np.ndarray`).
+
+        Stores for each key, a two or higher-dimensional `np.ndarray` of length
+        `n_vars`. Is sliced with `data` and `var` but behaves otherwise like a
+        `dict`.
+        """
+        return self._varm
+
+    @varm.setter
+    def varm(self, value):
+        if not isinstance(value, np.ndarray):
+            raise ValueError('Can only assign np.ndarray.')
+        if len(value) != self.n_vars:
+            raise ValueError('Length does not match.')
+        if self.isview:
+            self._adata_ref._varm[self._vidx] = value
+        else:
+            value = BoundRecArr(value, self, 'varm')
+            self._varm = value
+
+    @property
+    def obs_names(self):
+        """Names of observations (`.obs.index`)."""
+        return self.obs.index
+
+    @obs_names.setter
+    def obs_names(self, names):
+        self.obs.index = names
+
+    @property
+    def var_names(self):
+        """Names of variables (`.var.index`)."""
+        return self._var.index
+
+    @var_names.setter
+    def var_names(self, names):
+        self._var.index = names
+
+    def obs_keys(self):
+        """List keys of observation annotation `.obs`."""
+        return self._obs.keys().tolist()
+
+    def var_keys(self):
+        """List keys of variable annotation `var`."""
+        return self._var.keys().tolist()
+
+    def obsm_keys(self):
+        """List keys of observation annotation `obsm`."""
+        return list(self._obsm.keys())
+
+    def varm_keys(self):
+        """List keys of variable annotation `varm`."""
+        return list(self._varm.keys())
+
+    def uns_keys(self):
+        """List keys of unstructured annotation."""
+        return sorted(list(self._uns.keys()))
+
+    @property
     def isbacked(self):
         """`True` if object is backed on disk, `False` otherwise."""
         return self.filename is not None
+
+    @property
+    def isview(self):
+        """`True` if object is view of another AnnData object, `False` otherwise."""
+        return self._isview
 
     @property
     def filename(self):
@@ -784,257 +1075,17 @@ class AnnData(IndexMixin):
                 # write the content of self to disk
                 self.write(filename)
             # open new file for accessing
-            self.file._open(filename)
-            # as the data is stored on disk, we can safely set self.__X to None
-            self.__X = None
-
-    @property
-    def shape(self):
-        """Shape of data matrix: (n_obs, n_vars)."""
-        return self.n_obs, self.n_vars
-
-    # for backwards compat
-    @property
-    def data(self):
-        """Deprecated access to X."""
-        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
-              '`.data` will be removed in the future.')
-        return self.X
-
-    # for backwards compat
-    @data.setter
-    def data(self, value):
-        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
-              '`.data` will be removed in the future.')
-        self.X = value
-
-    @property
-    def X(self):
-        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sparse.spmatrix`)."""
-        return self._X
-
-    @property
-    def _X(self):
-        # we need this additional layer for AnnDataView
-        if self.isbacked(): return self._read_backed('X')
-        else: return self.__X
-
-    @X.setter
-    def X(self, value):
-        if not self.shape == value.shape:
-            raise ValueError('Data matrix has wrong shape {}, need to be {}'
-                             .format(value.shape, self.shape))
-        self._X = value
-
-    @_X.setter
-    def _X(self, value):
-        if self.isbacked(): self._write_backed('X', value)
-        else: self.__X = value
-
-    def _read_backed(self, attr):
-        return self.file._file[attr]
+            self.file._init(filename, filemode='r+')
+            # as the data is stored on disk, we can safely set self._X to None
+            self._X = None
 
     def _write_backed(self, attr, value):
-        if (self.file._file[attr].shape == value.shape
-            and not isinstance(self.file._file[attr], h5py.SparseDataset)
+        if (not isinstance(self.file._file[attr], h5py.SparseDataset)
             and not issparse(value)):
             self.file._file[attr] = value
         else:
             del self.file._file[attr]
             self.file._file.create_dataset(attr, data=value)
-
-    @property
-    def n_smps(self):
-        """Deprecated name for number of observations."""
-        return self._n_obs
-
-    @property
-    def n_obs(self):
-        """Number of observations."""
-        return self._n_obs
-
-    @property
-    def n_vars(self):
-        """Number of variables/features."""
-        return self._n_vars
-
-    @property
-    def obs(self):
-        """One-dimensional annotation of observations (`pd.DataFrame`)."""
-        return self._obs
-
-    @obs.setter
-    def obs(self, value):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError('Can only assign pd.DataFrame.')
-        if len(value) != self.n_obs:
-            raise ValueError('Length does not match.')
-        self._obs = value
-
-    # for backwards compat
-    @property
-    def smp(self):
-        """Deprecated access to one-dimensional annotation of observations (`pd.DataFrame`)."""
-        return self.obs
-
-    # for backwards compat
-    @smp.setter
-    def smp(self, value):
-        self.obs = value
-
-    @property
-    def var(self):
-        """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
-        return self._var
-
-    @var.setter
-    def var(self, value):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError('Can only assign pd.DataFrame.')
-        if len(value) != self.n_vars:
-            raise ValueError('Length does not match.')
-        self._var = value
-
-    @property
-    def uns(self):
-        """Unstructured annotation (ordered dictionary)."""
-        return self._uns
-
-    @uns.setter
-    def uns(self, value):
-        self._uns = value
-
-    @property
-    def add(self):
-        """Deprecated, remains for backwards compatibility."""
-        # FutureWarning and DeprecationWarning are not visible by default, use print
-        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
-              '`.add` will be removed in the future.')
-        return self._uns
-
-    @add.setter
-    def add(self, value):
-        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
-              '`.add` will be removed in the future.')
-        self._uns = value
-
-    @property
-    def obsm(self):
-        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`).
-
-        Stores for each key, a two or higher-dimensional `np.ndarray` of length
-        `n_obs`. Is sliced with `data` and `obs` but behaves otherwise like a
-        `dict`.
-        """
-        return self._obsm
-
-    # for backwards compat
-    @property
-    def smpm(self):
-        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`).
-
-        Stores for each key, a two or higher-dimensional `np.ndarray` of length
-        `n_obs`. Is sliced with `data` and `obs` but behaves otherwise like a
-        `dict`.
-        """
-        return self._obsm
-
-    @obsm.setter
-    def obsm(self, value):
-        if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign np.ndarray.')
-        if len(value) != self.n_obs:
-            raise ValueError('Length does not match.')
-        value = BoundRecArr(value, self, 'obsm')
-        self._obsm = value
-
-    # for backwards compat
-    @smpm.setter
-    def smpm(self, value):
-        if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign np.ndarray.')
-        if len(value) != self.n_obs:
-            raise ValueError('Length does not match.')
-        value = BoundRecArr(value, self, 'obsm')
-        self._obsm = value
-
-    @property
-    def varm(self):
-        """Multi-dimensional annotation of variables/ features (mutable structured `np.ndarray`).
-
-        Stores for each key, a two or higher-dimensional `np.ndarray` of length
-        `n_vars`. Is sliced with `data` and `var` but behaves otherwise like a
-        `dict`.
-        """
-        return self._varm
-
-    @varm.setter
-    def varm(self, value):
-        if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign np.ndarray.')
-        if len(value) != self.n_vars:
-            raise ValueError('Length does not match.')
-        value = BoundRecArr(value, self, 'varm')
-        self._varm = value
-
-    @property
-    def obs_names(self):
-        """Names of observations (`.obs.index`)."""
-        return self._obs.index
-
-    # backwards compat
-    @property
-    def smp_names(self):
-        """Deprecated access to names of observations."""
-        return self._obs.index
-
-    @obs_names.setter
-    def obs_names(self, names):
-        self._obs.index = names
-
-    # backwards compat
-    @smp_names.setter
-    def smp_names(self, names):
-        self._obs.index = names
-
-    @property
-    def var_names(self):
-        """Names of variables (`.var.index`)."""
-        return self._var.index
-
-    @var_names.setter
-    def var_names(self, names):
-        self._var.index = names
-
-    def obs_keys(self):
-        """List keys of observation annotation `.obs`."""
-        return self._obs.keys().tolist()
-
-    # for backwards compat
-    def smp_keys(self):
-        """List keys of observation annotation `obs`."""
-        return self._obs.keys().tolist()
-
-    def var_keys(self):
-        """List keys of variable annotation `var`."""
-        return self._var.keys().tolist()
-
-    def obsm_keys(self):
-        """List keys of observation annotation `obsm`."""
-        return list(self._obsm.keys())
-
-    # for backwards compat
-    def smpm_keys(self):
-        """List keys of observation annotation `obsm`."""
-        return list(self._obsm.keys())
-
-    def varm_keys(self):
-        """List keys of variable annotation `varm`."""
-        return list(self._varm.keys())
-
-    def uns_keys(self):
-        """List keys of unstructured annotation."""
-        return sorted(list(self._uns.keys()))
 
     def _normalize_indices(self, packed_index):
         # deal with slicing with pd.Series
@@ -1082,10 +1133,10 @@ class AnnData(IndexMixin):
     def __delitem__(self, index):
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
-        if not self.isbacked():
-            del self.__X[obs, var]
+        if not self.isbacked:
+            del self._X[obs, var]
         else:
-            X = self._read_backed('X')
+            X = self.file._file['X']
             del X[obs, var]
             self._write_backed('X', X)
         if var == slice(None):
@@ -1096,15 +1147,18 @@ class AnnData(IndexMixin):
     def __getitem__(self, index):
         """Returns a sliced view of the object."""
         return self._getitem_view(index)
+        # return self._getitem_copy(index)
 
     def _getitem_view(self, index):
         oidx, vidx = self._normalize_indices(index)
-        return AnnDataView(self, oidx, vidx)
+        return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
     def _getitem_copy(self, index):
         oidx, vidx = self._normalize_indices(index)
-        if not self.isbacked(): X = self.__X[oidx, vidx]
-        else: X = self._read_backed('X')[oidx, vidx]
+        if isinstance(oidx, (int, np.int64)): oidx = slice(oidx, oidx+1, 1)
+        if isinstance(vidx, (int, np.int64)): vidx = slice(vidx, vidx+1, 1)
+        if not self.isbacked: X = self._X[oidx, vidx]
+        else: X = self.file._file['X'][oidx, vidx]
         obs_new = self._obs.iloc[oidx]
         obsm_new = self._obsm[oidx]
         var_new = self._var.iloc[vidx]
@@ -1112,7 +1166,7 @@ class AnnData(IndexMixin):
         assert obs_new.shape[0] == X.shape[0], (oidx, obs_new)
         assert var_new.shape[0] == X.shape[1], (vidx, var_new)
         uns_new = self._uns.copy()
-        self._slice_uns_sparse_matrices_inplace(uns_new)
+        self._slice_uns_sparse_matrices_inplace(uns_new, oidx)
         return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new)
 
     def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
@@ -1120,7 +1174,8 @@ class AnnData(IndexMixin):
         if not (isinstance(oidx, slice) and
                 oidx.start is None and oidx.step is None and oidx.stop is None):
             for k, v in uns.items():
-                if isinstance(v, sparse.spmatrix) and v.shape == (self._n_obs, self._n_obs):
+                if isinstance(v, sparse.spmatrix) and v.shape == (
+                        self._n_obs, self._n_obs):
                     uns[k] = v.tocsc()[:, obs].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index):
@@ -1128,11 +1183,11 @@ class AnnData(IndexMixin):
 
         Same as adata = adata[:, index], but inplace.
         """
-        if not self.isbacked():
-            self.__X = self.__X[:, index]
-            self._n_vars = self.__X.shape[1]
+        if not self.isbacked:
+            self._X = self._X[:, index]
+            self._n_vars = self._X.shape[1]
         else:
-            X = self._read_backed('X')
+            X = self.file._file['X']
             X = X[:, index]
             self._n_vars = X.shape[1]
             self._write_backed('X', X)
@@ -1146,11 +1201,11 @@ class AnnData(IndexMixin):
 
         Same as adata = adata[index, :], but inplace.
         """
-        if not self.isbacked():
-            self.__X = self.__X[index, :]
-            self._n_obs = self.__X.shape[0]
+        if not self.isbacked:
+            self._X = self._X[index, :]
+            self._n_obs = self._X.shape[0]
         else:
-            X = self._read_backed('X')
+            X = self.file._file['X']
             X = X[index, :]
             self._n_obs = X.shape[0]
             self._write_backed('X', X)
@@ -1183,11 +1238,13 @@ class AnnData(IndexMixin):
         return x
 
     def __setitem__(self, index, val):
+        if self.isview:
+            raise ValueError('Object is view and cannot be accessed with `[]`.')
         obs, var = self._normalize_indices(index)
-        if not self.isbacked():
-            self.__X[obs, var] = val
+        if not self.isbacked:
+            self._X[obs, var] = val
         else:
-            X = self._read_backed('X')
+            X = self.file._file['X']
             X[obs, var] = val
             self._write_backed('X', X)
 
@@ -1199,8 +1256,8 @@ class AnnData(IndexMixin):
 
         Data matrix is transposed, observations and variables are interchanged.
         """
-        if not self.isbacked(): X = self.__X
-        else: X = _read_backed('X')
+        if not self.isbacked: X = self._X
+        else: X = self.file._file['X']
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
@@ -1213,14 +1270,16 @@ class AnnData(IndexMixin):
 
     def copy(self, filename=None):
         """Full copy, optionally on disk."""
-        if filename is None:
-            if not self.isbacked(): X = self.__X
-            else: X = _read_backed('X')
-            return AnnData(X.copy() if not self.isbacked() else X,
+        if not self.isbacked:
+            return AnnData(self._X.copy(),
                            self._obs.copy(),
                            self._var.copy(), self._uns.copy(),
                            self._obsm.copy(), self._varm.copy())
         else:
+            if filename is None:
+                raise ValueError(
+                    'To copy an AnnData object in backed mode, '
+                    'pass a filename: `.copy(filename=\'myfilename.h5ad\')`.')
             from shutil import copyfile
             copyfile(self.filename, filename)
             return AnnData(filename=filename)
@@ -1282,7 +1341,8 @@ class AnnData(IndexMixin):
         """).format(example_concatenate=_example_concatenate)
 
     def __contains__(self, key):
-        raise AttributeError('AnnData has no attribute __contains__, don\'t check `in adata`.')
+        raise AttributeError('AnnData has no attribute __contains__, '
+                             'don\'t check `in adata`.')
 
     def _check_dimensions(self, key=None):
         if key is None:
@@ -1318,20 +1378,16 @@ class AnnData(IndexMixin):
         compression_opts : `int`, optional (default: `None`)
             See http://docs.h5py.org/en/latest/high/dataset.html.
         """
-        if filename is None and not self.isbacked():
+        if filename is None and not self.isbacked:
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
         self._write_h5ad(filename,
             compression=compression, compression_opts=compression_opts)
-        if self.isbacked():
+        if self.isbacked:
             self.file.close()
 
-    def flush(self):
-        """Write `.h5ad`-formatted hdf5 file and leave the backing file open."""
-        self._write_h5ad(filename, compression='gzip', compression_opts=None)
-
-    def write_csvs(self, dirname, skip_data=True):
+    def write_csvs(self, dirname, skip_data=True, sep=','):
         """Write annotation to `.csv` files.
 
         It is not possible to recover the full :class:`~anndata.AnnData` from the
@@ -1343,9 +1399,11 @@ class AnnData(IndexMixin):
             Name of directory to which to export.
         skip_data : `bool`, optional (default: True)
              Skip the data matrix `.X`.
+        sep : `str`, optional (default: ',')
+             Separator for the data.
         """
         from .readwrite.write import write_csvs
-        write_csvs(dirname, self, skip_data)
+        write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     def write_loom(self, filename):
         """Write `.loom`-formatted hdf5 file.
@@ -1357,6 +1415,238 @@ class AnnData(IndexMixin):
         """
         from .readwrite.write import write_loom
         write_loom(filename, self)
+
+    def _write_h5ad(self, filename, **kwargs):
+        filename = str(filename)  # allow passing pathlib.Path objects
+        if not filename.endswith(('.h5', '.h5ad')):
+            raise ValueError('Filename needs to end with \'.h5ad\'.')
+        if self.isbacked:
+            # close so that we can reopen below
+            self.file._file.close()
+        # create directory if it doesn't exist
+        if not os.path.exists(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
+        d = self._to_dict_fixed_width_arrays()
+        # store dense values
+        with h5py.File(filename, 'w' if self.filename is None else 'a') as f:
+            for key, value in d.items():
+                _write_key_value_to_h5(f, key, value, **kwargs)
+        if self.isbacked:
+            self.file._file = h5py.File(filename, 'r+')
+
+    def _read_h5ad(self, filename=None, mode=None):
+        """Return a dict with arrays for initializing AnnData.
+
+        Parameters
+        ----------
+        filename : `str` or `None`, optional (default: `None`)
+            Defaults to the objects filename if `None`.
+        """
+        # we need to be able to call the function without reference to self when
+        # not reading in backed mode
+        backed = False
+        if filename is None:
+            backed = True if mode is None else mode
+            filename = self.filename
+
+        filename = str(filename)  # allow passing pathlib.Path objects
+        d = {}
+        if backed:
+            f = self.file._file
+        else:
+            f = h5py.File(filename, 'r')
+        # TODO: this will still fail if trying to read a sparse matrix group
+        for key in f.keys():
+            if backed and key in AnnData._BACKED_ATTRS:
+                d[key] = None
+            else:
+                _read_key_value_from_h5(f, d, key)
+        # backwards compat: save X with the correct name
+        if 'X' not in d:
+            if backed == 'r+':
+                for key in AnnData._H5_ALIASES['X']:
+                    if key in d:
+                        del f[key]
+                        f.create_dataset('X', data=d[key])
+                        break
+        # backwards compat: store sparse matrices properly
+        csr_keys = [key.replace('_csr_data', '')
+                    for key in d if '_csr_data' in key]
+        for key in csr_keys:
+            d = load_sparse_csr(d, key=key)
+        if not backed:
+            f.close()
+        return d
+
+    def _from_dict(self, ddata):
+        """Allows to construct an instance of AnnData from a dictionary.
+
+        Acts as interface for the communication with the hdf5 file.
+
+        In particular, from a dict that has been written using
+        ``AnnData._to_dict_fixed_width_arrays``.
+        """
+        d_true_keys = {}
+        # backwards compat
+        uns_is_not_key = False
+        valid_keys = []
+        for keys in AnnData._H5_ALIASES.values():
+            valid_keys += keys
+        for key in ddata.keys():
+            # if there is another key then the prdedefined
+            # then we are reading the old format
+            if key not in valid_keys:
+                uns_is_not_key = True
+
+        for true_key, keys in AnnData._H5_ALIASES.items():
+            for key in keys:
+                if key in ddata:
+                    d_true_keys[true_key] = ddata[key]
+                    if uns_is_not_key: del ddata[key]
+                    break
+            else:
+                d_true_keys[true_key] = None
+
+        # transform recarray to dataframe
+        from pandas.api.types import is_string_dtype
+        from pandas import Index
+
+        for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
+            if d_true_keys[true_key] is not None:
+                for key in keys:
+                    if key in d_true_keys[true_key].dtype.names:
+                        d_true_keys[true_key] = pd.DataFrame.from_records(
+                            d_true_keys[true_key], index=key)
+                        break
+                d_true_keys[true_key].index = d_true_keys[true_key].index.astype('U')
+                # transform to unicode string
+                # TODO: this is quite a hack
+                for c in d_true_keys[true_key].columns:
+                    if is_string_dtype(d_true_keys[true_key][c]):
+                        d_true_keys[true_key][c] = Index(
+                            d_true_keys[true_key][c]).astype('U').values
+
+        # these are the category fields
+        k_to_delete = []
+        items = (ddata.items() if uns_is_not_key
+                else ddata['uns'].items() if 'uns' in ddata else [])
+        for k, v in items:
+            if k.endswith('_categories'):
+                k_stripped = k.replace('_categories', '')
+                if k_stripped in d_true_keys['obs']:
+                    d_true_keys['obs'][k_stripped] = pd.Categorical.from_codes(
+                        codes=d_true_keys['obs'][k_stripped].values,
+                        categories=v)
+                if k_stripped in d_true_keys['var']:
+                    d_true_keys['var'][k_stripped] = pd.Categorical.from_codes(
+                        codes=d_true_keys['var'][k_stripped].values,
+                        categories=v)
+                k_to_delete.append(k)
+
+        for k in k_to_delete:
+            if uns_is_not_key:
+                del ddata[k]
+            else:
+                del ddata['uns'][k]
+
+        # assign the variables
+        X = d_true_keys['X']
+        obs = d_true_keys['obs']
+        obsm = d_true_keys['obsm']
+        var = d_true_keys['var']
+        varm = d_true_keys['varm']
+        # the remaining fields are the unstructured annotation
+        uns = (ddata if uns_is_not_key
+               else ddata['uns'] if 'uns' in ddata else {})
+
+        return X, obs, var, uns, obsm, varm
+
+    def _to_dict_fixed_width_arrays(self):
+        """A dict of arrays that stores data and annotation.
+
+        It is sufficient for reconstructing the object.
+        """
+        obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
+        var_rec, uns_var = df_to_records_fixed_width(self._var)
+        return {
+            'X': self._X,
+            'obs': obs_rec,
+            'var': var_rec,
+            'obsm': self._obsm,
+            'varm': self._varm,
+            # add the categories to the unstructured annotation
+            'uns': {**self._uns, **uns_obs, **uns_var}}
+
+    # --------------------------------------------------------------------------
+    # all of the following is for backwards compat
+    # --------------------------------------------------------------------------
+
+    @property
+    def data(self):
+        """Deprecated access to X."""
+        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
+              '`.data` will be removed in the future.')
+        return self.X
+
+    @data.setter
+    def data(self, value):
+        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
+              '`.data` will be removed in the future.')
+        self.X = value
+
+    @property
+    def n_smps(self):
+        """Deprecated access to `.n_obs`."""
+        return self.n_obs
+
+    @property
+    def smp(self):
+        """Deprecated access to `.obs`."""
+        return self.obs
+
+    # for backwards compat
+    @smp.setter
+    def smp(self, value):
+        self.obs = value
+
+    @property
+    def add(self):
+        """Deprecated access to `.uns`, remains for backwards compatibility."""
+        # FutureWarning and DeprecationWarning are not visible by default, use print
+        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
+              '`.add` will be removed in the future.')
+        return self.uns
+
+    @add.setter
+    def add(self, value):
+        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
+              '`.add` will be removed in the future.')
+        self.uns = value
+
+    @property
+    def smpm(self):
+        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`)        """
+        return self.obsm
+
+    @smpm.setter
+    def smpm(self, value):
+        self.obsm = value
+
+    @property
+    def smp_names(self):
+        return self.obs_names
+
+    @smp_names.setter
+    def smp_names(self, names):
+        self.obs_names = names
+
+    def smp_keys(self):
+        """List keys of observation annotation `obs`."""
+        return self.obs_keys()
+
+    def smpm_keys(self):
+        """List keys of observation annotation `obsm`."""
+        return self.obsm_keys()
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
@@ -1408,86 +1698,6 @@ class AnnData(IndexMixin):
 
 
 AnnData.__doc__ = AnnData._doc
-
-
-# let's not make this a subclass, but use composition:
-# the view only has a subset of AnnData's capabilities
-class AnnDataView():
-
-    def __init__(self, adata, oidx, vidx):
-        self._adata = adata
-        self._oidx = oidx
-        self._vidx = vidx
-        if isinstance(oidx, slice):
-            self.n_obs = len(self._adata.obs.index[oidx])
-        elif isinstance(oidx, (int, np.int64)):
-            self.n_obs = 1
-        else:
-            self.n_obs = len(oidx)
-        if isinstance(vidx, slice):
-            self.n_vars = len(self._adata.obs.index[vidx])
-        elif isinstance(vidx, (int, np.int64)):
-            self.n_vars = 1
-        else:
-            self.n_vars = len(vidx)
-
-    def __repr__(self):
-        return 'View of ' + self._adata._gen_repr(self.n_obs, self.n_vars)
-
-    @property
-    def X(self):
-        return self._adata._X[self._oidx, self._vidx]
-
-    @X.setter
-    def X(self, value):
-        self._adata._X[self._oidx, self._vidx] = value
-
-    @property
-    def obs(self):
-        return self._adata._obs.iloc[self._oidx]
-
-    @obs.setter
-    def obs(self, value):
-        self._adata._obs.iloc[self._oidx] = value
-
-    @property
-    def obsm(self):
-        return self._adata._obsm[self._oidx]
-
-    @obsm.setter
-    def obsm(self, value):
-        self._adata._obsm[self._oidx] = value
-
-    @property
-    def var(self):
-        return self._adata._var.iloc[self._vidx]
-
-    @var.setter
-    def var(self, value):
-        self._adata._var.iloc[self._vidx] = value
-
-    @property
-    def varm(self):
-        return self._adata._varm[self._vidx]
-
-    @varm.setter
-    def varm(self, value):
-        self._adata._varm[self._vidx] = value
-
-    @property
-    def uns(self):
-        uns_new = self._uns.copy()
-        self._adata._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
-        return uns_new
-
-    def copy(self):
-        return self._adata._getitem_copy((self._oidx, self._vidx))
-
-    def __getitem__(self, index):
-        raise ValueError('Object is view and cannot be accessed with [].')
-
-    def __setitem__(self, index, value):
-        raise ValueError('Object is view and cannot be accessed with [].')
 
 
 # all for backwards compat...

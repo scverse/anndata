@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 from ..base import AnnData
+from .utils import *
 
 
 def read_csv(filename, delimiter=',', first_column_names=None, dtype='float32'):
@@ -244,3 +245,5 @@ def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'
     return AnnData(data,
                    obs={'obs_names': row_names},
                    var={'var_names': col_names})
+
+

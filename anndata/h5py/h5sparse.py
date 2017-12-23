@@ -100,6 +100,14 @@ class File(Group):
     def close(self):
         self.h5f.close()
 
+    @property
+    def id(self):
+        return self.h5f.id
+
+    @property
+    def filename(self):
+        return self.h5f.filename
+
 
 class SparseDataset(IndexMixin):
     """Analogous to `h5py.Dataset`, but for sparse matrices.
@@ -119,6 +127,7 @@ class SparseDataset(IndexMixin):
         return self.h5py_group.attrs['h5sparse_format']
 
     def __getitem__(self, index):
+        if index == (): index = slice(None)
         row, col = self._unpack_index(index)
         format_class = get_format_class(self.format_str)
         mock_matrix = format_class(self.shape, dtype=self.dtype)
