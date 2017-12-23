@@ -387,60 +387,13 @@ class AnnDataFileManager():
         return bool(self._file.id)
 
 
-class AnnDataAttributeView():
-    """View on AnnData attributes."""
-
-    def __init__(self, adata_view, adata_ref,
-                 oidx, vidx, attribute, attribute_name):
-        self._adata_view = adata_view
-        self._adata_ref = adata_ref
-        self._oidx = oidx
-        self._vidx = vidx
-        self._attr = attribute
-        self._attr_name = attribute_name
-
-    def __repr__(self):
-        return 'view of ' + self._attr.__repr__()
-
-    def __str__(self):
-        return 'view of ' + self._attr.__str__()
-
-    @property
-    def shape(self):
-        return self._attr.shape
-
-    @property
-    def dtype(self):
-        return self._attr.dtype
-
-    @property
-    def size(self):
-        return self._attr.size
-
-    @property
-    def index(self):
-        return self._attr.index
-
-    def head(self):
-        return self._attr.head()
-
-    def keys(self):
-        try:
-            return self._attr.keys()
-        except AttributeError:
-            # it's a structured array
-            return self._attr.dtype.names
-
-    def __getitem__(self, idx):
-        return self._attr[idx]
-
-    def __setitem__(self, idx, value):
-        adata = self._adata_ref._getitem_copy((self._oidx, self._vidx))
-        self._adata_view._init_as_actual(adata)
-        getattr(self._adata_view, self._attr_name)[idx] = value
-
-    def copy(self):
-        return self._attr.copy()
+def _init_actual_AnnData(adata_view):
+    if adata_view.isbacked:
+        raise ValueError(
+            'You cannot modify elements of an AnnData view, '
+            'but need a copy of the subset.\n\n'
+            'Call `adata_subset = adata[index].copy(filename=...)`.')
+    adata_view._init_as_actual(adata_view.copy())
 
 
 class ArrayView(np.ndarray):
@@ -459,7 +412,7 @@ class ArrayView(np.ndarray):
             super(type(self), self).__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
-            adata_view._init_as_actual(adata_view.copy())
+            _init_actual_AnnData(adata_view)
             getattr(adata_view, attr_name)[idx] = value
 
     def keys(self):
@@ -484,7 +437,7 @@ class SparseCSRView(sparse.csr_matrix):
             super(type(self), self).__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
-            adata_view._init_as_actual(adata_view.copy())
+            _init_actual_AnnData(adata_view)
             getattr(adata_view, attr_name)[idx] = value
 
 
@@ -495,10 +448,12 @@ class SparseCSCView(sparse.csc_matrix):
         super(type(self), self).__init__(*args, **kwargs)
 
     def __setitem__(self, idx, value):
-        adata_view, adata_ref, oidx, vidx, attr_name = self._view_args
-        adata = adata_ref._getitem_copy((oidx, vidx))
-        adata_view._init_as_actual(adata)
-        getattr(adata_view, attr_name)[idx] = value
+        if self._view_args is None:
+            super(type(self), self).__setitem__(idx, value)
+        else:
+            adata_view, attr_name = self._view_args
+            _init_actual_AnnData(adata_view)
+            getattr(adata_view, attr_name)[idx] = value
 
 
 class DictView(dict):
@@ -512,7 +467,7 @@ class DictView(dict):
             super(type(self), self).__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
-            adata_view._init_as_actual(adata_view.copy())
+            _init_actual_AnnData(adata_view)
             getattr(adata_view, attr_name)[idx] = value
 
 
@@ -529,13 +484,13 @@ class DataFrameView(pd.DataFrame):
             super(type(self), self).__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
-            adata_view._init_as_actual(adata_view.copy())
+            _init_actual_AnnData(adata_view)
             getattr(adata_view, attr_name)[idx] = value
 
 
 class AnnData(IndexMixin):
 
-    _BACKED_ATTRS = ['X']
+    _BACKED_ATTRS = ['X', 'raw/X']
 
     # backwards compat
     _H5_ALIASES = {
@@ -868,7 +823,7 @@ class AnnData(IndexMixin):
 
     @property
     def X(self):
-        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sparse.spmatrix`)."""
+        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.sparse.spmatrix`)."""
         if self.isbacked:
             if not self.file.isopen: self.file.open()
             X = self.file._file['X']
@@ -885,7 +840,7 @@ class AnnData(IndexMixin):
                 if self.isview:
                     self.file._file['X'][self._oidx, self._vidx] = value
                 else:
-                    self.file._file['X'] = value
+                    self._set_backed('X', value)
             else:
                 if self.isview:
                     self._adata_ref._X[self._oidx, self._vidx] = value
@@ -1079,7 +1034,7 @@ class AnnData(IndexMixin):
             # as the data is stored on disk, we can safely set self._X to None
             self._X = None
 
-    def _write_backed(self, attr, value):
+    def _set_backed(self, attr, value):
         if (not isinstance(self.file._file[attr], h5py.SparseDataset)
             and not issparse(value)):
             self.file._file[attr] = value
@@ -1280,8 +1235,11 @@ class AnnData(IndexMixin):
                 raise ValueError(
                     'To copy an AnnData object in backed mode, '
                     'pass a filename: `.copy(filename=\'myfilename.h5ad\')`.')
-            from shutil import copyfile
-            copyfile(self.filename, filename)
+            if self.isview:
+                self.write(filename)
+            else:
+                from shutil import copyfile
+                copyfile(self.filename, filename)
             return AnnData(filename=filename)
 
     def concatenate(self, adatas, batch_key='batch', batch_categories=None):
@@ -1427,7 +1385,10 @@ class AnnData(IndexMixin):
         if not os.path.exists(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
         d = self._to_dict_fixed_width_arrays()
-        # store dense values
+        # we're writing to a different location than the backing file
+        # - load the matrix into the memory...
+        if self.isbacked and filename != self.filename:
+            d['X'] = self.X[:]
         with h5py.File(filename, 'w' if self.filename is None else 'a') as f:
             for key, value in d.items():
                 _write_key_value_to_h5(f, key, value, **kwargs)
@@ -1455,7 +1416,6 @@ class AnnData(IndexMixin):
             f = self.file._file
         else:
             f = h5py.File(filename, 'r')
-        # TODO: this will still fail if trying to read a sparse matrix group
         for key in f.keys():
             if backed and key in AnnData._BACKED_ATTRS:
                 d[key] = None
