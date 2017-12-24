@@ -528,6 +528,13 @@ class Raw(IndexMixin):
     def __init__(self, adata=None, X=None, var=None, varm=None):
         self._adata = adata
         if X is not None:
+            if len(X.shape) == 2:
+                n_obs, n_vars = X.shape
+                if n_obs == 1 and n_vars == 1:
+                    X = X[0, 0]
+                elif n_obs == 1 or n_vars == 1:
+                    if issparse(X): X = X.toarray()
+                    X = X.flatten()
             self._X = X
             self._var = var
             self._varm = varm
@@ -550,6 +557,10 @@ class Raw(IndexMixin):
         return self._var
 
     @property
+    def n_vars(self):
+        return self.X.shape[1]
+
+    @property
     def varm(self):
         return self._varm
 
@@ -568,6 +579,10 @@ class Raw(IndexMixin):
         else:
             varm = None
         return Raw(self._adata, X=X, var=var, varm=varm)
+
+    def copy(self):
+        return Raw(self._adata, X=self._X.copy(), var=self._var.copy(),
+                   varm=None if self._varm is None else self._varm.copy())
 
     def _normalize_indices(self, packed_index):
         # deal with slicing with pd.Series
@@ -622,8 +637,10 @@ class AnnData(IndexMixin):
         :class:`~anndata.AnnData`'s basic structure is similar to R's
         ExpressionSet [Huber15]_.
 
-        If you find :class:`~anndata.AnnData` useful, please consider citing
-        [Wolf17]_.
+        See this `blog post
+        <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_
+        for more details. If you find :class:`~anndata.AnnData` useful for your
+        scientific work, please consider citing [Wolf17]_.
         """)
 
     _example_concatenate = dedent("""\
@@ -897,7 +914,7 @@ class AnnData(IndexMixin):
             self._raw = None
         else:
             if isinstance(raw, Raw):
-                self._raw = Raw
+                self._raw = raw
             else:
                 # is dictionary from reading the file
                 self._raw = Raw(
@@ -960,8 +977,14 @@ class AnnData(IndexMixin):
                     self._set_backed('X', value)
             else:
                 if self.isview:
-                    self._adata_ref._X[self._oidx, self._vidx] = value
-                    self._init_X_as_view()
+                    # exit the view, if we set another type
+                    # (e.g., from sparse to dense)
+                    if not isinstance(value, type(self._adata_ref._X)):
+                        self._init_as_actual(self.copy())
+                        self._X = value
+                    else:
+                        self._adata_ref._X[self._oidx, self._vidx] = value
+                        self._init_X_as_view()
                 else:
                     self._X = value
         else:
@@ -976,6 +999,8 @@ class AnnData(IndexMixin):
     def raw(self, value):
         if not isinstance(value, AnnData):
             raise ValueError('Can only init raw attribute with an AnnData object.')
+        if self.isview:
+            self._init_as_actual(self.copy())
         self._raw = Raw(value)
 
     @property
@@ -1330,7 +1355,8 @@ class AnnData(IndexMixin):
             return AnnData(self._X.copy(),
                            self._obs.copy(),
                            self._var.copy(), self._uns.copy(),
-                           self._obsm.copy(), self._varm.copy())
+                           self._obsm.copy(), self._varm.copy(),
+                           raw=None if self._raw is None else self._raw.copy())
         else:
             if filename is None:
                 raise ValueError(
@@ -1554,6 +1580,7 @@ class AnnData(IndexMixin):
         valid_keys = []
         for keys in AnnData._H5_ALIASES.values():
             valid_keys += keys
+        valid_keys += ['raw.X', 'raw.var', 'raw.varm']
         for key in ddata.keys():
             # if there is another key then the prdedefined
             # then we are reading the old format
@@ -1617,17 +1644,17 @@ class AnnData(IndexMixin):
         obsm = d_true_keys['obsm']
         var = d_true_keys['var']
         varm = d_true_keys['varm']
-        # the remaining fields are the unstructured annotation
-        uns = (ddata if uns_is_not_key
-               else ddata['uns'] if 'uns' in ddata else {})
 
         raw = None
         if 'raw.X' in ddata:
             raw = {}
             raw['X'] = ddata['raw.X']
+            del ddata['raw.X']
             # get the dataframe
             raw['var'] = pd.DataFrame.from_records(
                 ddata['raw.var'], index='index')
+
+            del ddata['raw.var']
             raw['var'].index = raw['var'].index.astype('U')
             # transform to unicode string
             for c in raw['var'].columns:
@@ -1635,8 +1662,13 @@ class AnnData(IndexMixin):
                     raw['var'][c] = Index(raw['var'][c]).astype('U').values
         if 'raw.varm' in ddata:
             raw['varm'] = ddata['raw.varm']
+            del ddata['raw.varm']
         elif raw is not None:
             raw['varm'] = None
+
+        # the remaining fields are the unstructured annotation
+        uns = (ddata if uns_is_not_key
+               else ddata['uns'] if 'uns' in ddata else {})
 
         return X, obs, var, uns, obsm, varm, raw
 
@@ -1659,7 +1691,7 @@ class AnnData(IndexMixin):
         if self.raw is not None:
             # we ignore categorical data types here
             # they should never occur
-            var_rec, uns_var = df_to_records_fixed_width(self.raw.var)
+            var_rec, uns_var = df_to_records_fixed_width(self.raw._var)
             if len(uns_var) > 0:
                 warnings.warn('Categorical dtypes in `.raw.var` are cast to integer.')
             d['raw.X'] = self.raw.X

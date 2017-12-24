@@ -13,9 +13,9 @@ The :class:`anndata` package provides functions for :class:`~anndata.AnnData` ob
    AnnData
 
 
-Furthermore, as submodule :class:`anndata.h5py`, it provides a thin wrapper of `h5py
-<http://www.h5py.org/>`_ that is able to handle sparse matrices in addition to
-the standard functionality.
+Independent of :class:`~anndata.AnnData`, the submodule :class:`anndata.h5py`
+provides a thin wrapper of `h5py <http://www.h5py.org/>`_ that is able to handle
+sparse matrices in addition to the standard functionality.
 
 .. autosummary::
   :toctree: .
