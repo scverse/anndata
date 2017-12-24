@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
-import anndata as an
+import anndata as ad
+
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -30,12 +31,12 @@ uns_dict = {  # unstructured annotation
 
 
 def test_readwrite_dynamic():
-    for typ in [np.array]:
+    for typ in [np.array, csr_matrix]:
         X = typ(X_list)
-        adata = an.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
         adata.filename = './test.h5ad'
         adata.write()
-        adata = an.read('./test.h5ad')
+        adata = ad.read('./test.h5ad')
         assert pd.api.types.is_categorical(adata.obs['oanno1'])
         assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
         assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
@@ -45,10 +46,10 @@ def test_readwrite_dynamic():
 def test_readwrite_h5ad():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)
-        adata = an.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
         assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
         adata.write('./test.h5ad')
-        adata = an.read('./test.h5ad', init_filename=False)
+        adata = ad.read('./test.h5ad')
         assert pd.api.types.is_categorical(adata.obs['oanno1'])
         assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
         assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
@@ -58,9 +59,9 @@ def test_readwrite_h5ad():
 def test_readwrite_loom():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)
-        adata = an.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
         adata.write_loom('./test.loom')
-        adata = an.read_loom('./test.loom')
+        adata = ad.read_loom('./test.loom')
         if isinstance(X, np.ndarray):
             assert np.allclose(adata.X, X)
         else:
@@ -71,5 +72,5 @@ def test_readwrite_loom():
 def test_write_csv():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)
-        adata = an.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
         adata.write_csvs('./test_csv_dir')

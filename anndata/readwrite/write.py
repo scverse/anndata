@@ -52,9 +52,9 @@ def write_csvs(dirname, adata, skip_data=True, sep=','):
 def write_loom(filename, adata):
     from loompy import create
     row_attrs = adata.var.to_dict('list')
-    row_attrs['var_names'] = adata.var_names
+    row_attrs['var_names'] = adata.var_names.values
     col_attrs = adata.obs.to_dict('list')
-    col_attrs['obs_names'] = adata.obs_names
+    col_attrs['obs_names'] = adata.obs_names.values
     lc = create(
         filename,
         matrix=adata.X.T,

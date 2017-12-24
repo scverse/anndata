@@ -246,7 +246,8 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
         elif issparse(value):
             return value
         elif isinstance(value, dict):
-            # hack for storing dicts
+            # old hack for storing dicts, is never reached
+            # in the current implementation, can be removed in the future
             value = np.array([str(value)])
         else:
             # make sure value is an array
@@ -258,6 +259,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
         return value
 
     value = preprocess_writing(value)
+    
     if (value is None
         # ignore arrays with empty dtypes
         or not value.dtype.descr):
@@ -650,10 +652,13 @@ class AnnData(IndexMixin):
         # the file is the same as of the reference object
         self.file = adata_ref.file
         # views on attributes of adata_ref
-        self._obs = DataFrameView(adata_ref.obs.iloc[oidx], view_args=(self, 'obs'))
-        self._var = DataFrameView(adata_ref.var.iloc[vidx], view_args=(self, 'var'))
-        self._obsm = ArrayView(adata_ref.obsm[oidx], view_args=(self, 'obsm'))
-        self._varm = ArrayView(adata_ref.varm[vidx], view_args=(self, 'varm'))
+        oidx_normalized, vidx_normalized = oidx, vidx
+        if isinstance(oidx, (int, np.int64)): oidx_normalized = slice(oidx, oidx+1, 1)
+        if isinstance(vidx, (int, np.int64)): vidx_normalized = slice(vidx, vidx+1, 1)
+        self._obs = DataFrameView(adata_ref.obs.iloc[oidx_normalized], view_args=(self, 'obs'))
+        self._var = DataFrameView(adata_ref.var.iloc[vidx_normalized], view_args=(self, 'var'))
+        self._obsm = ArrayView(adata_ref.obsm[oidx_normalized], view_args=(self, 'obsm'))
+        self._varm = ArrayView(adata_ref.varm[vidx_normalized], view_args=(self, 'varm'))
         # hackish solution here, no copy should be necessary
         uns_new = self._adata_ref._uns.copy()
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
@@ -1389,7 +1394,8 @@ class AnnData(IndexMixin):
         # - load the matrix into the memory...
         if self.isbacked and filename != self.filename:
             d['X'] = self.X[:]
-        with h5py.File(filename, 'w' if self.filename is None else 'a') as f:
+        # we can always use 'w' here, as backed objects are not written anyways
+        with h5py.File(filename, 'w') as f:
             for key, value in d.items():
                 _write_key_value_to_h5(f, key, value, **kwargs)
         if self.isbacked:

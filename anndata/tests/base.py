@@ -108,7 +108,7 @@ def test_get_subset_annotation():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                     dict(S=['A', 'B']),
                     dict(F=['a', 'b', 'c']))
-
+    
     assert adata[0, 0].smp['S'].tolist() == ['A']
     assert adata[0, 0].var['F'].tolist() == ['a']
 
