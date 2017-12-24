@@ -187,6 +187,35 @@ def _fix_shapes(X, single_col=False):
     return X, n_obs, n_vars
 
 
+def _normalize_index(index, names):
+    def name_idx(i):
+        if isinstance(i, str):
+            # `where` returns an 1-tuple (1D array) of found indices
+            i = np.where(names == i)[0]
+            if len(i) == 0:  # returns array of length 0 if nothing is found
+                raise IndexError(
+                    'Name "{}" is not valid observation/variable name.'
+                    .format(index))
+            i = i[0]
+        return i
+
+    if isinstance(index, slice):
+        start = name_idx(index.start)
+        stop = name_idx(index.stop)
+        # string slices can only be inclusive, so +1 in that case
+        if isinstance(index.stop, str):
+            stop = None if stop is None else stop + 1
+        step = index.step
+        return slice(start, stop, step)
+    elif isinstance(index, (int, str)):
+        return name_idx(index)
+    elif isinstance(index, (Sequence, np.ndarray)):
+        return np.fromiter(map(name_idx, index), 'int64')
+    else:
+        raise IndexError('Unknown index {!r} of type {}'
+                         .format(index, type(index)))
+
+
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
         _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
@@ -332,6 +361,7 @@ def _read_key_value_from_h5(f, d, key, key_write=None):
         # TODO: come up with a better way of solving this, see also below
         if (key not in AnnData._H5_ALIASES['obs']
             and key not in AnnData._H5_ALIASES['var']
+            and key != 'raw.var'
             and not isinstance(value, dict) and value.dtype.names is not None):
             new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
                           if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
@@ -493,9 +523,70 @@ class DataFrameView(pd.DataFrame):
             getattr(adata_view, attr_name)[idx] = value
 
 
+class Raw(IndexMixin):
+
+    def __init__(self, adata=None, X=None, var=None, varm=None):
+        self._adata = adata
+        if X is not None:
+            self._X = X
+            self._var = var
+            self._varm = varm
+        else:
+            self._X = adata.X.copy()
+            self._var = adata.var.copy()
+            self._varm = adata.varm.copy()
+
+    @property
+    def X(self):
+        if self._adata.isbacked:
+            if not self._adata.file.isopen: self._adata.file.open()
+            X = self._adata.file._file['raw.X']
+            if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
+            else: return X
+        else: return self._X
+
+    @property
+    def var(self):
+        return self._var
+
+    @property
+    def varm(self):
+        return self._varm
+
+    @property
+    def var_names(self):
+        return self.var.index
+
+    def __getitem__(self, index):
+        oidx, vidx = self._normalize_indices(index)
+        if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
+        else: X = self._adata.file._file['raw.X'][oidx, vidx]
+        if isinstance(vidx, (int, np.int64)): vidx = slice(vidx, vidx+1, 1)
+        var = self._var.iloc[vidx]
+        if self._varm is not None:
+            varm = self._varm[vidx]
+        else:
+            varm = None
+        return Raw(self._adata, X=X, var=var, varm=varm)
+
+    def _normalize_indices(self, packed_index):
+        # deal with slicing with pd.Series
+        if isinstance(packed_index, pd.Series):
+            packed_index = packed_index.values
+        if isinstance(packed_index, tuple) and len(packed_index) == 2:
+            if isinstance(packed_index[1], pd.Series):
+                packed_index = packed_index[0], packed_index[1].values
+            if isinstance(packed_index[0], pd.Series):
+                packed_index = packed_index[0].values, packed_index[1]
+        obs, var = super(Raw, self)._unpack_index(packed_index)
+        obs = _normalize_index(obs, self._adata.obs_names)
+        var = _normalize_index(var, self.var_names)
+        return obs, var
+
+
 class AnnData(IndexMixin):
 
-    _BACKED_ATTRS = ['X', 'raw/X']
+    _BACKED_ATTRS = ['X', 'raw.X']
 
     # backwards compat
     _H5_ALIASES = {
@@ -632,7 +723,7 @@ class AnnData(IndexMixin):
 
     def __init__(
             self, X=None, obs=None, var=None, uns=None,
-            obsm=None, varm=None,
+            obsm=None, varm=None, raw=None,
             dtype='float32', single_col=False,
             filename=None, filemode=None,
             asview=False, oidx=None, vidx=None):
@@ -643,7 +734,7 @@ class AnnData(IndexMixin):
         else:
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
-                obsm=obsm, varm=varm,
+                obsm=obsm, varm=varm, raw=raw,
                 dtype=dtype, single_col=single_col,
                 filename=filename, filemode=filemode)
 
@@ -682,6 +773,12 @@ class AnnData(IndexMixin):
         # set data
         if self.isbacked: self._X = None
         else: self._init_X_as_view()
+        # set raw, easy, as it's immutable anyways...
+        if adata_ref._raw is not None:
+            # slicing along variables axis is ignored
+            self._raw = adata_ref.raw[oidx]
+        else:
+            self._raw = None
 
     def _init_X_as_view(self):
         X = self._adata_ref.X[self._oidx, self._vidx]
@@ -703,7 +800,7 @@ class AnnData(IndexMixin):
 
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
-            obsm=None, varm=None,
+            obsm=None, varm=None, raw=None,
             dtype='float32', single_col=False,
             filename=None, filemode=None):
 
@@ -736,14 +833,14 @@ class AnnData(IndexMixin):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm = self._from_dict(X)
+            X, obs, var, uns, obsm, varm, raw = self._from_dict(X)
 
         # init from AnnData
         if isinstance(X, AnnData):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm = X.X, X.obs, X.var, X.uns, X.obsm, X.varm
+            X, obs, var, uns, obsm, varm, raw = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -794,6 +891,17 @@ class AnnData(IndexMixin):
         self._varm = BoundRecArr(varm, self, 'varm')
 
         self._check_dimensions()
+
+        # raw
+        if raw is None:
+            self._raw = None
+        else:
+            if isinstance(raw, Raw):
+                self._raw = Raw
+            else:
+                # is dictionary from reading the file
+                self._raw = Raw(
+                    self, X=raw['X'], var=raw['var'], varm=raw['varm'])
 
         # clean up old formats
         self._clean_up_old_format(uns)
@@ -863,6 +971,12 @@ class AnnData(IndexMixin):
     @property
     def raw(self):
         return self._raw
+
+    @raw.setter
+    def raw(self, value):
+        if not isinstance(value, AnnData):
+            raise ValueError('Can only init raw attribute with an AnnData object.')
+        self._raw = Raw(value)
 
     @property
     def n_obs(self):
@@ -1065,37 +1179,9 @@ class AnnData(IndexMixin):
             if isinstance(packed_index[0], pd.Series):
                 packed_index = packed_index[0].values, packed_index[1]
         obs, var = super(AnnData, self)._unpack_index(packed_index)
-        obs = self._normalize_index(obs, self.obs_names)
-        var = self._normalize_index(var, self.var_names)
+        obs = _normalize_index(obs, self.obs_names)
+        var = _normalize_index(var, self.var_names)
         return obs, var
-
-    def _normalize_index(self, index, names):
-        def name_idx(i):
-            if isinstance(i, str):
-                # `where` returns an 1-tuple (1D array) of found indices
-                i = np.where(names == i)[0]
-                if len(i) == 0:  # returns array of length 0 if nothing is found
-                    raise IndexError(
-                        'Name "{}" is not valid observation/variable name.'
-                        .format(index))
-                i = i[0]
-            return i
-
-        if isinstance(index, slice):
-            start = name_idx(index.start)
-            stop = name_idx(index.stop)
-            # string slices can only be inclusive, so +1 in that case
-            if isinstance(index.stop, str):
-                stop = None if stop is None else stop + 1
-            step = index.step
-            return slice(start, stop, step)
-        elif isinstance(index, (int, str)):
-            return name_idx(index)
-        elif isinstance(index, (Sequence, np.ndarray)):
-            return np.fromiter(map(name_idx, index), 'int64')
-        else:
-            raise IndexError('Unknown index {!r} of type {}'
-                             .format(index, type(index)))
 
     # TODO: this is not quite complete...
     def __delitem__(self, index):
@@ -1135,7 +1221,9 @@ class AnnData(IndexMixin):
         assert var_new.shape[0] == X.shape[1], (vidx, var_new)
         uns_new = self._uns.copy()
         self._slice_uns_sparse_matrices_inplace(uns_new, oidx)
-        return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new)
+        if self.raw is not None:
+            raw_new = self.raw[oidx]
+        return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new, raw=raw_new)
 
     def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
         # slice sparse spatrices of n_obs × n_obs in self.uns
@@ -1533,7 +1621,24 @@ class AnnData(IndexMixin):
         uns = (ddata if uns_is_not_key
                else ddata['uns'] if 'uns' in ddata else {})
 
-        return X, obs, var, uns, obsm, varm
+        raw = None
+        if 'raw.X' in ddata:
+            raw = {}
+            raw['X'] = ddata['raw.X']
+            # get the dataframe
+            raw['var'] = pd.DataFrame.from_records(
+                ddata['raw.var'], index='index')
+            raw['var'].index = raw['var'].index.astype('U')
+            # transform to unicode string
+            for c in raw['var'].columns:
+                if is_string_dtype(raw['var'][c]):
+                    raw['var'][c] = Index(raw['var'][c]).astype('U').values
+        if 'raw.varm' in ddata:
+            raw['varm'] = ddata['raw.varm']
+        elif raw is not None:
+            raw['varm'] = None
+
+        return X, obs, var, uns, obsm, varm, raw
 
     def _to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
@@ -1542,7 +1647,7 @@ class AnnData(IndexMixin):
         """
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
         var_rec, uns_var = df_to_records_fixed_width(self._var)
-        return {
+        d = {
             'X': self._X,
             'obs': obs_rec,
             'var': var_rec,
@@ -1550,6 +1655,18 @@ class AnnData(IndexMixin):
             'varm': self._varm,
             # add the categories to the unstructured annotation
             'uns': {**self._uns, **uns_obs, **uns_var}}
+
+        if self.raw is not None:
+            # we ignore categorical data types here
+            # they should never occur
+            var_rec, uns_var = df_to_records_fixed_width(self.raw.var)
+            if len(uns_var) > 0:
+                warnings.warn('Categorical dtypes in `.raw.var` are cast to integer.')
+            d['raw.X'] = self.raw.X
+            d['raw.var'] = var_rec
+            d['raw.varm'] = self.raw.varm
+
+        return d
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat
