@@ -259,7 +259,10 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
         return value
 
     value = preprocess_writing(value)
-    
+
+    # for some reason, we need the following for writing string arrays
+    if key in f.keys() and value is not None: del f[key]
+
     if (value is None
         # ignore arrays with empty dtypes
         or not value.dtype.descr):
@@ -765,6 +768,7 @@ class AnnData(IndexMixin):
             # data matrix and shape
             self._X, self._n_obs, self._n_vars = _fix_shapes(X)
         else:
+            self._X = None
             self._n_obs = len(obs)
             self._n_vars = len(var)
 
@@ -855,6 +859,10 @@ class AnnData(IndexMixin):
         else:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
                              .format(value.shape, self.shape))
+
+    @property
+    def raw(self):
+        return self._raw
 
     @property
     def n_obs(self):
@@ -1098,7 +1106,7 @@ class AnnData(IndexMixin):
         else:
             X = self.file._file['X']
             del X[obs, var]
-            self._write_backed('X', X)
+            self._set_backed('X', X)
         if var == slice(None):
             del self._obs.iloc[obs, :]
         if obs == slice(None):
@@ -1150,7 +1158,7 @@ class AnnData(IndexMixin):
             X = self.file._file['X']
             X = X[:, index]
             self._n_vars = X.shape[1]
-            self._write_backed('X', X)
+            self._set_backed('X', X)
         self._var = self._var.iloc[index]
         # TODO: the following should not be necessary!
         self._varm = BoundRecArr(self._varm[index], self, 'varm')
@@ -1168,7 +1176,7 @@ class AnnData(IndexMixin):
             X = self.file._file['X']
             X = X[index, :]
             self._n_obs = X.shape[0]
-            self._write_backed('X', X)
+            self._set_backed('X', X)
         self._slice_uns_sparse_matrices_inplace(self._uns, index)
         self._obs = self._obs.iloc[index]
         # TODO: the following should not be necessary!
@@ -1206,7 +1214,7 @@ class AnnData(IndexMixin):
         else:
             X = self.file._file['X']
             X[obs, var] = val
-            self._write_backed('X', X)
+            self._set_backed('X', X)
 
     def __len__(self):
         return self.shape[0]
@@ -1394,8 +1402,8 @@ class AnnData(IndexMixin):
         # - load the matrix into the memory...
         if self.isbacked and filename != self.filename:
             d['X'] = self.X[:]
-        # we can always use 'w' here, as backed objects are not written anyways
-        with h5py.File(filename, 'w') as f:
+        # need to use 'a' if backed, otherwise we loose the backed objects
+        with h5py.File(filename, 'a' if self.isbacked else 'w') as f:
             for key, value in d.items():
                 _write_key_value_to_h5(f, key, value, **kwargs)
         if self.isbacked:

@@ -2,8 +2,6 @@ import numpy as np
 from numpy import ma
 import pandas as pd
 from scipy import sparse as sp
-# we don’t need this in requirements.txt, as it’s only needed for testing
-from pytest import mark
 
 from anndata import AnnData
 
