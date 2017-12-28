@@ -55,6 +55,40 @@ def read_excel(filename, sheet):
     return AnnData(X, row, col)
 
 
+def read_umi_tools(filename):
+    """Read a gzipped condensed count matrix from umi_tools.
+
+    Parameters
+    ----------
+    filename : `str`
+        File name to read from.
+
+    Returns
+    -------
+    An :class:`~anndata.AnnData` object.
+    """
+    filename = str(filename)  # allow passing pathlib.Path objects
+    # import pandas for conversion of a dict of dicts into a matrix
+    # import gzip to read a gzipped file :-)
+    import gzip
+    from pandas import DataFrame
+    
+    dod = {} # this will contain basically everything
+    fh = gzip.open(filename)
+    header = fh.readline() # read the first line
+    
+    for line in fh:
+        t = line.decode('ascii').split('\t')  # gzip read bytes, hence the decoding
+        try:
+            dod[t[1]].update({t[0]:int(t[2])})
+        except KeyError:
+            dod[t[1]] = {t[0]:int(t[2])}
+    
+    df = DataFrame.from_dict(dod, orient = 'index') # build the matrix
+    df.fillna(value = 0., inplace = True) # many NaN, replace with zeros
+    return AnnData(np.array(df), {'obs_names':df.index}, {'var_names':df.columns})
+
+
 def read_hdf(filename, key):
     """Read `.h5` (hdf5) file.
 

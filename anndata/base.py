@@ -709,6 +709,7 @@ class AnnData(IndexMixin):
         read_loom
         read_mtx
         read_text
+        read_umi_tools
 
         Notes
         -----
