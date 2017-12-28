@@ -621,9 +621,7 @@ class AnnData(IndexMixin):
     _main_narrative = dedent("""\
         :class:`~anndata.AnnData` stores a data matrix ``.X`` together with
         annotations of observations ``.obs``, variables ``.var`` and
-        unstructured annotations ``.uns``. If setting an `.h5ad` backing file
-        ``.filename``, data remains on the disk but is automatically loaded into
-        memory if needed.
+        unstructured annotations ``.uns``.
 
         .. raw:: html
 
@@ -632,10 +630,10 @@ class AnnData(IndexMixin):
 
         An :class:`~anndata.AnnData` object ``adata`` can be sliced like a
         pandas dataframe, for example, ``adata_subset = adata[:,
-        list_of_variable_names]``. Observation and variable names can be
-        accessed via ``.obs_names`` and ``.var_names``, respectively.
-        :class:`~anndata.AnnData`'s basic structure is similar to R's
-        ExpressionSet [Huber15]_.
+        list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure
+        is similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad` backing file
+        ``.filename``, data remains on the disk but is automatically loaded into
+        memory if needed.
 
         See this `blog post
         <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_

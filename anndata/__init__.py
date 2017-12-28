@@ -1,11 +1,14 @@
 from .base import AnnData
 from .base import read_h5ad as read
+from .readwrite import read_loom, \
+    read_csv, read_excel, read_text, read_hdf, read_mtx, read_umi_tools
 
 __doc__ = """\
 anndata
 =======
 
-The :class:`anndata` package provides functions for :class:`~anndata.AnnData` objects and their native file format `.h5ad`: {main_narrative}
+The :class:`anndata` package provides functions for :class:`~anndata.AnnData`
+objects: At the most basic level, {main_narrative}
 
 .. autosummary::
   :toctree: .
@@ -13,21 +16,10 @@ The :class:`anndata` package provides functions for :class:`~anndata.AnnData` ob
    AnnData
 
 
-Independent of :class:`~anndata.AnnData`, the submodule :class:`anndata.h5py`
-provides a thin wrapper of `h5py <http://www.h5py.org/>`_ that is able to handle
-sparse matrices in addition to the standard functionality.
-
-.. autosummary::
-  :toctree: .
-
-   h5py
-
-
 Reading
 -------
 
-Reading anndata's native file format `.h5ad`. Doing this, by default, only
-relevant contents of the file are loaded into memory.
+Reading anndata's native file format `.h5ad`.
 
 .. autosummary::
   :toctree: .
@@ -65,10 +57,20 @@ Writing to other formats.
 
    AnnData.write_csvs
    AnnData.write_loom
-""".format(main_narrative=AnnData._main_narrative)
 
-from .readwrite import read_loom, \
-    read_csv, read_excel, read_text, read_hdf, read_mtx, read_umi_tools
+h5py
+----
+
+Independent of :class:`~anndata.AnnData`, the submodule :class:`anndata.h5py`
+provides a thin wrapper of `h5py <http://www.h5py.org/>`_ that is able to handle
+sparse matrices in addition to the standard functionality.
+
+.. autosummary::
+  :toctree: .
+
+   h5py
+
+""".format(main_narrative=AnnData._main_narrative)
 
 from ._version import get_versions
 __version__ = get_versions()['version']

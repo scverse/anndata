@@ -16,7 +16,7 @@ At the very basic level: an ``AnnData`` object ``adata`` stores a data matrix (`
 dataframe-like annotation of observations (``adata.obs``) and variables (``adata.var``)
 and unstructured dict-like annotation (``adata.uns``).
 
-Read the `documentation <http://scanpy.readthedocs.io/en/latest/api/scanpy.api.AnnData.html>`_.
+Read the `documentation <http://anndata.readthedocs.org>`_.
 
 Install from `PyPI <https://pypi.python.org/pypi/anndata/>`__ via ``pip install anndata``.
 
