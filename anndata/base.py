@@ -978,9 +978,9 @@ class AnnData(IndexMixin):
                     self._set_backed('X', value)
             else:
                 if self.isview:
-                    # exit the view, if we set another type
-                    # (e.g., from sparse to dense)
-                    if not isinstance(value, type(self._adata_ref._X)):
+                    # exit the view if we go from sparse to dense
+                    if (issparse(value) and not issparse(self._adata_ref._X)
+                        or not issparse(value) and issparse(self._adata_ref._X)):
                         self._init_as_actual(self.copy())
                         self._X = value
                     else:
