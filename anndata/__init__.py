@@ -45,6 +45,7 @@ Reading other file formats.
    read_loom
    read_mtx
    read_text
+   read_umi_tools
 
 
 Writing
@@ -67,7 +68,7 @@ Writing to other formats.
 """.format(main_narrative=AnnData._main_narrative)
 
 from .readwrite import read_loom, \
-    read_csv, read_excel, read_text, read_hdf, read_mtx
+    read_csv, read_excel, read_text, read_hdf, read_mtx, read_umi_tools
 
 from ._version import get_versions
 __version__ = get_versions()['version']
