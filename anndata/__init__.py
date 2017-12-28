@@ -4,11 +4,10 @@ from .readwrite import read_loom, \
     read_csv, read_excel, read_text, read_hdf, read_mtx, read_umi_tools
 
 __doc__ = """\
-anndata
-=======
+API
+===
 
-The :class:`anndata` package provides functions for :class:`~anndata.AnnData`
-objects: At the most basic level, {main_narrative}
+The central class:
 
 .. autosummary::
   :toctree: .

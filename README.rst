@@ -9,20 +9,18 @@
 .. |Coverage| image:: https://codecov.io/gh/theislab/anndata/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/theislab/anndata
 
-AnnData
+anndata
 =======
 
-At the very basic level: an ``AnnData`` object ``adata`` stores a data matrix (``adata.X``),
-dataframe-like annotation of observations (``adata.obs``) and variables (``adata.var``)
-and unstructured dict-like annotation (``adata.uns``).
-
-Read the `documentation <http://anndata.readthedocs.org>`_.
+The :class:`anndata` package provides functions for :class:`~anndata.AnnData`
+objects, which, at the most basic level, store a data matrix (``.X``),
+dataframe-like annotation of observations (``.obs``) and variables (``.var``)
+and unstructured dict-like annotation (``.uns``).
 
 Install from `PyPI <https://pypi.python.org/pypi/anndata/>`__ via ``pip install anndata``.
 
-We will slowly support all of AnnData's generic functions (plotting,
-preprocessing, reading, writing from disk, hdf5 backing on disk) via the anndata
-package.
+Read the `documentation <https://anndata.readthedocs.io>`_. Learn more about conceptual ideas in our `preprint <https://doi.org/10.1101/174029>`_.
 
-AnnData has been developed together with Scanpy. We are grateful if you consider citing
-our `preprint, soon in Genome Biology <https://doi.org/10.1101/174029>`_.
+
+
+
