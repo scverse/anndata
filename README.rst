@@ -12,10 +12,7 @@
 anndata
 =======
 
-The `anndata` package provides functions for `AnnData` objects, which, at the
-most basic level, store a data matrix (``.X``), dataframe-like annotation of
-observations (``.obs``) and variables (``.var``) and unstructured dict-like
-annotation (``.uns``).
+The `anndata` package provides functions for `AnnData` objects, which, at the most basic level, store a data matrix (``.X``), dataframe-like annotation of observations (``.obs``) and variables (``.var``) and unstructured dict-like annotation (``.uns``).
 
 Install from `PyPI <https://pypi.python.org/pypi/anndata/>`__ via ``pip install anndata``.
 
