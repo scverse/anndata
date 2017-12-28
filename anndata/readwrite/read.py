@@ -86,7 +86,7 @@ def read_umi_tools(filename):
     
     df = DataFrame.from_dict(dod, orient = 'index') # build the matrix
     df.fillna(value = 0., inplace = True) # many NaN, replace with zeros
-    return AnnData(np.array(df), {'obs_names':df.index}, {'var_names':df.columns}
+    return AnnData(np.array(df), {'obs_names':df.index}, {'var_names':df.columns})
 
 
 def read_hdf(filename, key):
