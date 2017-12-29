@@ -69,8 +69,15 @@ def test_readwrite_loom():
             assert np.allclose(adata.X, X.toarray())
 
 
+def test_read_csv():
+    adata = ad.read_csv('adata.csv')
+    assert adata.obs_names.tolist() == ['r1', 'r2', 'r3']
+    assert adata.var_names.tolist() == ['c1', 'c2']
+    assert adata.X.tolist() == X_list
+
+
 def test_write_csv():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)
         adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        adata.write_csvs('./test_csv_dir')
+        adata.write_csvs('./test_csv_dir', skip_data=False)

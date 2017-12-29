@@ -1,18 +1,20 @@
+from pathlib import Path
+
 import h5py
 import numpy as np
 from ..base import AnnData
 from .utils import *
 
 
-def read_csv(filename, delimiter=',', first_column_names=None, dtype='float32'):
+def read_csv(filename, delimiter=',', first_column_names=None, dtype='float32') -> AnnData:
     """Read `.csv` file.
 
-    Same as :func:`~anndata.read_txt` but with default delimiter ','.
+    Same as :func:`~anndata.read_text` but with default delimiter ','.
 
     Parameters
     ----------
-    filename : `str`
-        Filename of data file.
+    filename : `str` or `pathlib.Path` or `file`-like object
+        Data file.
     delimiter : `str`, optional (default: `','`)
         Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
@@ -25,10 +27,10 @@ def read_csv(filename, delimiter=',', first_column_names=None, dtype='float32'):
     -------
     An :class:`~scanpy.api.AnnData` object.
     """
-    return read_txt(filename, delimiter, first_column_names, dtype)
+    return read_text(filename, delimiter, first_column_names, dtype)
 
 
-def read_excel(filename, sheet):
+def read_excel(filename, sheet) -> AnnData:
     """Read `.xlsx` (Excel) file.
 
     Assumes that the first columns stores the row names and the first row the
@@ -55,7 +57,7 @@ def read_excel(filename, sheet):
     return AnnData(X, row, col)
 
 
-def read_umi_tools(filename):
+def read_umi_tools(filename) -> AnnData:
     """Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
@@ -89,7 +91,7 @@ def read_umi_tools(filename):
     return AnnData(np.array(df), {'obs_names':df.index}, {'var_names':df.columns})
 
 
-def read_hdf(filename, key):
+def read_hdf(filename, key) -> AnnData:
     """Read `.h5` (hdf5) file.
 
     Note: Also looks for fields 'row_names' and 'col_names'.
@@ -126,7 +128,7 @@ def read_hdf(filename, key):
     return adata
 
 
-def read_loom(filename):
+def read_loom(filename) -> AnnData:
     """Read `.loom`-formatted hdf5 file.
 
     Parameters
@@ -138,6 +140,7 @@ def read_loom(filename):
     -------
     An :class:`~anndata.AnnData` object.
     """
+    filename = str(filename)  # allow passing pathlib.Path objects
     from loompy import connect
     lc = connect(filename, 'r')
     with h5py.File(filename, 'r') as f:
@@ -150,13 +153,14 @@ def read_loom(filename):
     return adata
 
 
-def read_mtx(filename, dtype='float32'):
+def read_mtx(filename, dtype='float32') -> AnnData:
     """Read `.mtx` file.
 
     Returns
     -------
     An :class:`~anndata.AnnData` object.
     """
+    filename = str(filename)  # allow passing pathlib.Path objects
     from scipy.io import mmread
     # could be rewritten accounting for dtype to be more performant
     X = mmread(filename).astype(dtype)
@@ -165,15 +169,15 @@ def read_mtx(filename, dtype='float32'):
     return AnnData(X)
 
 
-def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'):
+def read_text(filename, delimiter=None, first_column_names=None, dtype='float32') -> AnnData:
     """Read `.txt`, `.tab`, `.data` (text) file.
 
     Same as :func:`~anndata.read_csv` but with default delimiter `None`.
 
     Parameters
     ----------
-    filename : `str`
-        Filename of data file.
+    filename : `str`, `pathlib.Path`, or `file`-like object
+        Data file.
     delimiter : `str`, optional (default: `None`)
         Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
@@ -186,15 +190,21 @@ def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'
     -------
     An :class:`~scanpy.api.AnnData` object.
     """
-    filename = str(filename)  # allow passing pathlib.Path objects
+    if isinstance(filename, (str, Path)):
+        with Path(filename).open() as f:
+            return _read_text(f, delimiter, first_column_names, dtype)
+    else:
+        return _read_text(filename, delimiter, first_column_names, dtype)
+
+
+def _read_text(f, delimiter, first_column_names, dtype) -> AnnData:
     header = ''
     data = []
-    length = -1
-    f = open(filename)
+    lines = (l.rstrip('\r\n') for l in f)
     col_names = []
     row_names = []
     # read header and column names
-    for line in f:
+    for line in lines:
         if line.startswith('#'):
             header += line
         else:
@@ -225,7 +235,7 @@ def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'
     col_names = np.array(col_names, dtype=str)
     # read another line to check if first column contains row names or not
     if first_column_names is None: first_column_names = False
-    for line in f:
+    for line in lines:
         line_list = line.split(delimiter)
         if first_column_names or not is_float(line_list[0]):
             # logg.msg('    assuming first column in file stores row names', v=4)
@@ -244,7 +254,7 @@ def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'
         row_names.append(data[1][0].astype(int).astype(str))
         data = [data[1][1:]]
     # parse the file
-    for line in f:
+    for line in lines:
         line_list = line.split(delimiter)
         if first_column_names:
             row_names.append(line_list[0])
@@ -279,5 +289,3 @@ def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'
     return AnnData(data,
                    obs={'obs_names': row_names},
                    var={'var_names': col_names})
-
-
