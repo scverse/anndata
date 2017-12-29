@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 import anndata as ad
 
+
+HERE = Path(__file__).parent
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -70,7 +74,7 @@ def test_readwrite_loom():
 
 
 def test_read_csv():
-    adata = ad.read_csv('adata.csv')
+    adata = ad.read_csv(HERE / 'adata.csv')
     assert adata.obs_names.tolist() == ['r1', 'r2', 'r3']
     assert adata.var_names.tolist() == ['c1', 'c2']
     assert adata.X.tolist() == X_list
