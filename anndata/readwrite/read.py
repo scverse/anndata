@@ -197,22 +197,33 @@ def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'
         return _read_text(filename, delimiter, first_column_names, dtype)
 
 
+def iter_lines(file_like):
+    """ Helper for iterating only nonempty lines without line breaks"""
+    for line in file_like:
+        line = line.rstrip('\r\n')
+        if line:
+            yield line
+
+
 def _read_text(f, delimiter, first_column_names, dtype) -> AnnData:
-    header = ''
+    comments = []
     data = []
-    lines = (l.rstrip('\r\n') for l in f)
+    lines = iter_lines(f)
     col_names = []
     row_names = []
     # read header and column names
     for line in lines:
         if line.startswith('#'):
-            header += line
+            comment = line.lstrip('# ')
+            if comment:
+                comments.append(comment)
         else:
             if delimiter is not None and delimiter not in line:
                 raise ValueError('Did not find delimiter "{}" in first line.'
                                  .format(delimiter))
             line_list = line.split(delimiter)
-            if not is_float(line_list[0]):
+            # the first column might be row names, so check the last
+            if not is_float(line_list[-1]):
                 col_names = line_list
                 # logg.msg('    assuming first line in file stores column names', v=4)
             else:
@@ -225,9 +236,9 @@ def _read_text(f, delimiter, first_column_names, dtype) -> AnnData:
             break
     if not col_names:
         # try reading col_names from the last comment line
-        if len(header) > 0:
+        if len(comments) > 0:
             # logg.msg('    assuming last comment line stores variable names', v=4)
-            col_names = np.array(header.split('\n')[-2].strip('#').split())
+            col_names = np.array(comments[-1].split())
         # just numbers as col_names
         else:
             # logg.msg('    did not find column names in file', v=4)
@@ -269,7 +280,7 @@ def _read_text(f, delimiter, first_column_names, dtype) -> AnnData:
     #   a lot of memory and CPU time
     if data[0].size != data[-1].size:
         raise ValueError(
-            'length of first line {} is different from length of last line {}'
+            'length of first line ({}) is different from length of last line ({})'
             .format(data[0].size, data[-1].size))
     data = np.array(data, dtype=dtype)
     # logg.msg('    constructed array from list of list', t=True, v=4)

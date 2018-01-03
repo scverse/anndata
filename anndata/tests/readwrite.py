@@ -80,6 +80,13 @@ def test_read_csv():
     assert adata.X.tolist() == X_list
 
 
+def test_read_tsv():
+    adata = ad.read_text(HERE / 'adata-comments.tsv', '\t')
+    assert adata.obs_names.tolist() == ['r1', 'r2', 'r3']
+    assert adata.var_names.tolist() == ['c1', 'c2']
+    assert adata.X.tolist() == X_list
+
+
 def test_write_csv():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)
