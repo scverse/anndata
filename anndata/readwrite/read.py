@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Union, Optional, Iterable, Generator, Iterator
 
 import h5py
 import numpy as np
@@ -6,7 +7,12 @@ from ..base import AnnData
 from .utils import *
 
 
-def read_csv(filename, delimiter=',', first_column_names=None, dtype='float32') -> AnnData:
+def read_csv(
+    filename: Union[Path, str, Iterator[str]],
+    delimiter: Optional[str]=',',
+    first_column_names: Optional[bool]=None,
+    dtype: str='float32',
+) -> AnnData:
     """Read `.csv` file.
 
     Same as :func:`~anndata.read_text` but with default delimiter ','.
@@ -30,7 +36,10 @@ def read_csv(filename, delimiter=',', first_column_names=None, dtype='float32') 
     return read_text(filename, delimiter, first_column_names, dtype)
 
 
-def read_excel(filename, sheet) -> AnnData:
+def read_excel(
+    filename: Union[Path, str],
+    sheet: Union[str, int],
+) -> AnnData:
     """Read `.xlsx` (Excel) file.
 
     Assumes that the first columns stores the row names and the first row the
@@ -57,7 +66,7 @@ def read_excel(filename, sheet) -> AnnData:
     return AnnData(X, row, col)
 
 
-def read_umi_tools(filename) -> AnnData:
+def read_umi_tools(filename: Union[Path, str]) -> AnnData:
     """Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
@@ -91,7 +100,7 @@ def read_umi_tools(filename) -> AnnData:
     return AnnData(np.array(df), {'obs_names':df.index}, {'var_names':df.columns})
 
 
-def read_hdf(filename, key) -> AnnData:
+def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
     """Read `.h5` (hdf5) file.
 
     Note: Also looks for fields 'row_names' and 'col_names'.
@@ -128,7 +137,7 @@ def read_hdf(filename, key) -> AnnData:
     return adata
 
 
-def read_loom(filename) -> AnnData:
+def read_loom(filename: Union[Path, str]) -> AnnData:
     """Read `.loom`-formatted hdf5 file.
 
     Parameters
@@ -153,7 +162,7 @@ def read_loom(filename) -> AnnData:
     return adata
 
 
-def read_mtx(filename, dtype='float32') -> AnnData:
+def read_mtx(filename: Union[Path, str], dtype: str='float32') -> AnnData:
     """Read `.mtx` file.
 
     Returns
@@ -169,7 +178,12 @@ def read_mtx(filename, dtype='float32') -> AnnData:
     return AnnData(X)
 
 
-def read_text(filename, delimiter=None, first_column_names=None, dtype='float32') -> AnnData:
+def read_text(
+    filename: Union[Path, str, Iterator[str]],
+    delimiter: Optional[str]=None,
+    first_column_names: Optional[bool]=None,
+    dtype: str='float32',
+) -> AnnData:
     """Read `.txt`, `.tab`, `.data` (text) file.
 
     Same as :func:`~anndata.read_csv` but with default delimiter `None`.
@@ -197,7 +211,7 @@ def read_text(filename, delimiter=None, first_column_names=None, dtype='float32'
         return _read_text(filename, delimiter, first_column_names, dtype)
 
 
-def iter_lines(file_like):
+def iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
     """ Helper for iterating only nonempty lines without line breaks"""
     for line in file_like:
         line = line.rstrip('\r\n')
@@ -205,7 +219,12 @@ def iter_lines(file_like):
             yield line
 
 
-def _read_text(f, delimiter, first_column_names, dtype) -> AnnData:
+def _read_text(
+    f: Iterator[str],
+    delimiter: Optional[str],
+    first_column_names: Optional[bool],
+    dtype: str,
+) -> AnnData:
     comments = []
     data = []
     lines = iter_lines(f)

@@ -17,12 +17,21 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-import os
+import ast
 import sys
 import time
 import inspect
 from pathlib import Path
-sys.path.insert(0, os.path.abspath(os.path.pardir))
+from typing import List
+
+from sphinx.ext import autosummary, autodoc
+from sphinx.ext.autosummary import limited_join
+
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE / '..'))
+
+import anndata
+
 
 # -- General configuration ------------------------------------------------
 
@@ -33,17 +42,18 @@ sys.path.insert(0, os.path.abspath(os.path.pardir))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.doctest',
-              'sphinx.ext.coverage',
-              'sphinx.ext.mathjax',
-              'sphinx.ext.autosummary',
-              # 'plot_generator',
-              # 'plot_directive',
-              'numpydoc',
-              # 'ipython_directive',
-              # 'ipython_console_highlighting',
-              ]
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.doctest',
+    'sphinx.ext.coverage',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.autosummary',
+    # 'plot_generator',
+    # 'plot_directive',
+    'numpydoc',
+    # 'ipython_directive',
+    # 'ipython_console_highlighting',
+]
 
 # Generate the API documentation when building
 autosummary_generate = True
@@ -65,7 +75,6 @@ project = 'anndata'
 copyright = '{}, Alex Wolf, Philipp Angerer'.format(time.strftime("%Y"))
 author = 'Alex Wolf, Philipp Angerer'
 
-import anndata
 version = anndata.__version__.replace('.dirty', '')
 release = version
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
@@ -162,6 +171,9 @@ texinfo_documents = [
 ]
 
 
+# -- GitHub links ---------------------------------------------------------
+
+
 def get_obj_module(qualname):
     """Get a module/class/attribute and its original module by qualname"""
     modname = qualname
@@ -195,6 +207,8 @@ def get_linenos(obj):
 project_dir = Path(__file__).parent.parent  # project/docs/conf.py/../.. → project/
 github_url1 = 'https://github.com/{github_user}/{github_repo}/tree/{github_version}'.format_map(html_context)
 github_url2 = 'https://github.com/theislab/anndata/tree/master'
+
+
 def modurl(qualname):
     """Get the full GitHub URL for some object’s qualname."""
     obj, module = get_obj_module(qualname)
@@ -216,3 +230,65 @@ def modurl(qualname):
 from jinja2.defaults import DEFAULT_FILTERS
 
 DEFAULT_FILTERS['modurl'] = modurl
+
+
+# -- Prettier Autodoc -----------------------------------------------------
+
+
+def unparse(ast_node: ast.expr, plain: bool=False) -> str:
+    if isinstance(ast_node, ast.Attribute):
+        if plain:
+            return ast_node.attr
+        else:
+            v = unparse(ast_node.value, plain)
+            return f'{v}.{ast_node.attr}'
+    elif isinstance(ast_node, ast.Index):
+        return unparse(ast_node.value)
+    elif isinstance(ast_node, ast.Name):
+        return ast_node.id
+    elif isinstance(ast_node, ast.Subscript):
+        v = unparse(ast_node.value, plain)
+        s = unparse(ast_node.slice, plain)
+        return f'{v}[{s}]'
+    elif isinstance(ast_node, ast.Tuple):
+        return ', '.join(unparse(e) for e in ast_node.elts)
+    else:
+        raise NotImplementedError(f'can’t unparse {type(ast_node)}')
+
+
+def mangle_signature(sig: str, max_chars: int=30) -> str:
+    f = ast.parse(f'def f{sig}: pass').body[0]
+
+    args_all = [a.arg for a in f.args.args]
+    n_a = len(args_all) - len(f.args.defaults)
+    args = args_all[:n_a]  # type: List[str]
+    opts = args_all[n_a:]  # type: List[str]
+
+    # Produce a more compact signature
+    s = limited_join(', ', args, max_chars=max_chars - 2)
+    if opts:
+        if not s:
+            opts_str = limited_join(', ', opts, max_chars=max_chars - 4)
+            s = f'[{opts_str}]'
+        elif len(s) < max_chars - 4 - 2 - 3:
+            opts_str = limited_join(', ', opts, max_chars=max_chars - len(sig) - 4 - 2)
+            s += f'[, {opts_str}]'
+
+    if f.returns:
+        ret = unparse(f.returns, plain=True)
+        return f'({s}) -> {ret}'
+    return f'({s})'
+
+
+autosummary.mangle_signature = mangle_signature
+
+# TODO: also replace those for individual function pages:
+# autodoc.formatargspec
+# autodoc.format_annotation
+
+
+if __name__ == '__main__':
+    print(mangle_signature('(filename: typing.Union[str, pathlib.Path], delim: int=0) -> anndata.base.AnnData'))
+    print(mangle_signature('(a, *, b=1) -> int'))
+    print(mangle_signature('(a, b=1, *c) -> Union[str, pathlib.Path]'))
+    print(mangle_signature('(a, b=1, *c, d=1)'))
