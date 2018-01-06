@@ -771,8 +771,6 @@ class AnnData(IndexMixin):
         self._varm = ArrayView(adata_ref.varm[vidx_normalized], view_args=(self, 'varm'))
         # hackish solution here, no copy should be necessary
         uns_new = self._adata_ref._uns.copy()
-        self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
-        self._uns = DictView(uns_new, view_args=(self, 'uns'))
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
             self._n_obs = len(self._obs.index)
@@ -786,6 +784,9 @@ class AnnData(IndexMixin):
             self._n_vars = 1
         else:
             self._n_vars = len(vidx)
+        # need to do the slicing after setting self._n_obs, self._n_vars
+        self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
+        self._uns = DictView(uns_new, view_args=(self, 'uns'))
         # set data
         if self.isbacked: self._X = None
         else: self._init_X_as_view()
@@ -1255,7 +1256,7 @@ class AnnData(IndexMixin):
                 oidx.start is None and oidx.step is None and oidx.stop is None):
             for k, v in uns.items():
                 if isinstance(v, sparse.spmatrix) and v.shape == (
-                        self._n_obs, self._n_obs):
+                        self.n_obs, self.n_obs):
                     uns[k] = v.tocsc()[:, obs].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index):
