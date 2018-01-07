@@ -235,13 +235,18 @@ DEFAULT_FILTERS['modurl'] = modurl
 # -- Prettier Autodoc -----------------------------------------------------
 
 
+def f(string):
+	frame = sys._getframe(1)
+	return string.format_map(frame.f_locals)
+
+
 def unparse(ast_node: ast.expr, plain: bool=False) -> str:
     if isinstance(ast_node, ast.Attribute):
         if plain:
             return ast_node.attr
         else:
             v = unparse(ast_node.value, plain)
-            return f'{v}.{ast_node.attr}'
+            return f('{v}.{ast_node.attr}')
     elif isinstance(ast_node, ast.Index):
         return unparse(ast_node.value)
     elif isinstance(ast_node, ast.Name):
@@ -249,7 +254,7 @@ def unparse(ast_node: ast.expr, plain: bool=False) -> str:
     elif isinstance(ast_node, ast.Subscript):
         v = unparse(ast_node.value, plain)
         s = unparse(ast_node.slice, plain)
-        return f'{v}[{s}]'
+        return f('{v}[{s}]')
     elif isinstance(ast_node, ast.Tuple):
         return ', '.join(unparse(e) for e in ast_node.elts)
     else:
@@ -257,10 +262,10 @@ def unparse(ast_node: ast.expr, plain: bool=False) -> str:
 
 
 def mangle_signature(sig: str, max_chars: int=30) -> str:
-    f = ast.parse(f'def f{sig}: pass').body[0]
+    fn = ast.parse(f('def f{sig}: pass')).body[0]
 
-    args_all = [a.arg for a in f.args.args]
-    n_a = len(args_all) - len(f.args.defaults)
+    args_all = [a.arg for a in fn.args.args]
+    n_a = len(args_all) - len(fn.args.defaults)
     args = args_all[:n_a]  # type: List[str]
     opts = args_all[n_a:]  # type: List[str]
 
@@ -269,15 +274,15 @@ def mangle_signature(sig: str, max_chars: int=30) -> str:
     if opts:
         if not s:
             opts_str = limited_join(', ', opts, max_chars=max_chars - 4)
-            s = f'[{opts_str}]'
+            s = f('[{opts_str}]')
         elif len(s) < max_chars - 4 - 2 - 3:
             opts_str = limited_join(', ', opts, max_chars=max_chars - len(sig) - 4 - 2)
-            s += f'[, {opts_str}]'
+            s += f('[, {opts_str}]')
 
-    if f.returns:
-        ret = unparse(f.returns, plain=True)
-        return f'({s}) -> {ret}'
-    return f'({s})'
+    if fn.returns:
+        ret = unparse(fn.returns, plain=True)
+        return f('({s}) -> {ret}')
+    return f('({s})')
 
 
 autosummary.mangle_signature = mangle_signature
