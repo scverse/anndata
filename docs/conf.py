@@ -236,8 +236,8 @@ DEFAULT_FILTERS['modurl'] = modurl
 
 
 def f(string):
-	frame = sys._getframe(1)
-	return string.format_map(frame.f_locals)
+    frame = sys._getframe(1)
+    return string.format_map(frame.f_locals)
 
 
 def unparse(ast_node: ast.expr, plain: bool=False) -> str:
@@ -258,7 +258,8 @@ def unparse(ast_node: ast.expr, plain: bool=False) -> str:
     elif isinstance(ast_node, ast.Tuple):
         return ', '.join(unparse(e) for e in ast_node.elts)
     else:
-        raise NotImplementedError(f'can’t unparse {type(ast_node)}')
+        t = type(ast_node)
+        raise NotImplementedError(f('can’t unparse {t}'))
 
 
 def mangle_signature(sig: str, max_chars: int=30) -> str:
