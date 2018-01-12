@@ -67,7 +67,7 @@ def test_backing():
     # now transition to actual object
     adata_subset.obs['foo'] = range(2)
     assert not adata_subset.isview
-    adata_subset.obs['foo'].tolist() == list(range(2))
+    assert adata_subset.obs['foo'].tolist() == list(range(2))
 
     # save
     adata_subset.write()

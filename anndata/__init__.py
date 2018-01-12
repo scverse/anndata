@@ -1,7 +1,9 @@
-from .base import AnnData
-from .base import read_h5ad as read
-from .readwrite import read_loom, \
-    read_csv, read_excel, read_text, read_hdf, read_mtx, read_umi_tools
+from .base import AnnData, _MAIN_NARRATIVE
+from .readwrite import (
+    read_h5ad as read, read_loom, read_hdf,
+    read_excel, read_umi_tools,
+    read_csv, read_text, read_mtx,
+)
 
 __doc__ = """\
 API
@@ -69,7 +71,7 @@ sparse matrices in addition to the standard functionality.
 
    h5py
 
-""".format(main_narrative=AnnData._main_narrative)
+""".format(main_narrative=_MAIN_NARRATIVE)
 
 from ._version import get_versions
 __version__ = get_versions()['version']

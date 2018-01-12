@@ -16,6 +16,63 @@ from textwrap import dedent
 from . import h5py
 
 
+_MAIN_NARRATIVE = """\
+:class:`~anndata.AnnData` stores a data matrix ``.X`` together with
+annotations of observations ``.obs``, variables ``.var`` and
+unstructured annotations ``.uns``.
+
+.. raw:: html
+
+    <img src="http://falexwolf.de/img/scanpy/anndata.svg"
+         style="width: 350px; margin: 10px 0px 15px 20px">
+
+An :class:`~anndata.AnnData` object ``adata`` can be sliced like a
+pandas dataframe, for example, ``adata_subset = adata[:,
+list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure
+is similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad` backing file
+``.filename``, data remains on the disk but is automatically loaded into
+memory if needed.
+
+See this `blog post
+<http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_
+for more details. If you find :class:`~anndata.AnnData` useful for your
+scientific work, please consider citing [Wolf17]_.
+"""
+
+
+_EXAMPLE_CONCATENATE = """\
+>>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+>>>                  {'obs_names': ['o1', 'o2'],
+>>>                   'anno1': ['c1', 'c2']},
+>>>                  {'var_names': ['a', 'b', 'c']})
+>>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+>>>                  {'obs_names': ['o3', 'o4'],
+>>>                   'anno1': ['c3', 'c4']},
+>>>                  {'var_names': ['b', 'c', 'd']})
+>>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+>>>                  {'obs_names': ['o5', 'o6'],
+>>>                   'anno2': ['d3', 'd4']},
+>>>                  {'var_names': ['b', 'c', 'd']})
+>>>
+>>> adata = adata1.concatenate([adata2, adata3])
+>>> adata.X
+[[ 2.  3.]
+ [ 5.  6.]
+ [ 1.  2.]
+ [ 4.  5.]
+ [ 1.  2.]
+ [ 4.  5.]]
+>>> adata.obs
+   anno1 anno2 batch
+o1    c1   NaN     0
+o2    c2   NaN     0
+o3    c3   NaN     1
+o4    c4   NaN     1
+o5   NaN    d3     2
+o6   NaN    d4     2
+"""
+
+
 class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
@@ -30,19 +87,20 @@ class BoundRecArr(np.recarray):
     """A `np.recarray` to which fields can be added using `.['key']`.
 
     To enable this, it is bound to a instance of AnnData.
-
-    Parameters
-    ----------
-    source : `np.ndarray`
-        A (structured) numpy array.
-    parent : object
-        Any object to which the BoundRecArr shall be bound to.
-    attr : string
-        The name of the attribute as which it appears in parent.
     """
     _attr_choices = ['obsm', 'varm']
 
     def __new__(cls, input_array, parent, attr):
+        """
+        Parameters
+        ----------
+        source : `np.ndarray`
+            A (structured) numpy array.
+        parent : object
+            Any object to which the BoundRecArr shall be bound to.
+        attr : string
+            The name of the attribute as which it appears in parent.
+        """
         arr = np.asarray(input_array).view(cls)
         arr._parent = parent
         arr._attr = attr
@@ -230,147 +288,6 @@ def _gen_dataframe(anno, length, index_names):
         else:
             _anno = pd.DataFrame(anno)
     return _anno
-
-
-def read_h5ad(filename, backed=False):
-    """Read `.h5ad`-formatted hdf5 file.
-
-    Parameters
-    ----------
-    filename : `str`
-        File name of data file.
-    backed : {`False`, `True`, 'r', 'r+'}, optional (default: `False`)
-        Load :class:`~scanpy.api.AnnData` in `backed` mode instead of fully
-        loading it into memory (`memory` mode). `True` and 'r' are
-        equivalent. If you want to modify backed attributes of the AnnData
-        object, you need to choose 'r+'.
-
-    Returns
-    -------
-    An :class:`~anndata.AnnData` object.
-    """
-    if backed:
-        # open in backed-mode
-        return AnnData(filename=filename, filemode=backed)
-    else:
-        # load everything into memory
-        # TODO: do this with less of a hack...
-        #       the "0" currently replaces the "self"
-        d = AnnData._read_h5ad(0, filename)
-        return AnnData(d)
-
-
-def _write_key_value_to_h5(f, key, value, **kwargs):
-    if isinstance(value, Mapping):
-        for k, v in value.items():
-            if not isinstance(k, str):
-                warnings.warn('dict key {} transformed to str upon writing to h5,'
-                              'using string keys is recommended'
-                              .format(k))
-            _write_key_value_to_h5(f, key + '/' + str(k), v, **kwargs)
-        return
-
-    def preprocess_writing(value):
-        if value is None:
-            return value
-        elif issparse(value):
-            return value
-        elif isinstance(value, dict):
-            # old hack for storing dicts, is never reached
-            # in the current implementation, can be removed in the future
-            value = np.array([str(value)])
-        else:
-            # make sure value is an array
-            value = np.array(value)
-            # hm, why that?
-            if value.ndim == 0: value = np.array([value])
-        # make sure string format is chosen correctly
-        if value.dtype.kind == 'U': value = value.astype(np.string_)
-        return value
-
-    value = preprocess_writing(value)
-
-    # for some reason, we need the following for writing string arrays
-    if key in f.keys() and value is not None: del f[key]
-
-    # ignore arrays with empty dtypes
-    if value is None or not value.dtype.descr:
-        return
-    try:
-        if key in set(f.keys()):
-            is_valid_group = isinstance(f[key], h5py.Group) \
-                and f[key].shape == value.shape \
-                and f[key].dtype == value.dtype \
-                and not isinstance(f[key], h5py.SparseDataset)
-            if not is_valid_group and not isinstance(value, sparse.spmatrix):
-                f[key][()] = value
-                return
-            else:
-                del f[key]
-        f.create_dataset(key, data=value, **kwargs)
-    except TypeError:
-        # try writing as byte strings
-        try:
-            if value.dtype.names is None:
-                if key in set(f.keys()):
-                    if (f[key].shape == value.shape
-                            and f[key].dtype == value.dtype):
-                        f[key][()] = value.astype('S')
-                        return
-                    else:
-                        del f[key]
-                f.create_dataset(key, data=value.astype('S'), **kwargs)
-            else:
-                new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
-                             for dt in value.dtype.descr]
-                if key in set(f.keys()):
-                    if (f[key].shape == value.shape
-                            and f[key].dtype == value.dtype):
-                        f[key][()] = value.astype(new_dtype)
-                        return
-                    else:
-                        del f[key]
-                f.create_dataset(
-                    key, data=value.astype(new_dtype), **kwargs)
-        except Exception as e:
-            warnings.warn('Could not save field with key = "{}" '
-                          'to hdf5 file.'.format(key))
-
-
-def _read_key_value_from_h5(f, d, key, key_write=None):
-    if key_write is None: key_write = key
-    if isinstance(f[key], h5py.Group):
-        d[key_write] = {}
-        for k in f[key].keys():
-            _read_key_value_from_h5(f, d[key_write], key + '/' + k, k)
-        return
-    # the '()' means 'load everything into memory' (by contrast, ':'
-    # only works if not reading a scalar type)
-    value = f[key][()]
-
-    def postprocess_reading(key, value):
-        if value.ndim == 1 and len(value) == 1:
-            value = value[0]
-        if value.dtype.kind == 'S':
-            value = value.astype(str)
-            # backwards compat:
-            # recover a dictionary that has been stored as a string
-            if len(value) > 0:
-                if value[0] == '{' and value[-1] == '}': value = eval(value)
-        # transform byte strings in recarrays to unicode strings
-        # TODO: come up with a better way of solving this, see also below
-        if (key not in AnnData._H5_ALIASES['obs']
-            and key not in AnnData._H5_ALIASES['var']
-            and key != 'raw.var'
-            and not isinstance(value, dict) and value.dtype.names is not None):
-            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
-                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
-            value = value.astype(new_dtype)
-        return key, value
-
-    key, value = postprocess_reading(key, value)
-    d[key_write] = value
-    return
 
 
 class AnnDataFileManager:
@@ -611,6 +528,69 @@ class Raw(IndexMixin):
 
 
 class AnnData(IndexMixin):
+    __doc__ = dedent("""\
+    An annotated data matrix.
+
+    {main_narrative}
+
+    Parameters
+    ----------
+    X : `np.ndarray`, `sparse.spmatrix`
+        A #observations × #variables data matrix. A view of the data is used if the
+        data type matches, otherwise, a copy is made.
+    obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+        Key-indexed one-dimensional observation annotation of length #observations.
+    var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+        Key-indexed one-dimensional variable annotation of length #variables.
+    uns : `dict` or `None`, optional (default: `None`)
+        Unstructured annotation for the whole dataset.
+    obsm : structured `np.ndarray`, optional (default: `None`)
+        Key-indexed multi-dimensional observation annotation of length #observations.
+    varm : structured `np.ndarray`, optional (default: `None`)
+        Key-indexed multi-dimensional observation annotation of length #observations.
+    dtype : simple `np.dtype`, optional (default: 'float32')
+        Data type used for storage.
+    single_col : `bool`, optional (default: `False`)
+        Interpret one-dimensional input array as column.
+
+    See Also
+    --------
+    read
+    read_csv
+    read_excel
+    read_hdf
+    read_loom
+    read_mtx
+    read_text
+    read_umi_tools
+
+    Notes
+    -----
+    Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
+
+    :class:`~anndata.AnnData` stores observations (samples) of variables
+    (features) in the rows of a matrix. This is the convention of the modern
+    classics of stats [Hastie09]_ and Machine Learning [Murphy12]_, the convention of
+    dataframes both in R and Python and the established stats and machine
+    learning packages in Python (`statsmodels
+    <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
+    <http://scikit-learn.org/>`_). It is the opposite of the convention for
+    storing genomic data.
+
+    Examples
+    --------
+    A data matrix is flattened if either #observations (`n_obs`) or #variables
+    (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
+
+        adata = AnnData(np.ones((2, 2)))
+        adata[:, 0].X == adata.X[:, 0]
+
+    AnnData objects can be concatenated via :func:`~anndata.AnnData.concatenate`.
+
+    {example_concatenate}
+
+    """).format(main_narrative=_MAIN_NARRATIVE,
+                example_concatenate=_EXAMPLE_CONCATENATE)
 
     _BACKED_ATTRS = ['X', 'raw.X']
 
@@ -628,125 +608,6 @@ class AnnData(IndexMixin):
         'obs': {'obs_names', 'smp_names', 'row_names', 'index'},
         'var': {'var_names', 'col_names', 'index'},
     }
-
-    _main_narrative = dedent("""\
-        :class:`~anndata.AnnData` stores a data matrix ``.X`` together with
-        annotations of observations ``.obs``, variables ``.var`` and
-        unstructured annotations ``.uns``.
-
-        .. raw:: html
-
-            <img src="http://falexwolf.de/img/scanpy/anndata.svg"
-                 style="width: 350px; margin: 10px 0px 15px 20px">
-
-        An :class:`~anndata.AnnData` object ``adata`` can be sliced like a
-        pandas dataframe, for example, ``adata_subset = adata[:,
-        list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure
-        is similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad` backing file
-        ``.filename``, data remains on the disk but is automatically loaded into
-        memory if needed.
-
-        See this `blog post
-        <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_
-        for more details. If you find :class:`~anndata.AnnData` useful for your
-        scientific work, please consider citing [Wolf17]_.
-        """)
-
-    _example_concatenate = dedent("""\
-        >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['o1', 'o2'],
-        >>>                   'anno1': ['c1', 'c2']},
-        >>>                  {'var_names': ['a', 'b', 'c']})
-        >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['o3', 'o4'],
-        >>>                   'anno1': ['c3', 'c4']},
-        >>>                  {'var_names': ['b', 'c', 'd']})
-        >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['o5', 'o6'],
-        >>>                   'anno2': ['d3', 'd4']},
-        >>>                  {'var_names': ['b', 'c', 'd']})
-        >>>
-        >>> adata = adata1.concatenate([adata2, adata3])
-        >>> adata.X
-        [[ 2.  3.]
-         [ 5.  6.]
-         [ 1.  2.]
-         [ 4.  5.]
-         [ 1.  2.]
-         [ 4.  5.]]
-        >>> adata.obs
-           anno1 anno2 batch
-        o1    c1   NaN     0
-        o2    c2   NaN     0
-        o3    c3   NaN     1
-        o4    c4   NaN     1
-        o5   NaN    d3     2
-        o6   NaN    d4     2
-        """)
-
-    _doc = dedent("""\
-        An annotated data matrix.
-
-        {main_narrative}
-
-        Parameters
-        ----------
-        X : `np.ndarray`, `sparse.spmatrix`
-            A #observations × #variables data matrix. A view of the data is used if the
-            data type matches, otherwise, a copy is made.
-        obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
-            Key-indexed one-dimensional observation annotation of length #observations.
-        var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
-            Key-indexed one-dimensional variable annotation of length #variables.
-        uns : `dict` or `None`, optional (default: `None`)
-            Unstructured annotation for the whole dataset.
-        obsm : structured `np.ndarray`, optional (default: `None`)
-            Key-indexed multi-dimensional observation annotation of length #observations.
-        varm : structured `np.ndarray`, optional (default: `None`)
-            Key-indexed multi-dimensional observation annotation of length #observations.
-        dtype : simple `np.dtype`, optional (default: 'float32')
-            Data type used for storage.
-        single_col : `bool`, optional (default: `False`)
-            Interpret one-dimensional input array as column.
-
-        See Also
-        --------
-        read
-        read_csv
-        read_excel
-        read_hdf
-        read_loom
-        read_mtx
-        read_text
-        read_umi_tools
-
-        Notes
-        -----
-        Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
-
-        :class:`~anndata.AnnData` stores observations (samples) of variables
-        (features) in the rows of a matrix. This is the convention of the modern
-        classics of stats [Hastie09]_ and Machine Learning [Murphy12]_, the convention of
-        dataframes both in R and Python and the established stats and machine
-        learning packages in Python (`statsmodels
-        <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
-        <http://scikit-learn.org/>`_). It is the opposite of the convention for
-        storing genomic data.
-
-        Examples
-        --------
-        A data matrix is flattened if either #observations (`n_obs`) or #variables
-        (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
-
-            adata = AnnData(np.ones((2, 2)))
-            adata[:, 0].X == adata.X[:, 0]
-
-        AnnData objects can be concatenated via :func:`~anndata.AnnData.concatenate`.
-
-        {example_concatenate}
-
-        """).format(main_narrative=_main_narrative,
-                    example_concatenate=_example_concatenate)
 
     def __init__(
             self, X=None, obs=None, var=None, uns=None,
@@ -835,6 +696,7 @@ class AnnData(IndexMixin):
             obsm=None, varm=None, raw=None,
             dtype='float32', single_col=False,
             filename=None, filemode=None):
+        from .readwrite.read import _read_h5ad
 
         # view attributes
         self._isview = False
@@ -858,7 +720,7 @@ class AnnData(IndexMixin):
             # will read from backing file
             # what is returned is, at this stage, a dict
             # that needs to be processed
-            X = self._read_h5ad(mode=filemode)
+            X = _read_h5ad(self, mode=filemode)
 
         # init from dictionary
         if isinstance(X, Mapping):
@@ -1437,7 +1299,7 @@ class AnnData(IndexMixin):
         Examples
         --------
         {example_concatenate}
-        """).format(example_concatenate=_example_concatenate)
+        """).format(example_concatenate=_EXAMPLE_CONCATENATE)
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, '
@@ -1477,12 +1339,13 @@ class AnnData(IndexMixin):
         compression_opts : `int`, optional (default: `None`)
             See http://docs.h5py.org/en/latest/high/dataset.html.
         """
+        from .readwrite.write import _write_h5ad
+
         if filename is None and not self.isbacked:
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
-        self._write_h5ad(filename,
-            compression=compression, compression_opts=compression_opts)
+        _write_h5ad(filename, self, compression=compression, compression_opts=compression_opts)
         if self.isbacked:
             self.file.close()
 
@@ -1515,72 +1378,8 @@ class AnnData(IndexMixin):
         from .readwrite.write import write_loom
         write_loom(filename, self)
 
-    def _write_h5ad(self, filename, **kwargs):
-        filename = str(filename)  # allow passing pathlib.Path objects
-        if not filename.endswith(('.h5', '.h5ad')):
-            raise ValueError('Filename needs to end with \'.h5ad\'.')
-        if self.isbacked:
-            # close so that we can reopen below
-            self.file.close()
-        # create directory if it doesn't exist
-        if not os.path.exists(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        d = self._to_dict_fixed_width_arrays()
-        # we're writing to a different location than the backing file
-        # - load the matrix into the memory...
-        if self.isbacked and filename != self.filename:
-            d['X'] = self.X[:]
-        # need to use 'a' if backed, otherwise we loose the backed objects
-        with h5py.File(filename, 'a' if self.isbacked else 'w') as f:
-            for key, value in d.items():
-                _write_key_value_to_h5(f, key, value, **kwargs)
-        if self.isbacked:
-            self.file.open(filename, 'r+')
-
-    def _read_h5ad(self, filename=None, mode=None):
-        """Return a dict with arrays for initializing AnnData.
-
-        Parameters
-        ----------
-        filename : `str` or `None`, optional (default: `None`)
-            Defaults to the objects filename if `None`.
-        """
-        # we need to be able to call the function without reference to self when
-        # not reading in backed mode
-        backed = False
-        if filename is None:
-            backed = True if mode is None else mode
-            filename = self.filename
-
-        filename = str(filename)  # allow passing pathlib.Path objects
-        d = {}
-        if backed:
-            f = self.file._file
-        else:
-            f = h5py.File(filename, 'r')
-        for key in f.keys():
-            if backed and key in AnnData._BACKED_ATTRS:
-                d[key] = None
-            else:
-                _read_key_value_from_h5(f, d, key)
-        # backwards compat: save X with the correct name
-        if 'X' not in d:
-            if backed == 'r+':
-                for key in AnnData._H5_ALIASES['X']:
-                    if key in d:
-                        del f[key]
-                        f.create_dataset('X', data=d[key])
-                        break
-        # backwards compat: store sparse matrices properly
-        csr_keys = [key.replace('_csr_data', '')
-                    for key in d if '_csr_data' in key]
-        for key in csr_keys:
-            d = load_sparse_csr(d, key=key)
-        if not backed:
-            f.close()
-        return d
-
-    def _from_dict(self, ddata):
+    @staticmethod
+    def _from_dict(ddata):
         """Allows to construct an instance of AnnData from a dictionary.
 
         Acts as interface for the communication with the hdf5 file.
@@ -1832,35 +1631,3 @@ class AnnData(IndexMixin):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
-
-
-AnnData.__doc__ = AnnData._doc
-
-
-# all for backwards compat...
-def save_sparse_csr(X, key='X'):
-    from scipy.sparse.csr import csr_matrix
-    X = csr_matrix(X)
-    key_csr = key + '_csr'
-    return {key_csr + '_data': X.data,
-            key_csr + '_indices': X.indices,
-            key_csr + '_indptr': X.indptr,
-            key_csr + '_shape': np.array(X.shape)}
-
-
-def load_sparse_csr(d, key='X'):
-    from scipy.sparse.csr import csr_matrix
-    key_csr = key + '_csr'
-    d[key] = csr_matrix((d[key_csr + '_data'],
-                         d[key_csr + '_indices'],
-                         d[key_csr + '_indptr']),
-                        shape=d[key_csr + '_shape'])
-    del_sparse_matrix_keys(d, key_csr)
-    return d
-
-
-def del_sparse_matrix_keys(mapping, key_csr):
-    del mapping[key_csr + '_data']
-    del mapping[key_csr + '_indices']
-    del mapping[key_csr + '_indptr']
-    del mapping[key_csr + '_shape']

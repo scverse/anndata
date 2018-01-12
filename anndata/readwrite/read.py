@@ -1,9 +1,10 @@
 from pathlib import Path
 from typing import Union, Optional, Iterable, Generator, Iterator
 
-import h5py
 import numpy as np
+
 from ..base import AnnData
+from .. import h5py
 from .utils import *
 
 
@@ -319,3 +320,131 @@ def _read_text(
     return AnnData(data,
                    obs={'obs_names': row_names},
                    var={'var_names': col_names})
+
+
+def read_h5ad(filename, backed=False):
+    """Read `.h5ad`-formatted hdf5 file.
+
+    Parameters
+    ----------
+    filename : `str`
+        File name of data file.
+    backed : {`False`, `True`, 'r', 'r+'}, optional (default: `False`)
+        Load :class:`~scanpy.api.AnnData` in `backed` mode instead of fully
+        loading it into memory (`memory` mode). `True` and 'r' are
+        equivalent. If you want to modify backed attributes of the AnnData
+        object, you need to choose 'r+'.
+
+    Returns
+    -------
+    An :class:`~anndata.AnnData` object.
+    """
+
+    if backed:
+        # open in backed-mode
+        return AnnData(filename=filename, filemode=backed)
+    else:
+        # load everything into memory
+        d = _read_h5ad(filename=filename)
+        return AnnData(d)
+
+
+def _read_h5ad(adata=None, filename=None, mode=None):
+    """Return a dict with arrays for initializing AnnData.
+
+    Parameters
+    ----------
+    filename : `str` or `None`, optional (default: `None`)
+        Defaults to the objects filename if `None`.
+    """
+    if filename is None and (adata is None or adata.filename is None):
+        raise ValueError('Need either a filename or an AnnData object with file backing')
+
+    # we need to be able to call the function without reference to self when
+    # not reading in backed mode
+    backed = False
+    if filename is None:
+        backed = True if mode is None else mode
+        filename = adata.filename
+
+    filename = str(filename)  # allow passing pathlib.Path objects
+    d = {}
+    if backed:
+        f = adata.file._file
+    else:
+        f = h5py.File(filename, 'r')
+    for key in f.keys():
+        if backed and key in AnnData._BACKED_ATTRS:
+            d[key] = None
+        else:
+            _read_key_value_from_h5(f, d, key)
+    # backwards compat: save X with the correct name
+    if 'X' not in d:
+        if backed == 'r+':
+            for key in AnnData._H5_ALIASES['X']:
+                if key in d:
+                    del f[key]
+                    f.create_dataset('X', data=d[key])
+                    break
+    # backwards compat: store sparse matrices properly
+    csr_keys = [key.replace('_csr_data', '')
+                for key in d if '_csr_data' in key]
+    for key in csr_keys:
+        d = load_sparse_csr(d, key=key)
+    if not backed:
+        f.close()
+    return d
+
+
+def _read_key_value_from_h5(f, d, key, key_write=None):
+    if key_write is None: key_write = key
+    if isinstance(f[key], h5py.Group):
+        d[key_write] = {}
+        for k in f[key].keys():
+            _read_key_value_from_h5(f, d[key_write], key + '/' + k, k)
+        return
+    # the '()' means 'load everything into memory' (by contrast, ':'
+    # only works if not reading a scalar type)
+    value = f[key][()]
+
+    def postprocess_reading(key, value):
+        if value.ndim == 1 and len(value) == 1:
+            value = value[0]
+        if value.dtype.kind == 'S':
+            value = value.astype(str)
+            # backwards compat:
+            # recover a dictionary that has been stored as a string
+            if len(value) > 0:
+                if value[0] == '{' and value[-1] == '}': value = eval(value)
+        # transform byte strings in recarrays to unicode strings
+        # TODO: come up with a better way of solving this, see also below
+        if (key not in AnnData._H5_ALIASES['obs']
+            and key not in AnnData._H5_ALIASES['var']
+            and key != 'raw.var'
+            and not isinstance(value, dict) and value.dtype.names is not None):
+            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
+                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
+            value = value.astype(new_dtype)
+        return key, value
+
+    key, value = postprocess_reading(key, value)
+    d[key_write] = value
+    return
+
+
+def load_sparse_csr(d, key='X'):
+    from scipy.sparse.csr import csr_matrix
+    key_csr = key + '_csr'
+    d[key] = csr_matrix((d[key_csr + '_data'],
+                         d[key_csr + '_indices'],
+                         d[key_csr + '_indptr']),
+                        shape=d[key_csr + '_shape'])
+    del_sparse_matrix_keys(d, key_csr)
+    return d
+
+
+def del_sparse_matrix_keys(mapping, key_csr):
+    del mapping[key_csr + '_data']
+    del mapping[key_csr + '_indices']
+    del mapping[key_csr + '_indptr']
+    del mapping[key_csr + '_shape']
