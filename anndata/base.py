@@ -3,7 +3,7 @@
 import os
 import warnings
 from enum import Enum
-from collections import Mapping, Sequence
+from collections import Mapping, Sequence, Sized
 import numpy as np
 from numpy import ma
 import pandas as pd
@@ -12,6 +12,7 @@ from scipy import sparse
 from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
 from textwrap import dedent
+
 from . import h5py
 
 
@@ -52,7 +53,7 @@ class BoundRecArr(np.recarray):
         self._parent = getattr(obj, '_parent', None)
         self._attr = getattr(obj, '_attr', None)
 
-    def copy(self):
+    def copy(self, order='C'):
         new = super(BoundRecArr, self).copy()
         new._parent = self._parent
         return new
@@ -292,17 +293,16 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
     # for some reason, we need the following for writing string arrays
     if key in f.keys() and value is not None: del f[key]
 
-    if (value is None
-        # ignore arrays with empty dtypes
-        or not value.dtype.descr):
+    # ignore arrays with empty dtypes
+    if value is None or not value.dtype.descr:
         return
     try:
         if key in set(f.keys()):
-            if (not isinstance(f[key], h5py.Group)
-                and f[key].shape == value.shape
-                and f[key].dtype == value.dtype
+            is_valid_group = isinstance(f[key], h5py.Group) \
+                and f[key].shape == value.shape \
+                and f[key].dtype == value.dtype \
                 and not isinstance(f[key], h5py.SparseDataset)
-                and not isinstance(value, sparse.spmatrix)):
+            if not is_valid_group and not isinstance(value, sparse.spmatrix):
                 f[key][()] = value
                 return
             else:
@@ -314,7 +314,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
             if value.dtype.names is None:
                 if key in set(f.keys()):
                     if (f[key].shape == value.shape
-                        and f[key].dtype == value.dtype):
+                            and f[key].dtype == value.dtype):
                         f[key][()] = value.astype('S')
                         return
                     else:
@@ -325,7 +325,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
                              for dt in value.dtype.descr]
                 if key in set(f.keys()):
                     if (f[key].shape == value.shape
-                        and f[key].dtype == value.dtype):
+                            and f[key].dtype == value.dtype):
                         f[key][()] = value.astype(new_dtype)
                         return
                     else:
@@ -373,13 +373,16 @@ def _read_key_value_from_h5(f, d, key, key_write=None):
     return
 
 
-class AnnDataFileManager():
+class AnnDataFileManager:
     """Backing file manager for AnnData.
     """
 
     def __init__(self, adata, filename=None, filemode=None):
         self._adata = adata
-        self._init(filename, filemode)
+        self._filename = filename
+        self._filemode = filemode
+        if filename:
+            self.open()
 
     def __repr__(self):
         if self._filename is None:
@@ -387,20 +390,28 @@ class AnnDataFileManager():
         else:
             return 'Backing file manager of file {}.'.format(self._filename)
 
-    def _init(self, filename, filemode=None):
-        """Init the file manager."""
-        self._filename = filename
-        if filename is None:
-            self._file = None
-        else:
-            if filemode is None: filemode = 'r'
-            self._file = h5py.File(filename, filemode)
+    def __getitem__(self, key):
+        return self._file[key]
 
-    def open(self, filemode='r+'):
+    def __setitem__(self, key, value):
+        self._file[key] = value
+
+    def __delitem__(self, key):
+        del self._file[key]
+
+    @property
+    def filename(self):
+        return self._filename
+
+    def open(self, filename=None, filemode=None):
+        if filename is not None:
+            self._filename = filename
+        if filemode is not None:
+            self._filemode = filemode
         if self._filename is None:
             raise ValueError(
                 'Cannot open backing file if backing not initialized.')
-        self._file = h5py.File(self._filename, filemode)
+        self._file = h5py.File(self._filename, self._filemode)
 
     def close(self):
         """Close the backing file, remember filename, do *not* change to memory mode."""
@@ -408,7 +419,7 @@ class AnnDataFileManager():
 
     def _to_memory_mode(self):
         """Close the backing file, forget filename, *do* change to memory mode."""
-        self.adata.__X = self.adata._read('X')[()]
+        self._adata.__X = self._adata._read('X')[()]
         self._file.close()
         self._file = None
         self._filename = None
@@ -454,7 +465,7 @@ class ArrayView(np.ndarray):
         # it's a structured array
         return self.dtype.names
 
-    def copy(self):
+    def copy(self, order='C'):
         # we want a conventional array
         return np.array(self)
 
@@ -465,7 +476,7 @@ class SparseCSRView(sparse.csr_matrix):
 
     def __init__(self, *args, view_args=None, **kwargs):
         self._view_args = view_args
-        super(type(self), self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __setitem__(self, idx, value):
         if self._view_args is None:
@@ -480,11 +491,11 @@ class SparseCSCView(sparse.csc_matrix):
 
     def __init__(self, *args, view_args=None, **kwargs):
         self._view_args = view_args
-        super(type(self), self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __setitem__(self, idx, value):
         if self._view_args is None:
-            super(type(self), self).__setitem__(idx, value)
+            super().__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
             _init_actual_AnnData(adata_view)
@@ -495,11 +506,11 @@ class DictView(dict):
 
     def __init__(self, *args, view_args=None, **kwargs):
         self._view_args = view_args
-        super(type(self), self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __setitem__(self, idx, value):
         if self._view_args is None:
-            super(type(self), self).__setitem__(idx, value)
+            super().__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
             _init_actual_AnnData(adata_view)
@@ -512,11 +523,11 @@ class DataFrameView(pd.DataFrame):
 
     def __init__(self, *args, view_args=None, **kwargs):
         self._view_args = view_args
-        super(type(self), self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __setitem__(self, idx, value):
         if self._view_args is None:
-            super(type(self), self).__setitem__(idx, value)
+            super().__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
             _init_actual_AnnData(adata_view)
@@ -547,7 +558,7 @@ class Raw(IndexMixin):
     def X(self):
         if self._adata.isbacked:
             if not self._adata.file.isopen: self._adata.file.open()
-            X = self._adata.file._file['raw.X']
+            X = self._adata.file['raw.X']
             if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
             else: return X
         else: return self._X
@@ -571,7 +582,7 @@ class Raw(IndexMixin):
     def __getitem__(self, index):
         oidx, vidx = self._normalize_indices(index)
         if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
-        else: X = self._adata.file._file['raw.X'][oidx, vidx]
+        else: X = self._adata.file['raw.X'][oidx, vidx]
         if isinstance(vidx, (int, np.int64)): vidx = slice(vidx, vidx+1, 1)
         var = self._var.iloc[vidx]
         if self._varm is not None:
@@ -776,14 +787,18 @@ class AnnData(IndexMixin):
             self._n_obs = len(self._obs.index)
         elif isinstance(oidx, (int, np.int64)):
             self._n_obs = 1
-        else:
+        elif isinstance(oidx, Sized):
             self._n_obs = len(oidx)
+        else:
+            raise KeyError('Unknown Index type')
         if isinstance(vidx, slice):
             self._n_vars = len(self._var.index)
         elif isinstance(vidx, (int, np.int64)):
             self._n_vars = 1
-        else:
+        elif isinstance(vidx, Sized):
             self._n_vars = len(vidx)
+        else:
+            raise KeyError('Unknown Index type')
         # need to do the slicing after setting self._n_obs, self._n_vars
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
         self._uns = DictView(uns_new, view_args=(self, 'uns'))
@@ -960,26 +975,26 @@ class AnnData(IndexMixin):
         """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.sparse.spmatrix`)."""
         if self.isbacked:
             if not self.file.isopen: self.file.open()
-            X = self.file._file['X']
+            X = self.file['X']
             if self.isview: return X[self._oidx, self._vidx]
             else: return X
         else: return self._X
 
     @X.setter
     def X(self, value):
-        if ((self.n_vars == 1 and self.n_obs == len(value))
-            or (self.n_obs == 1 and self.n_vars == len(value))
-            or self.shape == value.shape):
+        var_get = self.n_vars == 1 and self.n_obs == len(value)
+        obs_get = self.n_obs == 1 and self.n_vars == len(value)
+        if var_get or obs_get or self.shape == value.shape:
             if self.isbacked:
                 if self.isview:
-                    self.file._file['X'][self._oidx, self._vidx] = value
+                    self.file['X'][self._oidx, self._vidx] = value
                 else:
                     self._set_backed('X', value)
             else:
                 if self.isview:
                     # exit the view if we go from sparse to dense
                     if (issparse(value) and not issparse(self._adata_ref._X)
-                        or not issparse(value) and issparse(self._adata_ref._X)):
+                            or not issparse(value) and issparse(self._adata_ref._X)):
                         self._init_as_actual(self.copy())
                         self._X = value
                     else:
@@ -1050,7 +1065,7 @@ class AnnData(IndexMixin):
     def uns(self, value):
         if self.isview:
             # here, we directly generate the copy
-            adata = self._adata_ref._getitem_copy((self.oidx, self.vidx))
+            adata = self._adata_ref._getitem_copy((self._oidx, self._vidx))
             self._init_as_actual(adata)
         self._uns = value
 
@@ -1155,7 +1170,7 @@ class AnnData(IndexMixin):
           moves the backing file from the previous file to the new file. If you
           want to copy the previous file, use copy(filename='new_filename').
         """
-        return self.file._filename
+        return self.file.filename
 
     @filename.setter
     def filename(self, filename):
@@ -1182,16 +1197,16 @@ class AnnData(IndexMixin):
                 # write the content of self to disk
                 self.write(filename)
             # open new file for accessing
-            self.file._init(filename, filemode='r+')
+            self.file.open(filename, 'r+')
             # as the data is stored on disk, we can safely set self._X to None
             self._X = None
 
     def _set_backed(self, attr, value):
-        if (not isinstance(self.file._file[attr], h5py.SparseDataset)
-            and not issparse(value)):
-            self.file._file[attr] = value
+        if (not isinstance(self.file[attr], h5py.SparseDataset)
+                and not issparse(value)):
+            self.file[attr] = value
         else:
-            del self.file._file[attr]
+            del self.file[attr]
             self.file._file.create_dataset(attr, data=value)
 
     def _normalize_indices(self, packed_index):
@@ -1215,7 +1230,7 @@ class AnnData(IndexMixin):
         if not self.isbacked:
             del self._X[obs, var]
         else:
-            X = self.file._file['X']
+            X = self.file['X']
             del X[obs, var]
             self._set_backed('X', X)
         if var == slice(None):
@@ -1237,7 +1252,7 @@ class AnnData(IndexMixin):
         if isinstance(oidx, (int, np.int64)): oidx = slice(oidx, oidx+1, 1)
         if isinstance(vidx, (int, np.int64)): vidx = slice(vidx, vidx+1, 1)
         if not self.isbacked: X = self._X[oidx, vidx]
-        else: X = self.file._file['X'][oidx, vidx]
+        else: X = self.file['X'][oidx, vidx]
         obs_new = self._obs.iloc[oidx]
         obsm_new = self._obsm[oidx]
         var_new = self._var.iloc[vidx]
@@ -1246,8 +1261,7 @@ class AnnData(IndexMixin):
         assert var_new.shape[0] == X.shape[1], (vidx, var_new)
         uns_new = self._uns.copy()
         self._slice_uns_sparse_matrices_inplace(uns_new, oidx)
-        if self.raw is not None:
-            raw_new = self.raw[oidx]
+        raw_new = None if self.raw is None else self.raw[oidx]
         return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new, raw=raw_new)
 
     def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
@@ -1257,7 +1271,7 @@ class AnnData(IndexMixin):
             for k, v in uns.items():
                 if isinstance(v, sparse.spmatrix) and v.shape == (
                         self.n_obs, self.n_obs):
-                    uns[k] = v.tocsc()[:, obs].tocsr()[oidx, :]
+                    uns[k] = v.tocsc()[:, self.n_obs].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index):
         """Inplace subsetting along variables dimension.
@@ -1268,7 +1282,7 @@ class AnnData(IndexMixin):
             self._X = self._X[:, index]
             self._n_vars = self._X.shape[1]
         else:
-            X = self.file._file['X']
+            X = self.file['X']
             X = X[:, index]
             self._n_vars = X.shape[1]
             self._set_backed('X', X)
@@ -1286,7 +1300,7 @@ class AnnData(IndexMixin):
             self._X = self._X[index, :]
             self._n_obs = self._X.shape[0]
         else:
-            X = self.file._file['X']
+            X = self.file['X']
             X = X[index, :]
             self._n_obs = X.shape[0]
             self._set_backed('X', X)
@@ -1325,7 +1339,7 @@ class AnnData(IndexMixin):
         if not self.isbacked:
             self._X[obs, var] = val
         else:
-            X = self.file._file['X']
+            X = self.file['X']
             X[obs, var] = val
             self._set_backed('X', X)
 
@@ -1338,7 +1352,7 @@ class AnnData(IndexMixin):
         Data matrix is transposed, observations and variables are interchanged.
         """
         if not self.isbacked: X = self._X
-        else: X = self.file._file['X']
+        else: X = self.file['X']
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
@@ -1507,7 +1521,7 @@ class AnnData(IndexMixin):
             raise ValueError('Filename needs to end with \'.h5ad\'.')
         if self.isbacked:
             # close so that we can reopen below
-            self.file._file.close()
+            self.file.close()
         # create directory if it doesn't exist
         if not os.path.exists(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
@@ -1521,7 +1535,7 @@ class AnnData(IndexMixin):
             for key, value in d.items():
                 _write_key_value_to_h5(f, key, value, **kwargs)
         if self.isbacked:
-            self.file._file = h5py.File(filename, 'r+')
+            self.file.open(filename, 'r+')
 
     def _read_h5ad(self, filename=None, mode=None):
         """Return a dict with arrays for initializing AnnData.
@@ -1843,6 +1857,7 @@ def load_sparse_csr(d, key='X'):
                         shape=d[key_csr + '_shape'])
     del_sparse_matrix_keys(d, key_csr)
     return d
+
 
 def del_sparse_matrix_keys(mapping, key_csr):
     del mapping[key_csr + '_data']
