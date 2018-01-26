@@ -516,7 +516,9 @@ class Raw(IndexMixin):
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
             packed_index = packed_index.values
-        if isinstance(packed_index, tuple) and len(packed_index) == 2:
+        if isinstance(packed_index, tuple):
+            if len(packed_index) != 2:
+                raise IndexDimError(len(packed_index))
             if isinstance(packed_index[1], pd.Series):
                 packed_index = packed_index[0], packed_index[1].values
             if isinstance(packed_index[0], pd.Series):
@@ -525,6 +527,20 @@ class Raw(IndexMixin):
         obs = _normalize_index(obs, self._adata.obs_names)
         var = _normalize_index(var, self.var_names)
         return obs, var
+
+
+INDEX_DIM_ERROR_MSG = 'You tried to slice an AnnData(View) object with an' \
+    '{}-dimensional index, but only 2 dimensions exist in such an object.'
+INDEX_DIM_ERROR_MSG_1D = '\nIf you tried to slice cells using adata[cells, ], ' \
+    'be aware that Python (unlike R) uses adata[cells, :] as slicing syntax.'
+
+
+class IndexDimError(IndexError):
+    def __init__(self, n_dims):
+        msg = INDEX_DIM_ERROR_MSG.format(n_dims)
+        if n_dims == 1:
+            msg += INDEX_DIM_ERROR_MSG_1D
+        super().__init__(msg)
 
 
 class AnnData(IndexMixin):
