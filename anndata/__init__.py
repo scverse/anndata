@@ -1,9 +1,10 @@
 from .base import AnnData, _MAIN_NARRATIVE
 from .readwrite import (
-    read_h5ad as read, read_loom, read_hdf,
+    read_h5ad, read_loom, read_hdf,
     read_excel, read_umi_tools,
     read_csv, read_text, read_mtx,
 )
+from .readwrite import read_h5ad as read  # backwards compat / shortcut for default format
 
 __doc__ = """\
 API
@@ -25,7 +26,7 @@ Reading anndata's native file format `.h5ad`.
 .. autosummary::
   :toctree: .
 
-   read
+   read_h5ad
 
 Reading other file formats.
 
