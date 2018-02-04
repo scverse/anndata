@@ -85,9 +85,9 @@ def read_umi_tools(filename: Union[Path, str]) -> AnnData:
     import gzip
     from pandas import DataFrame
     
-    dod = {} # this will contain basically everything
+    dod = {}  # this will contain basically everything
     fh = gzip.open(filename)
-    header = fh.readline() # read the first line
+    header = fh.readline()  # read the first line
     
     for line in fh:
         t = line.decode('ascii').split('\t')  # gzip read bytes, hence the decoding
@@ -96,9 +96,9 @@ def read_umi_tools(filename: Union[Path, str]) -> AnnData:
         except KeyError:
             dod[t[1]] = {t[0]:int(t[2])}
     
-    df = DataFrame.from_dict(dod, orient = 'index') # build the matrix
-    df.fillna(value = 0., inplace = True) # many NaN, replace with zeros
-    return AnnData(np.array(df), {'obs_names':df.index}, {'var_names':df.columns})
+    df = DataFrame.from_dict(dod, orient='index')  # build the matrix
+    df.fillna(value = 0., inplace=True)  # many NaN, replace with zeros
+    return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns})
 
 
 def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
