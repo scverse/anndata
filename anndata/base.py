@@ -45,39 +45,6 @@ scientific work, please consider citing [Wolf17]_.
 """
 
 
-_EXAMPLE_CONCATENATE = """\
->>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
->>>                  {'obs_names': ['o1', 'o2'],
->>>                   'anno1': ['c1', 'c2']},
->>>                  {'var_names': ['a', 'b', 'c']})
->>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
->>>                  {'obs_names': ['o3', 'o4'],
->>>                   'anno1': ['c3', 'c4']},
->>>                  {'var_names': ['b', 'c', 'd']})
->>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
->>>                  {'obs_names': ['o5', 'o6'],
->>>                   'anno2': ['d3', 'd4']},
->>>                  {'var_names': ['b', 'c', 'd']})
->>>
->>> adata = adata1.concatenate([adata2, adata3])
->>> adata.X
-[[ 2.  3.]
- [ 5.  6.]
- [ 1.  2.]
- [ 4.  5.]
- [ 1.  2.]
- [ 4.  5.]]
->>> adata.obs
-   anno1 anno2 batch
-o1    c1   NaN     0
-o2    c2   NaN     0
-o3    c3   NaN     1
-o4    c4   NaN     1
-o5   NaN    d3     2
-o6   NaN    d4     2
-"""
-
-
 class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
@@ -571,8 +538,6 @@ class AnnData(IndexMixin):
         Key-indexed multi-dimensional observation annotation of length #observations.
     dtype : simple `np.dtype`, optional (default: 'float32')
         Data type used for storage.
-    single_col : `bool`, optional (default: `False`)
-        Interpret one-dimensional input array as column.
 
     See Also
     --------
@@ -598,20 +563,40 @@ class AnnData(IndexMixin):
     <http://scikit-learn.org/>`_). It is the opposite of the convention for
     storing genomic data.
 
-    Examples
-    --------
     A data matrix is flattened if either #observations (`n_obs`) or #variables
     (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
 
         adata = AnnData(np.ones((2, 2)))
         adata[:, 0].X == adata.X[:, 0]
 
-    AnnData objects can be concatenated via :func:`~anndata.AnnData.concatenate`.
+    Attributes
+    ----------
+    X
+    filename
+    isbacked
+    isview
+    n_obs
+    n_vars
+    shape
+    obs
+    obsm
+    obs_names
+    raw
+    var
+    varm
+    var_names
 
-    {example_concatenate}
-
-    """).format(main_narrative=_MAIN_NARRATIVE,
-                example_concatenate=_EXAMPLE_CONCATENATE)
+    Methods
+    -------
+    concatenate
+    copy
+    transpose
+    obs_names_make_unique
+    var_names_make_unique
+    write
+    write_csvs
+    write_loom
+    """).format(main_narrative=_MAIN_NARRATIVE)
 
     _BACKED_ATTRS = ['X', 'raw.X']
 
@@ -892,6 +877,10 @@ class AnnData(IndexMixin):
 
     @property
     def raw(self):
+        """Store raw version of `.X` and `.var` as `.raw.X` and `.raw.X`.
+
+        `.raw` can be initialized by setting ``adata.raw = adata1``
+        """
         return self._raw
 
     @raw.setter
@@ -1272,6 +1261,57 @@ class AnnData(IndexMixin):
             return AnnData(filename=filename)
 
     def concatenate(self, adatas, batch_key='batch', batch_categories=None):
+        """Concatenate along the observations axis after intersecting the variables names.
+
+        The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
+
+        Parameters
+        ----------
+        adatas : :class:`~anndata.AnnData` or list of :class:`~anndata.AnnData`
+            AnnData matrices to concatenate with.
+        batch_key : `str` (default: 'batch')
+            Add the batch annotation to `.obs` using this key.
+        batch_categories : list (default: `range(len(adatas)+1)`)
+            Use these as categories for the batch annotation.
+
+        Returns
+        -------
+        adata : :class:`~anndata.AnnData`
+            The concatenated AnnData, where `adata.obs['batch']` stores a
+            categorical variable labeling the batch.
+
+        Examples
+        --------
+        >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['o1', 'o2'],
+        >>>                   'anno1': ['c1', 'c2']},
+        >>>                  {'var_names': ['a', 'b', 'c']})
+        >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['o3', 'o4'],
+        >>>                   'anno1': ['c3', 'c4']},
+        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+        >>>                  {'obs_names': ['o5', 'o6'],
+        >>>                   'anno2': ['d3', 'd4']},
+        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>>
+        >>> adata = adata1.concatenate([adata2, adata3])
+        >>> adata.X
+        [[ 2.  3.]
+         [ 5.  6.]
+         [ 1.  2.]
+         [ 4.  5.]
+         [ 1.  2.]
+         [ 4.  5.]]
+        >>> adata.obs
+           anno1 anno2 batch
+        o1    c1   NaN     0
+        o2    c2   NaN     0
+        o3    c3   NaN     1
+        o4    c4   NaN     1
+        o5   NaN    d3     2
+        o6   NaN    d4     2
+        """
         if isinstance(adatas, AnnData): adatas = [adatas]
         joint_variables = self.var_names
         for adata2 in adatas:
@@ -1302,30 +1342,6 @@ class AnnData(IndexMixin):
         uns = adatas_to_concat[0].uns
         return AnnData(X, obs, var, uns, obsm, varm, filename=self.filename)
 
-    concatenate.__doc__ = dedent("""\
-        Concatenate along the observations axis after intersecting the variables names.
-
-        The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
-
-        Parameters
-        ----------
-        adatas : :class:`~anndata.AnnData` or list of :class:`~anndata.AnnData`
-            AnnData matrices to concatenate with.
-        batch_key : `str` (default: 'batch')
-            Add the batch annotation to `.obs` using this key.
-        batch_categories : list (default: `range(len(adatas)+1)`)
-            Use these as categories for the batch annotation.
-
-        Returns
-        -------
-        adata : :class:`~anndata.AnnData`
-            The concatenated AnnData, where `adata.obs['batch']` stores a
-            categorical variable labeling the batch.
-
-        Examples
-        --------
-        {example_concatenate}
-        """).format(example_concatenate=_EXAMPLE_CONCATENATE)
 
     def var_names_make_unique(self, join=''):
         self.var.index = utils.make_index_unique(self.var.index, join)
