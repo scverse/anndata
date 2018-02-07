@@ -26,12 +26,12 @@ unstructured annotations ``.uns``.
     <img src="http://falexwolf.de/img/scanpy/anndata.svg"
          style="width: 350px; margin: 10px 0px 15px 20px">
 
-An :class:`~anndata.AnnData` object ``adata`` can be sliced like a
-pandas dataframe, for example, ``adata_subset = adata[:,
-list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure
-is similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad` backing file
-``.filename``, data remains on the disk but is automatically loaded into
-memory if needed.
+An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
+dataframe, for example, ``adata_subset = adata[:,
+list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure is
+similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad`-formatted HDF5
+backing file ``.filename``, data remains on the disk but is automatically loaded
+into memory if needed.
 
 See this `blog post
 <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_
