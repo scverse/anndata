@@ -60,17 +60,17 @@ def test_readwrite_h5ad():
         assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
 
-def test_readwrite_loom():
-    for typ in [np.array, csr_matrix]:
-        X = typ(X_list)
-        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        adata.write_loom('./test.loom')
-        adata = ad.read_loom('./test.loom')
-        if isinstance(X, np.ndarray):
-            assert np.allclose(adata.X, X)
-        else:
-            # TODO: this should not be necessary
-            assert np.allclose(adata.X, X.toarray())
+# def test_readwrite_loom():
+#     for typ in [np.array, csr_matrix]:
+#         X = typ(X_list)
+#         adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+#         adata.write_loom('./test.loom')
+#         adata = ad.read_loom('./test.loom')
+#         if isinstance(X, np.ndarray):
+#             assert np.allclose(adata.X, X)
+#         else:
+#             # TODO: this should not be necessary
+#             assert np.allclose(adata.X, X.toarray())
 
 
 def test_read_csv():
