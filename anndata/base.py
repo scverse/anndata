@@ -2,6 +2,7 @@
 """
 import os
 import warnings
+import logging
 from enum import Enum
 from collections import Mapping, Sequence, Sized
 import numpy as np
@@ -14,7 +15,10 @@ from scipy.sparse.sputils import IndexMixin
 from textwrap import dedent
 
 from . import h5py
+from . import utils
 
+FORMAT = '%(levelname)s: %(message)s'
+logging.basicConfig(format=FORMAT)
 
 _MAIN_NARRATIVE = """\
 :class:`~anndata.AnnData` stores a data matrix ``.X`` together with
@@ -993,21 +997,31 @@ class AnnData(IndexMixin):
 
     @property
     def obs_names(self):
-        """Names of observations (`.obs.index`)."""
+        """Names of observations (alias for `.obs.index`)."""
         return self.obs.index
 
     @obs_names.setter
     def obs_names(self, names):
-        self.obs.index = names
+        self._obs.index = names
+        if not self._obs.index.is_unique:
+            logging.warn(
+                'Observation names are not unique. '
+                'To make them unique, call `.obs_names_make_unique()`.\n'
+                'Duplicates are: {}'.format(self._obs.index.get_duplicates()))
 
     @property
     def var_names(self):
-        """Names of variables (`.var.index`)."""
+        """Names of variables (alias for `.var.index`)."""
         return self._var.index
 
     @var_names.setter
     def var_names(self, names):
         self._var.index = names
+        if not self._var.index.is_unique:
+            warnings.warn(
+                'Variable names are not unique. '
+                'To make them unique, call `.var_names_make_unique()`.\n'
+                'Duplicates are: {}'.format(self._var.index.get_duplicates()))
 
     def obs_keys(self):
         """List keys of observation annotation `.obs`."""
@@ -1316,6 +1330,16 @@ class AnnData(IndexMixin):
         --------
         {example_concatenate}
         """).format(example_concatenate=_EXAMPLE_CONCATENATE)
+
+    def var_names_make_unique(self, join=''):
+        self.var.index = utils.make_index_unique(self.var.index, join)
+
+    var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
+
+    def obs_names_make_unique(self, join=''):
+        self.obs.index = utils.make_index_unique(self.obs.index, join)
+
+    obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, '
