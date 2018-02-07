@@ -39,7 +39,8 @@ def make_index_unique(index, join=''):
 
 
 def warn_names_duplicates(string, df):
-    logging.warn(
-        '`.{}_names` are not unique. '
+    names = 'Observation' if string == 'obs' else 'Variable'
+    logging.info(
+        '{} names are not unique. '
         'To make them unique, call `.{}_names_make_unique()`.\n'
-        'Duplicates are: {}'.format(string, string, df.index.get_duplicates()))
+        'Duplicates are: {}'.format(names, string, df.index.get_duplicates()))

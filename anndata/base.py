@@ -1,6 +1,6 @@
 """Main class and helper functions.
 """
-import os
+import os, sys
 import warnings
 import logging
 from enum import Enum
@@ -17,8 +17,9 @@ from textwrap import dedent
 from . import h5py
 from . import utils
 
-FORMAT = '%(levelname)s: %(message)s'
-logging.basicConfig(format=FORMAT)
+# FORMAT = '%(levelname)s: %(message)s'  # TODO: add a better formatter
+FORMAT = '%(message)s'
+logging.basicConfig(format=FORMAT, level=logging.INFO, stream=sys.stdout)
 
 _MAIN_NARRATIVE = """\
 :class:`~anndata.AnnData` stores a data matrix ``.X`` together with
