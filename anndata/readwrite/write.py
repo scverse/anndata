@@ -63,11 +63,13 @@ def write_loom(filename: Union[Path, str], adata: AnnData):
     row_attrs['var_names'] = adata.var_names.values
     col_attrs = adata.obs.to_dict('list')
     col_attrs['obs_names'] = adata.obs_names.values
-    create(
+    with create(
         str(filename),  # allow passing Path objects
         adata.X.T,
         row_attrs=row_attrs,
-        col_attrs=col_attrs)
+        col_attrs=col_attrs
+    ) as ds:
+        pass
 
 
 def _write_h5ad(filename: Union[Path, str], adata: AnnData, **kwargs):
