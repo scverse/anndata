@@ -1,4 +1,6 @@
+import logging
 import pandas as pd
+
 
 def make_index_unique(index, join=''):
     """Makes the index unique by appending '1', '2', etc.
@@ -34,3 +36,10 @@ def make_index_unique(index, join=''):
     values[indices_dup] = values_dup
     index = pd.Index(values)
     return index
+
+
+def warn_names_duplicates(string, df):
+    logging.warn(
+        '`.{}_names` are not unique. '
+        'To make them unique, call `.{}_names_make_unique()`.\n'
+        'Duplicates are: {}'.format(string, string, df.index.get_duplicates()))

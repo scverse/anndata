@@ -805,6 +805,7 @@ class AnnData(IndexMixin):
         self._varm = BoundRecArr(varm, self, 'varm')
 
         self._check_dimensions()
+        self._check_uniqueness()
 
         # raw
         if raw is None:
@@ -1004,10 +1005,7 @@ class AnnData(IndexMixin):
     def obs_names(self, names):
         self._obs.index = names
         if not self._obs.index.is_unique:
-            logging.warn(
-                'Observation names are not unique. '
-                'To make them unique, call `.obs_names_make_unique()`.\n'
-                'Duplicates are: {}'.format(self._obs.index.get_duplicates()))
+            utils.warn_names_duplicates('obs', self._obs)
 
     @property
     def var_names(self):
@@ -1018,10 +1016,7 @@ class AnnData(IndexMixin):
     def var_names(self, names):
         self._var.index = names
         if not self._var.index.is_unique:
-            warnings.warn(
-                'Variable names are not unique. '
-                'To make them unique, call `.var_names_make_unique()`.\n'
-                'Duplicates are: {}'.format(self._var.index.get_duplicates()))
+            utils.warn_names_duplicates('var', self._var)
 
     def obs_keys(self):
         """List keys of observation annotation `.obs`."""
@@ -1340,6 +1335,12 @@ class AnnData(IndexMixin):
         self.obs.index = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
+
+    def _check_uniqueness(self):
+        if not self.obs.index.is_unique:
+            utils.warn_names_duplicates('obs', self.obs)
+        if not self.var.index.is_unique:
+            utils.warn_names_duplicates('var', self.var)
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, '
