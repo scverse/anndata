@@ -36,12 +36,9 @@ dataframe, for example, ``adata_subset = adata[:,
 list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure is
 similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad`-formatted HDF5
 backing file ``.filename``, data remains on the disk but is automatically loaded
-into memory if needed.
-
-See this `blog post
+into memory if needed. See this `blog post
 <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_
-for more details. If you find :class:`~anndata.AnnData` useful for your
-scientific work, please consider citing [Wolf17]_.
+for more details.
 """
 
 

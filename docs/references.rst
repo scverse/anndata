@@ -16,7 +16,6 @@ References
    *Machine Learning: A Probabilisitc Perspective*,
    `MIT Press <https://mitpress.mit.edu/books/machine-learning-0>`_.
 
-.. [Wolf17]
-   Wolf *et al.* (2017),
-   *Scanpy for analysis of large-scale single-cell gene expression data*,
-   `bioRxiv <https://doi.org/10.1101/174029>`_.
+.. [Wolf17] Wolf *et al.* (2018),
+   *Scanpy: large-scale single-cell gene expression data analysis*,
+   `Genome Biology (2018) <https://doi.org/10.1186/s13059-017-1382-0>`_.

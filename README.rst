@@ -9,11 +9,9 @@
 .. |Coverage| image:: https://codecov.io/gh/theislab/anndata/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/theislab/anndata
 
-anndata
-=======
-
-The `anndata` package provides functions for `AnnData` objects, which, at the most basic level, store a data matrix (``.X``), dataframe-like annotation of observations (``.obs``) and variables (``.var``) and unstructured dict-like annotation (``.uns``).
+anndata - Annotated Data
+========================
 
 Install from `PyPI <https://pypi.python.org/pypi/anndata/>`__ via ``pip install anndata``.
 
-Read the `documentation <https://anndata.readthedocs.io>`_. Learn more about conceptual ideas in our `preprint <https://doi.org/10.1101/174029>`_.
+Read the `documentation <https://anndata.readthedocs.io>`_.
