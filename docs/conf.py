@@ -19,6 +19,12 @@
 #
 import ast
 import sys, os
+import glob
+
+# clean up directory
+for f in glob.glob('anndata.*'):
+    os.remove(f)
+
 import time
 import inspect
 from pathlib import Path
