@@ -3,11 +3,10 @@ import warnings
 from collections import Mapping
 from pathlib import Path
 from typing import Union
-
 import pandas as pd
 import numpy as np
-from scipy import sparse
 from scipy.sparse import issparse
+import logging as logg
 
 from ..base import AnnData
 from .. import h5py
@@ -58,18 +57,18 @@ def write_csvs(dirname, adata, skip_data=True, sep=','):
 
 
 def write_loom(filename: Union[Path, str], adata: AnnData):
-    from loompy import create
+    filename = str(filename)  # allow passing Path object
     row_attrs = adata.var.to_dict('list')
     row_attrs['var_names'] = adata.var_names.values
     col_attrs = adata.obs.to_dict('list')
     col_attrs['obs_names'] = adata.obs_names.values
-    with create(
-        str(filename),  # allow passing Path objects
-        adata.X.T,
-        row_attrs=row_attrs,
-        col_attrs=col_attrs
-    ) as ds:
-        pass
+    X = adata.X.T
+    if issparse(X):
+        logg.info(
+            '... writing to \'.loom\' file densifies sparse matrix')
+        X = X.toarray()
+    from loompy import create
+    create(filename, X, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
 def _write_h5ad(filename: Union[Path, str], adata: AnnData, **kwargs):

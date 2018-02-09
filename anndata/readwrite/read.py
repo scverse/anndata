@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Union, Optional, Iterable, Generator, Iterator
-
+from scipy.sparse import issparse
 import numpy as np
 
 from ..base import AnnData
