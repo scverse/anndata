@@ -1,10 +1,10 @@
-**February, 2018**: version 0.5
+**February 9, 2018**: version 0.5
 
-1. account for uniquness of variable and observation names
+1. check duplicates in variable and observation names
 2. remove unused categories after slicing
-3. updated interface to loompy 2
-4. cleaned up docs of AnnData
-5. some IDE-backed improvements
+3. read/write '.loom' using loompy 2
+4. some IDE-backed improvements
+5. cleaned up docs of AnnData   
 6. several further fixes
 
 **December 29, 2017**: version 0.4.2
