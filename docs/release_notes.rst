@@ -3,7 +3,8 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 
 **February 9, 2018**: version 0.5
 
-1. inform about duplicates in :class:`~anndata.AnnData.var_names` and :class:`~anndata.AnnData.obs_names`: resolve them using, e.g., :func:`~anndata.AnnData.var_names_make_unique`,2. by default, generate unique observation names in :func:`~anndata.AnnData.concatenate`
+1. inform about duplicates in :class:`~anndata.AnnData.var_names` and resolve them using :func:`~anndata.AnnData.var_names_make_unique`
+2. by default, generate unique observation names in :func:`~anndata.AnnData.concatenate`
 3. automatically remove unused categories after slicing
 4. read/write `.loom` files using loompy 2
 5. some IDE-backed improvements
