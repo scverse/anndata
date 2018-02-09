@@ -539,7 +539,7 @@ class AnnData(IndexMixin):
 
     See Also
     --------
-    read
+    read_h5ad
     read_csv
     read_excel
     read_hdf
