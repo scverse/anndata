@@ -102,16 +102,14 @@ def test_slicing_series():
     assert (adata[:, df1['b'].values == '2'].X.tolist()
             == adata[:, df1['b'] == '2'].X.tolist())
 
+
 def test_slicing_remove_unused_categories():
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
         dict(k=['a', 'a', 'b', 'b']))
-    print(adata)
     adata._sanitize()
-    print(adata[3:5])
     assert adata[3:5].obs['k'].cat.categories.tolist() == ['b']
-    print(adata)
-    quit()
+
 
 def test_get_subset_annotation():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
