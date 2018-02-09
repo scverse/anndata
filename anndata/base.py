@@ -2,7 +2,7 @@
 """
 import os, sys
 import warnings
-import logging
+import logging as logg
 from enum import Enum
 from collections import Mapping, Sequence, Sized
 import numpy as np
@@ -13,13 +13,14 @@ from scipy import sparse
 from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
 from textwrap import dedent
+from natsort import natsorted
 
 from . import h5py
 from . import utils
 
 # FORMAT = '%(levelname)s: %(message)s'  # TODO: add a better formatter
 FORMAT = '%(message)s'
-logging.basicConfig(format=FORMAT, level=logging.INFO, stream=sys.stdout)
+logg.basicConfig(format=FORMAT, level=logg.INFO, stream=sys.stdout)
 
 _MAIN_NARRATIVE = """\
 :class:`~anndata.AnnData` stores a data matrix ``.X`` together with
@@ -640,15 +641,15 @@ class AnnData(IndexMixin):
         oidx_normalized, vidx_normalized = oidx, vidx
         if isinstance(oidx, (int, np.int64)): oidx_normalized = slice(oidx, oidx+1, 1)
         if isinstance(vidx, (int, np.int64)): vidx_normalized = slice(vidx, vidx+1, 1)
-        self._obs = DataFrameView(adata_ref.obs.iloc[oidx_normalized], view_args=(self, 'obs'))
-        self._var = DataFrameView(adata_ref.var.iloc[vidx_normalized], view_args=(self, 'var'))
+        obs_sub = adata_ref.obs.iloc[oidx_normalized]
+        var_sub = adata_ref.var.iloc[vidx_normalized]
         self._obsm = ArrayView(adata_ref.obsm[oidx_normalized], view_args=(self, 'obsm'))
         self._varm = ArrayView(adata_ref.varm[vidx_normalized], view_args=(self, 'varm'))
         # hackish solution here, no copy should be necessary
         uns_new = self._adata_ref._uns.copy()
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
-            self._n_obs = len(self._obs.index)
+            self._n_obs = len(obs_sub.index)
         elif isinstance(oidx, (int, np.int64)):
             self._n_obs = 1
         elif isinstance(oidx, Sized):
@@ -656,7 +657,7 @@ class AnnData(IndexMixin):
         else:
             raise KeyError('Unknown Index type')
         if isinstance(vidx, slice):
-            self._n_vars = len(self._var.index)
+            self._n_vars = len(var_sub.index)
         elif isinstance(vidx, (int, np.int64)):
             self._n_vars = 1
         elif isinstance(vidx, Sized):
@@ -665,6 +666,12 @@ class AnnData(IndexMixin):
             raise KeyError('Unknown Index type')
         # need to do the slicing after setting self._n_obs, self._n_vars
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
+        # fix categories
+        self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
+        self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
+        # set attributes
+        self._obs = DataFrameView(obs_sub, view_args=(self, 'obs'))
+        self._var = DataFrameView(var_sub, view_args=(self, 'var'))
         self._uns = DictView(uns_new, view_args=(self, 'uns'))
         # set data
         if self.isbacked: self._X = None
@@ -1128,8 +1135,10 @@ class AnnData(IndexMixin):
         if not self.isbacked: X = self._X[oidx, vidx]
         else: X = self.file['X'][oidx, vidx]
         obs_new = self._obs.iloc[oidx]
+        self._remove_unused_categories(self._obs, obs_new, self._uns)
         obsm_new = self._obsm[oidx]
         var_new = self._var.iloc[vidx]
+        self._remove_unused_categories(self._var, var_new, self._uns)
         varm_new = self._varm[vidx]
         assert obs_new.shape[0] == X.shape[0], (oidx, obs_new)
         assert var_new.shape[0] == X.shape[1], (vidx, var_new)
@@ -1137,6 +1146,39 @@ class AnnData(IndexMixin):
         self._slice_uns_sparse_matrices_inplace(uns_new, oidx)
         raw_new = None if self.raw is None else self.raw[oidx]
         return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new, raw=raw_new)
+
+    def _remove_unused_categories(self, df_full, df_sub, uns):
+        from pandas.api.types import is_categorical
+        for k in df_full:
+            if is_categorical(df_full[k]):
+                all_categories = df_full[k].cat.categories
+                df_sub[k].cat.remove_unused_categories(inplace=True)
+                # also correct the colors...
+                if k + '_colors' in uns:
+                    uns[k + '_colors'] = uns[
+                        k + '_colors'][
+                            np.where(np.in1d(
+                                all_categories, df_sub[k].cat.categories))[0]]
+
+    def _sanitize(self):
+        """Transform string arrays to categorical data types, if they store less
+        categories than the total number of samples.
+        """
+        from pandas.api.types import is_string_dtype
+        for ann in ['obs', 'var']:
+            for key in getattr(self, ann).columns:
+                df = getattr(self, ann)
+                if is_string_dtype(df[key]):
+                    c = pd.Categorical(
+                        df[key], categories=natsorted(np.unique(df[key])))
+                    if len(c.categories) < len(c):
+                        df[key] = c
+                        df[key].cat.categories = df[key].cat.categories.astype('U')
+                        logg.info(
+                            '... storing {} as categorical type'.format(key))
+                        logg.info(
+                            '    access categories as adata.{}[\'{}\'].cat.categories'
+                            .format(ann, key))
 
     def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
         # slice sparse spatrices of n_obs × n_obs in self.uns

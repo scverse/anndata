@@ -1,4 +1,4 @@
-import logging
+import logging as logg
 import pandas as pd
 
 
@@ -40,7 +40,7 @@ def make_index_unique(index, join=''):
 
 def warn_names_duplicates(string, df):
     names = 'Observation' if string == 'obs' else 'Variable'
-    logging.info(
+    logg.info(
         '{} names are not unique. '
         'To make them unique, call `.{}_names_make_unique()`.\n'
         'Duplicates are: {}'.format(names, string, df.index.get_duplicates()))

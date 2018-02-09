@@ -13,7 +13,7 @@ def test_creation():
     AnnData(sp.eye(2))
     AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(Smp=['A', 'B']),
+        dict(Obs=['A', 'B']),
         dict(Feat=['a', 'b', 'c']))
 
     assert AnnData(np.array([1, 2])).X.shape == (2,)
@@ -27,10 +27,10 @@ def test_creation():
 def test_names():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(smp_names=['A', 'B']),
+        dict(obs_names=['A', 'B']),
         dict(var_names=['a', 'b', 'c']))
 
-    assert adata.smp_names.tolist() == 'A B'.split()
+    assert adata.obs_names.tolist() == 'A B'.split()
     assert adata.var_names.tolist() == 'a b c'.split()
 
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]),
@@ -41,10 +41,10 @@ def test_names():
 def test_indices_dtypes():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(smp_names=['A', 'B']),
+        dict(obs_names=['A', 'B']),
         dict(var_names=['a', 'b', 'c']))
-    adata.smp_names = ['ö', 'a']
-    assert adata.smp_names.tolist() == ['ö', 'a']
+    adata.obs_names = ['ö', 'a']
+    assert adata.obs_names.tolist() == ['ö', 'a']
 
 
 def test_creation_from_vector():
@@ -73,7 +73,7 @@ def test_slicing():
 def test_slicing_strings():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(smp_names=['A', 'B']),
+        dict(obs_names=['A', 'B']),
         dict(var_names=['a', 'b', 'c']))
 
     assert adata['A', 'a'].X.tolist() == 1
@@ -93,7 +93,7 @@ def test_slicing_strings():
 def test_slicing_series():
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6]]),
-        dict(smp_names=['A', 'B', 'C']),
+        dict(obs_names=['A', 'B', 'C']),
         dict(var_names=['a', 'b']))
     df = pd.DataFrame({'a': ['1', '2', '2']})
     df1 = pd.DataFrame({'b': ['1', '2']})
@@ -102,119 +102,121 @@ def test_slicing_series():
     assert (adata[:, df1['b'].values == '2'].X.tolist()
             == adata[:, df1['b'] == '2'].X.tolist())
 
+def test_slicing_remove_unused_categories():
+    adata = AnnData(
+        np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
+        dict(k=['a', 'a', 'b', 'b']))
+    print(adata)
+    adata._sanitize()
+    print(adata[3:5])
+    assert adata[3:5].obs['k'].cat.categories.tolist() == ['b']
+    print(adata)
+    quit()
+
 def test_get_subset_annotation():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                     dict(S=['A', 'B']),
                     dict(F=['a', 'b', 'c']))
-    
-    assert adata[0, 0].smp['S'].tolist() == ['A']
+
+    assert adata[0, 0].obs['S'].tolist() == ['A']
     assert adata[0, 0].var['F'].tolist() == ['a']
 
 
 def test_transpose():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(smp_names=['A', 'B']),
+        dict(obs_names=['A', 'B']),
         dict(var_names=['a', 'b', 'c']))
 
     adata1 = adata.T
 
     # make sure to not modify the original!
-    assert adata.smp_names.tolist() == ['A', 'B']
+    assert adata.obs_names.tolist() == ['A', 'B']
     assert adata.var_names.tolist() == ['a', 'b', 'c']
 
-    assert adata1.smp_names.tolist() == ['a', 'b', 'c']
+    assert adata1.obs_names.tolist() == ['a', 'b', 'c']
     assert adata1.var_names.tolist() == ['A', 'B']
     assert adata1.X.shape == adata.X.T.shape
 
     adata2 = adata.transpose()
     assert np.array_equal(adata1.X, adata2.X)
-    assert np.array_equal(adata1.smp, adata2.smp)
+    assert np.array_equal(adata1.obs, adata2.obs)
     assert np.array_equal(adata1.var, adata2.var)
 
 
 def test_append_col():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
-    adata.smp['new'] = [1, 2]
+    adata.obs['new'] = [1, 2]
     # this worked in the initial AnnData, but not with a dataframe
-    # adata.smp[['new2', 'new3']] = [['A', 'B'], ['c', 'd']]
+    # adata.obs[['new2', 'new3']] = [['A', 'B'], ['c', 'd']]
 
     from pytest import raises
     with raises(ValueError):
-        adata.smp['new4'] = 'far too long'.split()
+        adata.obs['new4'] = 'far too long'.split()
 
 
-def test_set_smp():
+def test_set_obs():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
-    adata.smp = pd.DataFrame({'a': [3, 4]})
-    assert adata.smp_names.tolist() == [0, 1]
+    adata.obs = pd.DataFrame({'a': [3, 4]})
+    assert adata.obs_names.tolist() == [0, 1]
 
     from pytest import raises
     with raises(ValueError):
-        adata.smp = pd.DataFrame({'a': [3, 4, 5]})
-        adata.smp = {'a': [1, 2]}
-
-
-# def test_print():
-#     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-#                     dict(foo=['A', 'B']),
-#                     dict(bar=['a', 'b', 'c']))
-#     print(adata)
-#     print('>>> print(adata.smp)')
-#     print(adata.smp)
+        adata.obs = pd.DataFrame({'a': [3, 4, 5]})
+        adata.obs = {'a': [1, 2]}
 
 
 def test_multicol():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
     # 'c' keeps the columns as should be
-    adata.smpm['c'] = np.array([[0., 1.], [2, 3]])
-    assert adata.smpm_keys() == ['c']
-    assert adata.smpm['c'].tolist() == [[0., 1.], [2, 3]]
+    adata.obsm['c'] = np.array([[0., 1.], [2, 3]])
+    assert adata.obsm_keys() == ['c']
+    assert adata.obsm['c'].tolist() == [[0., 1.], [2, 3]]
 
 
-def test_n_smps():
+def test_n_obs():
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
-    assert adata.n_smps == 3
+    assert adata.n_obs == 3
     adata1 = adata[:2, ]
-    assert adata1.n_smps == 2
+    assert adata1.n_obs == 2
 
 
 def test_concatenate():
     adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-                     {'smp_names': ['s1', 's2'],
+                     {'obs_names': ['s1', 's2'],
                       'anno1': ['c1', 'c2']},
                      {'var_names': ['a', 'b', 'c']})
     adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-                     {'smp_names': ['s3', 's4'],
+                     {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
                      {'var_names': ['b', 'c', 'd']})
     adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-                     {'smp_names': ['s5', 's6'],
+                     {'obs_names': ['s5', 's6'],
                       'anno2': ['d3', 'd4']},
                      {'var_names': ['b', 'c', 'd']})
     adata = adata1.concatenate([adata2, adata3])
     assert adata.n_vars == 2
-    assert adata.smp_keys() == ['anno1', 'anno2', 'batch']
+    assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
     adata = adata1.concatenate([adata2, adata3], batch_key='batch1')
-    assert adata.smp_keys() == ['anno1', 'anno2', 'batch1']
+    assert adata.obs_keys() == ['anno1', 'anno2', 'batch1']
     adata = adata1.concatenate([adata2, adata3], batch_categories=['a1', 'a2', 'a3'])
-    assert adata.smp['batch'].cat.categories.tolist() == ['a1', 'a2', 'a3']
+    assert adata.obs['batch'].cat.categories.tolist() == ['a1', 'a2', 'a3']
 
-    
+
 def test_concatenate_sparse():
     from scipy.sparse import csr_matrix
     adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
-                     {'smp_names': ['s1', 's2'],
+                     {'obs_names': ['s1', 's2'],
                       'anno1': ['c1', 'c2']},
                      {'var_names': ['a', 'b', 'c']})
     adata2 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
-                     {'smp_names': ['s3', 's4'],
+                     {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
                      {'var_names': ['b', 'c', 'd']})
     adata3 = AnnData(csr_matrix([[1, 2, 0], [0, 5, 6]]),
-                     {'smp_names': ['s5', 's6'],
+                     {'obs_names': ['s5', 's6'],
                       'anno2': ['d3', 'd4']},
                      {'var_names': ['b', 'c', 'd']})
     adata = adata1.concatenate([adata2, adata3])
