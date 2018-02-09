@@ -1,18 +1,17 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
+
 **February 9, 2018**: version 0.5
 
-1. check duplicates in variable and observation names: :func:`~anndata.AnnData.var_names_make_unique`
-2. remove unused categories after slicing
-3. read/write ``.loom`` using loompy 2
-4. some IDE-backed improvements
-5. cleaned up docs of AnnData
-6. several further fixes
+1. inform about duplicates in :class:`~anndata.AnnData.var_names` and :class:`~anndata.AnnData.obs_names`: resolve them using, e.g., :func:`~anndata.AnnData.var_names_make_unique`,2. by default, generate unique observation names in :func:`~anndata.AnnData.concatenate`
+3. automatically remove unused categories after slicing
+4. read/write `.loom` files using loompy 2
+5. some IDE-backed improvements
 
 
 **December 29, 2017**: version 0.4.2
 
-1. fixed text file support (``.csv``, …)
+1. fixed read/write for a few text file formats
 2. read `UMI tools <https://github.com/CGATOxford/UMI-tools>`_ files: :func:`~anndata.read_umi_tools`
 
 
