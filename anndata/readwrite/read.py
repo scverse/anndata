@@ -157,8 +157,8 @@ def read_loom(filename: Union[Path, str]) -> AnnData:
         X = f['matrix'][()]
     adata = AnnData(
         X.T,
-        obs=lc.col_attrs,
-        var=lc.row_attrs)
+        obs=dict(lc.col_attrs),  # not ideal: make the generator a dict...
+        var=dict(lc.row_attrs))
     lc.close()
     return adata
 
