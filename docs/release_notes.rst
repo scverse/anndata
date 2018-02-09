@@ -1,3 +1,12 @@
+**February, 2018**: version 0.5
+
+1. account for uniquness of variable and observation names
+2. remove unused categories after slicing
+3. updated interface to loompy 2
+4. cleaned up docs of AnnData
+5. some IDE-backed improvements
+6. several further fixes
+
 **December 29, 2017**: version 0.4.2
 
 1. fixed text file support (``.csv``, …)
