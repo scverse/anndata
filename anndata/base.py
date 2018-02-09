@@ -9,6 +9,7 @@ import numpy as np
 from numpy import ma
 import pandas as pd
 from pandas.core.index import RangeIndex
+from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
@@ -156,7 +157,6 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
 
 
 def df_to_records_fixed_width(df):
-    from pandas.api.types import is_string_dtype, is_categorical
     uns = {}  # unstructured dictionary for storing categories
     names = ['index']
     if is_string_dtype(df.index):
@@ -1155,16 +1155,14 @@ class AnnData(IndexMixin):
                 df_sub[k].cat.remove_unused_categories(inplace=True)
                 # also correct the colors...
                 if k + '_colors' in uns:
-                    uns[k + '_colors'] = uns[
-                        k + '_colors'][
-                            np.where(np.in1d(
-                                all_categories, df_sub[k].cat.categories))[0]]
+                    uns[k + '_colors'] = np.array(uns[k + '_colors'])[
+                        np.where(np.in1d(
+                            all_categories, df_sub[k].cat.categories))[0]]
 
     def _sanitize(self):
         """Transform string arrays to categorical data types, if they store less
         categories than the total number of samples.
         """
-        from pandas.api.types import is_string_dtype
         for ann in ['obs', 'var']:
             for key in getattr(self, ann).columns:
                 df = getattr(self, ann)
@@ -1299,7 +1297,7 @@ class AnnData(IndexMixin):
                 copyfile(self.filename, filename)
             return AnnData(filename=filename)
 
-    def concatenate(self, adatas, batch_key='batch', batch_categories=None):
+    def concatenate(self, adatas, batch_key='batch', batch_categories=None, index_unique='-'):
         """Concatenate along the observations axis after intersecting the variables names.
 
         The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
@@ -1310,8 +1308,11 @@ class AnnData(IndexMixin):
             AnnData matrices to concatenate with.
         batch_key : `str` (default: 'batch')
             Add the batch annotation to `.obs` using this key.
-        batch_categories : list (default: `range(len(adatas)+1)`)
+        batch_categories : list, optional (default: `range(len(adatas)+1)`)
             Use these as categories for the batch annotation.
+        index_unique : `str` or `None`, optional (default: '-')
+            Make the index unique by joining the previous index name with the
+            batch category. Provide `None` to keep previous indices.
 
         Returns
         -------
@@ -1356,17 +1357,23 @@ class AnnData(IndexMixin):
         for adata2 in adatas:
             joint_variables = np.intersect1d(
                 joint_variables, adata2.var_names, assume_unique=True)
-        adatas_to_concat = []
         if batch_categories is None:
             categories = [str(i) for i in range(len(adatas)+1)]
         elif len(batch_categories) == len(adatas)+1:
             categories = batch_categories
         else:
             raise ValueError('Provide as many `batch_categories` as `adatas`.')
+        adatas_to_concat = []
         for i, ad in enumerate([self] + adatas):
+            ad.obs.index.values
             ad = ad[:, joint_variables]
             ad.obs[batch_key] = pd.Categorical(
                 ad.n_obs*[categories[i]], categories=categories)
+            ad.obs.index.values
+            if index_unique is not None:
+                if not is_string_dtype(ad.obs.index):
+                    ad.obs.index = ad.obs.index.astype(str)
+                ad.obs.index = ad.obs.index.values + index_unique + categories[i]
             adatas_to_concat.append(ad)
         Xs = [ad.X for ad in adatas_to_concat]
         if issparse(self.X):
