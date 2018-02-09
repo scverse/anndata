@@ -2,7 +2,7 @@ import logging as logg
 import pandas as pd
 
 
-def make_index_unique(index, join=''):
+def make_index_unique(index, join='-'):
     """Makes the index unique by appending '1', '2', etc.
 
     The first occurance of a non-unique value is ignored.
@@ -19,7 +19,7 @@ def make_index_unique(index, join=''):
     >>> adata = adata1.concatenate(adata2)
     >>> adata.obs_names
     Index(['a', 'b', 'c', 'd', 'b', 'b'], dtype='object')
-    >>> adata.obs_names_make_unique('-')
+    >>> adata.obs_names_make_unique()
     >>> adata.obs_names
     Index(['a', 'b', 'c', 'd', 'b-1', 'b-2'], dtype='object')
     """

@@ -1381,13 +1381,12 @@ class AnnData(IndexMixin):
         uns = adatas_to_concat[0].uns
         return AnnData(X, obs, var, uns, obsm, varm, filename=self.filename)
 
-
-    def var_names_make_unique(self, join=''):
+    def var_names_make_unique(self, join='-'):
         self.var.index = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def obs_names_make_unique(self, join=''):
+    def obs_names_make_unique(self, join='-'):
         self.obs.index = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
