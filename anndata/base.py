@@ -1323,16 +1323,13 @@ class AnnData(IndexMixin):
         Examples
         --------
         >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['o1', 'o2'],
-        >>>                   'anno1': ['c1', 'c2']},
+        >>>                  {'anno1': ['c1', 'c2']},
         >>>                  {'var_names': ['a', 'b', 'c']})
         >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['o3', 'o4'],
-        >>>                   'anno1': ['c3', 'c4']},
+        >>>                  {'anno1': ['c3', 'c4']},
         >>>                  {'var_names': ['b', 'c', 'd']})
         >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['o5', 'o6'],
-        >>>                   'anno2': ['d3', 'd4']},
+        >>>                  {'anno2': ['d3', 'd4']},
         >>>                  {'var_names': ['b', 'c', 'd']})
         >>>
         >>> adata = adata1.concatenate([adata2, adata3])
@@ -1343,14 +1340,16 @@ class AnnData(IndexMixin):
          [ 4.  5.]
          [ 1.  2.]
          [ 4.  5.]]
+        >>> adata.obs_names
+        Index(['0-0', '1-0', '0-1', '1-1', '0-2', '1-2'], dtype='object')
         >>> adata.obs
-           anno1 anno2 batch
-        o1    c1   NaN     0
-        o2    c2   NaN     0
-        o3    c3   NaN     1
-        o4    c4   NaN     1
-        o5   NaN    d3     2
-        o6   NaN    d4     2
+            anno1 anno2 batch
+        0-0    c1   NaN     0
+        1-0    c2   NaN     0
+        0-1    c3   NaN     1
+        1-1    c4   NaN     1
+        0-2   NaN    d3     2
+        1-2   NaN    d4     2
         """
         if isinstance(adatas, AnnData): adatas = [adatas]
         joint_variables = self.var_names
