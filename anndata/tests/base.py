@@ -194,12 +194,12 @@ def test_concatenate():
                      {'obs_names': ['s5', 's6'],
                       'anno2': ['d3', 'd4']},
                      {'var_names': ['b', 'c', 'd']})
-    adata = adata1.concatenate([adata2, adata3])
+    adata = adata1.concatenate(adata2, adata3)
     assert adata.n_vars == 2
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
-    adata = adata1.concatenate([adata2, adata3], batch_key='batch1')
+    adata = adata1.concatenate(adata2, adata3, batch_key='batch1')
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch1']
-    adata = adata1.concatenate([adata2, adata3], batch_categories=['a1', 'a2', 'a3'])
+    adata = adata1.concatenate(adata2, adata3, batch_categories=['a1', 'a2', 'a3'])
     assert adata.obs['batch'].cat.categories.tolist() == ['a1', 'a2', 'a3']
 
 
@@ -217,9 +217,22 @@ def test_concatenate_sparse():
                      {'obs_names': ['s5', 's6'],
                       'anno2': ['d3', 'd4']},
                      {'var_names': ['b', 'c', 'd']})
-    adata = adata1.concatenate([adata2, adata3])
+    adata = adata1.concatenate(adata2, adata3)
     assert adata.n_vars == 2
 
+
+def test_concatenate_outer():
+    adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+                     {'obs_names': ['s1', 's2'],
+                      'anno1': ['c1', 'c2']},
+                     {'var_names': ['a', 'b', 'c']})
+    adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6], [7,8,9]]),
+                     {'obs_names': ['s3', 's4', 's5'],
+                      'anno2': ['c3', 'c4', 'c5']},
+                     {'var_names': ['b', 'c', 'd']})
+    adata = adata1.concatenate(adata2, join='outer')
+    assert adata.n_vars == 4
+    assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
 
 # TODO: remove logging and actually test values
 # from scanpy import logging as logg
