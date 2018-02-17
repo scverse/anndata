@@ -66,17 +66,17 @@ class Group(object):
             group = self.h5py_group.create_group(name)
             group.attrs['h5sparse_format'] = data.h5py_group.attrs['h5sparse_format']
             group.attrs['h5sparse_shape'] = data.h5py_group.attrs['h5sparse_shape']
-            group.create_dataset('data', data=data.h5py_group['data'], **kwargs)
-            group.create_dataset('indices', data=data.h5py_group['indices'], **kwargs)
-            group.create_dataset('indptr', data=data.h5py_group['indptr'], **kwargs)
+            group.create_dataset('data', data=data.h5py_group['data'], maxshape=(None,), **kwargs)
+            group.create_dataset('indices', data=data.h5py_group['indices'], maxshape=(None,), **kwargs)
+            group.create_dataset('indptr', data=data.h5py_group['indptr'], maxshape=(None,), **kwargs)
             return SparseDataset(group)
         elif ss.issparse(data):
             group = self.h5py_group.create_group(name)
             group.attrs['h5sparse_format'] = get_format_str(data)
             group.attrs['h5sparse_shape'] = data.shape
-            group.create_dataset('data', data=data.data, **kwargs)
-            group.create_dataset('indices', data=data.indices, **kwargs)
-            group.create_dataset('indptr', data=data.indptr, **kwargs)
+            group.create_dataset('data', data=data.data, maxshape=(None,), **kwargs)
+            group.create_dataset('indices', data=data.indices, maxshape=(None,), **kwargs)
+            group.create_dataset('indptr', data=data.indptr, maxshape=(None,), **kwargs)
             return SparseDataset(group)
         else:
             return self.h5py_group.create_dataset(
@@ -140,8 +140,18 @@ def _set_many(self, i, j, x):
         return
 
     else:
-        raise ValueError(
-            'Currently, you cannot change the sparsity structure of a SparseDataset.')
+        # raise ValueError(
+        #     'Currently, you cannot change the sparsity structure of a SparseDataset.')
+        # replace where possible
+        mask = offsets > -1
+        self.data[offsets[mask]] = x[mask]
+        # only insertions remain
+        mask = ~mask
+        i = i[mask]
+        i[i < 0] += M
+        j = j[mask]
+        j[j < 0] += N
+        self._insert_many(i, j, x[mask])
 
 _cs_matrix._set_many = _set_many
 
