@@ -62,8 +62,7 @@ def test_dataset_append():
     appended_matrix = ss.vstack((sparse_matrix, to_append))
 
     with h5py.File(h5_path) as h5f:
-        h5f.create_dataset('matrix', data=sparse_matrix, chunks=(100000,),
-                           maxshape=(None,))
+        h5f.create_dataset('matrix', data=sparse_matrix, chunks=(100000,))
         h5f['matrix'].append(to_append)
         assert (h5f['matrix'].value != appended_matrix).size == 0
 
