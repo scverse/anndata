@@ -109,6 +109,67 @@ class File(Group):
         return self.h5f.filename
 
 
+from scipy.sparse.compressed import _cs_matrix
+from scipy.sparse import _sparsetools
+
+
+def _set_many(self, i, j, x):
+    """Sets value at each (i, j) to x
+
+    Here (i,j) index major and minor respectively, and must not contain
+    duplicate entries.
+    """
+    i, j, M, N = self._prepare_indices(i, j)
+
+    n_samples = len(x)
+    offsets = np.empty(n_samples, dtype=self.indices.dtype)
+    ret = _sparsetools.csr_sample_offsets(M, N, self.indptr, self.indices,
+                                          n_samples, i, j, offsets)
+    if ret == 1:
+        # rinse and repeat
+        self.sum_duplicates()
+        _sparsetools.csr_sample_offsets(M, N, self.indptr,
+                                        self.indices, n_samples, i, j,
+                                        offsets)
+
+    if -1 not in offsets:
+        # make a list for interaction with h5py
+        offsets = list(offsets)
+        # only affects existing non-zero cells
+        self.data[offsets] = x
+        return
+
+    else:
+        raise ValueError(
+            'Currently, you cannot change the sparsity structure of a SparseDataset.')
+
+_cs_matrix._set_many = _set_many
+
+
+def _zero_many(self, i, j):
+    """Sets value at each (i, j) to zero, preserving sparsity structure.
+
+    Here (i,j) index major and minor respectively.
+    """
+    i, j, M, N = self._prepare_indices(i, j)
+
+    n_samples = len(i)
+    offsets = np.empty(n_samples, dtype=self.indices.dtype)
+    ret = _sparsetools.csr_sample_offsets(M, N, self.indptr, self.indices,
+                                          n_samples, i, j, offsets)
+    if ret == 1:
+        # rinse and repeat
+        self.sum_duplicates()
+        _sparsetools.csr_sample_offsets(M, N, self.indptr,
+                                        self.indices, n_samples, i, j,
+                                        offsets)
+
+    # only assign zeros to the existing sparsity structure
+    self.data[list(offsets[offsets > -1])] = 0
+        
+_cs_matrix._zero_many = _zero_many
+
+    
 class SparseDataset(IndexMixin):
     """Analogous to `h5py.Dataset`, but for sparse matrices.
     """
@@ -136,49 +197,15 @@ class SparseDataset(IndexMixin):
         mock_matrix.indptr = self.h5py_group['indptr']
         return mock_matrix[row, col]
 
-    # the new solution above seems to do the job much better:
-    # it allows much more powerful indexing
-    # TODO: need to check that everything is really going right...
-    # def __getitem__(self, key):
-    #     row, col = self._unpack_index(key)
-    #     if self.format_str == 'csr':
-    #         if (isinstance(col, (int, np.int))
-    #             or any((col.start, col.stop, col.step))):
-    #             raise ValueError(
-    #                 'Slicing csr matrices is only possible along rows.')
-    #         key = row
-    #     else:
-    #         if (isinstance(row, (int, np.int))
-    #             or any((row.start, row.stop, row.step))):
-    #             raise ValueError(
-    #                 'Slicing csc matrices is only possible along columns.')
-    #         key = col
-    #     if isinstance(key, (int, np.int)):
-    #         start = key
-    #         stop = start + 1
-    #         key = slice(start, stop)
-    #     if isinstance(key, slice):
-    #         if key.step not in {None, 1}:
-    #             raise NotImplementedError("Index step is not supported.")
-    #         start = key.start
-    #         stop = key.stop
-    #         if stop is not None and stop > 0:
-    #             stop += 1
-    #         if start is not None and start < 0:
-    #             start -= 1
-    #         indptr_slice = slice(start, stop)
-    #         indptr = self.h5py_group['indptr'][indptr_slice]
-    #         data = self.h5py_group['data'][indptr[0]:indptr[-1]]
-    #         indices = self.h5py_group['indices'][indptr[0]:indptr[-1]]
-    #         indptr -= indptr[0]
-    #         if self.format_str == 'csr':
-    #             shape = (indptr.size - 1, self.shape[1])
-    #         else:
-    #             shape = (self.shape[0], indptr.size - 1)
-    #     else:
-    #         raise NotImplementedError("Only support one slice as index.")
-    #     format_class = get_format_class(self.format_str)
-    #     return format_class((data, indices, indptr), shape=shape)
+    def __setitem__(self, index, value):
+        if index == (): index = slice(None)
+        row, col = self._unpack_index(index)
+        format_class = get_format_class(self.format_str)
+        mock_matrix = format_class(self.shape, dtype=self.dtype)
+        mock_matrix.data = self.h5py_group['data']
+        mock_matrix.indices = self.h5py_group['indices']
+        mock_matrix.indptr = self.h5py_group['indptr']
+        mock_matrix[row, col] = value
 
     @property
     def shape(self):
