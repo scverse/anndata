@@ -42,4 +42,5 @@ def warn_names_duplicates(string, df):
     names = 'Observation' if string == 'obs' else 'Variable'
     logg.info(
         '{} names are not unique. '
-        'To make them unique, call `.{}_names_make_unique()`.\n')
+        'To make them unique, call `.{}_names_make_unique()`.'
+        .format(names, string))

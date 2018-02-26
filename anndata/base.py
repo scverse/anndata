@@ -1310,19 +1310,19 @@ class AnnData(IndexMixin):
         adatas : :class:`~anndata.AnnData`
             AnnData matrices to concatenate with.
         join: `str` (default: 'inner')
-            Use intersection (``'inner'``) or union (``'outer'``) of variables?
+            Use intersection (``'inner'``) or union (``'outer'``) of variables.
         batch_key : `str` (default: 'batch')
             Add the batch annotation to `.obs` using this key.
         batch_categories : list, optional (default: `range(len(adatas)+1)`)
             Use these as categories for the batch annotation.
-        index_unique : `str` or `None`, optional (default: '-')
-            Make the index unique by joining the previous index name with the
-            batch category. Provide `None` to keep previous indices.
+        index_unique : `str` or `None`, optional (default: None)
+            Make the index unique by joining the existing index names with the
+            batch category. Provide `None` to keep existing indices.
 
         Returns
         -------
         adata : :class:`~anndata.AnnData`
-            The concatenated AnnData, where `adata.obs['batch']` stores a
+            The concatenated AnnData, where `adata.obs[batch_key]` stores a
             categorical variable labeling the batch.
 
         Examples
@@ -1360,8 +1360,18 @@ class AnnData(IndexMixin):
             return self
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
             adatas = adatas[0]  # backwards compatibility
-        all_adatas = (self,) + adatas
+        all_adatas = (self,) + tuple(adatas)
 
+        # for controlled behavior, make all variable names unique
+        printed_info = False
+        for i, ad in enumerate(all_adatas):
+            if not ad.var_names.is_unique:
+                ad.var_names = utils.make_index_unique(ad.var_names)
+                if not printed_info:
+                    logg.info(
+                        'Making variable names unique for controlled concatenation.')
+                    printed_info = True
+                    
         mergers = dict(inner=set.intersection, outer=set.union)
         var_names = pd.Index(reduce(mergers[join], (set(ad.var_names) for ad in all_adatas)))
 
