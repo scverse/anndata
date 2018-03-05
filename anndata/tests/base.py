@@ -189,11 +189,11 @@ def test_concatenate():
     adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                      {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
-                     {'var_names': ['b', 'c', 'd']})
+                     {'var_names': ['d', 'c', 'b']})
     adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                      {'obs_names': ['s5', 's6'],
                       'anno2': ['d3', 'd4']},
-                     {'var_names': ['b', 'c', 'd']})
+                     {'var_names': ['d', 'c', 'b']})
     adata = adata1.concatenate(adata2, adata3)
     assert adata.n_vars == 2
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
@@ -201,7 +201,8 @@ def test_concatenate():
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch1']
     adata = adata1.concatenate(adata2, adata3, batch_categories=['a1', 'a2', 'a3'])
     assert adata.obs['batch'].cat.categories.tolist() == ['a1', 'a2', 'a3']
-
+    assert adata.var_names.tolist() == ['b', 'c']
+    
 
 def test_concatenate_sparse():
     from scipy.sparse import csr_matrix

@@ -1,5 +1,9 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
+Warning: there has been a bug in :func:`~anndata.AnnData.concatenate` in
+versions 0.5.2, 0.5.3 and 0.5.4: variable names were not assigned correctly. Use
+version 0.5.5.
+
 
 **February 9, 2018**: version 0.5
 

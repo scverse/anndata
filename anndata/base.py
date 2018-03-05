@@ -1301,9 +1301,12 @@ class AnnData(IndexMixin):
             return AnnData(filename=filename)
 
     def concatenate(self, *adatas, join='inner', batch_key='batch', batch_categories=None, index_unique=None):
-        """Concatenate along the observations axis after intersecting the variables names.
+        """Concatenate along the observations axis.
 
-        The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
+        The `.uns` and `.varm` attributes of the passed `adatas` are ignored.
+
+        If you use `join='outer'`, then note that this fills 0s for data that is
+        non-present. Use this with care.
 
         Parameters
         ----------
@@ -1337,7 +1340,7 @@ class AnnData(IndexMixin):
         >>>                  {'anno2': ['d3', 'd4']},
         >>>                  {'var_names': ['b', 'c', 'd']})
         >>>
-        >>> adata = adata1.concatenate(adata2, adata3)
+        >>> adata = adata1.concatenate(adata2, adata3, index_unique='-')
         >>> adata.X
         [[ 2.  3.]
          [ 5.  6.]
@@ -1372,9 +1375,17 @@ class AnnData(IndexMixin):
                         'Making variable names unique for controlled concatenation.')
                     printed_info = True
 
+        # define variable names of joint AnnData
         mergers = dict(inner=set.intersection, outer=set.union)
-        var_names = pd.Index(reduce(mergers[join], (set(ad.var_names) for ad in all_adatas)))
-
+        var_names_reduce = reduce(mergers[join], (set(ad.var_names) for ad in all_adatas))
+        # restore order of initial var_names, append non-sortable names at the end
+        var_names = []
+        for v in all_adatas[0].var_names:
+            if v in var_names_reduce:
+                var_names.append(v)
+                var_names_reduce.remove(v)  # update the set
+        var_names = pd.Index(var_names + list(var_names_reduce))
+            
         if batch_categories is None:
             categories = [str(i) for i, _ in enumerate(all_adatas)]
         elif len(batch_categories) == len(all_adatas):
@@ -1392,11 +1403,11 @@ class AnnData(IndexMixin):
         obs_i = 0  # start of next adata’s observations in X
         out_obss = []
         for i, ad in enumerate(all_adatas):
-            vars_ad_in_res = var_names.isin(ad.var_names)
-            vars_res_in_ad = ad.var_names.isin(var_names)
+            vars_intersect = [v for v in var_names if v in ad.var_names]
 
             # X
-            X[obs_i:obs_i+ad.n_obs, vars_ad_in_res] = ad.X[:, vars_res_in_ad]
+            X[obs_i:obs_i+ad.n_obs,
+              var_names.isin(vars_intersect)] = ad[:, vars_intersect].X
             obs_i += ad.n_obs
 
             # obs
@@ -1412,13 +1423,14 @@ class AnnData(IndexMixin):
             out_obss.append(obs)
 
             # var
-            var.loc[vars_ad_in_res, ad.var.columns] = ad.var.loc[vars_res_in_ad, :]
+            # potential add additional columns
+            var.loc[vars_intersect, ad.var.columns] = ad.var.loc[vars_intersect, :]
 
         obs = pd.concat(out_obss)
         uns = all_adatas[0].uns
         obsm = np.concatenate([ad.obsm for ad in all_adatas])
         varm = self.varm  # TODO
-        
+
         new_adata = AnnData(X, obs, var, uns, obsm, None, filename=self.filename)
         if not obs.index.is_unique:
             logg.info(
