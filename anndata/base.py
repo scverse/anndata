@@ -1371,7 +1371,7 @@ class AnnData(IndexMixin):
                     logg.info(
                         'Making variable names unique for controlled concatenation.')
                     printed_info = True
-                    
+
         mergers = dict(inner=set.intersection, outer=set.union)
         var_names = pd.Index(reduce(mergers[join], (set(ad.var_names) for ad in all_adatas)))
 
@@ -1402,6 +1402,9 @@ class AnnData(IndexMixin):
             # obs
             obs = ad.obs.copy()
             obs[batch_key] = pd.Categorical(ad.n_obs * [categories[i]], categories)
+            if (is_string_dtype(all_adatas[0].obs.index) and not
+                is_string_dtype(ad.obs.index)):
+                obs.index = obs.index.astype(str)
             if index_unique is not None:
                 if not is_string_dtype(ad.obs.index):
                     obs.index = obs.index.astype(str)
@@ -1415,7 +1418,12 @@ class AnnData(IndexMixin):
         uns = all_adatas[0].uns
         obsm = np.concatenate([ad.obsm for ad in all_adatas])
         varm = self.varm  # TODO
-        return AnnData(X, obs, var, uns, obsm, None, filename=self.filename)
+        
+        new_adata = AnnData(X, obs, var, uns, obsm, None, filename=self.filename)
+        if not obs.index.is_unique:
+            logg.info(
+                'Or pass `index_unique!=None` to `.concatenate`.')
+        return new_adata
 
     def var_names_make_unique(self, join='-'):
         self.var.index = utils.make_index_unique(self.var.index, join)
