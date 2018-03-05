@@ -1412,7 +1412,7 @@ class AnnData(IndexMixin):
             var.loc[vars_ad_in_res, ad.var.columns] = ad.var.loc[vars_res_in_ad, :]
 
         obs = pd.concat(out_obss)
-        uns = dict(ChainMap({}, *[ad.obs for ad in all_adatas]))
+        uns = all_adatas[0].uns
         obsm = np.concatenate([ad.obsm for ad in all_adatas])
         varm = self.varm  # TODO
         return AnnData(X, obs, var, uns, obsm, None, filename=self.filename)
