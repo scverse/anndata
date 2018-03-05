@@ -1300,7 +1300,7 @@ class AnnData(IndexMixin):
                 copyfile(self.filename, filename)
             return AnnData(filename=filename)
 
-    def concatenate(self, *adatas, join='inner', batch_key='batch', batch_categories=None, index_unique='-'):
+    def concatenate(self, *adatas, join='inner', batch_key='batch', batch_categories=None, index_unique=None):
         """Concatenate along the observations axis after intersecting the variables names.
 
         The `.var`, `.varm`, and `.uns` attributes of the passed adatas are ignored.
@@ -1315,7 +1315,7 @@ class AnnData(IndexMixin):
             Add the batch annotation to `.obs` using this key.
         batch_categories : list, optional (default: `range(len(adatas)+1)`)
             Use these as categories for the batch annotation.
-        index_unique : `str` or `None`, optional (default: None)
+        index_unique : `str` or `None`, optional (default: `None`)
             Make the index unique by joining the existing index names with the
             batch category. Provide `None` to keep existing indices.
 
