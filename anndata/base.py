@@ -1176,7 +1176,7 @@ class AnnData(IndexMixin):
                         df[key] = c
                         df[key].cat.categories = df[key].cat.categories.astype('U')
                         logg.info(
-                            '... storing {} as categorical type'.format(key))
+                            '... storing \'{}\' as categorical type'.format(key))
                         logg.info(
                             '    access categories as adata.{}[\'{}\'].cat.categories'
                             .format(ann, key))
