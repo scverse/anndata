@@ -650,6 +650,9 @@ class AnnData(IndexMixin):
         self._varm = ArrayView(adata_ref.varm[vidx_normalized], view_args=(self, 'varm'))
         # hackish solution here, no copy should be necessary
         uns_new = self._adata_ref._uns.copy()
+        # need to do the slicing before setting the updated self._n_obs, self._n_vars
+        self._n_obs = self._adata_ref.n_obs  # use the original n_obs here
+        self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
             self._n_obs = len(obs_sub.index)
@@ -667,8 +670,6 @@ class AnnData(IndexMixin):
             self._n_vars = len(vidx)
         else:
             raise KeyError('Unknown Index type')
-        # need to do the slicing after setting self._n_obs, self._n_vars
-        self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
         # fix categories
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
         self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
@@ -1188,7 +1189,7 @@ class AnnData(IndexMixin):
             for k, v in uns.items():
                 if isinstance(v, sparse.spmatrix) and v.shape == (
                         self.n_obs, self.n_obs):
-                    uns[k] = v.tocsc()[:, self.n_obs].tocsr()[oidx, :]
+                    uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index):
         """Inplace subsetting along variables dimension.
@@ -1385,7 +1386,7 @@ class AnnData(IndexMixin):
                 var_names.append(v)
                 var_names_reduce.remove(v)  # update the set
         var_names = pd.Index(var_names + list(var_names_reduce))
-            
+
         if batch_categories is None:
             categories = [str(i) for i, _ in enumerate(all_adatas)]
         elif len(batch_categories) == len(all_adatas):
