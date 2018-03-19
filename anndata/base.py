@@ -1096,16 +1096,25 @@ class AnnData(IndexMixin):
             del self.file[attr]
             self.file._file.create_dataset(attr, data=value)
 
-    def _normalize_indices(self, packed_index):
-        # deal with slicing with pd.Series
-        if isinstance(packed_index, pd.Series):
-            packed_index = packed_index.values
-        if isinstance(packed_index, tuple) and len(packed_index) == 2:
-            if isinstance(packed_index[1], pd.Series):
-                packed_index = packed_index[0], packed_index[1].values
-            if isinstance(packed_index[0], pd.Series):
-                packed_index = packed_index[0].values, packed_index[1]
-        obs, var = super(AnnData, self)._unpack_index(packed_index)
+    def _normalize_indices(self, index):
+        # deal with pd.Series
+        if isinstance(index, pd.Series):
+            index = index.values
+        if isinstance(index, tuple):
+            if len(index) != 2:
+                raise ValueError(
+                    'AnnData can only be sliced in rows and columns.')
+            # deal with pd.Series
+            if isinstance(index[1], pd.Series):
+                index = index[0], index[1].values
+            if isinstance(index[0], pd.Series):
+                index = index[0].values, index[1]
+            # one of the two has to be a slice
+            if not (isinstance(index[0], slice) or isinstance(index[1], slice)):
+                raise ValueError(
+                    'Slicing with two indices at the same time is not yet implemented. '
+                    'As a workaround, do row and column slicing succesively.')
+        obs, var = super(AnnData, self)._unpack_index(index)
         obs = _normalize_index(obs, self.obs_names)
         var = _normalize_index(var, self.var_names)
         return obs, var
