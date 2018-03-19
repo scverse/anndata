@@ -1,9 +1,17 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
-Warning: there has been a bug in :func:`~anndata.AnnData.concatenate` in
-versions 0.5.2, 0.5.3 and 0.5.4: variable names were not assigned correctly. Use
-version 0.5.5.
 
+**March 19, 2018**: version 0.5.6
+
+1. better memory efficiency in loom exports
+2. 'outer join' concatenation   
+3. bug fixes and consistency updates
+
+.. warning::
+
+    There was a bug in :func:`~anndata.AnnData.concatenate` in versions 0.5.2,
+    0.5.3 and 0.5.4: variable names were not assigned correctly. Was fixed in
+    version 0.5.5.
 
 **February 9, 2018**: version 0.5
 
