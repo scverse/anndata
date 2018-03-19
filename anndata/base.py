@@ -555,17 +555,19 @@ class AnnData(IndexMixin):
     -----
     Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
 
+    If the unstructured annotations `.uns` contain a sparse matrix of shape
+    `.n_obs` × `.n_obs`, these are also sliced.
+
     :class:`~anndata.AnnData` stores observations (samples) of variables
     (features) in the rows of a matrix. This is the convention of the modern
-    classics of stats [Hastie09]_ and Machine Learning [Murphy12]_, the convention of
-    dataframes both in R and Python and the established stats and machine
-    learning packages in Python (`statsmodels
+    classics of statistics [Hastie09]_ and machine learning [Murphy12]_, the
+    convention of dataframes both in R and Python and the established statistics
+    and machine learning packages in Python (`statsmodels
     <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
-    <http://scikit-learn.org/>`_). It is the opposite of the convention for
-    storing genomic data.
+    <http://scikit-learn.org/>`_).
 
     A data matrix is flattened if either #observations (`n_obs`) or #variables
-    (`n_vars`) is 1, so that Numpy's slicing behavior is reproduced::
+    (`n_vars`) is 1, so that numpy's slicing behavior is reproduced::
 
         adata = AnnData(np.ones((2, 2)))
         adata[:, 0].X == adata.X[:, 0]
@@ -1126,12 +1128,12 @@ class AnnData(IndexMixin):
     def __getitem__(self, index):
         """Returns a sliced view of the object."""
         return self._getitem_view(index)
-        # return self._getitem_copy(index)
 
     def _getitem_view(self, index):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
+    # this is no longer needed but remains here for reference for now
     def _getitem_copy(self, index):
         oidx, vidx = self._normalize_indices(index)
         if isinstance(oidx, (int, np.int64)): oidx = slice(oidx, oidx+1, 1)
@@ -1187,6 +1189,9 @@ class AnnData(IndexMixin):
         if not (isinstance(oidx, slice) and
                 oidx.start is None and oidx.step is None and oidx.stop is None):
             for k, v in uns.items():
+                # treat nested dicts
+                if isinstance(v, Mapping):
+                    self._slice_uns_sparse_matrices_inplace(v, oidx)
                 if isinstance(v, sparse.spmatrix) and v.shape == (
                         self.n_obs, self.n_obs):
                     uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
