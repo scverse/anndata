@@ -61,16 +61,16 @@ def test_readwrite_h5ad():
 
 
 def test_readwrite_loom():
-    for typ in [np.array, csr_matrix]:
+    for i, typ in enumerate([np.array, csr_matrix]):
         X = typ(X_list)
         adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
         adata.write_loom('./test.loom')
-        adata = ad.read_loom('./test.loom')
+        adata = ad.read_loom('./test.loom', sparse=(i == 1))
         if isinstance(X, np.ndarray):
             assert np.allclose(adata.X, X)
         else:
             # TODO: this should not be necessary
-            assert np.allclose(adata.X, X.toarray())
+            assert np.allclose(adata.X.toarray(), X.toarray())
 
 
 def test_read_csv():

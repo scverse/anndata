@@ -84,20 +84,20 @@ def read_umi_tools(filename: Union[Path, str]) -> AnnData:
     # import gzip to read a gzipped file :-)
     import gzip
     from pandas import DataFrame
-    
+
     dod = {}  # this will contain basically everything
     fh = gzip.open(filename)
     header = fh.readline()  # read the first line
-    
+
     for line in fh:
         t = line.decode('ascii').split('\t')  # gzip read bytes, hence the decoding
         try:
             dod[t[1]].update({t[0]:int(t[2])})
         except KeyError:
             dod[t[1]] = {t[0]:int(t[2])}
-    
+
     df = DataFrame.from_dict(dod, orient='index')  # build the matrix
-    df.fillna(value = 0., inplace=True)  # many NaN, replace with zeros
+    df.fillna(value=0., inplace=True)  # many NaN, replace with zeros
     return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns})
 
 
@@ -138,13 +138,20 @@ def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: Union[Path, str]) -> AnnData:
+def read_loom(filename: Union[Path, str], sparse=False) -> AnnData:
     """Read `.loom`-formatted hdf5 file.
+
+    This reads the whole file into memory.
+
+    Beware that you have to explicitly state when you want to read the file as
+    sparse data.
 
     Parameters
     ----------
     filename : `str`
         The filename.
+    sparse : `bool`
+        Whether to read the data matrix as sparse.
 
     Returns
     -------
@@ -152,14 +159,18 @@ def read_loom(filename: Union[Path, str]) -> AnnData:
     """
     filename = str(filename)  # allow passing pathlib.Path objects
     from loompy import connect
-    lc = connect(filename, 'r')
-    with h5py.File(filename, 'r') as f:
-        X = f['matrix'][()]
-    adata = AnnData(
-        X.T,
-        obs=dict(lc.col_attrs),  # not ideal: make the generator a dict...
-        var=dict(lc.row_attrs))
-    lc.close()
+    if sparse:
+        with connect(filename, 'r') as lc:
+            X = lc.sparse()
+    else:
+        with h5py.File(filename, 'r') as f:
+            X = f['matrix'][()]
+    with connect(filename, 'r') as lc:
+        adata = AnnData(
+            X.T,
+            obs=dict(lc.col_attrs),  # not ideal: make the generator a dict...
+            var=dict(lc.row_attrs))
+        lc.close()
     return adata
 
 

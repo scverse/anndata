@@ -66,8 +66,10 @@ def write_loom(filename: Union[Path, str], adata: AnnData):
     if issparse(X):
         logg.info(
             '... writing to \'.loom\' file densifies sparse matrix')
-        X = X.toarray()
+        X = X.tocoo()
     from loompy import create
+    if os.path.exists(filename):
+        os.remove(filename)
     create(filename, X, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
