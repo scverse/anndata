@@ -1097,11 +1097,14 @@ class AnnData(IndexMixin):
             self.file._file.create_dataset(attr, data=value)
 
     def _normalize_indices(self, index):
+        # deal with tuples of length 1
+        if isinstance(index, tuple) and len(index) == 1:
+            index = index[0]
         # deal with pd.Series
         if isinstance(index, pd.Series):
             index = index.values
         if isinstance(index, tuple):
-            if len(index) != 2:
+            if len(index) > 2:
                 raise ValueError(
                     'AnnData can only be sliced in rows and columns.')
             # deal with pd.Series
@@ -1111,9 +1114,12 @@ class AnnData(IndexMixin):
                 index = index[0].values, index[1]
             # one of the two has to be a slice
             if not (isinstance(index[0], slice) or isinstance(index[1], slice)):
-                raise ValueError(
-                    'Slicing with two indices at the same time is not yet implemented. '
-                    'As a workaround, do row and column slicing succesively.')
+                if (isinstance(index[0], (int, str, None)) and isinstance(index[1], (int, str, None))):
+                    pass  # two scalars are fine
+                else:
+                    raise ValueError(
+                        'Slicing with two indices at the same time is not yet implemented. '
+                        'As a workaround, do row and column slicing succesively.')
         obs, var = super(AnnData, self)._unpack_index(index)
         obs = _normalize_index(obs, self.obs_names)
         var = _normalize_index(var, self.var_names)

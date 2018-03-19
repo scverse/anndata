@@ -195,6 +195,7 @@ def test_concatenate():
                       'anno2': ['d3', 'd4']},
                      {'var_names': ['d', 'c', 'b']})
     adata = adata1.concatenate(adata2, adata3)
+    assert adata.X.astype(int).tolist() == [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
     assert adata.n_vars == 2
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
     adata = adata1.concatenate(adata2, adata3, batch_key='batch1')
