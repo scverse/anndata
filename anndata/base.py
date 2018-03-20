@@ -1608,6 +1608,8 @@ class AnnData(IndexMixin):
         for k, v in items:
             if k.endswith('_categories'):
                 k_stripped = k.replace('_categories', '')
+                if isinstance(v, (str, int)):  # fix categories with a single category
+                    v = [v]
                 if k_stripped in d_true_keys['obs']:
                     d_true_keys['obs'][k_stripped] = pd.Categorical.from_codes(
                         codes=d_true_keys['obs'][k_stripped].values,

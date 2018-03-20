@@ -18,6 +18,7 @@ X_list = [    # data matrix of shape n_obs x n_vars
 obs_dict = {  # annotation of observations / rows
     'row_names': ['name1', 'name2', 'name3'],  # row annotation
     'oanno1': ['cat1', 'cat2', 'cat2'],        # categorical annotation
+    'oanno1b': ['cat1', 'cat1', 'cat1'],       # categorical annotation with one category
     'oanno2': ['o1', 'o2', 'o3'],              # string annotation
     'oanno3': [2.1, 2.2, 2.3]}                 # float annotation
 
@@ -34,19 +35,6 @@ uns_dict = {  # unstructured annotation
 # -------------------------------------------------------------------------------
 
 
-def test_readwrite_dynamic():
-    for typ in [np.array, csr_matrix]:
-        X = typ(X_list)
-        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        adata.filename = './test.h5ad'
-        adata.write()
-        adata = ad.read('./test.h5ad')
-        assert pd.api.types.is_categorical(adata.obs['oanno1'])
-        assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
-        assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
-        assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
-
-
 def test_readwrite_h5ad():
     for typ in [np.array, csr_matrix]:
         X = typ(X_list)
@@ -59,6 +47,19 @@ def test_readwrite_h5ad():
         assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
         assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
+
+def test_readwrite_dynamic():
+    for typ in [np.array, csr_matrix]:
+        X = typ(X_list)
+        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+        adata.filename = './test.h5ad'  # change to backed mode
+        adata.write()
+        adata = ad.read('./test.h5ad')
+        assert pd.api.types.is_categorical(adata.obs['oanno1'])
+        assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+        assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
+        assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+        
 
 def test_readwrite_loom():
     for i, typ in enumerate([np.array, csr_matrix]):
