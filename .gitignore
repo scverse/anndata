@@ -1,3 +1,6 @@
+# tests
+*.pytest_cache/*
+
 # anndata
 test.*
 test_*

@@ -1,11 +1,12 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
 
-**March 19, 2018**: version 0.5.6
+**March 20, 2018**: versions 0.5.1 - 0.5.7
 
 1. better memory efficiency in loom exports
-2. 'outer join' concatenation   
-3. bug fixes and consistency updates
+2. 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data
+3. bug fix for single-category columns
+4. consistency and documentation updates
 
 .. warning::
 
@@ -13,13 +14,13 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
     0.5.3 and 0.5.4: variable names were not assigned correctly. Was fixed in
     version 0.5.5.
 
+
 **February 9, 2018**: version 0.5
 
 1. inform about duplicates in :class:`~anndata.AnnData.var_names` and resolve them using :func:`~anndata.AnnData.var_names_make_unique`
-2. by default, generate unique observation names in :func:`~anndata.AnnData.concatenate`
-3. automatically remove unused categories after slicing
-4. read/write `.loom` files using loompy 2
-5. some IDE-backed improvements
+2. automatically remove unused categories after slicing
+3. read/write `.loom` files using loompy 2
+4. some IDE-backed improvements
 
 
 **December 29, 2017**: version 0.4.2
