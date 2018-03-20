@@ -3,9 +3,9 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 
 **March 20, 2018**: versions 0.5.1 - 0.5.7
 
-1. better memory efficiency in loom exports
-2. 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data
-3. bug fix for single-category columns
+1. bug fix for reading HDF5 stored single-category annotations
+2. 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data   
+3. better memory efficiency in loom exports   
 4. consistency and documentation updates
 
 .. warning::
