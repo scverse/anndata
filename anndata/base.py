@@ -4,7 +4,7 @@ import os, sys
 import warnings
 import logging as logg
 from enum import Enum
-from collections import Mapping, Sequence, Sized, ChainMap
+from collections import Mapping, Sequence, Sized
 from functools import reduce
 from typing import Union
 
@@ -22,14 +22,13 @@ from natsort import natsorted
 from . import h5py
 from . import utils
 
-# FORMAT = '%(levelname)s: %(message)s'  # TODO: add a better formatter
 FORMAT = '%(message)s'
 logg.basicConfig(format=FORMAT, level=logg.INFO, stream=sys.stdout)
 
 _MAIN_NARRATIVE = """\
-:class:`~anndata.AnnData` stores a data matrix ``.X`` together with
-annotations of observations ``.obs``, variables ``.var`` and
-unstructured annotations ``.uns``.
+:class:`~anndata.AnnData` stores a data matrix ``.X`` together with annotations
+of observations ``.obs``, variables ``.var`` and unstructured annotations
+``.uns``.
 
 .. raw:: html
 
@@ -37,13 +36,13 @@ unstructured annotations ``.uns``.
          style="width: 350px; margin: 10px 0px 15px 20px">
 
 An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
-dataframe, for example, ``adata_subset = adata[:,
+dataframe, for instance, ``adata_subset = adata[:,
 list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure is
 similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad`-formatted HDF5
 backing file ``.filename``, data remains on the disk but is automatically loaded
 into memory if needed. See this `blog post
-<http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_
-for more details.
+<http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_ for
+more details.
 """
 
 
@@ -1321,27 +1320,29 @@ class AnnData(IndexMixin):
                 copyfile(self.filename, filename)
             return AnnData(filename=filename)
 
-    def concatenate(self, *adatas, join='inner', batch_key='batch', batch_categories=None, index_unique=None):
+    def concatenate(self, *adatas, join='inner', batch_key='batch',
+                    batch_categories=None, index_unique='-'):
         """Concatenate along the observations axis.
 
-        The `.uns` and `.varm` attributes of the passed `adatas` are ignored.
+        The `.uns`, `.varm` and `.obsm` attributes are ignored.
 
-        If you use `join='outer'`, then note that this fills 0s for data that is
-        non-present. Use this with care.
+        Currently, this works only in 'memory' mode.
 
         Parameters
         ----------
         adatas : :class:`~anndata.AnnData`
-            AnnData matrices to concatenate with.
+            AnnData matrices to concatenate with. Each matrix is referred to as
+            a 'batch'.
         join: `str` (default: 'inner')
             Use intersection (``'inner'``) or union (``'outer'``) of variables.
         batch_key : `str` (default: 'batch')
             Add the batch annotation to `.obs` using this key.
         batch_categories : list, optional (default: `range(len(adatas)+1)`)
             Use these as categories for the batch annotation.
-        index_unique : `str` or `None`, optional (default: `None`)
+        index_unique : {`None`, '-', str}, optional (default: `None`)
             Make the index unique by joining the existing index names with the
-            batch category. Provide `None` to keep existing indices.
+            batch category, using `index_unique`: '-', for instance. Provide
+            `None` to keep existing indices.
 
         Returns
         -------
@@ -1349,37 +1350,168 @@ class AnnData(IndexMixin):
             The concatenated AnnData, where `adata.obs[batch_key]` stores a
             categorical variable labeling the batch.
 
+        Notes
+        -----
+
+        .. warning::
+
+            If you use `join='outer'` this fills 0s for sparse data when
+            variables are absent in a batch. Use this with care. Dense data is
+            filled with NaNs. See the examples.
+
         Examples
         --------
+        Joining on intersection of variables.
+
         >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'anno1': ['c1', 'c2']},
-        >>>                  {'var_names': ['a', 'b', 'c']})
+        >>>                  {'obs_names': ['s1', 's2'],
+        >>>                   'anno1': ['c1', 'c2']},
+        >>>                  {'var_names': ['a', 'b', 'c'],
+        >>>                   'annoA': [0, 1, 2]})
         >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'anno1': ['c3', 'c4']},
-        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>>                  {'obs_names': ['s3', 's4'],
+        >>>                   'anno1': ['c3', 'c4']},
+        >>>                  {'var_names': ['d', 'c', 'b'],
+        >>>                   'annoA': [0, 1, 2]})
         >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'anno2': ['d3', 'd4']},
-        >>>                  {'var_names': ['b', 'c', 'd']})
+        >>>                  {'obs_names': ['s1', 's2'],
+        >>>                   'anno2': ['d3', 'd4']},
+        >>>                  {'var_names': ['d', 'c', 'b'],
+        >>>                   'annoA': [0, 2, 3],
+        >>>                   'annoB': [0, 1, 2]})
         >>>
-        >>> adata = adata1.concatenate(adata2, adata3, index_unique='-')
+        >>> adata = adata1.concatenate(adata2, adata3)
+        >>> adata
+        AnnData object with n_obs × n_vars = 6 × 2
+            obs_keys = ['anno1', 'anno2', 'batch']
+            var_keys = ['annoA-0', 'annoA-1', 'annoB-2', 'annoA-2']
         >>> adata.X
-        [[ 2.  3.]
-         [ 5.  6.]
-         [ 1.  2.]
-         [ 4.  5.]
-         [ 1.  2.]
-         [ 4.  5.]]
-        >>> adata.obs_names
-        Index(['0-0', '1-0', '0-1', '1-1', '0-2', '1-2'], dtype='object')
+        array([[2., 3.],
+               [5., 6.],
+               [3., 2.],
+               [6., 5.],
+               [3., 2.],
+               [6., 5.]], dtype=float32)
         >>> adata.obs
-            anno1 anno2 batch
-        0-0    c1   NaN     0
-        1-0    c2   NaN     0
-        0-1    c3   NaN     1
-        1-1    c4   NaN     1
-        0-2   NaN    d3     2
-        1-2   NaN    d4     2
+             anno1 anno2 batch
+        s1-0    c1   NaN     0
+        s2-0    c2   NaN     0
+        s3-1    c3   NaN     1
+        s4-1    c4   NaN     1
+        s1-2   NaN    d3     2
+        s2-2   NaN    d4     2
+        >>> adata.var.T
+                 b  c
+        annoA-0  1  2
+        annoA-1  2  1
+        annoB-2  2  1
+        annoA-2  3  2
+
+        Joining on the union of variables.
+
+        >>> adata = adata1.concatenate(adata2, adata3, join='outer')
+        >>> adata
+        AnnData object with n_obs × n_vars = 6 × 4
+            obs_keys = ['anno1', 'anno2', 'batch']
+            var_keys = ['annoA-0', 'annoA-1', 'annoB-2', 'annoA-2']
+        >>> adata.var.T
+        index      a    b    c    d
+        annoA-0  0.0  1.0  2.0  NaN
+        annoA-1  NaN  2.0  1.0  0.0
+        annoB-2  NaN  2.0  1.0  0.0
+        annoA-2  NaN  3.0  2.0  0.0
+        >>> adata.var_names
+        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> adata.X
+        array([[ 1.,  2.,  3., nan],
+               [ 4.,  5.,  6., nan],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.]], dtype=float32)
+        >>> adata.X.sum(axis=0)
+        array([nan, 25., 23., nan], dtype=float32)
+        >>> import pandas as pd
+        >>> Xdf = pd.DataFrame(adata.X, columns=adata.var_names)
+        index    a    b    c    d
+        0      1.0  2.0  3.0  NaN
+        1      4.0  5.0  6.0  NaN
+        2      NaN  3.0  2.0  1.0
+        3      NaN  6.0  5.0  4.0
+        4      NaN  3.0  2.0  1.0
+        5      NaN  6.0  5.0  4.0
+        >>> Xdf.sum()
+        index
+        a     5.0
+        b    25.0
+        c    23.0
+        d    10.0
+        dtype: float32
+        >>> from numpy import ma
+        >>> adata.X = ma.masked_invalid(adata.X)
+        >>> adata.X
+        masked_array(
+          data=[[1.0, 2.0, 3.0, --],
+                [4.0, 5.0, 6.0, --],
+                [--, 3.0, 2.0, 1.0],
+                [--, 6.0, 5.0, 4.0],
+                [--, 3.0, 2.0, 1.0],
+                [--, 6.0, 5.0, 4.0]],
+          mask=[[False, False, False,  True],
+                [False, False, False,  True],
+                [ True, False, False, False],
+                [ True, False, False, False],
+                [ True, False, False, False],
+                [ True, False, False, False]],
+          fill_value=1e+20,
+          dtype=float32)
+        >>> adata.X.sum(axis=0).data
+        array([ 5., 25., 23., 10.], dtype=float32)
+
+        The masked array is not saved but has to be reinstantiated after saving.
+
+        >>> adata.write('./test.h5ad')
+        >>> from anndata import read_h5ad
+        >>> adata = read_h5ad('./test.h5ad')
+        >>> adata.X
+        array([[ 1.,  2.,  3., nan],
+               [ 4.,  5.,  6., nan],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.]], dtype=float32)
+
+        For sparse data, everything behaves similarly, except that for `join='outer'`, zeros are added.
+
+        >>> from scipy.sparse import csr_matrix
+        >>> adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        >>>                  {'obs_names': ['s1', 's2'],
+        >>>                   'anno1': ['c1', 'c2']},
+        >>>                  {'var_names': ['a', 'b', 'c']})
+        >>> adata2 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        >>>                  {'obs_names': ['s3', 's4'],
+        >>>                   'anno1': ['c3', 'c4']},
+        >>>                  {'var_names': ['d', 'c', 'b']})
+        >>> adata3 = AnnData(csr_matrix([[1, 2, 0], [0, 5, 6]]),
+        >>>                  {'obs_names': ['s5', 's6'],
+        >>>                   'anno2': ['d3', 'd4']},
+        >>>                  {'var_names': ['d', 'c', 'b']})
+        >>>
+        >>> adata = adata1.concatenate(adata2, adata3, join='outer')
+        >>> adata.var_names
+        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> adata.X.toarray()
+        array([[0., 2., 3., 0.],
+               [0., 5., 6., 0.],
+               [0., 3., 2., 0.],
+               [0., 6., 5., 0.],
+               [0., 0., 2., 1.],
+               [0., 6., 5., 0.]], dtype=float32)
         """
+        if self.isbacked:
+            raise ValueErro(
+                'Currently, concatenate does only work in \'memory\' mode.')
+        
         if len(adatas) == 0:
             return self
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
@@ -1417,8 +1549,12 @@ class AnnData(IndexMixin):
         out_shape = (sum(a.n_obs for a in all_adatas), len(var_names))
 
         any_sparse = any(issparse(a.X) for a in all_adatas)
-        mat_cls = sparse.csc_matrix if any_sparse else np.ndarray
-        X = mat_cls(out_shape, dtype=self.X.dtype)
+        if any_sparse:
+            X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
+        else:
+            X = np.empty(out_shape, dtype=self.X.dtype)
+            X[:] = np.nan
+
         var = pd.DataFrame(index=var_names)
 
         obs_i = 0  # start of next adata’s observations in X
@@ -1444,15 +1580,16 @@ class AnnData(IndexMixin):
             out_obss.append(obs)
 
             # var
-            # potential add additional columns
-            var.loc[vars_intersect, ad.var.columns] = ad.var.loc[vars_intersect, :]
+            for c in ad.var.columns:
+                new_c = c + (index_unique if index_unique is not None else '-') + categories[i]
+                var.loc[vars_intersect, new_c] = ad.var.loc[vars_intersect, c]
+
+        if any_sparse:
+            X = X.tocsr()
 
         obs = pd.concat(out_obss)
-        uns = all_adatas[0].uns
-        obsm = np.concatenate([ad.obsm for ad in all_adatas])
-        varm = self.varm  # TODO
 
-        new_adata = AnnData(X, obs, var, uns, obsm, None, filename=self.filename)
+        new_adata = AnnData(X, obs, var)
         if not obs.index.is_unique:
             logg.info(
                 'Or pass `index_unique!=None` to `.concatenate`.')

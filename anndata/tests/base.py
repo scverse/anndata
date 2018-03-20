@@ -182,30 +182,55 @@ def test_n_obs():
 
 
 def test_concatenate():
+    # dense data
     adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                      {'obs_names': ['s1', 's2'],
                       'anno1': ['c1', 'c2']},
-                     {'var_names': ['a', 'b', 'c']})
+                     {'var_names': ['a', 'b', 'c'],
+                      'annoA': [0, 1, 2]})
     adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                      {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
-                     {'var_names': ['d', 'c', 'b']})
+                     {'var_names': ['d', 'c', 'b'],
+                      'annoA': [0, 1, 2]})
     adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-                     {'obs_names': ['s5', 's6'],
+                     {'obs_names': ['s1', 's2'],
                       'anno2': ['d3', 'd4']},
-                     {'var_names': ['d', 'c', 'b']})
+                     {'var_names': ['d', 'c', 'b'],
+                      'annoB': [0, 1, 2]})
+
+    # inner join
     adata = adata1.concatenate(adata2, adata3)
     assert adata.X.astype(int).tolist() == [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
-    assert adata.n_vars == 2
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
+    assert adata.var_keys() == ['annoA-0', 'annoA-1', 'annoB-2']
+    assert adata.var.values.tolist() == [[1, 2, 2], [2, 1, 1]]
     adata = adata1.concatenate(adata2, adata3, batch_key='batch1')
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch1']
     adata = adata1.concatenate(adata2, adata3, batch_categories=['a1', 'a2', 'a3'])
     assert adata.obs['batch'].cat.categories.tolist() == ['a1', 'a2', 'a3']
     assert adata.var_names.tolist() == ['b', 'c']
-    
 
-def test_concatenate_sparse():
+    # outer join
+    adata = adata1.concatenate(adata2, adata3, join='outer')
+    from numpy import ma
+    Xma = ma.masked_invalid(adata.X)
+    Xma_ref = ma.masked_invalid(np.array([
+        [1.0, 2.0, 3.0, np.nan],
+        [4.0, 5.0, 6.0, np.nan],
+        [np.nan, 3.0, 2.0, 1.0],
+        [np.nan, 6.0, 5.0, 4.0],
+        [np.nan, 3.0, 2.0, 1.0],
+        [np.nan, 6.0, 5.0, 4.0]]))
+    assert np.array_equal(Xma.mask, Xma_ref.mask)
+    assert np.allclose(Xma.compressed(), Xma_ref.compressed())
+    var_ma = ma.masked_invalid(adata.var.values.tolist())
+    var_ma_ref = ma.masked_invalid(np.array(
+        [[0.0, np.nan, np.nan], [1.0, 2.0, 2.0], [2.0, 1.0, 1.0], [np.nan, 0.0, 0.0]]))
+    assert np.array_equal(var_ma.mask, var_ma_ref.mask)
+    assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
+    
+    # sparse data
     from scipy.sparse import csr_matrix
     adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
                      {'obs_names': ['s1', 's2'],
@@ -214,61 +239,22 @@ def test_concatenate_sparse():
     adata2 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
                      {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
-                     {'var_names': ['b', 'c', 'd']})
+                     {'var_names': ['d', 'c', 'b']})
     adata3 = AnnData(csr_matrix([[1, 2, 0], [0, 5, 6]]),
                      {'obs_names': ['s5', 's6'],
                       'anno2': ['d3', 'd4']},
-                     {'var_names': ['b', 'c', 'd']})
+                     {'var_names': ['d', 'c', 'b']})
+
+    # inner join
     adata = adata1.concatenate(adata2, adata3)
-    assert adata.n_vars == 2
+    assert adata.X.toarray().astype(int).tolist() == [[2, 3], [5, 6], [3, 2], [6, 5], [0, 2], [6, 5]]
 
-
-def test_concatenate_outer():
-    adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-                     {'obs_names': ['s1', 's2'],
-                      'anno1': ['c1', 'c2']},
-                     {'var_names': ['a', 'b', 'c']})
-    adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6], [7,8,9]]),
-                     {'obs_names': ['s3', 's4', 's5'],
-                      'anno2': ['c3', 'c4', 'c5']},
-                     {'var_names': ['b', 'c', 'd']})
-    adata = adata1.concatenate(adata2, join='outer')
-    assert adata.n_vars == 4
-    assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
-
-# TODO: remove logging and actually test values
-# from scanpy import logging as logg
-
-# def test_profile_memory():
-#     import gc
-#     dim = 10  # increase this when profiling
-#     print()
-#     logg.print_memory_usage('start profiling')
-#     X = np.random.rand(dim, dim).astype('float32')
-#     logg.print_memory_usage('allocated X')
-#     var_filter = np.array([0, 1])
-#     X = X[:, var_filter]
-#     logg.print_memory_usage('sliced X')
-#     X = np.random.rand(dim, dim).astype('float32')
-#     logg.print_memory_usage('allocated X')
-#     adata = AnnData(X)
-#     logg.print_memory_usage('init adata with reference to X')
-#     adata.var['multi'] = np.random.rand(dim, 3)
-#     logg.print_memory_usage('added some annotation')
-#     # ------------------------------------------------
-#     # compare adata.__getitem__ with adata.filter_var
-#     # ------------------------------------------------
-#     # here, it doesn't make a difference in other scenarios
-#     # (e.g. sc.preprocess.weinreb16), filter_var seems to invoke earlier garbage
-#     # collection than slicing
-#     # adata.filter_var(var_filter)  # inplace
-#     adata = adata[:, var_filter]  # with copy
-#     logg.print_memory_usage('sliced adata')
-#     gc.collect()
-#     logg.print_memory_usage('after calling gc.collect()')
-#     return adata
-
-
-# def test_profile_memory_2():
-#     adata = test_profile_memory()
-#     logg.print_memory_usage('after leaving function')
+    # outer join
+    adata = adata1.concatenate(adata2, adata3, join='outer')
+    assert adata.X.toarray().tolist() == [
+        [0.0, 2.0, 3.0, 0.0],
+        [0.0, 5.0, 6.0, 0.0],
+        [0.0, 3.0, 2.0, 0.0],
+        [0.0, 6.0, 5.0, 0.0],
+        [0.0, 0.0, 2.0, 1.0],
+        [0.0, 6.0, 5.0, 0.0]]
