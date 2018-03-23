@@ -4,7 +4,7 @@ import os, sys
 import warnings
 import logging as logg
 from enum import Enum
-from collections import Mapping, Sequence, Sized
+from collections import Mapping, Sequence, Sized, OrderedDict
 from functools import reduce
 from typing import Union
 
@@ -784,7 +784,7 @@ class AnnData(IndexMixin):
         self._var = _gen_dataframe(var, self._n_vars, ['var_names', 'col_names'])
 
         # unstructured annotations
-        self._uns = uns or {}
+        self._uns = uns or OrderedDict()
 
         # multi-dimensional array annotations
         if obsm is None:
@@ -831,10 +831,10 @@ class AnnData(IndexMixin):
         descr = (
             'AnnData object with n_obs × n_vars = {} × {} {}'
             .format(n_obs, n_vars, backed_at))
-        for attr in ['obs_keys', 'var_keys', 'uns_keys', 'obsm_keys', 'varm_keys']:
-            keys = getattr(self, attr)()
+        for attr in ['obs', 'var', 'uns', 'obsm', 'varm']:
+            keys = getattr(self, attr).keys()
             if len(keys) > 0:
-                descr += '\n    {} = {}'.format(attr, keys)
+                descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
         return descr
 
     def __repr__(self):
@@ -1193,10 +1193,8 @@ class AnnData(IndexMixin):
                         df[key] = c
                         df[key].cat.categories = df[key].cat.categories.astype('U')
                         logg.info(
-                            '... storing \'{}\' as categorical type'.format(key))
-                        logg.info(
-                            '    access categories as adata.{}[\'{}\'].cat.categories'
-                            .format(ann, key))
+                            '... storing \'{}\' as categorical'
+                            .format(key, ann, key))
 
     def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
         # slice sparse spatrices of n_obs × n_obs in self.uns

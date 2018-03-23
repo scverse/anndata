@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Union, Optional, Iterable, Generator, Iterator
+from collections import OrderedDict
 from scipy.sparse import issparse
 import numpy as np
 
@@ -410,7 +411,7 @@ def _read_h5ad(adata=None, filename=None, mode=None):
 def _read_key_value_from_h5(f, d, key, key_write=None):
     if key_write is None: key_write = key
     if isinstance(f[key], h5py.Group):
-        d[key_write] = {}
+        d[key_write] = OrderedDict() if key == 'uns' else {} 
         for k in f[key].keys():
             _read_key_value_from_h5(f, d[key_write], key + '/' + k, k)
         return
