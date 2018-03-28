@@ -894,8 +894,11 @@ class AnnData(IndexMixin):
 
     @raw.setter
     def raw(self, value):
-        if not isinstance(value, AnnData):
-            raise ValueError('Can only init raw attribute with an AnnData object.')
+        if not isinstance(value, AnnData) or value is None:
+            raise ValueError(
+                'Can only init raw attribute with an AnnData object or `None`.')
+        if value is None:
+            self._raw = None
         if self.isview:
             self._init_as_actual(self.copy())
         self._raw = Raw(value)
