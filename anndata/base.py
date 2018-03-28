@@ -1180,15 +1180,15 @@ class AnnData(IndexMixin):
                             all_categories, df_sub[k].cat.categories))[0]]
 
     def _sanitize(self):
-        """Transform string arrays to categorical data types, if they store less
-        categories than the total number of samples.
+        """Transform string arrays to categorical data types if they store less
+        categories than the total number of observations.
         """
         for ann in ['obs', 'var']:
             for key in getattr(self, ann).columns:
                 df = getattr(self, ann)
                 if is_string_dtype(df[key]):
-                    c = pd.Categorical(
-                        df[key], categories=natsorted(np.unique(df[key])))
+                    c = df[key].astype(str)  # make sure we only have strings (could be that there are nans=float, for instance)
+                    c = pd.Categorical(c, categories=natsorted(np.unique(c)))
                     if len(c.categories) < len(c):
                         df[key] = c
                         df[key].cat.categories = df[key].cat.categories.astype('U')
