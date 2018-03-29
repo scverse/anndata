@@ -81,8 +81,9 @@ def _write_h5ad(filename: Union[Path, str], adata: AnnData, **kwargs):
         # close so that we can reopen below
         adata.file.close()
     # create directory if it doesn't exist
-    if not os.path.exists(os.path.dirname(filename)):
-        os.makedirs(os.path.dirname(filename))
+    dirname = os.path.dirname(filename)
+    if dirname != '' and not os.path.exists(dirname):
+        os.makedirs(dirname)
     d = adata._to_dict_fixed_width_arrays()
     # we're writing to a different location than the backing file
     # - load the matrix into the memory...
