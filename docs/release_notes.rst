@@ -1,12 +1,13 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
 
-**March 20, 2018**: versions 0.5.1 - 0.5.7
+**March 28, 2018**: versions 0.5.1 - 0.5.8
 
 1. bug fix for reading HDF5 stored single-category annotations
 2. 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data   
 3. better memory efficiency in loom exports   
 4. consistency and documentation updates
+5. prettified print output
 
 .. warning::
 
