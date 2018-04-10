@@ -1,5 +1,5 @@
 # stuff necessary for docs generation
-numpydoc
+numpydoc==0.7
 # dependencies of anndata
 pandas>=0.21.0
 scipy
