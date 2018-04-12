@@ -886,9 +886,11 @@ class AnnData(IndexMixin):
 
     @property
     def raw(self):
-        """Store raw version of `.X` and `.var` as `.raw.X` and `.raw.X`.
+        """Store raw version of `.X` and `.var` as `.raw.X` and `.raw.var`.
 
-        `.raw` can be initialized by setting ``adata.raw = adata1``
+        The `.raw` attribute is initialized with the current content of an object by setting: ``adata.raw = adata``.
+
+        Its content can be deleted by setting it back to `None`:  ``adata.raw = None``.
         """
         return self._raw
 
