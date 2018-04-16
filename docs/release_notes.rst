@@ -1,7 +1,11 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
+**April 16, 2018**: versions 0.5.9
 
-**March 28, 2018**: versions 0.5.1 - 0.5.8
+1. bug fix for deep copy of unstructured annotation after slicing
+   
+
+**March 16, 2018**: versions 0.5.1 - 0.5.8
 
 1. bug fix for reading HDF5 stored single-category annotations
 2. 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data   
