@@ -7,6 +7,7 @@ from enum import Enum
 from collections import Mapping, Sequence, Sized, OrderedDict
 from functools import reduce
 from typing import Union
+from copy import deepcopy
 
 import numpy as np
 from numpy import ma
@@ -650,7 +651,7 @@ class AnnData(IndexMixin):
         self._obsm = ArrayView(adata_ref.obsm[oidx_normalized], view_args=(self, 'obsm'))
         self._varm = ArrayView(adata_ref.varm[vidx_normalized], view_args=(self, 'varm'))
         # hackish solution here, no copy should be necessary
-        uns_new = self._adata_ref._uns.copy()
+        uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
         self._n_obs = self._adata_ref.n_obs  # use the original n_obs here
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
@@ -1168,7 +1169,7 @@ class AnnData(IndexMixin):
         varm_new = self._varm[vidx]
         assert obs_new.shape[0] == X.shape[0], (oidx, obs_new)
         assert var_new.shape[0] == X.shape[1], (vidx, var_new)
-        uns_new = self._uns.copy()
+        uns_new = deepcopy(self._uns)
         self._slice_uns_sparse_matrices_inplace(uns_new, oidx)
         raw_new = None if self.raw is None else self.raw[oidx]
         return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new, raw=raw_new)
@@ -1309,7 +1310,7 @@ class AnnData(IndexMixin):
         if not self.isbacked:
             return AnnData(self._X.copy(),
                            self._obs.copy(),
-                           self._var.copy(), self._uns.copy(),
+                           self._var.copy(), deepcopy(self._uns),
                            self._obsm.copy(), self._varm.copy(),
                            raw=None if self._raw is None else self._raw.copy())
         else:

@@ -90,6 +90,16 @@ def test_slicing_strings():
     with raises(IndexError): _ = adata[:, 'a':'X']
 
 
+def test_slicing_graphs():
+    adata = AnnData(
+        np.array([[1, 2], [3, 4], [5, 6]]),
+        uns={'neighbors':
+             {'connectivities': sp.csr_matrix(np.ones((3, 3)))}})
+    adata_sub = adata[[0, 1], :]
+    assert adata_sub.uns['neighbors']['connectivities'].shape[0] == 2
+    assert adata.uns['neighbors']['connectivities'].shape[0] == 3
+
+
 def test_slicing_series():
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6]]),
