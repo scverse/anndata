@@ -98,6 +98,7 @@ def test_slicing_graphs():
     adata_sub = adata[[0, 1], :]
     assert adata_sub.uns['neighbors']['connectivities'].shape[0] == 2
     assert adata.uns['neighbors']['connectivities'].shape[0] == 3
+    assert adata_sub.copy().uns['neighbors']['connectivities'].shape[0] == 2
 
 
 def test_slicing_series():
@@ -239,7 +240,7 @@ def test_concatenate():
         [[0.0, np.nan, np.nan], [1.0, 2.0, 2.0], [2.0, 1.0, 1.0], [np.nan, 0.0, 0.0]]))
     assert np.array_equal(var_ma.mask, var_ma_ref.mask)
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
-    
+
     # sparse data
     from scipy.sparse import csr_matrix
     adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),

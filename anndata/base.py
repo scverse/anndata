@@ -1154,7 +1154,7 @@ class AnnData(IndexMixin):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
-    # this is no longer needed but remains here for reference for now
+    # this is used in the setter for uns, if a view
     def _getitem_copy(self, index):
         oidx, vidx = self._normalize_indices(index)
         if isinstance(oidx, (int, np.int64)): oidx = slice(oidx, oidx+1, 1)
@@ -1310,7 +1310,10 @@ class AnnData(IndexMixin):
         if not self.isbacked:
             return AnnData(self._X.copy(),
                            self._obs.copy(),
-                           self._var.copy(), deepcopy(self._uns),
+                           self._var.copy(),
+                           # deepcopy on DictView does not work and is unnecessary
+                           # as uns was copied already before
+                           self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
                            self._obsm.copy(), self._varm.copy(),
                            raw=None if self._raw is None else self._raw.copy())
         else:
