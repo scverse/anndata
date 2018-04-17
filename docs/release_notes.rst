@@ -1,6 +1,6 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
-**April 16, 2018**: versions 0.5.9
+**April 17, 2018**: versions 0.5.9 - 0.5.10
 
 1. bug fix for deep copy of unstructured annotation after slicing
    
