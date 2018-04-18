@@ -30,7 +30,7 @@ def get_format_class(format_str):
 
 
 class Group(object):
-    """Like `h5py.Group`, but able to handle sparse matrices.
+    """Like :ref:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
     """
 
     def __init__(self, h5py_group):
@@ -84,7 +84,7 @@ class Group(object):
 
 
 class File(Group):
-    """Like `h5py.File`, but able to handle sparse matrices.
+    """Like :ref:`h5py.File <h5py:File>`, but able to handle sparse matrices.
     """
 
     def __init__(self, *args, **kwargs):
@@ -181,7 +181,7 @@ _cs_matrix._zero_many = _zero_many
 
     
 class SparseDataset(IndexMixin):
-    """Analogous to `h5py.Dataset`, but for sparse matrices.
+    """Analogous to :ref:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
     """
 
     def __init__(self, h5py_group):

@@ -13,7 +13,7 @@ from .. import h5py
 
 
 def write_csvs(dirname, adata, skip_data=True, sep=','):
-    """See :class:`~anndata.AnnData.write_csvs`.
+    """See :meth:`~anndata.AnnData.write_csvs`.
     """
     if dirname.endswith('.csv'):
         dirname = dirname.replace('.csv', '/')
