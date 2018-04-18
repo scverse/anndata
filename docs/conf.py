@@ -18,7 +18,8 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import ast
-import sys, os
+import sys
+import os
 import glob
 
 # clean up directory
@@ -27,12 +28,12 @@ for f in glob.glob('anndata.*'):
 
 import time
 import inspect
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import List
 import logging
 
 logger = logging.getLogger(__name__)
-from sphinx.ext import autosummary, autodoc
+from sphinx.ext import autosummary
 from sphinx.ext.autosummary import limited_join
 
 HERE = Path(__file__).parent
@@ -51,6 +52,7 @@ import anndata
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'sphinx.ext.intersphinx',
     'sphinx.ext.autodoc',
     'sphinx.ext.doctest',
     'sphinx.ext.coverage',
@@ -76,27 +78,10 @@ numpydoc_show_class_members = True
 # so, to avoid all these warnings, set this to False
 numpydoc_class_members_toctree = False
 
-def process_generate_options(app):
-    # type: (Sphinx) -> None
-    genfiles = app.config.autosummary_generate
-    if genfiles and not hasattr(genfiles, '__len__'):
-        env = app.builder.env
-        genfiles = [env.doc2path(x, base=None) for x in env.found_docs
-                    if os.path.isfile(env.doc2path(x))]
-    if not genfiles:
-        return
-    from sphinx.ext.autosummary.generate import generate_autosummary_docs
-    ext = app.config.source_suffix
-    genfiles = [genfile + (not genfile.endswith(tuple(ext)) and ext[0] or '')
-                for genfile in genfiles]
-    suffix = autosummary.get_rst_suffix(app)
-    if suffix is None:
-        return
-    generate_autosummary_docs(genfiles, builder=app.builder,
-                              warn=logger.warning, info=logger.info,
-                              suffix=suffix, base_path=app.srcdir, imported_members=True)
-
-autosummary.process_generate_options = process_generate_options
+intersphinx_mapping = dict(
+    python=('https://docs.python.org/3', None),
+    h5py=('http://docs.h5py.org/en/latest/', None)
+)
 
 templates_path = ['_templates']
 source_suffix = '.rst'
@@ -114,32 +99,16 @@ todo_include_todos = False
 # -- Options for HTML output ----------------------------------------------
 
 html_theme = 'sphinx_rtd_theme'
-if html_theme == 'sphinx_rtd_theme':
-    html_theme_options = {
-        'navigation_depth': 2,
-    }
-    html_context = {
-        "display_github": True,  # Integrate GitHub
-        "github_user": "theislab",  # Username
-        "github_repo": "anndata",  # Repo name
-        "github_version": "master",  # Version
-        "conf_py_path": "/docs/",  # Path in the checkout to the docs root
-    }
-elif html_theme == 'bootstrap':
-    import sphinx_bootstrap_theme
-    html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
-    html_theme_options = {
-        'navbar_site_name': "Site",
-        'navbar_pagenav_name': "Page",
-        'source_link_position': "footer",
-        'bootswatch_theme': "paper",
-        'navbar_pagenav': False,
-        'navbar_sidebarrel': False,
-        'bootstrap_version': "3",
-        'navbar_links': [
-            ("API", "api"),
-        ],
-    }
+html_theme_options = {
+    'navigation_depth': 2,
+}
+html_context = {
+    "display_github": True,  # Integrate GitHub
+    "github_user": "theislab",  # Username
+    "github_repo": "anndata",  # Repo name
+    "github_version": "master",  # Version
+    "conf_py_path": "/docs/",  # Path in the checkout to the docs root
+}
 
 html_static_path = ['_static']
 
@@ -244,7 +213,7 @@ def modurl(qualname):
     obj, module = get_obj_module(qualname)
     github_url = github_url1
     try:
-        path = Path(module.__file__).relative_to(project_dir)
+        path = PurePosixPath(Path(module.__file__).resolve().relative_to(project_dir))
     except ValueError:
         # trying to document something from another package
         github_url = github_url2
@@ -265,18 +234,13 @@ DEFAULT_FILTERS['modurl'] = modurl
 # -- Prettier Autodoc -----------------------------------------------------
 
 
-def f(string):
-    frame = sys._getframe(1)
-    return string.format_map(frame.f_locals)
-
-
 def unparse(ast_node: ast.expr, plain: bool=False) -> str:
     if isinstance(ast_node, ast.Attribute):
         if plain:
             return ast_node.attr
         else:
             v = unparse(ast_node.value, plain)
-            return f('{v}.{ast_node.attr}')
+            return f'{v}.{ast_node.attr}'
     elif isinstance(ast_node, ast.Index):
         return unparse(ast_node.value)
     elif isinstance(ast_node, ast.Name):
@@ -284,16 +248,16 @@ def unparse(ast_node: ast.expr, plain: bool=False) -> str:
     elif isinstance(ast_node, ast.Subscript):
         v = unparse(ast_node.value, plain)
         s = unparse(ast_node.slice, plain)
-        return f('{v}[{s}]')
+        return f'{v}[{s}]'
     elif isinstance(ast_node, ast.Tuple):
         return ', '.join(unparse(e) for e in ast_node.elts)
     else:
         t = type(ast_node)
-        raise NotImplementedError(f('can’t unparse {t}'))
+        raise NotImplementedError(f'can’t unparse {t}')
 
 
 def mangle_signature(sig: str, max_chars: int=30) -> str:
-    fn = ast.parse(f('def f{sig}: pass')).body[0]
+    fn = ast.parse(f'def f{sig}: pass').body[0]
 
     args_all = [a.arg for a in fn.args.args]
     n_a = len(args_all) - len(fn.args.defaults)
@@ -305,15 +269,15 @@ def mangle_signature(sig: str, max_chars: int=30) -> str:
     if opts:
         if not s:
             opts_str = limited_join(', ', opts, max_chars=max_chars - 4)
-            s = f('[{opts_str}]')
+            s = f'[{opts_str}]'
         elif len(s) < max_chars - 4 - 2 - 3:
             opts_str = limited_join(', ', opts, max_chars=max_chars - len(sig) - 4 - 2)
-            s += f('[, {opts_str}]')
+            s += f'[, {opts_str}]'
 
     if False:  # fn.returns:  # do not show return type in docs
         ret = unparse(fn.returns, plain=True)
-        return f('({s}) -> {ret}')
-    return f('({s})')
+        return f'({s}) -> {ret}'
+    return f'({s})'
 
 
 autosummary.mangle_signature = mangle_signature

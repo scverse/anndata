@@ -13,7 +13,7 @@ API
 The central class:
 
 .. autosummary::
-  :toctree: .
+   :toctree: .
 
    AnnData
 
@@ -24,14 +24,14 @@ Reading
 Reading anndata's native file format `.h5ad`.
 
 .. autosummary::
-  :toctree: .
+   :toctree: .
 
    read_h5ad
 
 Reading other file formats.
 
 .. autosummary::
-  :toctree: .
+   :toctree: .
 
    read_csv
    read_excel
@@ -48,14 +48,14 @@ Writing
 Writing to anndata's native file format `.h5ad`.
 
 .. autosummary::
-  :toctree: .
+   :toctree: .
 
    AnnData.write
 
 Writing to other formats.
 
 .. autosummary::
-  :toctree: .
+   :toctree: .
 
    AnnData.write_csvs
    AnnData.write_loom
@@ -68,7 +68,7 @@ provides a thin wrapper of `h5py <http://www.h5py.org/>`_ that is able to handle
 sparse matrices in addition to the standard functionality.
 
 .. autosummary::
-  :toctree: .
+   :toctree: .
 
    h5py
 
