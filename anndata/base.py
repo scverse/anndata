@@ -1182,6 +1182,9 @@ class AnnData(IndexMixin):
                 df_sub[k].cat.remove_unused_categories(inplace=True)
                 # also correct the colors...
                 if k + '_colors' in uns:
+                    # this is a strange hack...
+                    if np.array(uns[k + '_colors']).ndim == 0:
+                        uns[k + '_colors'] = np.array(uns[k + '_colors'])[None]
                     uns[k + '_colors'] = np.array(uns[k + '_colors'])[
                         np.where(np.in1d(
                             all_categories, df_sub[k].cat.categories))[0]]
@@ -1519,7 +1522,7 @@ class AnnData(IndexMixin):
         if self.isbacked:
             raise ValueErro(
                 'Currently, concatenate does only work in \'memory\' mode.')
-        
+
         if len(adatas) == 0:
             return self
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
