@@ -1,7 +1,7 @@
 # stuff necessary for docs generation
-numpydoc==0.7
+sphinx-autodoc-typehints
 # dependencies of anndata
-pandas>=0.21.0
+pandas~=0.21
 scipy
 h5py
 natsort

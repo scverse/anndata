@@ -1,4 +1,7 @@
 import logging as logg
+import warnings
+from functools import wraps
+
 import pandas as pd
 import numpy as np
 
@@ -75,3 +78,43 @@ def convert_dictionary_to_structured_array(source):
         arr[name] = np.array(cols[i], dtype=dtype_list[i][1])
 
     return arr
+
+
+def deprecated(new_name):
+    """
+    This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emitted
+    when the function is used.
+    """
+    def decorator(func):
+        @wraps(func)
+        def new_func(*args, **kwargs):
+            warnings.simplefilter('always', DeprecationWarning)  # turn off filter
+            warnings.warn(
+                f'Use {new_name} instead of {func.__name__}, '
+                f'{func.__name__} will be removed in the future.',
+                category=DeprecationWarning,
+                stacklevel=2,
+            )
+            warnings.simplefilter('default', DeprecationWarning)  # reset filter
+            return func(*args, **kwargs)
+        setattr(new_func, '__deprecated', True)
+        return new_func
+    return decorator
+
+
+class DeprecationMixinMeta(type):
+    """
+    Use this as superclass so deprecated methods and properties
+    do not appear in vars(MyClass)/dir(MyClass)
+    """
+    def __dir__(cls):
+        def is_deprecated(attr):
+            if isinstance(attr, property):
+                attr = attr.fget
+            return getattr(attr, '__deprecated', False)
+        
+        return [
+            item for item in type.__dir__(cls)
+            if not is_deprecated(getattr(cls, item, None))
+        ]
