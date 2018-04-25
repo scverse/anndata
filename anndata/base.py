@@ -527,7 +527,7 @@ class IndexDimError(IndexError):
         super().__init__(msg)
 
 
-class AnnData(IndexMixin):
+class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     __doc__ = dedent("""\
     An annotated data matrix.
 
@@ -582,34 +582,6 @@ class AnnData(IndexMixin):
 
         adata = AnnData(np.ones((2, 2)))
         adata[:, 0].X == adata.X[:, 0]
-
-    Attributes
-    ----------
-    X
-    filename
-    isbacked
-    isview
-    n_obs
-    n_vars
-    shape
-    obs
-    obsm
-    obs_names
-    raw
-    var
-    varm
-    var_names
-
-    Methods
-    -------
-    concatenate
-    copy
-    transpose
-    obs_names_make_unique
-    var_names_make_unique
-    write
-    write_csvs
-    write_loom
     """).format(main_narrative=_MAIN_NARRATIVE)
 
     _BACKED_ATTRS = ['X', 'raw.X']
@@ -787,8 +759,8 @@ class AnnData(IndexMixin):
             self._X, self._n_obs, self._n_vars = _fix_shapes(X)
         else:
             self._X = None
-            self._n_obs = len(obs)
-            self._n_vars = len(var)
+            self._n_obs = len([] if obs is None else obs)
+            self._n_vars = len([] if var is None else var)
 
         # annotations
         self._obs = _gen_dataframe(obs, self._n_obs,
@@ -1539,7 +1511,7 @@ class AnnData(IndexMixin):
                [0., 6., 5., 0.]], dtype=float32)
         """
         if self.isbacked:
-            raise ValueErro(
+            raise ValueError(
                 'Currently, concatenate does only work in \'memory\' mode.')
 
         if len(adatas) == 0:
@@ -1879,70 +1851,66 @@ class AnnData(IndexMixin):
     # --------------------------------------------------------------------------
 
     @property
+    @utils.deprecated('X')
     def data(self):
-        """Deprecated access to X."""
-        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
-              '`.data` will be removed in the future.')
         return self.X
 
     @data.setter
+    @utils.deprecated('X')
     def data(self, value):
-        print('DEPRECATION WARNING: use attribute `.X` instead of `.data`, '
-              '`.data` will be removed in the future.')
         self.X = value
 
     @property
+    @utils.deprecated('n_obs')
     def n_smps(self):
-        """Deprecated access to `.n_obs`."""
         return self.n_obs
 
     @property
+    @utils.deprecated('obs')
     def smp(self):
-        """Deprecated access to `.obs`."""
         return self.obs
 
-    # for backwards compat
     @smp.setter
+    @utils.deprecated('obs')
     def smp(self, value):
         self.obs = value
 
     @property
+    @utils.deprecated('uns')
     def add(self):
-        """Deprecated access to `.uns`, remains for backwards compatibility."""
-        # FutureWarning and DeprecationWarning are not visible by default, use print
-        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
-              '`.add` will be removed in the future.')
         return self.uns
 
     @add.setter
+    @utils.deprecated('uns')
     def add(self, value):
-        print('DEPRECATION WARNING: use attribute `.uns` instead of `.add`, '
-              '`.add` will be removed in the future.')
         self.uns = value
 
     @property
+    @utils.deprecated('obsm')
     def smpm(self):
-        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`)        """
         return self.obsm
 
     @smpm.setter
+    @utils.deprecated('obsm')
     def smpm(self, value):
         self.obsm = value
 
     @property
+    @utils.deprecated('obs_names')
     def smp_names(self):
         return self.obs_names
 
     @smp_names.setter
+    @utils.deprecated('obs_names')
     def smp_names(self, names):
         self.obs_names = names
 
+    @utils.deprecated('obs_keys')
     def smp_keys(self):
-        """List keys of observation annotation `obs`."""
         return self.obs_keys()
 
+    @utils.deprecated('obsm_keys')
     def smpm_keys(self):
-        """List keys of observation annotation `obsm`."""
         return self.obsm_keys()
 
     def _clean_up_old_format(self, uns):
