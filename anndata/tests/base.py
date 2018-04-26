@@ -12,9 +12,10 @@ def test_creation():
     AnnData(ma.array([[1, 2], [3, 4]]), uns={'mask': [0, 1, 1, 0]})
     AnnData(sp.eye(2))
     AnnData(
-        np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(Obs=['A', 'B']),
-        dict(Feat=['a', 'b', 'c']))
+        X=np.array([[1, 2, 3], [4, 5, 6]]),
+        obs=dict(Obs=['A', 'B']),
+        var=dict(Feat=['a', 'b', 'c']),
+        obsm=dict(X_pca=np.array([[1, 2], [3, 4]])))
 
     assert AnnData(np.array([1, 2])).X.shape == (2,)
 

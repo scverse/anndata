@@ -1,5 +1,6 @@
 import logging as logg
 import pandas as pd
+import numpy as np
 
 
 def make_index_unique(index, join='-'):
@@ -44,3 +45,33 @@ def warn_names_duplicates(string, df):
         '{} names are not unique. '
         'To make them unique, call `.{}_names_make_unique`.'
         .format(names, string))
+
+
+def convert_dictionary_to_structured_array(source):
+
+    names = list(source.keys())
+    try:  # transform to byte-strings
+        cols = [np.asarray(col) if np.array(col[0]).dtype.char not in {'U', 'S'}
+                else np.asarray(col).astype('U') for col in source.values()]
+    except UnicodeEncodeError:
+        raise ValueError(
+            'Currently only support ascii strings. Don\'t use "ö" etc. for sample annotation.')
+
+    # if old_index_key not in source:
+    #     names.append(new_index_key)
+    #     cols.append(np.arange(len(cols[0]) if cols else n_row).astype('U'))
+    # else:
+    #     names[names.index(old_index_key)] = new_index_key
+    #     cols[names.index(old_index_key)] = cols[names.index(old_index_key)].astype('U')
+    dtype_list = list(zip(names, [str(c.dtype) for c in cols], [(c.shape[1],) for c in cols]))
+    # might be unnecessary
+    dtype = np.dtype(dtype_list)
+
+    arr = np.zeros((len(cols[0]),), dtype)
+    # here, we do not want to call BoundStructArray.__getitem__
+    # but np.ndarray.__getitem__, therefore we avoid the following line
+    # arr = np.ndarray.__new__(cls, (len(cols[0]),), dtype)
+    for i, name in enumerate(dtype.names):
+        arr[name] = np.array(cols[i], dtype=dtype_list[i][1])
+
+    return arr

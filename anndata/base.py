@@ -797,6 +797,11 @@ class AnnData(IndexMixin):
                     '--> try installing a more recent numpy version: '
                     '    pip install numpy --upgrade')
         if varm is None: varm = np.empty(self._n_vars, dtype=[])
+        # deal with dictionaries
+        if isinstance(obsm, Mapping):
+             obsm = utils.convert_dictionary_to_structured_array(obsm)
+        if isinstance(varm, Mapping):
+             varm = utils.convert_dictionary_to_structured_array(varm)
         self._obsm = BoundRecArr(obsm, self, 'obsm')
         self._varm = BoundRecArr(varm, self, 'varm')
 
