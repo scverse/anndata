@@ -249,6 +249,8 @@ def _normalize_index(index, names):
 
 
 def _gen_dataframe(anno, length, index_names):
+    if isinstance(anno, pd.DataFrame):
+        return anno
     if anno is None or len(anno) == 0:
         _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
     else:
@@ -817,7 +819,10 @@ class AnnData(IndexMixin):
             else:
                 # is dictionary from reading the file
                 self._raw = Raw(
-                    self, X=raw['X'], var=raw['var'], varm=raw['varm'])
+                    self,
+                    X=raw['X'],
+                    var=_gen_dataframe(raw['var'], raw['X'].shape[1], ['var_names', 'col_names']),
+                    varm=raw['varm'] if 'varm' in raw else None)
 
         # clean up old formats
         self._clean_up_old_format(uns)

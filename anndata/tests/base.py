@@ -11,11 +11,16 @@ def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]), {}, {})
     AnnData(ma.array([[1, 2], [3, 4]]), uns={'mask': [0, 1, 1, 0]})
     AnnData(sp.eye(2))
-    AnnData(
-        X=np.array([[1, 2, 3], [4, 5, 6]]),
+    X = np.array([[1, 2, 3], [4, 5, 6]])
+    adata = AnnData(
+        X=X,
         obs=dict(Obs=['A', 'B']),
         var=dict(Feat=['a', 'b', 'c']),
-        obsm=dict(X_pca=np.array([[1, 2], [3, 4]])))
+        obsm=dict(X_pca=np.array([[1, 2], [3, 4]])),
+        raw=dict(X=X, var={'var_names': ['a', 'b', 'c']}))
+
+    assert adata.raw.X.tolist() == X.tolist()
+    assert adata.raw.var_names.tolist() == ['a', 'b', 'c']
 
     assert AnnData(np.array([1, 2])).X.shape == (2,)
 
