@@ -1,9 +1,15 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
+**May 1, 2018**: version 0.6
+
+1. compatibility with Seurat converter
+2. tremendous speedup for :func:`~anndata.AnnData.concatenate`
+   
+
 **April 17, 2018**: versions 0.5.9 - 0.5.10
 
 1. bug fix for deep copy of unstructured annotation after slicing
-   
+
 
 **March 16, 2018**: versions 0.5.1 - 0.5.8
 
