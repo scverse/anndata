@@ -15,7 +15,7 @@ import pandas as pd
 from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
-from scipy.sparse import issparse
+from scipy.sparse import issparse, isspmatrix_csc
 from scipy.sparse.sputils import IndexMixin
 from textwrap import dedent
 from natsort import natsorted
@@ -220,15 +220,16 @@ def _fix_shapes(X, single_col=False):
 
 
 def _normalize_index(index, names):
+    # the following is insanely slow for sequences, we replaced it using pandas below
     def name_idx(i):
         if isinstance(i, str):
             # `where` returns an 1-tuple (1D array) of found indices
-            i = np.where(names == i)[0]
-            if len(i) == 0:  # returns array of length 0 if nothing is found
+            i_found = np.where(names == i)[0]
+            if len(i_found) == 0:  # returns array of length 0 if nothing is found
                 raise IndexError(
-                    'Name "{}" is not valid observation/variable name.'
-                    .format(index))
-            i = i[0]
+                    'Key "{}" is not valid observation/variable name/index.'
+                    .format(i))
+            i = i_found[0]
         return i
 
     if isinstance(index, slice):
@@ -241,8 +242,16 @@ def _normalize_index(index, names):
         return slice(start, stop, step)
     elif isinstance(index, (int, str)):
         return name_idx(index)
-    elif isinstance(index, (Sequence, np.ndarray)):
-        return np.fromiter(map(name_idx, index), 'int64')
+    elif isinstance(index, (Sequence, np.ndarray, pd.Index)):
+        # here, we replaced the implementation based on name_idx with this
+        # incredibly faster one
+        positions = pd.Series(index=names, data=range(len(names)))
+        positions = positions[index]
+        if positions.isnull().values.any():
+            raise KeyError(
+                'Indices "{}" contain invalid observation/variables names/indices.'
+                .format(index))
+        return positions.values
     else:
         raise IndexError('Unknown index {!r} of type {}'
                          .format(index, type(index)))
@@ -1553,6 +1562,8 @@ class AnnData(IndexMixin):
         mergers = dict(inner=set.intersection, outer=set.union)
         var_names_reduce = reduce(mergers[join], (set(ad.var_names) for ad in all_adatas))
         # restore order of initial var_names, append non-sortable names at the end
+        # see how this was done in the repo at commit state
+        # 40a24f
         var_names = []
         for v in all_adatas[0].var_names:
             if v in var_names_reduce:
@@ -1570,22 +1581,34 @@ class AnnData(IndexMixin):
         out_shape = (sum(a.n_obs for a in all_adatas), len(var_names))
 
         any_sparse = any(issparse(a.X) for a in all_adatas)
-        if any_sparse:
-            X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
+        if join == 'outer':
+            if any_sparse:
+                X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
+            else:
+                X = np.empty(out_shape, dtype=self.X.dtype)
+                X[:] = np.nan
         else:
-            X = np.empty(out_shape, dtype=self.X.dtype)
-            X[:] = np.nan
+            Xs = []
 
         var = pd.DataFrame(index=var_names)
 
         obs_i = 0  # start of next adata’s observations in X
         out_obss = []
         for i, ad in enumerate(all_adatas):
-            vars_intersect = [v for v in var_names if v in ad.var_names]
+            if join == 'outer':
+                # only those names that are actually present in the current AnnData
+                vars_intersect = [v for v in var_names if v in ad.var_names]
+            else:
+                vars_intersect = var_names
 
             # X
-            X[obs_i:obs_i+ad.n_obs,
-              var_names.isin(vars_intersect)] = ad[:, vars_intersect].X
+            if join == 'outer':
+                # this is pretty slow, I guess sparse matrices shouldn't be
+                # constructed like that
+                X[obs_i:obs_i+ad.n_obs,
+                  var_names.isin(vars_intersect)] = ad[:, vars_intersect].X
+            else:
+                Xs.append(ad[:, vars_intersect].X)
             obs_i += ad.n_obs
 
             # obs
@@ -1605,8 +1628,13 @@ class AnnData(IndexMixin):
                 new_c = c + (index_unique if index_unique is not None else '-') + categories[i]
                 var.loc[vars_intersect, new_c] = ad.var.loc[vars_intersect, c]
 
-        if any_sparse:
-            X = X.tocsr()
+        if join == 'inner':
+            if any_sparse:
+                sparse_format = all_adatas[0].X.getformat()
+                from scipy.sparse import vstack
+                X = vstack(Xs).asformat(sparse_format)
+            else:
+                X = np.concatenate(Xs)
 
         obs = pd.concat(out_obss)
 
