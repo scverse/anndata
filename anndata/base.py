@@ -31,10 +31,8 @@ _MAIN_NARRATIVE = """\
 of observations ``.obs``, variables ``.var`` and unstructured annotations
 ``.uns``.
 
-.. raw:: html
-
-    <img src="http://falexwolf.de/img/scanpy/anndata.svg"
-         style="width: 350px; margin: 10px 0px 15px 20px">
+.. figure:: https://falexwolf.de/img/scanpy/anndata.svg
+   :width: 350px
 
 An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
 dataframe, for instance, ``adata_subset = adata[:,

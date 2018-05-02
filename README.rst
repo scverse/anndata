@@ -15,3 +15,6 @@ anndata - Annotated Data
 Install from `PyPI <https://pypi.python.org/pypi/anndata/>`__ via ``pip install anndata``.
 
 Read the `documentation <https://anndata.readthedocs.io>`_.
+
+.. would be nice to have http://falexwolf.de/img/scanpy/anndata.svg also on GitHub, but it's much too wide there;
+.. GitHub doesn't plan to resolve scaling images: https://github.com/github/markup/issues/295
