@@ -12,21 +12,25 @@ from ..base import AnnData
 from .. import h5py
 
 
-def write_csvs(dirname, adata, skip_data=True, sep=','):
+def write_csvs(dirname: Union[Path, str], adata: AnnData, skip_data: bool = True, sep: str = ','):
     """See :meth:`~anndata.AnnData.write_csvs`.
     """
     dirname = Path(dirname)
-    if dirname.endswith('.csv'):
-        dirname = dirname.replace('.csv', '/')
-    if not dirname.endswith('/'): dirname += '/'
+    if dirname.suffix == '.csv':
+        dirname = dirname.with_suffix('')
     # write the following at warning level, it's very important for the users
     # logg.info('writing \'.csv\' files to', dirname)
-    if not os.path.exists(dirname): os.makedirs(dirname)
-    if not os.path.exists(dirname + 'uns'): os.makedirs(dirname + 'uns')
-    d = {'obs': adata._obs,
-         'var': adata._var,
-         'obsm': adata._obsm.to_df(),
-         'varm': adata._varm.to_df()}
+    if not dirname.is_dir():
+        dirname.mkdir(parents=True, exist_ok=True)
+    dir_uns = dirname / 'uns'
+    if not dir_uns.is_dir():
+        dir_uns.mkdir(parents=True, exist_ok=True)
+    d = dict(
+        obs=adata._obs,
+        var=adata._var,
+        obsm=adata._obsm.to_df(),
+        varm=adata._varm.to_df(),
+    )
     if not skip_data:
         d['X'] = pd.DataFrame(
             adata._X.toarray() if issparse(adata._X) else adata._X)
@@ -40,8 +44,8 @@ def write_csvs(dirname, adata, skip_data=True, sep=','):
             continue
         filename = dirname
         if key not in {'X', 'var', 'obs', 'obsm', 'varm'}:
-            filename += 'uns/'
-        filename += key + '.csv'
+            filename = dir_uns
+        filename /= f'{key}.csv'
         df = value
         if not isinstance(value, pd.DataFrame):
             value = np.array(value)
@@ -49,12 +53,14 @@ def write_csvs(dirname, adata, skip_data=True, sep=','):
                 value = value[None]
             try:
                 df = pd.DataFrame(value)
-            except:
-                warnings.warn('Omitting to write \'{}\'.'.format(key))
+            except Exception as e:
+                warnings.warn(f'Omitting to write {key!r}.', type(e))
                 continue
-        df.to_csv(filename, sep=sep,
-                  header=True if key in {'obs', 'var', 'obsm', 'varm'} else False,
-                  index=True if key in {'obs', 'var'} else False)
+        df.to_csv(
+            filename, sep=sep,
+            header=True if key in {'obs', 'var', 'obsm', 'varm'} else False,
+            index=True if key in {'obs', 'var'} else False,
+        )
 
 
 def write_loom(filename: Union[Path, str], adata: AnnData):
