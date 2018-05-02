@@ -1,6 +1,7 @@
 # TODO:
 # - think about making all of the below subclasses
 # - think about supporting the COO format
+from typing import Optional
 
 import six
 import h5py
@@ -29,7 +30,7 @@ def get_format_class(format_str):
     return format_class
 
 
-class Group(object):
+class Group:
     """Like :ref:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
     """
 
@@ -83,13 +84,32 @@ class Group(object):
                 name=name, data=data, **kwargs)
 
 
+Group.create_dataset.__doc__ = h5py.Group.create_dataset.__doc__
+
+
 class File(Group):
     """Like :ref:`h5py.File <h5py:File>`, but able to handle sparse matrices.
     """
 
-    def __init__(self, *args, **kwargs):
-        self.h5f = h5py.File(*args, **kwargs)
-        self.h5py_group = self.h5f
+    def __init__(
+        self, name: str,
+        mode: Optional[str] = None,
+        driver: Optional[str] = None,
+        libver: Optional[str] = None,
+        userblock_size: Optional[int] = None,
+        swmr: bool = False,
+        **kwds,
+    ):
+        self.h5f = h5py.File(
+            name,
+            mode=mode,
+            driver=driver,
+            libver=libver,
+            userblock_size=userblock_size,
+            swmr=swmr,
+            **kwds,
+        )
+        super().__init__(self.h5f)
 
     def __enter__(self):
         return self
@@ -107,6 +127,9 @@ class File(Group):
     @property
     def filename(self):
         return self.h5f.filename
+
+
+File.__init__.__doc__ = h5py.File.__init__.__doc__
 
 
 from scipy.sparse.compressed import _cs_matrix
@@ -153,6 +176,7 @@ def _set_many(self, i, j, x):
         j[j < 0] += N
         self._insert_many(i, j, x[mask])
 
+
 _cs_matrix._set_many = _set_many
 
 
@@ -176,10 +200,11 @@ def _zero_many(self, i, j):
 
     # only assign zeros to the existing sparsity structure
     self.data[list(offsets[offsets > -1])] = 0
-        
+
+
 _cs_matrix._zero_many = _zero_many
 
-    
+
 class SparseDataset(IndexMixin):
     """Analogous to :ref:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
     """
