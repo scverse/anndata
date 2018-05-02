@@ -15,6 +15,7 @@ from .. import h5py
 def write_csvs(dirname, adata, skip_data=True, sep=','):
     """See :meth:`~anndata.AnnData.write_csvs`.
     """
+    dirname = Path(dirname)
     if dirname.endswith('.csv'):
         dirname = dirname.replace('.csv', '/')
     if not dirname.endswith('/'): dirname += '/'

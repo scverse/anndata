@@ -6,7 +6,8 @@ import logging as logg
 from enum import Enum
 from collections import Mapping, Sequence, Sized, OrderedDict
 from functools import reduce
-from typing import Union
+from pathlib import Path
+from typing import Union, Optional, Any
 from copy import deepcopy
 
 import numpy as np
@@ -1656,17 +1657,22 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                              'columns of `X` ({}), but has {} rows.'
                              .format(self._n_vars, len(self._varm)))
 
-    def write(self, filename=None, compression='gzip', compression_opts=None):
+    def write(
+        self,
+        filename: Optional[Union[Path, str]] = None,
+        compression: Optional[str] = 'gzip',
+        compression_opts: Union[int, Any] = None,
+    ):
         """Write `.h5ad`-formatted hdf5 file and close a potential backing file.
 
         Parameters
         ----------
-        filename : `str`, optional (default: ``.filename``)
+        filename
             Filename of data file. Defaults to backing file.
-        compression : `None` or {'gzip', 'lzf'}, optional (default: `'gzip'`)
-            See http://docs.h5py.org/en/latest/high/dataset.html.
-        compression_opts : `int`, optional (default: `None`)
-            See http://docs.h5py.org/en/latest/high/dataset.html.
+        compression : ``None`` or {``'gzip'``, ``'lzf'``}
+            See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
+        compression_opts
+            See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
         """
         from .readwrite.write import _write_h5ad
 
@@ -1678,7 +1684,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             self.file.close()
 
-    def write_csvs(self, dirname, skip_data=True, sep=','):
+    def write_csvs(self, dirname: Union[Path, str], skip_data: bool = True, sep: str = ','):
         """Write annotation to `.csv` files.
 
         It is not possible to recover the full :class:`~anndata.AnnData` from the
@@ -1686,22 +1692,22 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         Parameters
         ----------
-        dirname : `str`
+        dirname
             Name of directory to which to export.
-        skip_data : `bool`, optional (default: True)
+        skip_data
              Skip the data matrix `.X`.
-        sep : `str`, optional (default: ',')
+        sep
              Separator for the data.
         """
         from .readwrite.write import write_csvs
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
-    def write_loom(self, filename):
+    def write_loom(self, filename: Union[Path, str]):
         """Write `.loom`-formatted hdf5 file.
 
         Parameters
         ----------
-        filename : `str`
+        filename
             The filename.
         """
         from .readwrite.write import write_loom
