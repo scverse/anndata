@@ -4,10 +4,11 @@ import os, sys
 import warnings
 import logging as logg
 from enum import Enum
-from collections import Mapping, Sequence, Sized, OrderedDict
+from collections import OrderedDict
 from functools import reduce
 from pathlib import Path
-from typing import Union, Optional, Any
+from textwrap import indent, dedent
+from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple
 from copy import deepcopy
 
 import numpy as np
@@ -16,9 +17,8 @@ import pandas as pd
 from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
-from scipy.sparse import issparse, isspmatrix_csc
+from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
-from textwrap import dedent
 from natsort import natsorted
 
 from . import h5py
@@ -29,20 +29,19 @@ logg.basicConfig(format=FORMAT, level=logg.INFO, stream=sys.stdout)
 
 _MAIN_NARRATIVE = """\
 :class:`~anndata.AnnData` stores a data matrix ``.X`` together with annotations
-of observations ``.obs``, variables ``.var`` and unstructured annotations
-``.uns``.
+of observations ``.obs``, variables ``.var`` and unstructured annotations ``.uns``.
 
 .. figure:: https://falexwolf.de/img/scanpy/anndata.svg
    :width: 350px
 
 An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
-dataframe, for instance, ``adata_subset = adata[:,
-list_of_variable_names]``. :class:`~anndata.AnnData`'s basic structure is
-similar to R's ExpressionSet [Huber15]_. If setting an `.h5ad`-formatted HDF5
-backing file ``.filename``, data remains on the disk but is automatically loaded
-into memory if needed. See this `blog post
-<http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_ for
-more details.
+dataframe, for instance, ``adata_subset = adata[:, list_of_variable_names]``.
+:class:`~anndata.AnnData`'s basic structure is similar to R's ExpressionSet
+[Huber15]_. If setting an ``.h5ad``-formatted HDF5 backing file ``.filename``,
+data remains on the disk but is automatically loaded into memory if needed.
+See this `blog post`_ for more details.
+
+.. _blog post: http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/
 """
 
 
@@ -63,15 +62,15 @@ class BoundRecArr(np.recarray):
     """
     _attr_choices = ['obsm', 'varm']
 
-    def __new__(cls, input_array, parent, attr):
+    def __new__(cls, input_array: np.ndarray, parent: Any, attr: str):
         """
         Parameters
         ----------
-        source : `np.ndarray`
+        input_array
             A (structured) numpy array.
-        parent : object
+        parent
             Any object to which the BoundRecArr shall be bound to.
-        attr : string
+        attr
             The name of the attribute as which it appears in parent.
         """
         arr = np.asarray(input_array).view(cls)
@@ -190,7 +189,7 @@ def df_to_records_fixed_width(df):
         dtype={'names': names, 'formats': formats}), uns
 
 
-def _fix_shapes(X, single_col=False):
+def _fix_shapes(X):
     """Fix shapes of array or sparse matrix.
 
     Flatten 2d array with a single row or column to emulate numpys
@@ -209,9 +208,6 @@ def _fix_shapes(X, single_col=False):
     elif len(X.shape) == 1:
         n_vars = X.shape[0]
         n_obs = 1
-    elif len(X.shape) == 1 and single_col:
-        n_obs = X.shape[0]
-        n_vars = 1
     else:
         n_vars = 1
         n_obs = 1
@@ -288,7 +284,7 @@ class AnnDataFileManager:
         if self._filename is None:
             return 'Backing file manager: no file is set.'
         else:
-            return 'Backing file manager of file {}.'.format(self._filename)
+            return f'Backing file manager of file {self._filename}.'
 
     def __getitem__(self, key):
         return self._file[key]
@@ -527,28 +523,31 @@ class IndexDimError(IndexError):
 
 
 class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
-    __doc__ = dedent("""\
-    An annotated data matrix.
+    __doc__ = dedent(f"""An annotated data matrix.
 
-    {main_narrative}
+    {indent(_MAIN_NARRATIVE, 4*' ')}
 
     Parameters
     ----------
-    X : `np.ndarray`, `sparse.spmatrix`
+    X
         A #observations × #variables data matrix. A view of the data is used if the
         data type matches, otherwise, a copy is made.
-    obs : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+    obs
         Key-indexed one-dimensional observation annotation of length #observations.
-    var : `pd.DataFrame`, `dict`, structured `np.ndarray` or `None`, optional (default: `None`)
+    var
         Key-indexed one-dimensional variable annotation of length #variables.
-    uns : `dict` or `None`, optional (default: `None`)
+    uns
         Unstructured annotation for the whole dataset.
-    obsm : structured `np.ndarray`, optional (default: `None`)
+    obsm
         Key-indexed multi-dimensional observation annotation of length #observations.
-    varm : structured `np.ndarray`, optional (default: `None`)
+    varm
         Key-indexed multi-dimensional observation annotation of length #observations.
-    dtype : simple `np.dtype`, optional (default: 'float32')
+    dtype
         Data type used for storage.
+    filename
+        Name of backing file. See :class:`anndata.h5py.File`.
+    filemode
+        Open mode of backing file. See :class:`anndata.h5py.File`.
 
     See Also
     --------
@@ -565,23 +564,24 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     -----
     Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
 
-    If the unstructured annotations `.uns` contain a sparse matrix of shape
-    `.n_obs` × `.n_obs`, these are also sliced.
+    If the unstructured annotations ``.uns`` contain a sparse matrix of shape
+    ``.n_obs`` × ``.n_obs``, these are also sliced.
 
     :class:`~anndata.AnnData` stores observations (samples) of variables
     (features) in the rows of a matrix. This is the convention of the modern
     classics of statistics [Hastie09]_ and machine learning [Murphy12]_, the
     convention of dataframes both in R and Python and the established statistics
-    and machine learning packages in Python (`statsmodels
-    <http://www.statsmodels.org/stable/index.html>`_, `scikit-learn
-    <http://scikit-learn.org/>`_).
+    and machine learning packages in Python (statsmodels_, scikit-learn_).
 
-    A data matrix is flattened if either #observations (`n_obs`) or #variables
-    (`n_vars`) is 1, so that numpy's slicing behavior is reproduced::
+    A data matrix is flattened if either #observations (``n_obs``) or #variables
+    (``n_vars``) is 1, so that numpy's slicing behavior is reproduced::
 
         adata = AnnData(np.ones((2, 2)))
         adata[:, 0].X == adata.X[:, 0]
-    """).format(main_narrative=_MAIN_NARRATIVE)
+
+    .. _statsmodels: http://www.statsmodels.org/stable/index.html
+    .. _scikit-learn: http://scikit-learn.org/
+    """)
 
     _BACKED_ATTRS = ['X', 'raw.X']
 
@@ -601,11 +601,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     }
 
     def __init__(
-            self, X=None, obs=None, var=None, uns=None,
-            obsm=None, varm=None, raw=None,
-            dtype='float32', single_col=False,
-            filename=None, filemode=None,
-            asview=False, oidx=None, vidx=None):
+        self,
+        X: Optional[Union[np.ndarray, sparse.spmatrix]] = None,
+        obs: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
+        var: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
+        uns: Optional[Mapping[Any, Any]] = None,
+        obsm: Optional[np.ndarray] = None,
+        varm: Optional[np.ndarray] = None,
+        raw: Optional[Union[Raw, Mapping[str, Any]]] = None,
+        dtype: Union[np.dtype, str] = 'float32',
+        filename: Optional[Union[Path, str]] = None,
+        filemode: Optional[str] = None,
+        asview: bool = False,
+        *, oidx=None, vidx=None):
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError('`X` has to be an AnnData object.')
@@ -614,7 +622,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
                 obsm=obsm, varm=varm, raw=raw,
-                dtype=dtype, single_col=single_col,
+                dtype=dtype,
                 filename=filename, filemode=filemode)
 
     def _init_as_view(self, adata_ref, oidx, vidx):
@@ -692,7 +700,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
             obsm=None, varm=None, raw=None,
-            dtype='float32', single_col=False,
+            dtype='float32',
             filename=None, filemode=None):
         from .readwrite.read import _read_h5ad
 
@@ -877,11 +885,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def raw(self):
-        """Store raw version of `.X` and `.var` as `.raw.X` and `.raw.var`.
+        """Store raw version of ``.X`` and ``.var`` as ``.raw.X`` and ``.raw.var``.
 
-        The `.raw` attribute is initialized with the current content of an object by setting: ``adata.raw = adata``.
+        The `.raw` attribute is initialized with the current content of an object by setting::
 
-        Its content can be deleted by setting it back to `None`:  ``adata.raw = None``.
+            adata.raw = adata
+
+        Its content can be deleted by setting it back to ``None``::
+
+            adata.raw = None
         """
         return self._raw
 
@@ -950,11 +962,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def obsm(self):
-        """Multi-dimensional annotation of observations (mutable structured `np.ndarray`).
+        """Multi-dimensional annotation of observations
+        (mutable structured :class:`np.ndarray`).
 
-        Stores for each key, a two or higher-dimensional `np.ndarray` of length
-        `n_obs`. Is sliced with `data` and `obs` but behaves otherwise like a
-        `dict`.
+        Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
+        ``n_obs``. Is sliced with ``data`` and ``obs`` but behaves otherwise like a
+        :class:`dict`.
         """
         return self._obsm
 
@@ -972,11 +985,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def varm(self):
-        """Multi-dimensional annotation of variables/ features (mutable structured `np.ndarray`).
+        """Multi-dimensional annotation of variables/ features
+        (mutable structured :class:`np.ndarray`).
 
-        Stores for each key, a two or higher-dimensional `np.ndarray` of length
-        `n_vars`. Is sliced with `data` and `var` but behaves otherwise like a
-        `dict`.
+        Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
+        ``n_vars``. Is sliced with ``data`` and ``var`` but behaves otherwise like a
+        :class:`dict`.
         """
         return self._varm
 
@@ -1015,19 +1029,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             utils.warn_names_duplicates('var', self._var)
 
     def obs_keys(self):
-        """List keys of observation annotation `.obs`."""
+        """List keys of observation annotation ``.obs``."""
         return self._obs.keys().tolist()
 
     def var_keys(self):
-        """List keys of variable annotation `var`."""
+        """List keys of variable annotation ``var``."""
         return self._var.keys().tolist()
 
     def obsm_keys(self):
-        """List keys of observation annotation `obsm`."""
+        """List keys of observation annotation ``obsm``."""
         return list(self._obsm.keys())
 
     def varm_keys(self):
-        """List keys of variable annotation `varm`."""
+        """List keys of variable annotation ``varm``."""
         return list(self._varm.keys())
 
     def uns_keys(self):
@@ -1036,22 +1050,22 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def isbacked(self):
-        """`True` if object is backed on disk, `False` otherwise."""
+        """``True`` if object is backed on disk, ``False`` otherwise."""
         return self.filename is not None
 
     @property
     def isview(self):
-        """`True` if object is view of another AnnData object, `False` otherwise."""
+        """``True`` if object is view of another AnnData object, ``False`` otherwise."""
         return self._isview
 
     @property
     def filename(self):
-        """Change to backing mode by setting the filename of a `.h5ad` file.
+        """Change to backing mode by setting the filename of a ``.h5ad`` file.
 
         - Setting the filename writes the stored data to disk.
         - Setting the filename when the filename was previously another name
           moves the backing file from the previous file to the new file. If you
-          want to copy the previous file, use copy(filename='new_filename').
+          want to copy the previous file, use ``copy(filename='new_filename')``.
         """
         return self.file.filename
 
@@ -1092,7 +1106,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             del self.file[attr]
             self.file._file.create_dataset(attr, data=value)
 
-    def _normalize_indices(self, index):
+    def _normalize_indices(self, index: Union[Tuple, pd.Series, np.ndarray, slice, int, str, None]):
         # deal with tuples of length 1
         if isinstance(index, tuple) and len(index) == 1:
             index = index[0]
@@ -1110,7 +1124,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 index = index[0].values, index[1]
             # one of the two has to be a slice
             if not (isinstance(index[0], slice) or isinstance(index[1], slice)):
-                if (isinstance(index[0], (int, str, None)) and isinstance(index[1], (int, str, None))):
+                if isinstance(index[0], (int, str, None)) and isinstance(index[1], (int, str, None)):
                     pass  # two scalars are fine
                 else:
                     raise ValueError(
@@ -1211,7 +1225,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _inplace_subset_var(self, index):
         """Inplace subsetting along variables dimension.
 
-        Same as adata = adata[:, index], but inplace.
+        Same as ``adata = adata[:, index]``, but inplace.
         """
         if not self.isbacked:
             self._X = self._X[:, index]
@@ -1229,7 +1243,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _inplace_subset_obs(self, index):
         """Inplace subsetting along variables dimension.
 
-        Same as adata = adata[index, :], but inplace.
+        Same as ``adata = adata[index, :]``, but inplace.
         """
         if not self.isbacked:
             self._X = self._X[index, :]
@@ -1258,7 +1272,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _get_var_array(self, k):
         """Get an array along the variables dimension by first looking up
-        var_keys and then obs_names."""
+        ``var_keys`` and then ``obs_names``."""
         x = (self._var[k] if k in self.var_keys()
              else self[k] if k in set(self.obs_names)
              else None)
@@ -1321,44 +1335,49 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 copyfile(self.filename, filename)
             return AnnData(filename=filename)
 
-    def concatenate(self, *adatas, join='inner', batch_key='batch',
-                    batch_categories=None, index_unique='-'):
+    def concatenate(
+        self, *adatas: 'AnnData',
+        join: str = 'inner',
+        batch_key: str = 'batch',
+        batch_categories: Sequence[Any] = None,
+        index_unique: Optional[str] = '-'
+    ) -> 'AnnData':
         """Concatenate along the observations axis.
 
-        The `.uns`, `.varm` and `.obsm` attributes are ignored.
+        The ``.uns``, ``.varm`` and ``.obsm`` attributes are ignored.
 
-        Currently, this works only in 'memory' mode.
+        Currently, this works only in ``'memory'`` mode.
 
         Parameters
         ----------
-        adatas : :class:`~anndata.AnnData`
+        adatas
             AnnData matrices to concatenate with. Each matrix is referred to as
-            a 'batch'.
-        join: `str` (default: 'inner')
+            a “batch”.
+        join
             Use intersection (``'inner'``) or union (``'outer'``) of variables.
-        batch_key : `str` (default: 'batch')
-            Add the batch annotation to `.obs` using this key.
-        batch_categories : list, optional (default: `range(len(adatas)+1)`)
-            Use these as categories for the batch annotation.
-        index_unique : {`None`, '-', str}, optional (default: `None`)
+        batch_key
+            Add the batch annotation to ``.obs`` using this key.
+        batch_categories
+            Use these as categories for the batch annotation. By default, use increasing numbers.
+        index_unique
             Make the index unique by joining the existing index names with the
-            batch category, using `index_unique`: '-', for instance. Provide
-            `None` to keep existing indices.
+            batch category, using ``index_unique='-'``, for instance. Provide
+            ``None`` to keep existing indices.
 
         Returns
         -------
-        adata : :class:`~anndata.AnnData`
-            The concatenated AnnData, where `adata.obs[batch_key]` stores a
-            categorical variable labeling the batch.
+        :class:`~anndata.AnnData`
+            The concatenated :class:`~anndata.AnnData`, where ``adata.obs[batch_key]``
+            stores a categorical variable labeling the batch.
 
         Notes
         -----
 
         .. warning::
 
-            If you use `join='outer'` this fills 0s for sparse data when
-            variables are absent in a batch. Use this with care. Dense data is
-            filled with NaNs. See the examples.
+           If you use ``join='outer'`` this fills 0s for sparse data when
+           variables are absent in a batch. Use this with care. Dense data is
+           filled with ``NaN``s. See the examples.
 
         Examples
         --------
