@@ -5,11 +5,11 @@
 Inc. <https://www.appier.com/>`_. See the copyright and license note in the
 source code.
 
-The design choices of :mod:`anndata.h5py`, however, are fundamentally
-different. In particular, :mod:`anndata.h5py` allows handling sparse and
-non-sparse data at the same time. It achieves this by extending the
-functionality of :class:`File` and :class:`Group` objects in the h5py API,
-and by providing a new :class:`SparseDataset` object.
+The design choices of :mod:`anndata.h5py`, however, are different. In
+particular, :mod:`anndata.h5py` allows handling sparse and non-sparse data at
+the same time. It achieves this by extending the functionality of :class:`File`
+and :class:`Group` objects in the h5py API, and by providing a new
+:class:`SparseDataset` object.
 
 For examples and further information, see this `blog post <https://falexwolf.de/blog/171212_sparse_matrices_with_h5py>`_.
 
