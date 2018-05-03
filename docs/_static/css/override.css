@@ -1,4 +1,4 @@
-dl.class:not(.docutils) dl dt {
+.rst-content dl:not(.docutils) dl dt {
 	/* mimick numpydoc’s blockquote style */
 	font-weight: normal;
 	background: none transparent;
@@ -6,4 +6,12 @@ dl.class:not(.docutils) dl dt {
 	margin: 0 0 12px;
 	padding: 3px 0 0;
 	font-size: 100%;
+}
+
+.rst-content dl:not(.docutils) dl dt code {
+	font-size: 100%;
+	font-weight: normal;
+	background: none transparent;
+	border: none;
+	padding: 0 2px;
 }

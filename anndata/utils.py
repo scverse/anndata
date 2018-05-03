@@ -1,6 +1,7 @@
 import logging as logg
 import warnings
 from functools import wraps
+from typing import Mapping, Any, Sequence
 
 import pandas as pd
 import numpy as np
@@ -50,7 +51,7 @@ def warn_names_duplicates(string, df):
         .format(names, string))
 
 
-def convert_dictionary_to_structured_array(source):
+def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
 
     names = list(source.keys())
     try:  # transform to byte-strings

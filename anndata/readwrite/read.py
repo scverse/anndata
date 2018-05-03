@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Union, Optional, Iterable, Generator, Iterator
 from collections import OrderedDict
-from scipy.sparse import issparse
 import numpy as np
 
 from ..base import AnnData
@@ -15,25 +14,22 @@ def read_csv(
     first_column_names: Optional[bool]=None,
     dtype: str='float32',
 ) -> AnnData:
-    """Read `.csv` file.
+    """Read ``.csv`` file.
 
-    Same as :func:`~anndata.read_text` but with default delimiter ','.
+    Same as :func:`~anndata.read_text` but with default delimiter ``','``.
 
     Parameters
     ----------
-    filename : `str` or `pathlib.Path` or `file`-like object
+    filename
         Data file.
-    delimiter : `str`, optional (default: `','`)
+    delimiter
         Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
         splitting at single white space ' '.
-    first_column_names : `bool` or `None`, optional (default: `None`)
+    first_column_names
         Assume the first column stores row names.
-    dtype : `str`, optional (default: 'float32')
-
-    Returns
-    -------
-    An :class:`~scanpy.api.AnnData` object.
+    dtype
+        Numpy data type.
     """
     return read_text(filename, delimiter, first_column_names, dtype)
 
@@ -42,21 +38,17 @@ def read_excel(
     filename: Union[Path, str],
     sheet: Union[str, int],
 ) -> AnnData:
-    """Read `.xlsx` (Excel) file.
+    """Read ``.xlsx`` (Excel) file.
 
     Assumes that the first columns stores the row names and the first row the
     column names.
 
     Parameters
     ----------
-    filename : `str`
+    filename
         File name to read from.
-    sheet : `str`
+    sheet
         Name of sheet in Excel file.
-
-    Returns
-    -------
-    An :class:`~anndata.AnnData` object.
     """
     filename = str(filename)  # allow passing pathlib.Path objects
     # rely on pandas for reading an excel file
@@ -73,12 +65,8 @@ def read_umi_tools(filename: Union[Path, str]) -> AnnData:
 
     Parameters
     ----------
-    filename : `str`
+    filename
         File name to read from.
-
-    Returns
-    -------
-    An :class:`~anndata.AnnData` object.
     """
     filename = str(filename)  # allow passing pathlib.Path objects
     # import pandas for conversion of a dict of dicts into a matrix
@@ -103,21 +91,16 @@ def read_umi_tools(filename: Union[Path, str]) -> AnnData:
 
 
 def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
-    """Read `.h5` (hdf5) file.
+    """Read ``.h5`` (hdf5) file.
 
-    Note: Also looks for fields 'row_names' and 'col_names'.
+    Note: Also looks for fields ``row_names`` and ``col_names``.
 
     Parameters
     ----------
-    filename : `str`
+    filename
         Filename of data file.
-    key : `str`
+    key
         Name of dataset in the file.
-
-    Returns
-    -------
-    adata : :class:`~anndata.AnnData`
-        An annotated data matrix.
     """
     filename = str(filename)  # allow passing pathlib.Path objects
     with h5py.File(filename, 'r') as f:
@@ -139,8 +122,8 @@ def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: Union[Path, str], sparse=False) -> AnnData:
-    """Read `.loom`-formatted hdf5 file.
+def read_loom(filename: Union[Path, str], sparse: bool = False) -> AnnData:
+    """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
 
@@ -149,14 +132,10 @@ def read_loom(filename: Union[Path, str], sparse=False) -> AnnData:
 
     Parameters
     ----------
-    filename : `str`
+    filename
         The filename.
-    sparse : `bool`
+    sparse
         Whether to read the data matrix as sparse.
-
-    Returns
-    -------
-    An :class:`~anndata.AnnData` object.
     """
     filename = str(filename)  # allow passing pathlib.Path objects
     from loompy import connect
@@ -176,11 +155,14 @@ def read_loom(filename: Union[Path, str], sparse=False) -> AnnData:
 
 
 def read_mtx(filename: Union[Path, str], dtype: str='float32') -> AnnData:
-    """Read `.mtx` file.
+    """Read ``.mtx`` file.
 
-    Returns
-    -------
-    An :class:`~anndata.AnnData` object.
+    Parameters
+    ----------
+    filename
+        The filename.
+    dtype
+        Numpy data type.
     """
     filename = str(filename)  # allow passing pathlib.Path objects
     from scipy.io import mmread
@@ -197,25 +179,22 @@ def read_text(
     first_column_names: Optional[bool]=None,
     dtype: str='float32',
 ) -> AnnData:
-    """Read `.txt`, `.tab`, `.data` (text) file.
+    """Read ``.txt``, ``.tab``, ``.data`` (text) file.
 
-    Same as :func:`~anndata.read_csv` but with default delimiter `None`.
+    Same as :func:`~anndata.read_csv` but with default delimiter ``None``.
 
     Parameters
     ----------
-    filename : `str`, `pathlib.Path`, or `file`-like object
-        Data file.
-    delimiter : `str`, optional (default: `None`)
+    filename
+        Data file, filename or stream.
+    delimiter
         Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
         splitting at single white space ' '.
-    first_column_names : `bool` or `None`, optional (default: `None`)
+    first_column_names
         Assume the first column stores row names.
-    dtype : `str`, optional (default: 'float32')
-
-    Returns
-    -------
-    An :class:`~scanpy.api.AnnData` object.
+    dtype
+        Numpy data type.
     """
     if isinstance(filename, (str, Path)):
         with Path(filename).open() as f:
@@ -334,22 +313,18 @@ def _read_text(
                    var={'var_names': col_names})
 
 
-def read_h5ad(filename, backed=False):
-    """Read `.h5ad`-formatted hdf5 file.
+def read_h5ad(filename, backed: Union[bool, str] = False):
+    """Read ``.h5ad``-formatted hdf5 file.
 
     Parameters
     ----------
-    filename : `str`
+    filename
         File name of data file.
-    backed : {`False`, `True`, 'r', 'r+'}, optional (default: `False`)
-        Load :class:`~scanpy.api.AnnData` in `backed` mode instead of fully
+    backed : {``False``, ``True``, ``'r'``, ``'r+'``}
+        Load :class:`~anndata.AnnData` in `backed` mode instead of fully
         loading it into memory (`memory` mode). `True` and 'r' are
         equivalent. If you want to modify backed attributes of the AnnData
         object, you need to choose 'r+'.
-
-    Returns
-    -------
-    An :class:`~anndata.AnnData` object.
     """
 
     if backed:
@@ -361,13 +336,13 @@ def read_h5ad(filename, backed=False):
         return AnnData(d)
 
 
-def _read_h5ad(adata=None, filename=None, mode=None):
+def _read_h5ad(adata: AnnData = None, filename: Optional[Union[Path, str]] = None, mode: str = None):
     """Return a dict with arrays for initializing AnnData.
 
     Parameters
     ----------
-    filename : `str` or `None`, optional (default: `None`)
-        Defaults to the objects filename if `None`.
+    filename
+        Defaults to the objects filename if ``None``.
     """
     if filename is None and (adata is None or adata.filename is None):
         raise ValueError('Need either a filename or an AnnData object with file backing')
