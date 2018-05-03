@@ -941,6 +941,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @uns.setter
     def uns(self, value):
+        if not isinstance(value, Mapping):
+            raise ValueError('Only dicitionary types are allowed for `.uns`.')
         if self.isview:
             # here, we directly generate the copy
             adata = self._adata_ref._getitem_copy((self._oidx, self._vidx))
