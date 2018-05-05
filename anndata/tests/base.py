@@ -29,6 +29,13 @@ def test_creation():
            np.array([[1, 2], [3, 4]]),
            dict(TooLong=[1, 2, 3, 4]))
 
+    # init with empty data matrix
+    shape = (3, 5)
+    adata = AnnData(None, uns={'test': np.array((3, 3))}, shape=shape)
+    assert adata.X is None
+    assert adata.shape == shape
+    assert 'test' in adata.uns
+
 
 def test_names():
     adata = AnnData(

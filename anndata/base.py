@@ -544,6 +544,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Key-indexed multi-dimensional observation annotation of length #observations.
     dtype
         Data type used for storage.
+    shape
+        Shape tuple (#observations, #variables). Can only be provided if ``X`` is ``None``.
     filename
         Name of backing file. See :class:`anndata.h5py.File`.
     filemode
@@ -610,6 +612,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         raw: Optional[Union[Raw, Mapping[str, Any]]] = None,
         dtype: Union[np.dtype, str] = 'float32',
+        shape: tuple = None,
         filename: Optional[Union[Path, str]] = None,
         filemode: Optional[str] = None,
         asview: bool = False,
@@ -622,7 +625,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
                 obsm=obsm, varm=varm, raw=raw,
-                dtype=dtype,
+                dtype=dtype, shape=shape,
                 filename=filename, filemode=filemode)
 
     def _init_as_view(self, adata_ref, oidx, vidx):
@@ -680,6 +683,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._raw = None
 
     def _init_X_as_view(self):
+        if self._adata_ref.X is None:
+            self._X = None
+            return
         X = self._adata_ref.X[self._oidx, self._vidx]
         if len(X.shape) == 2:
             n_obs, n_vars = X.shape
@@ -700,7 +706,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
             obsm=None, varm=None, raw=None,
-            dtype='float32',
+            dtype='float32', shape=None,
             filename=None, filemode=None):
         from .readwrite.read import _read_h5ad
 
@@ -755,6 +761,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 class_names = ', '.join(c.__name__ for c in StorageType.classes())
                 raise ValueError('`X` needs to be of one of {}, not {}.'
                                  .format(class_names, type(X)))
+            if shape is not None:
+                raise ValueError('`shape` needs to be `None` is `X` is not `None`.')
             # if type doesn't match, a copy is made, otherwise, use a view
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
@@ -768,6 +776,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._X = None
             self._n_obs = len([] if obs is None else obs)
             self._n_vars = len([] if var is None else var)
+            # check consistency with shape
+            if shape is not None:
+                if self._n_obs == 0:
+                    self._n_obs = shape[0]
+                else:
+                    if self._n_obs != shape[0]:
+                        raise ValueError('`shape` is inconsistent with `obs`')
+                if self._n_vars == 0:
+                    self._n_vars = shape[1]
+                else:
+                    if self._n_vars != shape[1]:
+                        raise ValueError('`shape` is inconsistent with `var`')
 
         # annotations
         self._obs = _gen_dataframe(obs, self._n_obs,
@@ -848,8 +868,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> Union[np.ndarray, sparse.spmatrix]:
-        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.sparse.spmatrix`)."""
+    def X(self) -> Union[np.ndarray, sparse.spmatrix, None]:
+        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.sparse.spmatrix`) or `None`."""
         if self.isbacked:
             if not self.file.isopen: self.file.open()
             X = self.file['X']
@@ -859,6 +879,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @X.setter
     def X(self, value):
+        if value is None:
+            if self.isview:
+                raise ValueError('Copy the view before setting the data matrix to `None`.')
+            if self.isbacked:
+                raise ValueError('Not implemented.')
+            self._X = None
+            return
         var_get = self.n_vars == 1 and self.n_obs == len(value)
         obs_get = self.n_obs == 1 and self.n_vars == len(value)
         if var_get or obs_get or self.shape == value.shape:
@@ -871,7 +898,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 if self.isview:
                     # exit the view if we go from sparse to dense
                     if (issparse(value) and not issparse(self._adata_ref._X)
-                            or not issparse(value) and issparse(self._adata_ref._X)):
+                        or not issparse(value) and issparse(self._adata_ref._X)):
                         self._init_as_actual(self.copy())
                         self._X = value
                     else:
@@ -1317,7 +1344,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename=None):
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            return AnnData(self._X.copy(),
+            return AnnData(self._X.copy() if self._X is not None else None,
                            self._obs.copy(),
                            self._var.copy(),
                            # deepcopy on DictView does not work and is unnecessary
