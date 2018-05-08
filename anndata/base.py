@@ -2013,7 +2013,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
 
-    def chunks_X(self, chunk_size=None):
+    def chunked_X(self, chunk_size=None):
         if chunk_size is None:
             # Should be some adaptive code
             chunk_size = 6000
