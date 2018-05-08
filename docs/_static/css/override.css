@@ -15,3 +15,7 @@
 	border: none;
 	padding: 0 2px;
 }
+
+.rst-content dl:not(.docutils) dl dt a.reference>code {
+	text-decoration: underline;
+}
