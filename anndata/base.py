@@ -2012,3 +2012,16 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
+
+    def chunked_X(self, chunk_size=None):
+        if chunk_size is None:
+            # Should be some adaptive code
+            chunk_size = 6000
+        start = 0
+        n = self.n_obs
+        for _ in range(int(n // chunk_size)):
+            end = start + chunk_size
+            yield (self.X[start:end], start, end)
+            start = end
+        if start < n:
+            yield (self.X[start:n], start, n)
