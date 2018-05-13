@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Union, Optional, Iterable, Generator, Iterator
 from collections import OrderedDict
+import gzip
+import bz2
 import numpy as np
 
 from ..base import AnnData
@@ -197,8 +199,15 @@ def read_text(
         Numpy data type.
     """
     if isinstance(filename, (str, Path)):
-        with Path(filename).open() as f:
-            return _read_text(f, delimiter, first_column_names, dtype)
+        if str(filename).endswith('.gz'):
+            with gzip.open(str(filename), mode='rt') as f:
+                return _read_text(f, delimiter, first_column_names, dtype)
+        elif str(filename).endswith('.bz2'):
+            with bz2.open(str(filename), mode='rt') as f:
+                return _read_text(f, delimiter, first_column_names, dtype)
+        else:
+            with Path(filename).open() as f:
+                return _read_text(f, delimiter, first_column_names, dtype)
     else:
         return _read_text(filename, delimiter, first_column_names, dtype)
 
