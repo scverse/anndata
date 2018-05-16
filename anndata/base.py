@@ -1222,6 +1222,38 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                         np.where(np.in1d(
                             all_categories, df_sub[k].cat.categories))[0]]
 
+    def rename_categories(self, key, categories):
+        """Rename categories of annotation `key` in `.obs`, `.var` and `.uns`.
+
+        Besides calling ``self.obs[key].cat.rename_categories(categories)`` -
+        similar for `.var` - this also renames categories in unstructured
+        annotation that uses the categorical annotation `key`.
+        """
+        if key in self.obs:
+            old_categories = self.obs[key].cat.categories.tolist()
+            self.obs[key].cat.rename_categories(categories, inplace=True)
+        elif key in self.var:
+            old_categories = self.var[key].cat.categories.tolist()
+            self.var[key].cat.rename_categories(categories, inplace=True)
+        else:
+            raise ValueError('{} is neither in `.obs` nor in `.var`.'
+                             .format(key))
+        # this is not a good solution
+        # but depends on the scanpy conventions for storing the categorical key
+        # as `groupby` in the `params` slot
+        for k1, v1 in self.uns.items():
+            if isinstance(v1, Mapping):
+                if 'params' in v1 and 'groupby' in v1['params']:
+                    if v1['params']['groupby'] == key:
+                        for k2, v2 in v1.items():
+                            if isinstance(v2, np.ndarray) and v2.dtype.names is not None:
+                                if list(v2.dtype.names) == old_categories:
+                                    self.uns[k1][k2].dtype.names = categories
+                                else:
+                                    logg.warn(
+                                        'Omitting {}/{} as old categories do not match.'
+                                        .format(k1, k2))
+
     def _sanitize(self):
         """Transform string arrays to categorical data types if they store less
         categories than the total number of observations.
