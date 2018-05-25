@@ -146,7 +146,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
                 and f[key].shape == value.shape \
                 and f[key].dtype == value.dtype \
                 and not isinstance(f[key], h5py.SparseDataset)
-            if not is_valid_group and not isinstance(value, sparse.spmatrix):
+            if not is_valid_group and not issparse(value):
                 f[key][()] = value
                 return
             else:

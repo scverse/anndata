@@ -604,7 +604,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def __init__(
         self,
-        X: Optional[Union[np.ndarray, sparse.spmatrix]] = None,
+        X: Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]] = None,
         obs: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
         var: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
         uns: Optional[Mapping[Any, Any]] = None,
@@ -868,8 +868,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> Union[np.ndarray, sparse.spmatrix, None]:
-        """Data matrix of shape `n_obs` × `n_vars` (`np.ndarray`, `sp.sparse.spmatrix`) or `None`."""
+    def X(self) -> Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]]:
+        """Data matrix of shape `n_obs` × `n_vars`."""
         if self.isbacked:
             if not self.file.isopen: self.file.open()
             X = self.file['X']
