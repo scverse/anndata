@@ -364,6 +364,9 @@ class ArrayView(np.ndarray):
     def copy(self, order='C'):
         # we want a conventional array
         return np.array(self)
+    
+    def toarray(self):
+        return self.copy()
 
 
 # the following two definitions are exactly equivalent
