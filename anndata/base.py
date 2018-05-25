@@ -1159,7 +1159,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 if isinstance(index[0], (int, str, None)) and isinstance(index[1], (int, str, None)):
                     pass  # two scalars are fine
                 else:
-                    raise ValueError(
+                    raise NotImplementedError(
                         'Slicing with two indices at the same time is not yet implemented. '
                         'As a workaround, do row and column slicing succesively.')
         obs, var = super(AnnData, self)._unpack_index(index)
