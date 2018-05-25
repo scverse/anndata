@@ -135,6 +135,14 @@ def test_slicing_remove_unused_categories():
     assert adata[3:5].obs['k'].cat.categories.tolist() == ['b']
 
 
+def test_slicing_integer_index():
+    adata = AnnData(
+        np.array([[0, 1, 2], [3, 4, 5]]),
+        var=dict(var_names=[10, 11, 12]))
+    sliced = adata[:, adata.X.sum(0) > 3]  # This used to fail
+    assert sliced.shape == (2, 2)
+
+
 def test_get_subset_annotation():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
                     dict(S=['A', 'B']),

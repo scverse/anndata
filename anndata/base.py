@@ -215,6 +215,7 @@ def _fix_shapes(X):
 
 
 def _normalize_index(index, names):
+    assert names.dtype != float and names.dtype != int, 'Don’t call _normalize_index with non-categorical/string names'
     # the following is insanely slow for sequences, we replaced it using pandas below
     def name_idx(i):
         if isinstance(i, str):
@@ -632,6 +633,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 filename=filename, filemode=filemode)
 
     def _init_as_view(self, adata_ref, oidx, vidx):
+        def get_n_items_idx(idx):
+            if isinstance(idx, np.ndarray) and idx.dtype == bool:
+                return idx.sum()
+            else:
+                return len(idx)
+        
         self._isview = True
         self._adata_ref = adata_ref
         self._oidx = oidx
@@ -653,19 +660,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
-            self._n_obs = len(obs_sub.index)
+            self._n_obs = get_n_items_idx(obs_sub.index)
         elif isinstance(oidx, (int, np.int64)):
             self._n_obs = 1
         elif isinstance(oidx, Sized):
-            self._n_obs = len(oidx)
+            self._n_obs = get_n_items_idx(oidx)
         else:
             raise KeyError('Unknown Index type')
         if isinstance(vidx, slice):
-            self._n_vars = len(var_sub.index)
+            self._n_vars = get_n_items_idx(var_sub.index)
         elif isinstance(vidx, (int, np.int64)):
             self._n_vars = 1
         elif isinstance(vidx, Sized):
-            self._n_vars = len(vidx)
+            self._n_vars = get_n_items_idx(vidx)
         else:
             raise KeyError('Unknown Index type')
         # fix categories
@@ -1154,14 +1161,17 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 index = index[0], index[1].values
             if isinstance(index[0], pd.Series):
                 index = index[0].values, index[1]
-            # one of the two has to be a slice
-            if not (isinstance(index[0], slice) or isinstance(index[1], slice)):
-                if isinstance(index[0], (int, str, None)) and isinstance(index[1], (int, str, None)):
-                    pass  # two scalars are fine
-                else:
-                    raise NotImplementedError(
-                        'Slicing with two indices at the same time is not yet implemented. '
-                        'As a workaround, do row and column slicing succesively.')
+
+            no_slice = not any(isinstance(i, slice) for i in index)
+            both_scalars = all(isinstance(i, (int, str, type(None))) for i in index)
+            if no_slice and not both_scalars:
+                raise NotImplementedError(
+                    'Slicing with two indices at the same time is not yet implemented. '
+                    'As a workaround, do row and column slicing succesively.')
+            # Speed up and error prevention for boolean indices (Don’t convert to integer indices)
+            # Needs to be refactored once we support a tuple of two arbitrary index types
+            if any(isinstance(i, np.ndarray) and i.dtype == bool for i in index):
+                return index
         obs, var = super(AnnData, self)._unpack_index(index)
         obs = _normalize_index(obs, self.obs_names)
         var = _normalize_index(var, self.var_names)
