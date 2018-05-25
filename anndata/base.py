@@ -215,7 +215,10 @@ def _fix_shapes(X):
 
 
 def _normalize_index(index, names):
-    assert names.dtype != float and names.dtype != int, 'Don’t call _normalize_index with non-categorical/string names'
+    if not isinstance(names, RangeIndex):
+        assert names.dtype != float and names.dtype != int, \
+            'Don’t call _normalize_index with non-categorical/string names'
+
     # the following is insanely slow for sequences, we replaced it using pandas below
     def name_idx(i):
         if isinstance(i, str):
