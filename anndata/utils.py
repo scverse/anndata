@@ -92,8 +92,8 @@ def deprecated(new_name):
         def new_func(*args, **kwargs):
             warnings.simplefilter('always', DeprecationWarning)  # turn off filter
             warnings.warn(
-                f'Use {new_name} instead of {func.__name__}, '
-                f'{func.__name__} will be removed in the future.',
+                'Use {0} instead of {1}, {1} will be removed in the future.'
+                .format(new_name, func.__name__),
                 category=DeprecationWarning,
                 stacklevel=2,
             )

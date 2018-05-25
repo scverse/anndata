@@ -1,12 +1,15 @@
+from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 from scipy.sparse import csr_matrix
 import anndata as ad
 
 
 HERE = Path(__file__).parent
+
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -61,6 +64,7 @@ def test_readwrite_dynamic():
         assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
         
 
+@pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')
 def test_readwrite_loom():
     for i, typ in enumerate([np.array, csr_matrix]):
         X = typ(X_list)
