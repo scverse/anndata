@@ -45,7 +45,7 @@ def write_csvs(dirname: Union[Path, str], adata: AnnData, skip_data: bool = True
         filename = dirname
         if key not in {'X', 'var', 'obs', 'obsm', 'varm'}:
             filename = dir_uns
-        filename /= f'{key}.csv'
+        filename /= '{}.csv'.format(key)
         df = value
         if not isinstance(value, pd.DataFrame):
             value = np.array(value)
@@ -54,7 +54,7 @@ def write_csvs(dirname: Union[Path, str], adata: AnnData, skip_data: bool = True
             try:
                 df = pd.DataFrame(value)
             except Exception as e:
-                warnings.warn(f'Omitting to write {key!r}.', type(e))
+                warnings.warn('Omitting to write {!r}.'.format(key), type(e))
                 continue
         df.to_csv(
             filename, sep=sep,

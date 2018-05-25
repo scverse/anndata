@@ -284,7 +284,7 @@ class AnnDataFileManager:
         if self._filename is None:
             return 'Backing file manager: no file is set.'
         else:
-            return f'Backing file manager of file {self._filename}.'
+            return 'Backing file manager of file {}.'.format(self._filename)
 
     def __getitem__(self, key):
         return self._file[key]
@@ -523,9 +523,9 @@ class IndexDimError(IndexError):
 
 
 class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
-    __doc__ = dedent(f"""An annotated data matrix.
+    __doc__ = dedent("""An annotated data matrix.
 
-    {indent(_MAIN_NARRATIVE, 4*' ')}
+    {}
 
     Parameters
     ----------
@@ -583,7 +583,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
-    """)
+    """).format(indent(_MAIN_NARRATIVE, 4*' '))
 
     _BACKED_ATTRS = ['X', 'raw.X']
 

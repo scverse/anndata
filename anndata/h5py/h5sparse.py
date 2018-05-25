@@ -98,7 +98,7 @@ class File(Group):
         libver: Optional[str] = None,
         userblock_size: Optional[int] = None,
         swmr: bool = False,
-        **kwds,
+        **kwds  # Python 3.5 can’t handle trailing commas here
     ):
         self.h5f = h5py.File(
             name,

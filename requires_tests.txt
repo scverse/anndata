@@ -1,1 +1,1 @@
-loompy>=2.0
+loompy>=2.0; python_version>='3.6'
