@@ -1,3 +1,7 @@
 [run]
 source=anndata
-omit=*/tests/*
+omit=
+	setup.py
+	versioneer.py
+	anndata/_version.py
+	anndata/tests/*
