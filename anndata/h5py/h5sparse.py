@@ -9,6 +9,8 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse.sputils import IndexMixin
 
+from ..compat import PathLike
+
 FORMAT_DICT = {
     'csr': ss.csr_matrix,
     'csc': ss.csc_matrix,
@@ -92,7 +94,7 @@ class File(Group):
     """
 
     def __init__(
-        self, name: str,
+        self, name: PathLike,
         mode: Optional[str] = None,
         driver: Optional[str] = None,
         libver: Optional[str] = None,

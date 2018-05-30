@@ -1,8 +1,6 @@
-import os
 import warnings
 from collections import Mapping
 from pathlib import Path
-from typing import Union
 import pandas as pd
 import numpy as np
 from scipy.sparse import issparse
@@ -10,9 +8,10 @@ import logging as logg
 
 from ..base import AnnData
 from .. import h5py
+from ..compat import PathLike, fspath
 
 
-def write_csvs(dirname: Union[Path, str], adata: AnnData, skip_data: bool = True, sep: str = ','):
+def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ','):
     """See :meth:`~anndata.AnnData.write_csvs`.
     """
     dirname = Path(dirname)
@@ -63,8 +62,8 @@ def write_csvs(dirname: Union[Path, str], adata: AnnData, skip_data: bool = True
         )
 
 
-def write_loom(filename: Union[Path, str], adata: AnnData):
-    filename = str(filename)  # allow passing Path object
+def write_loom(filename: PathLike, adata: AnnData):
+    filename = Path(filename)
     row_attrs = adata.var.to_dict('list')
     row_attrs['var_names'] = adata.var_names.values
     col_attrs = adata.obs.to_dict('list')
@@ -75,22 +74,22 @@ def write_loom(filename: Union[Path, str], adata: AnnData):
             '... writing to \'.loom\' file densifies sparse matrix')
         X = X.tocoo()
     from loompy import create
-    if os.path.exists(filename):
-        os.remove(filename)
-    create(filename, X, row_attrs=row_attrs, col_attrs=col_attrs)
+    if filename.exists():
+        filename.unlink()
+    create(fspath(filename), X, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
-def _write_h5ad(filename: Union[Path, str], adata: AnnData, **kwargs):
-    filename = str(filename)  # allow passing pathlib.Path objects
-    if not filename.endswith(('.h5', '.h5ad')):
-        raise ValueError('Filename needs to end with \'.h5ad\'.')
+def _write_h5ad(filename: PathLike, adata: AnnData, **kwargs):
+    filename = Path(filename)
+    if filename.suffix not in ('.h5', '.h5ad'):
+        raise ValueError("Filename needs to end with '.h5ad'.")
     if adata.isbacked:
         # close so that we can reopen below
         adata.file.close()
     # create directory if it doesn't exist
-    dirname = os.path.dirname(filename)
-    if dirname != '' and not os.path.exists(dirname):
-        os.makedirs(dirname)
+    dirname = filename.parent
+    if not dirname.is_dir():
+        dirname.mkdir(parents=True, exist_ok=True)
     d = adata._to_dict_fixed_width_arrays()
     # we're writing to a different location than the backing file
     # - load the matrix into the memory...

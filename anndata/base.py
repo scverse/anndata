@@ -23,6 +23,7 @@ from natsort import natsorted
 
 from . import h5py
 from . import utils
+from .compat import PathLike
 
 FORMAT = '%(message)s'
 logg.basicConfig(format=FORMAT, level=logg.INFO, stream=sys.stdout)
@@ -620,7 +621,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         raw: Optional[Union[Raw, Mapping[str, Any]]] = None,
         dtype: Union[np.dtype, str] = 'float32',
         shape: tuple = None,
-        filename: Optional[Union[Path, str]] = None,
+        filename: Optional[PathLike] = None,
         filemode: Optional[str] = None,
         asview: bool = False,
         *, oidx=None, vidx=None):
@@ -1755,7 +1756,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def write(
         self,
-        filename: Optional[Union[Path, str]] = None,
+        filename: Optional[PathLike] = None,
         compression: Optional[str] = 'gzip',
         compression_opts: Union[int, Any] = None,
     ):
@@ -1780,7 +1781,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             self.file.close()
 
-    def write_csvs(self, dirname: Union[Path, str], skip_data: bool = True, sep: str = ','):
+    def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ','):
         """Write annotation to `.csv` files.
 
         It is not possible to recover the full :class:`~anndata.AnnData` from the
@@ -1798,7 +1799,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         from .readwrite.write import write_csvs
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
-    def write_loom(self, filename: Union[Path, str]):
+    def write_loom(self, filename: PathLike):
         """Write `.loom`-formatted hdf5 file.
 
         Parameters

@@ -7,11 +7,12 @@ import numpy as np
 
 from ..base import AnnData
 from .. import h5py
+from ..compat import PathLike, fspath
 from .utils import *
 
 
 def read_csv(
-    filename: Union[Path, str, Iterator[str]],
+    filename: Union[PathLike, Iterator[str]],
     delimiter: Optional[str]=',',
     first_column_names: Optional[bool]=None,
     dtype: str='float32',
@@ -37,7 +38,7 @@ def read_csv(
 
 
 def read_excel(
-    filename: Union[Path, str],
+    filename: PathLike,
     sheet: Union[str, int],
 ) -> AnnData:
     """Read ``.xlsx`` (Excel) file.
@@ -52,17 +53,16 @@ def read_excel(
     sheet
         Name of sheet in Excel file.
     """
-    filename = str(filename)  # allow passing pathlib.Path objects
     # rely on pandas for reading an excel file
     from pandas import read_excel
-    df = read_excel(filename, sheet)
+    df = read_excel(fspath(filename), sheet)
     X = df.values[:, 1:].astype(float)
     row = {'row_names': df.iloc[:, 0].values.astype(str)}
     col = {'col_names': np.array(df.columns[1:], dtype=str)}
     return AnnData(X, row, col)
 
 
-def read_umi_tools(filename: Union[Path, str]) -> AnnData:
+def read_umi_tools(filename: PathLike) -> AnnData:
     """Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
@@ -70,14 +70,13 @@ def read_umi_tools(filename: Union[Path, str]) -> AnnData:
     filename
         File name to read from.
     """
-    filename = str(filename)  # allow passing pathlib.Path objects
     # import pandas for conversion of a dict of dicts into a matrix
     # import gzip to read a gzipped file :-)
     import gzip
     from pandas import DataFrame
 
     dod = {}  # this will contain basically everything
-    fh = gzip.open(filename)
+    fh = gzip.open(fspath(filename))
     header = fh.readline()  # read the first line
 
     for line in fh:
@@ -92,7 +91,7 @@ def read_umi_tools(filename: Union[Path, str]) -> AnnData:
     return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns})
 
 
-def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
+def read_hdf(filename: PathLike, key: str) -> AnnData:
     """Read ``.h5`` (hdf5) file.
 
     Note: Also looks for fields ``row_names`` and ``col_names``.
@@ -104,15 +103,15 @@ def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
     key
         Name of dataset in the file.
     """
-    filename = str(filename)  # allow passing pathlib.Path objects
     with h5py.File(filename, 'r') as f:
         # the following is necessary in Python 3, because only
         # a view and not a list is returned
         keys = [k for k in f.keys()]
         if key == '':
-            raise ValueError('The file ' + filename +
-                             ' stores the following sheets:\n' + str(keys) +
-                             '\n Call read/read_hdf5 with one of them.')
+            raise ValueError((
+                'The file {} stores the following sheets:\n{}\n'
+                'Call read/read_hdf5 with one of them.'
+            ).format(filename, keys))
         # read array
         X = f[key][()]
         # try to find row and column names
@@ -124,7 +123,7 @@ def read_hdf(filename: Union[Path, str], key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: Union[Path, str], sparse: bool = False) -> AnnData:
+def read_loom(filename: PathLike, sparse: bool = False) -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
@@ -139,7 +138,7 @@ def read_loom(filename: Union[Path, str], sparse: bool = False) -> AnnData:
     sparse
         Whether to read the data matrix as sparse.
     """
-    filename = str(filename)  # allow passing pathlib.Path objects
+    filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
     if sparse:
         with connect(filename, 'r') as lc:
@@ -156,7 +155,7 @@ def read_loom(filename: Union[Path, str], sparse: bool = False) -> AnnData:
     return adata
 
 
-def read_mtx(filename: Union[Path, str], dtype: str='float32') -> AnnData:
+def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
     """Read ``.mtx`` file.
 
     Parameters
@@ -166,17 +165,16 @@ def read_mtx(filename: Union[Path, str], dtype: str='float32') -> AnnData:
     dtype
         Numpy data type.
     """
-    filename = str(filename)  # allow passing pathlib.Path objects
     from scipy.io import mmread
     # could be rewritten accounting for dtype to be more performant
-    X = mmread(filename).astype(dtype)
+    X = mmread(fspath(filename)).astype(dtype)
     from scipy.sparse import csr_matrix
     X = csr_matrix(X)
     return AnnData(X)
 
 
 def read_text(
-    filename: Union[Path, str, Iterator[str]],
+    filename: Union[PathLike, Iterator[str]],
     delimiter: Optional[str]=None,
     first_column_names: Optional[bool]=None,
     dtype: str='float32',
@@ -198,18 +196,20 @@ def read_text(
     dtype
         Numpy data type.
     """
-    if isinstance(filename, (str, Path)):
-        if str(filename).endswith('.gz'):
-            with gzip.open(str(filename), mode='rt') as f:
-                return _read_text(f, delimiter, first_column_names, dtype)
-        elif str(filename).endswith('.bz2'):
-            with bz2.open(str(filename), mode='rt') as f:
-                return _read_text(f, delimiter, first_column_names, dtype)
-        else:
-            with Path(filename).open() as f:
-                return _read_text(f, delimiter, first_column_names, dtype)
-    else:
+    if not isinstance(filename, PathLike):
         return _read_text(filename, delimiter, first_column_names, dtype)
+
+    filename = Path(filename)
+    if filename.suffix == '.gz':
+        with gzip.open(str(filename), mode='rt') as f:
+            return _read_text(f, delimiter, first_column_names, dtype)
+    elif filename.suffix == '.bz2':
+        with bz2.open(str(filename), mode='rt') as f:
+            return _read_text(f, delimiter, first_column_names, dtype)
+    else:
+        with filename.open() as f:
+            return _read_text(f, delimiter, first_column_names, dtype)
+        
 
 
 def iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
@@ -345,7 +345,7 @@ def read_h5ad(filename, backed: Union[bool, str] = False):
         return AnnData(d)
 
 
-def _read_h5ad(adata: AnnData = None, filename: Optional[Union[Path, str]] = None, mode: str = None):
+def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None, mode: str = None):
     """Return a dict with arrays for initializing AnnData.
 
     Parameters
@@ -363,7 +363,6 @@ def _read_h5ad(adata: AnnData = None, filename: Optional[Union[Path, str]] = Non
         backed = True if mode is None else mode
         filename = adata.filename
 
-    filename = str(filename)  # allow passing pathlib.Path objects
     d = {}
     if backed:
         f = adata.file._file
