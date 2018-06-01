@@ -62,7 +62,7 @@ def test_readwrite_dynamic():
         assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
         assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
         assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
-        
+
 
 @pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')
 def test_readwrite_loom():
@@ -90,6 +90,14 @@ def test_read_tsv():
     assert adata.obs_names.tolist() == ['r1', 'r2', 'r3']
     assert adata.var_names.tolist() == ['c1', 'c2']
     assert adata.X.tolist() == X_list
+
+
+def test_read_tsv_iter():
+    with (HERE / 'adata-comments.tsv').open() as f:
+        adata = ad.read_text(f, '\t')
+        assert adata.obs_names.tolist() == ['r1', 'r2', 'r3']
+        assert adata.var_names.tolist() == ['c1', 'c2']
+        assert adata.X.tolist() == X_list
 
 
 def test_write_csv():
