@@ -591,7 +591,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
-    """).format(indent(_MAIN_NARRATIVE, 4*' '))
+    """).format(indent(_MAIN_NARRATIVE, 4*' ').lstrip(' '))
 
     _BACKED_ATTRS = ['X', 'raw.X']
 
