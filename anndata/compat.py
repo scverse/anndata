@@ -1,5 +1,5 @@
 from abc import ABC
-from pathlib import Path
+from pathlib import PurePath
 from typing import Union
 
 try:
@@ -8,16 +8,13 @@ except ImportError:
     class PathLike(ABC):
         @classmethod
         def __subclasshook__(cls, subclass):
-            return (
-                issubclass(subclass, (Path, str, bytes))
-                or hasattr(subclass, '__fspath__')
-            )
+            return issubclass(subclass, PurePath) or hasattr(subclass, '__fspath__')
 
-    def fspath(path: PathLike) -> Union[str, bytes]:
+    def fspath(path: Union[PathLike, str, bytes]) -> Union[str, bytes]:
         """Copied from https://github.com/python/cpython/blob/3.6/Lib/os.py"""
         if isinstance(path, (str, bytes)):
             return path
-        if isinstance(path, Path):
+        if isinstance(path, PurePath):
             return str(path)
 
         path_type = type(path)

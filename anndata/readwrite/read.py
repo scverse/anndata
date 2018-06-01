@@ -196,7 +196,7 @@ def read_text(
     dtype
         Numpy data type.
     """
-    if not isinstance(filename, PathLike):
+    if not isinstance(filename, (PathLike, str, bytes)):
         return _read_text(filename, delimiter, first_column_names, dtype)
 
     filename = Path(filename)
@@ -209,7 +209,6 @@ def read_text(
     else:
         with filename.open() as f:
             return _read_text(f, delimiter, first_column_names, dtype)
-        
 
 
 def iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
