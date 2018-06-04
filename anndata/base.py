@@ -369,7 +369,7 @@ class ArrayView(np.ndarray):
     def copy(self, order='C'):
         # we want a conventional array
         return np.array(self)
-    
+
     def toarray(self):
         return self.copy()
 
@@ -642,7 +642,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 return idx.sum()
             else:
                 return len(idx)
-        
+
         self._isview = True
         self._adata_ref = adata_ref
         self._oidx = oidx
@@ -1650,7 +1650,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         any_sparse = any(issparse(a.X) for a in all_adatas)
         if join == 'outer':
-            if any_sparse:
+            if any_sparse:  # not sure whether the lil_matrix is really the best option
                 X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
             else:
                 X = np.empty(out_shape, dtype=self.X.dtype)
@@ -1698,13 +1698,16 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         if join == 'inner':
             if any_sparse:
-                sparse_format = all_adatas[0].X.getformat()
                 from scipy.sparse import vstack
-                X = vstack(Xs).asformat(sparse_format)
+                X = vstack(Xs)
             else:
                 X = np.concatenate(Xs)
 
         obs = pd.concat(out_obss)
+
+        if any_sparse:
+            sparse_format = all_adatas[0].X.getformat()
+            X = X.asformat(sparse_format)
 
         new_adata = AnnData(X, obs, var)
         if not obs.index.is_unique:
