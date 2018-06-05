@@ -1,6 +1,7 @@
 import numpy as np
 from numpy import ma
 import pandas as pd
+import pickle
 from scipy import sparse as sp
 
 from anndata import AnnData
@@ -308,3 +309,8 @@ def test_rename_categories():
 
     assert list(adata.obs['cat_anno'].cat.categories) == new_categories
     assert list(adata.uns['tool']['cat_array'].dtype.names) == new_categories
+
+def test_pickle():
+    adata = AnnData()
+    adata2 = pickle.loads(pickle.dumps(adata))
+    assert adata2.obsm._parent == adata2

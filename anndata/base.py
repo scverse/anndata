@@ -84,6 +84,16 @@ class BoundRecArr(np.recarray):
         self._parent = getattr(obj, '_parent', None)
         self._attr = getattr(obj, '_attr', None)
 
+    def __reduce__(self):
+        pickled_state = super(self.__class__, self).__reduce__()
+        new_state = pickled_state[2] + (self.__dict__, )
+        return (pickled_state[0], pickled_state[1], new_state)
+    
+    def __setstate__(self, state):
+        for k, v in state[-1].items():
+            self.__setattr__(k, v)
+        super(self.__class__, self).__setstate__(state[0:-1])
+
     def copy(self, order='C'):
         new = super(BoundRecArr, self).copy()
         new._parent = self._parent
