@@ -1813,6 +1813,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         from .readwrite.write import write_loom
         write_loom(filename, self)
 
+    def chunked_X(self, chunk_size=None):
+        if chunk_size is None:
+            # Should be some adaptive code
+            chunk_size = 6000
+        start = 0
+        n = self.n_obs
+        for _ in range(int(n // chunk_size)):
+            end = start + chunk_size
+            yield (self.X[start:end], start, end)
+            start = end
+        if start < n:
+            yield (self.X[start:n], start, n)
+
     @staticmethod
     def _from_dict(ddata):
         """Allows to construct an instance of AnnData from a dictionary.
@@ -1903,13 +1916,23 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             # get the dataframe
             raw['var'] = pd.DataFrame.from_records(
                 ddata['raw.var'], index='index')
-
             del ddata['raw.var']
             raw['var'].index = raw['var'].index.astype('U')
             # transform to unicode string
             for c in raw['var'].columns:
                 if is_string_dtype(raw['var'][c]):
                     raw['var'][c] = Index(raw['var'][c]).astype('U').values
+            # these are the category fields
+            if 'raw.cat' in ddata:  # old h5ad didn't have that field
+                for k, v in ddata['raw.cat'].items():
+                    if k.endswith('_categories'):
+                        k_stripped = k.replace('_categories', '')
+                        if isinstance(v, (str, int)):  # fix categories with a single category
+                            v = [v]
+                        raw['var'][k_stripped] = pd.Categorical.from_codes(
+                            codes=raw['var'][k_stripped].values,
+                            categories=v)
+                del ddata['raw.cat']
         if 'raw.varm' in ddata:
             raw['varm'] = ddata['raw.varm']
             del ddata['raw.varm']
@@ -1939,14 +1962,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             'uns': {**self._uns, **uns_obs, **uns_var}}
 
         if self.raw is not None:
-            # we ignore categorical data types here
-            # they should never occur
             var_rec, uns_var = df_to_records_fixed_width(self.raw._var)
-            if len(uns_var) > 0:
-                warnings.warn('Categorical dtypes in `.raw.var` are cast to integer.')
             d['raw.X'] = self.raw.X
             d['raw.var'] = var_rec
             d['raw.varm'] = self.raw.varm
+            d['raw.cat'] = uns_var
 
         return d
 
@@ -2064,16 +2084,3 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
-
-    def chunked_X(self, chunk_size=None):
-        if chunk_size is None:
-            # Should be some adaptive code
-            chunk_size = 6000
-        start = 0
-        n = self.n_obs
-        for _ in range(int(n // chunk_size)):
-            end = start + chunk_size
-            yield (self.X[start:end], start, end)
-            start = end
-        if start < n:
-            yield (self.X[start:n], start, n)
