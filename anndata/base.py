@@ -1841,7 +1841,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         valid_keys = []
         for keys in AnnData._H5_ALIASES.values():
             valid_keys += keys
-        valid_keys += ['raw.X', 'raw.var', 'raw.varm']
+        valid_keys += ['raw.X', 'raw.var', 'raw.varm', 'raw.cat']
         for key in ddata.keys():
             # if there is another key then the prdedefined
             # then we are reading the old format
