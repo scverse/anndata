@@ -1826,7 +1826,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if start < n:
             yield (self.X[start:n], start, n)
 
-    def batch_X(self, select=1000, replace=T):
+    def chunk_X(self, select=1000, replace=T):
         # select is an integer or an array of indices for the batch
         # if select is an integer, random batch of size=select will be returned
         if isinstance(select, int):
