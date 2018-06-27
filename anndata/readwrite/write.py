@@ -2,6 +2,7 @@ import warnings
 from collections import Mapping
 from pathlib import Path
 import pandas as pd
+import math
 import numpy as np
 from scipy.sparse import issparse
 import logging as logg
@@ -77,6 +78,124 @@ def write_loom(filename: PathLike, adata: AnnData):
     if filename.exists():
         filename.unlink()
     create(fspath(filename), X, row_attrs=row_attrs, col_attrs=col_attrs)
+
+# TODO: store can be a MutableMapping or a string - accept PathLike too?
+def write_zarr(store, adata: AnnData, **kwargs):
+    d = adata._to_dict_fixed_width_arrays()
+    import zarr
+    f = zarr.open(store, mode='w')
+    for key, value in d.items():
+        _write_key_value_to_zarr(f, key, value, **kwargs)
+
+def _write_key_value_to_zarr(f, key, value, **kwargs):
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            if not isinstance(k, str):
+                warnings.warn('dict key {} transformed to str upon writing to zarr,'
+                              'using string keys is recommended'
+                              .format(k))
+            _write_key_value_to_zarr(f, key + '/' + str(k), v, **kwargs)
+        return
+
+    def preprocess_writing(value):
+        if value is None:
+            return value
+        elif issparse(value):
+            return value
+        elif isinstance(value, dict):
+            # old hack for storing dicts, is never reached
+            # in the current implementation, can be removed in the future
+            value = np.array([str(value)])
+        else:
+            # make sure value is an array
+            value = np.array(value)
+            # hm, why that?
+            if value.ndim == 0: value = np.array([value])
+        # make sure string format is chosen correctly
+        if value.dtype.kind == 'U': value = value.astype(np.string_)
+        return value
+
+    value = preprocess_writing(value)
+
+    # for some reason, we need the following for writing string arrays
+    if key in f.keys() and value is not None: del f[key]
+
+    # ignore arrays with empty dtypes
+    if value is None or not value.dtype.descr:
+        return
+    try:
+        if key in set(f.keys()):
+            is_valid_group = isinstance(f[key], zarr.hierarchy.Group) \
+                             and f[key].shape == value.shape \
+                             and f[key].dtype == value.dtype
+            if not is_valid_group and not issparse(value):
+                f[key][()] = value
+                return
+            else:
+                del f[key]
+        #f.create_dataset(key, data=value, **kwargs)
+        if key != 'X': # TODO: make this more explicit
+            del kwargs['chunks']
+        import numcodecs # TODO: only set object_codec for objects
+        ds = f.create_dataset(key, shape=value.shape,
+                                 dtype=value.dtype, object_codec=numcodecs.JSON(), **kwargs)
+        _write_in_zarr_chunks(ds, key, value)
+    except TypeError:
+        # try writing as byte strings
+        try:
+            if value.dtype.names is None:
+                if key in set(f.keys()):
+                    if (f[key].shape == value.shape
+                            and f[key].dtype == value.dtype):
+                        f[key][()] = value.astype('S')
+                        return
+                    else:
+                        del f[key]
+                #f.create_dataset(key, data=value.astype('S'), **kwargs)
+                ds = f.create_dataset(key, shape=value.astype('S').shape,
+                                         dtype=value.astype('S').dtype, **kwargs)
+                _write_in_zarr_chunks(ds, key, value.astype('S'))
+            else:
+                new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
+                             for dt in value.dtype.descr]
+                if key in set(f.keys()):
+                    if (f[key].shape == value.shape
+                            and f[key].dtype == value.dtype):
+                        f[key][()] = value.astype(new_dtype)
+                        return
+                    else:
+                        del f[key]
+                #f.create_dataset(
+                #    key, data=value.astype(new_dtype), **kwargs)
+                ds = f.create_dataset(key, shape=value.astype(new_dtype).shape,
+                                      dtype=value.astype(new_dtype).dtype, **kwargs)
+                _write_in_zarr_chunks(ds, key, value.astype(new_dtype))
+        except Exception as e:
+            warnings.warn('Could not save field with key = "{}" '
+                          'to hdf5 file.'.format(key))
+
+
+def _get_chunk_indices(za):
+    # TODO: does zarr provide code for this?
+    """
+    Return all the indices (coordinates) for the chunks in a zarr array, even empty ones.
+    """
+    return [(i, j) for i in range(int(math.ceil(float(za.shape[0])/za.chunks[0])))
+            for j in range(int(math.ceil(float(za.shape[1])/za.chunks[1])))]
+
+
+def _write_in_zarr_chunks(za, key, value):
+    if key != 'X':
+        za[:] = value # don't chunk metadata
+    else:
+        for ci in _get_chunk_indices(za):
+            s0, e0 = za.chunks[0] * ci[0], za.chunks[0] * (ci[0] + 1)
+            s1, e1 = za.chunks[1] * ci[1], za.chunks[1] * (ci[1] + 1)
+            print(ci, s0, e1, s1, e1)
+            if issparse(value):
+                za[s0:e0, s1:e1] = value[s0:e0, s1:e1].todense()
+            else:
+                za[s0:e0, s1:e1] = value[s0:e0, s1:e1]
 
 
 def _write_h5ad(filename: PathLike, adata: AnnData, **kwargs):

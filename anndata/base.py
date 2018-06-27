@@ -1813,6 +1813,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         from .readwrite.write import write_loom
         write_loom(filename, self)
 
+
+    def write_zarr(self, store, chunks):
+        from .readwrite.write import write_zarr
+        write_zarr(store, self, chunks=chunks)
+
+
     @staticmethod
     def _from_dict(ddata):
         """Allows to construct an instance of AnnData from a dictionary.
