@@ -1826,6 +1826,30 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if start < n:
             yield (self.X[start:n], start, n)
 
+    def chunk_X(self, select=1000, replace=T):
+        # select is an integer or an array of indices for the batch
+        # if select is an integer, random batch of size=select will be returned
+        if isinstance(select, int):
+            select = select if select < self.n_obs else self.n_obs
+            choice = np.random.choice(self.n_obs, select, replace)
+        elif isinstance (select, (np.ndarray, list, tuple)):
+            choice = np.array(select)
+        else:
+            raise ValueError('select should be int or array')
+
+        reverse = None
+        if self.isbacked:
+            # h5py can only slice with a sorted list of unique index values
+            # so random batch with indices [2, 2, 5, 3, 8, 10, 8] will fail
+            # this fixes the problem
+            indices, reverse = np.unique(choice, return_inverse=True)
+            selection = self.X[indices.tolist()]
+        else:
+            selection = self.X[choice]
+
+        selection = selection.toarray() if issparse(selection) else selection
+        return selection if reverse is None else selection[reverse]
+
     @staticmethod
     def _from_dict(ddata):
         """Allows to construct an instance of AnnData from a dictionary.
