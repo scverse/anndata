@@ -340,7 +340,10 @@ def _read_key_value_from_zarr(f, d, key, key_write=None):
         return
     # the '()' means 'load everything into memory' (by contrast, ':'
     # only works if not reading a scalar type)
-    value = f[key][()]
+    if key != 'X':
+        value = f[key][()]
+    else:
+        value = f[key] # don't load X into memory
 
     def postprocess_reading(key, value):
         if value.ndim == 1 and len(value) == 1:
