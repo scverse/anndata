@@ -574,8 +574,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     -----
     Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
 
+    Indexing into an AnnData object with a numeric is supposed to be positional,
+    like pandas ``.iloc`` method, while indexing with a string/ categorical is
+    supposed to behave like ``.loc``.
+
     If the unstructured annotations ``.uns`` contain a sparse matrix of shape
-    ``.n_obs`` × ``.n_obs``, these are also sliced.
+    ``.n_obs`` × ``.n_obs``, these are sliced when upon calls of `.[]`.
 
     :class:`~anndata.AnnData` stores observations (samples) of variables
     (features) in the rows of a matrix. This is the convention of the modern
