@@ -8,7 +8,7 @@ from collections import OrderedDict
 from functools import reduce
 from pathlib import Path
 from textwrap import indent, dedent
-from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple
+from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List
 from copy import deepcopy
 
 import numpy as np
@@ -1817,7 +1817,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         from .readwrite.write import write_loom
         write_loom(filename, self)
 
-    def chunked_X(self, chunk_size=None):
+    def chunked_X(self, chunk_size: Optional[int] = None):
+        """Return an iterator over the rows of the data matrix `.X`.
+
+        Parameters
+        ----------
+        chunk_size
+            Row size of a single chunk.
+        """
         if chunk_size is None:
             # Should be some adaptive code
             chunk_size = 6000
@@ -1830,14 +1837,27 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if start < n:
             yield (self.X[start:n], start, n)
 
-    def chunk_X(self, select=1000, replace=T):
-        # select is an integer or an array of indices for the batch
-        # if select is an integer, random batch of size=select will be returned
+    def chunk_X(self,
+                select: Union[int, List[int], Tuple[int], np.ndarray] = 1000,
+                replace: bool = True):
+        """Return a chunk of the data matrix `.X` with random or specified indices.
+
+        Parameters
+        ----------
+        select
+            If select is an integer, a random chunk of row size = select will be returned.
+            If select is a list, tuple or numpy array of integers, then a chunk
+            with these indices will be returned.
+
+        replace
+            If select is an integer then replace = True specifies random sampling of indices
+            with replacement, replace = False - without replacement.
+        """
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs
             choice = np.random.choice(self.n_obs, select, replace)
         elif isinstance (select, (np.ndarray, list, tuple)):
-            choice = np.array(select)
+            choice = np.asarray(select)
         else:
             raise ValueError('select should be int or array')
 
