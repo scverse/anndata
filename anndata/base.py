@@ -1837,7 +1837,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             select = select if select < self.n_obs else self.n_obs
             choice = np.random.choice(self.n_obs, select, replace)
         elif isinstance (select, (np.ndarray, list, tuple)):
-            choice = np.array(select)
+            choice = np.asarray(select)
         else:
             raise ValueError('select should be int or array')
 
