@@ -1,29 +1,33 @@
 :github_url: {{ fullname | modurl }}
 
-{% extends "!autosummary/class.rst" %}
+{{ fullname | escape | underline}}
+
+.. currentmodule:: {{ module }}
 
 .. add toctree option to make autodoc generate the pages
 
-{% block methods %}
-   {% if methods %}
-   .. rubric:: Methods
+.. autoclass:: {{ objname }}
 
-   .. autosummary::
-      :toctree: .
-   {% for item in methods %}
-      ~{{ name }}.{{ item }}
-   {%- endfor %}
-   {% endif %}
-{% endblock %}
-
-{% block attributes %}
+   {% block attributes %}
    {% if attributes %}
    .. rubric:: Attributes
 
    .. autosummary::
-      :toctree: .
    {% for item in attributes %}
       ~{{ name }}.{{ item }}
    {%- endfor %}
    {% endif %}
-{% endblock %}
+   {% endblock %}
+
+   {% block methods %}
+   {% if methods %}
+   .. rubric:: Methods
+
+   .. autosummary::
+   {% for item in methods %}
+      {%- if item != '__init__' %}
+      ~{{ name }}.{{ item }}
+      {%- endif -%}
+   {%- endfor %}
+   {% endif %}
+   {% endblock %}
