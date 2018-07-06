@@ -12,7 +12,7 @@
 anndata - Annotated Data
 ========================
 
-Install from `PyPI <https://pypi.python.org/pypi/anndata/>`__ via ``pip install anndata``.
+Install via ``pip install anndata`` or ``conda install anndata -c bioconda``.
 
 Read the `documentation <https://anndata.readthedocs.io>`_.
 
