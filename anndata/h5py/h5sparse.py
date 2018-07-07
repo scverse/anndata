@@ -62,14 +62,17 @@ class Group:
 
     def create_dataset(self, name, data=None, chunk_size=6000, **kwargs):
         if data is None:
+
             raise NotImplementedError("Only support create_dataset with "
                                       "if `data` is passed.")
         elif ss.issparse(data):
+
             sds = self.h5py_group.create_dataset(name=name, shape=data.shape, dtype=data.dtype, **kwargs)
             for chunk, start, end in _chunked_rows(data, chunk_size):
                 sds[start:end] = chunk.toarray()
             sds.attrs['sparse_format'] = get_format_str(data)
             return sds
+
         else:
             return self.h5py_group.create_dataset(
                 name=name, data=data, **kwargs)
@@ -128,18 +131,17 @@ def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
     if not isinstance(sds, h5py.Dataset):
         raise ValueError('sds should be a h5py Dataset')
 
-    elif 'sparse_format' not in sds.attrs:
-        raise ValueError('sds should have the sparse_format attribute')
-
-    else:
+    if 'sparse_format' in sds.attrs:
         sparse_class = get_format_class(sds.attrs['sparse_format'])
+    else:
+        sparse_class = ss.csr_matrix
 
-        data = None
+    data = None
 
-        for chunk, _, _ in _chunked_rows(sds, chunk_size):
-            data = sparse_class(chunk) if data is None else ss.vstack([data, sparse_class(chunk)])
+    for chunk, _, _ in _chunked_rows(sds, chunk_size):
+        data = sparse_class(chunk) if data is None else ss.vstack([data, sparse_class(chunk)])
 
-        return data
+    return data
 
 def _load_h5_dataset_as_sparse2(sds, chunk_size=512):
     #Like loompy does, not efficient it seems
