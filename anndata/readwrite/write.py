@@ -7,7 +7,10 @@ from scipy.sparse import issparse
 import logging as logg
 
 from ..base import AnnData
+
 from .. import h5py
+from .. import backwards
+
 from ..compat import PathLike, fspath
 
 
@@ -144,7 +147,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
             is_valid_group = isinstance(f[key], h5py.Group) \
                 and f[key].shape == value.shape \
                 and f[key].dtype == value.dtype \
-                and not isinstance(f[key], h5py.SparseDataset)
+                and not isinstance(f[key], backwards.SparseDataset)
             if not is_valid_group and not issparse(value):
                 f[key][()] = value
                 return

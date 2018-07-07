@@ -22,6 +22,8 @@ from scipy.sparse.sputils import IndexMixin
 from natsort import natsorted
 
 from . import h5py
+from . import backwards
+
 from . import utils
 from .compat import PathLike
 
@@ -1146,7 +1148,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._X = None
 
     def _set_backed(self, attr, value):
-        if (not isinstance(self.file[attr], h5py.SparseDataset)
+        if (not isinstance(self.file[attr], backwards.SparseDataset)
                 and not issparse(value)):
             self.file[attr] = value
         else:
