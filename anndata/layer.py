@@ -25,7 +25,7 @@ class AnnDataLayer():
             getattr(self._adata, self._type)[self._name][slice] = data
 
     def sparse(self):
-        if self._adata.isbacked
+        if self._adata.isbacked:
             return _load_h5_dataset_as_sparse(self._adata.file._file['/'+self._type+'/'+self._name])
         else:
             return ss.csr_matrix(getattr(self._adata, self._type)[self._name])
