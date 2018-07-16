@@ -1343,23 +1343,23 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _get_obs_array(self, k):
         """Get an array along the observation dimension by first looking up
-        obs_keys and then var_names."""
-        x = (self._obs[k] if k in self.obs_keys()
-             else self[:, k].data if k in set(self.var_names)
+        obs.keys and then var.index."""
+        x = (self._obs[k] if k in self.obs.keys()
+             else self[:, k].X if k in self.var_names
              else None)
         if x is None:
-            raise ValueError('Did not find {} in obs_keys or var_names.'
+            raise ValueError('Did not find {} in obs.keys or var_names.'
                              .format(k))
         return x
 
     def _get_var_array(self, k):
         """Get an array along the variables dimension by first looking up
-        ``var_keys`` and then ``obs_names``."""
-        x = (self._var[k] if k in self.var_keys()
-             else self[k] if k in set(self.obs_names)
+        ``var.keys`` and then ``obs.index``."""
+        x = (self._var[k] if k in self.var.keys()
+             else self[k].X if k in self.obs_names
              else None)
         if x is None:
-            raise ValueError('Did not find {} in var_keys or obs_names.'
+            raise ValueError('Did not find {} in var.keys or obs_names.'
                              .format(k))
         return x
 
