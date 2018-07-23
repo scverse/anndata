@@ -1339,6 +1339,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._obs = self._obs.iloc[index]
         # TODO: the following should not be necessary!
         self._obsm = BoundRecArr(self._obsm[index], self, 'obsm')
+        if self._raw is not None:
+            # slicing along variables axis is ignored
+            self._raw = self.raw[index]
+        else:
+            self._raw = None
         return None
 
     def _get_obs_array(self, k):
