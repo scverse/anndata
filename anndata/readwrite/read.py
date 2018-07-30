@@ -7,7 +7,6 @@ import numpy as np
 
 from ..base import AnnData
 
-from .. import backwards
 from .. import h5py
 
 from ..compat import PathLike, fspath
@@ -395,7 +394,7 @@ def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None, mode:
 
 def _read_key_value_from_h5(f, d, key, key_write=None):
     if key_write is None: key_write = key
-    if isinstance(f[key], (h5py.Group, backwards.Group)):
+    if isinstance(f[key], h5py.Group):
         d[key_write] = OrderedDict() if key == 'uns' else {}
         for k in f[key].keys():
             _read_key_value_from_h5(f, d[key_write], key + '/' + k, k)

@@ -21,7 +21,7 @@ For examples and further information, see this `blog post <https://falexwolf.de/
    Dataset
    SparseDataset
 """
-from .h5sparse import File, Group, _load_h5_dataset_as_sparse
+from .h5sparse import File, Group, SparseDataset, _load_h5_dataset_as_sparse
 from h5py import Dataset
 
 # Problem: the H5py intersphinx is broken, and only contains e.g. `Dataset` directly.

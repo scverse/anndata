@@ -22,7 +22,6 @@ from scipy.sparse.sputils import IndexMixin
 from natsort import natsorted
 
 from . import h5py
-from . import backwards
 
 from . import utils
 from .compat import PathLike
@@ -1148,7 +1147,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._X = None
 
     def _set_backed(self, attr, value):
-        if (not isinstance(self.file[attr], backwards.SparseDataset)
+        if (not isinstance(self.file[attr], h5py.SparseDataset)
                 and not issparse(value)):
             self.file[attr] = value
         else:
@@ -1768,6 +1767,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         compression: Optional[str] = 'gzip',
         compression_opts: Union[int, Any] = None,
+        sparse_as_dense: bool = False
     ):
         """Write `.h5ad`-formatted hdf5 file and close a potential backing file.
 
@@ -1786,7 +1786,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
-        _write_h5ad(filename, self, compression=compression, compression_opts=compression_opts)
+        _write_h5ad(filename, self, compression=compression, compression_opts=compression_opts,
+                                                             sparse_as_dense=sparse_as_dense)
         if self.isbacked:
             self.file.close()
 
