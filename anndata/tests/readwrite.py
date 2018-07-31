@@ -26,7 +26,8 @@ obs_dict = {  # annotation of observations / rows
     'oanno3': [2.1, 2.2, 2.3]}                 # float annotation
 
 var_dict = {  # annotation of variables / columns
-    'vanno1': [3.1, 3.2]}
+    'vanno1': [3.1, 3.2],
+    'vanno2': ['cat1', 'cat1']}        # categorical annotation
 
 uns_dict = {  # unstructured annotation
     'oanno1_colors': ['#000000', '#FFFFFF'],
@@ -43,12 +44,14 @@ def test_readwrite_h5ad():
         X = typ(X_list)
         adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
         assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
+        adata.raw = adata
         adata.write('./test.h5ad')
         adata = ad.read('./test.h5ad')
         assert pd.api.types.is_categorical(adata.obs['oanno1'])
         assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
         assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
         assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+        assert pd.api.types.is_categorical(adata.raw.var['vanno2'])
 
 
 def test_readwrite_dynamic():

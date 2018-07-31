@@ -36,7 +36,7 @@ extensions = [
     'sphinx.ext.autosummary',
     # 'plot_generator',
     # 'plot_directive',
-    'sphinx_autodoc_typehints',
+    'sphinx_autodoc_typehints',  # needs to be after napoleon
     # 'ipython_directive',
     # 'ipython_console_highlighting',
 ]
@@ -83,7 +83,7 @@ html_context = {
     ],
 }
 if 'READTHEDOCS' in os.environ:
-    # For some RTD doesn’t insert their stuff anymore once we add custom CSS files.
+    # For some reason, RTD doesn’t insert their stuff anymore once we add custom CSS files.
     html_context['css_files'].insert(0, 'https://media.readthedocs.org/css/sphinx_rtd_theme.css')
 
 html_static_path = ['_static']

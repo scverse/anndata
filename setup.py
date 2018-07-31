@@ -24,6 +24,7 @@ setup(
     author_email='alex.wolf@helmholtz-muenchen.de',
     license='BSD-3-Clause',
     install_requires=requires,
+    python_requires='>=3.5',
     packages=find_packages(),
     zip_safe=False,
     classifiers=[
