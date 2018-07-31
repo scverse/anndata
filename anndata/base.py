@@ -91,7 +91,7 @@ class BoundRecArr(np.recarray):
         pickled_state = super(self.__class__, self).__reduce__()
         new_state = pickled_state[2] + (self.__dict__, )
         return (pickled_state[0], pickled_state[1], new_state)
-    
+
     def __setstate__(self, state):
         for k, v in state[-1].items():
             self.__setattr__(k, v)
@@ -325,7 +325,7 @@ class AnnDataFileManager:
         if self._filename is None:
             raise ValueError(
                 'Cannot open backing file if backing not initialized.')
-        self._file = h5py.File(self._filename, self._filemode)
+        self._file = h5py.File(self._filename, self._filemode, force_dense=True)
 
     def close(self):
         """Close the backing file, remember filename, do *not* change to memory mode."""
