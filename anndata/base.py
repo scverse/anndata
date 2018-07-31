@@ -953,6 +953,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def layers_X(self):
+        """
+
+        .. warning
+        Setting subsets of items in layers writes to the original data also if AnnData is a view.
+        """
         return self._layers_X
 
     @property
