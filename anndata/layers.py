@@ -2,7 +2,7 @@
 import numpy as np
 from collections import OrderedDict
 
-class AnnDataLayer():
+class AnnDataLayers():
 
     def __init__(self, adata, layers = None):
 

@@ -23,7 +23,7 @@ from natsort import natsorted
 import zarr
 
 from . import h5py
-from .layer import AnnDataLayer
+from .layers import AnnDataLayers
 
 from . import utils
 from .compat import PathLike
@@ -873,7 +873,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # clean up old formats
         self._clean_up_old_format(uns)
 
-        self._layers_X = AnnDataLayer(self, layers_X)
+        self._layers_X = AnnDataLayers(self, layers_X)
 
     def __sizeof__(self):
         size = 0
