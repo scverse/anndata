@@ -652,7 +652,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
                 obsm=obsm, varm=varm, raw=raw,
-                layers_X = layers_X,
+                layers_X=layers_X,
                 dtype=dtype, shape=shape,
                 filename=filename, filemode=filemode)
 
@@ -706,11 +706,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._obs = DataFrameView(obs_sub, view_args=(self, 'obs'))
         self._var = DataFrameView(var_sub, view_args=(self, 'var'))
         self._uns = DictView(uns_new, view_args=(self, 'uns'))
-        #set layers_X
-        self._layers_X = adata_ref.layers_X
         # set data
         if self.isbacked: self._X = None
         else: self._init_X_as_view()
+
+        self._layers_X = AnnDataLayers(self, adata_ref=adata_ref, oidx=oidx, vidx=vidx)
+
         # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
@@ -1435,7 +1436,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                            # as uns was copied already before
                            self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
                            self._obsm.copy(), self._varm.copy(),
-                           raw=None if self._raw is None else self._raw.copy())
+                           raw=None if self._raw is None else self._raw.copy(), layers_X=self.layers_X.as_dict())
         else:
             if filename is None:
                 raise ValueError(
