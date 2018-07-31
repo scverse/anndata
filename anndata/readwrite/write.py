@@ -81,7 +81,7 @@ def write_loom(filename: PathLike, adata: AnnData):
     create(fspath(filename), X, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
-def _write_h5ad(filename: PathLike, adata: AnnData, sparse_as_dense: bool = False, **kwargs):
+def _write_h5ad(filename: PathLike, adata: AnnData, force_dense: bool = False, **kwargs):
     filename = Path(filename)
     if filename.suffix not in ('.h5', '.h5ad'):
         raise ValueError("Filename needs to end with '.h5ad'.")
@@ -98,7 +98,7 @@ def _write_h5ad(filename: PathLike, adata: AnnData, sparse_as_dense: bool = Fals
     if adata.isbacked and filename != adata.filename:
         d['X'] = adata.X[:]
     # need to use 'a' if backed, otherwise we loose the backed objects
-    with h5py.File(filename, 'a' if adata.isbacked else 'w', sparse_as_dense=sparse_as_dense) as f:
+    with h5py.File(filename, 'a' if adata.isbacked else 'w', force_dense=force_dense) as f:
         for key, value in d.items():
             _write_key_value_to_h5(f, key, value, **kwargs)
     if adata.isbacked:
