@@ -57,8 +57,8 @@ templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'
 project = 'anndata'
-copyright = '{}, Alex Wolf, Philipp Angerer'.format(time.strftime("%Y"))
-author = 'Alex Wolf, Philipp Angerer'
+copyright = '{}, Alex Wolf, Philipp Angerer, Sergei Rybakov'.format(time.strftime("%Y"))
+author = 'Alex Wolf, Philipp Angerer, Sergei Rybakov'
 
 version = anndata.__version__.replace('.dirty', '')
 release = version

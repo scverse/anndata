@@ -20,7 +20,7 @@ setup(
     description='An annotated data matrix.',
     long_description=readme,
     url='http://github.com/theislab/anndata',
-    author='Alex Wolf, Philipp Angerer',
+    author='Alex Wolf, Philipp Angerer, Sergei Rybakov',
     author_email='alex.wolf@helmholtz-muenchen.de',
     license='BSD-3-Clause',
     install_requires=requires,
