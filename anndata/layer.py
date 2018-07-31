@@ -1,31 +1,29 @@
 #thats just start
+import numpy as np
+from collections import OrderedDict
 
-from .base import AnnData
-from .h5py import _load_h5_dataset_as_sparse
-import scipy.sparse as ss
-
-# l = AnnDataLayer(adata, 'obsm', 'principal_components')
 class AnnDataLayer():
 
-    def __init__(adata: AnnData, atype: str, name: str):
+    def __init__(self, adata, layers = None):
+
         self._adata = adata
-        self._type = atype
-        self._name = name
 
-    def __getitem__(self, slice):
-        if self._adata.isbacked:
-            return self._adata.file._file['/'+self._type+'/'+self._name][slice]
-        else:
-            return getattr(self._adata, self._type)[self._name][slice]
+        if layers is not None:
+            for key in layers.keys():
+                if layers[key].shape != self._adata.shape:
+                    raise ValueError('Shape does not fit.')
 
-    def __setitem__(self, slice, data):
-        if self._adata.isbacked:
-            self._adata.file._file['/'+self._type+'/'+self._name][slice] = data
-        else:
-            getattr(self._adata, self._type)[self._name][slice] = data
+        self._layers = OrderedDict(layers) if layers is not None else OrderedDict()
 
-    def sparse(self):
-        if self._adata.isbacked:
-            return _load_h5_dataset_as_sparse(self._adata.file._file['/'+self._type+'/'+self._name])
-        else:
-            return ss.csr_matrix(getattr(self._adata, self._type)[self._name])
+    def __getitem__(self, key):
+        if key not in self._layers.keys():
+            raise KeyError
+        return self._layers[key]
+
+    def __setitem__(self, key, value):
+        if value.shape != self._adata.shape:
+            raise ValueError('Shape does not fit.')
+        self._layers[key] = value
+
+    def keys(self):
+        return self._layers.keys()

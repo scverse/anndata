@@ -149,10 +149,17 @@ def read_loom(filename: PathLike, sparse: bool = False) -> AnnData:
         with h5py.File(filename, 'r') as f:
             X = f['matrix'][()]
     with connect(filename, 'r') as lc:
+
+        layers = OrderedDict()
+        for key in lc.layers.keys():
+            if key != '':
+                layers[key] = lc.layers[key][()].T
+
         adata = AnnData(
             X.T,
             obs=dict(lc.col_attrs),  # not ideal: make the generator a dict...
-            var=dict(lc.row_attrs))
+            var=dict(lc.row_attrs),
+            layers_X=layers)
         lc.close()
     return adata
 

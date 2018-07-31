@@ -23,6 +23,7 @@ from natsort import natsorted
 import zarr
 
 from . import h5py
+from .layer import AnnDataLayer
 
 from . import utils
 from .compat import PathLike
@@ -635,6 +636,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         uns: Optional[Mapping[Any, Any]] = None,
         obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        layers_X: Optional[Mapping] = None,
         raw: Optional[Union[Raw, Mapping[str, Any]]] = None,
         dtype: Union[np.dtype, str] = 'float32',
         shape: tuple = None,
@@ -650,6 +652,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
                 obsm=obsm, varm=varm, raw=raw,
+                layers_X = layers_X,
                 dtype=dtype, shape=shape,
                 filename=filename, filemode=filemode)
 
@@ -703,6 +706,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._obs = DataFrameView(obs_sub, view_args=(self, 'obs'))
         self._var = DataFrameView(var_sub, view_args=(self, 'var'))
         self._uns = DictView(uns_new, view_args=(self, 'uns'))
+        #set layers_X
+        self._layers_X = adata_ref.layers_X
         # set data
         if self.isbacked: self._X = None
         else: self._init_X_as_view()
@@ -736,7 +741,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
-            obsm=None, varm=None, raw=None,
+            obsm=None, varm=None, raw=None, layers_X = None,
             dtype='float32', shape=None,
             filename=None, filemode=None):
         from .readwrite.read import _read_h5ad
@@ -868,6 +873,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # clean up old formats
         self._clean_up_old_format(uns)
 
+        self._layers_X = AnnDataLayer(self, layers_X)
+
     def __sizeof__(self):
         size = 0
         for attr in ['_X', '_obs', '_var', '_uns', '_obsm', '_varm']:
@@ -942,6 +949,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         else:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
                              .format(value.shape, self.shape))
+
+    @property
+    def layers_X(self):
+        return self._layers_X
 
     @property
     def raw(self):
