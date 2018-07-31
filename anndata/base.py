@@ -20,8 +20,13 @@ from scipy import sparse
 from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
 from natsort import natsorted
-import zarr
 
+# try importing zarr
+try:
+    import zarr.core.array as ZarrArray
+except ImportError:
+    ZarrArray = object()
+    
 from . import h5py
 
 from . import utils
@@ -52,7 +57,7 @@ class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
     Sparse = sparse.spmatrix
-    Zarr = zarr.core.Array
+    Zarr = ZarrArray
 
     @classmethod
     def classes(cls):
@@ -799,7 +804,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
                 if X.dtype != np.dtype(dtype): X = X.astype(dtype)
-            elif isinstance(X, zarr.core.Array):
+            elif isinstance(X, ZarrArray):
                 X = X.astype(dtype)
             else:  # is np.ndarray
                 X = X.astype(dtype, copy=False)
