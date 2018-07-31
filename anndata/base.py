@@ -23,10 +23,12 @@ from natsort import natsorted
 
 # try importing zarr
 try:
-    import zarr.core.array as ZarrArray
+    from zarr.core import Array as ZarrArray
 except ImportError:
-    ZarrArray = object()
-    
+    class ZarrArray:
+        def __rep__():
+            return 'mock zarr.core.Array'
+
 from . import h5py
 
 from . import utils
@@ -57,10 +59,11 @@ class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
     Sparse = sparse.spmatrix
-    Zarr = ZarrArray
+    ZarrArry = ZarrArray
 
     @classmethod
     def classes(cls):
+        print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
 
 
