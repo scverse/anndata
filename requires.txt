@@ -3,3 +3,4 @@ numpy>=1.14.0
 scipy
 h5py
 natsort
+zarr

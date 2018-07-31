@@ -321,6 +321,55 @@ def _read_text(
                    var={'var_names': col_names})
 
 
+def read_zarr(store):
+    import zarr
+    f = zarr.open(store, mode='r')
+    d = {}
+    for key in f.keys():
+        _read_key_value_from_zarr(f, d, key)
+    return AnnData(d)
+
+
+def _read_key_value_from_zarr(f, d, key, key_write=None):
+    import zarr
+    if key_write is None: key_write = key
+    if isinstance(f[key], zarr.hierarchy.Group):
+        d[key_write] = OrderedDict() if key == 'uns' else {}
+        for k in f[key].keys():
+            _read_key_value_from_zarr(f, d[key_write], key + '/' + k, k)
+        return
+    # the '()' means 'load everything into memory' (by contrast, ':'
+    # only works if not reading a scalar type)
+    if key != 'X':
+        value = f[key][()]
+    else:
+        value = f[key] # don't load X into memory
+
+    def postprocess_reading(key, value):
+        if value.ndim == 1 and len(value) == 1:
+            value = value[0]
+        if value.dtype.kind == 'S':
+            value = value.astype(str)
+            # backwards compat:
+            # recover a dictionary that has been stored as a string
+            if len(value) > 0:
+                if value[0] == '{' and value[-1] == '}': value = eval(value)
+        # transform byte strings in recarrays to unicode strings
+        # TODO: come up with a better way of solving this, see also below
+        if (key not in AnnData._H5_ALIASES['obs']
+                and key not in AnnData._H5_ALIASES['var']
+                and key != 'raw.var'
+                and not isinstance(value, dict) and value.dtype.names is not None):
+            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
+                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
+            value = value.astype(new_dtype)
+        return key, value
+
+    #key, value = postprocess_reading(key, value)
+    d[key_write] = value
+    return
+
+
 def read_h5ad(filename, backed: Union[bool, str] = False):
     """Read ``.h5ad``-formatted hdf5 file.
 
