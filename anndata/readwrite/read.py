@@ -6,7 +6,9 @@ import bz2
 import numpy as np
 
 from ..base import AnnData
+
 from .. import h5py
+
 from ..compat import PathLike, fspath
 from .utils import *
 
@@ -442,14 +444,19 @@ def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None, mode:
 def _read_key_value_from_h5(f, d, key, key_write=None):
     if key_write is None: key_write = key
     if isinstance(f[key], h5py.Group):
-        d[key_write] = OrderedDict() if key == 'uns' else {} 
+        d[key_write] = OrderedDict() if key == 'uns' else {}
         for k in f[key].keys():
             _read_key_value_from_h5(f, d[key_write], key + '/' + k, k)
         return
+
+    ds = f[key]
+
+    if isinstance(ds, h5py.Dataset) and 'sparse_format' in ds.attrs:
+        value = h5py._load_h5_dataset_as_sparse(ds)
+    else:
+        value = ds[()]
     # the '()' means 'load everything into memory' (by contrast, ':'
     # only works if not reading a scalar type)
-    value = f[key][()]
-
     def postprocess_reading(key, value):
         if value.ndim == 1 and len(value) == 1:
             value = value[0]

@@ -8,7 +8,9 @@ from scipy.sparse import issparse
 import logging as logg
 
 from ..base import AnnData
+
 from .. import h5py
+
 from ..compat import PathLike, fspath
 
 
@@ -198,7 +200,7 @@ def _write_in_zarr_chunks(za, key, value):
                 za[s0:e0, s1:e1] = value[s0:e0, s1:e1]
 
 
-def _write_h5ad(filename: PathLike, adata: AnnData, **kwargs):
+def _write_h5ad(filename: PathLike, adata: AnnData, force_dense: bool = False, **kwargs):
     filename = Path(filename)
     if filename.suffix not in ('.h5', '.h5ad'):
         raise ValueError("Filename needs to end with '.h5ad'.")
@@ -215,7 +217,7 @@ def _write_h5ad(filename: PathLike, adata: AnnData, **kwargs):
     if adata.isbacked and filename != adata.filename:
         d['X'] = adata.X[:]
     # need to use 'a' if backed, otherwise we loose the backed objects
-    with h5py.File(filename, 'a' if adata.isbacked else 'w') as f:
+    with h5py.File(filename, 'a' if adata.isbacked else 'w', force_dense=force_dense) as f:
         for key, value in d.items():
             _write_key_value_to_h5(f, key, value, **kwargs)
     if adata.isbacked:

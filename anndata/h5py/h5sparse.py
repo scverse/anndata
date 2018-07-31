@@ -11,6 +11,8 @@ from scipy.sparse.sputils import IndexMixin
 
 from ..compat import PathLike
 
+from .utils import _chunked_rows
+
 FORMAT_DICT = {
     'csr': ss.csr_matrix,
     'csc': ss.csc_matrix,
@@ -32,12 +34,31 @@ def get_format_class(format_str):
     return format_class
 
 
+def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
+    #efficient for csr, not so for csc (but still better than loompy it seems)
+    if not isinstance(sds, h5py.Dataset):
+        raise ValueError('sds should be a h5py Dataset')
+
+    if 'sparse_format' in sds.attrs:
+        sparse_class = get_format_class(sds.attrs['sparse_format'])
+    else:
+        sparse_class = ss.csr_matrix
+
+    data = None
+
+    for chunk, _, _ in _chunked_rows(sds, chunk_size):
+        data = sparse_class(chunk) if data is None else ss.vstack([data, sparse_class(chunk)])
+
+    return data
+
+
 class Group:
     """Like :ref:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
     """
 
-    def __init__(self, h5py_group):
+    def __init__(self, h5py_group, force_dense=False):
         self.h5py_group = h5py_group
+        self.force_dense = force_dense
 
     def __getitem__(self, key):
         h5py_item = self.h5py_group[key]
@@ -61,11 +82,18 @@ class Group:
     def keys(self):
         return self.h5py_group.keys()
 
-    def create_dataset(self, name, data=None, **kwargs):
+    def create_dataset(self, name, data=None, chunk_size=6000, **kwargs):
         if data is None:
             raise NotImplementedError("Only support create_dataset with "
                                       "if `data` is passed.")
-        elif isinstance(data, SparseDataset):
+
+        elif (isinstance(data, SparseDataset) or ss.issparse(data)) and self.force_dense:
+            sds = self.h5py_group.create_dataset(name=name, shape=data.shape, dtype=data.dtype, **kwargs)
+            for chunk, start, end in _chunked_rows(data, chunk_size):
+                sds[start:end] = chunk.toarray()
+            sds.attrs['sparse_format'] = data.format_str if isinstance(data, SparseDataset) else get_format_str(data)
+            return sds
+        elif isinstance(data, SparseDataset) and not self.force_dense:
             group = self.h5py_group.create_group(name)
             group.attrs['h5sparse_format'] = data.h5py_group.attrs['h5sparse_format']
             group.attrs['h5sparse_shape'] = data.h5py_group.attrs['h5sparse_shape']
@@ -73,7 +101,7 @@ class Group:
             group.create_dataset('indices', data=data.h5py_group['indices'], maxshape=(None,), **kwargs)
             group.create_dataset('indptr', data=data.h5py_group['indptr'], maxshape=(None,), **kwargs)
             return SparseDataset(group)
-        elif ss.issparse(data):
+        elif ss.issparse(data) and not self.force_dense:
             group = self.h5py_group.create_group(name)
             group.attrs['h5sparse_format'] = get_format_str(data)
             group.attrs['h5sparse_shape'] = data.shape
@@ -100,6 +128,7 @@ class File(Group):
         libver: Optional[str] = None,
         userblock_size: Optional[int] = None,
         swmr: bool = False,
+        force_dense: bool = False,
         **kwds  # Python 3.5 can’t handle trailing commas here
     ):
         self.h5f = h5py.File(
@@ -111,7 +140,7 @@ class File(Group):
             swmr=swmr,
             **kwds,
         )
-        super().__init__(self.h5f)
+        super().__init__(self.h5f, force_dense)
 
     def __enter__(self):
         return self

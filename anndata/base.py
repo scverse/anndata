@@ -23,6 +23,7 @@ from natsort import natsorted
 import zarr
 
 from . import h5py
+
 from . import utils
 from .compat import PathLike
 
@@ -1153,7 +1154,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:
                 # change from memory to backing-mode
                 # write the content of self to disk
-                self.write(filename)
+                self.write(filename, force_dense=True)
             # open new file for accessing
             self.file.open(filename, 'r+')
             # as the data is stored on disk, we can safely set self._X to None
@@ -1785,6 +1786,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         compression: Optional[str] = 'gzip',
         compression_opts: Union[int, Any] = None,
+        force_dense: Optional[bool] = None
     ):
         """Write `.h5ad`-formatted hdf5 file and close a potential backing file.
 
@@ -1803,7 +1805,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
-        _write_h5ad(filename, self, compression=compression, compression_opts=compression_opts)
+
+        force_dense = True if self.isbacked else False
+
+        _write_h5ad(filename, self, compression=compression, compression_opts=compression_opts,
+                                                             force_dense=force_dense)
         if self.isbacked:
             self.file.close()
 
