@@ -621,6 +621,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         'uns': {'uns'},
         'obsm': {'obsm', '_obsm', 'smpm', '_smpm'},
         'varm': {'varm', '_varm'},
+        'layers_X': {'layers_X', '_layers_X'},
     }
 
     _H5_ALIASES_NAMES = {
@@ -776,14 +777,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm, raw = self._from_dict(X)
+            X, obs, var, uns, obsm, varm, raw, layers_X = self._from_dict(X)
 
         # init from AnnData
         if isinstance(X, AnnData):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm, raw = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw
+            X, obs, var, uns, obsm, varm, raw, layers_X = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw, X.layers_X
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -2001,6 +2002,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         obsm = d_true_keys['obsm']
         var = d_true_keys['var']
         varm = d_true_keys['varm']
+        layers_X = d_true_keys['layers_X']
 
         raw = None
         if 'raw.X' in ddata:
@@ -2037,7 +2039,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         uns = (ddata if uns_is_not_key
                else ddata['uns'] if 'uns' in ddata else {})
 
-        return X, obs, var, uns, obsm, varm, raw
+        return X, obs, var, uns, obsm, varm, raw, layers_X
 
     def _to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
@@ -2046,12 +2048,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
         var_rec, uns_var = df_to_records_fixed_width(self._var)
+        layers = self.layers_X.as_dict()
         d = {
             'X': self._X,
             'obs': obs_rec,
             'var': var_rec,
             'obsm': self._obsm,
             'varm': self._varm,
+            'layers_X': layers,
             # add the categories to the unstructured annotation
             'uns': {**self._uns, **uns_obs, **uns_var}}
 
