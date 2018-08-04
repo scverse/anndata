@@ -1342,42 +1342,16 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         Same as ``adata = adata[:, index]``, but inplace.
         """
-        if not self.isbacked:
-            self._X = self._X[:, index]
-            self._n_vars = self._X.shape[1]
-        else:
-            X = self.file['X']
-            X = X[:, index]
-            self._n_vars = X.shape[1]
-            self._set_backed('X', X)
-        self._var = self._var.iloc[index]
-        # TODO: the following should not be necessary!
-        self._varm = BoundRecArr(self._varm[index], self, 'varm')
-        return None
+        adata_subset = self[:, index].copy()
+        self.__dict__.update(adata_subset.__dict__)
 
     def _inplace_subset_obs(self, index):
         """Inplace subsetting along variables dimension.
 
         Same as ``adata = adata[index, :]``, but inplace.
         """
-        if not self.isbacked:
-            self._X = self._X[index, :]
-            self._n_obs = self._X.shape[0]
-        else:
-            X = self.file['X']
-            X = X[index, :]
-            self._n_obs = X.shape[0]
-            self._set_backed('X', X)
-        self._slice_uns_sparse_matrices_inplace(self._uns, index)
-        self._obs = self._obs.iloc[index]
-        # TODO: the following should not be necessary!
-        self._obsm = BoundRecArr(self._obsm[index], self, 'obsm')
-        if self._raw is not None:
-            # slicing along variables axis is ignored
-            self._raw = self.raw[index]
-        else:
-            self._raw = None
-        return None
+        adata_subset = self[index].copy()
+        self.__dict__.update(adata_subset.__dict__)
 
     def _get_obs_array(self, k):
         """Get an array along the observation dimension by first looking up
