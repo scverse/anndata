@@ -2,6 +2,8 @@
 import numpy as np
 from collections import OrderedDict
 
+from scipy.sparse import issparse
+
 class AnnDataLayers():
 
     def __init__(self, adata, layers=None, adata_ref=None, oidx=None, vidx=None):
@@ -25,10 +27,19 @@ class AnnDataLayers():
             return self._layers[key]
 
     def __setitem__(self, key, value):
+        if not isinstance(value, np.ndarray) and not issparse(value):
+            raise ValueError('Value should be numpy array or sparse matrix')
         if self.isview:
             if key not in self._adata_ref.layers_X.keys():
-                raise ValueError('You can not create new keys in view mode')
-            self._adata_ref.layers_X[key][self._oidx, self._vidx] = value
+                if self._adata.isbacked:
+                    raise ValueError(
+                        'You cannot modify elements of an AnnData view, '
+                        'but need a copy of the subset.\n\n'
+                        'Call `adata_subset = adata[index].copy(filename=...)`.')
+                self._adata._init_as_actual(self._adata.copy())
+                self._adata.layers_X[key] = value
+            else:
+                self._adata_ref.layers_X[key][self._oidx, self._vidx] = value
         else:
             if value.shape != self._adata.shape:
                 raise ValueError('Shape does not fit.')
@@ -42,7 +53,7 @@ class AnnDataLayers():
 
     def items(self):
         if self.isview:
-            return [(k, v[self._oidx, self._vidx]) for (k, v) in self._adata_ref.layers_X.items()]
+            return [(k, v[self._oidx, self._vidx].copy()) for (k, v) in self._adata_ref.layers_X.items()]
         else:
             return self._layers.items()
 
