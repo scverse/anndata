@@ -31,6 +31,7 @@ class AnnDataLayers():
             raise ValueError('Value should be numpy array or sparse matrix')
         if self.isview:
             if key not in self._adata_ref.layers_X.keys():
+                # can't load _init_actual_AnnData from .base - circular
                 if self._adata.isbacked:
                     raise ValueError(
                         'You cannot modify elements of an AnnData view, '
