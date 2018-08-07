@@ -1343,7 +1343,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Same as ``adata = adata[:, index]``, but inplace.
         """
         adata_subset = self[:, index].copy()
-        self.__dict__.update(adata_subset.__dict__)
+        self._init_as_actual(adata_subset)
+        #self.__dict__.update(adata_subset.__dict__)
 
     def _inplace_subset_obs(self, index):
         """Inplace subsetting along variables dimension.
@@ -1351,7 +1352,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Same as ``adata = adata[index, :]``, but inplace.
         """
         adata_subset = self[index].copy()
-        self.__dict__.update(adata_subset.__dict__)
+        self._init_as_actual(adata_subset)
+        #self.__dict__.update(adata_subset.__dict__)
 
     def _get_obs_array(self, k):
         """Get an array along the observation dimension by first looking up
