@@ -56,7 +56,7 @@ class AnnDataLayers():
         if self.isview:
             return [(k, v[self._oidx, self._vidx].copy()) for (k, v) in self._adata_ref.layers_X.items()]
         else:
-            return self._layers.items()
+            return [(k, v.copy()) for (k, v) in self._layers.items()]
 
     def __len__(self):
         if self.isview:
