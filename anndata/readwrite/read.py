@@ -159,7 +159,7 @@ def read_loom(filename: PathLike, sparse: bool = False) -> AnnData:
             X.T,
             obs=dict(lc.col_attrs),  # not ideal: make the generator a dict...
             var=dict(lc.row_attrs),
-            layers_X=layers)
+            layers=layers)
         lc.close()
     return adata
 

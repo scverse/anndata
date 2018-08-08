@@ -10,39 +10,39 @@ L = np.array([[10, 11, 12],
               [16, 17, 18]])
 
 def test_creation():
-    adata = ad.AnnData(X=X, layers_X={'L':L.copy()})
+    adata = ad.AnnData(X=X, layers={'L':L.copy()})
 
-    assert list(adata.layers_X.keys()) == ['L']
-    assert (adata.layers_X['L'] == L).all()
+    assert list(adata.layers.keys()) == ['L']
+    assert (adata.layers['L'] == L).all()
 
 def test_views():
-    adata = ad.AnnData(X=X, layers_X={'L':L.copy()})
+    adata = ad.AnnData(X=X, layers={'L':L.copy()})
     adata_view = adata[1:, 1:]
 
-    assert adata_view.layers_X.isview
-    assert adata_view.layers_X._adata_ref == adata
+    assert adata_view.layers.isview
+    assert adata_view.layers._adata_ref == adata
 
-    assert adata_view.layers_X.keys() == adata.layers_X.keys()
-    assert (adata_view.layers_X['L'] == adata.layers_X['L'][1:, 1:]).all()
+    assert adata_view.layers.keys() == adata.layers.keys()
+    assert (adata_view.layers['L'] == adata.layers['L'][1:, 1:]).all()
 
-    adata.layers_X['S'] = X
+    adata.layers['S'] = X
 
-    assert adata_view.layers_X.keys() == adata.layers_X.keys()
-    assert (adata_view.layers_X['S'] == adata.layers_X['S'][1:, 1:]).all()
+    assert adata_view.layers.keys() == adata.layers.keys()
+    assert (adata_view.layers['S'] == adata.layers['S'][1:, 1:]).all()
 
-    adata_view.layers_X['T'] = X[1:, 1:]
+    adata_view.layers['T'] = X[1:, 1:]
 
-    assert not adata_view.layers_X.isview
+    assert not adata_view.layers.isview
     assert not adata_view.isview
 
 def test_readwrite():
-    adata = ad.AnnData(X=X, layers_X={'L':L.copy()})
+    adata = ad.AnnData(X=X, layers={'L':L.copy()})
     adata.write('test.h5ad')
 
     adata_read = ad.read_h5ad('test.h5ad')
 
-    assert adata.layers_X.keys() == adata_read.layers_X.keys()
-    assert (adata.layers_X['L'] == adata_read.layers_X['L']).all()
+    assert adata.layers.keys() == adata_read.layers.keys()
+    assert (adata.layers['L'] == adata_read.layers['L']).all()
 
     os.remove('test.h5ad')
 
