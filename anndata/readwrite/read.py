@@ -145,14 +145,15 @@ def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X
     from loompy import connect
     with connect(filename, 'r') as lc:
 
-        X = lc.layers[X_name].sparse() if sparse else lc.layers[X_name][()]
+        X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
 
         layers = OrderedDict()
         for key in lc.layers.keys():
             if key != '':
-                layers[key] = lc.layers[key][()].T
+                layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
 
-        if X_name != '': layers['matrix'] = lc.layers[''][()].T
+        if X_name != '':
+            layers['matrix'] = lc.layers[''].sparse().T.tocsr() if sparse else lc.layers[''][()].T
 
         obs=dict(lc.col_attrs)
         if obs_names is not None and obs_names in obs.keys():
@@ -171,7 +172,7 @@ def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X
                     del var[key]
 
         adata = AnnData(
-            X.T,
+            X,
             obs=obs,  # not ideal: make the generator a dict...
             var=var,
             layers=layers)
