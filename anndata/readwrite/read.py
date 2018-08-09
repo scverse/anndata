@@ -125,7 +125,7 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike, sparse: bool = False,
+def read_loom(filename: PathLike, sparse: bool = False, X_name: str = '',
               obs_names: Optional[str] = None, var_names: Optional[str] = None) -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
@@ -143,17 +143,13 @@ def read_loom(filename: PathLike, sparse: bool = False,
     """
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
-    if sparse:
-        with connect(filename, 'r') as lc:
-            X = lc.sparse()
-    else:
-        with h5py.File(filename, 'r') as f:
-            X = f['matrix'][()]
     with connect(filename, 'r') as lc:
+
+        X = lc.layers[X_name].sparse() if sparse else lc.layers[X_name][()]
 
         layers = OrderedDict()
         for key in lc.layers.keys():
-            if key != '':
+            if key != X_name:
                 layers[key] = lc.layers[key][()].T
 
         obs=dict(lc.col_attrs)
