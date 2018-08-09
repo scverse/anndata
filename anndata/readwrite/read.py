@@ -164,10 +164,10 @@ def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X
             var['var_names'] = var.pop(var_names)
 
         if cleanup:
-            for key in obs.keys():
+            for key in list(obs.keys()):
                 if len(set(obs[key])) == 1:
                     del obs[key]
-            for key in var.keys():
+            for key in list(var.keys()):
                 if len(set(var[key])) == 1:
                     del var[key]
 
