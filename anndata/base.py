@@ -284,7 +284,7 @@ def _gen_dataframe(anno, length, index_names):
                     columns=[k for k in anno.keys() if k != index_name])
                 break
         else:
-            _anno = pd.DataFrame(anno)
+            _anno = pd.DataFrame(anno, index=RangeIndex(0, length, name=None).astype(str))
     return _anno
 
 
