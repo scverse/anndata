@@ -154,10 +154,6 @@ def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X
 
         if X_name != '': layers['matrix'] = lc.layers[''][()].T
 
-        if cleanup:
-            for key in layers.keys():
-                if len(set(layers[key])) == 1: del layers[key]
-
         obs=dict(lc.col_attrs)
         if obs_names is not None and obs_names in obs.keys():
             obs['obs_names'] = obs.pop(obs_names)
@@ -165,6 +161,14 @@ def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X
         var=dict(lc.row_attrs)
         if var_names is not None and var_names in var.keys():
             var['var_names'] = var.pop(var_names)
+
+        if cleanup:
+            for key in obs.keys():
+                if len(set(obs[key])) == 1:
+                    del obs[key]
+            for key in var.keys():
+                if len(set(var[key])) == 1:
+                    del var[key]
 
         adata = AnnData(
             X.T,
