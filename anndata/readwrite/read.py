@@ -125,7 +125,8 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike, sparse: bool = False) -> AnnData:
+def read_loom(filename: PathLike, sparse: bool = False,
+              obs_names: Optional[str] = None, var_names: Optional[str] = None) -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
@@ -155,10 +156,18 @@ def read_loom(filename: PathLike, sparse: bool = False) -> AnnData:
             if key != '':
                 layers[key] = lc.layers[key][()].T
 
+        obs=dict(lc.col_attrs)
+        if obs_names is not None and obs_names in obs.keys():
+            obs['obs_names'] = obs.pop(obs_names)
+
+        var=dict(lc.row_attrs)
+        if var_names is not None and var_names in var.keys():
+            var['var_names'] = var.pop(var_names)
+
         adata = AnnData(
             X.T,
-            obs=dict(lc.col_attrs),  # not ideal: make the generator a dict...
-            var=dict(lc.row_attrs),
+            obs=obs,  # not ideal: make the generator a dict...
+            var=var,
             layers=layers)
         lc.close()
     return adata
