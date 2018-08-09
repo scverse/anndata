@@ -45,11 +45,22 @@ class AnnDataLayers():
                 raise ValueError('Shape does not fit.')
             self._layers[key] = value
 
+    def __delitem__(self, key):
+        self.__delattr__(key)
+
+    def __delattr__(self, key):
+        if self.isview:
+            adata = self._adata.copy()
+            adata.layers.__delattr__(key)
+            self._adata._init_as_actual(adata)
+        else:
+            del self._layers[key]
+
     def keys(self):
         if self.isview:
             return self._adata_ref.layers.keys()
         else:
-            return self._layers.keys()
+            return list(self._layers.keys())
 
     def items(self):
         if self.isview:

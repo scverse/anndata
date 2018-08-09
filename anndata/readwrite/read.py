@@ -149,8 +149,10 @@ def read_loom(filename: PathLike, sparse: bool = False, X_name: str = '',
 
         layers = OrderedDict()
         for key in lc.layers.keys():
-            if key != X_name:
+            if key != '':
                 layers[key] = lc.layers[key][()].T
+
+        if X_name != '': layers['matrix'] = lc.layers[''][()].T
 
         obs=dict(lc.col_attrs)
         if obs_names is not None and obs_names in obs.keys():
