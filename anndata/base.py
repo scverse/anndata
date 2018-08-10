@@ -892,7 +892,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         descr = (
             'AnnData object with n_obs × n_vars = {} × {} {}'
             .format(n_obs, n_vars, backed_at))
-        for attr in ['obs', 'var', 'uns', 'obsm', 'varm']:
+        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:
             keys = getattr(self, attr).keys()
             if len(keys) > 0:
                 descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
