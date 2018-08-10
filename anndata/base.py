@@ -875,7 +875,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # clean up old formats
         self._clean_up_old_format(uns)
 
-        self._layers = AnnDataLayers(self, layers)
+        self._layers = AnnDataLayers(self, layers, dtype)
 
     def __sizeof__(self):
         size = 0

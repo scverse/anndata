@@ -5,19 +5,23 @@ from scipy.sparse import issparse
 
 class AnnDataLayers():
 
-    def __init__(self, adata, layers=None, adata_ref=None, oidx=None, vidx=None):
+    def __init__(self, adata, layers=None, dtype='float32', adata_ref=None, oidx=None, vidx=None):
 
         self._adata = adata
         self._adata_ref = adata_ref
         self._oidx = oidx
         self._vidx = vidx
 
+        self._layers = OrderedDict()
+
         if layers is not None:
             for key in layers.keys():
                 if layers[key].shape != self._adata.shape:
                     raise ValueError('Shape does not fit.')
-
-        self._layers = OrderedDict(layers) if layers is not None else OrderedDict()
+                if layers[key].dtype != np.dtype(dtype):
+                    self._layers[key] = layers[key].astype(dtype, copy=False)
+                else:
+                    self._layers[key] = layers[key]
 
     def __getitem__(self, key):
         if self.isview:
