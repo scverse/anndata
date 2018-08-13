@@ -1353,24 +1353,25 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """
         adata_subset = self[index].copy()
         self._init_as_actual(adata_subset)
-        #self.__dict__.update(adata_subset.__dict__)
 
-    def _get_obs_array(self, k):
+    def _get_obs_array(self, k, use_raw=False):
         """Get an array along the observation dimension by first looking up
         obs.keys and then var.index."""
         x = (self._obs[k] if k in self.obs.keys()
-             else self[:, k].X if k in self.var_names
+             else self.raw[:, k].X if (k in self.raw.var_names and use_raw)
+             else self[:, k].X if (k in self.var_names and not use_raw)
              else None)
         if x is None:
             raise ValueError('Did not find {} in obs.keys or var_names.'
                              .format(k))
         return x
 
-    def _get_var_array(self, k):
+    def _get_var_array(self, k, use_raw=False):
         """Get an array along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
         x = (self._var[k] if k in self.var.keys()
-             else self[k].X if k in self.obs_names
+             else self.raw[k].X if (k in self.raw.obs_names and use_raw)
+             else self[k].X if (k in self.obs_names and not use_raw)
              else None)
         if x is None:
             raise ValueError('Did not find {} in var.keys or obs_names.'
