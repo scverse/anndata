@@ -30,6 +30,7 @@ except ImportError:
             return 'mock zarr.core.Array'
 
 from . import h5py
+from .layers import AnnDataLayers
 
 from . import utils
 from .compat import PathLike
@@ -291,7 +292,7 @@ def _gen_dataframe(anno, length, index_names):
                     columns=[k for k in anno.keys() if k != index_name])
                 break
         else:
-            _anno = pd.DataFrame(anno)
+            _anno = pd.DataFrame(anno, index=RangeIndex(0, length, name=None).astype(str))
     return _anno
 
 
@@ -628,6 +629,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         'uns': {'uns'},
         'obsm': {'obsm', '_obsm', 'smpm', '_smpm'},
         'varm': {'varm', '_varm'},
+        'layers': {'layers', '_layers'},
     }
 
     _H5_ALIASES_NAMES = {
@@ -643,6 +645,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         uns: Optional[Mapping[Any, Any]] = None,
         obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        layers: Optional[Mapping] = None,
         raw: Optional[Union[Raw, Mapping[str, Any]]] = None,
         dtype: Union[np.dtype, str] = 'float32',
         shape: tuple = None,
@@ -658,6 +661,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
                 obsm=obsm, varm=varm, raw=raw,
+                layers=layers,
                 dtype=dtype, shape=shape,
                 filename=filename, filemode=filemode)
 
@@ -714,6 +718,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # set data
         if self.isbacked: self._X = None
         else: self._init_X_as_view()
+
+        self._layers = AnnDataLayers(self, adata_ref=adata_ref, oidx=oidx, vidx=vidx)
+
         # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
@@ -744,7 +751,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
-            obsm=None, varm=None, raw=None,
+            obsm=None, varm=None, raw=None, layers=None,
             dtype='float32', shape=None,
             filename=None, filemode=None):
         from .readwrite.read import _read_h5ad
@@ -778,14 +785,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm, raw = self._from_dict(X)
+            X, obs, var, uns, obsm, varm, raw, layers = self._from_dict(X)
 
         # init from AnnData
         if isinstance(X, AnnData):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm, raw = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw
+            X, obs, var, uns, obsm, varm, raw, layers = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw, X.layers
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -876,6 +883,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # clean up old formats
         self._clean_up_old_format(uns)
 
+        self._layers = AnnDataLayers(self, layers, dtype)
+
     def __sizeof__(self):
         size = 0
         for attr in ['_X', '_obs', '_var', '_uns', '_obsm', '_varm']:
@@ -891,7 +900,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         descr = (
             'AnnData object with n_obs × n_vars = {} × {} {}'
             .format(n_obs, n_vars, backed_at))
-        for attr in ['obs', 'var', 'uns', 'obsm', 'varm']:
+        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:
             keys = getattr(self, attr).keys()
             if len(keys) > 0:
                 descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
@@ -950,6 +959,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         else:
             raise ValueError('Data matrix has wrong shape {}, need to be {}'
                              .format(value.shape, self.shape))
+
+    @property
+    def layers(self):
+        """
+
+        .. warning
+        Setting subsets of items in layers writes to the original data also if AnnData is a view.
+        """
+        return self._layers
 
     @property
     def raw(self):
@@ -1332,59 +1350,36 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         Same as ``adata = adata[:, index]``, but inplace.
         """
-        if not self.isbacked:
-            self._X = self._X[:, index]
-            self._n_vars = self._X.shape[1]
-        else:
-            X = self.file['X']
-            X = X[:, index]
-            self._n_vars = X.shape[1]
-            self._set_backed('X', X)
-        self._var = self._var.iloc[index]
-        # TODO: the following should not be necessary!
-        self._varm = BoundRecArr(self._varm[index], self, 'varm')
-        return None
+        adata_subset = self[:, index].copy()
+        self._init_as_actual(adata_subset)
+        #self.__dict__.update(adata_subset.__dict__)
 
     def _inplace_subset_obs(self, index):
         """Inplace subsetting along variables dimension.
 
         Same as ``adata = adata[index, :]``, but inplace.
         """
-        if not self.isbacked:
-            self._X = self._X[index, :]
-            self._n_obs = self._X.shape[0]
-        else:
-            X = self.file['X']
-            X = X[index, :]
-            self._n_obs = X.shape[0]
-            self._set_backed('X', X)
-        self._slice_uns_sparse_matrices_inplace(self._uns, index)
-        self._obs = self._obs.iloc[index]
-        # TODO: the following should not be necessary!
-        self._obsm = BoundRecArr(self._obsm[index], self, 'obsm')
-        if self._raw is not None:
-            # slicing along variables axis is ignored
-            self._raw = self.raw[index]
-        else:
-            self._raw = None
-        return None
+        adata_subset = self[index].copy()
+        self._init_as_actual(adata_subset)
 
-    def _get_obs_array(self, k):
+    def _get_obs_array(self, k, use_raw=False):
         """Get an array along the observation dimension by first looking up
         obs.keys and then var.index."""
         x = (self._obs[k] if k in self.obs.keys()
-             else self[:, k].X if k in self.var_names
+             else self.raw[:, k].X if (k in self.raw.var_names and use_raw)
+             else self[:, k].X if (k in self.var_names and not use_raw)
              else None)
         if x is None:
             raise ValueError('Did not find {} in obs.keys or var_names.'
                              .format(k))
         return x
 
-    def _get_var_array(self, k):
+    def _get_var_array(self, k, use_raw=False):
         """Get an array along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
         x = (self._var[k] if k in self.var.keys()
-             else self[k].X if k in self.obs_names
+             else self.raw[k].X if (k in self.raw.obs_names and use_raw)
+             else self[k].X if (k in self.obs_names and not use_raw)
              else None)
         if x is None:
             raise ValueError('Did not find {} in var.keys or obs_names.'
@@ -1432,7 +1427,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                            # as uns was copied already before
                            self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
                            self._obsm.copy(), self._varm.copy(),
-                           raw=None if self._raw is None else self._raw.copy())
+                           raw=None if self._raw is None else self._raw.copy(), layers=self.layers.as_dict())
         else:
             if filename is None:
                 raise ValueError(
@@ -1992,6 +1987,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         obsm = d_true_keys['obsm']
         var = d_true_keys['var']
         varm = d_true_keys['varm']
+        layers = d_true_keys['layers']
 
         raw = None
         if 'raw.X' in ddata:
@@ -2028,7 +2024,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         uns = (ddata if uns_is_not_key
                else ddata['uns'] if 'uns' in ddata else {})
 
-        return X, obs, var, uns, obsm, varm, raw
+        return X, obs, var, uns, obsm, varm, raw, layers
 
     def _to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
@@ -2037,12 +2033,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
         var_rec, uns_var = df_to_records_fixed_width(self._var)
+        layers = self.layers.as_dict()
         d = {
             'X': self._X,
             'obs': obs_rec,
             'var': var_rec,
             'obsm': self._obsm,
             'varm': self._varm,
+            'layers': layers,
             # add the categories to the unstructured annotation
             'uns': {**self._uns, **uns_obs, **uns_var}}
 

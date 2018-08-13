@@ -125,7 +125,8 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike, sparse: bool = False) -> AnnData:
+def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X_name: str = '',
+              obs_names: Optional[str] = None, var_names: Optional[str] = None) -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
@@ -142,17 +143,39 @@ def read_loom(filename: PathLike, sparse: bool = False) -> AnnData:
     """
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
-    if sparse:
-        with connect(filename, 'r') as lc:
-            X = lc.sparse()
-    else:
-        with h5py.File(filename, 'r') as f:
-            X = f['matrix'][()]
     with connect(filename, 'r') as lc:
+
+        X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
+
+        layers = OrderedDict()
+        for key in lc.layers.keys():
+            if key != '':
+                layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
+
+        if X_name != '':
+            layers['matrix'] = lc.layers[''].sparse().T.tocsr() if sparse else lc.layers[''][()].T
+
+        obs=dict(lc.col_attrs)
+        if obs_names is not None and obs_names in obs.keys():
+            obs['obs_names'] = obs.pop(obs_names)
+
+        var=dict(lc.row_attrs)
+        if var_names is not None and var_names in var.keys():
+            var['var_names'] = var.pop(var_names)
+
+        if cleanup:
+            for key in list(obs.keys()):
+                if len(set(obs[key])) == 1:
+                    del obs[key]
+            for key in list(var.keys()):
+                if len(set(var[key])) == 1:
+                    del var[key]
+
         adata = AnnData(
-            X.T,
-            obs=dict(lc.col_attrs),  # not ideal: make the generator a dict...
-            var=dict(lc.row_attrs))
+            X,
+            obs=obs,  # not ideal: make the generator a dict...
+            var=var,
+            layers=layers)
         lc.close()
     return adata
 
