@@ -601,19 +601,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     supposed to behave like ``.loc``.
 
     If the unstructured annotations ``.uns`` contain a sparse matrix of shape
-    ``.n_obs`` × ``.n_obs``, these are sliced when upon calls of `.[]`.
+    ``.n_obs`` × ``.n_obs``, these are sliced when calling ``[]``.
+
+    A data matrix is flattened if either ``n_obs`` or ``n_vars`` is 1, so that
+    numpy's slicing behavior is reproduced::
+
+        adata = AnnData(np.ones((2, 2)))
+        adata[:, 0].X == adata.X[:, 0]
 
     :class:`~anndata.AnnData` stores observations (samples) of variables
     (features) in the rows of a matrix. This is the convention of the modern
     classics of statistics [Hastie09]_ and machine learning [Murphy12]_, the
     convention of dataframes both in R and Python and the established statistics
     and machine learning packages in Python (statsmodels_, scikit-learn_).
-
-    A data matrix is flattened if either #observations (``n_obs``) or #variables
-    (``n_vars``) is 1, so that numpy's slicing behavior is reproduced::
-
-        adata = AnnData(np.ones((2, 2)))
-        adata[:, 0].X == adata.X[:, 0]
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
