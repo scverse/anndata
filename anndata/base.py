@@ -980,6 +980,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Its content can be deleted by setting it back to ``None``::
 
             adata.raw = None
+
+        Upon slicing an AnnData object along the observations (row) axis,
+        ``.raw`` is also sliced. Slicing an AnnData object along the variables
+        (columns) axis, leaves ``.raw`` unaffected. Note that you can call::
+
+             adata.raw[:, 'orig_variable_name'].X
+
+        to retrieve the data associated with a variable that might have been
+        filtered out or "compressed away" in ``.X``.
         """
         return self._raw
 
