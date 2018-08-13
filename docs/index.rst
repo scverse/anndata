@@ -24,4 +24,5 @@ in `Genome Biology (2018) <https://doi.org/10.1186/s13059-017-1382-0>`_.
    :hidden:
 
    api
+   benchmarks
    references
