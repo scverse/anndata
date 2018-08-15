@@ -1398,13 +1398,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """
         if not self.isbacked: X = self._X
         else: X = self.file['X']
+        layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items(copy=False)}
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
-                           filename=self.filename)
+                           filename=self.filename, layers=layers)
         return AnnData(X.T, self._var, self._obs, self._uns,
                        self._varm.flipped(), self._obsm.flipped(),
-                       filename=self.filename)
+                       filename=self.filename, layers=layers)
 
     T = property(transpose)
 
