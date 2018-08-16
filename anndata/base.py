@@ -20,7 +20,14 @@ from scipy import sparse
 from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
 from natsort import natsorted
-import zarr
+
+# try importing zarr
+try:
+    from zarr.core import Array as ZarrArray
+except ImportError:
+    class ZarrArray:
+        def __rep__():
+            return 'mock zarr.core.Array'
 
 from . import h5py
 from .layers import AnnDataLayers
@@ -53,10 +60,11 @@ class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
     Sparse = sparse.spmatrix
-    Zarr = zarr.core.Array
+    ZarrArry = ZarrArray
 
     @classmethod
     def classes(cls):
+        print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
 
 
@@ -593,19 +601,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     supposed to behave like ``.loc``.
 
     If the unstructured annotations ``.uns`` contain a sparse matrix of shape
-    ``.n_obs`` × ``.n_obs``, these are sliced when upon calls of `.[]`.
+    ``.n_obs`` × ``.n_obs``, these are sliced when calling ``[]``.
+
+    A data matrix is flattened if either ``n_obs`` or ``n_vars`` is 1, so that
+    numpy's slicing behavior is reproduced::
+
+        adata = AnnData(np.ones((2, 2)))
+        adata[:, 0].X == adata.X[:, 0]
 
     :class:`~anndata.AnnData` stores observations (samples) of variables
     (features) in the rows of a matrix. This is the convention of the modern
     classics of statistics [Hastie09]_ and machine learning [Murphy12]_, the
     convention of dataframes both in R and Python and the established statistics
     and machine learning packages in Python (statsmodels_, scikit-learn_).
-
-    A data matrix is flattened if either #observations (``n_obs``) or #variables
-    (``n_vars``) is 1, so that numpy's slicing behavior is reproduced::
-
-        adata = AnnData(np.ones((2, 2)))
-        adata[:, 0].X == adata.X[:, 0]
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
@@ -806,7 +814,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
                 if X.dtype != np.dtype(dtype): X = X.astype(dtype)
-            elif isinstance(X, zarr.core.Array):
+            elif isinstance(X, ZarrArray):
                 X = X.astype(dtype)
             else:  # is np.ndarray
                 X = X.astype(dtype, copy=False)
@@ -972,6 +980,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Its content can be deleted by setting it back to ``None``::
 
             adata.raw = None
+
+        Upon slicing an AnnData object along the observations (row) axis,
+        ``.raw`` is also sliced. Slicing an AnnData object along the variables
+        (columns) axis, leaves ``.raw`` unaffected. Note that you can call::
+
+             adata.raw[:, 'orig_variable_name'].X
+
+        to retrieve the data associated with a variable that might have been
+        filtered out or "compressed away" in ``.X``.
         """
         return self._raw
 

@@ -125,8 +125,8 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X_name: str = '',
-              obs_names: Optional[str] = None, var_names: Optional[str] = None) -> AnnData:
+def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
+              obs_names: str = 'CellID', var_names: str = 'Gene') -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
@@ -145,23 +145,19 @@ def read_loom(filename: PathLike, sparse: bool = False, cleanup: bool = False, X
     from loompy import connect
     with connect(filename, 'r') as lc:
 
+        if X_name not in lc.layers.keys(): X_name = ''
         X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
 
         layers = OrderedDict()
+        if X_name != '': layers['matrix'] = lc.layers[''].sparse().T.tocsr() if sparse else lc.layers[''][()].T
         for key in lc.layers.keys():
-            if key != '':
-                layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
-
-        if X_name != '':
-            layers['matrix'] = lc.layers[''].sparse().T.tocsr() if sparse else lc.layers[''][()].T
+            if key != '': layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
 
         obs=dict(lc.col_attrs)
-        if obs_names is not None and obs_names in obs.keys():
-            obs['obs_names'] = obs.pop(obs_names)
+        if obs_names in obs.keys(): obs['obs_names'] = obs.pop(obs_names)
 
         var=dict(lc.row_attrs)
-        if var_names is not None and var_names in var.keys():
-            var['var_names'] = var.pop(var_names)
+        if var_names in var.keys(): var['var_names'] = var.pop(var_names)
 
         if cleanup:
             for key in list(obs.keys()):
