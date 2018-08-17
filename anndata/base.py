@@ -1374,9 +1374,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _get_obs_array(self, k, use_raw=False, layer='X'):
         """Get an array along the observation dimension by first looking up
         obs.keys and then var.index."""
+        in_raw_var_names = k in self.raw.var_names if self.raw is not None else False
+
         if k in self.obs.keys():
             x = self._obs[k]
-        elif k in self.raw.var_names and use_raw and layer == 'X':
+        elif in_raw_var_names and use_raw and layer == 'X':
             x = self.raw[:, k].X
         elif k in self.var_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
             x = self[:, k].X if layer=='X' else self[:, k].layers[layer]
@@ -1393,9 +1395,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _get_var_array(self, k, use_raw=False, layer='X'):
         """Get an array along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
+        in_raw_obs_names = k in self.raw.obs_names if self.raw is not None else False
+
         if k in self.var.keys():
             x = self._var[k]
-        elif k in self.raw.obs_names and use_raw and layer == 'X':
+        elif in_raw_obs_names and use_raw and layer == 'X':
             x = self.raw[k].X
         elif k in self.obs_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
             x = self[k].X if layer=='X' else self[k].layers[layer]
