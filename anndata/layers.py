@@ -66,20 +66,26 @@ class AnnDataLayers():
         else:
             return list(self._layers.keys())
 
-    def items(self):
+    def items(self, copy=True):
         if self.isview:
-            return [(k, v[self._oidx, self._vidx].copy()) for (k, v) in self._adata_ref.layers.items()]
+            if copy:
+                return [(k, v[self._oidx, self._vidx].copy()) for (k, v) in self._adata_ref.layers.items()]
+            else:
+                return [(k, v[self._oidx, self._vidx]) for (k, v) in self._adata_ref.layers.items()]
         else:
-            return [(k, v.copy()) for (k, v) in self._layers.items()]
+            if copy:
+                return [(k, v.copy()) for (k, v) in self._layers.items()]
+            else:
+                return self._layers.items()
+
+    def as_dict(self, copy=True):
+        return {k:v for (k, v) in self.items(copy)}
 
     def __len__(self):
         if self.isview:
             return len(self._adata_ref.layers)
         else:
             return len(self._layers)
-
-    def as_dict(self):
-        return {k:v for (k, v) in self.items()}
 
     @property
     def isview(self):

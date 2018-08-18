@@ -1371,26 +1371,44 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         adata_subset = self[index].copy()
         self._init_as_actual(adata_subset)
 
-    def _get_obs_array(self, k, use_raw=False):
+    def _get_obs_array(self, k, use_raw=False, layer='X'):
         """Get an array along the observation dimension by first looking up
         obs.keys and then var.index."""
-        x = (self._obs[k] if k in self.obs.keys()
-             else self.raw[:, k].X if (k in self.raw.var_names and use_raw)
-             else self[:, k].X if (k in self.var_names and not use_raw)
-             else None)
-        if x is None:
+        in_raw_var_names = k in self.raw.var_names if self.raw is not None else False
+
+        if k in self.obs.keys():
+            x = self._obs[k]
+        elif in_raw_var_names and use_raw and layer == 'X':
+            x = self.raw[:, k].X
+        elif k in self.var_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
+            x = self[:, k].X if layer=='X' else self[:, k].layers[layer]
+        elif use_raw and layer != 'X':
+            raise ValueError('No layers in Raw')
+        elif layer != 'X' and layer not in self.layers.keys():
+            raise ValueError('Did not find {} in layers.keys.'
+                             .format(layer))
+        else:
             raise ValueError('Did not find {} in obs.keys or var_names.'
                              .format(k))
         return x
 
-    def _get_var_array(self, k, use_raw=False):
+    def _get_var_array(self, k, use_raw=False, layer='X'):
         """Get an array along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
-        x = (self._var[k] if k in self.var.keys()
-             else self.raw[k].X if (k in self.raw.obs_names and use_raw)
-             else self[k].X if (k in self.obs_names and not use_raw)
-             else None)
-        if x is None:
+        in_raw_obs_names = k in self.raw.obs_names if self.raw is not None else False
+
+        if k in self.var.keys():
+            x = self._var[k]
+        elif in_raw_obs_names and use_raw and layer == 'X':
+            x = self.raw[k].X
+        elif k in self.obs_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
+            x = self[k].X if layer=='X' else self[k].layers[layer]
+        elif use_raw and layer != 'X':
+            raise ValueError('No layers in Raw')
+        elif layer != 'X' and layer not in self.layers.keys():
+            raise ValueError('Did not find {} in layers.keys.'
+                             .format(layer))
+        else:
             raise ValueError('Did not find {} in var.keys or obs_names.'
                              .format(k))
         return x
@@ -1416,13 +1434,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """
         if not self.isbacked: X = self._X
         else: X = self.file['X']
+        layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items(copy=False)}
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
-                           filename=self.filename)
+                           filename=self.filename, layers=layers)
         return AnnData(X.T, self._var, self._obs, self._uns,
                        self._varm.flipped(), self._obsm.flipped(),
-                       filename=self.filename)
+                       filename=self.filename, layers=layers)
 
     T = property(transpose)
 
