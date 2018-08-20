@@ -1,12 +1,23 @@
-#thats just start
+from typing import Mapping, Optional, Union
+
 import numpy as np
 from collections import OrderedDict
 from scipy.sparse import issparse
 
-class AnnDataLayers():
+if False:
+    from .base import AnnData, Index  # noqa
 
-    def __init__(self, adata, layers=None, dtype='float32', adata_ref=None, oidx=None, vidx=None):
 
+class AnnDataLayers:
+    def __init__(
+        self,
+        adata: 'AnnData',
+        layers: Optional[Mapping[str, np.ndarray]] = None,
+        dtype: Union[str, np.dtype] = 'float32',
+        adata_ref: 'AnnData' = None,
+        oidx: 'Index' = None,
+        vidx: 'Index' = None,
+    ):
         self._adata = adata
         self._adata_ref = adata_ref
         self._oidx = oidx
@@ -63,29 +74,21 @@ class AnnDataLayers():
     def keys(self):
         if self.isview:
             return self._adata_ref.layers.keys()
-        else:
+        else:  # TODO @Koncopd: Why wrap this in list() and not the above?
             return list(self._layers.keys())
 
     def items(self, copy=True):
         if self.isview:
-            if copy:
-                return [(k, v[self._oidx, self._vidx].copy()) for (k, v) in self._adata_ref.layers.items()]
-            else:
-                return [(k, v[self._oidx, self._vidx]) for (k, v) in self._adata_ref.layers.items()]
+            pairs = [(k, v[self._oidx, self._vidx]) for (k, v) in self._adata_ref.layers.items()]
         else:
-            if copy:
-                return [(k, v.copy()) for (k, v) in self._layers.items()]
-            else:
-                return self._layers.items()
+            pairs = self._layers.items()
+        return [(k, v.copy()) for (k, v) in pairs] if copy else pairs
 
     def as_dict(self, copy=True):
-        return {k:v for (k, v) in self.items(copy)}
+        return dict(self.items(copy))
 
     def __len__(self):
-        if self.isview:
-            return len(self._adata_ref.layers)
-        else:
-            return len(self._layers)
+        return len(self._adata_ref.layers if self.isview else self._layers)
 
     @property
     def isview(self):

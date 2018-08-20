@@ -1,12 +1,11 @@
 """Main class and helper functions.
 """
-import os, sys
-import warnings
+import os
+import sys
 import logging as logg
 from enum import Enum
 from collections import OrderedDict
 from functools import reduce
-from pathlib import Path
 from textwrap import indent, dedent
 from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List
 from copy import deepcopy
@@ -26,6 +25,7 @@ try:
     from zarr.core import Array as ZarrArray
 except ImportError:
     class ZarrArray:
+        @staticmethod
         def __rep__():
             return 'mock zarr.core.Array'
 
@@ -66,6 +66,9 @@ class StorageType(Enum):
     def classes(cls):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
+
+
+Index = Union[slice, int, np.int64, np.ndarray, Sized]
 
 
 class BoundRecArr(np.recarray):
@@ -652,7 +655,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         filemode: Optional[str] = None,
         asview: bool = False,
-        *, oidx=None, vidx=None):
+        *, oidx: Index = None, vidx: Index = None):
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError('`X` has to be an AnnData object.')
@@ -665,8 +668,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 dtype=dtype, shape=shape,
                 filename=filename, filemode=filemode)
 
-    def _init_as_view(self, adata_ref, oidx, vidx):
-        def get_n_items_idx(idx):
+    def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
+        def get_n_items_idx(idx: Index):
             if isinstance(idx, np.ndarray) and idx.dtype == bool:
                 return idx.sum()
             else:

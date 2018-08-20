@@ -39,59 +39,60 @@ uns_dict = {  # unstructured annotation
 # -------------------------------------------------------------------------------
 
 
-def test_readwrite_h5ad():
-    for typ in [np.array, csr_matrix]:
-        X = typ(X_list)
-        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
-        adata.raw = adata
-        adata.write('./test.h5ad')
-        adata = ad.read('./test.h5ad')
-        assert pd.api.types.is_categorical(adata.obs['oanno1'])
-        assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
-        assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
-        assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
-        assert pd.api.types.is_categorical(adata.raw.var['vanno2'])
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_h5ad(typ):
+    X = typ(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
+    adata.raw = adata
+    adata.write('./test.h5ad')
+    adata = ad.read('./test.h5ad')
+    assert pd.api.types.is_categorical(adata.obs['oanno1'])
+    assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+    assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
+    assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+    assert pd.api.types.is_categorical(adata.raw.var['vanno2'])
 
 
-def test_readwrite_dynamic():
-    for typ in [np.array, csr_matrix]:
-        X = typ(X_list)
-        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        adata.filename = './test.h5ad'  # change to backed mode
-        adata.write()
-        adata = ad.read('./test.h5ad')
-        assert pd.api.types.is_categorical(adata.obs['oanno1'])
-        assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
-        assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
-        assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_dynamic(typ):
+    X = typ(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata.filename = './test.h5ad'  # change to backed mode
+    adata.write()
+    adata = ad.read('./test.h5ad')
+    assert pd.api.types.is_categorical(adata.obs['oanno1'])
+    assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+    assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
+    assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
 
-def test_readwrite_zarr():
-    for typ in [np.array, csr_matrix]:
-        X = typ(X_list)
-        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
-        adata.write_zarr('./test_zarr_dir', chunks=True)
-        adata = ad.read_zarr('./test_zarr_dir')
-        assert pd.api.types.is_categorical(adata.obs['oanno1'])
-        assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
-        assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
-        assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+@pytest.mark.skipif(not find_spec('zarr'), reason='Zarr is not installed')
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_zarr(typ):
+    X = typ(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
+    adata.write_zarr('./test_zarr_dir', chunks=True)
+    adata = ad.read_zarr('./test_zarr_dir')
+    assert pd.api.types.is_categorical(adata.obs['oanno1'])
+    assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+    assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
+    assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
 
 @pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')
-def test_readwrite_loom():
-    for i, typ in enumerate([np.array, csr_matrix]):
-        X = typ(X_list)
-        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        adata.write_loom('./test.loom')
-        adata = ad.read_loom('./test.loom', sparse=(i == 1))
-        if isinstance(X, np.ndarray):
-            assert np.allclose(adata.X, X)
-        else:
-            # TODO: this should not be necessary
-            assert np.allclose(adata.X.toarray(), X.toarray())
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_loom(typ):
+    X = typ(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata.write_loom('./test.loom')
+    adata = ad.read_loom('./test.loom', sparse=typ is csr_matrix)
+    if isinstance(X, np.ndarray):
+        assert np.allclose(adata.X, X)
+    else:
+        # TODO: this should not be necessary
+        assert np.allclose(adata.X.toarray(), X.toarray())
 
 
 def test_read_csv():
@@ -116,8 +117,8 @@ def test_read_tsv_iter():
         assert adata.X.tolist() == X_list
 
 
-def test_write_csv():
-    for typ in [np.array, csr_matrix]:
-        X = typ(X_list)
-        adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-        adata.write_csvs('./test_csv_dir', skip_data=False)
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_write_csv(typ):
+    X = typ(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata.write_csvs('./test_csv_dir', skip_data=False)
