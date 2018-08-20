@@ -72,10 +72,7 @@ class AnnDataLayers:
             del self._layers[key]
 
     def keys(self):
-        if self.isview:
-            return self._adata_ref.layers.keys()
-        else:  # TODO @Koncopd: Why wrap this in list() and not the above?
-            return list(self._layers.keys())
+        return (self._adata_ref.layers if self.isview else self._layers).keys()
 
     def items(self, copy=True):
         if self.isview:
