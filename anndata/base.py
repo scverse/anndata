@@ -1375,9 +1375,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._init_as_actual(adata_subset)
 
     def _get_obs_array(self, k, use_raw=False, layer='X'):
-        """Get an array along the observation dimension by first looking up
+        """Get an array from the layer (default layer='X') along the observation dimension by first looking up
         obs.keys and then var.index."""
         in_raw_var_names = k in self.raw.var_names if self.raw is not None else False
+
+        if use_raw and self.raw is None:
+            raise ValueError('.raw doesn\'t exist')
 
         if k in self.obs.keys():
             x = self._obs[k]
@@ -1386,7 +1389,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         elif k in self.var_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
             x = self[:, k].X if layer=='X' else self[:, k].layers[layer]
         elif use_raw and layer != 'X':
-            raise ValueError('No layers in Raw')
+            raise ValueError('No layers in .raw')
         elif layer != 'X' and layer not in self.layers.keys():
             raise ValueError('Did not find {} in layers.keys.'
                              .format(layer))
@@ -1396,9 +1399,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return x
 
     def _get_var_array(self, k, use_raw=False, layer='X'):
-        """Get an array along the variables dimension by first looking up
+        """Get an array from the layer (default layer='X') along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
         in_raw_obs_names = k in self.raw.obs_names if self.raw is not None else False
+
+        if use_raw and self.raw is None:
+            raise ValueError('.raw doesn\'t exist')
 
         if k in self.var.keys():
             x = self._var[k]
@@ -1407,7 +1413,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         elif k in self.obs_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
             x = self[k].X if layer=='X' else self[k].layers[layer]
         elif use_raw and layer != 'X':
-            raise ValueError('No layers in Raw')
+            raise ValueError('No layers in .raw')
         elif layer != 'X' and layer not in self.layers.keys():
             raise ValueError('Did not find {} in layers.keys.'
                              .format(layer))
