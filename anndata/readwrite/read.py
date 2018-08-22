@@ -172,7 +172,6 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
             obs=obs,  # not ideal: make the generator a dict...
             var=var,
             layers=layers)
-        lc.close()
     return adata
 
 
