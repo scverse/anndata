@@ -71,15 +71,22 @@ def write_loom(filename: PathLike, adata: AnnData):
     row_attrs['var_names'] = adata.var_names.values
     col_attrs = adata.obs.to_dict('list')
     col_attrs['obs_names'] = adata.obs_names.values
+    
     X = adata.X.T
-    if issparse(X):
-        logg.info(
-            '... writing to \'.loom\' file densifies sparse matrix')
-        X = X.tocoo()
+    if issparse(X): 
+        X = X.A
+        logg.info('... writing to \'.loom\' file densifies sparse matrix')
+    layers = {'': X}
+    
+    for key in adata.layers.keys():
+        layer = adata.layers[key].T
+        if issparse(layer): layer = layer.A
+        layers[key] = layer
+        
     from loompy import create
     if filename.exists():
         filename.unlink()
-    create(fspath(filename), X, row_attrs=row_attrs, col_attrs=col_attrs)
+    create(fspath(filename), layers, row_attrs=row_attrs, col_attrs=col_attrs)
 
 # TODO: store can be a MutableMapping or a string - accept PathLike too?
 def write_zarr(store, adata: AnnData, **kwargs):
