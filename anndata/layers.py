@@ -3,6 +3,7 @@ from typing import Mapping, Optional, Union
 import numpy as np
 from collections import OrderedDict
 from scipy.sparse import issparse
+from . import h5py
 
 if False:
     from .base import AnnData, Index  # noqa
@@ -38,7 +39,10 @@ class AnnDataLayers:
         if self.isview:
             return self._adata_ref.layers[key][self._oidx, self._vidx]
         else:
-            return self._layers[key]
+            if self._adata.isbacked:
+                if not self._adata.file.isopen: self._adata.file.open()
+                return self._adata.file['layers'][key]
+            else: return self._layers[key]
 
     def __setitem__(self, key, value):
         if not isinstance(value, np.ndarray) and not issparse(value):
@@ -58,7 +62,13 @@ class AnnDataLayers:
         else:
             if value.shape != self._adata.shape:
                 raise ValueError('Shape does not fit.')
-            self._layers[key] = value
+            if self._adata.isbacked:
+                if (not isinstance(self._adata.file['layers'][key], h5py.SparseDataset) and not issparse(value)):
+                    self._adata.file['layers'][key] = value
+                else:
+                    del self._adata.file['layers'][key]
+                    self._adata.file['layers'].create_dataset(key, data=value)
+            else: self._layers[key] = value
 
     def __delitem__(self, key):
         self.__delattr__(key)
