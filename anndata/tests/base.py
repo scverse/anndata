@@ -23,12 +23,14 @@ def test_creation():
     assert adata.raw.X.tolist() == X.tolist()
     assert adata.raw.var_names.tolist() == ['a', 'b', 'c']
 
-    assert AnnData(np.array([1, 2])).X.shape == (2,)
+    assert AnnData(np.array([1, 2])).X.shape == (1, 2)
 
     from pytest import raises
-    raises(ValueError, AnnData,
+    with raises(ValueError):
+        AnnData(
            np.array([[1, 2], [3, 4]]),
-           dict(TooLong=[1, 2, 3, 4]))
+           dict(TooLong=[1, 2, 3, 4]),
+        )
 
     # init with empty data matrix
     shape = (3, 5)
@@ -63,20 +65,21 @@ def test_indices_dtypes():
 
 def test_creation_from_vector():
     adata = AnnData(np.array([1, 2, 3]))
-    assert adata.X.shape == (3,)
+    assert adata.X.shape == (1, 3)
     adata = AnnData(np.array([[1], [2], [3]]))
-    assert adata.X.shape == (3,)
+    assert adata.X.shape == (3, 1)
 
 
 def test_slicing():
     adata = AnnData(np.array([[1, 2, 3],
                               [4, 5, 6]]))
 
-    assert np.all(adata[:, 0].X == adata.X[:, 0])
+    # anndata maintains 2D shape, numpy doesn’t
+    assert adata[:, 0].X.tolist() == adata.X[:, 0].reshape((2, 1)).tolist()
 
-    assert adata[0, 0].X.tolist() == 1
-    assert adata[0, :].X.tolist() == [1, 2, 3]
-    assert adata[:, 0].X.tolist() == [1, 4]
+    assert adata[0, 0].X.tolist() == [[1]]
+    assert adata[0, :].X.tolist() == [[1, 2, 3]]
+    assert adata[:, 0].X.tolist() == [[1], [4]]
 
     assert adata[:, [0, 1]].X.tolist() == [[1, 2], [4, 5]]
     assert adata[:, np.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
@@ -90,9 +93,9 @@ def test_slicing_strings():
         dict(obs_names=['A', 'B']),
         dict(var_names=['a', 'b', 'c']))
 
-    assert adata['A', 'a'].X.tolist() == 1
-    assert adata['A', :].X.tolist() == [1, 2, 3]
-    assert adata[:, 'a'].X.tolist() == [1, 4]
+    assert adata['A', 'a'].X.tolist() == [[1]]
+    assert adata['A', :].X.tolist() == [[1, 2, 3]]
+    assert adata[:, 'a'].X.tolist() == [[1], [4]]
     assert adata[:, ['a', 'b']].X.tolist() == [[1, 2], [4, 5]]
     assert adata[:, np.array(['a', 'c'])].X.tolist() == [[1, 3], [4, 6]]
     assert adata[:, 'b':'c'].X.tolist() == [[2, 3], [5, 6]]

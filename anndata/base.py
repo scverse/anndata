@@ -34,6 +34,7 @@ from . import h5py
 from .layers import AnnDataLayers
 
 from . import utils
+from .utils import Index, get_n_items_idx
 from .compat import PathLike
 
 FORMAT = '%(message)s'
@@ -67,9 +68,6 @@ class StorageType(Enum):
     def classes(cls):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
-
-
-Index = Union[slice, int, np.int64, np.ndarray, Sized]
 
 
 class BoundRecArr(np.recarray):
@@ -230,26 +228,16 @@ def df_to_records_fixed_width(df):
 def _fix_shapes(X):
     """Fix shapes of array or sparse matrix.
 
-    Flatten 2d array with a single row or column to emulate numpys
-    behavior of slicing.
+    Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
     """
     if X.dtype.names is None and len(X.shape) not in {0, 1, 2}:
         raise ValueError('X needs to be 2-dimensional, not '
                          '{}-dimensional.'.format(len(X.shape)))
-    if len(X.shape) == 2:
-        n_obs, n_vars = X.shape
-        if n_obs == 1 and n_vars == 1:
-            X = X[0, 0]
-        elif n_obs == 1 or n_vars == 1:
-            if issparse(X): X = X.toarray()
-            X = X.flatten()
-    elif len(X.shape) == 1:
-        n_vars = X.shape[0]
-        n_obs = 1
-    else:
-        n_vars = 1
-        n_obs = 1
-    return X, n_obs, n_vars
+    if len(X.shape) == 1:
+        X.shape = (1, X.shape[0])
+    elif len(X.shape) == 0:
+        X.shape = (1, 1)
+    return X
 
 
 def _normalize_index(index, names):
@@ -681,12 +669,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 filename=filename, filemode=filemode)
 
     def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
-        def get_n_items_idx(idx: Index):
-            if isinstance(idx, np.ndarray) and idx.dtype == bool:
-                return idx.sum()
-            else:
-                return len(idx)
-
         self._isview = True
         self._adata_ref = adata_ref
         self._oidx = oidx
@@ -708,19 +690,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
-            self._n_obs = get_n_items_idx(obs_sub.index)
+            self._n_obs = get_n_items_idx(obs_sub.index, adata_ref.n_obs)
         elif isinstance(oidx, (int, np.int64)):
             self._n_obs = 1
         elif isinstance(oidx, Sized):
-            self._n_obs = get_n_items_idx(oidx)
+            self._n_obs = get_n_items_idx(oidx, adata_ref.n_obs)
         else:
             raise KeyError('Unknown Index type')
         if isinstance(vidx, slice):
-            self._n_vars = get_n_items_idx(var_sub.index)
+            self._n_vars = get_n_items_idx(var_sub.index, adata_ref.n_vars)
         elif isinstance(vidx, (int, np.int64)):
             self._n_vars = 1
         elif isinstance(vidx, Sized):
-            self._n_vars = get_n_items_idx(vidx)
+            self._n_vars = get_n_items_idx(vidx, adata_ref.n_vars)
         else:
             raise KeyError('Unknown Index type')
         # fix categories
@@ -748,13 +730,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._X = None
             return
         X = self._adata_ref.X[self._oidx, self._vidx]
-        if len(X.shape) == 2:
-            n_obs, n_vars = X.shape
-            if n_obs == 1 and n_vars == 1:
-                X = X[0, 0]
-            elif n_obs == 1 or n_vars == 1:
-                if issparse(X): X = X.toarray()
-                X = X.flatten()
         if isinstance(X, sparse.csr_matrix):
             self._X = SparseCSRView(X, view_args=(self, 'X'))
         elif isinstance(X, sparse.csc_matrix):
@@ -762,7 +737,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         elif issparse(X):
             raise ValueError('View on non-csr/csc sparse matrices not implemented.')
         else:
-            self._X = ArrayView(X, view_args=(self, 'X'))
+            shape = (
+                get_n_items_idx(self._oidx, self.n_obs),
+                get_n_items_idx(self._vidx, self.n_vars)
+            )
+            if np.isscalar(X):
+                X = X.view()
+            self._X = ArrayView(X.reshape(shape), view_args=(self, 'X'))
 
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
@@ -834,7 +815,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:  # is np.ndarray
                 X = X.astype(dtype, copy=False)
             # data matrix and shape
-            self._X, self._n_obs, self._n_vars = _fix_shapes(X)
+            self._X = _fix_shapes(X)
+            self._n_obs, self._n_vars = self._X.shape
         else:
             self._X = None
             self._n_obs = len([] if obs is None else obs)
@@ -938,9 +920,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             if not self.file.isopen: self.file.open()
             X = self.file['X']
-            if self.isview: return X[self._oidx, self._vidx]
-            else: return X
-        else: return self._X
+            if self.isview:
+                X = X[self._oidx, self._vidx]
+                X.shape = self.shape
+        else:
+            X = self._X
+        assert X is None or len(X.shape) == 2, 'Failure to maintain 2D data matrix'
+        return X
 
     @X.setter
     def X(self, value):
@@ -953,6 +939,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             return
         var_get = self.n_vars == 1 and self.n_obs == len(value)
         obs_get = self.n_obs == 1 and self.n_vars == len(value)
+        if len(value.shape) != 2:
+            raise ValueError('Data matrix needs to be 2D, not {}D'.format(len(value.shape)))
         if var_get or obs_get or self.shape == value.shape:
             if self.isbacked:
                 if self.isview:

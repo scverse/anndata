@@ -1,7 +1,7 @@
 import logging as logg
 import warnings
 from functools import wraps
-from typing import Mapping, Any, Sequence
+from typing import Mapping, Any, Sequence, Union, Sized, Optional
 
 import pandas as pd
 import numpy as np
@@ -119,3 +119,20 @@ class DeprecationMixinMeta(type):
             item for item in type.__dir__(cls)
             if not is_deprecated(getattr(cls, item, None))
         ]
+
+
+Index = Union[slice, int, np.int64, np.ndarray, Sized]
+
+
+def get_n_items_idx(idx: Index, l: int):
+    if isinstance(idx, np.ndarray) and idx.dtype == bool:
+        return idx.sum()
+    elif isinstance(idx, slice):
+        start = 0 if idx.start is None else idx.start
+        stop = l if idx.stop is None else idx.stop
+        step = 1 if idx.step is None else idx.step
+        return (stop - start) // step
+    elif isinstance(idx, (int, np.int_)):
+        return 1
+    else:
+        return len(idx)
