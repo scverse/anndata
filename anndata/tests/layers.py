@@ -37,10 +37,16 @@ def test_views():
 
 def test_readwrite():
     adata = ad.AnnData(X=X, layers={'L':L.copy()})
+    
     adata.write('test.h5ad')
-
     adata_read = ad.read_h5ad('test.h5ad')
 
+    assert adata.layers.keys() == adata_read.layers.keys()
+    assert (adata.layers['L'] == adata_read.layers['L']).all()
+    
+    adata.write_loom('test')
+    adata_read = ad.read_loom('test')
+    
     assert adata.layers.keys() == adata_read.layers.keys()
     assert (adata.layers['L'] == adata_read.layers['L']).all()
 
