@@ -13,6 +13,7 @@ from copy import deepcopy
 import numpy as np
 from numpy import ma
 import pandas as pd
+from numpy.lib.recfunctions import rec_drop_fields
 from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
@@ -154,6 +155,17 @@ class BoundRecArr(np.recarray):
         # make it a BoundRecArr
         # TODO: why can we not do this step before filling the array?
         new = BoundRecArr(new, self._parent, self._attr)
+        setattr(self._parent, self._attr, new)
+
+    def __delitem__(self, key):
+        """Delete field with name."""
+        if key not in self.dtype.names:
+            raise ValueError(
+                'Currently, can only delete single names from {}.'
+                .format(self.dtype.names)
+            )
+        new_array = rec_drop_fields(self, key)
+        new = BoundRecArr(new_array, self._parent, self._attr)
         setattr(self._parent, self._attr, new)
 
     def to_df(self):

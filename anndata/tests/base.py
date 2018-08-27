@@ -187,6 +187,15 @@ def test_append_col():
         adata.obs['new4'] = 'far too long'.split()
 
 
+def test_delete_col():
+    adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
+    assert ['o1', 'o2'] == adata.obs_keys()
+
+    del adata.obs['o1']
+    assert ['o2'] == adata.obs_keys()
+    assert [3, 4] == adata.obs['o2'].tolist()
+
+
 def test_set_obs():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
