@@ -595,6 +595,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Name of backing file. See :class:`anndata.h5py.File`.
     filemode
         Open mode of backing file. See :class:`anndata.h5py.File`.
+    layers
+        Dictionary with keys as layers' names and values as matrices of the same dimensions as X.
 
     See Also
     --------
@@ -977,7 +979,29 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def layers(self):
-        """
+        """Dictionary-like object with values of the same dimensions as .X.
+
+        Layers in AnnData have API similar to loompy
+        http://linnarssonlab.org/loompy/apiwalkthrough/index.html#layers
+        Return the layer named "unspliced"::
+
+            adata.layers["unspliced"]
+
+        Create or replace the "spliced" layer::
+
+            adata.layers["spliced"] = ...
+
+        Assign the 10th column of layer "spliced" to the variable a::
+
+            a = adata.layers["spliced"][:, 10]
+
+        Delete the "spliced" layer::
+
+            del adata.layers["spliced"]
+
+        Return layers' names::
+
+            adata.layers.keys()
 
         .. warning
         Setting subsets of items in layers writes to the original data also if AnnData is a view.
