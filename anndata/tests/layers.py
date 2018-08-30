@@ -48,7 +48,7 @@ def test_readwrite():
 def test_readwrite_loom():
     adata = ad.AnnData(X=X, layers={'L': L.copy()})
     adata.write_loom('test.loom')
-    adata_read = ad.read('test.loom')
+    adata_read = ad.read_loom('test.loom')
 
     assert adata.layers.keys() == adata_read.layers.keys()
     assert (adata.layers['L'] == adata_read.layers['L']).all()
