@@ -72,16 +72,9 @@ def write_loom(filename: PathLike, adata: AnnData):
     col_attrs = adata.obs.to_dict('list')
     col_attrs['obs_names'] = adata.obs_names.values
     
-    X = adata.X.T
-    if issparse(X): 
-        X = X.A
-        logg.info('... writing to \'.loom\' file densifies sparse matrix')
-    layers = {'': X}
-    
+    layers = {'': adata.X.T}
     for key in adata.layers.keys():
-        layer = adata.layers[key].T
-        if issparse(layer): layer = layer.A
-        layers[key] = layer
+        layers[key] = adata.layers[key].T
         
     from loompy import create
     if filename.exists():
