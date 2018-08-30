@@ -2,3 +2,4 @@ loompy>=2.0; python_version>='3.6'
 pytest-cov
 codecov
 zarr
+loompy
