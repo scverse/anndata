@@ -1,3 +1,5 @@
+from importlib.util import find_spec
+import pytest
 import numpy as np
 import anndata as ad
 import os
@@ -45,10 +47,11 @@ def test_readwrite():
 
     os.remove('test.h5ad')
 
+pytest.mark.skipif(find_spec('loompy') is None, reason="loompy not installed")
 def test_readwrite_loom():
     adata = ad.AnnData(X=X, layers={'L': L.copy()})
     adata.write_loom('test.loom')
-    adata_read = ad.read_loom('test.loom')
+    adata_read = ad.read_loom('test.loom', X_name='')
 
     assert adata.layers.keys() == adata_read.layers.keys()
     assert (adata.layers['L'] == adata_read.layers['L']).all()
