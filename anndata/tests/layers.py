@@ -1,8 +1,8 @@
-from importlib.util import find_spec
+import os, sys
 import pytest
 import numpy as np
 import anndata as ad
-import os
+
 
 X = np.array([[1, 2, 3],
               [4, 5, 6],
@@ -47,7 +47,8 @@ def test_readwrite():
 
     os.remove('test.h5ad')
 
-pytest.mark.skipif(find_spec('loompy') is None, reason="loompy not installed")
+@pytest.mark.skipif(sys.version_info < (3.6),
+                    reason="loompy requires python 3.6 or higher")
 def test_readwrite_loom():
     adata = ad.AnnData(X=X, layers={'L': L.copy()})
     adata.write_loom('test.loom')
