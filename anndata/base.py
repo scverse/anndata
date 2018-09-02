@@ -1233,6 +1233,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self.file.open(filename, 'r+')
             # as the data is stored on disk, we can safely set self._X to None
             self._X = None
+            self.layers._layers.clear()
 
     def _set_backed(self, attr, value):
         if (not isinstance(self.file[attr], h5py.SparseDataset)
