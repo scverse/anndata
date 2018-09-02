@@ -1,5 +1,5 @@
+from anndata import AnnData, h5py, read_h5ad
 import numpy as np
-import anndata as ad
 import os
 
 X = np.array([[1, 2, 3],
@@ -10,13 +10,13 @@ L = np.array([[10, 11, 12],
               [16, 17, 18]])
 
 def test_creation():
-    adata = ad.AnnData(X=X, layers={'L':L.copy()})
+    adata = AnnData(X=X, layers={'L':L.copy()})
 
     assert list(adata.layers.keys()) == ['L']
     assert (adata.layers['L'] == L).all()
 
 def test_views():
-    adata = ad.AnnData(X=X, layers={'L':L.copy()})
+    adata = AnnData(X=X, layers={'L':L.copy()})
     adata_view = adata[1:, 1:]
 
     assert adata_view.layers.isview
@@ -36,10 +36,10 @@ def test_views():
     assert not adata_view.isview
 
 def test_readwrite():
-    adata = ad.AnnData(X=X, layers={'L':L.copy()})
+    adata = AnnData(X=X, layers={'L':L.copy()})
     adata.write('test.h5ad')
 
-    adata_read = ad.read_h5ad('test.h5ad')
+    adata_read = read_h5ad('test.h5ad')
 
     assert adata.layers.keys() == adata_read.layers.keys()
     assert (adata.layers['L'] == adata_read.layers['L']).all()
@@ -47,5 +47,11 @@ def test_readwrite():
     os.remove('test.h5ad')
 
 def test_backed():
-    #backed mode for layers isn't implemented, layers stay in memory
-    pass
+    adata = AnnData(X=X, layers={'L':L.copy()})
+    adata.filename = 'test_backed_layers.h5ad'
+
+    assert not any(adata.layers._layers.keys())
+    assert isinstance(adata.layers['L'], h5py.Dataset)
+
+    adata.file.close()
+    os.remove('test_backed_layers.h5ad')
