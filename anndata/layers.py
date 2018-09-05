@@ -26,9 +26,9 @@ class AnnDataLayers:
         self._layers = OrderedDict()
 
         for key, layer in (layers or {}).items():
-            if not isinstance(layer, np.ndarray):
+            if not isinstance(layer, np.ndarray) and not issparse(layer):
                 raise TypeError(
-                    'Layer {} is not a numpy.ndarray but a {}'
+                    'Layer {} is not a numpy.ndarray or scipy.sparse.spmatrix but a {}'
                     .format(key, type(layer).__name__)
                 )
             if layer.shape != self._adata.shape:
