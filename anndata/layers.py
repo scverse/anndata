@@ -25,14 +25,18 @@ class AnnDataLayers:
 
         self._layers = OrderedDict()
 
-        if layers is not None:
-            for key in layers.keys():
-                if layers[key].shape != self._adata.shape:
-                    raise ValueError('Shape does not fit.')
-                if layers[key].dtype != np.dtype(dtype):
-                    self._layers[key] = layers[key].astype(dtype, copy=False)
-                else:
-                    self._layers[key] = layers[key]
+        for key, layer in (layers or {}).items():
+            if not isinstance(layer, np.ndarray):
+                raise TypeError(
+                    'Layer {} is not a numpy.ndarray but a {}'
+                    .format(key, type(layer).__name__)
+                )
+            if layer.shape != self._adata.shape:
+                raise ValueError('Shape does not fit.')
+            if layer.dtype != np.dtype(dtype):
+                self._layers[key] = layer.astype(dtype, copy=False)
+            else:
+                self._layers[key] = layer
 
     def __getitem__(self, key):
         if self.isview:
