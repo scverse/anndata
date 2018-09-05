@@ -1,10 +1,15 @@
-import logging as logg
 import warnings
 from functools import wraps
 from typing import Mapping, Any, Sequence
 
 import pandas as pd
 import numpy as np
+
+from .logging import get_logger
+if False:
+    from .base import BoundRecArr  # noqa
+
+logger = get_logger(__name__)
 
 
 def make_index_unique(index, join='-'):
@@ -43,12 +48,12 @@ def make_index_unique(index, join='-'):
     return index
 
 
-def warn_names_duplicates(string, df):
-    names = 'Observation' if string == 'obs' else 'Variable'
-    logg.info(
+def warn_names_duplicates(attr):
+    names = 'Observation' if attr == 'obs' else 'Variable'
+    logger.info(
         '{} names are not unique. '
         'To make them unique, call `.{}_names_make_unique`.'
-        .format(names, string))
+        .format(names, attr))
 
 
 def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):

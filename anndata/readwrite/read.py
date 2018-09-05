@@ -6,9 +6,7 @@ import bz2
 import numpy as np
 
 from ..base import AnnData
-
 from .. import h5py
-
 from ..compat import PathLike, fspath
 from .utils import *
 
