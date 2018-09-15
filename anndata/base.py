@@ -578,15 +578,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         A #observations × #variables data matrix. A view of the data is used if the
         data type matches, otherwise, a copy is made.
     obs
-        Key-indexed one-dimensional observation annotation of length #observations.
+        Key-indexed one-dimensional observations annotation of length #observations.
     var
-        Key-indexed one-dimensional variable annotation of length #variables.
+        Key-indexed one-dimensional variables annotation of length #variables.
     uns
-        Unstructured annotation for the whole dataset.
+        Key-index unstructured annotation.
     obsm
-        Key-indexed multi-dimensional observation annotation of length #observations.
+        Key-indexed multi-dimensional observations annotation of length #observations.
     varm
-        Key-indexed multi-dimensional observation annotation of length #observations.
+        Key-indexed multi-dimensional variables annotation of length #observations.
     dtype
         Data type used for storage.
     shape
@@ -656,7 +656,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def __init__(
         self,
-        X: Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]] = None,
+        X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame, ArrayView]] = None,
         obs: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
         var: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
         uns: Optional[Mapping[Any, Any]] = None,
@@ -792,9 +792,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                     'If initializing from `filename`, '
                     'no further arguments may be passed.')
             self.file = AnnDataFileManager(self, filename, filemode)
-            # will read from backing file
-            # what is returned is, at this stage, a dict
-            # that needs to be processed
+            # will read from backing file what is returned is, at this
+            # stage, a dictionary that needs to be processed in the
+            # code block that follows immediately
             X = _read_h5ad(self, mode=filemode)
 
         # init from dictionary
@@ -803,9 +803,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
             X, obs, var, uns, obsm, varm, raw, layers = self._from_dict(X)
-
+            
         # init from AnnData
-        if isinstance(X, AnnData):
+        elif isinstance(X, AnnData):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
@@ -900,6 +900,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # clean up old formats
         self._clean_up_old_format(uns)
 
+        # layers
         self._layers = AnnDataLayers(self, layers, dtype)
 
     def __sizeof__(self):
