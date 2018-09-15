@@ -3,8 +3,8 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 
 **September 14, 2018**: on master
 
-1. ``.layers`` attribute inspired by `.loom <http://loompy.org>`__ files allows there information-loss-less conversion
-2. initialatization from dataframes
+1. :func:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
+2. initialatization from pandas DataFrames
 3. iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
 4. support for reading zarr files: :func:`~anndata.read_zarr`
       

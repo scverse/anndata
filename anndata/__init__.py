@@ -41,6 +41,7 @@ Reading other file formats.
    read_mtx
    read_text
    read_umi_tools
+   read_zarr
 
 
 Writing
