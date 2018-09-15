@@ -811,6 +811,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                     'If `X` is a dict no further arguments must be provided.')
             X, obs, var, uns, obsm, varm, raw, layers = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw, X.layers
 
+        # init from DataFrame
+        elif isinstance(X, pd.DataFrame):
+            obs = pd.DataFrame(index=X.index)
+            var = pd.DataFrame(index=X.columns)
+            X = X.values
+
         # ----------------------------------------------------------------------
         # actually process the data
         # ----------------------------------------------------------------------
