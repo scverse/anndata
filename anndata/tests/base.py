@@ -38,6 +38,14 @@ def test_creation():
     assert 'test' in adata.uns
 
 
+def test_create_from_df():
+    df = pd.DataFrame(np.ones((3, 2)), index=['a', 'b', 'c'], columns=['A', 'B'])
+    ad = AnnData(df)
+    assert df.values.tolist() == ad.X.tolist()
+    assert df.columns.tolist() == ad.var_names.tolist()
+    assert df.index.tolist() == ad.obs_names.tolist()
+
+
 def test_names():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
