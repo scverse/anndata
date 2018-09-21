@@ -491,7 +491,7 @@ class Raw(IndexMixin):
             self._var = var
             self._varm = varm
         else:
-            self._X = adata.X.copy()
+            self._X = None if adata.isbacked else adata.X.copy()
             self._var = adata.var.copy()
             self._varm = adata.varm.copy()
 
@@ -897,10 +897,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 self._raw = raw
             else:
                 # is dictionary from reading the file
+                shape = self.file['raw.X'].shape if self.isbacked else raw['X'].shape
+
                 self._raw = Raw(
                     self,
                     X=raw['X'],
-                    var=_gen_dataframe(raw['var'], raw['X'].shape[1], ['var_names', 'col_names']),
+                    var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
                     varm=raw['varm'] if 'varm' in raw else None)
 
         # clean up old formats
