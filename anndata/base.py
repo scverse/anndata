@@ -486,7 +486,14 @@ class Raw(IndexMixin):
             X = self._adata.file['raw.X']
             if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
             else: return X
-        else: return self._X
+        else:
+            if n_obs == 1 and n_vars == 1:
+                return X[0, 0]
+            elif n_obs == 1 or n_vars == 1:
+                if issparse(X): X = X.toarray()
+                return X.flatten()
+            else:
+                return self._X
 
     @property
     def var(self):
