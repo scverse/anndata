@@ -1,7 +1,6 @@
 import numpy as np
 from numpy import ma
 import pandas as pd
-import pickle
 from scipy import sparse as sp
 
 from anndata import AnnData

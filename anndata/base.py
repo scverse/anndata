@@ -1,8 +1,6 @@
 """Main class and helper functions.
 """
 import os
-import sys
-import logging as logg
 from enum import Enum
 from collections import OrderedDict
 from functools import reduce
@@ -34,10 +32,8 @@ from . import h5py
 from .layers import AnnDataLayers
 
 from . import utils
+from .logging import anndata_logger as logger
 from .compat import PathLike
-
-FORMAT = '%(message)s'
-logg.basicConfig(format=FORMAT, level=logg.INFO, stream=sys.stdout)
 
 _MAIN_NARRATIVE = """\
 :class:`~anndata.AnnData` stores a data matrix ``.X`` together with annotations
@@ -1160,7 +1156,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def obs_names(self, names):
         self._obs.index = names
         if not self._obs.index.is_unique:
-            utils.warn_names_duplicates('obs', self._obs)
+            utils.warn_names_duplicates('obs')
 
     @property
     def var_names(self):
@@ -1171,7 +1167,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def var_names(self, names):
         self._var.index = names
         if not self._var.index.is_unique:
-            utils.warn_names_duplicates('var', self._var)
+            utils.warn_names_duplicates('var')
 
     def obs_keys(self):
         """List keys of observation annotation ``.obs``."""
@@ -1369,7 +1365,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                 if list(v2.dtype.names) == old_categories:
                                     self.uns[k1][k2].dtype.names = categories
                                 else:
-                                    logg.warn(
+                                    logger.warn(
                                         'Omitting {}/{} as old categories do not match.'
                                         .format(k1, k2))
 
@@ -1386,7 +1382,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                     if len(c.categories) < len(c):
                         df[key] = c
                         df[key].cat.categories = df[key].cat.categories.astype('U')
-                        logg.info(
+                        logger.info(
                             '... storing \'{}\' as categorical'
                             .format(key, ann, key))
 
@@ -1731,7 +1727,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if not ad.var_names.is_unique:
                 ad.var_names = utils.make_index_unique(ad.var_names)
                 if not printed_info:
-                    logg.info(
+                    logger.info(
                         'Making variable names unique for controlled concatenation.')
                     printed_info = True
 
@@ -1820,7 +1816,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         new_adata = AnnData(X, obs, var)
         if not obs.index.is_unique:
-            logg.info(
+            logger.info(
                 'Or pass `index_unique!=None` to `.concatenate`.')
         return new_adata
 
@@ -1836,9 +1832,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _check_uniqueness(self):
         if not self.obs.index.is_unique:
-            utils.warn_names_duplicates('obs', self.obs)
+            utils.warn_names_duplicates('obs')
         if not self.var.index.is_unique:
-            utils.warn_names_duplicates('var', self.var)
+            utils.warn_names_duplicates('var')
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, '
