@@ -22,8 +22,6 @@ def test_creation():
     assert adata.raw.X.tolist() == X.tolist()
     assert adata.raw.var_names.tolist() == ['a', 'b', 'c']
 
-    assert AnnData(np.array([1, 2])).X.shape == (1, 2)
-
     from pytest import raises
     with raises(ValueError):
         AnnData(
@@ -70,23 +68,16 @@ def test_indices_dtypes():
     assert adata.obs_names.tolist() == ['ö', 'a']
 
 
-def test_creation_from_vector():
-    adata = AnnData(np.array([1, 2, 3]))
-    assert adata.X.shape == (1, 3)
-    adata = AnnData(np.array([[1], [2], [3]]))
-    assert adata.X.shape == (3, 1)
-
 
 def test_slicing():
     adata = AnnData(np.array([[1, 2, 3],
                               [4, 5, 6]]))
 
-    # anndata maintains 2D shape, numpy doesn’t
-    assert adata[:, 0].X.tolist() == adata.X[:, 0].reshape((2, 1)).tolist()
+    assert adata[:, 0].X.tolist() == adata.X[:, 0].tolist()
 
-    assert adata[0, 0].X.tolist() == [[1]]
-    assert adata[0, :].X.tolist() == [[1, 2, 3]]
-    assert adata[:, 0].X.tolist() == [[1], [4]]
+    assert adata[0, 0].X.tolist() == 1
+    assert adata[0, :].X.tolist() == [1, 2, 3]
+    assert adata[:, 0].X.tolist() == [1, 4]
 
     assert adata[:, [0, 1]].X.tolist() == [[1, 2], [4, 5]]
     assert adata[:, np.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
@@ -100,9 +91,9 @@ def test_slicing_strings():
         dict(obs_names=['A', 'B']),
         dict(var_names=['a', 'b', 'c']))
 
-    assert adata['A', 'a'].X.tolist() == [[1]]
-    assert adata['A', :].X.tolist() == [[1, 2, 3]]
-    assert adata[:, 'a'].X.tolist() == [[1], [4]]
+    assert adata['A', 'a'].X.tolist() == 1
+    assert adata['A', :].X.tolist() == [1, 2, 3]
+    assert adata[:, 'a'].X.tolist() == [1, 4]
     assert adata[:, ['a', 'b']].X.tolist() == [[1, 2], [4, 5]]
     assert adata[:, np.array(['a', 'c'])].X.tolist() == [[1, 3], [4, 6]]
     assert adata[:, 'b':'c'].X.tolist() == [[2, 3], [5, 6]]
@@ -143,7 +134,7 @@ def test_slicing_remove_unused_categories():
         np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
         dict(k=['a', 'a', 'b', 'b']))
     adata._sanitize()
-    assert adata[3:5].obs['k'].cat.categories.tolist() == ['b']
+    assert adata[2:4].obs['k'].cat.categories.tolist() == ['b']
 
 
 def test_slicing_integer_index():
@@ -330,6 +321,7 @@ def test_rename_categories():
     assert list(adata.uns['tool']['cat_array'].dtype.names) == new_categories
 
 def test_pickle():
+    import pickle
     adata = AnnData()
     adata2 = pickle.loads(pickle.dumps(adata))
     assert adata2.obsm._parent == adata2

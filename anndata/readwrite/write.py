@@ -67,9 +67,9 @@ def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: s
 
 def write_loom(filename: PathLike, adata: AnnData):
     filename = Path(filename)
-    row_attrs = adata.var.to_dict('list')
+    row_attrs = {k: np.array(v) for k, v in adata.var.to_dict('list').items()}
     row_attrs['var_names'] = adata.var_names.values
-    col_attrs = adata.obs.to_dict('list')
+    col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict('list').items()}
     col_attrs['obs_names'] = adata.obs_names.values
     
     layers = {'': adata.X.T}

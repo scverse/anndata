@@ -463,14 +463,9 @@ class Raw(IndexMixin):
 
     def __init__(self, adata=None, X=None, var=None, varm=None):
         self._adata = adata
+        self._n_obs = adata.n_obs
+        self._n_vars = adata.n_vars
         if X is not None:
-            if len(X.shape) == 2:
-                n_obs, n_vars = X.shape
-                if n_obs == 1 and n_vars == 1:
-                    X = X[0, 0]
-                elif n_obs == 1 or n_vars == 1:
-                    if issparse(X): X = X.toarray()
-                    X = X.flatten()
             self._X = X
             self._var = var
             self._varm = varm
@@ -487,10 +482,11 @@ class Raw(IndexMixin):
             if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
             else: return X
         else:
-            if n_obs == 1 and n_vars == 1:
-                return X[0, 0]
-            elif n_obs == 1 or n_vars == 1:
-                if issparse(X): X = X.toarray()
+            if self.n_obs == 1 and self.n_vars == 1:
+                return self._X[0, 0]
+            elif self.n_obs == 1 or self.n_vars == 1:
+                X = self._X
+                if issparse(self._X): X = self._X.toarray()
                 return X.flatten()
             else:
                 return self._X
@@ -501,7 +497,11 @@ class Raw(IndexMixin):
 
     @property
     def n_vars(self):
-        return self.X.shape[1]
+        return self._n_vars
+
+    @property
+    def n_obs(self):
+        return self._n_obs
 
     @property
     def varm(self):
@@ -718,8 +718,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._var = DataFrameView(var_sub, view_args=(self, 'var'))
         self._uns = DictView(uns_new, view_args=(self, 'uns'))
         # set data
-        if self.isbacked: self._X = None
-        else: self._init_X_as_view()
+        if self.isbacked:
+            self._X = None
+        else:
+            self._init_X_as_view()
 
         self._layers = AnnDataLayers(self, adata_ref=adata_ref, oidx=oidx, vidx=vidx)
 
@@ -743,8 +745,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise ValueError('View on non-csr/csc sparse matrices not implemented.')
         else:
             shape = (
-                get_n_items_idx(self._oidx, self.n_obs),
-                get_n_items_idx(self._vidx, self.n_vars)
+                get_n_items_idx(self._oidx, self._adata_ref.n_obs),
+                get_n_items_idx(self._vidx, self._adata_ref.n_vars)
             )
             if np.isscalar(X):
                 X = X.view()
@@ -936,11 +938,16 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             X = self.file['X']
             if self.isview:
                 X = X[self._oidx, self._vidx]
-                X.shape = self.shape
+            return X
         else:
-            X = self._X
-        assert X is None or len(X.shape) == 2, 'Failure to maintain 2D data matrix'
-        return X
+            if self.n_obs == 1 and self.n_vars == 1:
+                return self._X[0, 0]
+            elif self.n_obs == 1 or self.n_vars == 1:
+                X = self._X
+                if issparse(self._X): X = self._X.toarray()
+                return X.flatten()
+            else:
+                return self._X
 
     @X.setter
     def X(self, value):
@@ -953,8 +960,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             return
         var_get = self.n_vars == 1 and self.n_obs == len(value)
         obs_get = self.n_obs == 1 and self.n_vars == len(value)
-        if len(value.shape) != 2:
-            raise ValueError('Data matrix needs to be 2D, not {}D'.format(len(value.shape)))
         if var_get or obs_get or self.shape == value.shape:
             if self.isbacked:
                 if self.isview:
