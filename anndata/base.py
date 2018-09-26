@@ -1,8 +1,6 @@
 """Main class and helper functions.
 """
 import os
-import sys
-import logging as logg
 from enum import Enum
 from collections import OrderedDict
 from functools import reduce
@@ -35,10 +33,8 @@ from .layers import AnnDataLayers
 
 from . import utils
 from .utils import Index, get_n_items_idx
+from .logging import anndata_logger as logger
 from .compat import PathLike
-
-FORMAT = '%(message)s'
-logg.basicConfig(format=FORMAT, level=logg.INFO, stream=sys.stdout)
 
 _MAIN_NARRATIVE = """\
 :class:`~anndata.AnnData` stores a data matrix ``.X`` together with annotations
@@ -479,7 +475,7 @@ class Raw(IndexMixin):
             self._var = var
             self._varm = varm
         else:
-            self._X = adata.X.copy()
+            self._X = None if adata.isbacked else adata.X.copy()
             self._var = adata.var.copy()
             self._varm = adata.varm.copy()
 
@@ -566,15 +562,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         A #observations × #variables data matrix. A view of the data is used if the
         data type matches, otherwise, a copy is made.
     obs
-        Key-indexed one-dimensional observation annotation of length #observations.
+        Key-indexed one-dimensional observations annotation of length #observations.
     var
-        Key-indexed one-dimensional variable annotation of length #variables.
+        Key-indexed one-dimensional variables annotation of length #variables.
     uns
-        Unstructured annotation for the whole dataset.
+        Key-index unstructured annotation.
     obsm
-        Key-indexed multi-dimensional observation annotation of length #observations.
+        Key-indexed multi-dimensional observations annotation of length #observations.
     varm
-        Key-indexed multi-dimensional observation annotation of length #observations.
+        Key-indexed multi-dimensional variables annotation of length #observations.
     dtype
         Data type used for storage.
     shape
@@ -583,6 +579,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Name of backing file. See :class:`anndata.h5py.File`.
     filemode
         Open mode of backing file. See :class:`anndata.h5py.File`.
+    layers
+        Dictionary with keys as layers' names and values as matrices of the same dimensions as X.
 
     See Also
     --------
@@ -642,7 +640,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def __init__(
         self,
-        X: Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]] = None,
+        X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame, ArrayView]] = None,
         obs: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
         var: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
         uns: Optional[Mapping[Any, Any]] = None,
@@ -771,9 +769,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                     'If initializing from `filename`, '
                     'no further arguments may be passed.')
             self.file = AnnDataFileManager(self, filename, filemode)
-            # will read from backing file
-            # what is returned is, at this stage, a dict
-            # that needs to be processed
+            # will read from backing file what is returned is, at this
+            # stage, a dictionary that needs to be processed in the
+            # code block that follows immediately
             X = _read_h5ad(self, mode=filemode)
 
         # init from dictionary
@@ -782,13 +780,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
             X, obs, var, uns, obsm, varm, raw, layers = self._from_dict(X)
-
+            
         # init from AnnData
-        if isinstance(X, AnnData):
+        elif isinstance(X, AnnData):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
             X, obs, var, uns, obsm, varm, raw, layers = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw, X.layers
+
+        # init from DataFrame
+        elif isinstance(X, pd.DataFrame):
+            obs = pd.DataFrame(index=X.index)
+            var = pd.DataFrame(index=X.columns)
+            X = X.values
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -871,15 +875,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 self._raw = raw
             else:
                 # is dictionary from reading the file
+                shape = self.file['raw.X'].shape if self.isbacked else raw['X'].shape
+
                 self._raw = Raw(
                     self,
                     X=raw['X'],
-                    var=_gen_dataframe(raw['var'], raw['X'].shape[1], ['var_names', 'col_names']),
+                    var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
                     varm=raw['varm'] if 'varm' in raw else None)
 
         # clean up old formats
         self._clean_up_old_format(uns)
 
+        # layers
         self._layers = AnnDataLayers(self, layers, dtype)
 
     def __sizeof__(self):
@@ -965,7 +972,29 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def layers(self):
-        """
+        """Dictionary-like object with values of the same dimensions as .X.
+
+        Layers in AnnData have API similar to loompy
+        http://linnarssonlab.org/loompy/apiwalkthrough/index.html#layers
+        Return the layer named "unspliced"::
+
+            adata.layers["unspliced"]
+
+        Create or replace the "spliced" layer::
+
+            adata.layers["spliced"] = ...
+
+        Assign the 10th column of layer "spliced" to the variable a::
+
+            a = adata.layers["spliced"][:, 10]
+
+        Delete the "spliced" layer::
+
+            del adata.layers["spliced"]
+
+        Return layers' names::
+
+            adata.layers.keys()
 
         .. warning
         Setting subsets of items in layers writes to the original data also if AnnData is a view.
@@ -1115,7 +1144,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def obs_names(self, names):
         self._obs.index = names
         if not self._obs.index.is_unique:
-            utils.warn_names_duplicates('obs', self._obs)
+            utils.warn_names_duplicates('obs')
 
     @property
     def var_names(self):
@@ -1126,7 +1155,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def var_names(self, names):
         self._var.index = names
         if not self._var.index.is_unique:
-            utils.warn_names_duplicates('var', self._var)
+            utils.warn_names_duplicates('var')
 
     def obs_keys(self):
         """List keys of observation annotation ``.obs``."""
@@ -1324,7 +1353,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                 if list(v2.dtype.names) == old_categories:
                                     self.uns[k1][k2].dtype.names = categories
                                 else:
-                                    logg.warn(
+                                    logger.warn(
                                         'Omitting {}/{} as old categories do not match.'
                                         .format(k1, k2))
 
@@ -1341,7 +1370,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                     if len(c.categories) < len(c):
                         df[key] = c
                         df[key].cat.categories = df[key].cat.categories.astype('U')
-                        logg.info(
+                        logger.info(
                             '... storing \'{}\' as categorical'
                             .format(key, ann, key))
 
@@ -1686,7 +1715,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if not ad.var_names.is_unique:
                 ad.var_names = utils.make_index_unique(ad.var_names)
                 if not printed_info:
-                    logg.info(
+                    logger.info(
                         'Making variable names unique for controlled concatenation.')
                     printed_info = True
 
@@ -1775,7 +1804,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         new_adata = AnnData(X, obs, var)
         if not obs.index.is_unique:
-            logg.info(
+            logger.info(
                 'Or pass `index_unique!=None` to `.concatenate`.')
         return new_adata
 
@@ -1791,9 +1820,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _check_uniqueness(self):
         if not self.obs.index.is_unique:
-            utils.warn_names_duplicates('obs', self.obs)
+            utils.warn_names_duplicates('obs')
         if not self.var.index.is_unique:
-            utils.warn_names_duplicates('var', self.var)
+            utils.warn_names_duplicates('var')
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, '

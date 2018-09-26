@@ -1,5 +1,14 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
+
+**September 14, 2018**: on master
+
+1. :func:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
+2. initialatization from pandas DataFrames
+3. iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
+4. support for reading zarr files: :func:`~anndata.read_zarr`
+      
+
 **May 1, 2018**: version 0.6
 
 1. compatibility with Seurat converter
@@ -37,19 +46,19 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 **December 29, 2017**: version 0.4.2
 
 1. fixed read/write for a few text file formats
-2. read `UMI tools <https://github.com/CGATOxford/UMI-tools>`_ files: :func:`~anndata.read_umi_tools`
+2. read `UMI tools <https://github.com/CGATOxford/UMI-tools>`__ files: :func:`~anndata.read_umi_tools`
 
 
 **December 23, 2017**: version 0.4
 
 1. towards a common file format for exchanging :class:`~anndata.AnnData` with
    packages such as Seurat and SCDE by reading and writing `.loom
-   <http://loompy.org>`_ files
+   <http://loompy.org>`__ files
 2. :class:`~anndata.AnnData`
    provides scalability beyond dataset sizes that fit into memory: see this
    `blog post
-   <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`_
+   <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`__
 3. :class:`~anndata.AnnData` has a :class:`~anndata.AnnData.raw` attribute
    that simplifies storing the data matrix when you consider it "raw": see the
    `clustering tutorial
-   <https://github.com/theislab/scanpy_usage/tree/master/170505_seurat>`_
+   <https://github.com/theislab/scanpy_usage/tree/master/170505_seurat>`__

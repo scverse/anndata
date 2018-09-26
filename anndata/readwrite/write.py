@@ -5,13 +5,14 @@ import pandas as pd
 import math
 import numpy as np
 from scipy.sparse import issparse
-import logging as logg
 
 from ..base import AnnData
-
 from .. import h5py
-
 from ..compat import PathLike, fspath
+from ..logging import get_logger
+
+
+logger = get_logger(__name__)
 
 
 def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ','):
@@ -20,8 +21,7 @@ def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: s
     dirname = Path(dirname)
     if dirname.suffix == '.csv':
         dirname = dirname.with_suffix('')
-    # write the following at warning level, it's very important for the users
-    # logg.info('writing \'.csv\' files to', dirname)
+    logger.info('writing \'.csv\' files to', dirname)
     if not dirname.is_dir():
         dirname.mkdir(parents=True, exist_ok=True)
     dir_uns = dirname / 'uns'
@@ -71,15 +71,15 @@ def write_loom(filename: PathLike, adata: AnnData):
     row_attrs['var_names'] = adata.var_names.values
     col_attrs = adata.obs.to_dict('list')
     col_attrs['obs_names'] = adata.obs_names.values
-    X = adata.X.T
-    if issparse(X):
-        logg.info(
-            '... writing to \'.loom\' file densifies sparse matrix')
-        X = X.tocoo()
+    
+    layers = {'': adata.X.T}
+    for key in adata.layers.keys():
+        layers[key] = adata.layers[key].T
+        
     from loompy import create
     if filename.exists():
         filename.unlink()
-    create(fspath(filename), X, row_attrs=row_attrs, col_attrs=col_attrs)
+    create(fspath(filename), layers, row_attrs=row_attrs, col_attrs=col_attrs)
 
 # TODO: store can be a MutableMapping or a string - accept PathLike too?
 def write_zarr(store, adata: AnnData, **kwargs):
@@ -127,6 +127,7 @@ def _write_key_value_to_zarr(f, key, value, **kwargs):
         return
     try:
         if key in set(f.keys()):
+            import zarr
             is_valid_group = isinstance(f[key], zarr.hierarchy.Group) \
                              and f[key].shape == value.shape \
                              and f[key].dtype == value.dtype
@@ -174,7 +175,7 @@ def _write_key_value_to_zarr(f, key, value, **kwargs):
                 _write_in_zarr_chunks(ds, key, value.astype(new_dtype))
         except Exception as e:
             warnings.warn('Could not save field with key = "{}" '
-                          'to hdf5 file.'.format(key))
+                          'to hdf5 file: {}'.format(key, e))
 
 
 def _get_chunk_indices(za):

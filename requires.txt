@@ -1,5 +1,5 @@
 pandas>=0.21.0
-numpy>=1.14.0
-scipy
+numpy~=1.14.0
+scipy~=1.0
 h5py
 natsort
