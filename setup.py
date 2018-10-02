@@ -1,23 +1,18 @@
 from setuptools import setup, find_packages
-from pathlib import Path
+from io import open
 import versioneer
 
-package_name = 'anndata'
-
-req_path = Path('requires.txt')
-if not req_path.is_file():
-    req_path = Path(package_name + '.egg-info') / req_path
-with req_path.open() as requirements:
+with open('requirements.txt', encoding='utf-8') as requirements:
     requires = [l.strip() for l in requirements]
 
-with open('README.rst') as readme_f:
+with open('README.rst', encoding='utf-8') as readme_f:
     readme = readme_f.read()
 
 setup(
-    name=package_name,
+    name='anndata',
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
-    description='An annotated data matrix.',
+    description='Annotated Data.',
     long_description=readme,
     url='http://github.com/theislab/anndata',
     author='Alex Wolf, Philipp Angerer, Sergei Rybakov',

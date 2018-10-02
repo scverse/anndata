@@ -1,8 +1,6 @@
 """Main class and helper functions.
 """
 import os
-import sys
-import logging as logg
 from enum import Enum
 from collections import OrderedDict
 from functools import reduce
@@ -34,10 +32,9 @@ from . import h5py
 from .layers import AnnDataLayers
 
 from . import utils
+from .utils import Index, get_n_items_idx
+from .logging import anndata_logger as logger
 from .compat import PathLike
-
-FORMAT = '%(message)s'
-logg.basicConfig(format=FORMAT, level=logg.INFO, stream=sys.stdout)
 
 _MAIN_NARRATIVE = """\
 :class:`~anndata.AnnData` stores a data matrix ``.X`` together with annotations
@@ -67,9 +64,6 @@ class StorageType(Enum):
     def classes(cls):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
-
-
-Index = Union[slice, int, np.int64, np.ndarray, Sized]
 
 
 class BoundRecArr(np.recarray):
@@ -223,26 +217,16 @@ def df_to_records_fixed_width(df):
 def _fix_shapes(X):
     """Fix shapes of array or sparse matrix.
 
-    Flatten 2d array with a single row or column to emulate numpys
-    behavior of slicing.
+    Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
     """
     if X.dtype.names is None and len(X.shape) not in {0, 1, 2}:
         raise ValueError('X needs to be 2-dimensional, not '
                          '{}-dimensional.'.format(len(X.shape)))
-    if len(X.shape) == 2:
-        n_obs, n_vars = X.shape
-        if n_obs == 1 and n_vars == 1:
-            X = X[0, 0]
-        elif n_obs == 1 or n_vars == 1:
-            if issparse(X): X = X.toarray()
-            X = X.flatten()
-    elif len(X.shape) == 1:
-        n_vars = X.shape[0]
-        n_obs = 1
-    else:
-        n_vars = 1
-        n_obs = 1
-    return X, n_obs, n_vars
+    if len(X.shape) == 1:
+        X.shape = (1, X.shape[0])
+    elif len(X.shape) == 0:
+        X.shape = (1, 1)
+    return X
 
 
 def _normalize_index(index, names):
@@ -472,19 +456,14 @@ class Raw(IndexMixin):
 
     def __init__(self, adata=None, X=None, var=None, varm=None):
         self._adata = adata
+        self._n_obs = adata.n_obs
+        self._n_vars = adata.n_vars
         if X is not None:
-            if len(X.shape) == 2:
-                n_obs, n_vars = X.shape
-                if n_obs == 1 and n_vars == 1:
-                    X = X[0, 0]
-                elif n_obs == 1 or n_vars == 1:
-                    if issparse(X): X = X.toarray()
-                    X = X.flatten()
             self._X = X
             self._var = var
             self._varm = varm
         else:
-            self._X = adata.X.copy()
+            self._X = None if adata.isbacked else adata.X.copy()
             self._var = adata.var.copy()
             self._varm = adata.varm.copy()
 
@@ -495,7 +474,15 @@ class Raw(IndexMixin):
             X = self._adata.file['raw.X']
             if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
             else: return X
-        else: return self._X
+        else:
+            if self.n_obs == 1 and self.n_vars == 1:
+                return self._X[0, 0]
+            elif self.n_obs == 1 or self.n_vars == 1:
+                X = self._X
+                if issparse(self._X): X = self._X.toarray()
+                return X.flatten()
+            else:
+                return self._X
 
     @property
     def var(self):
@@ -503,7 +490,11 @@ class Raw(IndexMixin):
 
     @property
     def n_vars(self):
-        return self.X.shape[1]
+        return self._n_vars
+
+    @property
+    def n_obs(self):
+        return self._n_obs
 
     @property
     def varm(self):
@@ -676,12 +667,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 filename=filename, filemode=filemode)
 
     def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
-        def get_n_items_idx(idx: Index):
-            if isinstance(idx, np.ndarray) and idx.dtype == bool:
-                return idx.sum()
-            else:
-                return len(idx)
-
         self._isview = True
         self._adata_ref = adata_ref
         self._oidx = oidx
@@ -703,19 +688,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
-            self._n_obs = get_n_items_idx(obs_sub.index)
+            self._n_obs = get_n_items_idx(obs_sub.index, adata_ref.n_obs)
         elif isinstance(oidx, (int, np.int64)):
             self._n_obs = 1
         elif isinstance(oidx, Sized):
-            self._n_obs = get_n_items_idx(oidx)
+            self._n_obs = get_n_items_idx(oidx, adata_ref.n_obs)
         else:
             raise KeyError('Unknown Index type')
         if isinstance(vidx, slice):
-            self._n_vars = get_n_items_idx(var_sub.index)
+            self._n_vars = get_n_items_idx(var_sub.index, adata_ref.n_vars)
         elif isinstance(vidx, (int, np.int64)):
             self._n_vars = 1
         elif isinstance(vidx, Sized):
-            self._n_vars = get_n_items_idx(vidx)
+            self._n_vars = get_n_items_idx(vidx, adata_ref.n_vars)
         else:
             raise KeyError('Unknown Index type')
         # fix categories
@@ -726,8 +711,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._var = DataFrameView(var_sub, view_args=(self, 'var'))
         self._uns = DictView(uns_new, view_args=(self, 'uns'))
         # set data
-        if self.isbacked: self._X = None
-        else: self._init_X_as_view()
+        if self.isbacked:
+            self._X = None
+        else:
+            self._init_X_as_view()
 
         self._layers = AnnDataLayers(self, adata_ref=adata_ref, oidx=oidx, vidx=vidx)
 
@@ -743,13 +730,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._X = None
             return
         X = self._adata_ref.X[self._oidx, self._vidx]
-        if len(X.shape) == 2:
-            n_obs, n_vars = X.shape
-            if n_obs == 1 and n_vars == 1:
-                X = X[0, 0]
-            elif n_obs == 1 or n_vars == 1:
-                if issparse(X): X = X.toarray()
-                X = X.flatten()
         if isinstance(X, sparse.csr_matrix):
             self._X = SparseCSRView(X, view_args=(self, 'X'))
         elif isinstance(X, sparse.csc_matrix):
@@ -757,7 +737,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         elif issparse(X):
             raise ValueError('View on non-csr/csc sparse matrices not implemented.')
         else:
-            self._X = ArrayView(X, view_args=(self, 'X'))
+            shape = (
+                get_n_items_idx(self._oidx, self._adata_ref.n_obs),
+                get_n_items_idx(self._vidx, self._adata_ref.n_vars)
+            )
+            if np.isscalar(X):
+                X = X.view()
+            self._X = ArrayView(X.reshape(shape), view_args=(self, 'X'))
 
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
@@ -835,7 +821,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:  # is np.ndarray
                 X = X.astype(dtype, copy=False)
             # data matrix and shape
-            self._X, self._n_obs, self._n_vars = _fix_shapes(X)
+            self._X = _fix_shapes(X)
+            self._n_obs, self._n_vars = self._X.shape
         else:
             self._X = None
             self._n_obs = len([] if obs is None else obs)
@@ -890,10 +877,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 self._raw = raw
             else:
                 # is dictionary from reading the file
+                shape = self.file['raw.X'].shape if self.isbacked else raw['X'].shape
+
                 self._raw = Raw(
                     self,
                     X=raw['X'],
-                    var=_gen_dataframe(raw['var'], raw['X'].shape[1], ['var_names', 'col_names']),
+                    var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
                     varm=raw['varm'] if 'varm' in raw else None)
 
         # clean up old formats
@@ -940,9 +929,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             if not self.file.isopen: self.file.open()
             X = self.file['X']
-            if self.isview: return X[self._oidx, self._vidx]
-            else: return X
-        else: return self._X
+            if self.isview:
+                X = X[self._oidx, self._vidx]
+            return X
+        else:
+            if self.n_obs == 1 and self.n_vars == 1:
+                return self._X[0, 0]
+            elif self.n_obs == 1 or self.n_vars == 1:
+                X = self._X
+                if issparse(self._X): X = self._X.toarray()
+                return X.flatten()
+            else:
+                return self._X
 
     @X.setter
     def X(self, value):
@@ -1151,7 +1149,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def obs_names(self, names):
         self._obs.index = names
         if not self._obs.index.is_unique:
-            utils.warn_names_duplicates('obs', self._obs)
+            utils.warn_names_duplicates('obs')
 
     @property
     def var_names(self):
@@ -1162,7 +1160,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def var_names(self, names):
         self._var.index = names
         if not self._var.index.is_unique:
-            utils.warn_names_duplicates('var', self._var)
+            utils.warn_names_duplicates('var')
 
     def obs_keys(self):
         """List keys of observation annotation ``.obs``."""
@@ -1360,7 +1358,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                 if list(v2.dtype.names) == old_categories:
                                     self.uns[k1][k2].dtype.names = categories
                                 else:
-                                    logg.warn(
+                                    logger.warn(
                                         'Omitting {}/{} as old categories do not match.'
                                         .format(k1, k2))
 
@@ -1744,7 +1742,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if not ad.var_names.is_unique:
                 ad.var_names = utils.make_index_unique(ad.var_names)
                 if not printed_info:
-                    logg.info(
+                    logger.info(
                         'Making variable names unique for controlled concatenation.')
                     printed_info = True
 
@@ -1833,7 +1831,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         new_adata = AnnData(X, obs, var)
         if not obs.index.is_unique:
-            logg.info(
+            logger.info(
                 'Or pass `index_unique!=None` to `.concatenate`.')
         return new_adata
 
@@ -1849,9 +1847,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _check_uniqueness(self):
         if not self.obs.index.is_unique:
-            utils.warn_names_duplicates('obs', self.obs)
+            utils.warn_names_duplicates('obs')
         if not self.var.index.is_unique:
-            utils.warn_names_duplicates('var', self.var)
+            utils.warn_names_duplicates('var')
 
     def __contains__(self, key):
         raise AttributeError('AnnData has no attribute __contains__, '

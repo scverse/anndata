@@ -55,6 +55,15 @@ def test_readwrite_h5ad(typ):
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_h5ad_one_dimensino(typ):
+    X = typ(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata = adata[:, 0].copy()
+    adata.write('./test.h5ad')
+    adata = ad.read('./test.h5ad')
+
+
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_dynamic(typ):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)

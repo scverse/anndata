@@ -6,9 +6,7 @@ import bz2
 import numpy as np
 
 from ..base import AnnData
-
 from .. import h5py
-
 from ..compat import PathLike, fspath
 from .utils import *
 
@@ -476,7 +474,8 @@ def _read_key_value_from_h5(f, d, key, key_write=None):
     # the '()' means 'load everything into memory' (by contrast, ':'
     # only works if not reading a scalar type)
     def postprocess_reading(key, value):
-        if value.ndim == 1 and len(value) == 1:
+        # record arrays should stay record arrays and not become scalars
+        if value.ndim == 1 and len(value) == 1 and not value.dtype != np.record:
             value = value[0]
         if value.dtype.kind == 'S':
             value = value.astype(str)
