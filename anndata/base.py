@@ -207,15 +207,8 @@ def df_to_records_fixed_width(df):
     for k in df.columns:
         names.append(k)
         if is_string_dtype(df[k]):
-            c = df[k].astype('category')
-            # transform to category only if there are less categories than
-            # observations
-            if len(c.cat.categories) < len(c):
-                uns[k + '_categories'] = c.cat.categories.values
-                arrays.append(c.cat.codes)
-            else:
-                max_len_index = df[k].map(len).max()
-                arrays.append(df[k].values.astype('S{}'.format(max_len_index)))
+            max_len_index = df[k].map(len).max()
+            arrays.append(df[k].values.astype('S{}'.format(max_len_index)))
         elif is_categorical(df[k]):
             uns[k + '_categories'] = df[k].cat.categories
             arrays.append(df[k].cat.codes)
@@ -803,7 +796,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
             X, obs, var, uns, obsm, varm, raw, layers = self._from_dict(X)
-            
+
         # init from AnnData
         elif isinstance(X, AnnData):
             if any((obs, var, uns, obsm, varm)):
@@ -1371,22 +1364,44 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                         'Omitting {}/{} as old categories do not match.'
                                         .format(k1, k2))
 
-    def _sanitize(self):
-        """Transform string arrays to categorical data types if they store less
-        categories than the total number of observations.
+    def strings_to_categoricals(self, df=None):
+        """Transform string annotations to categoricals.
+
+        Only considers string annotations that lead to less categories than the
+        total number of observations.
+
+        If `df` is not `None`, modifies the passed df inplace.
+
+        Makes a view a copy.
         """
-        for ann in ['obs', 'var']:
-            for key in getattr(self, ann).columns:
-                df = getattr(self, ann)
-                if is_string_dtype(df[key]):
-                    c = df[key].astype(str)  # make sure we only have strings (could be that there are nans=float, for instance)
-                    c = pd.Categorical(c, categories=natsorted(np.unique(c)))
-                    if len(c.categories) < len(c):
-                        df[key] = c
-                        df[key].cat.categories = df[key].cat.categories.astype('U')
-                        logg.info(
-                            '... storing \'{}\' as categorical'
-                            .format(key, ann, key))
+        dont_modify = False  # only necessary for backed views
+        if df is None:
+            dfs = [self.obs, self.var]
+            if self.isview:
+                if not self.isbacked:
+                    self._init_as_actual(self.copy())
+                else:
+                    dont_modify = True
+        else:
+            dfs = [df]
+        for df in dfs:
+            string_cols = [key for key in df.columns if is_string_dtype(df[key])]
+            for key in string_cols:
+                # make sure we only have strings (could be that there are
+                # np.nans (float), -666, '-666', for instance)
+                c = df[key].astype('U')
+                # make a categorical
+                c = pd.Categorical(c, categories=natsorted(np.unique(c)))
+                if len(c.categories) < len(c):
+                    if dont_modify:
+                        raise RuntimeError(
+                            'Please call `.strings_to_categoricals()` on full AnnData, not on this view. '
+                            'You might encounter this error message while copying or writing to disk.')
+                    df[key] = c
+                    logg.info('... storing \'{}\' as categorical'
+                        .format(key))
+
+    _sanitize = strings_to_categoricals  # backwards compat
 
     def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
         # slice sparse spatrices of n_obs × n_obs in self.uns
@@ -2112,6 +2127,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         It is sufficient for reconstructing the object.
         """
+        self.strings_to_categoricals()
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
         var_rec, uns_var = df_to_records_fixed_width(self._var)
         layers = self.layers.as_dict()
@@ -2126,6 +2142,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             'uns': {**self._uns, **uns_obs, **uns_var}}
 
         if self.raw is not None:
+            self.strings_to_categoricals(self.raw._var)
             var_rec, uns_var = df_to_records_fixed_width(self.raw._var)
             d['raw.X'] = self.raw.X
             d['raw.var'] = var_rec
