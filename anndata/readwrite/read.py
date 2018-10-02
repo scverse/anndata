@@ -475,7 +475,7 @@ def _read_key_value_from_h5(f, d, key, key_write=None):
     # only works if not reading a scalar type)
     def postprocess_reading(key, value):
         # record arrays should stay record arrays and not become scalars
-        if value.ndim == 1 and len(value) == 1 and not value.dtype != np.record:
+        if value.ndim == 1 and len(value) == 1 and value.dtype.names is None:
             value = value[0]
         if value.dtype.kind == 'S':
             value = value.astype(str)
