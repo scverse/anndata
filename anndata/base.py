@@ -1396,7 +1396,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                             'Please call `.strings_to_categoricals()` on full AnnData, not on this view. '
                             'You might encounter this error message while copying or writing to disk.')
                     df[key] = c
-                    logg.info('... storing \'{}\' as categorical'
+                    logger.info('... storing \'{}\' as categorical'
                         .format(key))
 
     _sanitize = strings_to_categoricals  # backwards compat
