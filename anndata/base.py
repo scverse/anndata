@@ -457,7 +457,6 @@ class Raw(IndexMixin):
     def __init__(self, adata=None, X=None, var=None, varm=None):
         self._adata = adata
         self._n_obs = adata.n_obs
-        self._n_vars = adata.n_vars
         if X is not None:
             self._X = X
             self._var = var
@@ -490,7 +489,7 @@ class Raw(IndexMixin):
 
     @property
     def n_vars(self):
-        return self._n_vars
+        return self._var.shape[0]
 
     @property
     def n_obs(self):
