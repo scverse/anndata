@@ -36,13 +36,9 @@ def test_backing():
 
     adata.filename = './test.h5ad'
 
-    print(adata.X)
-    
     adata.write()
 
     assert not adata.file.isopen
-
-    print(adata.X)
 
     assert adata.isbacked
 
