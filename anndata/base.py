@@ -1353,6 +1353,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 if 'params' in v1 and 'groupby' in v1['params']:
                     if v1['params']['groupby'] == key:
                         for k2, v2 in v1.items():
+                            # picks out the recarrays that are named according to the old
+                            # categories
                             if isinstance(v2, np.ndarray) and v2.dtype.names is not None:
                                 if list(v2.dtype.names) == old_categories:
                                     self.uns[k1][k2].dtype.names = categories
