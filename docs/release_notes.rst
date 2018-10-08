@@ -1,7 +1,7 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
 
-**September 14, 2018**: on master
+**October 7, 2018**: on GitHub and 0.6.11
 
 1. :func:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
 2. initialatization from pandas DataFrames
