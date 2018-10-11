@@ -28,14 +28,14 @@ except ImportError:
         def __rep__():
             return 'mock zarr.core.Array'
 
-# try importing zap
+# try importing zappy
 try:
-    from zap.base import ZapArray
+    from zappy.base import ZappyArray
 except ImportError:
-    class ZapArray:
+    class ZappyArray:
         @staticmethod
         def __rep__():
-            return 'mock zap.base.ZapArray'
+            return 'mock zappy.base.ZappyArray'
 
 from . import h5py
 from .layers import AnnDataLayers
@@ -68,7 +68,7 @@ class StorageType(Enum):
     Masked = ma.MaskedArray
     Sparse = sparse.spmatrix
     ZarrArry = ZarrArray
-    ZapArry = ZapArray
+    ZappyArry = ZappyArray
 
     @classmethod
     def classes(cls):
@@ -745,7 +745,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._X = SparseCSCView(X, view_args=(self, 'X'))
         elif issparse(X):
             raise ValueError('View on non-csr/csc sparse matrices not implemented.')
-        elif isinstance(X, ZapArray): # ZapArray acts as a view itself
+        elif isinstance(X, ZappyArray): # ZappyArray acts as a view itself
             self._X = X
         else:
             shape = (
