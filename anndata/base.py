@@ -1953,6 +1953,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         write_loom(filename, self)
 
     def write_zarr(self, store, chunks):
+        """Write a hierarchical Zarr array store.
+
+        Parameters
+        ----------
+        store
+            The filename, a `MutableMapping`, or a Zarr storage class.
+        chunks
+            Chunk shape.
+        """
         from .readwrite.write import write_zarr
         write_zarr(store, self, chunks=chunks)
 
