@@ -46,6 +46,7 @@ autosummary_generate = True
 autodoc_mock_imports = ['_tkinter']  # why this?
 autodoc_member_order = 'bysource'
 #autodoc_default_flags = ['members']
+napoleon_use_rtype = False
 napoleon_use_param = True
 
 intersphinx_mapping = dict(
