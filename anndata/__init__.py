@@ -61,6 +61,7 @@ Writing to other formats.
 
    AnnData.write_csvs
    AnnData.write_loom
+   AnnData.write_zarr
 
 h5py
 ----

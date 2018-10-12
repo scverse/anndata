@@ -340,6 +340,13 @@ def _read_text(
 
 
 def read_zarr(store):
+    """Read from a hierarchical Zarr array store.
+
+    Parameters
+    ----------
+    store
+        The filename, a `MutableMapping`, or a Zarr storage class.
+    """
     import zarr
     f = zarr.open(store, mode='r')
     d = {}
