@@ -138,6 +138,14 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         The filename.
     sparse
         Whether to read the data matrix as sparse.
+    cleanup: 
+        Whether to remove all obs/var keys that do not store more than one unique value.
+    X_name:
+        Loompy key where the data matrix is stored.
+    obs_names:
+        Loompy key where the observation/cell names are stored.
+    var_names: 
+        Loompy key where the variable/gene names are stored.
     """
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
