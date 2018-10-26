@@ -1541,7 +1541,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                            # as uns was copied already before
                            self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
                            self._obsm.copy(), self._varm.copy(),
-                           raw=None if self._raw is None else self._raw.copy(), layers=self.layers.as_dict())
+                           raw=None if self._raw is None else self._raw.copy(),
+                           layers=self.layers.as_dict(),
+                           dtype=self._X.dtype.name if self._X is not None else 'float32')
         else:
             if filename is None:
                 raise ValueError(
