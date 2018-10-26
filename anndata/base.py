@@ -224,19 +224,14 @@ def df_to_records_fixed_width(df):
         dtype={'names': names, 'formats': formats}), uns
 
 
-def _fix_shapes(X):
-    """Fix shapes of array or sparse matrix.
+def _check_2d_shape(X):
+    """Check shape of array or sparse matrix.
 
     Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
     """
-    if X.dtype.names is None and len(X.shape) not in {0, 1, 2}:
+    if X.dtype.names is None and len(X.shape) != 2:
         raise ValueError('X needs to be 2-dimensional, not '
                          '{}-dimensional.'.format(len(X.shape)))
-    if len(X.shape) == 1:
-        X.shape = (1, X.shape[0])
-    elif len(X.shape) == 0:
-        X.shape = (1, 1)
-    return X
 
 
 def _normalize_index(index, names):
@@ -799,7 +794,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm, raw, layers = X.X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw, X.layers
+            X, obs, var, uns, obsm, varm, raw, layers = X._X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw, X.layers
 
         # init from DataFrame
         elif isinstance(X, pd.DataFrame):
@@ -822,6 +817,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                  .format(class_names, type(X)))
             if shape is not None:
                 raise ValueError('`shape` needs to be `None` is `X` is not `None`.')
+            _check_2d_shape(X)
             # if type doesn't match, a copy is made, otherwise, use a view
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
@@ -832,7 +828,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:  # is np.ndarray
                 X = X.astype(dtype, copy=False)
             # data matrix and shape
-            self._X = _fix_shapes(X)
+            self._X = X
             self._n_obs, self._n_vars = self._X.shape
         else:
             self._X = None
@@ -1100,9 +1096,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if not isinstance(value, Mapping):
             raise ValueError('Only dicitionary types are allowed for `.uns`.')
         if self.isview:
-            # here, we directly generate the copy
-            adata = self._adata_ref._getitem_copy((self._oidx, self._vidx))
-            self._init_as_actual(adata)
+            self._init_as_actual(self.copy())
         self._uns = value
 
     @property
@@ -1305,26 +1299,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _getitem_view(self, index):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
-
-    # this is used in the setter for uns, if a view
-    def _getitem_copy(self, index):
-        oidx, vidx = self._normalize_indices(index)
-        if isinstance(oidx, (int, np.int64)): oidx = slice(oidx, oidx+1, 1)
-        if isinstance(vidx, (int, np.int64)): vidx = slice(vidx, vidx+1, 1)
-        if not self.isbacked: X = self._X[oidx, vidx]
-        else: X = self.file['X'][oidx, vidx]
-        obs_new = self._obs.iloc[oidx]
-        self._remove_unused_categories(self._obs, obs_new, self._uns)
-        obsm_new = self._obsm[oidx]
-        var_new = self._var.iloc[vidx]
-        self._remove_unused_categories(self._var, var_new, self._uns)
-        varm_new = self._varm[vidx]
-        assert obs_new.shape[0] == X.shape[0], (oidx, obs_new)
-        assert var_new.shape[0] == X.shape[1], (vidx, var_new)
-        uns_new = deepcopy(self._uns)
-        self._slice_uns_sparse_matrices_inplace(uns_new, oidx)
-        raw_new = None if self.raw is None else self.raw[oidx]
-        return AnnData(X, obs_new, var_new, uns_new, obsm_new, varm_new, raw=raw_new)
 
     def _remove_unused_categories(self, df_full, df_sub, uns):
         from pandas.api.types import is_categorical
