@@ -1508,6 +1508,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename=None):
         """Full copy, optionally on disk."""
         if not self.isbacked:
+            if self._X is not None and self._X.dtype.name != 'float32':
+                logger.warn(
+                    'Up to anndata 0.6.11, `.copy()` cast a '
+                    'non-\'float32\' data matrix X to \'float32\'. '
+                    'Now, your matrix of dtype \'{}\' maintains this dtype during copy. '
+                    'This might change low-variance components in PCA etc. '
+                    'To reproduce the previous behavior, set `adata.X = adata.X.astype(\'float32\')`. '
+                    .format(self._X.dtype.name))
             return AnnData(self._X.copy() if self._X is not None else None,
                            self._obs.copy(),
                            self._var.copy(),
