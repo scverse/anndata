@@ -733,7 +733,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if self._adata_ref.X is None:
             self._X = None
             return
-        X = self._adata_ref.X[self._oidx, self._vidx]
+        X = self._adata_ref._X[self._oidx, self._vidx]
         if isinstance(X, sparse.csr_matrix):
             self._X = SparseCSRView(X, view_args=(self, 'X'))
         elif isinstance(X, sparse.csc_matrix):
