@@ -84,6 +84,45 @@ def test_slicing():
     assert adata[:, np.array([False, True, True])].X.tolist() == [[2, 3], [5, 6]]
     assert adata[:, 1:3].X.tolist() == [[2, 3], [5, 6]]
 
+    assert adata[0:2, :][:, 0:2].X.tolist() == [[1,2], [4,5]]
+    assert adata[0:1, :][:, 0:2].X.tolist() == [1,2]
+    assert adata[0, :][:, 0].X.tolist() == 1
+    assert adata[:, 0:2][0:2, :].X.tolist() == [[1,2], [4,5]]
+    assert adata[:, 0:2][0:1, :].X.tolist() == [1,2]
+    assert adata[:, 0][0, :].X.tolist() == 1
+
+
+def test_boolean_slicing():
+    adata = AnnData(np.array([[1, 2, 3],
+                              [4, 5, 6]]))
+
+    obs_selector = np.array([True, False], dtype=bool)
+    vars_selector = np.array([True, False, False], dtype=bool)
+    assert adata[obs_selector, :][:, vars_selector].X.tolist() == 1
+    assert adata[:, vars_selector][obs_selector, :].X.tolist() == 1
+    assert adata[obs_selector, :][:, 0].X.tolist() == 1
+    assert adata[:, 0][obs_selector, :].X.tolist() == 1
+    assert adata[0, :][:, vars_selector].X.tolist() == 1
+    assert adata[:, vars_selector][0, :].X.tolist() == 1
+
+    obs_selector = np.array([True, False], dtype=bool)
+    vars_selector = np.array([True, True, False], dtype=bool)
+    assert adata[obs_selector, :][:, vars_selector].X.tolist() == [1, 2]
+    assert adata[:, vars_selector][obs_selector, :].X.tolist() == [1, 2]
+    assert adata[obs_selector, :][:, 0:2].X.tolist() == [1, 2]
+    assert adata[:, 0:2][obs_selector, :].X.tolist() == [1, 2]
+    assert adata[0, :][:, vars_selector].X.tolist() == [1, 2]
+    assert adata[:, vars_selector][0, :].X.tolist() == [1, 2]
+
+    obs_selector = np.array([True, True], dtype=bool)
+    vars_selector = np.array([True, True, False], dtype=bool)
+    assert adata[obs_selector, :][:, vars_selector].X.tolist() == [[1,2], [4,5]]
+    assert adata[:, vars_selector][obs_selector, :].X.tolist() == [[1,2], [4,5]]
+    assert adata[obs_selector, :][:, 0:2].X.tolist() == [[1,2], [4,5]]
+    assert adata[:, 0:2][obs_selector, :].X.tolist() == [[1,2], [4,5]]
+    assert adata[0:2, :][:, vars_selector].X.tolist() == [[1,2], [4,5]]
+    assert adata[:, vars_selector][0:2, :].X.tolist() == [[1,2], [4,5]]
+
 
 def test_slicing_strings():
     adata = AnnData(
