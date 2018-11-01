@@ -1503,7 +1503,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Data matrix is returned as pandas DataFrame, where observation names are on index,
         and variable names on columns.
         """
-        return pd.DataFrame(self.X, index=self.obs_names, columns=self.var_names)
+        return pd.DataFrame(self._X, index=self.obs_names, columns=self.var_names)
 
     def copy(self, filename=None):
         """Full copy, optionally on disk."""
