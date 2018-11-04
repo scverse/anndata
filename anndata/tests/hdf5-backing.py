@@ -48,15 +48,15 @@ def test_backing():
     # this might give us a trouble as the user might not
     # know that the file is open again....
     assert adata.file.isopen
-    
-    adata[:2, 0].X = [0, 0]    
+
+    adata[:2, 0].X = [0, 0]
 
     assert adata[:, 0].X.tolist() == [0, 0, 7]
 
     adata_subset = adata[:2, [0, 1]]
 
     assert adata_subset.isview
-    
+
     from pytest import raises
     with raises(ValueError):
         # cannot set view in backing mode...
@@ -74,7 +74,7 @@ def test_backing():
 
 
 def test_double_index():
-    
+
     X = np.array(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
 
@@ -87,3 +87,24 @@ def test_double_index():
 
     # close backing file
     adata.write()
+
+
+def test_return_to_memory_mode():
+
+    X = np.array(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
+
+    adata.filename = './test.h5ad'
+
+    assert adata.isbacked
+
+    adata.filename = None
+
+    assert not adata.isbacked
+
+    bdata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
+
+    # make sure the previous file had been properly closed
+    # when setting `adata.filename = None`
+    # if it hadn't the following line would throw an error
+    adata.filename = './test.h5ad'
