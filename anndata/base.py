@@ -1410,8 +1410,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Same as ``adata = adata[:, index]``, but inplace.
         """
         adata_subset = self[:, index].copy()
-        self._init_as_actual(adata_subset)
-        #self.__dict__.update(adata_subset.__dict__)
+        self._init_as_actual(adata_subset, dtype=self._X.dtype)
 
     def _inplace_subset_obs(self, index):
         """Inplace subsetting along variables dimension.
@@ -1419,7 +1418,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Same as ``adata = adata[index, :]``, but inplace.
         """
         adata_subset = self[index].copy()
-        self._init_as_actual(adata_subset)
+        self._init_as_actual(adata_subset, dtype=self._X.dtype)
 
     def _get_obs_array(self, k, use_raw=False, layer='X'):
         """Get an array from the layer (default layer='X') along the observation dimension by first looking up
@@ -1492,9 +1491,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             logger.warn(
                 'Up to anndata 0.6.12, `.transpose()` cast a '
                 'non-\'float32\' data matrix X to \'float32\'. '
-                'Now, your matrix of dtype \'{}\' maintains this dtype during copy. '
-                'This might change low-variance components in PCA etc. '
-                'To reproduce the previous behavior, set `adata.X = adata.X.astype(\'float32\')`. '
+                'Now, the dtype \'{}\' is maintained. '
                 .format(self._X.dtype.name))
         if not self.isbacked: X = self._X
         else: X = self.file['X']
@@ -1522,11 +1519,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if not self.isbacked:
             if self._X is not None and self._X.dtype.name != 'float32':
                 logger.warn(
-                    'Up to anndata 0.6.11, `.copy()` cast a '
+                    'Up to anndata 0.6.12, `.transpose()` cast a '
                     'non-\'float32\' data matrix X to \'float32\'. '
-                    'Now, your matrix of dtype \'{}\' maintains this dtype during copy. '
-                    'This might change low-variance components in PCA etc. '
-                    'To reproduce the previous behavior, set `adata.X = adata.X.astype(\'float32\')`. '
+                    'Now, the dtype \'{}\' is maintained. '
                     .format(self._X.dtype.name))
             return AnnData(self._X.copy() if self._X is not None else None,
                            self._obs.copy(),
