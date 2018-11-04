@@ -1484,19 +1484,27 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         Data matrix is transposed, observations and variables are interchanged.
         """
+        if self._X is not None and self._X.dtype.name != 'float32':
+            logger.warn(
+                'Up to anndata 0.6.12, `.transpose()` cast a '
+                'non-\'float32\' data matrix X to \'float32\'. '
+                'Now, your matrix of dtype \'{}\' maintains this dtype during copy. '
+                'This might change low-variance components in PCA etc. '
+                'To reproduce the previous behavior, set `adata.X = adata.X.astype(\'float32\')`. '
+                .format(self._X.dtype.name))
         if not self.isbacked: X = self._X
         else: X = self.file['X']
         layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items(copy=False)}
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
-                           filename=self.filename, layers=layers)
+                           filename=self.filename, layers=layers, dtype=self.X.dtype.name)
         return AnnData(X.T, self._var, self._obs, self._uns,
                        self._varm.flipped(), self._obsm.flipped(),
-                       filename=self.filename, layers=layers)
+                       filename=self.filename, layers=layers, dtype=self.X.dtype.name)
 
     T = property(transpose)
-    
+
     def to_df(self):
         """Generate shallow pandas DataFrame.
 
