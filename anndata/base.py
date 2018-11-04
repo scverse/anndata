@@ -1519,7 +1519,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if not self.isbacked:
             if self._X is not None and self._X.dtype.name != 'float32':
                 logger.warn(
-                    'Up to anndata 0.6.12, `.transpose()` cast a '
+                    'Up to anndata 0.6.12, `.copy()` cast a '
                     'non-\'float32\' data matrix X to \'float32\'. '
                     'Now, the dtype \'{}\' is maintained. '
                     .format(self._X.dtype.name))
