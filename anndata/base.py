@@ -671,6 +671,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 filename=filename, filemode=filemode)
 
     def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
+        if adata_ref.isbacked and adata_ref.isview:
+            raise ValueError(
+                'Currently, you cannot index repeatedly into a backed AnnData, '
+                'that is, you cannot make a view of a view.')
         self._isview = True
         self._adata_ref = adata_ref
         self._oidx = oidx

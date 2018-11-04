@@ -45,14 +45,18 @@ def test_backing():
     assert adata[:, 0].isview
     assert adata[:, 0].X.tolist() == [1, 4, 7]
 
-    adata[:2, 0].X = [0, 0]
+    # this might give us a trouble as the user might not
+    # know that the file is open again....
+    assert adata.file.isopen
+    
+    adata[:2, 0].X = [0, 0]    
 
     assert adata[:, 0].X.tolist() == [0, 0, 7]
 
     adata_subset = adata[:2, [0, 1]]
 
     assert adata_subset.isview
-
+    
     from pytest import raises
     with raises(ValueError):
         # cannot set view in backing mode...
@@ -67,3 +71,19 @@ def test_backing():
 
     # save
     adata_subset.write()
+
+
+def test_double_index():
+    
+    X = np.array(X_list)
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
+
+    adata.filename = './test.h5ad'
+
+    from pytest import raises
+    with raises(ValueError):
+        # no view of view of backed object currently
+        adata[:2][:, 0]
+
+    # close backing file
+    adata.write()
