@@ -107,4 +107,7 @@ def test_return_to_memory_mode():
     # make sure the previous file had been properly closed
     # when setting `adata.filename = None`
     # if it hadn't the following line would throw an error
-    adata.filename = './test.h5ad'
+    bdata.filename = './test.h5ad'
+
+    # close the file
+    bdata.filename = None
