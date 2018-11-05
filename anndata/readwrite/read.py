@@ -57,7 +57,7 @@ def read_excel(
     # rely on pandas for reading an excel file
     from pandas import read_excel
     df = read_excel(fspath(filename), sheet, dtype=dtype)
-    X = df.values[:, 1:].astype(dtype)
+    X = df.values[:, 1:]
     row = {'row_names': df.iloc[:, 0].values.astype(str)}
     col = {'col_names': np.array(df.columns[1:], dtype=str)}
     return AnnData(X, row, col, dtype=dtype)
@@ -89,7 +89,7 @@ def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
 
     df = DataFrame.from_dict(dod, orient='index')  # build the matrix
     df.fillna(value=0., inplace=True)  # many NaN, replace with zeros
-    return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns},dtype=dtype)
+    return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns}, dtype=dtype)
 
 
 def read_hdf(filename: PathLike, key: str, dtype: str='float32') -> AnnData:
@@ -198,7 +198,7 @@ def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
     X = mmread(fspath(filename)).astype(dtype)
     from scipy.sparse import csr_matrix
     X = csr_matrix(X)
-    return AnnData(X,dtype=dtype)
+    return AnnData(X, dtype=dtype)
 
 
 def read_text(
