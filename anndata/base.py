@@ -1349,7 +1349,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                 if list(v2.dtype.names) == old_categories:
                                     self.uns[k1][k2].dtype.names = categories
                                 else:
-                                    logger.warn(
+                                    logger.warning(
                                         'Omitting {}/{} as old categories do not match.'
                                         .format(k1, k2))
 
@@ -1488,7 +1488,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Data matrix is transposed, observations and variables are interchanged.
         """
         if self._X is not None and self._X.dtype.name != 'float32':
-            logger.warn(
+            logger.warning(
                 'Up to anndata 0.6.12, `.transpose()` cast a '
                 'non-\'float32\' `.X` to \'float32\'. '
                 'Now, the dtype \'{}\' is maintained. '
@@ -1518,7 +1518,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """Full copy, optionally on disk."""
         if not self.isbacked:
             if self._X is not None and self._X.dtype.name != 'float32':
-                logger.warn(
+                logger.warning(
                     'Up to anndata 0.6.12, `.copy()` cast a '
                     'non-\'float32\' `.X` to \'float32\'. '
                     'Now, the dtype \'{}\' is maintained. '
