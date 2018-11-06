@@ -787,11 +787,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             X = _read_h5ad(self, mode=filemode)
 
         # init from dictionary
+        # this should be removed at some point and fully replaced with ._from_dict()
         if isinstance(X, Mapping):
             if any((obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If `X` is a dict no further arguments must be provided.')
             X, obs, var, uns, obsm, varm, raw, layers = self._from_dict(X)
+            if X is not None:
+                dtype = X.dtype.name # this is not a function that a user would
+                                     # use, hence it's fine to set the dtype
 
         # init from AnnData
         elif isinstance(X, AnnData):

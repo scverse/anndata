@@ -92,7 +92,7 @@ def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
     return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns}, dtype=dtype)
 
 
-def read_hdf(filename: PathLike, key: str, dtype: str='float32') -> AnnData:
+def read_hdf(filename: PathLike, key: str) -> AnnData:
     """Read ``.h5`` (hdf5) file.
 
     Note: Also looks for fields ``row_names`` and ``col_names``.
@@ -120,7 +120,7 @@ def read_hdf(filename: PathLike, key: str, dtype: str='float32') -> AnnData:
         for iname, name in enumerate(['row_names', 'col_names']):
             if name in keys:
                 rows_cols[iname][name] = f[name][()]
-    adata = AnnData(X, rows_cols[0], rows_cols[1], dtype=dtype)
+    adata = AnnData(X, rows_cols[0], rows_cols[1], dtype=X.dtype.name)
     return adata
 
 
