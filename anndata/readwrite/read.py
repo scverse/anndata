@@ -40,6 +40,7 @@ def read_csv(
 def read_excel(
     filename: PathLike,
     sheet: Union[str, int],
+    dtype: str='float32',
 ) -> AnnData:
     """Read ``.xlsx`` (Excel) file.
 
@@ -55,14 +56,14 @@ def read_excel(
     """
     # rely on pandas for reading an excel file
     from pandas import read_excel
-    df = read_excel(fspath(filename), sheet)
-    X = df.values[:, 1:].astype(float)
+    df = read_excel(fspath(filename), sheet, dtype=dtype)
+    X = df.values[:, 1:]
     row = {'row_names': df.iloc[:, 0].values.astype(str)}
     col = {'col_names': np.array(df.columns[1:], dtype=str)}
-    return AnnData(X, row, col)
+    return AnnData(X, row, col, dtype=dtype)
 
 
-def read_umi_tools(filename: PathLike) -> AnnData:
+def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
     """Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
@@ -88,10 +89,10 @@ def read_umi_tools(filename: PathLike) -> AnnData:
 
     df = DataFrame.from_dict(dod, orient='index')  # build the matrix
     df.fillna(value=0., inplace=True)  # many NaN, replace with zeros
-    return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns})
+    return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns}, dtype=dtype)
 
 
-def read_hdf(filename: PathLike, key: str) -> AnnData:
+def read_hdf(filename: PathLike, key: str, dtype: str='float32') -> AnnData:
     """Read ``.h5`` (hdf5) file.
 
     Note: Also looks for fields ``row_names`` and ``col_names``.
@@ -119,12 +120,12 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
         for iname, name in enumerate(['row_names', 'col_names']):
             if name in keys:
                 rows_cols[iname][name] = f[name][()]
-    adata = AnnData(X, rows_cols[0], rows_cols[1])
+    adata = AnnData(X, rows_cols[0], rows_cols[1], dtype=dtype)
     return adata
 
 
 def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
-              obs_names: str = 'CellID', var_names: str = 'Gene') -> AnnData:
+              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str='float32') -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
@@ -177,7 +178,8 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
             X,
             obs=obs,  # not ideal: make the generator a dict...
             var=var,
-            layers=layers)
+            layers=layers,
+            dtype=dtype)
     return adata
 
 
@@ -196,7 +198,7 @@ def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
     X = mmread(fspath(filename)).astype(dtype)
     from scipy.sparse import csr_matrix
     X = csr_matrix(X)
-    return AnnData(X)
+    return AnnData(X, dtype=dtype)
 
 
 def read_text(
@@ -344,7 +346,8 @@ def _read_text(
         col_names[iname] = name.strip('"')
     return AnnData(data,
                    obs={'obs_names': row_names},
-                   var={'var_names': col_names})
+                   var={'var_names': col_names},
+                   dtype=dtype)
 
 
 def read_zarr(store):
