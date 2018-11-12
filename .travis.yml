@@ -6,7 +6,7 @@ install:
   - "pip install -r requirements.txt"
   - "pip install -r requirements_tests.txt"
   - "pip install docutils"
-  - "python setup.py build_ext --inplace"
+  - "pip install -e ."
 script:
   - pytest --cov=.
   - codecov
