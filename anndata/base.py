@@ -1326,10 +1326,21 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def rename_categories(self, key, categories):
         """Rename categories of annotation `key` in `.obs`, `.var` and `.uns`.
 
-        Besides calling ``self.obs[key].cat.rename_categories(categories)`` -
+        Only supports passing a list-like `categories` argument.
+
+        Besides calling ``self.obs[key].cat.categories = categories`` -
         similar for `.var` - this also renames categories in unstructured
         annotation that uses the categorical annotation `key`.
+
+        Parameters
+        ----------
+        key : `str`
+             Key for observations or variables annotation.
+        categories : `list`-like 
+             New categories, the same number as the old categories.
         """
+        if isinstance(categories, dict):
+            raise ValueError('Only list-like `categories` is supported.')
         if key in self.obs:
             old_categories = self.obs[key].cat.categories.tolist()
             self.obs[key].cat.rename_categories(categories, inplace=True)
