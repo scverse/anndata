@@ -4,7 +4,7 @@ python:
   - "3.6"
 install:
   - "pip install -r requirements.txt"
-  - "pip install -r requires_tests.txt"  
+  - "pip install -r requirements_tests.txt"
   - "pip install docutils"
   - "python setup.py build_ext --inplace"
 script:
