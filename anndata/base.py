@@ -1850,7 +1850,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:
                 X = np.concatenate(Xs)
 
-        obs = pd.concat(out_obss)
+        obs = pd.concat(out_obss, sort=True)
 
         if any_sparse:
             sparse_format = all_adatas[0].X.getformat()
