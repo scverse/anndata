@@ -1077,6 +1077,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Can only assign pd.DataFrame.')
         if len(value) != self.n_obs:
             raise ValueError('Length does not match.')
+        utils.warn_no_string_index(value.index)
         if self.isview: self._adata_ref._obs.iloc[self._oidx] = value
         else: self._obs = value
 
@@ -1091,6 +1092,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Can only assign pd.DataFrame.')
         if len(value) != self.n_vars:
             raise ValueError('Length does not match.')
+        utils.warn_no_string_index(value.index)
         if self.isview: self._adata_ref._var.iloc[self._vidx] = value
         else: self._var = value
 
@@ -1160,6 +1162,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @obs_names.setter
     def obs_names(self, names):
+        utils.warn_no_string_index(names)
         self._obs.index = names
         if not self._obs.index.is_unique:
             utils.warn_names_duplicates('obs')
@@ -1171,6 +1174,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @var_names.setter
     def var_names(self, names):
+        utils.warn_no_string_index(names)
         self._var.index = names
         if not self._var.index.is_unique:
             utils.warn_names_duplicates('var')
@@ -1336,7 +1340,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         ----------
         key : `str`
              Key for observations or variables annotation.
-        categories : `list`-like 
+        categories : `list`-like
              New categories, the same number as the old categories.
         """
         if isinstance(categories, dict):

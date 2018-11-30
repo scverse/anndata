@@ -56,6 +56,14 @@ def warn_names_duplicates(attr):
         .format(names, attr))
 
 
+def warn_no_string_index(names):
+    if not isinstance(names[0], str):
+        logger.warning(
+            'AnnData expects string indices, but your first two indices are: {}. '
+            'This will raise an error in the future.'
+            .format(names[:2]))
+    
+
 def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
 
     names = list(source.keys())
