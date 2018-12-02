@@ -59,8 +59,7 @@ def warn_names_duplicates(attr):
 def warn_no_string_index(names):
     if not isinstance(names[0], str):
         logger.warning(
-            'AnnData expects string indices, but your first two indices are: {}. '
-            'This will raise an error in the future.'
+            'AnnData expects string indices for some functionality, but your first two indices are: {}. '
             .format(names[:2]))
     
 
