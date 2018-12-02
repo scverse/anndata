@@ -139,13 +139,13 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         The filename.
     sparse
         Whether to read the data matrix as sparse.
-    cleanup: 
+    cleanup:
         Whether to remove all obs/var keys that do not store more than one unique value.
     X_name:
         Loompy key where the data matrix is stored.
     obs_names:
         Loompy key where the observation/cell names are stored.
-    var_names: 
+    var_names:
         Loompy key where the variable/gene names are stored.
     """
     filename = fspath(filename)  # allow passing pathlib.Path objects
@@ -487,6 +487,11 @@ def _read_key_value_from_h5(f, d, key, key_write=None):
 
     if isinstance(ds, h5py.Dataset) and 'sparse_format' in ds.attrs:
         value = h5py._load_h5_dataset_as_sparse(ds)
+    elif isinstance(ds, h5py.Dataset):
+        value = np.empty(ds.shape, ds.dtype)
+        ds.read_direct(value)
+    elif isinstance(ds, h5py.SparseDataset):
+        value = ds.value
     else:
         value = ds[()]
     # the '()' means 'load everything into memory' (by contrast, ':'

@@ -46,7 +46,7 @@ def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
 
     data = None
 
-    for chunk, _, _ in _chunked_rows(sds, chunk_size):
+    for chunk, _, _ in _chunked_rows(sds, chunk_size, True):
         data = sparse_class(chunk) if data is None else ss.vstack([data, sparse_class(chunk)])
 
     return data
@@ -283,12 +283,16 @@ class SparseDataset(IndexMixin):
 
     @property
     def value(self):
-        data = self.h5py_group['data'].value
-        indices = self.h5py_group['indices'].value
-        indptr = self.h5py_group['indptr'].value
-        shape = self.h5py_group.attrs['h5sparse_shape']
         format_class = get_format_class(self.format_str)
-        return format_class((data, indices, indptr), shape=shape)
+        object = self.h5py_group
+        data_array = format_class(self.shape, dtype=self.dtype)
+        data_array.data = np.empty(object['data'].shape, object['data'].dtype)
+        data_array.indices = np.empty(object['indices'].shape, object['indices'].dtype)
+        data_array.indptr = np.empty(object['indptr'].shape, object['indptr'].dtype)
+        object['data'].read_direct(data_array.data)
+        object['indices'].read_direct(data_array.indices)
+        object['indptr'].read_direct(data_array.indptr)
+        return data_array
 
     def append(self, sparse_matrix):
         shape = self.h5py_group.attrs['h5sparse_shape']
