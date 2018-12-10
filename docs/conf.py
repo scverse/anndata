@@ -3,6 +3,7 @@ import sys
 import time
 import inspect
 from pathlib import Path, PurePosixPath
+from typing import Optional, Union
 import logging
 
 HERE = Path(__file__).parent
@@ -205,6 +206,37 @@ def modurl(qualname):
 from jinja2.defaults import DEFAULT_FILTERS
 
 DEFAULT_FILTERS['modurl'] = modurl
+
+
+# -- Override some classnames in autodoc --------------------------------------------
+# This makes sure that automatically documented links actually
+# end up being links instead of pointing nowhere.
+
+
+import sphinx_autodoc_typehints
+
+qualname_overrides = {
+    'anndata.base.AnnData': 'anndata.AnnData',
+    'scipy.sparse.base.spmatrix': 'scipy.sparse.spmatrix',
+    'scipy.sparse.csr.csr_matrix': 'scipy.sparse.csr_matrix',
+    'scipy.sparse.csc.csc_matrix': 'scipy.sparse.csc_matrix',
+}
+
+fa_orig = sphinx_autodoc_typehints.format_annotation
+def format_annotation(annotation):
+    if getattr(annotation, '__origin__', None) is Union or hasattr(annotation, '__union_params__'):
+        params = getattr(annotation, '__union_params__', None) or getattr(annotation, '__args__', None)
+        if len(params or []) == 2 and getattr(params[1], '__qualname__', None) == 'NoneType':
+            return fa_orig(annotation)  # Optional[...]
+        return ', '.join(map(format_annotation, params))
+    if inspect.isclass(annotation):
+        full_name = '{}.{}'.format(annotation.__module__, annotation.__qualname__)
+        override = qualname_overrides.get(full_name)
+        if override is not None:
+            return f':py:class:`~{qualname_overrides[full_name]}`'
+    return fa_orig(annotation)
+sphinx_autodoc_typehints.format_annotation = format_annotation
+
 
 
 # -- Prettier Param docs --------------------------------------------
