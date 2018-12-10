@@ -1908,7 +1908,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                              'columns of `X` ({}), but has {} rows.'
                              .format(self._n_vars, len(self._varm)))
 
-    def write(
+    def write_h5ad(
         self,
         filename: Optional[PathLike] = None,
         compression: Optional[str] = 'gzip',
@@ -1916,6 +1916,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         force_dense: Optional[bool] = None
     ):
         """Write `.h5ad`-formatted hdf5 file and close a potential backing file.
+
+        .. note::
+           
+            Setting compression to `None` can dramatically speed up writing.
 
         Parameters
         ----------
@@ -1925,6 +1929,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
         compression_opts
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
+        force_dense
+            Write sparse data as a dense matrix. Defaults to `True` if object is
+            backed, otherwise to `False`.
         """
         from .readwrite.write import _write_h5ad
 
@@ -1940,6 +1947,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                                              force_dense=force_dense)
         if self.isbacked:
             self.file.close()
+
+    write = write_h5ad  # a shortcut and backwards compat
 
     def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ','):
         """Write annotation to `.csv` files.
