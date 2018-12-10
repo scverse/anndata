@@ -1915,7 +1915,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None
     ):
-        """Write `.h5ad`-formatted hdf5 file and close a potential backing file.
+        """Write `.h5ad`-formatted hdf5 file.
 
         .. note::
            
@@ -1925,7 +1925,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         ----------
         filename
             Filename of data file. Defaults to backing file.
-        compression : ``None`` or {``'gzip'``, ``'lzf'``}
+        compression : `None` or {`'gzip'`, `'lzf'`}
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
         compression_opts
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
