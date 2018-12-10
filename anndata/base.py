@@ -1375,12 +1375,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def strings_to_categoricals(self, df=None):
         """Transform string annotations to categoricals.
 
-        Only considers string annotations that lead to less categories than the
+        Only affects string annotations that lead to less categories than the
         total number of observations.
 
-        If `df` is not `None`, modifies the passed df inplace.
+        Params
+        ------
+        df : `pd.DataFrame`, `None`
+            If `df` is `None`, modifies both `.obs` and `.var`, otherwise
+            modifies `df` inplace.
 
-        Makes a view a copy.
+        Notes
+        -----
+        Turns the view of an `AnnData` into an actual `AnnData`..
         """
         dont_modify = False  # only necessary for backed views
         if df is None:

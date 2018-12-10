@@ -49,6 +49,7 @@ autodoc_member_order = 'bysource'
 #autodoc_default_flags = ['members']
 napoleon_use_rtype = False
 napoleon_use_param = True
+napoleon_custom_sections = [('Params', 'Parameters')]
 
 intersphinx_mapping = dict(
     python=('https://docs.python.org/3', None),
