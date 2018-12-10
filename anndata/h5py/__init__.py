@@ -22,7 +22,7 @@ For examples and further information, see this `blog post <https://falexwolf.de/
    SparseDataset
 """
 from .h5sparse import File, Group, SparseDataset, _load_h5_dataset_as_sparse
-from h5py import Dataset
+from h5py import Dataset, special_dtype
 
 # Problem: the H5py intersphinx is broken, and only contains e.g. `Dataset` directly.
 # So we can’t possibly link to it using :class:`Dataset`, since that will always find our version.

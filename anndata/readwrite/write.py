@@ -236,19 +236,11 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
         return
 
     def preprocess_writing(value):
-        if value is None:
+        if value is None or issparse(value):
             return value
-        elif issparse(value):
-            return value
-        elif isinstance(value, dict):
-            # old hack for storing dicts, is never reached
-            # in the current implementation, can be removed in the future
-            value = np.array([str(value)])
         else:
-            # make sure value is an array
-            value = np.array(value)
-            # hm, why that?
-            if value.ndim == 0: value = np.array([value])
+            value = np.array(value)  # make sure value is an array
+            if value.ndim == 0: value = np.array([value])  # hm, why that?
         # make sure string format is chosen correctly
         if value.dtype.kind == 'U': value = value.astype(np.string_)
         return value
@@ -273,19 +265,12 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
             else:
                 del f[key]
         f.create_dataset(key, data=value, **kwargs)
-    except TypeError:
-        # try writing as byte strings
+    except TypeError as e:
         try:
             if value.dtype.names is None:
-                if key in set(f.keys()):
-                    if (f[key].shape == value.shape
-                            and f[key].dtype == value.dtype):
-                        f[key][()] = value.astype('S')
-                        return
-                    else:
-                        del f[key]
-                f.create_dataset(key, data=value.astype('S'), **kwargs)
-            else:
+                dt = h5py.special_dtype(vlen=str)
+                f.create_dataset(key, data=value, dtype=dt, **kwargs)
+            else:  # try writing composite datatypes with byte strings
                 new_dtype = [(dt[0], 'S{}'.format(int(dt[1][2:])*4))
                              for dt in value.dtype.descr]
                 if key in set(f.keys()):
@@ -298,5 +283,6 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
                 f.create_dataset(
                     key, data=value.astype(new_dtype), **kwargs)
         except Exception as e:
+            print(e)
             warnings.warn('Could not save field with key = "{}" '
                           'to hdf5 file.'.format(key))

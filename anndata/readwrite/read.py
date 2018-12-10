@@ -494,24 +494,20 @@ def _read_key_value_from_h5(f, d, key, key_write=None):
         value = ds.value
     else:
         value = ds[()]
-    # the '()' means 'load everything into memory' (by contrast, ':'
-    # only works if not reading a scalar type)
+
     def postprocess_reading(key, value):
         # record arrays should stay record arrays and not become scalars
         if value.ndim == 1 and len(value) == 1 and value.dtype.names is None:
             value = value[0]
-        if value.dtype.kind == 'S':
+        if hasattr(value, 'dtype') and value.dtype.kind == 'S':
             value = value.astype(str)
-            # backwards compat:
-            # recover a dictionary that has been stored as a string
-            if len(value) > 0:
-                if value[0] == '{' and value[-1] == '}': value = eval(value)
         # transform byte strings in recarrays to unicode strings
         # TODO: come up with a better way of solving this, see also below
         if (key not in AnnData._H5_ALIASES['obs']
             and key not in AnnData._H5_ALIASES['var']
             and key != 'raw.var'
-            and not isinstance(value, dict) and value.dtype.names is not None):
+            and not isinstance(value, dict)
+            and hasattr(value, 'dtype') and value.dtype.names is not None):
             new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
                           if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
             value = value.astype(new_dtype)
