@@ -1,0 +1,13 @@
+.rst-content dl:not(.docutils) dl dt {
+	/* mimick numpydoc’s blockquote style */
+	font-weight: normal;
+	background: none transparent;
+	border-left: none;
+	margin: 0 0 12px;
+	padding: 3px 0 0;
+	font-size: 100%;
+}
+
+.rst-content tt.literal, .rst-content tt.literal, .rst-content code.literal {
+    color: #404040;
+}
