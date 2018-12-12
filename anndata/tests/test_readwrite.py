@@ -131,3 +131,17 @@ def test_write_csv(typ):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs('./test_csv_dir', skip_data=False)
+
+
+@pytest.mark.parametrize(['read', 'write'], [
+    (ad.read_h5ad, ad.AnnData.write_h5ad),
+    # Loom can’t handle 0×0 matrices
+    # (ad.read_loom, ad.AnnData.write_loom),
+    # TODO: only run this if zarr is installed
+    # (ad.read_zarr, lambda a, f: ad.readwrite.write_zarr(f, a)),
+])
+def test_readwrite_hdf5_empty(read, write):
+    adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
+    write(adata, HERE / 'empty.h5')
+    ad_read = read(HERE / 'empty.h5')
+    assert ad_read.uns['empty'].shape == (0,)

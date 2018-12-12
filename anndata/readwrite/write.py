@@ -71,15 +71,18 @@ def write_loom(filename: PathLike, adata: AnnData):
     row_attrs['var_names'] = adata.var_names.values
     col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict('list').items()}
     col_attrs['obs_names'] = adata.obs_names.values
-    
+
+    if adata.X is None:
+        raise ValueError('loompy does not accept empty matrices as data')
     layers = {'': adata.X.T}
     for key in adata.layers.keys():
         layers[key] = adata.layers[key].T
-        
+
     from loompy import create
     if filename.exists():
         filename.unlink()
     create(fspath(filename), layers, row_attrs=row_attrs, col_attrs=col_attrs)
+
 
 # TODO: store can be a MutableMapping or a string - accept PathLike too?
 def write_zarr(store, adata: AnnData, **kwargs):
@@ -88,6 +91,7 @@ def write_zarr(store, adata: AnnData, **kwargs):
     f = zarr.open(store, mode='w')
     for key, value in d.items():
         _write_key_value_to_zarr(f, key, value, **kwargs)
+
 
 def _write_key_value_to_zarr(f, key, value, **kwargs):
     if isinstance(value, Mapping):

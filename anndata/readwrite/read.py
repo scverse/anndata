@@ -489,7 +489,8 @@ def _read_key_value_from_h5(f, d, key, key_write=None):
         value = h5py._load_h5_dataset_as_sparse(ds)
     elif isinstance(ds, h5py.Dataset):
         value = np.empty(ds.shape, ds.dtype)
-        ds.read_direct(value)
+        if 0 not in ds.shape:
+            ds.read_direct(value)
     elif isinstance(ds, h5py.SparseDataset):
         value = ds.value
     else:

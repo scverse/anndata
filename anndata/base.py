@@ -203,7 +203,7 @@ def df_to_records_fixed_width(df):
     uns = {}  # unstructured dictionary for storing categories
     names = ['index']
     if is_string_dtype(df.index):
-        max_len_index = df.index.map(len).max()
+        max_len_index = 0 if 0 in df.shape else df.index.map(len).max()
         index = df.index.values.astype('S{}'.format(max_len_index))
     else:
         index = df.index.values
