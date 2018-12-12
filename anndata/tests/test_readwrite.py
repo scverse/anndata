@@ -142,6 +142,6 @@ def test_write_csv(typ):
 ])
 def test_readwrite_hdf5_empty(read, write):
     adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
-    write(adata, HERE / 'empty.h5')
-    ad_read = read(HERE / 'empty.h5')
+    write(adata, HERE / 'test.empty.h5')
+    ad_read = read(HERE / 'test.empty.h5')
     assert ad_read.uns['empty'].shape == (0,)
