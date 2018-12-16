@@ -1,12 +1,13 @@
 See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
 
 
-**October 7, 2018**: on GitHub and 0.6.11
+**December 16, 2018**: on GitHub and 0.6.16
 
 1. :func:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
 2. initialatization from pandas DataFrames
 3. iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
 4. support for reading zarr files: :func:`~anndata.read_zarr`
+5. changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical
       
 
 **May 1, 2018**: version 0.6
@@ -15,8 +16,8 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 2. tremendous speedup for :func:`~anndata.AnnData.concatenate`
 3. bug fix for deep copy of unstructured annotation after slicing
 4. bug fix for reading HDF5 stored single-category annotations
-5. 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data   
-6. better memory efficiency in loom exports   
+5. 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data
+6. better memory efficiency in loom exports
 
 
 **February 9, 2018**: version 0.5
