@@ -1917,7 +1917,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def write_h5ad(
         self,
         filename: Optional[PathLike] = None,
-        compression: Optional[str] = 'gzip',
+        compression: Optional[str] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None
     ):
@@ -1925,7 +1925,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         .. note::
            
-            Setting compression to `None` can dramatically speed up writing.
+            Setting compression to `'gzip'` can save disk space but will slow
+            down writing and subsequent reading.
 
         Parameters
         ----------
@@ -1945,12 +1946,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
-
         if force_dense is None:
             force_dense = True if self.isbacked else False
 
-        _write_h5ad(filename, self, compression=compression, compression_opts=compression_opts,
-                                                             force_dense=force_dense)
+        _write_h5ad(filename, self, compression=compression,
+                    compression_opts=compression_opts, force_dense=force_dense)
+
         if self.isbacked:
             self.file.close()
 
