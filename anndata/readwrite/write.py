@@ -21,7 +21,7 @@ def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: s
     dirname = Path(dirname)
     if dirname.suffix == '.csv':
         dirname = dirname.with_suffix('')
-    logger.info('writing \'.csv\' files to', dirname)
+    logger.info("writing '.csv' files to %s", dirname)
     if not dirname.is_dir():
         dirname.mkdir(parents=True, exist_ok=True)
     dir_uns = dirname / 'uns'
