@@ -573,8 +573,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Key-index unstructured annotation.
     obsm
         Key-indexed multi-dimensional observations annotation of length #observations.
+        If passing a :class:`~numpy.ndarray`, it needs to have a structured datatype.
     varm
         Key-indexed multi-dimensional variables annotation of length #variables.
+        If passing a :class:`~numpy.ndarray`, it needs to have a structured datatype.
     dtype
         Data type used for storage.
     shape
