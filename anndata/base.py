@@ -644,14 +644,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def __init__(
         self,
-        X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame, ArrayView]] = None,
-        obs: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
-        var: Optional[Union[pd.DataFrame, Mapping[Any, Iterable[Any]], np.ndarray]] = None,
-        uns: Optional[Mapping[Any, Any]] = None,
+        X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame]] = None,
+        obs: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
+        var: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
+        uns: Optional[Mapping[str, Any]] = None,
         obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
-        raw: Optional[Union[Raw, Mapping[str, Any]]] = None,
+        raw: Optional[Raw] = None,
         dtype: Union[np.dtype, str] = 'float32',
         shape: tuple = None,
         filename: Optional[PathLike] = None,
@@ -891,7 +891,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if isinstance(raw, Raw):
                 self._raw = raw
             else:
-                # is dictionary from reading the file
+                # is dictionary from reading the file, nothing that is meant for a user
                 shape = self.file['raw.X'].shape if self.isbacked else raw['X'].shape
 
                 self._raw = Raw(
