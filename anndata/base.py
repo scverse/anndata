@@ -937,7 +937,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def shape(self) -> Tuple:
-        """Shape of data matrix: `(.n_obs, .n_vars)`."""
+        """Shape of data matrix `(.n_obs, .n_vars)`."""
         return self.n_obs, self.n_vars
 
     @property
@@ -1113,8 +1113,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def obsm(self):
-        """Multi-dimensional annotation of observations
-        (mutable structured :class:`np.ndarray`).
+        """Multi-dimensional annotation of observations (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
         ``n_obs``. Is sliced with ``data`` and ``obs`` but behaves otherwise like a
@@ -1125,7 +1124,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     @obsm.setter
     def obsm(self, value):
         if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign np.ndarray.')
+            raise ValueError('Can only assign `np.ndarray`.')
         if len(value) != self.n_obs:
             raise ValueError('Length does not match.')
         if self.isview:
@@ -1136,10 +1135,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def varm(self):
-        """Multi-dimensional annotation of variables/ features
-        (mutable structured :class:`np.ndarray`).
+        """Multi-dimensional annotation of variables/ features (mutable structured :class:`~numpy.ndarray`).
 
-        Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
+        Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray` of length
         ``n_vars``. Is sliced with ``data`` and ``var`` but behaves otherwise like a
         :class:`dict`.
         """
@@ -1148,7 +1146,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     @varm.setter
     def varm(self, value):
         if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign np.ndarray.')
+            raise ValueError('Can only assign `np.ndarray`.')
         if len(value) != self.n_vars:
             raise ValueError('Length does not match.')
         if self.isview:
@@ -1186,15 +1184,15 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self._obs.keys().tolist()
 
     def var_keys(self):
-        """List keys of variable annotation ``var``."""
+        """List keys of variable annotation ``.var``."""
         return self._var.keys().tolist()
 
     def obsm_keys(self):
-        """List keys of observation annotation ``obsm``."""
+        """List keys of observation annotation ``.obsm``."""
         return list(self._obsm.keys())
 
     def varm_keys(self):
-        """List keys of variable annotation ``varm``."""
+        """List keys of variable annotation ``.varm``."""
         return list(self._varm.keys())
 
     def uns_keys(self):
