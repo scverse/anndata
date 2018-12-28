@@ -53,7 +53,11 @@ napoleon_custom_sections = [('Params', 'Parameters')]
 
 intersphinx_mapping = dict(
     python=('https://docs.python.org/3', None),
-    h5py=('http://docs.h5py.org/en/latest/', None)
+    h5py=('http://docs.h5py.org/en/latest/', None),
+    numpy=('https://docs.scipy.org/doc/numpy/', None),
+    scipy=('https://docs.scipy.org/doc/scipy/reference/', None),
+    pandas=('http://pandas.pydata.org/pandas-docs/stable/', None),
+    sklearn=('https://scikit-learn.org/stable/', None),
 )
 
 templates_path = ['_templates']
@@ -218,6 +222,7 @@ import sphinx_autodoc_typehints
 
 qualname_overrides = {
     'anndata.base.AnnData': 'anndata.AnnData',
+    'pandas.core.frame.DataFrame': 'pandas.DataFrame',
     'scipy.sparse.base.spmatrix': 'scipy.sparse.spmatrix',
     'scipy.sparse.csr.csr_matrix': 'scipy.sparse.csr_matrix',
     'scipy.sparse.csc.csc_matrix': 'scipy.sparse.csc_matrix',

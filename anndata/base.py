@@ -574,7 +574,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     obsm
         Key-indexed multi-dimensional observations annotation of length #observations.
     varm
-        Key-indexed multi-dimensional variables annotation of length #observations.
+        Key-indexed multi-dimensional variables annotation of length #variables.
     dtype
         Data type used for storage.
     shape
