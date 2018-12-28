@@ -64,8 +64,8 @@ templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'
 project = 'anndata'
-copyright = '{}, Alex Wolf, Philipp Angerer, Sergei Rybakov'.format(time.strftime("%Y"))
 author = 'Alex Wolf, Philipp Angerer, Sergei Rybakov'
+copyright = f'{datetime.now():%Y}, {author}.'
 
 version = anndata.__version__.replace('.dirty', '')
 release = version
@@ -95,56 +95,16 @@ if 'READTHEDOCS' in os.environ:
 
 html_static_path = ['_static']
 
-# -- Options for HTMLHelp output ------------------------------------------
-
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'anndatadoc'
 
 
-# -- Options for LaTeX output ---------------------------------------------
+# -- Options for other output ---------------------------------------
 
-latex_elements = {
-    # The paper size ('letterpaper' or 'a4paper').
-    #
-    # 'papersize': 'letterpaper',
-
-    # The font size ('10pt', '11pt' or '12pt').
-    #
-    # 'pointsize': '10pt',
-
-    # Additional stuff for the LaTeX preamble.
-    #
-    # 'preamble': '',
-
-    # Latex figure (float) alignment
-    #
-    # 'figure_align': 'htbp',
-}
-
-# Grouping the document tree into LaTeX files. List of tuples
-# (source start file, target name, title,
-#  author, documentclass [howto, manual, or own class]).
-latex_documents = [
-    (master_doc, 'anndata.tex', 'anndata Documentation',
-     'Alex Wolf, Philipp Angerer', 'manual'),
-]
-
-
-# -- Options for manual page output ---------------------------------------
-
-# One entry per manual page. List of tuples
-# (source start file, name, description, authors, manual section).
 man_pages = [
     (master_doc, 'anndata', 'anndata Documentation',
      [author], 1)
 ]
-
-
-# -- Options for Texinfo output -------------------------------------------
-
-# Grouping the document tree into Texinfo files. List of tuples
-# (source start file, target name, title, author,
-#  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'anndata', 'anndata Documentation',
      author, 'anndata', 'One line description of project.',
