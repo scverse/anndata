@@ -934,8 +934,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             return self._gen_repr(self.n_obs, self.n_vars)
 
     @property
-    def shape(self):
-        """Shape of data matrix: (n_obs, n_vars)."""
+    def shape(self) -> Tuple:
+        """Shape of data matrix: `(.n_obs, .n_vars)`."""
         return self.n_obs, self.n_vars
 
     @property
@@ -992,7 +992,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def layers(self):
-        """Dictionary-like object with values of the same dimensions as .X.
+        """Dictionary-like object with values of the same dimensions as `.X`.
 
         Layers in AnnData have API similar to loompy
         http://linnarssonlab.org/loompy/apiwalkthrough/index.html#layers
