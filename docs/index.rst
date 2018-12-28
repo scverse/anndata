@@ -6,7 +6,7 @@
 
 Report issues and see the code on `GitHub <https://github.com/theislab/anndata>`_.
 
-`anndata`'s :class:`~anndata.AnnData` provides a scalable way of keeping track
+:class:`~anndata.AnnData` provides a scalable way of keeping track
 of data together with learned annotations. It is used within `Scanpy
 <https://github.com/theislab/scanpy>`_, for which it was initially
 developed. Both packages have been introduced in `Genome Biology (2018)
