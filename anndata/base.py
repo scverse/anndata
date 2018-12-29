@@ -128,12 +128,18 @@ class BoundRecArr(np.recarray):
         return self.dtype.names
 
     def __setitem__(self, key, arr):
+        if not isinstance(arr, np.ndarray):
+            raise ValueError(
+                'Can only assign numpy ndarrays to .{}[{!r}], not objects of class {}'
+                .format(self._attr, key, type(arr))
+            )
         if arr.ndim == 1:
             raise ValueError('Use adata.obs or adata.var for 1-dimensional arrays.')
         if self.shape[0] != arr.shape[0]:
-            raise ValueError('Can only assign an array of same length ({}), '
-                             'not of length {}.'
-                             .format(self.shape[0], arr.shape[0]))
+            raise ValueError(
+                'Can only assign an array of same length ({}), not of length {}.'
+                .format(self.shape[0], arr.shape[0])
+            )
         # the following always allocates a new array
         # even if the key already exists and dimensions match
         # TODO: one could check for this case
