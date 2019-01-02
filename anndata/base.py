@@ -1024,8 +1024,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
             adata.layers.keys()
 
-        .. warning
-        Setting subsets of items in layers writes to the original data also if AnnData is a view.
+        .. warning::
+
+           If AnnData is a view, setting subsets of layers modifies the original data.
         """
         return self._layers
 
