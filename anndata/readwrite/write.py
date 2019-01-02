@@ -84,8 +84,9 @@ def write_loom(filename: PathLike, adata: AnnData):
     create(fspath(filename), layers, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
-# TODO: store can be a MutableMapping or a string - accept PathLike too?
 def write_zarr(store, adata: AnnData, **kwargs):
+    if isinstance(store, Path):
+        store = str(store)
     d = adata._to_dict_fixed_width_arrays()
     import zarr
     f = zarr.open(store, mode='w')
@@ -141,9 +142,9 @@ def _write_key_value_to_zarr(f, key, value, **kwargs):
             else:
                 del f[key]
         #f.create_dataset(key, data=value, **kwargs)
-        if key != 'X': # TODO: make this more explicit
+        if key != 'X' and 'chunks' in kwargs:  # TODO: make this more explicit
             del kwargs['chunks']
-        import numcodecs # TODO: only set object_codec for objects
+        import numcodecs  # TODO: only set object_codec for objects
         ds = f.create_dataset(key, shape=value.shape,
                                  dtype=value.dtype, object_codec=numcodecs.JSON(), **kwargs)
         _write_in_zarr_chunks(ds, key, value)

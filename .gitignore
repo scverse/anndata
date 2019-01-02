@@ -5,8 +5,6 @@
 
 # anndata
 test.*
-test_*
-!test_*.py
 docs/_build
 docs/anndata.*
 

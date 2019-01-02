@@ -358,6 +358,8 @@ def read_zarr(store):
     store
         The filename, a `MutableMapping`, or a Zarr storage class.
     """
+    if isinstance(store, Path):
+        store = str(store)
     import zarr
     f = zarr.open(store, mode='r')
     d = {}

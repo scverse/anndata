@@ -40,13 +40,13 @@ uns_dict = {  # unstructured annotation
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_h5ad(typ):
+def test_readwrite_h5ad(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
     adata.raw = adata
-    adata.write('./test.h5ad')
-    adata = ad.read('./test.h5ad')
+    adata.write(tmp_path / 'test.h5ad')
+    adata = ad.read(tmp_path / 'test.h5ad')
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
@@ -55,21 +55,21 @@ def test_readwrite_h5ad(typ):
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_h5ad_one_dimensino(typ):
+def test_readwrite_h5ad_one_dimensino(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata = adata[:, 0].copy()
-    adata.write('./test.h5ad')
-    adata = ad.read('./test.h5ad')
+    adata.write(tmp_path / 'test.h5ad')
+    adata = ad.read(tmp_path / 'test.h5ad')
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_dynamic(typ):
+def test_readwrite_dynamic(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata.filename = './test.h5ad'  # change to backed mode
+    adata.filename = tmp_path / 'test.h5ad'  # change to backed mode
     adata.write()
-    adata = ad.read('./test.h5ad')
+    adata = ad.read(tmp_path / 'test.h5ad')
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
@@ -78,12 +78,12 @@ def test_readwrite_dynamic(typ):
 
 @pytest.mark.skipif(not find_spec('zarr'), reason='Zarr is not installed')
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_zarr(typ):
+def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
-    adata.write_zarr('./test_zarr_dir', chunks=True)
-    adata = ad.read_zarr('./test_zarr_dir')
+    adata.write_zarr(tmp_path / 'test_zarr_dir', chunks=True)
+    adata = ad.read_zarr(tmp_path / 'test_zarr_dir')
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
@@ -92,11 +92,11 @@ def test_readwrite_zarr(typ):
 
 @pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_loom(typ):
+def test_readwrite_loom(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata.write_loom('./test.loom')
-    adata = ad.read_loom('./test.loom', sparse=typ is csr_matrix)
+    adata.write_loom(tmp_path / 'test.loom')
+    adata = ad.read_loom(tmp_path / 'test.loom', sparse=typ is csr_matrix)
     if isinstance(X, np.ndarray):
         assert np.allclose(adata.X, X)
     else:
@@ -127,21 +127,24 @@ def test_read_tsv_iter():
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_write_csv(typ):
+def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata.write_csvs('./test_csv_dir', skip_data=False)
+    adata.write_csvs(tmp_path / 'test_csv_dir', skip_data=False)
 
 
-@pytest.mark.parametrize(['read', 'write'], [
-    (ad.read_h5ad, ad.AnnData.write_h5ad),
+@pytest.mark.parametrize(['read', 'write', 'name'], [
+    (ad.read_h5ad, ad.readwrite.write._write_h5ad, 'test_empty.h5ad'),
     # Loom can’t handle 0×0 matrices
-    # (ad.read_loom, ad.AnnData.write_loom),
-    # TODO: only run this if zarr is installed
-    # (ad.read_zarr, lambda a, f: ad.readwrite.write_zarr(f, a)),
+    # (ad.read_loom, ad.readwrite.write_loom, 'test_empty.loom'),
+    (ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zarr'),
+    # Zip storage doesn’t seem to work…?
+    # (ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zip'),
 ])
-def test_readwrite_hdf5_empty(read, write):
+def test_readwrite_hdf5_empty(read, write, name, tmp_path):
+    if read is ad.read_zarr:
+        pytest.importorskip('zarr')
     adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
-    write(adata, HERE / 'test.empty.h5')
-    ad_read = read(HERE / 'test.empty.h5')
+    write(tmp_path / name, adata)
+    ad_read = read(tmp_path / name)
     assert ad_read.uns['empty'].shape == (0,)
