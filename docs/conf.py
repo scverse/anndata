@@ -249,8 +249,8 @@ class PrettyTypedField(PyTypedField):
             if fieldtype is not None:
                 head += nodes.Text(' : ')
                 if len(fieldtype) == 1 and isinstance(fieldtype[0], nodes.Text):
-                    typename = ''.join(n.astext() for n in fieldtype)
-                    head += makerefs(self.typerolename, typename, addnodes.literal_emphasis)
+                    text_node, = fieldtype  # type: nodes.Text
+                    head += makerefs(self.typerolename, text_node.astext(), addnodes.literal_emphasis)
                 else:
                     head += fieldtype
 
