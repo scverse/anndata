@@ -149,7 +149,7 @@ github_url1 = 'https://github.com/{github_user}/{github_repo}/tree/{github_versi
 github_url2 = 'https://github.com/theislab/anndata/tree/master'
 
 
-def modurl(qualname):
+def modurl(qualname: str) -> str:
     """Get the full GitHub URL for some object’s qualname."""
     obj, module = get_obj_module(qualname)
     github_url = github_url1
@@ -160,8 +160,8 @@ def modurl(qualname):
         github_url = github_url2
         path = '/'.join(module.__file__.split('/')[-2:])
     start, end = get_linenos(obj)
-    fragment = '#L{}-L{}'.format(start, end) if start and end else ''
-    return '{}/{}{}'.format(github_url, path, fragment)
+    fragment = f'#L{start}-L{end}' if start and end else ''
+    return f'{github_url}/{path}{fragment}'
 
 
 # html_context doesn’t apply to autosummary templates ☹
@@ -201,7 +201,7 @@ def format_annotation(annotation):
     if getattr(annotation, '__origin__', None) is Mapping:
         return ':class:`~typing.Mapping`'
     if inspect.isclass(annotation):
-        full_name = '{}.{}'.format(annotation.__module__, annotation.__qualname__)
+        full_name = f'{annotation.__module__}.{annotation.__qualname__}'
         override = qualname_overrides.get(full_name)
         if override is not None:
             return f':py:class:`~{override}`'
