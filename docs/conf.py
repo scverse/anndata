@@ -201,7 +201,7 @@ def format_annotation(annotation):
         return ', '.join(map(format_annotation, params))
     # do not show the arguments of Mapping
     if getattr(annotation, '__origin__', None) is Mapping:
-         return ':class:`~typing.Mapping`'
+        return ':class:`~typing.Mapping`'
     if inspect.isclass(annotation):
         full_name = '{}.{}'.format(annotation.__module__, annotation.__qualname__)
         override = qualname_overrides.get(full_name)
