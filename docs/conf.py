@@ -80,16 +80,16 @@ html_theme = 'sphinx_rtd_theme'
 html_theme_options = {
     'navigation_depth': 2,
 }
-html_context = {
-    'display_github': True,      # Integrate GitHub
-    'github_user': 'theislab',   # Username
-    'github_repo': 'anndata',    # Repo name
-    'github_version': 'master',  # Version
-    'conf_py_path': '/docs/',    # Path in the checkout to the docs root
-    'css_files': [               # Additional CSS
+html_context = dict(
+    display_github=True,      # Integrate GitHub
+    github_user='theislab',   # Username
+    github_repo='anndata',    # Repo name
+    github_version='master',  # Version
+    conf_py_path='/docs/',    # Path in the checkout to the docs root
+    css_files=[               # Additional CSS
         '_static/css/custom.css',
     ],
-}
+)
 if 'READTHEDOCS' in os.environ:
     # For some reason, RTD doesn’t insert their stuff anymore once we add custom CSS files.
     html_context['css_files'].insert(0, 'https://media.readthedocs.org/css/sphinx_rtd_theme.css')
