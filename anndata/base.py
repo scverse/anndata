@@ -1618,7 +1618,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
            If you use ``join='outer'`` this fills 0s for sparse data when
            variables are absent in a batch. Use this with care. Dense data is
-           filled with ``NaN``s. See the examples.
+           filled with ``NaN``. See the examples.
 
         Examples
         --------
@@ -1930,9 +1930,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """Write `.h5ad`-formatted hdf5 file.
 
         .. note::
-           
-            Setting compression to `'gzip'` can save disk space but will slow
-            down writing and subsequent reading.
+
+           Setting compression to `'gzip'` can save disk space but will slow
+           down writing and subsequent reading.
 
         Parameters
         ----------
