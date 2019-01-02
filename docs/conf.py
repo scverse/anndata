@@ -53,11 +53,11 @@ napoleon_use_param = True
 napoleon_custom_sections = [('Params', 'Parameters')]
 
 intersphinx_mapping = dict(
-    python=('https://docs.python.org/3', None),
     h5py=('http://docs.h5py.org/en/latest/', None),
     numpy=('https://docs.scipy.org/doc/numpy/', None),
-    scipy=('https://docs.scipy.org/doc/scipy/reference/', None),
     pandas=('http://pandas.pydata.org/pandas-docs/stable/', None),
+    python=('https://docs.python.org/3', None),
+    scipy=('https://docs.scipy.org/doc/scipy/reference/', None),
     sklearn=('https://scikit-learn.org/stable/', None),
 )
 
