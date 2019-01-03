@@ -35,7 +35,7 @@ def get_format_class(format_str):
 
 
 def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
-    #efficient for csr, not so for csc (but still better than loompy it seems)
+    # efficient for csr, not so for csc (but still better than loompy it seems)
     if not isinstance(sds, h5py.Dataset):
         raise ValueError('sds should be a h5py Dataset')
 

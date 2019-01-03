@@ -16,22 +16,28 @@ HERE = Path(__file__).parent
 # -------------------------------------------------------------------------------
 
 X_list = [    # data matrix of shape n_obs x n_vars
-    [1, 0], [3, 0], [5, 6]]
+    [1, 0],
+    [3, 0],
+    [5, 6],
+]
 
-obs_dict = {  # annotation of observations / rows
-    'row_names': ['name1', 'name2', 'name3'],  # row annotation
-    'oanno1': ['cat1', 'cat2', 'cat2'],        # categorical annotation
-    'oanno1b': ['cat1', 'cat1', 'cat1'],       # categorical annotation with one category
-    'oanno2': ['o1', 'o2', 'o3'],              # string annotation
-    'oanno3': [2.1, 2.2, 2.3]}                 # float annotation
+obs_dict = dict(  # annotation of observations / rows
+    row_names=['name1', 'name2', 'name3'],  # row annotation
+    oanno1=['cat1', 'cat2', 'cat2'],        # categorical annotation
+    oanno1b=['cat1', 'cat1', 'cat1'],       # categorical annotation with one category
+    oanno2=['o1', 'o2', 'o3'],              # string annotation
+    oanno3=[2.1, 2.2, 2.3],                 # float annotation
+)
 
-var_dict = {  # annotation of variables / columns
-    'vanno1': [3.1, 3.2],
-    'vanno2': ['cat1', 'cat1']}        # categorical annotation
+var_dict = dict(  # annotation of variables / columns
+    vanno1=[3.1, 3.2],
+    vanno2=['cat1', 'cat1'],  # categorical annotation
+)
 
-uns_dict = {  # unstructured annotation
-    'oanno1_colors': ['#000000', '#FFFFFF'],
-    'uns2': ['some annotation']}
+uns_dict = dict(  # unstructured annotation
+    oanno1_colors=['#000000', '#FFFFFF'],
+    uns2=['some annotation'],
+)
 
 
 # -------------------------------------------------------------------------------
