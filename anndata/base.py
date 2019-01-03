@@ -1954,7 +1954,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if filename is None:
             filename = self.filename
         if force_dense is None:
-            force_dense = True if self.isbacked else False
+            force_dense = self.isbacked
 
         _write_h5ad(filename, self, compression=compression,
                     compression_opts=compression_opts, force_dense=force_dense)

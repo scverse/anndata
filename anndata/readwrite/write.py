@@ -60,8 +60,8 @@ def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: s
                 continue
         df.to_csv(
             filename, sep=sep,
-            header=True if key in {'obs', 'var', 'obsm', 'varm'} else False,
-            index=True if key in {'obs', 'var'} else False,
+            header=key in {'obs', 'var', 'obsm', 'varm'},
+            index=key in {'obs', 'var'},
         )
 
 

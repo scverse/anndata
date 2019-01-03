@@ -446,7 +446,7 @@ def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None, mode:
     # not reading in backed mode
     backed = False
     if filename is None:
-        backed = True if mode is None else mode
+        backed = mode is None
         filename = adata.filename
 
     d = {}
