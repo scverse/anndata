@@ -1,5 +1,6 @@
+import sys
 from importlib.util import find_spec
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,15 @@ import anndata as ad
 
 
 HERE = Path(__file__).parent
+
+
+if sys.version_info < (3, 6):
+    from _pytest.tmpdir import _mk_tmp  # noqa
+
+    # On 3.5 this is pathlib2, which won’t work.
+    @pytest.fixture
+    def tmp_path(request, tmp_path_factory):
+        return Path(str(_mk_tmp(request, tmp_path_factory)))
 
 
 # -------------------------------------------------------------------------------
