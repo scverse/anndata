@@ -18,13 +18,8 @@ for generated in HERE.glob('anndata.*.rst'):
 
 # -- General configuration ------------------------------------------------
 
-# If your documentation needs a minimal Sphinx version, state it here.
-#
-# needs_sphinx = '1.0'
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
+# needs_sphinx = '1.0'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
@@ -42,10 +37,12 @@ extensions = [
 
 # Generate the API documentation when building
 autosummary_generate = True
-autodoc_mock_imports = ['_tkinter']  # why this?
 autodoc_member_order = 'bysource'
-#autodoc_default_flags = ['members']
-napoleon_use_rtype = False
+# autodoc_default_flags = ['members']
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
 napoleon_custom_sections = [('Params', 'Parameters')]
 
