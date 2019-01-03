@@ -1,16 +1,13 @@
-import os
 import sys
-import time
 import inspect
-from pathlib import Path, PurePosixPath
-from typing import Optional, Union, Mapping
 import logging
+from pathlib import Path, PurePosixPath
 from datetime import datetime
+from typing import Union, Mapping
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / '..'))
-
-import anndata
+import anndata  # noqa
 
 
 logger = logging.getLogger(__name__)
