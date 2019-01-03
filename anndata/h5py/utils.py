@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def _chunked_rows(X, chunk_size=1000, read=False):
     start = 0
     type = X.dtype
@@ -9,15 +10,15 @@ def _chunked_rows(X, chunk_size=1000, read=False):
     for _ in range(int(n // chunk_size)):
         end = start + chunk_size
         if read:
-            X.read_direct(data_array, source_sel=np.s_[start:end,:])
+            X.read_direct(data_array, source_sel=np.s_[start:end, :])
         else:
             data_array = X[start:end]
         yield (data_array, start, end)
         start = end
     if start < n:
         if read:
-            data_array = np.empty((n-start+1, m), type)
-            X.read_direct(data_array, source_sel=np.s_[start:n,:])
+            data_array = np.empty((n-start, m), type)
+            X.read_direct(data_array, source_sel=np.s_[start:n, :])
         else:
             data_array = X[start:n]
         yield (data_array, start, n)
