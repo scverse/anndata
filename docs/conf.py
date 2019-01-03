@@ -68,7 +68,9 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 pygments_style = 'sphinx'
 todo_include_todos = False
 
+
 # -- Options for HTML output ----------------------------------------------
+
 
 html_theme = 'sphinx_rtd_theme'
 html_theme_options = dict(
@@ -88,20 +90,18 @@ def setup(app):
     app.add_stylesheet('css/custom.css')
 
 
-# Output file base name for HTML help builder.
-htmlhelp_basename = 'anndatadoc'
-
-
 # -- Options for other output ---------------------------------------
 
+htmlhelp_basename = f'{project}doc'
+doc_title = f'{project} Documentation'
+latex_documents = [
+    (master_doc, f'{project}.tex', doc_title, author, 'manual'),
+]
 man_pages = [
-    (master_doc, 'anndata', 'anndata Documentation',
-     [author], 1)
+    (master_doc, project, doc_title, [author], 1)
 ]
 texinfo_documents = [
-    (master_doc, 'anndata', 'anndata Documentation',
-     author, 'anndata', 'One line description of project.',
-     'Miscellaneous'),
+    (master_doc, project, doc_title, author, project, 'One line description of project.', 'Miscellaneous'),
 ]
 
 
