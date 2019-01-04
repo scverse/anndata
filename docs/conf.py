@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE / '..'))
+sys.path.insert(0, str(HERE.parent))
 import anndata  # noqa
 
 
