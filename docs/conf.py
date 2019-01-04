@@ -19,9 +19,9 @@ for generated in HERE.glob('anndata.*.rst'):
 
 needs_sphinx = '1.7'  # autosummary bugfix
 
-# Gneral information
+# General information
 project = 'anndata'
-author = ','.join([
+author = ', '.join([
     'Philipp Angerer',
     'Alex Wolf',
     'Sergei Rybakov',
@@ -97,7 +97,7 @@ def setup(app):
     app.add_stylesheet('css/custom.css')
 
 
-# -- Options for other output ---------------------------------------
+# -- Options for other output formats ------------------------------------------
 
 
 htmlhelp_basename = f'{project}doc'
