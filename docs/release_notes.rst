@@ -7,7 +7,7 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 2. initialatization from pandas DataFrames
 3. iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
 4. support for reading zarr files: :func:`~anndata.read_zarr`
-5. changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical
+5. changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical (v0.6.16)
       
 
 **May 1, 2018**: version 0.6

@@ -1931,15 +1931,24 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """Write `.h5ad`-formatted hdf5 file.
 
         .. note::
+           
+            Setting compression to `'gzip'` can save disk space but
+            will slow down writing and subsequent reading. Prior to
+            v0.6.16, this was the default for parameter
+            `compression`.
 
-           Setting compression to `'gzip'` can save disk space but will slow
-           down writing and subsequent reading.
+        Generally, if you have sparse data that are stored as a dense
+        matrix, you can dramatically improve performance and reduce
+        disk space by converting to a `csr_matrix`::
+        
+            from scipy.sparse import csr_matrix
+            adata.X = csr_matrix(adata.X) 
 
         Parameters
         ----------
         filename
             Filename of data file. Defaults to backing file.
-        compression : `None` or {`'gzip'`, `'lzf'`}
+        compression : `None`,  {`'gzip'`, `'lzf'`} (default: `None`)
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
         compression_opts
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
