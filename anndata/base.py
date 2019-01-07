@@ -1821,6 +1821,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 X[:] = np.nan
         else:
             Xs = []
+            
+        layers = OrderedDict()
+        if join == 'inner':
+            layers_keys = all_adatas[0].layers.keys()
+            shared_layers = [key for key in layers_keys if all([key in ad.layers.keys() for ad in all_adatas])]
+            for key in shared_layers: 
+                layers[key] = []
 
         var = pd.DataFrame(index=var_names)
 
@@ -1842,6 +1849,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:
                 Xs.append(ad[:, vars_intersect].X)
             obs_i += ad.n_obs
+            
+            # layers
+            if join == 'inner':
+                for key in shared_layers:
+                    layers[key].append(ad[:, vars_intersect].layers[key])
 
             # obs
             obs = ad.obs.copy()
@@ -1866,6 +1878,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 X = vstack(Xs)
             else:
                 X = np.concatenate(Xs)
+                
+            for key in shared_layers:
+                if any(issparse(a.layers[key]) for a in all_adatas):
+                    layers[key] = vstack(layers[key])
+                else:
+                    layers[key] = np.concatenate(layers[key])
 
         obs = pd.concat(out_obss, sort=True)
 
@@ -1873,7 +1891,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             sparse_format = all_adatas[0].X.getformat()
             X = X.asformat(sparse_format)
 
-        new_adata = AnnData(X, obs, var)
+        new_adata = AnnData(X, obs, var, layers=layers)
         if not obs.index.is_unique:
             logger.info(
                 'Or pass `index_unique!=None` to `.concatenate`.')
