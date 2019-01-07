@@ -77,6 +77,17 @@ sparse matrices in addition to the standard functionality.
 
 """.format(main_narrative=_MAIN_NARRATIVE)
 
+__author__ = ', '.join([
+    'Philipp Angerer',
+    'Alex Wolf',
+    'Sergei Rybakov',
+])
+__email__ = ', '.join([
+    'philipp.angerer@helmholtz-muenchen.de',
+    'alex.wolf@helmholtz-muenchen.de',
+    # We don’t need all, the main authors are sufficient.
+])
+
 from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
