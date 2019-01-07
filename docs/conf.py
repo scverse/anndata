@@ -21,11 +21,7 @@ needs_sphinx = '1.7'  # autosummary bugfix
 
 # General information
 project = 'anndata'
-author = ', '.join([
-    'Philipp Angerer',
-    'Alex Wolf',
-    'Sergei Rybakov',
-])
+author = anndata.__author__
 copyright = f'{datetime.now():%Y}, {author}.'
 version = anndata.__version__.replace('.dirty', '')
 release = version
