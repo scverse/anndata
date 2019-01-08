@@ -78,8 +78,8 @@ sparse matrices in addition to the standard functionality.
 """.format(main_narrative=_MAIN_NARRATIVE)
 
 __author__ = ', '.join([
-    'Philipp Angerer',
-    'Alex Wolf',
+    'Philipp Angerer*',
+    'Alex Wolf*',
     'Sergei Rybakov',
 ])
 __email__ = ', '.join([
