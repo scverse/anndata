@@ -408,7 +408,7 @@ def _read_key_value_from_zarr(f, d, key, key_write=None):
     return
 
 
-def read_h5ad(filename, backed: Union[bool, str] = False):
+def read_h5ad(filename, backed: Union[bool, str] = False, chunk_size: int = 6000):
     """Read ``.h5ad``-formatted hdf5 file.
 
     Parameters
@@ -420,6 +420,11 @@ def read_h5ad(filename, backed: Union[bool, str] = False):
         loading it into memory (`memory` mode). `True` and 'r' are
         equivalent. If you want to modify backed attributes of the AnnData
         object, you need to choose 'r+'.
+    chunk_size
+        Used only when loading sparse dataset that is stored as dense.
+        Loading iterates through chunks of the dataset of this row size
+        until it reads the whole dataset.
+        Higher size means higher memory consumption and higher loading speed.
     """
 
     if backed:
@@ -427,11 +432,12 @@ def read_h5ad(filename, backed: Union[bool, str] = False):
         return AnnData(filename=filename, filemode=backed)
     else:
         # load everything into memory
-        d = _read_h5ad(filename=filename)
+        d = _read_h5ad(filename=filename, chunk_size=chunk_size)
         return AnnData(d)
 
 
-def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None, mode: str = None):
+def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None,
+               mode: str = None, chunk_size: int = 6000):
     """Return a dict with arrays for initializing AnnData.
 
     Parameters
@@ -458,7 +464,7 @@ def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None, mode:
         if backed and key in AnnData._BACKED_ATTRS:
             d[key] = None
         else:
-            _read_key_value_from_h5(f, d, key)
+            _read_key_value_from_h5(f, d, key, chunk_size=chunk_size)
     # backwards compat: save X with the correct name
     if 'X' not in d:
         if backed == 'r+':
@@ -477,18 +483,18 @@ def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None, mode:
     return d
 
 
-def _read_key_value_from_h5(f, d, key, key_write=None):
+def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
     if key_write is None: key_write = key
     if isinstance(f[key], h5py.Group):
         d[key_write] = OrderedDict() if key == 'uns' else {}
         for k in f[key].keys():
-            _read_key_value_from_h5(f, d[key_write], key + '/' + k, k)
+            _read_key_value_from_h5(f, d[key_write], key + '/' + k, k, chunk_size)
         return
 
     ds = f[key]
 
     if isinstance(ds, h5py.Dataset) and 'sparse_format' in ds.attrs:
-        value = h5py._load_h5_dataset_as_sparse(ds)
+        value = h5py._load_h5_dataset_as_sparse(ds, chunk_size)
     elif isinstance(ds, h5py.Dataset):
         value = np.empty(ds.shape, ds.dtype)
         if 0 not in ds.shape:
