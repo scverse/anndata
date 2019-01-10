@@ -436,8 +436,12 @@ def read_h5ad(filename, backed: Union[bool, str] = False, chunk_size: int = 6000
         return AnnData(d)
 
 
-def _read_h5ad(adata: AnnData = None, filename: Optional[PathLike] = None,
-               mode: str = None, chunk_size: int = 6000):
+def _read_h5ad(
+    adata: AnnData = None,
+    filename: Optional[PathLike] = None,
+    mode: str = None,
+    chunk_size: int = 6000
+):
     """Return a dict with arrays for initializing AnnData.
 
     Parameters
