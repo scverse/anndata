@@ -178,6 +178,14 @@ def test_slicing_series():
             == adata[:, df1['b'] == '2'].X.tolist())
 
 
+def test_strings_to_categoricals():
+    adata = AnnData(
+        np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
+        dict(k=['a', 'a', 'b', 'b']))
+    adata.strings_to_categoricals()
+    assert adata.obs['k'].cat.categories.tolist() == ['a', 'b']
+
+
 def test_slicing_remove_unused_categories():
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
