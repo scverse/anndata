@@ -2,8 +2,18 @@ import numpy as np
 from numpy import ma
 import pandas as pd
 from scipy import sparse as sp
+from scipy.sparse import csr_matrix
 
 from anndata import AnnData
+
+
+# some test objects that we use below
+adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
+adata_sparse = AnnData(
+    csr_matrix([[0, 2, 3], [0, 5, 6]]),
+    {'obs_names': ['s1', 's2'],
+     'anno1': ['c1', 'c2']},
+    {'var_names': ['a', 'b', 'c']})
 
 
 def test_creation():
@@ -314,10 +324,7 @@ def test_concatenate():
 
     # sparse data
     from scipy.sparse import csr_matrix
-    adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
-                     {'obs_names': ['s1', 's2'],
-                      'anno1': ['c1', 'c2']},
-                     {'var_names': ['a', 'b', 'c']})
+    adata1 = adata_sparse
     adata2 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
                      {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
@@ -359,8 +366,19 @@ def test_rename_categories():
     assert list(adata.obs['cat_anno'].cat.categories) == new_categories
     assert list(adata.uns['tool']['cat_array'].dtype.names) == new_categories
 
+
 def test_pickle():
     import pickle
     adata = AnnData()
     adata2 = pickle.loads(pickle.dumps(adata))
     assert adata2.obsm._parent == adata2
+
+
+def test_to_df_dense():
+    df = adata_dense.to_df()
+
+
+def test_to_df_sparse():
+    X = adata_sparse.X.toarray()
+    df = adata_sparse.to_df()
+    assert df.values.tolist() == X.tolist()

@@ -1539,12 +1539,20 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     T = property(transpose)
 
     def to_df(self):
-        """Generate shallow pandas DataFrame.
+        """Generate shallow :class:`~pandas.DataFrame`.
 
-        Data matrix is returned as pandas DataFrame, where observation names are on index,
-        and variable names on columns.
+        The data matrix `.X` is returned as
+        :class:`~pandas.DataFrame`, where `.obs_names` initializes the
+        index, and `.var_names` the columns.
+
+        * No annotations are maintained in the returned object.
+        * The data matrix is densified in case it is sparse.
         """
-        return pd.DataFrame(self._X, index=self.obs_names, columns=self.var_names)
+        if issparse(self._X):
+            X = self._X.toarray()
+        else:
+            X = self._X
+        return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
     def copy(self, filename=None):
         """Full copy, optionally on disk."""
