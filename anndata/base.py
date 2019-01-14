@@ -1902,7 +1902,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             sparse_format = all_adatas[0].X.getformat()
             X = X.asformat(sparse_format)
 
-        new_adata = AnnData(X, obs, var, layers=layers)
+        new_adata = AnnData(X, obs, var, layers=layers) if join == 'inner' else AnnData(X, obs, var)
         if not obs.index.is_unique:
             logger.info(
                 'Or pass `index_unique!=None` to `.concatenate`.')
