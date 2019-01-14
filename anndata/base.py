@@ -1821,13 +1821,24 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 X[:] = np.nan
         else:
             Xs = []
-            
+
+        # create layers dict that contains layers shared among all AnnDatas
         layers = OrderedDict()
-        if join == 'inner':
-            layers_keys = all_adatas[0].layers.keys()
-            shared_layers = [key for key in layers_keys if all([key in ad.layers.keys() for ad in all_adatas])]
-            for key in shared_layers: 
-                layers[key] = []
+        shared_layers = [key for key in all_adatas[0].layers.keys()
+                         if all([key in ad.layers.keys() for ad in all_adatas])]
+        for key in shared_layers:
+            layers[key] = []
+
+        # check whether tries to do 'outer' join and layers is non_empty.
+        if join == 'outer' and len(shared_layers) > 0:
+            logger.info('layers concatenation is not yet available for '
+                        '\'outer\' intersection and will be ignored.')
+
+        # check whether layers are not consistently set in all AnnData objects.
+        n_layers = np.array([len(ad.layers.keys()) for ad in all_adatas])
+        if join == 'inner' and not all(len(shared_layers) == n_layers):
+            logger.info('layers are inconsistent - only layers that are '
+                        'shared among all AnnData objects are included.')
 
         var = pd.DataFrame(index=var_names)
 
