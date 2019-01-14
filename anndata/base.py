@@ -1831,14 +1831,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         # check whether tries to do 'outer' join and layers is non_empty.
         if join == 'outer' and len(shared_layers) > 0:
-            logger.info('layers concatenation is not yet available for '
-                        '\'outer\' intersection and will be ignored.')
+            logger.info(
+                'layers concatenation is not yet available for \'outer\' intersection and will be ignored.')
 
         # check whether layers are not consistently set in all AnnData objects.
         n_layers = np.array([len(ad.layers.keys()) for ad in all_adatas])
         if join == 'inner' and not all(len(shared_layers) == n_layers):
-            logger.info('layers are inconsistent - only layers that are '
-                        'shared among all AnnData objects are included.')
+            logger.info(
+                'layers are inconsistent - only layers that are shared among all AnnData objects are included.')
 
         var = pd.DataFrame(index=var_names)
 
