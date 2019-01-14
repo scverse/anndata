@@ -265,25 +265,34 @@ def test_n_obs():
 
 def test_concatenate():
     # dense data
-    adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+    X1 = np.array([[1, 2, 3], [4, 5, 6]])
+    X2 = np.array([[1, 2, 3], [4, 5, 6]])
+    X3 = np.array([[1, 2, 3], [4, 5, 6]])
+
+    adata1 = AnnData(X1,
                      {'obs_names': ['s1', 's2'],
                       'anno1': ['c1', 'c2']},
                      {'var_names': ['a', 'b', 'c'],
-                      'annoA': [0, 1, 2]})
-    adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+                      'annoA': [0, 1, 2]},
+                     layers={'Xs': X1})
+    adata2 = AnnData(X2,
                      {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
                      {'var_names': ['d', 'c', 'b'],
-                      'annoA': [0, 1, 2]})
-    adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
+                      'annoA': [0, 1, 2]},
+                     layers={'Xs': X2})
+    adata3 = AnnData(X3,
                      {'obs_names': ['s1', 's2'],
                       'anno2': ['d3', 'd4']},
                      {'var_names': ['d', 'c', 'b'],
-                      'annoB': [0, 1, 2]})
+                      'annoB': [0, 1, 2]},
+                     layers={'Xs': X3})
 
     # inner join
     adata = adata1.concatenate(adata2, adata3)
-    assert adata.X.astype(int).tolist() == [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
+    X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
+    assert adata.X.astype(int).tolist() == X_combined
+    assert adata.layers['Xs'].astype(int).tolist() == X_combined
     assert adata.obs_keys() == ['anno1', 'anno2', 'batch']
     assert adata.var_keys() == ['annoA-0', 'annoA-1', 'annoB-2']
     assert adata.var.values.tolist() == [[1, 2, 2], [2, 1, 1]]
@@ -314,22 +323,31 @@ def test_concatenate():
 
     # sparse data
     from scipy.sparse import csr_matrix
-    adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
+    X1 = csr_matrix([[0, 2, 3], [0, 5, 6]])
+    X2 = csr_matrix([[0, 2, 3], [0, 5, 6]])
+    X3 = csr_matrix([[1, 2, 0], [0, 5, 6]])
+
+    adata1 = AnnData(X1,
                      {'obs_names': ['s1', 's2'],
                       'anno1': ['c1', 'c2']},
-                     {'var_names': ['a', 'b', 'c']})
-    adata2 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
+                     {'var_names': ['a', 'b', 'c']},
+                     layers={'Xs': X1})
+    adata2 = AnnData(X2,
                      {'obs_names': ['s3', 's4'],
                       'anno1': ['c3', 'c4']},
-                     {'var_names': ['d', 'c', 'b']})
-    adata3 = AnnData(csr_matrix([[1, 2, 0], [0, 5, 6]]),
+                     {'var_names': ['d', 'c', 'b']},
+                     layers={'Xs': X2})
+    adata3 = AnnData(X3,
                      {'obs_names': ['s5', 's6'],
                       'anno2': ['d3', 'd4']},
-                     {'var_names': ['d', 'c', 'b']})
+                     {'var_names': ['d', 'c', 'b']},
+                     layers={'Xs': X3})
 
     # inner join
     adata = adata1.concatenate(adata2, adata3)
-    assert adata.X.toarray().astype(int).tolist() == [[2, 3], [5, 6], [3, 2], [6, 5], [0, 2], [6, 5]]
+    X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [0, 2], [6, 5]]
+    assert adata.X.toarray().astype(int).tolist() == X_combined
+    assert adata.layers['Xs'].toarray().astype(int).tolist() == X_combined
 
     # outer join
     adata = adata1.concatenate(adata2, adata3, join='outer')
@@ -340,7 +358,6 @@ def test_concatenate():
         [0.0, 6.0, 5.0, 0.0],
         [0.0, 0.0, 2.0, 1.0],
         [0.0, 6.0, 5.0, 0.0]]
-
 
 def test_rename_categories():
     X = np.ones((6, 3))
