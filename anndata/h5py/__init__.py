@@ -26,4 +26,4 @@ from h5py import Dataset, special_dtype
 
 # Problem: the H5py intersphinx is broken, and only contains e.g. `Dataset` directly.
 # So we can’t possibly link to it using :class:`Dataset`, since that will always find our version.
-Dataset.__doc__ = """Equivalent to :ref:`h5py.Dataset <h5py:Dataset>`."""
+Dataset.__doc__ = """Equivalent to :class:`h5py.Dataset <h5py:Dataset>`."""

@@ -61,9 +61,11 @@ napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
 napoleon_custom_sections = [('Params', 'Parameters')]
 todo_include_todos = False
+nitpicky = True  # Report broken links
 
 intersphinx_mapping = dict(
     h5py=('http://docs.h5py.org/en/latest/', None),
+    loompy=('https://linnarssonlab.org/loompy/', None),
     numpy=('https://docs.scipy.org/doc/numpy/', None),
     pandas=('http://pandas.pydata.org/pandas-docs/stable/', None),
     python=('https://docs.python.org/3', None),

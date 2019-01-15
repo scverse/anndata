@@ -53,7 +53,7 @@ def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
 
 
 class Group:
-    """Like :ref:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
+    """Like :class:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
     """
 
     def __init__(self, h5py_group, force_dense=False):
@@ -118,7 +118,7 @@ Group.create_dataset.__doc__ = h5py.Group.create_dataset.__doc__
 
 
 class File(Group):
-    """Like :ref:`h5py.File <h5py:File>`, but able to handle sparse matrices.
+    """Like :class:`h5py.File <h5py:File>`, but able to handle sparse matrices.
     """
 
     def __init__(
@@ -237,7 +237,7 @@ _cs_matrix._zero_many = _zero_many
 
 
 class SparseDataset(IndexMixin):
-    """Analogous to :ref:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
+    """Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
     """
 
     def __init__(self, h5py_group):

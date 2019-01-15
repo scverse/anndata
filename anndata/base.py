@@ -981,8 +981,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:
                 if self.isview:
                     # exit the view if we go from sparse to dense
-                    if (issparse(value) and not issparse(self._adata_ref._X)
-                        or not issparse(value) and issparse(self._adata_ref._X)):
+                    if (
+                        issparse(value) and not issparse(self._adata_ref._X)
+                        or not issparse(value) and issparse(self._adata_ref._X)
+                    ):
                         self._init_as_actual(self.copy())
                         self._X = value
                     else:
@@ -998,25 +1000,24 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def layers(self):
         """Dictionary-like object with values of the same dimensions as :attr:`X`.
 
-        Layers in AnnData have API similar to loompy
-        http://linnarssonlab.org/loompy/apiwalkthrough/index.html#layers
-        Return the layer named "unspliced"::
+        Layers in AnnData have API similar to loompy :ref:`loomlayers`.
+        Return the layer named ``"unspliced"``::
 
             adata.layers["unspliced"]
 
-        Create or replace the "spliced" layer::
+        Create or replace the ``"spliced"`` layer::
 
             adata.layers["spliced"] = ...
 
-        Assign the 10th column of layer "spliced" to the variable a::
+        Assign the 10th column of layer ``"spliced"`` to the variable a::
 
             a = adata.layers["spliced"][:, 10]
 
-        Delete the "spliced" layer::
+        Delete the ``"spliced"`` layer::
 
             del adata.layers["spliced"]
 
-        Return layers' names::
+        Return layers’ names::
 
             adata.layers.keys()
 
@@ -1955,9 +1956,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         filename
             Filename of data file. Defaults to backing file.
         compression : ``None``,  {``'gzip'``, ``'lzf'``} (default: ``None``)
-            See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
+            See the h5py :ref:`dataset_compression`.
         compression_opts
-            See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
+            See the h5py :ref:`dataset_compression`.
         force_dense
             Write sparse data as a dense matrix. Defaults to ``True`` if object is
             backed, otherwise to ``False``.
