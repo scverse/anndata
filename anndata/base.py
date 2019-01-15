@@ -4,7 +4,7 @@ import os
 from enum import Enum
 from collections import OrderedDict
 from functools import reduce
-from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List
+from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List, Dict
 from copy import deepcopy
 
 import numpy as np
@@ -81,35 +81,35 @@ class BoundRecArr(np.recarray):
         arr._attr = attr
         return arr
 
-    def __array_finalize__(self, obj):
+    def __array_finalize__(self, obj: Any):
         if obj is None: return
         self._parent = getattr(obj, '_parent', None)
         self._attr = getattr(obj, '_attr', None)
 
-    def __reduce__(self):
-        pickled_state = super(self.__class__, self).__reduce__()
+    def __reduce__(self) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        pickled_state = super().__reduce__()
         new_state = pickled_state[2] + (self.__dict__, )
-        return (pickled_state[0], pickled_state[1], new_state)
+        return pickled_state[0], pickled_state[1], new_state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: Sequence[Mapping[str, Any]]):
         for k, v in state[-1].items():
             self.__setattr__(k, v)
-        super(self.__class__, self).__setstate__(state[0:-1])
+        super().__setstate__(state[0:-1])
 
-    def copy(self, order='C'):
+    def copy(self, order='C') -> 'BoundRecArr':
         new = super(BoundRecArr, self).copy()
         new._parent = self._parent
         return new
 
-    def flipped(self):
+    def flipped(self) -> 'BoundRecArr':
         new_attr = (self._attr_choices[1] if self._attr == self._attr_choices[0]
                     else self._attr_choices[0])
         return BoundRecArr(self, self._parent, new_attr)
 
-    def keys(self):
+    def keys(self) -> Tuple[str, ...]:
         return self.dtype.names
 
-    def __setitem__(self, key, arr):
+    def __setitem__(self, key: str, arr: np.ndarray):
         if not isinstance(arr, np.ndarray):
             raise ValueError(
                 'Can only assign numpy ndarrays to .{}[{!r}], not objects of class {}'
@@ -149,7 +149,7 @@ class BoundRecArr(np.recarray):
         new = BoundRecArr(new, self._parent, self._attr)
         setattr(self._parent, self._attr, new)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str):
         """Delete field with name."""
         if key not in self.dtype.names:
             raise ValueError(
@@ -160,7 +160,7 @@ class BoundRecArr(np.recarray):
         new = BoundRecArr(new_array, self._parent, self._attr)
         setattr(self._parent, self._attr, new)
 
-    def to_df(self):
+    def to_df(self) -> pd.DataFrame:
         """Convert to pandas dataframe."""
         df = pd.DataFrame(index=RangeIndex(0, self.shape[0], name=None))
         for key in self.keys():
@@ -285,33 +285,43 @@ class AnnDataFileManager:
     """Backing file manager for AnnData.
     """
 
-    def __init__(self, adata, filename=None, filemode=None):
+    def __init__(
+        self,
+        adata: 'AnnData',
+        filename: Optional[PathLike] = None,
+        filemode: Optional[str] = None,
+    ):
         self._adata = adata
         self._filename = filename
         self._filemode = filemode
+        self._file = None
         if filename:
             self.open()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self._filename is None:
             return 'Backing file manager: no file is set.'
         else:
             return 'Backing file manager of file {}.'.format(self._filename)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]:
         return self._file[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]):
         self._file[key] = value
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str):
         del self._file[key]
 
     @property
-    def filename(self):
+    def filename(self) -> PathLike:
         return self._filename
 
-    def open(self, filename=None, filemode=None):
+    def open(
+        self,
+        filename: Optional[PathLike] = None,
+        filemode: Optional[str] = None,
+    ):
         if filename is not None:
             self._filename = filename
         if filemode is not None:
@@ -323,7 +333,8 @@ class AnnDataFileManager:
 
     def close(self):
         """Close the backing file, remember filename, do *not* change to memory mode."""
-        self._file.close()
+        if self._file is not None:
+            self._file.close()
 
     def _to_memory_mode(self):
         """Close the backing file, forget filename, *do* change to memory mode."""
@@ -2042,9 +2053,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if start < n:
             yield (self.X[start:n], start, n)
 
-    def chunk_X(self,
-                select: Union[int, List[int], Tuple[int], np.ndarray] = 1000,
-                replace: bool = True):
+    def chunk_X(
+        self,
+        select: Union[int, List[int], Tuple[int, ...], np.ndarray] = 1000,
+        replace: bool = True,
+    ):
         """Return a chunk of the data matrix :attr:`X` with random or specified indices.
 
         Parameters
@@ -2055,13 +2068,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             with these indices will be returned.
 
         replace
-            If select is an integer then replace = True specifies random sampling of indices
-            with replacement, replace = False - without replacement.
+            If select is an integer then ``replace=True`` specifies random sampling of indices
+            with replacement, ``replace=False`` - without replacement.
         """
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs
             choice = np.random.choice(self.n_obs, select, replace)
-        elif isinstance (select, (np.ndarray, list, tuple)):
+        elif isinstance(select, (np.ndarray, list, tuple)):
             choice = np.asarray(select)
         else:
             raise ValueError('select should be int or array')

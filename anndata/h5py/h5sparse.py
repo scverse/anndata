@@ -1,7 +1,7 @@
 # TODO:
 # - think about making all of the below subclasses
 # - think about supporting the COO format
-from typing import Optional
+from typing import Optional, Union, KeysView
 
 import six
 import h5py
@@ -60,7 +60,7 @@ class Group:
         self.h5py_group = h5py_group
         self.force_dense = force_dense
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, 'SparseDataset']:
         h5py_item = self.h5py_group[key]
         if isinstance(h5py_item, h5py.Group):
             if 'h5sparse_format' in h5py_item.attrs:
@@ -76,10 +76,10 @@ class Group:
     def __delitem__(self, name):
         self.h5py_group.__delitem__(name)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Union[h5py.Group, h5py.Dataset, 'SparseDataset']):
         self.h5py_group.__setitem__(key, value)
 
-    def keys(self):
+    def keys(self) -> KeysView[str]:
         return self.h5py_group.keys()
 
     def create_dataset(self, name, data=None, chunk_size=6000, **kwargs):
