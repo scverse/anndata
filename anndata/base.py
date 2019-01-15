@@ -603,16 +603,16 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     Notes
     -----
-    Multi-dimensional annotations are stored in ``.obsm`` and ``.varm``.
+    Multi-dimensional annotations are stored in :attr:`obsm` and :attr:`varm`.
 
     Indexing into an AnnData object with a numeric is supposed to be positional,
-    like pandas ``.iloc`` method, while indexing with a string/ categorical is
-    supposed to behave like ``.loc``.
+    like pandas’ :attr:`~pandas.DataFrame.iloc` accessor, while indexing with a string/categorical is
+    supposed to behave like :attr:`~pandas.DataFrame.loc`.
 
-    If the unstructured annotations ``.uns`` contain a sparse matrix of shape
-    ``.n_obs`` × ``.n_obs``, these are sliced when calling ``[]``.
+    If the unstructured annotations :attr:`uns` contain a sparse matrix of shape
+    :attr:`n_obs` × :attr:`n_obs`, these are sliced when calling ``[]``.
 
-    A data matrix is flattened if either ``n_obs`` or ``n_vars`` is 1, so that
+    A data matrix is flattened if either :attr:`n_obs` or :attr:`n_vars` is 1, so that
     numpy's slicing behavior is reproduced::
 
         adata = AnnData(np.ones((2, 2)))
@@ -1028,7 +1028,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def raw(self):
-        """Store raw version of ``.X`` and ``.var`` as ``.raw.X`` and ``.raw.var``.
+        """Store raw version of :attr:`X` and :attr:`var` as ``.raw.X`` and ``.raw.var``.
 
         The :attr:`raw` attribute is initialized with the current content of an object by setting::
 
@@ -1039,13 +1039,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             adata.raw = None
 
         Upon slicing an AnnData object along the observations (row) axis,
-        ``.raw`` is also sliced. Slicing an AnnData object along the variables
-        (columns) axis, leaves ``.raw`` unaffected. Note that you can call::
+        :attr:`raw` is also sliced. Slicing an AnnData object along the variables
+        (columns) axis, leaves :attr:`raw` unaffected. Note that you can call::
 
              adata.raw[:, 'orig_variable_name'].X
 
         to retrieve the data associated with a variable that might have been
-        filtered out or "compressed away" in ``.X``.
+        filtered out or "compressed away" in :attr:`X`.
         """
         return self._raw
 
@@ -1183,19 +1183,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             utils.warn_names_duplicates('var')
 
     def obs_keys(self):
-        """List keys of observation annotation ``.obs``."""
+        """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
 
     def var_keys(self):
-        """List keys of variable annotation ``.var``."""
+        """List keys of variable annotation :attr:`var`."""
         return self._var.keys().tolist()
 
     def obsm_keys(self):
-        """List keys of observation annotation ``.obsm``."""
+        """List keys of observation annotation :attr:`obsm`."""
         return list(self._obsm.keys())
 
     def varm_keys(self):
-        """List keys of variable annotation ``.varm``."""
+        """List keys of variable annotation :attr:`varm`."""
         return list(self._varm.keys())
 
     def uns_keys(self):
@@ -1592,7 +1592,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     ) -> 'AnnData':
         """Concatenate along the observations axis.
 
-        The ``.uns``, ``.varm`` and ``.obsm`` attributes are ignored.
+        The :attr:`uns`, :attr:`varm` and :attr:`obsm` attributes are ignored.
 
         Currently, this works only in ``'memory'`` mode.
 
@@ -1604,7 +1604,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         join
             Use intersection (``'inner'``) or union (``'outer'``) of variables.
         batch_key
-            Add the batch annotation to ``.obs`` using this key.
+            Add the batch annotation to :attr:`obs` using this key.
         batch_categories
             Use these as categories for the batch annotation. By default, use increasing numbers.
         index_unique
