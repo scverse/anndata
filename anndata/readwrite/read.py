@@ -26,9 +26,9 @@ def read_csv(
     filename
         Data file.
     delimiter
-        Delimiter that separates data within text file. If `None`, will split at
+        Delimiter that separates data within text file. If ``None``, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ' '.
+        splitting at single white space ``' '``.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -216,9 +216,9 @@ def read_text(
     filename
         Data file, filename or stream.
     delimiter
-        Delimiter that separates data within text file. If `None`, will split at
+        Delimiter that separates data within text file. If ``None``, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ' '.
+        splitting at single white space ``' '``.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -356,7 +356,7 @@ def read_zarr(store):
     Parameters
     ----------
     store
-        The filename, a `MutableMapping`, or a Zarr storage class.
+        The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
     if isinstance(store, Path):
         store = str(store)
@@ -416,10 +416,10 @@ def read_h5ad(filename, backed: Union[bool, str] = False, chunk_size: int = 6000
     filename
         File name of data file.
     backed : {``False``, ``True``, ``'r'``, ``'r+'``}
-        Load :class:`~anndata.AnnData` in `backed` mode instead of fully
-        loading it into memory (`memory` mode). `True` and 'r' are
+        Load :class:`~anndata.AnnData` in ``backed`` mode instead of fully
+        loading it into memory (`memory` mode). ``True`` and ``'r'`` are
         equivalent. If you want to modify backed attributes of the AnnData
-        object, you need to choose 'r+'.
+        object, you need to choose ``'r+'``.
     chunk_size
         Used only when loading sparse dataset that is stored as dense.
         Loading iterates through chunks of the dataset of this row size

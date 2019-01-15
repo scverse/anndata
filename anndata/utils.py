@@ -19,7 +19,7 @@ def make_index_unique(index, join='-'):
 
     Parameters
     ----------
-    join : `str`, optional (default: '')
+    join
          The connecting string between name and integer.
 
     Examples

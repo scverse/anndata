@@ -45,23 +45,6 @@ from .utils import Index, get_n_items_idx
 from .logging import anndata_logger as logger
 from .compat import PathLike
 
-_MAIN_NARRATIVE = """\
-:class:`~anndata.AnnData` stores a data matrix ``.X`` together with annotations
-of observations ``.obs``, variables ``.var`` and unstructured annotations ``.uns``.
-
-.. figure:: https://falexwolf.de/img/scanpy/anndata.svg
-   :width: 350px
-
-An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
-dataframe, for instance, ``adata_subset = adata[:, list_of_variable_names]``.
-:class:`~anndata.AnnData`'s basic structure is similar to R's ExpressionSet
-[Huber15]_. If setting an ``.h5ad``-formatted HDF5 backing file ``.filename``,
-data remains on the disk but is automatically loaded into memory if needed.
-See this `blog post`_ for more details.
-
-.. _blog post: http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/
-"""
-
 
 class StorageType(Enum):
     Array = np.ndarray
@@ -77,7 +60,7 @@ class StorageType(Enum):
 
 
 class BoundRecArr(np.recarray):
-    """A `np.recarray` to which fields can be added using `.['key']`.
+    """A :class:`numpy.recarray` to which fields can be added using ``.['key']``.
 
     To enable this, it is bound to a instance of AnnData.
     """
@@ -562,9 +545,22 @@ class IndexDimError(IndexError):
 
 
 class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
-    __doc__ = dedent("""An annotated data matrix.
+    """An annotated data matrix.
 
-    {}
+    :class:`~anndata.AnnData` stores a data matrix :attr:`X` together with annotations
+    of observations :attr:`obs`, variables :attr:`var` and unstructured annotations :attr:`uns`.
+
+    .. figure:: https://falexwolf.de/img/scanpy/anndata.svg
+       :width: 350px
+
+    An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
+    dataframe, for instance, ``adata_subset = adata[:, list_of_variable_names]``.
+    :class:`~anndata.AnnData`'s basic structure is similar to R's ExpressionSet
+    [Huber15]_. If setting an ``.h5ad``-formatted HDF5 backing file ``.filename``,
+    data remains on the disk but is automatically loaded into memory if needed.
+    See this `blog post`_ for more details.
+
+    .. _blog post: http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/
 
     Parameters
     ----------
@@ -601,6 +597,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     read_excel
     read_hdf
     read_loom
+    read_zarr
     read_mtx
     read_text
     read_umi_tools
@@ -630,7 +627,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
-    """).format(indent(_MAIN_NARRATIVE, 4*' ').lstrip(' '))
+    """
 
     _BACKED_ATTRS = ['X', 'raw.X']
 
@@ -942,13 +939,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             return self._gen_repr(self.n_obs, self.n_vars)
 
     @property
-    def shape(self) -> Tuple:
-        """Shape of data matrix `(.n_obs, .n_vars)`."""
+    def shape(self) -> Tuple[int, int]:
+        r"""Shape of data matrix (:attr:`n_obs`, :attr:`n_vars`)."""
         return self.n_obs, self.n_vars
 
     @property
     def X(self) -> Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]]:
-        """Data matrix of shape `n_obs` × `n_vars`."""
+        """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.isopen: self.file.open()
             X = self.file['X']
@@ -1000,7 +997,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def layers(self):
-        """Dictionary-like object with values of the same dimensions as `.X`.
+        """Dictionary-like object with values of the same dimensions as :attr:`X`.
 
         Layers in AnnData have API similar to loompy
         http://linnarssonlab.org/loompy/apiwalkthrough/index.html#layers
@@ -1034,7 +1031,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def raw(self):
         """Store raw version of ``.X`` and ``.var`` as ``.raw.X`` and ``.raw.var``.
 
-        The `.raw` attribute is initialized with the current content of an object by setting::
+        The :attr:`raw` attribute is initialized with the current content of an object by setting::
 
             adata.raw = adata
 
@@ -1164,7 +1161,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def obs_names(self):
-        """Names of observations (alias for `.obs.index`)."""
+        """Names of observations (alias for ``.obs.index``)."""
         return self.obs.index
 
     @obs_names.setter
@@ -1176,7 +1173,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @property
     def var_names(self):
-        """Names of variables (alias for `.var.index`)."""
+        """Names of variables (alias for ``.var.index``)."""
         return self._var.index
 
     @var_names.setter
@@ -1334,23 +1331,24 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                         np.where(np.in1d(
                             all_categories, df_sub[k].cat.categories))[0]]
 
-    def rename_categories(self, key, categories):
-        """Rename categories of annotation `key` in `.obs`, `.var` and `.uns`.
+    def rename_categories(self, key: str, categories: Sequence[Any]):
+        """Rename categories of annotation ``key`` in
+        :attr:`obs`, :attr:`var` and :attr:`uns`.
 
-        Only supports passing a list-like `categories` argument.
+        Only supports passing a list/array-like ``categories`` argument.
 
         Besides calling ``self.obs[key].cat.categories = categories`` -
-        similar for `.var` - this also renames categories in unstructured
-        annotation that uses the categorical annotation `key`.
+        similar for :attr:`var` - this also renames categories in unstructured
+        annotation that uses the categorical annotation ``key``.
 
         Parameters
         ----------
-        key : `str`
+        key
              Key for observations or variables annotation.
-        categories : `list`-like
+        categories
              New categories, the same number as the old categories.
         """
-        if isinstance(categories, dict):
+        if isinstance(categories, Mapping):
             raise ValueError('Only list-like `categories` is supported.')
         if key in self.obs:
             old_categories = self.obs[key].cat.categories.tolist()
@@ -1379,7 +1377,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                                         'Omitting {}/{} as old categories do not match.'
                                         .format(k1, k2))
 
-    def strings_to_categoricals(self, df=None):
+    def strings_to_categoricals(self, df: Optional[pd.DataFrame] = None):
         """Transform string annotations to categoricals.
 
         Only affects string annotations that lead to less categories than the
@@ -1387,13 +1385,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         Params
         ------
-        df : `pd.DataFrame`, `None`
-            If `df` is `None`, modifies both `.obs` and `.var`, otherwise
-            modifies `df` inplace.
+        df
+            If ``df`` is ``None``, modifies both :attr:`obs` and :attr:`.var`,
+            otherwise modifies ``df`` inplace.
 
         Notes
         -----
-        Turns the view of an `AnnData` into an actual `AnnData`..
+        Turns the view of an :class:`~anndata.AnnData` into an actual
+        :class:`~anndata.AnnData`.
         """
         dont_modify = False  # only necessary for backed views
         if df is None:
@@ -1541,9 +1540,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def to_df(self):
         """Generate shallow :class:`~pandas.DataFrame`.
 
-        The data matrix `.X` is returned as
-        :class:`~pandas.DataFrame`, where `.obs_names` initializes the
-        index, and `.var_names` the columns.
+        The data matrix :attr:`X` is returned as
+        :class:`~pandas.DataFrame`, where :attr:`obs_names` initializes the
+        index, and :attr:`var_names` the columns.
 
         * No annotations are maintained in the returned object.
         * The data matrix is densified in case it is sparse.
@@ -1751,7 +1750,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                [nan,  3.,  2.,  1.],
                [nan,  6.,  5.,  4.]], dtype=float32)
 
-        For sparse data, everything behaves similarly, except that for `join='outer'`, zeros are added.
+        For sparse data, everything behaves similarly, except that for ``join='outer'``, zeros are added.
 
         >>> from scipy.sparse import csr_matrix
         >>> adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
@@ -1936,18 +1935,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None
     ):
-        """Write `.h5ad`-formatted hdf5 file.
+        """Write ``.h5ad``-formatted hdf5 file.
 
         .. note::
            
-            Setting compression to `'gzip'` can save disk space but
+            Setting compression to ``'gzip'`` can save disk space but
             will slow down writing and subsequent reading. Prior to
             v0.6.16, this was the default for parameter
-            `compression`.
+            ``compression``.
 
         Generally, if you have sparse data that are stored as a dense
         matrix, you can dramatically improve performance and reduce
-        disk space by converting to a `csr_matrix`::
+        disk space by converting to a :class:`~scipy.sparse.csr_matrix`::
         
             from scipy.sparse import csr_matrix
             adata.X = csr_matrix(adata.X) 
@@ -1956,13 +1955,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         ----------
         filename
             Filename of data file. Defaults to backing file.
-        compression : `None`,  {`'gzip'`, `'lzf'`} (default: `None`)
+        compression : ``None``,  {``'gzip'``, ``'lzf'``} (default: ``None``)
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
         compression_opts
             See the :ref:`h5py filter pipeline <h5py:dataset_compression>`.
         force_dense
-            Write sparse data as a dense matrix. Defaults to `True` if object is
-            backed, otherwise to `False`.
+            Write sparse data as a dense matrix. Defaults to ``True`` if object is
+            backed, otherwise to ``False``.
         """
         from .readwrite.write import _write_h5ad
 
@@ -1982,17 +1981,17 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     write = write_h5ad  # a shortcut and backwards compat
 
     def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ','):
-        """Write annotation to `.csv` files.
+        """Write annotation to ``.csv`` files.
 
         It is not possible to recover the full :class:`~anndata.AnnData` from the
-        output of this function. Use :func:`~anndata.write` for this.
+        output of this function. Use :meth:`~anndata.AnnData.write` for this.
 
         Parameters
         ----------
         dirname
             Name of directory to which to export.
         skip_data
-             Skip the data matrix `.X`.
+             Skip the data matrix :attr:`X`.
         sep
              Separator for the data.
         """
@@ -2000,7 +1999,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     def write_loom(self, filename: PathLike):
-        """Write `.loom`-formatted hdf5 file.
+        """Write ``.loom``-formatted hdf5 file.
 
         Parameters
         ----------
@@ -2016,7 +2015,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Parameters
         ----------
         store
-            The filename, a `MutableMapping`, or a Zarr storage class.
+            The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
         chunks
             Chunk shape.
         """
@@ -2024,7 +2023,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         write_zarr(store, self, chunks=chunks)
 
     def chunked_X(self, chunk_size: Optional[int] = None):
-        """Return an iterator over the rows of the data matrix `.X`.
+        """Return an iterator over the rows of the data matrix :attr:`X`.
 
         Parameters
         ----------
@@ -2046,7 +2045,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def chunk_X(self,
                 select: Union[int, List[int], Tuple[int], np.ndarray] = 1000,
                 replace: bool = True):
-        """Return a chunk of the data matrix `.X` with random or specified indices.
+        """Return a chunk of the data matrix :attr:`X` with random or specified indices.
 
         Parameters
         ----------
