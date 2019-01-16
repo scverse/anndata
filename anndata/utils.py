@@ -12,7 +12,7 @@ if False:
 logger = get_logger(__name__)
 
 
-def make_index_unique(index, join='-'):
+def make_index_unique(index: pd.Index, join: str = '-'):
     """Makes the index unique by appending '1', '2', etc.
 
     The first occurance of a non-unique value is ignored.
@@ -48,7 +48,7 @@ def make_index_unique(index, join='-'):
     return index
 
 
-def warn_names_duplicates(attr):
+def warn_names_duplicates(attr: str):
     names = 'Observation' if attr == 'obs' else 'Variable'
     logger.info(
         '{} names are not unique. '
@@ -56,15 +56,14 @@ def warn_names_duplicates(attr):
         .format(names, attr))
 
 
-def warn_no_string_index(names):
+def warn_no_string_index(names: Sequence[Any]):
     if not isinstance(names[0], str):
         logger.warning(
             'AnnData expects string indices for some functionality, but your first two indices are: {}. '
             .format(names[:2]))
-    
+
 
 def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
-
     names = list(source.keys())
     try:  # transform to byte-strings
         cols = [np.asarray(col) if np.array(col[0]).dtype.char not in {'U', 'S'}
@@ -93,7 +92,7 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     return arr
 
 
-def deprecated(new_name):
+def deprecated(new_name: str):
     """
     This is a decorator which can be used to mark functions
     as deprecated. It will result in a warning being emitted
@@ -126,7 +125,7 @@ class DeprecationMixinMeta(type):
             if isinstance(attr, property):
                 attr = attr.fget
             return getattr(attr, '__deprecated', False)
-        
+
         return [
             item for item in type.__dir__(cls)
             if not is_deprecated(getattr(cls, item, None))

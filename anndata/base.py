@@ -4,7 +4,7 @@ import os
 from enum import Enum
 from collections import OrderedDict
 from functools import reduce
-from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List, Dict
+from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List, Dict, KeysView, MutableMapping
 from copy import deepcopy
 
 import numpy as np
@@ -97,7 +97,7 @@ class BoundRecArr(np.recarray):
         super().__setstate__(state[0:-1])
 
     def copy(self, order='C') -> 'BoundRecArr':
-        new = super(BoundRecArr, self).copy()
+        new = super().copy()
         new._parent = self._parent
         return new
 
@@ -304,7 +304,7 @@ class AnnDataFileManager:
         else:
             return 'Backing file manager of file {}.'.format(self._filename)
 
-    def __getitem__(self, key) -> Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]:
+    def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]:
         return self._file[key]
 
     def __setitem__(self, key: str, value: Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]):
@@ -344,7 +344,7 @@ class AnnDataFileManager:
         self._filename = None
 
     @property
-    def isopen(self):
+    def isopen(self) -> bool:
         """State of backing file."""
         if self._file is None:
             return False
@@ -361,104 +361,72 @@ def _init_actual_AnnData(adata_view):
     adata_view._init_as_actual(adata_view.copy())
 
 
-class ArrayView(np.ndarray):
+class _SetItemMixin:
+    def __setitem__(self, idx: Any, value: Any):
+        if self._view_args is None:
+            super().__setitem__(idx, value)
+        else:
+            adata_view, attr_name = self._view_args
+            _init_actual_AnnData(adata_view)
+            getattr(adata_view, attr_name)[idx] = value
 
-    def __new__(cls, input_array, view_args=None):
+
+class _ViewMixin(_SetItemMixin):
+    def __init__(self, *args, view_args: Tuple['AnnData', str] = None, **kwargs):
+        self._view_args = view_args
+        super().__init__(*args, **kwargs)
+
+
+class ArrayView(np.ndarray, _SetItemMixin):
+    def __new__(
+        cls,
+        input_array: Sequence[Any],
+        view_args: Tuple['AnnData', str] = None,
+    ):
         arr = np.asarray(input_array).view(cls)
         arr._view_args = view_args
         return arr
 
-    def __array_finalize__(self, obj):
+    def __array_finalize__(self, obj: Optional[np.ndarray]):
         if obj is None: return
         self._view_args = getattr(obj, '_view_args', None)
 
-    def __setitem__(self, idx, value):
-        if self._view_args is None:
-            super(type(self), self).__setitem__(idx, value)
-        else:
-            adata_view, attr_name = self._view_args
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
-
-    def keys(self):
+    def keys(self) -> KeysView[str]:
         # it's a structured array
         return self.dtype.names
 
-    def copy(self, order='C'):
+    def copy(self, order: str = 'C') -> np.ndarray:
         # we want a conventional array
         return np.array(self)
 
-    def toarray(self):
+    def toarray(self) -> np.ndarray:
         return self.copy()
 
 
-# the following two definitions are exactly equivalent
-
-class SparseCSRView(sparse.csr_matrix):
-
-    def __init__(self, *args, view_args=None, **kwargs):
-        self._view_args = view_args
-        super().__init__(*args, **kwargs)
-
-    def __setitem__(self, idx, value):
-        if self._view_args is None:
-            super(type(self), self).__setitem__(idx, value)
-        else:
-            adata_view, attr_name = self._view_args
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
+class SparseCSRView(_ViewMixin, sparse.csr_matrix):
+    pass
 
 
-class SparseCSCView(sparse.csc_matrix):
-
-    def __init__(self, *args, view_args=None, **kwargs):
-        self._view_args = view_args
-        super().__init__(*args, **kwargs)
-
-    def __setitem__(self, idx, value):
-        if self._view_args is None:
-            super().__setitem__(idx, value)
-        else:
-            adata_view, attr_name = self._view_args
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
+class SparseCSCView(_ViewMixin, sparse.csc_matrix):
+    pass
 
 
-class DictView(dict):
-
-    def __init__(self, *args, view_args=None, **kwargs):
-        self._view_args = view_args
-        super().__init__(*args, **kwargs)
-
-    def __setitem__(self, idx, value):
-        if self._view_args is None:
-            super().__setitem__(idx, value)
-        else:
-            adata_view, attr_name = self._view_args
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
+class DictView(_ViewMixin, dict):
+    pass
 
 
-class DataFrameView(pd.DataFrame):
-
+class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata = ['_view_args']
-
-    def __init__(self, *args, view_args=None, **kwargs):
-        self._view_args = view_args
-        super().__init__(*args, **kwargs)
-
-    def __setitem__(self, idx, value):
-        if self._view_args is None:
-            super().__setitem__(idx, value)
-        else:
-            adata_view, attr_name = self._view_args
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
 
 
 class Raw(IndexMixin):
-
-    def __init__(self, adata=None, X=None, var=None, varm=None):
+    def __init__(
+        self,
+        adata: Optional['AnnData'] = None,
+        X: Union[np.ndarray, sparse.spmatrix, None] = None,
+        var: Optional[BoundRecArr] = None,
+        varm: Optional[BoundRecArr] = None,
+    ):
         self._adata = adata
         self._n_obs = adata.n_obs
         if X is not None:
@@ -534,7 +502,7 @@ class Raw(IndexMixin):
                 packed_index = packed_index[0], packed_index[1].values
             if isinstance(packed_index[0], pd.Series):
                 packed_index = packed_index[0].values, packed_index[1]
-        obs, var = super(Raw, self)._unpack_index(packed_index)
+        obs, var = super()._unpack_index(packed_index)
         obs = _normalize_index(obs, self._adata.obs_names)
         var = _normalize_index(var, self.var_names)
         return obs, var
@@ -921,14 +889,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # layers
         self._layers = AnnDataLayers(self, layers, dtype)
 
-    def __sizeof__(self):
+    def __sizeof__(self) -> int:
         size = 0
         for attr in ['_X', '_obs', '_var', '_uns', '_obsm', '_varm']:
             s = getattr(self, attr).__sizeof__()
             size += s
         return size
 
-    def _gen_repr(self, n_obs, n_vars):
+    def _gen_repr(self, n_obs, n_vars) -> str:
         if self.isbacked:
             backed_at = 'backed at \'{}\''.format(self.filename)
         else:
@@ -942,7 +910,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
         return descr
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.isview:
             return 'View of ' + self._gen_repr(self.n_obs, self.n_vars)
         else:
@@ -973,7 +941,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 return self._X
 
     @X.setter
-    def X(self, value):
+    def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
         if value is None:
             if self.isview:
                 raise ValueError('Copy the view before setting the data matrix to `None`.')
@@ -1008,7 +976,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                              .format(value.shape, self.shape))
 
     @property
-    def layers(self):
+    def layers(self) -> AnnDataLayers:
         """Dictionary-like object with values of the same dimensions as :attr:`X`.
 
         Layers in AnnData have API similar to loompy :ref:`loomlayers`.
@@ -1039,7 +1007,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self._layers
 
     @property
-    def raw(self):
+    def raw(self) -> Raw:
         """Store raw version of :attr:`X` and :attr:`var` as ``.raw.X`` and ``.raw.var``.
 
         The :attr:`raw` attribute is initialized with the current content of an object by setting::
@@ -1062,7 +1030,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self._raw
 
     @raw.setter
-    def raw(self, value):
+    def raw(self, value: Optional['AnnData']):
         if not (isinstance(value, AnnData) or value is None):
             raise ValueError(
                 'Can only init raw attribute with an AnnData object or `None`.')
@@ -1074,22 +1042,22 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._raw = Raw(value)
 
     @property
-    def n_obs(self):
+    def n_obs(self) -> int:
         """Number of observations."""
         return self._n_obs
 
     @property
-    def n_vars(self):
+    def n_vars(self) -> int:
         """Number of variables/features."""
         return self._n_vars
 
     @property
-    def obs(self):
+    def obs(self) -> pd.DataFrame:
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
         return self._obs
 
     @obs.setter
-    def obs(self, value):
+    def obs(self, value: pd.DataFrame):
         if not isinstance(value, pd.DataFrame):
             raise ValueError('Can only assign pd.DataFrame.')
         if len(value) != self.n_obs:
@@ -1099,12 +1067,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         else: self._obs = value
 
     @property
-    def var(self):
+    def var(self) -> pd.DataFrame:
         """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
         return self._var
 
     @var.setter
-    def var(self, value):
+    def var(self, value: pd.DataFrame):
         if not isinstance(value, pd.DataFrame):
             raise ValueError('Can only assign pd.DataFrame.')
         if len(value) != self.n_vars:
@@ -1114,20 +1082,20 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         else: self._var = value
 
     @property
-    def uns(self):
+    def uns(self) -> MutableMapping:
         """Unstructured annotation (ordered dictionary)."""
         return self._uns
 
     @uns.setter
-    def uns(self, value):
-        if not isinstance(value, Mapping):
-            raise ValueError('Only dicitionary types are allowed for `.uns`.')
+    def uns(self, value: MutableMapping):
+        if not isinstance(value, MutableMapping):
+            raise ValueError('Only mutable mapping types (e.g. dict) are allowed for `.uns`.')
         if self.isview:
             self._init_as_actual(self.copy())
         self._uns = value
 
     @property
-    def obsm(self):
+    def obsm(self) -> BoundRecArr:
         """Multi-dimensional annotation of observations (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
@@ -1137,7 +1105,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self._obsm
 
     @obsm.setter
-    def obsm(self, value):
+    def obsm(self, value: np.ndarray):
         if not isinstance(value, np.ndarray):
             raise ValueError('Can only assign `np.ndarray`.')
         if len(value) != self.n_obs:
@@ -1145,11 +1113,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if self.isview:
             self._adata_ref._obsm[self._oidx] = value
         else:
-            value = BoundRecArr(value, self, 'obsm')
-            self._obsm = value
+            self._obsm = BoundRecArr(value, self, 'obsm')
 
     @property
-    def varm(self):
+    def varm(self) -> BoundRecArr:
         """Multi-dimensional annotation of variables/ features (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray` of length
@@ -1159,7 +1126,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self._varm
 
     @varm.setter
-    def varm(self, value):
+    def varm(self, value: np.ndarray):
         if not isinstance(value, np.ndarray):
             raise ValueError('Can only assign `np.ndarray`.')
         if len(value) != self.n_vars:
@@ -1167,65 +1134,64 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if self.isview:
             self._adata_ref._varm[self._vidx] = value
         else:
-            value = BoundRecArr(value, self, 'varm')
-            self._varm = value
+            self._varm = BoundRecArr(value, self, 'varm')
 
     @property
-    def obs_names(self):
+    def obs_names(self) -> pd.Index:
         """Names of observations (alias for ``.obs.index``)."""
         return self.obs.index
 
     @obs_names.setter
-    def obs_names(self, names):
+    def obs_names(self, names: Sequence[str]):
         utils.warn_no_string_index(names)
         self._obs.index = names
         if not self._obs.index.is_unique:
             utils.warn_names_duplicates('obs')
 
     @property
-    def var_names(self):
+    def var_names(self) -> pd.Index:
         """Names of variables (alias for ``.var.index``)."""
         return self._var.index
 
     @var_names.setter
-    def var_names(self, names):
+    def var_names(self, names: Sequence[str]):
         utils.warn_no_string_index(names)
         self._var.index = names
         if not self._var.index.is_unique:
             utils.warn_names_duplicates('var')
 
-    def obs_keys(self):
+    def obs_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
 
-    def var_keys(self):
+    def var_keys(self) -> List[str]:
         """List keys of variable annotation :attr:`var`."""
         return self._var.keys().tolist()
 
-    def obsm_keys(self):
+    def obsm_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obsm`."""
         return list(self._obsm.keys())
 
-    def varm_keys(self):
+    def varm_keys(self) -> List[str]:
         """List keys of variable annotation :attr:`varm`."""
         return list(self._varm.keys())
 
-    def uns_keys(self):
+    def uns_keys(self) -> List[str]:
         """List keys of unstructured annotation."""
         return sorted(list(self._uns.keys()))
 
     @property
-    def isbacked(self):
+    def isbacked(self) -> bool:
         """``True`` if object is backed on disk, ``False`` otherwise."""
         return self.filename is not None
 
     @property
-    def isview(self):
+    def isview(self) -> bool:
         """``True`` if object is view of another AnnData object, ``False`` otherwise."""
         return self._isview
 
     @property
-    def filename(self):
+    def filename(self) -> Optional[PathLike]:
         """Change to backing mode by setting the filename of a ``.h5ad`` file.
 
         - Setting the filename writes the stored data to disk.
@@ -1236,7 +1202,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return self.file.filename
 
     @filename.setter
-    def filename(self, filename):
+    def filename(self, filename: Optional[PathLike]):
         # change from backing-mode back to full loading into memory
         if filename is None:
             if self.filename is not None:
@@ -1272,7 +1238,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             del self.file[attr]
             self.file._file.create_dataset(attr, data=value)
 
-    def _normalize_indices(self, index: Union[Tuple, pd.Series, np.ndarray, slice, int, str, None]):
+    def _normalize_indices(self, index: Optional[Index]):
         # deal with tuples of length 1
         if isinstance(index, tuple) and len(index) == 1:
             index = index[0]
@@ -1299,13 +1265,13 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             # Needs to be refactored once we support a tuple of two arbitrary index types
             if any(isinstance(i, np.ndarray) and i.dtype == bool for i in index):
                 return index
-        obs, var = super(AnnData, self)._unpack_index(index)
+        obs, var = super()._unpack_index(index)
         obs = _normalize_index(obs, self.obs_names)
         var = _normalize_index(var, self.var_names)
         return obs, var
 
     # TODO: this is not quite complete...
-    def __delitem__(self, index):
+    def __delitem__(self, index: Index):
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
         if not self.isbacked:
@@ -1319,11 +1285,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if obs == slice(None):
             del self._var.iloc[var, :]
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Index) -> 'AnnData':
         """Returns a sliced view of the object."""
         return self._getitem_view(index)
 
-    def _getitem_view(self, index):
+    def _getitem_view(self, index: Index) -> 'AnnData':
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
@@ -1510,7 +1476,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                              .format(k))
         return x
 
-    def __setitem__(self, index, val):
+    def __setitem__(self, index: Index, val: Union[int, float, np.ndarray, sparse.spmatrix]):
         if self.isview:
             raise ValueError('Object is view and cannot be accessed with `[]`.')
         obs, var = self._normalize_indices(index)
@@ -1521,10 +1487,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             X[obs, var] = val
             self._set_backed('X', X)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.shape[0]
 
-    def transpose(self):
+    def transpose(self) -> 'AnnData':
         """Transpose whole object.
 
         Data matrix is transposed, observations and variables are interchanged.
@@ -1548,7 +1514,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     T = property(transpose)
 
-    def to_df(self):
+    def to_df(self) -> pd.DataFrame:
         """Generate shallow :class:`~pandas.DataFrame`.
 
         The data matrix :attr:`X` is returned as
@@ -1564,7 +1530,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             X = self._X
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
-    def copy(self, filename=None):
+    def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
         if not self.isbacked:
             if self._X is not None and self._X.dtype.name != 'float32':
@@ -1897,12 +1863,12 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 'Or pass `index_unique!=None` to `.concatenate`.')
         return new_adata
 
-    def var_names_make_unique(self, join='-'):
+    def var_names_make_unique(self, join: str = '-'):
         self.var.index = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def obs_names_make_unique(self, join='-'):
+    def obs_names_make_unique(self, join: str = '-'):
         self.obs.index = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
@@ -1913,7 +1879,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if not self.var.index.is_unique:
             utils.warn_names_duplicates('var')
 
-    def __contains__(self, key):
+    def __contains__(self, key: Any):
         raise AttributeError('AnnData has no attribute __contains__, '
                              'don\'t check `in adata`.')
 
@@ -2020,7 +1986,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         from .readwrite.write import write_loom
         write_loom(filename, self)
 
-    def write_zarr(self, store, chunks):
+    def write_zarr(
+        self,
+        store: Union[MutableMapping, PathLike],
+        chunks: Union[bool, int, Tuple[int, ...]],
+    ):
         """Write a hierarchical Zarr array store.
 
         Parameters
@@ -2093,7 +2063,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return selection if reverse is None else selection[reverse]
 
     @staticmethod
-    def _from_dict(ddata):
+    def _from_dict(ddata: Mapping[str, Any]):
         """Allows to construct an instance of AnnData from a dictionary.
 
         Acts as interface for the communication with the hdf5 file.
