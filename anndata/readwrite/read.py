@@ -4,6 +4,7 @@ from collections import OrderedDict
 import gzip
 import bz2
 import numpy as np
+import warnings
 
 from ..base import AnnData
 from .. import h5py
@@ -408,25 +409,28 @@ def _read_key_value_from_zarr(f, d, key, key_write=None):
     return
 
 
-def read_h5ad(filename, backed: Union[bool, str] = False, chunk_size: int = 6000):
+def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
     """Read ``.h5ad``-formatted hdf5 file.
 
     Parameters
     ----------
     filename
         File name of data file.
-    backed : {``False``, ``True``, ``'r'``, ``'r+'``}
-        Load :class:`~anndata.AnnData` in ``backed`` mode instead of fully
-        loading it into memory (`memory` mode). ``True`` and ``'r'`` are
-        equivalent. If you want to modify backed attributes of the AnnData
-        object, you need to choose ``'r+'``.
+    backed : {``None``, ``'r'``, ``'r+'``}
+        If ``'r'``, load :class:`~anndata.AnnData` in ``backed`` mode instead
+        of fully loading it into memory (`memory` mode). If you want to modify
+        backed attributes of the AnnData object, you need to choose ``'r+'``.
     chunk_size
         Used only when loading sparse dataset that is stored as dense.
         Loading iterates through chunks of the dataset of this row size
         until it reads the whole dataset.
         Higher size means higher memory consumption and higher loading speed.
     """
-
+    if isinstance(backed, bool):
+        warnings.warn("In a future version, read_h5ad will no longer explicitly"
+                      " support boolean arguments. Specify the read mode, or "
+                      "leave `backed=None`.",
+                      DeprecationWarning)
     if backed:
         # open in backed-mode
         return AnnData(filename=filename, filemode=backed)
