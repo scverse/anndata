@@ -1,6 +1,8 @@
 import warnings
 from collections import Mapping
 from pathlib import Path
+from typing import Union, MutableMapping
+
 import pandas as pd
 import math
 import numpy as np
@@ -84,7 +86,7 @@ def write_loom(filename: PathLike, adata: AnnData):
     create(fspath(filename), layers, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
-def write_zarr(store, adata: AnnData, **kwargs):
+def write_zarr(store: Union[MutableMapping, PathLike], adata: AnnData, **kwargs):
     if isinstance(store, Path):
         store = str(store)
     d = adata._to_dict_fixed_width_arrays()

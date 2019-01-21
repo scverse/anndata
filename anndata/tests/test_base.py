@@ -2,8 +2,18 @@ import numpy as np
 from numpy import ma
 import pandas as pd
 from scipy import sparse as sp
+from scipy.sparse import csr_matrix
 
 from anndata import AnnData
+
+
+# some test objects that we use below
+adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
+adata_sparse = AnnData(
+    csr_matrix([[0, 2, 3], [0, 5, 6]]),
+    {'obs_names': ['s1', 's2'],
+     'anno1': ['c1', 'c2']},
+    {'var_names': ['a', 'b', 'c']})
 
 
 def test_creation():
@@ -166,6 +176,14 @@ def test_slicing_series():
             == adata[df['a'] == '2'].X.tolist())
     assert (adata[:, df1['b'].values == '2'].X.tolist()
             == adata[:, df1['b'] == '2'].X.tolist())
+
+
+def test_strings_to_categoricals():
+    adata = AnnData(
+        np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
+        dict(k=['a', 'a', 'b', 'b']))
+    adata.strings_to_categoricals()
+    assert adata.obs['k'].cat.categories.tolist() == ['a', 'b']
 
 
 def test_slicing_remove_unused_categories():
@@ -376,8 +394,19 @@ def test_rename_categories():
     assert list(adata.obs['cat_anno'].cat.categories) == new_categories
     assert list(adata.uns['tool']['cat_array'].dtype.names) == new_categories
 
+
 def test_pickle():
     import pickle
     adata = AnnData()
     adata2 = pickle.loads(pickle.dumps(adata))
     assert adata2.obsm._parent == adata2
+
+
+def test_to_df_dense():
+    df = adata_dense.to_df()
+
+
+def test_to_df_sparse():
+    X = adata_sparse.X.toarray()
+    df = adata_sparse.to_df()
+    assert df.values.tolist() == X.tolist()

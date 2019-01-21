@@ -1,4 +1,4 @@
-from .base import AnnData, _MAIN_NARRATIVE
+from .base import AnnData
 from .readwrite import (
     read_h5ad, read_loom, read_hdf,
     read_excel, read_umi_tools,
@@ -22,7 +22,7 @@ The central class:
 Reading
 -------
 
-Reading anndata's native file format `.h5ad`.
+Reading anndata's native file format ``.h5ad``.
 
 .. autosummary::
    :toctree: .
@@ -47,7 +47,7 @@ Reading other file formats.
 Writing
 -------
 
-Writing to anndata's native file format `.h5ad`.
+Writing to anndata's native file format ``.h5ad``.
 
 .. autosummary::
    :toctree: .
@@ -75,11 +75,11 @@ sparse matrices in addition to the standard functionality.
 
    h5py
 
-""".format(main_narrative=_MAIN_NARRATIVE)
+"""
 
 __author__ = ', '.join([
-    'Philipp Angerer',
-    'Alex Wolf',
+    'Philipp Angerer*',
+    'Alex Wolf*',
     'Sergei Rybakov',
 ])
 __email__ = ', '.join([
