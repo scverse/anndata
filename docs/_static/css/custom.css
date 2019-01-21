@@ -12,6 +12,24 @@
     font-weight: normal;
 }
 
+
+.rst-content .annotation {
+    padding: 2px 5px;
+    background-color: white;
+    border: 1px solid #e1e4e5;
+}
+.rst-content .annotation tt,
+.rst-content .annotation code {
+    padding: 0 0;
+    background-color: transparent;
+    border: 0 solid transparent;
+}
+.rst-content .annotation a tt.xref,
+.rst-content .annotation a code.xref {
+    text-decoration: underline;
+}
+
+
 .rst-content dl:not(.docutils) dl > dt {
     /* mimick numpydoc’s blockquote style */
     /* TODO: once scanpydoc adds classes, also change return types */
