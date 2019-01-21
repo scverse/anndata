@@ -454,6 +454,10 @@ class Raw(IndexMixin):
                 return X.flatten()
             else:
                 return self._X
+            
+    @property
+    def shape(self):
+        return self.X.shape
 
     @property
     def var(self):
