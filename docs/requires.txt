@@ -1,7 +1,7 @@
 # stuff necessary for docs generation
 sphinx>=1.8
 sphinx-autodoc-typehints
-scanpydoc>=0.3.1
+scanpydoc>=0.3.2
 # dependencies of anndata
 pandas~=0.21
 scipy
