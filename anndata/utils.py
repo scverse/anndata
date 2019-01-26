@@ -143,7 +143,7 @@ def get_n_items_idx(idx: Index, l: int):
         stop = l if idx.stop is None else idx.stop
         step = 1 if idx.step is None else idx.step
         return (stop - start) // step
-    elif isinstance(idx, (int, np.int_)):
+    elif isinstance(idx, (int, np.int_, np.int64, np.int32)):
         return 1
     else:
         return len(idx)
