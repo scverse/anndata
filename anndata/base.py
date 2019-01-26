@@ -1508,6 +1508,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 .format(self._X.dtype.name))
         if not self.isbacked: X = self._X
         else: X = self.file['X']
+        if self.isview:
+            raise ValueError(
+                'You\'re trying to transpose a view of an `AnnData`, which is currently not implemented. '
+                'Call `.copy()` before transposing.')
         layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items(copy=False)}
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
