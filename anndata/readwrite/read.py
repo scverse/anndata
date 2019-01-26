@@ -458,9 +458,8 @@ def _read_h5ad(
 
     # we need to be able to call the function without reference to self when
     # not reading in backed mode
-    backed = False
-    if filename is None:
-        backed = mode is None
+    backed = mode is not None
+    if filename is None and not backed:
         filename = adata.filename
 
     d = {}
