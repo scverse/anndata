@@ -199,8 +199,9 @@ def df_to_records_fixed_width(df):
     for k in df.columns:
         names.append(k)
         if is_string_dtype(df[k]):
-            max_len_index = df[k].map(len).max()
-            arrays.append(df[k].values.astype('S{}'.format(max_len_index)))
+            lengths = df[k].map(len)
+            if is_categorical(lengths): lengths = lengths.cat.as_ordered()
+            arrays.append(df[k].values.astype('S{}'.format(lengths.max())))
         elif is_categorical(df[k]):
             uns[k + '_categories'] = df[k].cat.categories
             arrays.append(df[k].cat.codes)
