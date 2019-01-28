@@ -1213,7 +1213,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @filename.setter
     def filename(self, filename: Optional[PathLike]):
-        filename = Path(filename)
+        # convert early for later comparison
+        filename = None if filename is None else Path(filename)
         # change from backing-mode back to full loading into memory
         if filename is None:
             if self.filename is not None:
