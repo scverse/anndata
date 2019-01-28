@@ -251,7 +251,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
             value = np.array(value)  # make sure value is an array
             if value.ndim == 0: value = np.array([value])  # hm, why that?
         # make sure string format is chosen correctly
-        if value.dtype.kind == 'U': value = value.astype(np.string_)
+        if value.dtype.kind == 'U': value = value.astype(h5py.special_dtype(vlen=str))
         return value
 
     value = preprocess_writing(value)
