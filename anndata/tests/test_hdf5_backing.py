@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 import numpy as np
 
@@ -38,7 +36,7 @@ uns_dict = dict(  # unstructured annotation
 # -------------------------------------------------------------------------------
 
 # this is very similar to the views test
-def test_backing(backing_h5ad):
+def test_backing(tmp_path, backing_h5ad):
     X = np.array(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
     assert not adata.isbacked
@@ -63,9 +61,7 @@ def test_backing(backing_h5ad):
         adata_subset.obs['foo'] = range(2)
 
     # need to copy first
-    copy = Path('./test.subset.h5ad')
-    adata_subset = adata_subset.copy(copy)
-    copy.unlink()
+    adata_subset = adata_subset.copy(tmp_path / 'test.subset.h5ad')
     # now transition to actual object
     adata_subset.obs['foo'] = range(2)
     assert not adata_subset.isview

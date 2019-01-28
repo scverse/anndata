@@ -56,10 +56,8 @@ def test_readwrite(backing_h5ad):
 
 
 @pytest.mark.skipif(find_spec('loompy') is None, reason="loompy not installed")
-def test_readwrite_loom():
-    loom_path = Path('test.loom')
-    if loom_path.is_file():
-        loom_path.unlink()
+def test_readwrite_loom(tmp_path):
+    loom_path = Path(tmp_path / 'test.loom')
     adata = ad.AnnData(X=X, layers={'L': L.copy()})
     adata.write_loom(loom_path)
     adata_read = ad.read_loom(loom_path, X_name='')

@@ -1,4 +1,3 @@
-import sys
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -10,15 +9,6 @@ import anndata as ad
 
 
 HERE = Path(__file__).parent
-
-
-if sys.version_info < (3, 6):
-    from _pytest.tmpdir import _mk_tmp  # noqa
-
-    # On 3.5 this is pathlib2, which won’t work.
-    @pytest.fixture
-    def tmp_path(request, tmp_path_factory):
-        return Path(str(_mk_tmp(request, tmp_path_factory)))
 
 
 # -------------------------------------------------------------------------------
@@ -63,13 +53,13 @@ uns_dict = dict(  # unstructured annotation
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_h5ad(typ, tmp_path):
+def test_readwrite_h5ad(typ, backing_h5ad):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
     adata.raw = adata
-    adata.write(tmp_path / 'test.h5ad')
-    adata = ad.read(tmp_path / 'test.h5ad')
+    adata.write(backing_h5ad)
+    adata = ad.read(backing_h5ad)
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
@@ -77,30 +67,30 @@ def test_readwrite_h5ad(typ, tmp_path):
     assert pd.api.types.is_categorical(adata.raw.var['vanno2'])
 
 
-def test_readwrite_sparse_as_dense(tmp_path):
+def test_readwrite_sparse_as_dense(backing_h5ad):
     adata = ad.AnnData(X_sp)
-    adata.write(tmp_path / 'test.h5ad', force_dense=True)
-    adata = ad.read(tmp_path / 'test.h5ad', chunk_size=2)
+    adata.write(backing_h5ad, force_dense=True)
+    adata = ad.read(backing_h5ad, chunk_size=2)
     assert issparse(adata.X)
     assert np.allclose(X_sp.toarray(), adata.X.toarray())
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_h5ad_one_dimensino(typ, tmp_path):
+def test_readwrite_h5ad_one_dimensino(typ, backing_h5ad):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata = adata[:, 0].copy()
-    adata.write(tmp_path / 'test.h5ad')
-    adata = ad.read(tmp_path / 'test.h5ad')
+    adata.write(backing_h5ad)
+    adata = ad.read(backing_h5ad)
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_dynamic(typ, tmp_path):
+def test_readwrite_dynamic(typ, backing_h5ad):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata.filename = tmp_path / 'test.h5ad'  # change to backed mode
+    adata.filename = backing_h5ad  # change to backed mode
     adata.write()
-    adata = ad.read(tmp_path / 'test.h5ad')
+    adata = ad.read(backing_h5ad)
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
