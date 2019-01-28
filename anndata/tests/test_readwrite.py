@@ -1,6 +1,6 @@
 import sys
 from importlib.util import find_spec
-from pathlib import Path, PurePath
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -76,12 +76,14 @@ def test_readwrite_h5ad(typ, tmp_path):
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
     assert pd.api.types.is_categorical(adata.raw.var['vanno2'])
 
+
 def test_readwrite_sparse_as_dense(tmp_path):
     adata = ad.AnnData(X_sp)
     adata.write(tmp_path / 'test.h5ad', force_dense=True)
     adata = ad.read(tmp_path / 'test.h5ad', chunk_size=2)
     assert issparse(adata.X)
     assert np.allclose(X_sp.toarray(), adata.X.toarray())
+
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_h5ad_one_dimensino(typ, tmp_path):
