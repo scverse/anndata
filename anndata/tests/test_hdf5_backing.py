@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import numpy as np
 
@@ -61,7 +63,9 @@ def test_backing(backing_h5ad):
         adata_subset.obs['foo'] = range(2)
 
     # need to copy first
-    adata_subset = adata_subset.copy('./test_subset.h5ad')
+    copy = Path('./test.subset.h5ad')
+    adata_subset = adata_subset.copy(copy)
+    copy.unlink()
     # now transition to actual object
     adata_subset.obs['foo'] = range(2)
     assert not adata_subset.isview
