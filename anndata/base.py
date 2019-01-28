@@ -4,6 +4,7 @@ import os
 from enum import Enum
 from collections import OrderedDict
 from functools import reduce
+from pathlib import Path
 from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List, Dict, KeysView, MutableMapping
 from copy import deepcopy
 
@@ -293,17 +294,17 @@ class AnnDataFileManager:
         filemode: Optional[str] = None,
     ):
         self._adata = adata
-        self._filename = filename
+        self.filename = filename
         self._filemode = filemode
         self._file = None
         if filename:
             self.open()
 
     def __repr__(self) -> str:
-        if self._filename is None:
+        if self.filename is None:
             return 'Backing file manager: no file is set.'
         else:
-            return 'Backing file manager of file {}.'.format(self._filename)
+            return 'Backing file manager of file {}.'.format(self.filename)
 
     def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]:
         return self._file[key]
@@ -315,8 +316,12 @@ class AnnDataFileManager:
         del self._file[key]
 
     @property
-    def filename(self) -> PathLike:
+    def filename(self) -> Path:
         return self._filename
+
+    @filename.setter
+    def filename(self, filename: Optional[PathLike]):
+        self._filename = None if filename is None else Path(filename)
 
     def open(
         self,
@@ -324,13 +329,13 @@ class AnnDataFileManager:
         filemode: Optional[str] = None,
     ):
         if filename is not None:
-            self._filename = filename
+            self.filename = filename
         if filemode is not None:
             self._filemode = filemode
-        if self._filename is None:
+        if self.filename is None:
             raise ValueError(
                 'Cannot open backing file if backing not initialized.')
-        self._file = h5py.File(self._filename, self._filemode, force_dense=True)
+        self._file = h5py.File(self.filename, self._filemode, force_dense=True)
 
     def close(self):
         """Close the backing file, remember filename, do *not* change to memory mode."""
@@ -1208,6 +1213,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @filename.setter
     def filename(self, filename: Optional[PathLike]):
+        filename = Path(filename)
         # change from backing-mode back to full loading into memory
         if filename is None:
             if self.filename is not None:

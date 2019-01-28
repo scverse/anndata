@@ -1,4 +1,4 @@
-from pytest import raises
+import pytest
 import numpy as np
 
 import anndata as ad
@@ -36,12 +36,12 @@ uns_dict = dict(  # unstructured annotation
 # -------------------------------------------------------------------------------
 
 # this is very similar to the views test
-def test_backing():
+def test_backing(backing_h5ad):
     X = np.array(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
     assert not adata.isbacked
 
-    adata.filename = './test.h5ad'
+    adata.filename = backing_h5ad
     adata.write()
     assert not adata.file.isopen
     assert adata.isbacked
@@ -56,7 +56,7 @@ def test_backing():
 
     adata_subset = adata[:2, [0, 1]]
     assert adata_subset.isview
-    with raises(ValueError):
+    with pytest.raises(ValueError):
         # cannot set view in backing mode...
         adata_subset.obs['foo'] = range(2)
 
@@ -71,11 +71,11 @@ def test_backing():
     adata_subset.write()
 
 
-def test_double_index():
+def test_double_index(backing_h5ad):
     X = np.array(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
-    adata.filename = './test.h5ad'
-    with raises(ValueError):
+    adata.filename = backing_h5ad
+    with pytest.raises(ValueError):
         # no view of view of backed object currently
         adata[:2][:, 0]
 
@@ -83,10 +83,10 @@ def test_double_index():
     adata.write()
 
 
-def test_return_to_memory_mode():
+def test_return_to_memory_mode(backing_h5ad):
     X = np.array(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
-    adata.filename = './test.h5ad'
+    adata.filename = backing_h5ad
     assert adata.isbacked
 
     adata.filename = None
@@ -96,6 +96,6 @@ def test_return_to_memory_mode():
     # make sure the previous file had been properly closed
     # when setting `adata.filename = None`
     # if it hadn't the following line would throw an error
-    bdata.filename = './test.h5ad'
+    bdata.filename = backing_h5ad
     # close the file
     bdata.filename = None
