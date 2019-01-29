@@ -1394,19 +1394,23 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         else:
             dfs = [df]
         for df in dfs:
-            string_cols = [key for key in df.columns if is_string_dtype(df[key]) \
-                           and not is_categorical(df[key])]
+            string_cols = [
+                key for key in df.columns
+                if is_string_dtype(df[key])
+                and not is_categorical(df[key])
+            ]
             for key in string_cols:
                 # make sure we only have strings (could be that there are
                 # np.nans (float), -666, '-666', for instance)
                 c = df[key].astype('U')
                 # make a categorical
-                c = pd.Categorical(c, categories=natsorted(np.unique(c)))
+                c = pd.Categorical(c, categories=natsorted(np.unique(c)), ordered=True)
                 if len(c.categories) < len(c):
                     if dont_modify:
                         raise RuntimeError(
                             'Please call `.strings_to_categoricals()` on full AnnData, not on this view. '
-                            'You might encounter this error message while copying or writing to disk.')
+                            'You might encounter this error message while copying or writing to disk.'
+                        )
                     df[key] = c
                     logger.info('... storing {!r} as categorical'.format(key))
 
