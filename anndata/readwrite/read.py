@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Union, Optional, Iterable, Generator, Iterator
+from typing import Union, Optional
+from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
 import bz2
@@ -366,7 +367,7 @@ def read_zarr(store):
     d = {}
     for key in f.keys():
         _read_key_value_from_zarr(f, d, key)
-    return AnnData(d)
+    return AnnData(*AnnData._args_from_dict(d))
 
 
 def _read_key_value_from_zarr(f, d, key, key_write=None):
@@ -440,17 +441,16 @@ def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
         return AnnData(filename=filename, filemode=backed)
     else:
         # load everything into memory
-        d = _read_h5ad(filename=filename, chunk_size=chunk_size)
-        return AnnData(d)
+        return AnnData(*_read_args_from_h5ad(filename=filename, chunk_size=chunk_size))
 
 
-def _read_h5ad(
+def _read_args_from_h5ad(
     adata: AnnData = None,
     filename: Optional[PathLike] = None,
     mode: Optional[str] = None,
     chunk_size: int = 6000
 ):
-    """Return a dict with arrays for initializing AnnData.
+    """Return a tuple with the parameters for initializing AnnData.
 
     Parameters
     ----------
@@ -491,7 +491,7 @@ def _read_h5ad(
         d = load_sparse_csr(d, key=key)
     if not backed:
         f.close()
-    return d
+    return AnnData._args_from_dict(d)
 
 
 def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):

@@ -5,7 +5,9 @@ from enum import Enum
 from collections import OrderedDict
 from functools import reduce
 from pathlib import Path
-from typing import Union, Optional, Any, Iterable, Mapping, Sequence, Sized, Tuple, List, Dict, KeysView, MutableMapping
+from typing import Any, Union, Optional
+from typing import Iterable, Sized, Sequence, Mapping, MutableMapping
+from typing import Tuple, List, Dict, KeysView
 from copy import deepcopy
 
 import numpy as np
@@ -753,7 +755,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             obsm=None, varm=None, raw=None, layers=None,
             dtype='float32', shape=None,
             filename=None, filemode=None):
-        from .readwrite.read import _read_h5ad
+        from .readwrite.read import _read_args_from_h5ad
 
         # view attributes
         self._isview = False
@@ -766,42 +768,31 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # ----------------------------------------------------------------------
 
         # init from file
-        if filename is None:
-            self.file = AnnDataFileManager(self, None)
-        else:
+        if filename is not None:
             if any((X, obs, var, uns, obsm, varm)):
                 raise ValueError(
                     'If initializing from `filename`, '
                     'no further arguments may be passed.')
             self.file = AnnDataFileManager(self, filename, filemode)
-            # will read from backing file what is returned is, at this
-            # stage, a dictionary that needs to be processed in the
-            # code block that follows immediately
-            X = _read_h5ad(self, mode=filemode)
-
-        # init from dictionary
-        # this should be removed at some point and fully replaced with ._from_dict()
-        if isinstance(X, Mapping):
-            if any((obs, var, uns, obsm, varm)):
-                raise ValueError(
-                    'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm, raw, layers = self._from_dict(X)
+            X, obs, var, uns, obsm, varm, layers, raw = _read_args_from_h5ad(self, mode=filemode)
             if X is not None:
-                dtype = X.dtype.name # this is not a function that a user would
-                                     # use, hence it's fine to set the dtype
+                # this is not a function that a user would use, hence it's fine to set the dtype
+                dtype = X.dtype.name
+        else:
+            self.file = AnnDataFileManager(self, None)
 
-        # init from AnnData
-        elif isinstance(X, AnnData):
-            if any((obs, var, uns, obsm, varm)):
-                raise ValueError(
-                    'If `X` is a dict no further arguments must be provided.')
-            X, obs, var, uns, obsm, varm, raw, layers = X._X, X.obs, X.var, X.uns, X.obsm, X.varm, X.raw, X.layers
+            # init from AnnData
+            if isinstance(X, AnnData):
+                if any((obs, var, uns, obsm, varm)):
+                    raise ValueError(
+                        'If `X` is a dict no further arguments must be provided.')
+                X, obs, var, uns, obsm, varm, layers, raw = X._X, X.obs, X.var, X.uns, X.obsm, X.varm, X.layers, X.raw
 
-        # init from DataFrame
-        elif isinstance(X, pd.DataFrame):
-            obs = pd.DataFrame(index=X.index)
-            var = pd.DataFrame(index=X.columns)
-            X = X.values
+            # init from DataFrame
+            elif isinstance(X, pd.DataFrame):
+                obs = pd.DataFrame(index=X.index)
+                var = pd.DataFrame(index=X.columns)
+                X = X.values
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -2112,7 +2103,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         return selection if reverse is None else selection[reverse]
 
     @staticmethod
-    def _from_dict(ddata: Mapping[str, Any]):
+    def _args_from_dict(ddata: Mapping[str, Any]):
         """Allows to construct an instance of AnnData from a dictionary.
 
         Acts as interface for the communication with the hdf5 file.
@@ -2226,7 +2217,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         uns = (ddata if uns_is_not_key
                else ddata['uns'] if 'uns' in ddata else {})
 
-        return X, obs, var, uns, obsm, varm, raw, layers
+        return X, obs, var, uns, obsm, varm, layers, raw
 
     def _to_dict_fixed_width_arrays(self):
         """A dict of arrays that stores data and annotation.
