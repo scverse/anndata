@@ -2143,9 +2143,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 d_true_keys[true_key] = None
 
         # transform recarray to dataframe
-        from pandas.api.types import is_string_dtype
-        from pandas import Index
-
         for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
             if d_true_keys[true_key] is not None:
                 for key in keys:
@@ -2158,7 +2155,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 # TODO: this is quite a hack
                 for c in d_true_keys[true_key].columns:
                     if is_string_dtype(d_true_keys[true_key][c]):
-                        d_true_keys[true_key][c] = Index(
+                        d_true_keys[true_key][c] = pd.Index(
                             d_true_keys[true_key][c]).astype('U').values
 
         # these are the category fields
@@ -2207,7 +2204,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             # transform to unicode string
             for c in raw['var'].columns:
                 if is_string_dtype(raw['var'][c]):
-                    raw['var'][c] = Index(raw['var'][c]).astype('U').values
+                    raw['var'][c] = pd.Index(raw['var'][c]).astype('U').values
             # these are the category fields
             if 'raw.cat' in ddata:  # old h5ad didn't have that field
                 for k, v in ddata['raw.cat'].items():

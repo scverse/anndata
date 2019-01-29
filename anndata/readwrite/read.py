@@ -427,10 +427,14 @@ def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
         Higher size means higher memory consumption and higher loading speed.
     """
     if isinstance(backed, bool):
-        warnings.warn("In a future version, read_h5ad will no longer explicitly"
-                      " support boolean arguments. Specify the read mode, or "
-                      "leave `backed=None`.",
-                      DeprecationWarning)
+        # We pass `None`s through to h5py.File, and its default is “a”
+        # (=“r+”, but create the file if it doesn’t exist)
+        backed = 'r+' if backed else None
+        warnings.warn(
+            "In a future version, read_h5ad will no longer explicitly support "
+            "boolean arguments. Specify the read mode, or leave `backed=None`.",
+            DeprecationWarning,
+        )
     if backed:
         # open in backed-mode
         return AnnData(filename=filename, filemode=backed)
@@ -443,7 +447,7 @@ def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
 def _read_h5ad(
     adata: AnnData = None,
     filename: Optional[PathLike] = None,
-    mode: str = None,
+    mode: Optional[str] = None,
     chunk_size: int = 6000
 ):
     """Return a dict with arrays for initializing AnnData.
