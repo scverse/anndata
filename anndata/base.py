@@ -201,7 +201,7 @@ def df_to_records_fixed_width(df):
     arrays = [index]
     for k in df.columns:
         names.append(k)
-        if is_string_dtype(df[k]):
+        if is_string_dtype(df[k]) and not is_categorical(df[k]):
             lengths = df[k].map(len)
             if is_categorical(lengths): lengths = lengths.cat.as_ordered()
             arrays.append(df[k].values.astype('S{}'.format(lengths.max())))
