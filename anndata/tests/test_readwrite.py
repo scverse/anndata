@@ -55,10 +55,11 @@ uns_dict = dict(  # unstructured annotation
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_h5ad(typ, backing_h5ad):
     X = typ(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
-    adata.raw = adata
-    adata.write(backing_h5ad)
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    assert pd.api.types.is_string_dtype(adata_src.obs['oanno1'])
+    adata_src.raw = adata_src
+    adata_src.write(backing_h5ad)
+
     adata = ad.read(backing_h5ad)
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
@@ -68,8 +69,9 @@ def test_readwrite_h5ad(typ, backing_h5ad):
 
 
 def test_readwrite_sparse_as_dense(backing_h5ad):
-    adata = ad.AnnData(X_sp)
-    adata.write(backing_h5ad, force_dense=True)
+    adata_src = ad.AnnData(X_sp)
+    adata_src.write(backing_h5ad, force_dense=True)
+
     adata = ad.read(backing_h5ad, chunk_size=2)
     assert issparse(adata.X)
     assert np.allclose(X_sp.toarray(), adata.X.toarray())
@@ -78,18 +80,20 @@ def test_readwrite_sparse_as_dense(backing_h5ad):
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_h5ad_one_dimensino(typ, backing_h5ad):
     X = typ(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata = adata[:, 0].copy()
-    adata.write(backing_h5ad)
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_one = adata_src[:, 0].copy()
+    adata_one.write(backing_h5ad)
     adata = ad.read(backing_h5ad)
+    assert adata.shape == (3, 1)
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_dynamic(typ, backing_h5ad):
     X = typ(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata.filename = backing_h5ad  # change to backed mode
-    adata.write()
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_src.filename = backing_h5ad  # change to backed mode
+    adata_src.write()
+
     adata = ad.read(backing_h5ad)
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
@@ -101,9 +105,10 @@ def test_readwrite_dynamic(typ, backing_h5ad):
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert pd.api.types.is_string_dtype(adata.obs['oanno1'])
-    adata.write_zarr(tmp_path / 'test_zarr_dir', chunks=True)
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    assert pd.api.types.is_string_dtype(adata_src.obs['oanno1'])
+    adata_src.write_zarr(tmp_path / 'test_zarr_dir', chunks=True)
+
     adata = ad.read_zarr(tmp_path / 'test_zarr_dir')
     assert pd.api.types.is_categorical(adata.obs['oanno1'])
     assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
@@ -115,8 +120,9 @@ def test_readwrite_zarr(typ, tmp_path):
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_loom(typ, tmp_path):
     X = typ(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata.write_loom(tmp_path / 'test.loom')
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_src.write_loom(tmp_path / 'test.loom')
+
     adata = ad.read_loom(tmp_path / 'test.loom', sparse=typ is csr_matrix)
     if isinstance(X, np.ndarray):
         assert np.allclose(adata.X, X)
@@ -142,9 +148,9 @@ def test_read_tsv_strpath():
 def test_read_tsv_iter():
     with (HERE / 'adata-comments.tsv').open() as f:
         adata = ad.read_text(f, '\t')
-        assert adata.obs_names.tolist() == ['r1', 'r2', 'r3']
-        assert adata.var_names.tolist() == ['c1', 'c2']
-        assert adata.X.tolist() == X_list
+    assert adata.obs_names.tolist() == ['r1', 'r2', 'r3']
+    assert adata.var_names.tolist() == ['c1', 'c2']
+    assert adata.X.tolist() == X_list
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
@@ -155,12 +161,10 @@ def test_write_csv(typ, tmp_path):
 
 
 @pytest.mark.parametrize(['read', 'write', 'name'], [
-    (ad.read_h5ad, ad.readwrite.write._write_h5ad, 'test_empty.h5ad'),
-    # Loom can’t handle 0×0 matrices
-    # (ad.read_loom, ad.readwrite.write_loom, 'test_empty.loom'),
-    (ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zarr'),
-    # Zip storage doesn’t seem to work…?
-    # (ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zip'),
+    pytest.param(ad.read_h5ad, ad.readwrite.write._write_h5ad, 'test_empty.h5ad'),
+    pytest.param(ad.read_loom, ad.readwrite.write_loom, 'test_empty.loom', marks=pytest.mark.xfail(reason='Loom can’t handle 0×0 matrices')),
+    pytest.param(ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zarr'),
+    pytest.param(ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zip', marks=pytest.mark.xfail(reason='Zarr zip storage doesn’t seem to work…')),
 ])
 def test_readwrite_hdf5_empty(read, write, name, tmp_path):
     if read is ad.read_zarr:
