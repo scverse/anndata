@@ -1394,7 +1394,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         else:
             dfs = [df]
         for df in dfs:
-            string_cols = [key for key in df.columns if is_string_dtype(df[key])]
+            string_cols = [key for key in df.columns if is_string_dtype(df[key]) \
+                           and not is_categorical(df[key])]
             for key in string_cols:
                 # make sure we only have strings (could be that there are
                 # np.nans (float), -666, '-666', for instance)
