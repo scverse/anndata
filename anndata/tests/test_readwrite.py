@@ -2,9 +2,10 @@ from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import pytest
 from scipy.sparse import csr_matrix, issparse
+from pandas.api.types import is_categorical
+
 import anndata as ad
 
 
@@ -56,16 +57,16 @@ uns_dict = dict(  # unstructured annotation
 def test_readwrite_h5ad(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert pd.api.types.is_string_dtype(adata_src.obs['oanno1'])
+    assert not is_categorical(adata_src.obs['oanno1'])
     adata_src.raw = adata_src
     adata_src.write(backing_h5ad)
 
     adata = ad.read(backing_h5ad)
-    assert pd.api.types.is_categorical(adata.obs['oanno1'])
-    assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+    assert is_categorical(adata.obs['oanno1'])
+    assert not is_categorical(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
-    assert pd.api.types.is_categorical(adata.raw.var['vanno2'])
+    assert is_categorical(adata.raw.var['vanno2'])
 
 
 def test_readwrite_sparse_as_dense(backing_h5ad):
@@ -95,8 +96,8 @@ def test_readwrite_dynamic(typ, backing_h5ad):
     adata_src.write()
 
     adata = ad.read(backing_h5ad)
-    assert pd.api.types.is_categorical(adata.obs['oanno1'])
-    assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+    assert is_categorical(adata.obs['oanno1'])
+    assert not is_categorical(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
@@ -106,12 +107,12 @@ def test_readwrite_dynamic(typ, backing_h5ad):
 def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert pd.api.types.is_string_dtype(adata_src.obs['oanno1'])
+    assert not is_categorical(adata_src.obs['oanno1'])
     adata_src.write_zarr(tmp_path / 'test_zarr_dir', chunks=True)
 
     adata = ad.read_zarr(tmp_path / 'test_zarr_dir')
-    assert pd.api.types.is_categorical(adata.obs['oanno1'])
-    assert pd.api.types.is_string_dtype(adata.obs['oanno2'])
+    assert is_categorical(adata.obs['oanno1'])
+    assert not is_categorical(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
