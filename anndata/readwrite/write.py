@@ -89,7 +89,7 @@ def write_loom(filename: PathLike, adata: AnnData):
 def write_zarr(store: Union[MutableMapping, PathLike], adata: AnnData, **kwargs):
     if isinstance(store, Path):
         store = str(store)
-    d = adata._to_dict_fixed_width_arrays()
+    d = adata._to_dict_fixed_width_arrays(var_len_str=False)
     import zarr
     f = zarr.open(store, mode='w')
     for key, value in d.items():

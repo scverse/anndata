@@ -190,22 +190,27 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
     return keys
 
 
-def df_to_records_fixed_width(df):
+def df_to_records_fixed_width(df, var_len_str=True):
     uns = {}  # unstructured dictionary for storing categories
     names = ['index']
-    obj_type = h5py.special_dtype(vlen=str)
     if is_string_dtype(df.index):
-        max_len_index = 0 if 0 in df.shape else df.index.map(len).max()
-        index = df.index.values.astype(obj_type)
+        if var_len_str:
+            index = df.index.values.astype(h5py.special_dtype(vlen=str))
+        else:
+            max_len_index = 0 if 0 in df.shape else df.index.map(len).max()
+            index = df.index.values.astype('S{}'.format(max_len_index))
     else:
         index = df.index.values
     arrays = [index]
     for k in df.columns:
         names.append(k)
         if is_string_dtype(df[k]) and not is_categorical(df[k]):
-            lengths = df[k].map(len)
-            if is_categorical(lengths): lengths = lengths.cat.as_ordered()
-            arrays.append(df[k].values.astype(obj_type))
+            if var_len_str:
+                arrays.append(df[k].values.astype(h5py.special_dtype(vlen=str)))
+            else:
+                lengths = df[k].map(len)
+                if is_categorical(lengths): lengths = lengths.cat.as_ordered()
+                arrays.append(df[k].values.astype('S{}'.format(lengths.max())))
         elif is_categorical(df[k]):
             uns[k + '_categories'] = df[k].cat.categories
             arrays.append(df[k].cat.codes)
@@ -2223,14 +2228,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         return X, obs, var, uns, obsm, varm, layers, raw
 
-    def _to_dict_fixed_width_arrays(self):
+    def _to_dict_fixed_width_arrays(self, var_len_str=True):
         """A dict of arrays that stores data and annotation.
 
         It is sufficient for reconstructing the object.
         """
         self.strings_to_categoricals()
-        obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
-        var_rec, uns_var = df_to_records_fixed_width(self._var)
+        obs_rec, uns_obs = df_to_records_fixed_width(self._obs, var_len_str)
+        var_rec, uns_var = df_to_records_fixed_width(self._var, var_len_str)
         layers = self.layers.as_dict()
         d = {
             'X': self._X,
@@ -2244,7 +2249,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         if self.raw is not None:
             self.strings_to_categoricals(self.raw._var)
-            var_rec, uns_var = df_to_records_fixed_width(self.raw._var)
+            var_rec, uns_var = df_to_records_fixed_width(self.raw._var, var_len_str)
             d['raw.X'] = self.raw.X
             d['raw.var'] = var_rec
             d['raw.varm'] = self.raw.varm
