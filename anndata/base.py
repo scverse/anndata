@@ -2151,21 +2151,21 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         # these are the category fields
         k_to_delete = []
-        items = (ddata.items() if uns_is_not_key
-                else ddata['uns'].items() if 'uns' in ddata else [])
+        items = (
+            ddata.items() if uns_is_not_key
+            else ddata['uns'].items() if 'uns' in ddata else []
+        )
         for k, v in items:
             if k.endswith('_categories'):
                 k_stripped = k.replace('_categories', '')
                 if isinstance(v, (str, int)):  # fix categories with a single category
                     v = [v]
-                if k_stripped in d_true_keys['obs']:
-                    d_true_keys['obs'][k_stripped] = pd.Categorical.from_codes(
-                        codes=d_true_keys['obs'][k_stripped].values,
-                        categories=v)
-                if k_stripped in d_true_keys['var']:
-                    d_true_keys['var'][k_stripped] = pd.Categorical.from_codes(
-                        codes=d_true_keys['var'][k_stripped].values,
-                        categories=v)
+                for ann in ['obs', 'var']:
+                    if k_stripped in d_true_keys[ann]:
+                        d_true_keys[ann][k_stripped] = pd.Categorical.from_codes(
+                            codes=d_true_keys[ann][k_stripped].values,
+                            categories=v,
+                        )
                 k_to_delete.append(k)
 
         for k in k_to_delete:
@@ -2214,8 +2214,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raw['varm'] = None
 
         # the remaining fields are the unstructured annotation
-        uns = (ddata if uns_is_not_key
-               else ddata['uns'] if 'uns' in ddata else {})
+        uns = (
+            ddata if uns_is_not_key
+            else ddata['uns'] if 'uns' in ddata
+            else {}
+        )
 
         return X, obs, var, uns, obsm, varm, layers, raw
 
