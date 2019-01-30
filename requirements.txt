@@ -1,4 +1,4 @@
-pandas>=0.21.0
+pandas>=0.23.0
 numpy~=1.14
 scipy~=1.0
 h5py
