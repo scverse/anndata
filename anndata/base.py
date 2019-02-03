@@ -190,21 +190,27 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
     return keys
 
 
-def df_to_records_fixed_width(df):
+def df_to_records_fixed_width(df, var_len_str=True):
     uns = {}  # unstructured dictionary for storing categories
     names = ['index']
     if is_string_dtype(df.index):
-        max_len_index = 0 if 0 in df.shape else df.index.map(len).max()
-        index = df.index.values.astype('S{}'.format(max_len_index))
+        if var_len_str:
+            index = df.index.values.astype(h5py.special_dtype(vlen=str))
+        else:
+            max_len_index = 0 if 0 in df.shape else df.index.map(len).max()
+            index = df.index.values.astype('S{}'.format(max_len_index))
     else:
         index = df.index.values
     arrays = [index]
     for k in df.columns:
         names.append(k)
         if is_string_dtype(df[k]) and not is_categorical(df[k]):
-            lengths = df[k].map(len)
-            if is_categorical(lengths): lengths = lengths.cat.as_ordered()
-            arrays.append(df[k].values.astype('S{}'.format(lengths.max())))
+            if var_len_str:
+                arrays.append(df[k].values.astype(h5py.special_dtype(vlen=str)))
+            else:
+                lengths = df[k].map(len)
+                if is_categorical(lengths): lengths = lengths.cat.as_ordered()
+                arrays.append(df[k].values.astype('S{}'.format(lengths.max())))
         elif is_categorical(df[k]):
             uns[k + '_categories'] = df[k].cat.categories
             arrays.append(df[k].cat.codes)
@@ -462,7 +468,7 @@ class Raw(IndexMixin):
                 return X.flatten()
             else:
                 return self._X
-            
+
     @property
     def shape(self):
         return self.X.shape
@@ -1855,7 +1861,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:
                 Xs.append(ad[:, vars_intersect].X)
             obs_i += ad.n_obs
-            
+
             # layers
             if join == 'inner':
                 for key in shared_layers:
@@ -1884,7 +1890,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 X = vstack(Xs)
             else:
                 X = np.concatenate(Xs)
-                
+
             for key in shared_layers:
                 if any(issparse(a.layers[key]) for a in all_adatas):
                     layers[key] = vstack(layers[key])
@@ -1955,7 +1961,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         """Write ``.h5ad``-formatted hdf5 file.
 
         .. note::
-           
+
             Setting compression to ``'gzip'`` can save disk space but
             will slow down writing and subsequent reading. Prior to
             v0.6.16, this was the default for parameter
@@ -1964,9 +1970,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         Generally, if you have sparse data that are stored as a dense
         matrix, you can dramatically improve performance and reduce
         disk space by converting to a :class:`~scipy.sparse.csr_matrix`::
-        
+
             from scipy.sparse import csr_matrix
-            adata.X = csr_matrix(adata.X) 
+            adata.X = csr_matrix(adata.X)
 
         Parameters
         ----------
@@ -2222,14 +2228,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         return X, obs, var, uns, obsm, varm, layers, raw
 
-    def _to_dict_fixed_width_arrays(self):
+    def _to_dict_fixed_width_arrays(self, var_len_str=True):
         """A dict of arrays that stores data and annotation.
 
         It is sufficient for reconstructing the object.
         """
         self.strings_to_categoricals()
-        obs_rec, uns_obs = df_to_records_fixed_width(self._obs)
-        var_rec, uns_var = df_to_records_fixed_width(self._var)
+        obs_rec, uns_obs = df_to_records_fixed_width(self._obs, var_len_str)
+        var_rec, uns_var = df_to_records_fixed_width(self._var, var_len_str)
         layers = self.layers.as_dict()
         d = {
             'X': self._X,
@@ -2243,7 +2249,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         if self.raw is not None:
             self.strings_to_categoricals(self.raw._var)
-            var_rec, uns_var = df_to_records_fixed_width(self.raw._var)
+            var_rec, uns_var = df_to_records_fixed_width(self.raw._var, var_len_str)
             d['raw.X'] = self.raw.X
             d['raw.var'] = var_rec
             d['raw.varm'] = self.raw.varm

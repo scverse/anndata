@@ -89,7 +89,7 @@ def write_loom(filename: PathLike, adata: AnnData):
 def write_zarr(store: Union[MutableMapping, PathLike], adata: AnnData, **kwargs):
     if isinstance(store, Path):
         store = str(store)
-    d = adata._to_dict_fixed_width_arrays()
+    d = adata._to_dict_fixed_width_arrays(var_len_str=False)
     import zarr
     f = zarr.open(store, mode='w')
     for key, value in d.items():
@@ -251,7 +251,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
             value = np.array(value)  # make sure value is an array
             if value.ndim == 0: value = np.array([value])  # hm, why that?
         # make sure string format is chosen correctly
-        if value.dtype.kind == 'U': value = value.astype(np.string_)
+        if value.dtype.kind == 'U': value = value.astype(h5py.special_dtype(vlen=str))
         return value
 
     value = preprocess_writing(value)
