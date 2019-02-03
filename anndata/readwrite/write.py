@@ -76,6 +76,11 @@ def write_loom(filename: PathLike, adata: AnnData):
 
     if adata.X is None:
         raise ValueError('loompy does not accept empty matrices as data')
+    if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
+        logger.warning(
+            'Cannot export `.obsm` and `.varm` entries to loom.'
+            'The loom file will lack these fields:\n{}\n'
+            .format(adata.obsm.keys(), adata.varm.keys()))
     layers = {'': adata.X.T}
     for key in adata.layers.keys():
         layers[key] = adata.layers[key].T
