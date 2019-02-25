@@ -1300,7 +1300,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     def _getitem_view(self, index: Index) -> 'AnnData':
         oidx, vidx = self._normalize_indices(index)
-        return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
+        return type(self)(self, oidx=oidx, vidx=vidx, asview=True)
 
     def _remove_unused_categories(self, df_full, df_sub, uns):
         from pandas.api.types import is_categorical
@@ -1522,12 +1522,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 'Call `.copy()` before transposing.')
         layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items(copy=False)}
         if sparse.isspmatrix_csr(X):
-            return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
-                           self._varm.flipped(), self._obsm.flipped(),
-                           filename=self.filename, layers=layers, dtype=self.X.dtype.name)
-        return AnnData(X.T, self._var, self._obs, self._uns,
-                       self._varm.flipped(), self._obsm.flipped(),
-                       filename=self.filename, layers=layers, dtype=self.X.dtype.name)
+            return type(self)(X.T.tocsr(), self._var, self._obs, self._uns,
+                              self._varm.flipped(), self._obsm.flipped(),
+                              filename=self.filename, layers=layers,
+                              dtype=self.X.dtype.name)
+        return type(self)(X.T, self._var, self._obs, self._uns,
+                          self._varm.flipped(), self._obsm.flipped(),
+                          filename=self.filename, layers=layers,
+                          dtype=self.X.dtype.name)
 
     T = property(transpose)
 
@@ -1556,16 +1558,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                     'non-\'float32\' `.X` to \'float32\'. '
                     'Now, the dtype \'{}\' is maintained. '
                     .format(self._X.dtype.name))
-            return AnnData(self._X.copy() if self._X is not None else None,
-                           self._obs.copy(),
-                           self._var.copy(),
-                           # deepcopy on DictView does not work and is unnecessary
-                           # as uns was copied already before
-                           self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
-                           self._obsm.copy(), self._varm.copy(),
-                           raw=None if self._raw is None else self._raw.copy(),
-                           layers=self.layers.as_dict(),
-                           dtype=self._X.dtype.name if self._X is not None else 'float32')
+            return type(self)(
+                self._X.copy() if self._X is not None else None,
+                self._obs.copy(),
+                self._var.copy(),
+                # deepcopy on DictView does not work and is unnecessary
+                # as uns was copied already before
+                self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
+                self._obsm.copy(), self._varm.copy(),
+                raw=None if self._raw is None else self._raw.copy(),
+                layers=self.layers.as_dict(),
+                dtype=self._X.dtype.name if self._X is not None else 'float32'
+            )
         else:
             if filename is None:
                 raise ValueError(
@@ -1576,7 +1580,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             else:
                 from shutil import copyfile
                 copyfile(self.filename, filename)
-            return AnnData(filename=filename)
+            return type(self)(filename=filename)
 
     def concatenate(
         self, *adatas: 'AnnData',
@@ -1903,7 +1907,11 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             sparse_format = all_adatas[0].X.getformat()
             X = X.asformat(sparse_format)
 
-        new_adata = AnnData(X, obs, var, layers=layers) if join == 'inner' else AnnData(X, obs, var)
+        if join == 'inner':
+            new_adata = type(self)(X, obs, var, layers=layers)
+        else:
+            new_adata = type(self)(X, obs, var)
+
         if not obs.index.is_unique:
             logger.info(
                 'Or pass `index_unique!=None` to `.concatenate`.')
