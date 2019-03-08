@@ -1401,7 +1401,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 # np.nans (float), -666, '-666', for instance)
                 c = df[key].astype('U')
                 # make a categorical
-                c = pd.Categorical(c, categories=natsorted(np.unique(c)), ordered=True)
+                c = pd.Categorical(c, categories=natsorted(np.unique(c)))
                 if len(c.categories) < len(c):
                     if dont_modify:
                         raise RuntimeError(
