@@ -127,7 +127,7 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
 
 
 def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
-              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str='float32') -> AnnData:
+              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str='float32', **kwargs) -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
@@ -149,10 +149,12 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         Loompy key where the observation/cell names are stored.
     var_names:
         Loompy key where the variable/gene names are stored.
+    **kwargs:
+        Arguments to loompy.connect
     """
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
-    with connect(filename, 'r') as lc:
+    with connect(filename, 'r', **kwargs) as lc:
 
         if X_name not in lc.layers.keys(): X_name = ''
         X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
