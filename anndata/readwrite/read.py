@@ -58,7 +58,7 @@ def read_excel(
     """
     # rely on pandas for reading an excel file
     from pandas import read_excel
-    df = read_excel(fspath(filename), sheet, dtype=dtype)
+    df = read_excel(fspath(filename), sheet)
     X = df.values[:, 1:]
     row = {'row_names': df.iloc[:, 0].values.astype(str)}
     col = {'col_names': np.array(df.columns[1:], dtype=str)}
