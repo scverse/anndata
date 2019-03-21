@@ -8,13 +8,13 @@ from pandas.api.types import is_categorical
 
 import anndata as ad
 
-
 HERE = Path(__file__).parent
 
 
 # -------------------------------------------------------------------------------
 # Some test data
 # -------------------------------------------------------------------------------
+
 X_sp = csr_matrix([
     [1, 0, 0],
     [3, 0, 0],
@@ -174,3 +174,8 @@ def test_readwrite_hdf5_empty(read, write, name, tmp_path):
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
     assert ad_read.uns['empty'].shape == (0,)
+
+
+def test_read_excel():
+    adata = ad.read_excel(HERE / 'data/excel.xlsx', 'Sheet1', dtype=int)
+    assert adata.X.tolist() == X_list
