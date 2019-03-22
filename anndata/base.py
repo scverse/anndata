@@ -391,7 +391,7 @@ class _ViewMixin(_SetItemMixin):
         super().__init__(*args, **kwargs)
 
 
-class ArrayView(np.ndarray, _SetItemMixin):
+class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],

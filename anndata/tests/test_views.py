@@ -47,3 +47,11 @@ def test_views():
     assert not adata_subset.isview
 
     assert adata_subset.obs['foo'].tolist() == list(range(2))
+
+
+def test_slice_copy():
+    adata = ad.AnnData(np.empty((100, 100)))
+    adata.obsm['o'] = np.empty((100, 50))
+
+    adata = adata[:50]
+    adata.obsm['o'] = np.ones((50, 20))
