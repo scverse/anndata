@@ -67,7 +67,7 @@ def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: s
         )
 
 
-def write_loom(filename: PathLike, adata: AnnData):
+def write_loom(filename: PathLike, adata: AnnData, write_embeddings: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict('list').items()}
     row_attrs['var_names'] = adata.var_names.values
@@ -76,11 +76,21 @@ def write_loom(filename: PathLike, adata: AnnData):
 
     if adata.X is None:
         raise ValueError('loompy does not accept empty matrices as data')
-    if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
-        logger.warning(
-            'Cannot export `.obsm` and `.varm` entries to loom.'
-            'The loom file will lack these fields:\n{}\n'
-            .format(adata.obsm.keys(), adata.varm.keys()))
+
+    if write_embeddings:
+        for key in adata.obsm.keys():
+            for i in range(adata.obsm[key].shape[1]):
+                col_attrs[f'obsm_{key}_{i+1}'] = adata.obsm[key][:, i]
+        for key in adata.varm.keys():
+            for i in range(adata.varm[key].shape[1]):
+                row_attrs[f'varm_{key}_{i+1}'] = adata.varm[key][:, i]
+    else:
+        if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
+            logger.warning(
+                'The loom file will lack these fields:\n{}\n'
+                'Use write_embeddings=True to export embeddings.'
+                .format(adata.obsm.keys() + adata.varm.keys()))
+
     layers = {'': adata.X.T}
     for key in adata.layers.keys():
         layers[key] = adata.layers[key].T
