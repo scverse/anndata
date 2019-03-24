@@ -86,7 +86,7 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
         if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
             logger.warning(
                 'The loom file will lack these fields:\n{}\n'
-                'Use write_embeddings=True to export embeddings.'
+                'Use write_obsm_varm=True to export multi-dimensional annotations'
                 .format(adata.obsm.keys() + adata.varm.keys()))
 
     layers = {'': adata.X.T}
