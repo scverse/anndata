@@ -80,10 +80,10 @@ def write_loom(filename: PathLike, adata: AnnData, write_embeddings: bool = Fals
     if write_embeddings:
         for key in adata.obsm.keys():
             for i in range(adata.obsm[key].shape[1]):
-                col_attrs[f'obsm_{key}_{i+1}'] = adata.obsm[key][:, i]
+                col_attrs['obsm_{}_{}'.format(key, i+1)] = adata.obsm[key][:, i]
         for key in adata.varm.keys():
             for i in range(adata.varm[key].shape[1]):
-                row_attrs[f'varm_{key}_{i+1}'] = adata.varm[key][:, i]
+                row_attrs['varm_{}_{}'.format(key, i+1)] = adata.varm[key][:, i]
     else:
         if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
             logger.warning(
