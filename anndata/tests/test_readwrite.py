@@ -122,7 +122,9 @@ def test_readwrite_zarr(typ, tmp_path):
 def test_readwrite_loom(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata_src.write_loom(tmp_path / 'test.loom')
+    adata_src.obsm['X_a'] = np.zeros((adata_src.n_obs, 2))
+    adata_src.varm['X_b'] = np.zeros((adata_src.n_vars, 2))
+    adata_src.write_loom(tmp_path / 'test.loom', write_embeddings=True)
 
     adata = ad.read_loom(tmp_path / 'test.loom', sparse=typ is csr_matrix)
     if isinstance(X, np.ndarray):
