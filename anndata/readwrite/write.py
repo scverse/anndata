@@ -67,7 +67,7 @@ def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: s
         )
 
 
-def write_loom(filename: PathLike, adata: AnnData, write_embeddings: bool = False):
+def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict('list').items()}
     row_attrs['var_names'] = adata.var_names.values
@@ -77,13 +77,11 @@ def write_loom(filename: PathLike, adata: AnnData, write_embeddings: bool = Fals
     if adata.X is None:
         raise ValueError('loompy does not accept empty matrices as data')
 
-    if write_embeddings:
+    if write_obsm_varm:
         for key in adata.obsm.keys():
-            for i in range(adata.obsm[key].shape[1]):
-                col_attrs['obsm_{}_{}'.format(key, i+1)] = adata.obsm[key][:, i]
+            col_attrs[key] = adata.obsm[key]
         for key in adata.varm.keys():
-            for i in range(adata.varm[key].shape[1]):
-                row_attrs['varm_{}_{}'.format(key, i+1)] = adata.varm[key][:, i]
+            row_attrs[key] = adata.varm[key]
     else:
         if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
             logger.warning(

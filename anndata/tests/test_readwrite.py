@@ -123,8 +123,8 @@ def test_readwrite_loom(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.obsm['X_a'] = np.zeros((adata_src.n_obs, 2))
-    adata_src.varm['X_b'] = np.zeros((adata_src.n_vars, 2))
-    adata_src.write_loom(tmp_path / 'test.loom', write_embeddings=True)
+    adata_src.varm['X_b'] = np.zeros((adata_src.n_vars, 3))
+    adata_src.write_loom(tmp_path / 'test.loom', write_obsm_varm=True)
 
     adata = ad.read_loom(tmp_path / 'test.loom', sparse=typ is csr_matrix)
     if isinstance(X, np.ndarray):
@@ -132,6 +132,8 @@ def test_readwrite_loom(typ, tmp_path):
     else:
         # TODO: this should not be necessary
         assert np.allclose(adata.X.toarray(), X.toarray())
+    assert 'X_a' in adata.obsm_keys() and adata.obsm['X_a'].shape[1] == 2
+    assert 'X_b' in adata.varm_keys() and adata.varm['X_b'].shape[1] == 3
 
 
 def test_read_csv():

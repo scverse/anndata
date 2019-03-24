@@ -2021,7 +2021,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         from .readwrite.write import write_csvs
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
-    def write_loom(self, filename: PathLike, write_embeddings: bool = False):
+    def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
         """Write ``.loom``-formatted hdf5 file.
 
         Parameters
@@ -2030,7 +2030,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             The filename.
         """
         from .readwrite.write import write_loom
-        write_loom(filename, self, write_embeddings = write_embeddings)
+        write_loom(filename, self, write_obsm_varm = write_obsm_varm)
 
     def write_zarr(
         self,
