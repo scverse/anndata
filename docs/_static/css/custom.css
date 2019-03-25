@@ -1,7 +1,17 @@
-.rst-content tt.literal,
-.rst-content code.literal {
-    /* Dark gray instead of red for literals */
-    color: #404040;
+.noteversion {
+    font-size:70%;
+}
+
+.noteversion:after {
+    content: "/";
+}
+
+.small {
+    font-size:40%;
+}
+
+.smaller {
+    font-size:70%;
 }
 
 .rst-content tt:not(.xref),
@@ -39,4 +49,8 @@
     margin: 0 0 12px;
     padding: 3px 0 0;
     font-size: 111.11%;
+}
+
+.rst-content tt.literal, .rst-content tt.literal, .rst-content code.literal {
+    color: #404040;
 }
