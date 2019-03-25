@@ -443,7 +443,12 @@ def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
         return AnnData(filename=filename, filemode=backed)
     else:
         # load everything into memory
-        return AnnData(*_read_args_from_h5ad(filename=filename, chunk_size=chunk_size))
+        constructor_args = _read_args_from_h5ad(filename=filename, chunk_size=chunk_size)
+        X = constructor_args[0]
+        dtype = None
+        if X is not None:
+            dtype = X.dtype.name  # maintain dtype, since 0.7
+        return AnnData(*_read_args_from_h5ad(filename=filename, chunk_size=chunk_size), dtype=dtype)
 
 
 def _read_args_from_h5ad(

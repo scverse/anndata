@@ -69,6 +69,16 @@ def test_readwrite_h5ad(typ, backing_h5ad):
     assert is_categorical(adata.raw.var['vanno2'])
 
 
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_maintain_dtype(typ, backing_h5ad):
+    X = typ(X_list)
+    adata_src = ad.AnnData(X, dtype='int8')
+    adata_src.write(backing_h5ad)
+
+    adata = ad.read(backing_h5ad)
+    assert adata.X.dtype == adata_src.X.dtype
+
+
 def test_readwrite_sparse_as_dense(backing_h5ad):
     adata_src = ad.AnnData(X_sp)
     adata_src.write(backing_h5ad, force_dense=True)
@@ -79,7 +89,7 @@ def test_readwrite_sparse_as_dense(backing_h5ad):
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_h5ad_one_dimensino(typ, backing_h5ad):
+def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_one = adata_src[:, 0].copy()
