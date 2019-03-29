@@ -67,7 +67,7 @@ def write_csvs(dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: s
         )
 
 
-def write_loom(filename: PathLike, adata: AnnData):
+def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict('list').items()}
     row_attrs['var_names'] = adata.var_names.values
@@ -76,11 +76,19 @@ def write_loom(filename: PathLike, adata: AnnData):
 
     if adata.X is None:
         raise ValueError('loompy does not accept empty matrices as data')
-    if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
-        logger.warning(
-            'Cannot export `.obsm` and `.varm` entries to loom.'
-            'The loom file will lack these fields:\n{}\n'
-            .format(adata.obsm.keys(), adata.varm.keys()))
+
+    if write_obsm_varm:
+        for key in adata.obsm.keys():
+            col_attrs[key] = adata.obsm[key]
+        for key in adata.varm.keys():
+            row_attrs[key] = adata.varm[key]
+    else:
+        if len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
+            logger.warning(
+                'The loom file will lack these fields:\n{}\n'
+                'Use write_obsm_varm=True to export multi-dimensional annotations'
+                .format(adata.obsm.keys() + adata.varm.keys()))
+
     layers = {'': adata.X.T}
     for key in adata.layers.keys():
         layers[key] = adata.layers[key].T

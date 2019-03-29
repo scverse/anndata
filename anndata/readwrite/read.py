@@ -164,11 +164,21 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         for key in lc.layers.keys():
             if key != '': layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
 
-        obs=dict(lc.col_attrs)
+        obs = dict(lc.col_attrs)
         if obs_names in obs.keys(): obs['obs_names'] = obs.pop(obs_names)
+        obsm_attrs = [k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1]
 
-        var=dict(lc.row_attrs)
+        obsm = {}
+        for key in obsm_attrs:
+            obsm[key] = obs.pop(key)
+
+        var = dict(lc.row_attrs)
         if var_names in var.keys(): var['var_names'] = var.pop(var_names)
+        varm_attrs = [k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1]
+
+        varm = {}
+        for key in varm_attrs:
+            varm[key] = var.pop(key)
 
         if cleanup:
             for key in list(obs.keys()):
@@ -183,6 +193,8 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
             obs=obs,  # not ideal: make the generator a dict...
             var=var,
             layers=layers,
+            obsm=obsm if obsm else None,
+            varm=varm if varm else None,
             dtype=dtype)
     return adata
 
