@@ -12,7 +12,7 @@ On master :small:`March 23, 2019`
 - bug fix for https://github.com/theislab/anndata/issues/126 :noteversion:`0.6.19`
 - bug fix for reading excel files :noteversion:`0.6.19`
 - :attr:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
-- initialatization from pandas DataFrames
+- initialization from pandas DataFrames
 - iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
 - support for reading zarr files: :func:`~anndata.read_zarr`
 - changed default compression to ``None`` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical :noteversion:`0.6.16`
