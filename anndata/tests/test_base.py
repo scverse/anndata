@@ -331,6 +331,11 @@ def test_concatenate():
         [np.nan, 6.0, 5.0, 4.0],
         [np.nan, 3.0, 2.0, 1.0],
         [np.nan, 6.0, 5.0, 4.0]]))
+    print(Xma.dtype)
+    print(Xma)
+    print(Xma.mask)
+    print(Xma_ref)
+    print(Xma_ref.mask)
     assert np.array_equal(Xma.mask, Xma_ref.mask)
     assert np.allclose(Xma.compressed(), Xma_ref.compressed())
     var_ma = ma.masked_invalid(adata.var.values.tolist())
