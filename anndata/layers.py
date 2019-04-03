@@ -13,7 +13,7 @@ class AnnDataLayers:
         self,
         adata: 'AnnData',
         layers: Optional[Mapping[str, np.ndarray]] = None,
-        dtype: Union[str, np.dtype] = None,
+        dtype: Union[str, np.dtype] = 'float32',
         adata_ref: 'AnnData' = None,
         oidx: 'Index' = None,
         vidx: 'Index' = None,
@@ -32,10 +32,11 @@ class AnnDataLayers:
                     .format(key, type(layer).__name__)
                 )
             if layer.shape != self._adata.shape:
-                raise ValueError('Shape of layer {} does not fit.'.format(key))
-            if dtype is not None:
+                raise ValueError('Shape does not fit.')
+            if layer.dtype != np.dtype(dtype):
                 self._layers[key] = layer.astype(dtype, copy=False)
-            self._layers[key] = layer
+            else:
+                self._layers[key] = layer
 
     def __getitem__(self, key):
         if self.isview:

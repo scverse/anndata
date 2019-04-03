@@ -653,7 +653,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Raw] = None,
-        dtype: Union[np.dtype, str] = None,
+        dtype: Union[np.dtype, str] = 'float32',
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
         filemode: Optional[str] = None,
@@ -759,7 +759,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
             obsm=None, varm=None, raw=None, layers=None,
-            dtype=None, shape=None,
+            dtype='float32', shape=None,
             filename=None, filemode=None):
         from .readwrite.read import _read_args_from_h5ad
 
@@ -817,11 +817,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 raise ValueError('`shape` needs to be `None` is `X` is not `None`.')
             _check_2d_shape(X)
             # if type doesn't match, a copy is made, otherwise, use a view
-            if dtype is not None:
-                if issparse(X) or isinstance(X, ma.MaskedArray) or isinstance(X, ZarrArray):
-                    X = X.astype(dtype)
-                else:  # is np.ndarray
-                    X = X.astype(dtype, copy=False)
+            if issparse(X) or isinstance(X, ma.MaskedArray):
+                # TODO: maybe use view on data attribute of sparse matrix
+                #       as in readwrite.read_10x_h5
+                if X.dtype != np.dtype(dtype): X = X.astype(dtype)
+            elif isinstance(X, ZarrArray):
+                X = X.astype(dtype)
+            else:  # is np.ndarray
+                X = X.astype(dtype, copy=False)
             # data matrix and shape
             self._X = X
             self._n_obs, self._n_vars = self._X.shape
@@ -1815,12 +1818,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             if any_sparse:  # not sure whether the lil_matrix is really the best option
                 X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
             else:
-                if np.issubdtype(self.X.dtype, np.integer):
-                    dtype = 'float32'
-                    logger.warning('Transforming to `float32` as integer cannot represent NaNs.')
-                else:
-                    dtype = self.X.dtype
-                X = np.empty(out_shape, dtype=dtype)
+                X = np.empty(out_shape, dtype=self.X.dtype)
                 X[:] = np.nan
         else:
             Xs = []

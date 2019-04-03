@@ -9,7 +9,6 @@ On master :small:`March 23, 2019`
 ---------------------------------
 
 - maintain dtype upon read/write :noteversion:`to appear as 0.7`
-- maintain dtype during initialization :noteversion:`to appear as 0.7`
 - bug fix for https://github.com/theislab/anndata/issues/126 :noteversion:`0.6.19`
 - bug fix for reading excel files :noteversion:`0.6.19`
 - :attr:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
