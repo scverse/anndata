@@ -854,16 +854,19 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._uns = uns or OrderedDict()
 
         # multi-dimensional array annotations
-        if obsm is None:
-            try:
+        # None or {} → empty arrays
+        try:
+            if not obsm:
                 obsm = np.empty(self._n_obs, dtype=[])
-            except TypeError:
-                raise TypeError(
-                    'TypeError: Empty data-type'
-                    '--> try installing a more recent numpy version: '
-                    '    pip install numpy --upgrade')
-        if varm is None: varm = np.empty(self._n_vars, dtype=[])
-        # deal with dictionaries
+            if not varm:
+                varm = np.empty(self._n_vars, dtype=[])
+        except TypeError:
+            raise TypeError(
+                'TypeError: Empty data-type\n'
+                '--> try installing a more recent numpy version: \n'
+                '    pip install numpy --upgrade'
+            )
+        # deal with non-empty dictionaries
         if isinstance(obsm, Mapping):
              obsm = utils.convert_dictionary_to_structured_array(obsm)
         if isinstance(varm, Mapping):
