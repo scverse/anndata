@@ -16,6 +16,7 @@ On master :small:`March 23, 2019`
 - iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
 - support for reading zarr files: :func:`~anndata.read_zarr`
 - changed default compression to ``None`` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical :noteversion:`0.6.16`
+- maintain dtype upon copy :noteversion:`0.6.13`
 
 
 Version 0.6 :small:`May 1, 2018`
