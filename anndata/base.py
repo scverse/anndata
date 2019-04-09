@@ -1511,12 +1511,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
         Data matrix is transposed, observations and variables are interchanged.
         """
-        if self._X is not None and self._X.dtype.name != 'float32':
-            logger.warning(
-                'Up to anndata 0.6.12, `.transpose()` cast a '
-                'non-\'float32\' `.X` to \'float32\'. '
-                'Now, the dtype \'{}\' is maintained. '
-                .format(self._X.dtype.name))
         if not self.isbacked: X = self._X
         else: X = self.file['X']
         if self.isview:
