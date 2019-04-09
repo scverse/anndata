@@ -1547,12 +1547,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self._X is not None and self._X.dtype.name != 'float32':
-                logger.warning(
-                    'Up to anndata 0.6.12, `.copy()` cast a '
-                    'non-\'float32\' `.X` to \'float32\'. '
-                    'Now, the dtype \'{}\' is maintained. '
-                    .format(self._X.dtype.name))
             return AnnData(self._X.copy() if self._X is not None else None,
                            self._obs.copy(),
                            self._var.copy(),
