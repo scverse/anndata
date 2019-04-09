@@ -856,9 +856,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # multi-dimensional array annotations
         # None or {} → empty arrays
         try:
-            if not obsm:
+            if not isinstance(obsm, np.ndarray) and not obsm:
                 obsm = np.empty(self._n_obs, dtype=[])
-            if not varm:
+            if not isinstance(varm, np.ndarray) and not varm:
                 varm = np.empty(self._n_vars, dtype=[])
         except TypeError:
             raise TypeError(
