@@ -265,9 +265,10 @@ def _normalize_index(index, names):
         positions = pd.Series(index=names, data=range(len(names)))
         positions = positions[index]
         if positions.isnull().values.any():
+            not_found = positions.index[positions.isnull().values]
             raise KeyError(
-                'Indices "{}" contain invalid observation/variables names/indices.'
-                .format(index))
+                "Values {}, from {}, are not valid obs/ var names or indices."
+                .format(list(not_found), list(positions.index)))
         return positions.values
     else:
         raise IndexError('Unknown index {!r} of type {}'
