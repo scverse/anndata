@@ -152,6 +152,12 @@ def test_slicing_strings():
     with raises(IndexError): _ = adata['X', :]
     with raises(IndexError): _ = adata['A':'X', :]
     with raises(IndexError): _ = adata[:, 'a':'X']
+    
+    # Test if errors are helpful
+    with raises(KeyError, match=r"not_in_var"):
+        adata[:, ["A", "B", "not_in_var"]]
+    with raises(KeyError, match=r"not_in_obs"):
+        adata[["A", "B", "not_in_obs"], :]
 
 
 def test_slicing_graphs():
