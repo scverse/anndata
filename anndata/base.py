@@ -60,6 +60,80 @@ class StorageType(Enum):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
 
+from collections.abc import MutableMapping
+
+class DictMBase(MutableMapping):
+    """A dict whose values must match a dimension of the parent."""
+
+    def _validate_value(self, value):
+        # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
+        n = self.parent.shape[self.dimension]
+        if not value.shape[0] == n:
+            raise ValueError()
+        try:
+            # Could probably also re-order index if it's contained
+            if not (value.index == self.dim_names).all():
+                raise IndexError()  # Maybe not index error
+        except AttributeError:
+            pass
+    
+    def view(self, subset):
+        return DictMView(self, subset)
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        self._validate_value(value)
+        self._data[key] = value
+
+    def __iter__(self):
+        return self._data.__iter__()
+
+    def __len__(self):
+        return self._data.__len__()
+
+    def to_df(self) -> pd.DataFrame:
+        """Convert to pandas dataframe."""
+        df = pd.DataFrame(index=self.dim_names)
+        for key in self.keys():
+            value = self[key]
+            for icolumn, column in enumerate(value.T):
+                df['{}{}'.format(key, icolumn + 1)] = column
+        return df
+
+
+class DictM(DictMBase):
+    def __init__(self, parent, dimension: int):
+        self.parent = parent
+        if dimension not in (0, 1):
+            raise ValueError()
+        self.dimension = dimension
+        self.dim_names = (parent.obs_names, parent.var_names)[dimension]
+        self._data = dict()
+
+    def __delitem__(self, key):  # A view probably can't do this
+        self._data.__delitem__(key)
+
+
+class DictMView(DictMBase):
+    def __init__(self, parent_dictm, subset):
+        parent = parent_dictm
+        print("View initing")
+        print(f"View of {parent}, of axis {parent.dimension}")
+        self.parent = parent_dictm # Is this weird?
+        self.subset = subset
+        self._data = {k: v[subset] for k, v in self.parent._data.items()}
+    
+    def _init_as_actual(self):
+        d = DictM(self.parent.parent, self.parent.dimension)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
+
+    def __delitem__(self, key):  # A view probably can't do this
+        self.parent._data.__delitem__(key)
+
 
 class BoundRecArr(np.recarray):
     """A :class:`numpy.recarray` to which fields can be added using ``.['key']``.
@@ -689,8 +763,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if isinstance(vidx, (int, np.int64)): vidx_normalized = slice(vidx, vidx+1, 1)
         obs_sub = adata_ref.obs.iloc[oidx_normalized]
         var_sub = adata_ref.var.iloc[vidx_normalized]
-        self._obsm = ArrayView(adata_ref.obsm[oidx_normalized], view_args=(self, 'obsm'))
-        self._varm = ArrayView(adata_ref.varm[vidx_normalized], view_args=(self, 'varm'))
+        self._obsm = adata_ref.obsm.view(oidx_normalized)
+        self._varm = adata_ref.varm.view(vidx_normalized)
         # hackish solution here, no copy should be necessary
         uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
@@ -1117,6 +1191,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
     @obsm.setter
     def obsm(self, value: np.ndarray):
+        print("hi")
         if not isinstance(value, np.ndarray):
             raise ValueError('Can only assign `np.ndarray`.')
         if len(value) != self.n_obs:
