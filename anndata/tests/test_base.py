@@ -54,6 +54,22 @@ def test_create_from_df():
     assert df.columns.tolist() == ad.var_names.tolist()
     assert df.index.tolist() == ad.obs_names.tolist()
 
+def test_create_from_df_with_obs_and_var():
+    df = pd.DataFrame(np.ones((3, 2)), index=['a', 'b', 'c'], columns=['A', 'B'])
+    obs = pd.DataFrame(np.ones((3, 1)), index=df.index, columns=['C'])
+    var = pd.DataFrame(np.ones((2, 1)), index=df.columns, columns=['D'])
+    ad = AnnData(df, obs=obs, var=var)
+    assert df.values.tolist() == ad.X.tolist()
+    assert df.columns.tolist() == ad.var_names.tolist()
+    assert df.index.tolist() == ad.obs_names.tolist()
+    assert obs.equals(ad.obs)
+    assert var.equals(ad.var)
+    
+    from pytest import raises
+    with raises(ValueError, match=r'Index of obs must match index of X.'):
+        AnnData(df, obs=obs.reset_index())
+    with raises(ValueError, match=r'Index of var must match columns of X.'):
+        AnnData(df, var=var.reset_index())
 
 def test_names():
     adata = AnnData(
@@ -416,3 +432,4 @@ def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
     assert df.values.tolist() == X.tolist()
+
