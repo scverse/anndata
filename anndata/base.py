@@ -797,8 +797,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
-                obs = pd.DataFrame(index=X.index)
-                var = pd.DataFrame(index=X.columns)
+                if obs is None:
+                    obs = pd.DataFrame(index=X.index)
+                else:
+                    if not X.index.equals(obs.index):
+                        raise ValueError(
+                            'Index of obs must match index of X.')
+                if var is None:
+                    var = pd.DataFrame(index=X.columns)
+                else:
+                    if not X.columns.equals(var.index):
+                        raise ValueError(
+                            'Index of var must match columns of X.')
                 X = X.values
 
         # ----------------------------------------------------------------------
