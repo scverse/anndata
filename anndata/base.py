@@ -69,7 +69,7 @@ class DictMBase(MutableMapping):
         # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
         n = self.parent.shape[self.dimension]
         if not value.shape[0] == n:
-            raise ValueError()
+            raise ValueError(f"Values of ***m must match *** dimension of parent. This value has {value.shape[0]} rows, should have {n}") # TODO: Make obsm/ varm name easy to get
         try:
             # Could probably also re-order index if it's contained
             if not (value.index == self.dim_names).all():
@@ -85,6 +85,7 @@ class DictMBase(MutableMapping):
 
     def __setitem__(self, key, value):
         self._validate_value(value)
+        # TODO: would be nice to get a key name on error
         self._data[key] = value
 
     def __iter__(self):
@@ -92,6 +93,9 @@ class DictMBase(MutableMapping):
 
     def __len__(self):
         return self._data.__len__()
+
+    def __delitem__(self, key):  # A view probably can't do this
+        self._data.__delitem__(key)
 
     def to_df(self) -> pd.DataFrame:
         """Convert to pandas dataframe."""
@@ -111,18 +115,19 @@ class DictM(DictMBase):
         self.dimension = dimension
         self.dim_names = (parent.obs_names, parent.var_names)[dimension]
         self._data = dict()
-
-    def __delitem__(self, key):  # A view probably can't do this
-        self._data.__delitem__(key)
+    
+    def copy(self):
+        new = DictM(self.parent, self.dimension)  # TODO: parent
+        new.update(self._data)
+        return new
 
 
 class DictMView(DictMBase):
     def __init__(self, parent_dictm, subset):
-        parent = parent_dictm
-        print("View initing")
-        print(f"View of {parent}, of axis {parent.dimension}")
+        print(f"View of {parent_dictm}, of axis {parent_dictm.dimension}")
         self.parent = parent_dictm # Is this weird?
         self.subset = subset
+        self.dim_names = self.parent.dim_names[subset]
         self._data = {k: v[subset] for k, v in self.parent._data.items()}
     
     def _init_as_actual(self):
@@ -130,9 +135,6 @@ class DictMView(DictMBase):
         for k, v in self.items():
             d[k] = v.copy()
         return d
-
-    def __delitem__(self, key):  # A view probably can't do this
-        self.parent._data.__delitem__(key)
 
 
 class BoundRecArr(np.recarray):
@@ -931,10 +933,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # multi-dimensional array annotations
         # None or {} → empty arrays
         try:
-            if not isinstance(obsm, np.ndarray) and not obsm:
-                obsm = np.empty(self._n_obs, dtype=[])
-            if not isinstance(varm, np.ndarray) and not varm:
-                varm = np.empty(self._n_vars, dtype=[])
+            if obsm is None:
+                obsm = dict()
+            if varm is None:
+                varm = dict()
         except TypeError:
             raise TypeError(
                 'TypeError: Empty data-type\n'
@@ -942,12 +944,10 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                 '    pip install numpy --upgrade'
             )
         # deal with non-empty dictionaries
-        if isinstance(obsm, Mapping):
-             obsm = utils.convert_dictionary_to_structured_array(obsm)
-        if isinstance(varm, Mapping):
-             varm = utils.convert_dictionary_to_structured_array(varm)
-        self._obsm = BoundRecArr(obsm, self, 'obsm')
-        self._varm = BoundRecArr(varm, self, 'varm')
+        self._obsm = DictM(self, 0)
+        self._obsm.update(obsm)
+        self._varm = DictM(self, 1)
+        self._varm.update(varm)
 
         self._check_dimensions()
         self._check_uniqueness()
@@ -2009,14 +2009,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Variables annot. `var` must have number of '
                              'columns of `X` ({}), but has {} rows.'
                              .format(self._n_vars, self._var.shape[0]))
-        if 'obsm' in key and len(self._obsm) != self._n_obs:
-            raise ValueError('Observations annot. `obsm` must have number of '
-                             'rows of `X` ({}), but has {} rows.'
-                             .format(self._n_obs, len(self._obsm)))
-        if 'varm' in key and len(self._varm) != self._n_vars:
-            raise ValueError('Variables annot. `varm` must have number of '
-                             'columns of `X` ({}), but has {} rows.'
-                             .format(self._n_vars, len(self._varm)))
+        if 'obsm' in key:
+            obsm = self._obsm
+            if not all([o.shape[0] == self._n_obs for o in obsm.values()]) and len(obsm.dim_names) != self._n_obs:
+                raise ValueError('Observations annot. `obsm` must have number of '
+                                'rows of `X` ({}), but has {} rows.'
+                                .format(self._n_obs, len(self._obsm)))
+        if 'varm' in key:
+            varm = self._varm
+            if not all([v.shape[0] == self._n_var for v in varm.values()]) and len(varm.dim_names) != self._n_var:
+                raise ValueError('Variables annot. `varm` must have number of '
+                                'columns of `X` ({}), but has {} rows.'
+                                .format(self._n_vars, len(self._varm)))
 
     def write_h5ad(
         self,
