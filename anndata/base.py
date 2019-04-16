@@ -48,6 +48,18 @@ from .logging import anndata_logger as logger
 from .compat import PathLike
 
 
+def compound_dtype_to_dict(a):
+    """
+    Convert a numpy array of compound data types to a dict.
+    """
+    if a.dtype.fields is None:
+        raise ValueError()
+    d = dict()
+    for k in a.dtype.fields.keys():
+        d[k] = a[k]  # .copy()?
+    return d
+
+
 class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
@@ -89,7 +101,11 @@ class DictMBase(MutableMapping):
         return self._data[key]
 
     def __setitem__(self, key, value):
-        self._validate_value(value)
+        try:
+            self._validate_value(value)
+        except Exception:
+            print(f"Error setting key {key}")  # TODO: format the error to include this
+            raise
         # TODO: would be nice to get a key name on error
         self._data[key] = value
 
@@ -1028,7 +1044,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 '--> try installing a more recent numpy version: \n'
                 '    pip install numpy --upgrade'
             )
-        # deal with non-empty dictionaries
+
+        # TODO: Probably do this much earlier, potentially for backwards compat
+        # Think about consequences of making obsm a group in hdf
+        if isinstance(obsm, np.ndarray):
+            obsm = compound_dtype_to_dict(obsm)
+        if isinstance(varm, np.ndarray):
+            varm = compound_dtype_to_dict(varm)
         self._obsm = DictM(self, 0)
         self._obsm.update(obsm)
         self._varm = DictM(self, 1)
@@ -2176,7 +2198,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                                 .format(self._n_obs, len(self._obsm)))
         if 'varm' in key:
             varm = self._varm
-            if not all([v.shape[0] == self._n_var for v in varm.values()]) and len(varm.dim_names) != self._n_var:
+            if not all([v.shape[0] == self._n_vars for v in varm.values()]) and len(varm.dim_names) != self._n_var:
                 raise ValueError('Variables annot. `varm` must have number of '
                                 'columns of `X` ({}), but has {} rows.'
                                 .format(self._n_vars, len(self._varm)))
