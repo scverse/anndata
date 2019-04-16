@@ -599,13 +599,13 @@ class Raw:
         oidx, vidx = self._normalize_indices(index)
         if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
         else: X = self._adata.file['raw.X'][oidx, vidx]
-        if isinstance(vidx, (int, np.int64)): vidx = slice(vidx, vidx+1, 1)
+        if isinstance(vidx, (int, np.int64)): 
+            vidx = slice(vidx, vidx+1, 1)  # why this?
         var = self._var.iloc[vidx]
+        new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
-            varm = self._varm[vidx]
-        else:
-            varm = None
-        return Raw(self._adata, X=X, var=var, varm=varm)
+            new._varm = self._varm.view(self, vidx)
+        return new
 
     def copy(self):
         return Raw(self._adata, X=self._X.copy(), var=self._var.copy(),
