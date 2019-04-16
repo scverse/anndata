@@ -3,10 +3,11 @@
 import os
 from enum import Enum
 from collections import OrderedDict
+from collections.abc import MutableMapping
 from functools import reduce
 from pathlib import Path
 from typing import Any, Union, Optional
-from typing import Iterable, Sized, Sequence, Mapping, MutableMapping
+from typing import Iterable, Sized, Sequence, Mapping
 from typing import Tuple, List, Dict, KeysView
 from copy import deepcopy
 
@@ -51,6 +52,15 @@ from .compat import PathLike
 def compound_dtype_to_dict(a):
     """
     Convert a numpy array of compound data types to a dict.
+
+    Usage
+    -----
+    >>> a = np.array(
+            [((1, 2), (3., 4., 5.))],
+            dtype=[("a", int, (2,)), ("b", float, (3,))]
+        )
+    >>> compound_dtype_to_dict(a)
+    {'a': array([[1, 2]]), 'b': array([[3., 4., 5.]])}
     """
     if a.dtype.fields is None:
         raise ValueError()
@@ -71,8 +81,6 @@ class StorageType(Enum):
     def classes(cls):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
-
-from collections.abc import MutableMapping
 
 class DictMBase(MutableMapping):
     """A dict whose values must match a dimension of the parent."""
