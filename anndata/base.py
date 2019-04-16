@@ -77,8 +77,8 @@ class DictMBase(MutableMapping):
         except AttributeError:
             pass
     
-    def view(self, subset):
-        return DictMView(self, subset)
+    def view(self, parent, subset):
+        return DictMView(self, parent, subset)
 
     def __getitem__(self, key):
         return self._data[key]
@@ -96,6 +96,11 @@ class DictMBase(MutableMapping):
 
     def __delitem__(self, key):  # A view probably can't do this
         self._data.__delitem__(key)
+
+    def flipped(self):
+        new = self.copy()
+        new.dimension = abs(self.dimension - 1)
+        return new
 
     def to_df(self) -> pd.DataFrame:
         """Convert to pandas dataframe."""
@@ -123,18 +128,23 @@ class DictM(DictMBase):
 
 
 class DictMView(DictMBase):
-    def __init__(self, parent_dictm, subset):
+    def __init__(self, parent_dictm, parent_view, subset):
         print(f"View of {parent_dictm}, of axis {parent_dictm.dimension}")
-        self.parent = parent_dictm # Is this weird?
+        self.parent_dictm = parent_dictm
+        self.parent = parent_view
         self.subset = subset
-        self.dim_names = self.parent.dim_names[subset]
-        self._data = {k: v[subset] for k, v in self.parent._data.items()}
+        self.dimension = self.parent_dictm.dimension
+        self.dim_names = self.parent_dictm.dim_names[subset]
+        self._data = {k: v[subset] for k, v in self.parent_dictm._data.items()}
     
-    def _init_as_actual(self):
-        d = DictM(self.parent.parent, self.parent.dimension)
+    def copy(self):
+        # Is this parent right?
+        d = DictM(self.parent, self.dimension)
         for k, v in self.items():
             d[k] = v.copy()
         return d
+    # def _init_as_actual(self):
+        # return self.copy()
 
 
 class BoundRecArr(np.recarray):
@@ -765,8 +775,8 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         if isinstance(vidx, (int, np.int64)): vidx_normalized = slice(vidx, vidx+1, 1)
         obs_sub = adata_ref.obs.iloc[oidx_normalized]
         var_sub = adata_ref.var.iloc[vidx_normalized]
-        self._obsm = adata_ref.obsm.view(oidx_normalized)
-        self._varm = adata_ref.varm.view(vidx_normalized)
+        self._obsm = adata_ref.obsm.view(self, oidx_normalized)
+        self._varm = adata_ref.varm.view(self, vidx_normalized)
         # hackish solution here, no copy should be necessary
         uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
