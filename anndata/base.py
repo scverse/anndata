@@ -64,13 +64,18 @@ from collections.abc import MutableMapping
 
 class DictMBase(MutableMapping):
     """A dict whose values must match a dimension of the parent."""
+    dimnames = ("obs", "var")
+
+    @property
+    def dimname(self):
+        return self.dimnames[self.dimension]
 
     def _validate_value(self, value):
         # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
         n = self.parent.shape[self.dimension]
         if not value.shape[0] == n:
-            raise ValueError(f"Values of ***m must match *** dimension of parent. This value has {value.shape[0]} rows, should have {n}") # TODO: Make obsm/ varm name easy to get
-        try:
+            raise ValueError(f"Values of {self.dimname}m must match {self.dimname} dimension of parent. This value has {value.shape[0]} rows, should have {n}") # TODO: Make obsm/ varm name easy to get
+        try: # TODO: Handle objects with indices
             # Could probably also re-order index if it's contained
             if not (value.index == self.dim_names).all():
                 raise IndexError()  # Maybe not index error
