@@ -1,16 +1,33 @@
 import warnings
-from functools import wraps
+from functools import wraps, singledispatch
 from typing import Mapping, Any, Sequence, Union, Sized, Optional
 
 import pandas as pd
 import numpy as np
 
 from .logging import get_logger
-if False:
-    from .base import BoundRecArr  # noqa
 
 logger = get_logger(__name__)
 
+
+@singledispatch
+def convert_to_dict(obj):
+    return dict(obj)
+
+
+@convert_to_dict.register
+def convert_to_dict_dict(obj: dict):
+    return obj
+
+@convert_to_dict.register
+def convert_to_dict_ndarray(obj: np.ndarray):
+    if obj.dtype.fields is None:
+        raise TypeError(
+            f"Can only convert np.ndarray with compound dtypes to dict, passed array had {obj.dtype}.")
+    d = dict()
+    for k in obj.dtype.fields.keys():
+        d[k] = obj[k]
+    return d
 
 def make_index_unique(index: pd.Index, join: str = '-'):
     """Makes the index unique by appending '1', '2', etc.
