@@ -382,6 +382,8 @@ class _SetItemMixin:
             super().__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
+            logger.warning(
+                'Trying to set attribute `.{}` of view, making a copy.'.format(attr_name))
             _init_actual_AnnData(adata_view)
             getattr(adata_view, attr_name)[idx] = value
 
