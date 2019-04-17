@@ -4,7 +4,7 @@ import os
 from enum import Enum
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from functools import reduce
+from functools import reduce, singledispatch
 from pathlib import Path
 from typing import Any, Union, Optional
 from typing import Iterable, Sized, Sequence, Mapping
@@ -44,30 +44,9 @@ from . import h5py
 from .layers import AnnDataLayers
 
 from . import utils
-from .utils import Index, get_n_items_idx, unpack_index
+from .utils import Index, get_n_items_idx, convert_to_dict, unpack_index
 from .logging import anndata_logger as logger
 from .compat import PathLike
-
-
-def compound_dtype_to_dict(a):
-    """
-    Convert a numpy array of compound data types to a dict.
-
-    Usage
-    -----
-    >>> a = np.array(
-            [((1, 2), (3., 4., 5.))],
-            dtype=[("a", int, (2,)), ("b", float, (3,))]
-        )
-    >>> compound_dtype_to_dict(a)
-    {'a': array([[1, 2]]), 'b': array([[3., 4., 5.]])}
-    """
-    if a.dtype.fields is None:
-        raise ValueError()
-    d = dict()
-    for k in a.dtype.fields.keys():
-        d[k] = a[k]  # .copy()?
-    return d
 
 
 class StorageType(Enum):
@@ -103,6 +82,7 @@ class DictMBase(MutableMapping):
             pass
     
     def view(self, parent, subset):
+        """Returns a subsetted view of this object"""
         return DictMView(self, parent, subset)
 
     def __getitem__(self, key):
@@ -174,118 +154,6 @@ class DictMView(DictMBase):
         return d
     # def _init_as_actual(self):
         # return self.copy()
-
-
-class BoundRecArr(np.recarray):
-    """A :class:`numpy.recarray` to which fields can be added using ``.['key']``.
-
-    To enable this, it is bound to a instance of AnnData.
-    """
-    _attr_choices = ['obsm', 'varm']
-
-    def __new__(cls, input_array: np.ndarray, parent: Any, attr: str):
-        """
-        Parameters
-        ----------
-        input_array
-            A (structured) numpy array.
-        parent
-            Any object to which the BoundRecArr shall be bound to.
-        attr
-            The name of the attribute as which it appears in parent.
-        """
-        arr = np.asarray(input_array).view(cls)
-        arr._parent = parent
-        arr._attr = attr
-        return arr
-
-    def __array_finalize__(self, obj: Any):
-        if obj is None: return
-        self._parent = getattr(obj, '_parent', None)
-        self._attr = getattr(obj, '_attr', None)
-
-    def __reduce__(self) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-        pickled_state = super().__reduce__()
-        new_state = pickled_state[2] + (self.__dict__, )
-        return pickled_state[0], pickled_state[1], new_state
-
-    def __setstate__(self, state: Sequence[Mapping[str, Any]]):
-        for k, v in state[-1].items():
-            self.__setattr__(k, v)
-        super().__setstate__(state[0:-1])
-
-    def copy(self, order='C') -> 'BoundRecArr':
-        new = super().copy()
-        new._parent = self._parent
-        return new
-
-    def flipped(self) -> 'BoundRecArr':
-        new_attr = (self._attr_choices[1] if self._attr == self._attr_choices[0]
-                    else self._attr_choices[0])
-        return BoundRecArr(self, self._parent, new_attr)
-
-    def keys(self) -> Tuple[str, ...]:
-        return self.dtype.names
-
-    def __setitem__(self, key: str, arr: np.ndarray):
-        if not isinstance(arr, np.ndarray):
-            raise ValueError(
-                'Can only assign numpy ndarrays to .{}[{!r}], not objects of class {}'
-                .format(self._attr, key, type(arr))
-            )
-        if arr.ndim == 1:
-            raise ValueError('Use adata.obs or adata.var for 1-dimensional arrays.')
-        if self.shape[0] != arr.shape[0]:
-            raise ValueError(
-                'Can only assign an array of same length ({}), not of length {}.'
-                .format(self.shape[0], arr.shape[0])
-            )
-        # the following always allocates a new array
-        # even if the key already exists and dimensions match
-        # TODO: one could check for this case
-        # dtype
-        merged_dtype = []
-        found_key = False
-        for descr in self.dtype.descr:
-            if descr[0] == key:
-                merged_dtype.append((key, arr.dtype, arr.shape[1]))
-                found_key = True
-            else:
-                merged_dtype.append(descr)
-        if not found_key:
-            merged_dtype.append((key, arr.dtype, arr.shape[1]))
-        # create new array
-        new = np.empty(len(self), dtype=merged_dtype)
-        # fill the array
-        for name in new.dtype.names:
-            if name == key:
-                new[name] = arr
-            else:
-                new[name] = self[name]
-        # make it a BoundRecArr
-        # TODO: why can we not do this step before filling the array?
-        new = BoundRecArr(new, self._parent, self._attr)
-        setattr(self._parent, self._attr, new)
-
-    def __delitem__(self, key: str):
-        """Delete field with name."""
-        if key not in self.dtype.names:
-            raise ValueError(
-                'Currently, can only delete single names from {}.'
-                .format(self.dtype.names)
-            )
-        new_array = rec_drop_fields(self, key)
-        new = BoundRecArr(new_array, self._parent, self._attr)
-        setattr(self._parent, self._attr, new)
-
-    def to_df(self) -> pd.DataFrame:
-        """Convert to pandas dataframe."""
-        df = pd.DataFrame(index=RangeIndex(0, self.shape[0], name=None))
-        for key in self.keys():
-            value = self[key]
-            for icolumn, column in enumerate(value.T):
-                df['{}{}'.format(key, icolumn+1)] = column
-        return df
 
 
 # for backwards compat
@@ -564,8 +432,8 @@ class Raw:
         self,
         adata: Optional['AnnData'] = None,
         X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Optional[BoundRecArr] = None,
-        varm: Optional[BoundRecArr] = None,
+        var: Optional[DictMBase] = None,
+        varm: Optional[DictMBase] = None,
     ):
         self._adata = adata
         self._n_obs = adata.n_obs
@@ -1056,9 +924,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # TODO: Probably do this much earlier, potentially for backwards compat
         # Think about consequences of making obsm a group in hdf
         if isinstance(obsm, np.ndarray):
-            obsm = compound_dtype_to_dict(obsm)
+            obsm = convert_to_dict(obsm)
         if isinstance(varm, np.ndarray):
-            varm = compound_dtype_to_dict(varm)
+            varm = convert_to_dict(varm)
         self._obsm = DictM(self, 0)
         self._obsm.update(obsm)
         self._varm = DictM(self, 1)
@@ -1295,7 +1163,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._uns = value
 
     @property
-    def obsm(self) -> BoundRecArr:
+    def obsm(self) -> DictMBase:
         """Multi-dimensional annotation of observations (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
@@ -1305,19 +1173,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self._obsm
 
     @obsm.setter
-    def obsm(self, value: np.ndarray):
-        print("hi")
-        if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign `np.ndarray`.')
-        if len(value) != self.n_obs:
-            raise ValueError('Length does not match.')
+    def obsm(self, value):
+        value = convert_to_dict(value)  # make sure value is okay
+        obsm = DictM(self, 0)
+        obsm.update(value)
         if self.isview:
-            self._adata_ref._obsm[self._oidx] = value
-        else:
-            self._obsm = BoundRecArr(value, self, 'obsm')
+            self._init_as_actual(self.copy())
+        self._obsm = obsm
 
     @property
-    def varm(self) -> BoundRecArr:
+    def varm(self):
         """Multi-dimensional annotation of variables/ features (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray` of length
@@ -1327,15 +1192,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self._varm
 
     @varm.setter
-    def varm(self, value: np.ndarray):
-        if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign `np.ndarray`.')
-        if len(value) != self.n_vars:
-            raise ValueError('Length does not match.')
+    def varm(self, value):
+        value = convert_to_dict(value)  # make sure value is okay
+        varm = DictM(self, 1)
+        varm.update(value)
         if self.isview:
-            self._adata_ref._varm[self._vidx] = value
-        else:
-            self._varm = BoundRecArr(value, self, 'varm')
+            self._init_as_actual(self.copy())
+        self._varm = varm
 
     @property
     def obs_names(self) -> pd.Index:
