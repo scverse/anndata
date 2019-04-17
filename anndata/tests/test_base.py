@@ -47,12 +47,23 @@ def test_creation():
     assert 'test' in adata.uns
 
 
+def test_create_with_dfs():
+    X = np.ones((6, 3))
+    obs = pd.DataFrame(
+        {'cat_anno': pd.Categorical(['a', 'a', 'a', 'a', 'b', 'a'])})
+    obs_copy = obs.copy()
+    adata = AnnData(X=X, obs=obs)
+    assert obs.index.equals(obs_copy.index)
+    assert obs.index.astype(str).equals(adata.obs.index)
+
+
 def test_create_from_df():
     df = pd.DataFrame(np.ones((3, 2)), index=['a', 'b', 'c'], columns=['A', 'B'])
     ad = AnnData(df)
     assert df.values.tolist() == ad.X.tolist()
     assert df.columns.tolist() == ad.var_names.tolist()
     assert df.index.tolist() == ad.obs_names.tolist()
+
 
 def test_create_from_df_with_obs_and_var():
     df = pd.DataFrame(np.ones((3, 2)), index=['a', 'b', 'c'], columns=['A', 'B'])
@@ -70,6 +81,7 @@ def test_create_from_df_with_obs_and_var():
         AnnData(df, obs=obs.reset_index())
     with raises(ValueError, match=r'Index of var must match columns of X.'):
         AnnData(df, var=var.reset_index())
+
 
 def test_names():
     adata = AnnData(
