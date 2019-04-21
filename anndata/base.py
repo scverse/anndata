@@ -69,14 +69,14 @@ class DictMBase(MutableMapping):
     def dimname(self):
         return self.dimnames[self.dimension]
 
-    def _validate_value(self, value):
+    def _validate_value(self, value, key):  # Key is passed just for helpful error
         # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
         n = self.parent.shape[self.dimension]
         if not value.shape[0] == n:
             raise ValueError(
-                f"Values of {self.dimname}m must match {self.dimname} "
-                "dimension of parent. This value has {value.shape[0]} rows,"
-                " should have {n}")
+                f"Value passed for key '{key}' is of incorrect shape. Values of"
+                "{self.dimname}m must match {self.dimname} dimension of parent."
+                " This value has {value.shape[0]} rows, should have {n}")
         try: # TODO: Handle objects with indices
             # Could probably also re-order index if it's contained
             if not (value.index == self.dim_names).all():
@@ -90,14 +90,6 @@ class DictMBase(MutableMapping):
 
     def __getitem__(self, key):
         return self._data[key]
-
-    def __setitem__(self, key, value):
-        try:
-            self._validate_value(value)
-        except Exception:
-            print(f"Error setting key {key}")  # TODO: format the error to include this
-            raise
-        self._data[key] = value
 
     def __iter__(self):
         return self._data.__iter__()
@@ -132,6 +124,10 @@ class DictM(DictMBase):
         self.dim_names = (parent.obs_names, parent.var_names)[dimension]
         self._data = dict()
     
+    def __setitem__(self, key, value):
+        self._validate_value(value, key)
+        self._data[key] = value
+    
     def copy(self):
         new = DictM(self.parent, self.dimension)  # TODO: parent
         new.update(self._data)
@@ -148,6 +144,12 @@ class DictMView(DictMBase):
         self.dim_names = self.parent_dictm.dim_names[subset]
         self._data = {k: v[subset] for k, v in self.parent_dictm._data.items()}
     
+    def __setitem__(self, key, value):
+        self._validate_value(value, key)  # Validate before mutating
+        self.parent._init_as_actual(self.parent.copy())
+        new_dictm = getattr(self.parent, "{}m".format(self.dimname))
+        new_dictm[key] = value
+
     def copy(self):
         d = DictM(self.parent, self.dimension)
         for k, v in self.items():
