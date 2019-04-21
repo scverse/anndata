@@ -73,7 +73,10 @@ class DictMBase(MutableMapping):
         # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
         n = self.parent.shape[self.dimension]
         if not value.shape[0] == n:
-            raise ValueError(f"Values of {self.dimname}m must match {self.dimname} dimension of parent. This value has {value.shape[0]} rows, should have {n}") # TODO: Make obsm/ varm name easy to get
+            raise ValueError(
+                f"Values of {self.dimname}m must match {self.dimname} "
+                "dimension of parent. This value has {value.shape[0]} rows,"
+                " should have {n}")
         try: # TODO: Handle objects with indices
             # Could probably also re-order index if it's contained
             if not (value.index == self.dim_names).all():
@@ -94,7 +97,6 @@ class DictMBase(MutableMapping):
         except Exception:
             print(f"Error setting key {key}")  # TODO: format the error to include this
             raise
-        # TODO: would be nice to get a key name on error
         self._data[key] = value
 
     def __iter__(self):
@@ -147,14 +149,15 @@ class DictMView(DictMBase):
         self._data = {k: v[subset] for k, v in self.parent_dictm._data.items()}
     
     def copy(self):
-        # Is this parent right?
         d = DictM(self.parent, self.dimension)
         for k, v in self.items():
             d[k] = v.copy()
         return d
-    # def _init_as_actual(self):
-        # return self.copy()
 
+
+@convert_to_dict.register
+def convert_to_dict_dictm(obj: DictMBase):
+    return dict(obs._data)
 
 # for backwards compat
 def _find_corresponding_multicol_key(key, keys_multicol):
@@ -1182,7 +1185,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsm = obsm
 
     @property
-    def varm(self):
+    def varm(self) -> DictMBase:
         """Multi-dimensional annotation of variables/ features (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray` of length
