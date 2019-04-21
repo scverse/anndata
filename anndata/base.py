@@ -492,6 +492,10 @@ class Raw:
     def var_names(self):
         return self.var.index
 
+    @property
+    def obs_names(self):
+        return self._adata.obs_names
+
     def __getitem__(self, index):
         oidx, vidx = self._normalize_indices(index)
         if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
