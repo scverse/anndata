@@ -14,7 +14,6 @@ logger = get_logger(__name__)
 def convert_to_dict(obj):
     return dict(obj)
 
-
 @convert_to_dict.register
 def convert_to_dict_dict(obj: dict):
     return obj
@@ -28,6 +27,7 @@ def convert_to_dict_ndarray(obj: np.ndarray):
     for k in obj.dtype.fields.keys():
         d[k] = obj[k]
     return d
+
 
 def make_index_unique(index: pd.Index, join: str = '-'):
     """Makes the index unique by appending '1', '2', etc.
