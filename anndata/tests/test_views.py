@@ -1,4 +1,8 @@
+import joblib
 import numpy as np
+import pandas as pd
+import pytest
+
 import anndata as ad
 
 
@@ -27,6 +31,12 @@ uns_dict = {  # unstructured annotation
 # The test functions
 # -------------------------------------------------------------------------------
 
+@pytest.fixture
+def adata():
+    adata = ad.AnnData(np.empty((100, 100)))
+    adata.obsm['o'] = np.zeros((100, 50))
+    adata.varm['o'] = np.zeros((100, 50))
+    return adata
 
 def test_views():
     X = np.array(X_list)
@@ -49,9 +59,79 @@ def test_views():
     assert adata_subset.obs['foo'].tolist() == list(range(2))
 
 
-def test_slice_copy():
-    adata = ad.AnnData(np.empty((100, 100)))
-    adata.obsm['o'] = np.empty((100, 50))
+# These tests could probably be condensed into a fixture based test for obsm and varm
+def test_set_obsm_key(adata):
+    init_hash = joblib.hash(adata)
 
-    adata = adata[:50]
-    adata.obsm['o'] = np.ones((50, 20))
+    orig_obsm_val = adata.obsm['o'].copy()
+    subset_obsm = adata[:50]
+    assert subset_obsm.isview == True
+    subset_obsm.obsm['o'] = np.ones((50, 20))
+    assert subset_obsm.isview == False
+    assert np.all(adata.obsm["o"] == orig_obsm_val)
+
+    assert init_hash == joblib.hash(adata)
+
+
+def test_set_varm_key(adata):
+    init_hash = joblib.hash(adata)
+
+    orig_varm_val = adata.varm['o'].copy()
+    subset_varm = adata[:, :50]
+    assert subset_varm.isview == True
+    subset_varm.varm['o'] = np.ones((50, 20))
+    assert subset_varm.isview == False
+    assert np.all(adata.varm["o"] == orig_varm_val)
+
+    assert init_hash == joblib.hash(adata)
+
+def test_set_obsm(adata):
+    init_hash = joblib.hash(adata)
+
+    dim0_size = np.random.randint(2, adata.shape[0] - 1)
+    dim1_size = np.random.randint(1, 99)
+    orig_obsm_val = adata.obsm["o"].copy()
+    subset_idx = np.random.choice(adata.obs_names, dim0_size, replace=False)
+
+    subset =  adata[subset_idx, :]
+    assert subset.isview == True
+    subset.obsm = {"o": np.ones((dim0_size, dim1_size))}
+    assert subset.isview == False
+    assert np.all(orig_obsm_val == adata.obsm["o"])  # Checking for mutation
+    assert np.all(subset.obsm["o"] == np.ones((dim0_size, dim1_size)))
+
+    subset = adata[subset_idx, :]
+    subset_hash = joblib.hash(subset)
+    with pytest.raises(ValueError):
+        subset.obsm = {"o": np.ones((dim0_size + 1, dim1_size))}
+    with pytest.raises(ValueError):
+        subset.varm = {"o": np.ones((dim0_size - 1, dim1_size))}
+    assert subset_hash == joblib.hash(subset)
+
+    assert init_hash == joblib.hash(adata)  # Only modification have been made to a view
+
+
+def test_set_varm(adata):
+    init_hash = joblib.hash(adata)
+
+    dim0_size = np.random.randint(2, adata.shape[0] - 1)
+    dim1_size = np.random.randint(1, 99)
+    orig_varm_val = adata.varm["o"].copy()
+    subset_idx = np.random.choice(adata.var_names, dim0_size, replace=False)
+
+    subset = adata[:, subset_idx]
+    assert subset.isview == True
+    subset.varm = {"o": np.ones((dim0_size, dim1_size))}
+    assert subset.isview == False
+    assert np.all(orig_varm_val == adata.varm["o"])  # Checking for mutation
+    assert np.all(subset.varm["o"] == np.ones((dim0_size, dim1_size)))
+
+    subset = adata[:, subset_idx]
+    subset_hash = joblib.hash(subset)
+    with pytest.raises(ValueError):
+        subset.varm = {"o": np.ones((dim0_size + 1, dim1_size))}
+    with pytest.raises(ValueError):
+        subset.varm = {"o": np.ones((dim0_size - 1, dim1_size))}
+    assert subset_hash == joblib.hash(subset)  # subset should not be changed by failed setting
+
+    assert init_hash == joblib.hash(adata)
