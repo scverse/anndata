@@ -65,9 +65,9 @@ def test_set_obsm_key(adata):
 
     orig_obsm_val = adata.obsm['o'].copy()
     subset_obsm = adata[:50]
-    assert subset_obsm.isview == True
+    assert subset_obsm.isview
     subset_obsm.obsm['o'] = np.ones((50, 20))
-    assert subset_obsm.isview == False
+    assert not subset_obsm.isview
     assert np.all(adata.obsm["o"] == orig_obsm_val)
 
     assert init_hash == joblib.hash(adata)
@@ -78,9 +78,9 @@ def test_set_varm_key(adata):
 
     orig_varm_val = adata.varm['o'].copy()
     subset_varm = adata[:, :50]
-    assert subset_varm.isview == True
+    assert subset_varm.isview
     subset_varm.varm['o'] = np.ones((50, 20))
-    assert subset_varm.isview == False
+    assert not subset_varm.isview
     assert np.all(adata.varm["o"] == orig_varm_val)
 
     assert init_hash == joblib.hash(adata)
@@ -94,9 +94,9 @@ def test_set_obsm(adata):
     subset_idx = np.random.choice(adata.obs_names, dim0_size, replace=False)
 
     subset =  adata[subset_idx, :]
-    assert subset.isview == True
+    assert subset.isview
     subset.obsm = {"o": np.ones((dim0_size, dim1_size))}
-    assert subset.isview == False
+    assert not subset.isview
     assert np.all(orig_obsm_val == adata.obsm["o"])  # Checking for mutation
     assert np.all(subset.obsm["o"] == np.ones((dim0_size, dim1_size)))
 
@@ -120,9 +120,9 @@ def test_set_varm(adata):
     subset_idx = np.random.choice(adata.var_names, dim0_size, replace=False)
 
     subset = adata[:, subset_idx]
-    assert subset.isview == True
+    assert subset.isview
     subset.varm = {"o": np.ones((dim0_size, dim1_size))}
-    assert subset.isview == False
+    assert not subset.isview
     assert np.all(orig_varm_val == adata.varm["o"])  # Checking for mutation
     assert np.all(subset.varm["o"] == np.ones((dim0_size, dim1_size)))
 

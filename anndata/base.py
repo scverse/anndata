@@ -61,6 +61,7 @@ class StorageType(Enum):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
 
+
 class DictMBase(MutableMapping):
     """A dict whose values must match a dimension of the parent."""
     dimnames = ("obs", "var")
@@ -74,9 +75,11 @@ class DictMBase(MutableMapping):
         n = self.parent.shape[self.dimension]
         if not value.shape[0] == n:
             raise ValueError(
-                f"Value passed for key '{key}' is of incorrect shape. Values of"
-                "{self.dimname}m must match {self.dimname} dimension of parent."
-                " This value has {value.shape[0]} rows, should have {n}")
+                "Value passed for key '{key}' is of incorrect shape. Values of"
+                " {dimname}m must match {dimname} dimension of parent. This "
+                "value has {wrong_shape} rows, should have {n}.".format(
+                    key=key, dimname=self.dimname, wrong_shape=value.shape[0], n=n)
+            )
         try: # TODO: Handle objects with indices
             # Could probably also re-order index if it's contained
             if not (value.index == self.dim_names).all():
@@ -136,7 +139,6 @@ class DictM(DictMBase):
 
 class DictMView(DictMBase):
     def __init__(self, parent_dictm, parent_view, subset):
-        print(f"View of {parent_dictm}, of axis {parent_dictm.dimension}")
         self.parent_dictm = parent_dictm
         self.parent = parent_view
         self.subset = subset
