@@ -6,3 +6,4 @@ zarr
 matplotlib
 sklearn
 xlrd
+joblib
