@@ -277,6 +277,10 @@ def _normalize_index(index, names):
 
 def _gen_dataframe(anno, length, index_names):
     if isinstance(anno, pd.DataFrame):
+        anno = anno.copy()
+        if not is_string_dtype(anno.index):
+            logger.warning('Transforming to str index.')
+            anno.index = anno.index.astype(str)        
         return anno
     if anno is None or len(anno) == 0:
         _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
@@ -382,6 +386,8 @@ class _SetItemMixin:
             super().__setitem__(idx, value)
         else:
             adata_view, attr_name = self._view_args
+            logger.warning(
+                'Trying to set attribute `.{}` of view, making a copy.'.format(attr_name))
             _init_actual_AnnData(adata_view)
             getattr(adata_view, attr_name)[idx] = value
 
@@ -801,8 +807,18 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
-                obs = pd.DataFrame(index=X.index)
-                var = pd.DataFrame(index=X.columns)
+                if obs is None:
+                    obs = pd.DataFrame(index=X.index)
+                else:
+                    if not X.index.equals(obs.index):
+                        raise ValueError(
+                            'Index of obs must match index of X.')
+                if var is None:
+                    var = pd.DataFrame(index=X.columns)
+                else:
+                    if not X.columns.equals(var.index):
+                        raise ValueError(
+                            'Index of var must match columns of X.')
                 X = X.values
 
         # ----------------------------------------------------------------------
