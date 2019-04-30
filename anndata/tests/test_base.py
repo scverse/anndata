@@ -1,3 +1,5 @@
+from itertools import product
+
 import numpy as np
 from numpy import ma
 import pandas as pd
@@ -438,6 +440,33 @@ def test_pickle():
 
 def test_to_df_dense():
     df = adata_dense.to_df()
+
+
+def test_convenience():
+    # Setup
+    adata = adata_sparse.copy()
+    adata.var["anno2"] = ["p1", "p2", "p3"]
+    adata.raw = adata
+    adata.X = adata.X / 2
+    adata_dense = adata.copy()
+    adata_dense.X = adata_dense.X.toarray()
+
+    assert np.allclose(adata.obs_array("b"), np.array([1., 2.5]))
+    assert np.allclose(adata.obs_array("c", use_raw=True), np.array([3, 6]))
+    assert np.all(adata.obs_array("anno1") == np.array(["c1", "c2"]))
+    assert np.allclose(adata.var_array("s1"), np.array([0, 1., 1.5]))
+    assert np.allclose(adata.var_array("s2", use_raw=True), np.array([0, 5, 6]))
+
+    for obs_k, use_raw in product(["a", "b", "c", "anno1"], [True, False]):
+        r1 = adata.obs_array(obs_k, use_raw=use_raw)
+        r2 = adata_dense.obs_array(obs_k, use_raw=use_raw)
+        assert np.all(r1 == r2)
+        assert type(r1) == type(r2)
+    for var_k, use_raw in product(["s1", "s2", "anno2"], [True, False]):
+        r1 = adata.var_array(var_k, use_raw=use_raw)
+        r2 = adata_dense.var_array(var_k, use_raw=use_raw)
+        assert np.all(r1 == r2)
+        assert type(r1) == type(r2)
 
 
 def test_to_df_sparse():

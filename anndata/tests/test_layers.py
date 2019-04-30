@@ -22,6 +22,9 @@ def test_creation():
     adata = ad.AnnData(X=X, layers={'L': L.copy()})
 
     assert list(adata.layers.keys()) == ['L']
+    assert "L" in adata.layers
+    assert "X" not in adata.layers
+    assert "some_other_thing" not in adata.layers
     assert (adata.layers['L'] == L).all()
 
 
