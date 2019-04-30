@@ -397,6 +397,10 @@ class _ViewMixin(_SetItemMixin):
         self._view_args = view_args
         super().__init__(*args, **kwargs)
 
+    def __deepcopy__(self, memo):
+        parent, k = self._view_args
+        return deepcopy(getattr(parent._adata_ref, k))
+
 
 class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
