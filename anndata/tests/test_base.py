@@ -489,6 +489,38 @@ def test_convenience():
         )
 
 
+def test_1d_slice_dtypes():
+    N, M = 10, 20
+    obs_df = pd.DataFrame(
+        {
+            "cat": pd.Categorical(np.arange(N, dtype=int)),
+            "int": np.arange(N, dtype=int),
+            "float": np.arange(N, dtype=float),
+            "obj": [str(i) for i in np.arange(N, dtype=int)]
+        },
+        index=["cell{}".format(i) for i in np.arange(N, dtype=int)]
+    )
+    var_df = pd.DataFrame(
+        {
+            "cat": pd.Categorical(np.arange(M, dtype=int)),
+            "int": np.arange(M, dtype=int),
+            "float": np.arange(M, dtype=float),
+            "obj": [str(i) for i in np.arange(M, dtype=int)]
+        },
+        index=["gene{}".format(i) for i in np.arange(M, dtype=int)]
+    )
+    adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
+
+    new_obs_df = pd.DataFrame(index=adata.obs_names)
+    for k in obs_df.columns:
+        new_obs_df[k] = adata.get_obs_slice_1d(k)
+    assert np.all(new_obs_df == obs_df)
+    new_var_df = pd.DataFrame(index=adata.var_names)
+    for k in var_df.columns:
+        new_var_df[k] = adata.get_var_slice_1d(k)
+    assert np.all(new_var_df == var_df)
+
+
 def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
