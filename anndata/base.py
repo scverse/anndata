@@ -462,6 +462,56 @@ class Raw:
             self._var = adata.var.copy()
             self._varm = adata.varm.copy()
 
+    def var_array(self, k: str) -> np.ndarray:
+        """
+        Convenience function for returning a 1 dimensional ndarray of values
+        from `.X` or `.var`.
+
+        Made for convenience, not performance. Intentionally permissive about
+        arguments, for easy iterative use.
+
+        Params
+        ------
+        k
+            Key to use. Should be in `.obs_names` or `.var.columns`.
+
+        Returns
+        -------
+        A one dimensional nd array, with values for each var in the same order
+        as `.var_names`.
+        """
+        if k in self.var:
+            a = self.var[k].values
+        else:
+            a = self[k, :].X
+        if issparse(a):
+            a = a.toarray()
+        return np.ravel(a)
+
+    def obs_array(self, k: str) -> np.ndarray:
+        """
+        Convenience function for returning a 1 dimensional ndarray of values
+        from `.X`.
+
+        Made for convenience, not performance. Intentionally permissive about
+        arguments, for easy iterative use.
+
+        Params
+        ------
+        k
+            Key to use. Should be in `.var_names` or `.obs.columns`. If `use_raw`,
+            value should be in `.raw.var_names` instead of `.var_names`.
+
+        Returns
+        -------
+        A one dimensional nd array, with values for each obs in the same order
+        as `.obs_names`.
+        """
+        a = self[:, k].X
+        if issparse(a):
+            a = a.toarray()
+        return np.ravel(a)
+
     @property
     def X(self):
         if self._adata.isbacked:
@@ -1516,7 +1566,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self._X
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
-    def _get_expression(self, use_raw=False, layer=None):
+    def _get_X(self, use_raw=False, layer=None):
         """
         Convenience method for getting expression values with common arguments and error handling.
         """
@@ -1536,7 +1586,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return self.X
 
     def obs_array(
-        self, k: str, *, use_raw: bool = False, layer: Optional[str] = None
+        self, k: str, *, layer: Optional[str] = None
     ) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
@@ -1550,8 +1600,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         k
             Key to use. Should be in `.var_names` or `.obs.columns`. If `use_raw`,
             value should be in `.raw.var_names` instead of `.var_names`.
-        use_raw
-            Whether values should be returned from `.raw.X`
         layer
             What layer values should be returned from. If `None`, `.X` is used.
 
@@ -1569,18 +1617,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         if k in self.obs:
             a = self.obs[k].values
-        elif use_raw:
-            a = self.raw[:, k].X
         else:
             idx = self._normalize_indices((slice(None), k))
-            a = self._get_expression(layer=layer)[idx]
+            a = self._get_X(layer=layer)[idx]
         if issparse(a):
-            a = a.toarray().reshape(-1)
-        return a
+            a = a.toarray()
+        return np.ravel(a)
 
 
     def var_array(
-        self, k, *, use_raw: bool = False, layer: Optional[str] = None
+        self, k, *, layer: Optional[str] = None
     ) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
@@ -1593,8 +1639,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ------
         k
             Key to use. Should be in `.obs_names` or `.var.columns`.
-        use_raw
-            Whether values should be returned from `.raw.X`
         layer
             What layer values should be returned from. If `None`, `.X` is used.
 
@@ -1612,14 +1656,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         if k in self.var:
             a = self.var[k].values
-        elif use_raw:
-            a = self.raw[k, :].X
         else:
             idx = self._normalize_indices((k, slice(None)))
-            a = self._get_expression(layer=layer)[idx]
+            a = self._get_X(layer=layer)[idx]
         if issparse(a):
-            a = a.toarray().reshape(-1)
-        return a
+            a = a.toarray()
+        return np.ravel(a)
 
     @utils.deprecated("obs_array")
     def _get_obs_array(self, k, use_raw=False, layer=None):
