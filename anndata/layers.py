@@ -32,7 +32,7 @@ class AlignedMapping(MutableMapping, ABC):
                     "value had shape {wrong_shape}.".format(
                         key=key, attrname=self.attrname, axes=self.axes, wrong_shape=val.shape)
                 )
-        try: # TODO: Handle objects with indices
+        try:  # TODO: Handle objects with indices
             # Could probably also re-order index if it's contained
             if not (val.index == self.dim_names).all():
                 raise IndexError()  # Maybe not index error
@@ -58,13 +58,15 @@ class AlignedMapping(MutableMapping, ABC):
     def attrname(self) -> str:
         """What attr for the AnnData is this?"""
         pass
-    
+
     @abstractmethod
     def copy(self):
         pass
 
     def __repr__(self):
-        return f"{self.__class__.__name__} with keys: {', '.join(self.keys())}"
+        return "{} with keys: {}".format(
+            self.__class__.__name__, ', '.join(self.keys())
+        )
 
     def as_dict(self):
         return dict(self.items())
@@ -85,10 +87,10 @@ class AlignedViewMixin:
 
     def __getitem__(self, key):
         return self.parent_mapping[key][self.subset_idx]
-    
+
     def __iter__(self):
         return self.parent_mapping.keys().__iter__()
-    
+
     def __len__(self):
         return len(self.parent_mapping)
 
@@ -107,6 +109,7 @@ class AlignedViewMixin:
         """Returns a subsetted view of this object"""
         return self.__class__(self, parent, subset_idx)
 
+
 class AlignedActualMixin:
     """
     Attributes
@@ -124,15 +127,16 @@ class AlignedActualMixin:
 
     def __delitem__(self, key):
         del self._data[key]
-    
+
     def __iter__(self):
         return self._data.__iter__()
 
     def __len__(self):
         return self._data.__len__()
-    
+
     def __contains__(self, k):
         return self._data.__contains__(k)
+
 
 class AxisArraysBase(AlignedMapping):
     """
@@ -168,7 +172,7 @@ class AxisArraysBase(AlignedMapping):
             for icolumn, column in enumerate(value.T):
                 df['{}{}'.format(key, icolumn + 1)] = column
         return df
-    
+
     def copy(self):
         d = AxisArrays(self.parent, self._axis)
         for k, v in self.items():
@@ -210,6 +214,7 @@ class LayersBase(AlignedMapping):
             self.parent,
             vals={k: v.copy() for k, v in self.items()}
         )
+
 
 class Layers(AlignedActualMixin, LayersBase):
     def __init__(self, parent: 'AnnData', vals: Optional[Mapping] = None):
