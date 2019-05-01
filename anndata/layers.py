@@ -69,7 +69,7 @@ class AlignedMapping(MutableMapping, ABC):
         )
 
     def as_dict(self):
-        return dict(self.items())
+        return dict(self)
 
 
 class AlignedViewMixin:
