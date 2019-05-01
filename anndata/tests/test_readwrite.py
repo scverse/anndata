@@ -1,9 +1,14 @@
+
+from string import ascii_letters
 from importlib.util import find_spec
 from pathlib import Path
+
 
 import numpy as np
 import pytest
 from scipy.sparse import csr_matrix, issparse
+from scipy import sparse
+import pandas as pd
 from pandas.api.types import is_categorical
 
 import anndata as ad
@@ -47,6 +52,27 @@ uns_dict = dict(  # unstructured annotation
     uns2=['some annotation'],
 )
 
+def gen_typed_df(n):
+    letters = np.fromiter(iter(ascii_letters), "U1")
+    if n > len(letters):
+        letters = letters[:n // 2]  # Make sure categories are repeated
+    return pd.DataFrame({
+        "cat": pd.Categorical(np.random.choice(letters, n)),
+        "int64": np.random.randint(-50, 50, n),
+        "float64": np.random.random(n),
+        "uint8": np.random.randint(255, size=n, dtype="uint8")
+    })
+
+def gen_typed_df_t2_size(m, n):
+    s = 0
+    df = pd.DataFrame()
+    new_vals = gen_typed_df(m)
+    while s < (n / new_vals.shape[1]):
+        new_vals = gen_typed_df(m)
+        new_vals.columns = new_vals.columns + "_" + str(s)
+        df[new_vals.columns] = new_vals
+        s += 1
+    return df.iloc[:m, :n].copy()
 
 # -------------------------------------------------------------------------------
 # The test functions
@@ -70,13 +96,76 @@ def test_readwrite_h5ad(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_maintain_dtype(typ, backing_h5ad):
+def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, dtype='int8')
     adata_src.write(backing_h5ad)
 
     adata = ad.read(backing_h5ad)
     assert adata.X.dtype == adata_src.X.dtype
+
+def test_read_write_maintain_obsmvarm_dtypes(backing_h5ad):
+    M, N = 500, 200
+    obs = pd.DataFrame(index=["cell{}".format(i) for i in range(M)])
+    var = pd.DataFrame(index=["gene{}".format(i) for i in range(N)])
+    obsm = {
+        "array": np.random.random((M, 50)),
+        "sparse": sparse.random(M, 100, format="csr"),
+        "df": gen_typed_df(M)
+    }
+    obsm["df"].index = obs.index
+    varm = {
+        "array": np.random.random((N, 50)),
+        "sparse": sparse.random(N, 100, format="csr"),
+        "df": gen_typed_df(N)
+    }
+    varm["df"].index = var.index
+
+    orig = ad.AnnData(
+        X=sparse.random(M, N, format="csr"),
+        obs=obs,
+        var=var,
+        obsm=obsm,
+        varm=varm
+    )
+    orig.write(backing_h5ad)
+    curr = ad.read(backing_h5ad)
+
+    assert type(orig.obsm["array"]) is type(curr.obsm["array"])
+    assert np.all(orig.obsm["array"] == curr.obsm["array"])
+    assert np.all(orig.varm["array"] == curr.varm["array"])
+    assert type(orig.obsm["sparse"]) is type(curr.obsm["sparse"])
+    assert np.all((orig.obsm["sparse"] == curr.obsm["sparse"]).toarray())
+    assert np.all((orig.varm["sparse"] == curr.varm["sparse"]).toarray())
+    # assert type(orig.obsm["df"]) is type(curr.obsm["df"])
+    # assert np.all(orig.obsm["df"] == curr.obsm["df"])
+    # assert np.all(orig.varm["df"] == curr.varm["df"])
+
+def test_maintain_layers(backing_h5ad):
+    M, N = 500, 200
+    obs = pd.DataFrame(index=["cell{}".format(i) for i in range(M)])
+    var = pd.DataFrame(index=["gene{}".format(i) for i in range(N)])
+    df = gen_typed_df_t2_size(M, N)
+    df.index = obs.index
+    df.columns = var.index
+    layers = {
+        "array": np.random.random((M, N)),
+        "sparse": sparse.random(M, N, format="csr"),
+        "df": df
+    }
+    orig = ad.AnnData(
+        X=sparse.random(M, N, format="csr"),
+        layers=layers
+    )
+    orig.write(backing_h5ad)
+    curr = ad.read(backing_h5ad)
+
+    assert type(orig.layers["array"]) is type(curr.layers["array"])
+    assert np.all(orig.layers["array"] == curr.layers["array"])
+    assert type(orig.layers["sparse"]) is type(curr.layers["sparse"])
+    assert np.all((orig.layers["sparse"] == curr.layers["sparse"]).toarray())
+    # assert type(orig.layers["df"]) is type(curr.layers["df"])
+    # assert np.all(orig.layers["df"] == curr.layers["df"])
 
 
 def test_readwrite_sparse_as_dense(backing_h5ad):
