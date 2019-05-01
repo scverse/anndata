@@ -462,7 +462,7 @@ class Raw:
             self._var = adata.var.copy()
             self._varm = adata.varm.copy()
 
-    def var_array(self, k: str) -> np.ndarray:
+    def get_var_slice_1d(self, k: str) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
         from `.X` or `.var`.
@@ -488,7 +488,7 @@ class Raw:
             a = a.toarray()
         return np.ravel(a)
 
-    def obs_array(self, k: str) -> np.ndarray:
+    def get_obs_slice_1d(self, k: str) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
         from `.X`.
@@ -1585,12 +1585,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.X
 
-    def obs_array(
+    def get_obs_slice_1d(
         self, k: str, *, layer: Optional[str] = None
     ) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`, `.raw.X`, `.layers[k]`, or `.obs`.
+        from `.X`, `.layers[k]`, or `.obs`.
 
         Made for convenience, not performance. Intentionally permissive about
         arguments, for easy iterative use.
@@ -1598,8 +1598,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Params
         ------
         k
-            Key to use. Should be in `.var_names` or `.obs.columns`. If `use_raw`,
-            value should be in `.raw.var_names` instead of `.var_names`.
+            Key to use. Should be in `.var_names` or `.obs.columns`.
         layer
             What layer values should be returned from. If `None`, `.X` is used.
 
@@ -1625,12 +1624,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return np.ravel(a)
 
 
-    def var_array(
+    def get_var_slice_1d(
         self, k, *, layer: Optional[str] = None
     ) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`, `.raw.X`, `.layers[k]`, or `.obs`.
+        from `.X`, `.layers[k]`, or `.obs`.
 
         Made for convenience, not performance. Intentionally permissive about
         arguments, for easy iterative use.
@@ -1663,17 +1662,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             a = a.toarray()
         return np.ravel(a)
 
-    @utils.deprecated("obs_array")
+    @utils.deprecated("get_obs_slice_1d")
     def _get_obs_array(self, k, use_raw=False, layer=None):
         """Get an array from the layer (default layer='X') along the observation dimension by first looking up
         obs.keys and then var.index."""
-        return self.obs_array(k=k, use_raw=use_raw, layer=layer)
+        return self.get_obs_slice_1d(k=k, use_raw=use_raw, layer=layer)
 
-    @utils.deprecated("var_array")
+    @utils.deprecated("get_var_slice_1d")
     def _get_var_array(self, k, use_raw=False, layer='X'):
         """Get an array from the layer (default layer='X') along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
-        return self.var_array(k=k, use_raw=use_raw, layer=layer)
+        return self.get_var_slice_1d(k=k, use_raw=use_raw, layer=layer)
 
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""

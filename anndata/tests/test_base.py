@@ -458,28 +458,34 @@ def test_convenience():
         assert np.all(r1 == r2)
         assert type(r1) == type(r2)
 
-    assert np.allclose(adata.obs_array("b"), np.array([1., 2.5]))
-    assert np.allclose(adata.raw.obs_array("c"), np.array([3, 6]))
-    assert np.all(adata.obs_array("anno1") == np.array(["c1", "c2"]))
-    assert np.allclose(adata.var_array("s1"), np.array([0, 1., 1.5]))
-    assert np.allclose(adata.raw.var_array("s2"), np.array([0, 5, 6]))
+    assert np.allclose(adata.get_obs_slice_1d("b"), np.array([1., 2.5]))
+    assert np.allclose(adata.raw.get_obs_slice_1d("c"), np.array([3, 6]))
+    assert np.all(adata.get_obs_slice_1d("anno1") == np.array(["c1", "c2"]))
+    assert np.allclose(adata.get_var_slice_1d("s1"), np.array([0, 1., 1.5]))
+    assert np.allclose(adata.raw.get_var_slice_1d("s2"), np.array([0, 5, 6]))
 
-    for obs_k in ["a", "b", "c", "anno1"]:
+    for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
         assert_same_op_result(
             adata, adata_dense,
-            lambda x: x.obs_array(obs_k)
+            lambda x: x.get_obs_slice_1d(obs_k, layer=layer)
         )
     
     for obs_k in ["a", "b", "c"]:
         assert_same_op_result(
             adata, adata_dense,
-            lambda x: x.raw.obs_array(obs_k)
+            lambda x: x.raw.get_obs_slice_1d(obs_k)
         )
 
     for var_k, layer in product(["s1", "s2", "anno2"], [None, "x2"]):
         assert_same_op_result(
             adata, adata_dense,
-            lambda x: x.obs_array(obs_k, layer=layer)
+            lambda x: x.get_var_slice_1d(var_k, layer=layer)
+        )
+    
+    for var_k in ["s1", "s2", "anno2"]:
+        assert_same_op_result(
+            adata, adata_dense,
+            lambda x: x.raw.get_var_slice_1d(var_k)
         )
 
 
