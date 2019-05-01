@@ -11,25 +11,44 @@ if False:
 
 
 class AlignedMapping(MutableMapping, ABC):
+    """
+    Attributes
+    ----------
+    axes: Tuple[int]
+        Which axes is this aligned along?
+    """
 
     @property
     @abstractmethod
     def isview(self):
         pass
 
-    @abstractmethod # This could probably just get implemented here
-    def _validate_value(self, val, key) -> "NoneType":
+    # @abstractmethod # This could probably just get implemented here
+    # def _validate_value(self, val, key) -> "NoneType":
+    #     """Raises an error if value is invalid"""
+    #     pass
+
+    def _validate_value(self, val, key) -> None:
         """Raises an error if value is invalid"""
+        for i, axis in enumerate(self.axes):
+            if self.parent.shape[axis] != val.shape[i]:
+                raise ValueError(
+                    "Value passed for key '{key}' is of incorrect shape. Values of"
+                    " {attrname} must match dimensions {axes} of parent."
+                    "value had shape {wrong_shape}.".format(
+                        key=key, dimname=self.attrname, axes=self.axes, wrong_shape=val.shape)
+                )
+        try: # TODO: Handle objects with indices
+            # Could probably also re-order index if it's contained
+            if not (val.index == self.dim_names).all():
+                raise IndexError()  # Maybe not index error
+        except AttributeError:
+            pass
+
+    @property
+    @abstractmethod
+    def axes(self) -> Tuple:
         pass
-
-    # TODO
-    # I need to figure out what these idx value are
-    # def _validate_value(self, val, key):
-    #     for curidx, vallen in zip(self.idx, value.shape):
-    #         if curlen == slice(None):
-    #             continue
-    #         curl
-
 
     @abstractmethod
     def view(self, parent, idx):
@@ -44,33 +63,41 @@ class AlignedMapping(MutableMapping, ABC):
 
     @property
     @abstractmethod
-    def idx(self) -> Tuple:
-        """How to slice it"""
-        pass
-
-    @property
-    @abstractmethod
     def attrname(self) -> str:
         """What attr for the AnnData is this?"""
         pass
 
     def __repr__(self):
-        return f"{self.__class__.__name__}: with keys: {', '.join(self._data.keys())}"
+        return f"{self.__class__.__name__} with keys: {', '.join(self.keys())}"
 
     def as_dict(self):
         return dict(self.items())
 
 class AlignedViewMixin:
-    @property
-    def isview(self):
-        return True
+    """
+    Attributes
+    ----------
+    parent
+        Reference to parent AnnData view
+    attrname
+        What attribute in the parent is this?
+    parent_mapping
+        The object this is a view of.
+    """
+    isview = True
 
     @property
     def parent_mapping(self):
         return getattr(self.parent._adata_ref, self.attrname)
 
     def __getitem__(self, key):
-        return self.parent_mapping[key][self.idx]
+        return self.parent_mapping[key][self.subset_idx]
+    
+    def __iter__(self):
+        return self.parent_mapping.keys().__iter__()
+    
+    def __len__(self):
+        return len(self.parent_mapping)
 
     def __delitem__(self, key):
         adata = self.parent.copy()
@@ -87,9 +114,12 @@ class AlignedViewMixin:
         return self.__class__(self, parent, idx)
 
 class AlignedActualMixin:
-    @property
-    def isview(self):
-        return False
+    """
+    Attributes
+    _data: dict
+        Underlying mapping to the data
+    """
+    isview = False
 
     def __getitem__(self, key):
         return self._data[key]
@@ -100,11 +130,18 @@ class AlignedActualMixin:
 
     def __delitem__(self, key):
         del self._data[key]
+    
+    def __iter__(self):
+        return self._data.__iter__()
+
+    def __len__(self):
+        return self._data.__len__()
+    
+    def __contains__(self, k):
+        return self._data.__contains__(k)
 
 class LayersBase(AlignedMapping):
-    @property
-    def attrname(self):
-        return "layers"
+    attrname = "layers"
 
 class Layers(LayersBase, AlignedActualMixin):
     pass
@@ -116,6 +153,10 @@ class AxisArraysBase(AlignedMapping):
     _dimnames = ("obs", "var")
 
     @property
+    def axes(self):
+        return (self._axis,)
+
+    @property
     def dim(self):
         return self._dimnames[self._axis]
 
@@ -123,11 +164,53 @@ class AxisArraysBase(AlignedMapping):
     def attrname(self):
         return "{}m".format(self.dim)
 
-class AxisArrays(AxisArraysBase, AlignedActualMixin):
-    pass
 
-class AxisArraysView(AxisArraysBase, AlignedViewMixin):
-    pass
+class AxisArrays(AlignedActualMixin, AxisArraysBase):
+    def __init__(self, parent, axis: int):
+        self._parent = parent
+        if axis not in (0, 1):
+            raise ValueError()
+        self._axis = axis
+        self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
+        self._data = dict()
+
+    @property
+    def parent(self):
+        return self._parent
+
+    def copy(self):
+        new = AxisArrays(self.parent, self._axis)  # TODO: parent
+        new.update(self._data)
+        return new
+    
+    def view(self, parent, subset):
+        return AxisArraysView(self, parent, subset)
+
+
+class AxisArraysView(AlignedViewMixin, AxisArraysBase):
+    def __init__(self, parent_mapping, parent_view, subset_idx):
+        # self.parent_mapping = parent_mapping
+        self._parent = parent_view
+        self.subset_idx = subset_idx
+        # self._axis = self.parent_mapping._axis
+        self._axis = parent_mapping._axis
+        self.dim_names = parent_mapping.dim_names[subset_idx]
+    
+    @property
+    def parent(self):
+        return self._parent
+
+    def __setitem__(self, key, value):
+        self._validate_value(value, key)  # Validate before mutating
+        self.parent._init_as_actual(self.parent.copy())
+        new_axarr = getattr(self.parent, "{}m".format(self.dim))
+        new_axarr[key] = value
+
+    def copy(self):
+        d = AxisArrays(self.parent, self._axis)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
 
 # class LayersBase(AlignedMapping):
 #     # def __init__(
