@@ -514,10 +514,12 @@ def test_1d_slice_dtypes():
     new_obs_df = pd.DataFrame(index=adata.obs_names)
     for k in obs_df.columns:
         new_obs_df[k] = adata.get_obs_slice_1d(k)
+        new_obs_df[k].dtype is obs_df[k].dtype
     assert np.all(new_obs_df == obs_df)
     new_var_df = pd.DataFrame(index=adata.var_names)
     for k in var_df.columns:
         new_var_df[k] = adata.get_var_slice_1d(k)
+        new_var_df[k].dtype is var_df[k].dtype
     assert np.all(new_var_df == var_df)
 
 
