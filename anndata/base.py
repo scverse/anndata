@@ -22,7 +22,7 @@ from scipy import sparse
 from scipy.sparse import issparse
 from natsort import natsorted
 
-from .layers import AxisArraysBase, AxisArrays
+
 # try importing zarr
 try:
     from zarr.core import Array as ZarrArray
@@ -42,7 +42,8 @@ except ImportError:
             return 'mock zappy.base.ZappyArray'
 
 from . import h5py
-from .layers import AnnDataLayers
+from .layers import AxisArraysBase, AxisArrays, Layers
+# from .layers import AnnDataLayers
 
 from . import utils
 from .utils import Index, get_n_items_idx, convert_to_dict, unpack_index
@@ -62,107 +63,6 @@ class StorageType(Enum):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
 
-
-# class DictMBase(MutableMapping):
-#     """A dict whose values must match a dimension of the parent."""
-#     dimnames = ("obs", "var")
-
-#     @property
-#     def dimname(self):
-#         return self.dimnames[self.dimension]
-
-#     def _validate_value(self, value, key):  # Key is passed just for helpful error
-#         # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
-#         n = self.parent.shape[self.dimension]
-#         if not value.shape[0] == n:
-#             raise ValueError(
-#                 "Value passed for key '{key}' is of incorrect shape. Values of"
-#                 " {dimname}m must match {dimname} dimension of parent. This "
-#                 "value has {wrong_shape} rows, should have {n}.".format(
-#                     key=key, dimname=self.dimname, wrong_shape=value.shape[0], n=n)
-#             )
-#         try: # TODO: Handle objects with indices
-#             # Could probably also re-order index if it's contained
-#             if not (value.index == self.dim_names).all():
-#                 raise IndexError()  # Maybe not index error
-#         except AttributeError:
-#             pass
-    
-#     def view(self, parent, subset):
-#         """Returns a subsetted view of this object"""
-#         return DictMView(self, parent, subset)
-
-#     def __getitem__(self, key):
-#         return self._data[key]
-
-#     def __iter__(self):
-#         return self._data.__iter__()
-
-#     def __len__(self):
-#         return self._data.__len__()
-
-#     def __delitem__(self, key):  # A view probably can't do this
-#         self._data.__delitem__(key)
-
-#     def flipped(self):
-#         new = self.copy()
-#         new.dimension = abs(self.dimension - 1)
-#         return new
-
-    # def to_df(self) -> pd.DataFrame:
-    #     """Convert to pandas dataframe."""
-    #     df = pd.DataFrame(index=self.dim_names)
-    #     for key in self.keys():
-    #         value = self[key]
-    #         for icolumn, column in enumerate(value.T):
-    #             df['{}{}'.format(key, icolumn + 1)] = column
-    #     return df
-
-
-# class DictM(DictMBase):
-#     def __init__(self, parent, dimension: int):
-#         self.parent = parent
-#         if dimension not in (0, 1):
-#             raise ValueError()
-#         self.dimension = dimension
-#         self.dim_names = (parent.obs_names, parent.var_names)[dimension]
-#         self._data = dict()
-    
-#     def __setitem__(self, key, value):
-#         self._validate_value(value, key)
-#         self._data[key] = value
-    
-#     def copy(self):
-#         new = DictM(self.parent, self.dimension)  # TODO: parent
-#         new.update(self._data)
-#         return new
-
-
-# class DictMView(DictMBase):
-#     def __init__(self, parent_dictm, parent_view, subset):
-#         self.parent_dictm = parent_dictm
-#         self.parent = parent_view
-#         self.subset = subset
-#         self.dimension = self.parent_dictm.dimension
-#         self.dim_names = self.parent_dictm.dim_names[subset]
-#         self._data = {k: v[subset] for k, v in self.parent_dictm._data.items()}
-    
-#     def __setitem__(self, key, value):
-#         self._validate_value(value, key)  # Validate before mutating
-#         self.parent._init_as_actual(self.parent.copy())
-#         new_dictm = getattr(self.parent, "{}m".format(self.dimname))
-#         new_dictm[key] = value
-
-#     def copy(self):
-#         d = DictM(self.parent, self.dimension)
-#         for k, v in self.items():
-#             d[k] = v.copy()
-#         return d
-
-
-# @convert_to_dict.register
-# def convert_to_dict_dictm(obj: DictMBase):
-#     return dict(obs._data)
 
 # for backwards compat
 def _find_corresponding_multicol_key(key, keys_multicol):
@@ -781,7 +681,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             self._init_X_as_view()
 
-        self._layers = AnnDataLayers(self, adata_ref=adata_ref, oidx=oidx, vidx=vidx)
+        self._layers = adata_ref.layers.view(self, (oidx, vidx))
 
         # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:
@@ -967,7 +867,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._clean_up_old_format(uns)
 
         # layers
-        self._layers = AnnDataLayers(self, layers, dtype)
+        self._layers = Layers(self, layers)
 
     def __sizeof__(self) -> int:
         size = 0
@@ -1056,7 +956,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                              .format(value.shape, self.shape))
 
     @property
-    def layers(self) -> AnnDataLayers:
+    def layers(self) -> Layers:
         """Dictionary-like object with values of the same dimensions as :attr:`X`.
 
         Layers in AnnData have API similar to loompy :ref:`loomlayers`.
@@ -1535,7 +1435,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 'You\'re trying to transpose a view of an `AnnData`, which is currently not implemented. '
                 'Call `.copy()` before transposing.')
-        layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items(copy=False)}
+        layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items()}
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),

@@ -135,3 +135,36 @@ def test_set_varm(adata):
     assert subset_hash == joblib.hash(subset)  # subset should not be changed by failed setting
 
     assert init_hash == joblib.hash(adata)
+
+
+def test_layers_view():
+    X = np.array([
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+    ])
+    L = np.array([
+        [10, 11, 12],
+        [13, 14, 15],
+        [16, 17, 18],
+    ])
+    real_adata = ad.AnnData(X)
+    real_adata.layers["L"] = L
+    view_adata = real_adata[1:, 1:]
+    real_hash = joblib.hash(real_adata)
+    view_hash = joblib.hash(view_adata)
+
+    assert view_adata.isview
+
+    with pytest.raises(ValueError):
+        view_adata.layers["L2"] = L + 2
+
+    assert view_adata.isview  # Failing to set layer item makes adata not view
+    assert real_hash == joblib.hash(real_adata)
+    assert view_hash == joblib.hash(view_adata)
+
+    view_adata.layers["L2"] = L[1:, 1:] + 2
+
+    assert not view_adata.isview
+    assert real_hash == joblib.hash(real_adata)
+    assert view_hash != joblib.hash(view_adata)
