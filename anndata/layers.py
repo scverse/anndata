@@ -4,6 +4,7 @@ from collections.abc import MutableMapping
 from typing import Mapping, Optional, Union, Tuple
 
 import numpy as np
+import pandas as pd
 from scipy.sparse import issparse
 
 if False:
@@ -36,7 +37,7 @@ class AlignedMapping(MutableMapping, ABC):
                     "Value passed for key '{key}' is of incorrect shape. Values of"
                     " {attrname} must match dimensions {axes} of parent."
                     "value had shape {wrong_shape}.".format(
-                        key=key, dimname=self.attrname, axes=self.axes, wrong_shape=val.shape)
+                        key=key, attrname=self.attrname, axes=self.axes, wrong_shape=val.shape)
                 )
         try: # TODO: Handle objects with indices
             # Could probably also re-order index if it's contained
@@ -86,9 +87,9 @@ class AlignedViewMixin:
     """
     isview = True
 
-    @property
-    def parent_mapping(self):
-        return getattr(self.parent._adata_ref, self.attrname)
+    # @property
+    # def parent_mapping(self):
+        # return getattr(self.parent._adata_ref, self.attrname)
 
     def __getitem__(self, key):
         return self.parent_mapping[key][self.subset_idx]
@@ -150,19 +151,39 @@ class LayersView(LayersBase, AlignedViewMixin):
     pass
 
 class AxisArraysBase(AlignedMapping):
+    """
+    Mapping of key: array-like, where array-like is aligned to an axis of parent AnnData.
+    """
     _dimnames = ("obs", "var")
 
     @property
     def axes(self):
+        """Axes of the parent this is aligned to"""
         return (self._axis,)
 
     @property
     def dim(self):
+        """Name of the dimension this aligned to."""
         return self._dimnames[self._axis]
 
     @property
     def attrname(self):
         return "{}m".format(self.dim)
+
+    def flipped(self):
+        """transpose"""
+        new = self.copy()
+        new.dimension = abs(self._axis - 1)
+        return new
+
+    def to_df(self) -> pd.DataFrame:
+        """Convert to pandas dataframe."""
+        df = pd.DataFrame(index=self.dim_names)
+        for key in self.keys():
+            value = self[key]
+            for icolumn, column in enumerate(value.T):
+                df['{}{}'.format(key, icolumn + 1)] = column
+        return df
 
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
@@ -189,10 +210,9 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(self, parent_mapping, parent_view, subset_idx):
-        # self.parent_mapping = parent_mapping
+        self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
-        # self._axis = self.parent_mapping._axis
         self._axis = parent_mapping._axis
         self.dim_names = parent_mapping.dim_names[subset_idx]
     

@@ -22,6 +22,7 @@ from scipy.sparse import issparse
 from scipy.sparse.sputils import IndexMixin
 from natsort import natsorted
 
+from .layers import AxisArraysBase, AxisArrays
 # try importing zarr
 try:
     from zarr.core import Array as ZarrArray
@@ -62,106 +63,106 @@ class StorageType(Enum):
         return tuple(c.value for c in cls.__members__.values())
 
 
-class DictMBase(MutableMapping):
-    """A dict whose values must match a dimension of the parent."""
-    dimnames = ("obs", "var")
+# class DictMBase(MutableMapping):
+#     """A dict whose values must match a dimension of the parent."""
+#     dimnames = ("obs", "var")
 
-    @property
-    def dimname(self):
-        return self.dimnames[self.dimension]
+#     @property
+#     def dimname(self):
+#         return self.dimnames[self.dimension]
 
-    def _validate_value(self, value, key):  # Key is passed just for helpful error
-        # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
-        n = self.parent.shape[self.dimension]
-        if not value.shape[0] == n:
-            raise ValueError(
-                "Value passed for key '{key}' is of incorrect shape. Values of"
-                " {dimname}m must match {dimname} dimension of parent. This "
-                "value has {wrong_shape} rows, should have {n}.".format(
-                    key=key, dimname=self.dimname, wrong_shape=value.shape[0], n=n)
-            )
-        try: # TODO: Handle objects with indices
-            # Could probably also re-order index if it's contained
-            if not (value.index == self.dim_names).all():
-                raise IndexError()  # Maybe not index error
-        except AttributeError:
-            pass
+#     def _validate_value(self, value, key):  # Key is passed just for helpful error
+#         # This needs to work for np.ndarray, pd.DataFrame, pd.Series, sparse matrices, anything else?
+#         n = self.parent.shape[self.dimension]
+#         if not value.shape[0] == n:
+#             raise ValueError(
+#                 "Value passed for key '{key}' is of incorrect shape. Values of"
+#                 " {dimname}m must match {dimname} dimension of parent. This "
+#                 "value has {wrong_shape} rows, should have {n}.".format(
+#                     key=key, dimname=self.dimname, wrong_shape=value.shape[0], n=n)
+#             )
+#         try: # TODO: Handle objects with indices
+#             # Could probably also re-order index if it's contained
+#             if not (value.index == self.dim_names).all():
+#                 raise IndexError()  # Maybe not index error
+#         except AttributeError:
+#             pass
     
-    def view(self, parent, subset):
-        """Returns a subsetted view of this object"""
-        return DictMView(self, parent, subset)
+#     def view(self, parent, subset):
+#         """Returns a subsetted view of this object"""
+#         return DictMView(self, parent, subset)
 
-    def __getitem__(self, key):
-        return self._data[key]
+#     def __getitem__(self, key):
+#         return self._data[key]
 
-    def __iter__(self):
-        return self._data.__iter__()
+#     def __iter__(self):
+#         return self._data.__iter__()
 
-    def __len__(self):
-        return self._data.__len__()
+#     def __len__(self):
+#         return self._data.__len__()
 
-    def __delitem__(self, key):  # A view probably can't do this
-        self._data.__delitem__(key)
+#     def __delitem__(self, key):  # A view probably can't do this
+#         self._data.__delitem__(key)
 
-    def flipped(self):
-        new = self.copy()
-        new.dimension = abs(self.dimension - 1)
-        return new
+#     def flipped(self):
+#         new = self.copy()
+#         new.dimension = abs(self.dimension - 1)
+#         return new
 
-    def to_df(self) -> pd.DataFrame:
-        """Convert to pandas dataframe."""
-        df = pd.DataFrame(index=self.dim_names)
-        for key in self.keys():
-            value = self[key]
-            for icolumn, column in enumerate(value.T):
-                df['{}{}'.format(key, icolumn + 1)] = column
-        return df
+    # def to_df(self) -> pd.DataFrame:
+    #     """Convert to pandas dataframe."""
+    #     df = pd.DataFrame(index=self.dim_names)
+    #     for key in self.keys():
+    #         value = self[key]
+    #         for icolumn, column in enumerate(value.T):
+    #             df['{}{}'.format(key, icolumn + 1)] = column
+    #     return df
 
 
-class DictM(DictMBase):
-    def __init__(self, parent, dimension: int):
-        self.parent = parent
-        if dimension not in (0, 1):
-            raise ValueError()
-        self.dimension = dimension
-        self.dim_names = (parent.obs_names, parent.var_names)[dimension]
-        self._data = dict()
+# class DictM(DictMBase):
+#     def __init__(self, parent, dimension: int):
+#         self.parent = parent
+#         if dimension not in (0, 1):
+#             raise ValueError()
+#         self.dimension = dimension
+#         self.dim_names = (parent.obs_names, parent.var_names)[dimension]
+#         self._data = dict()
     
-    def __setitem__(self, key, value):
-        self._validate_value(value, key)
-        self._data[key] = value
+#     def __setitem__(self, key, value):
+#         self._validate_value(value, key)
+#         self._data[key] = value
     
-    def copy(self):
-        new = DictM(self.parent, self.dimension)  # TODO: parent
-        new.update(self._data)
-        return new
+#     def copy(self):
+#         new = DictM(self.parent, self.dimension)  # TODO: parent
+#         new.update(self._data)
+#         return new
 
 
-class DictMView(DictMBase):
-    def __init__(self, parent_dictm, parent_view, subset):
-        self.parent_dictm = parent_dictm
-        self.parent = parent_view
-        self.subset = subset
-        self.dimension = self.parent_dictm.dimension
-        self.dim_names = self.parent_dictm.dim_names[subset]
-        self._data = {k: v[subset] for k, v in self.parent_dictm._data.items()}
+# class DictMView(DictMBase):
+#     def __init__(self, parent_dictm, parent_view, subset):
+#         self.parent_dictm = parent_dictm
+#         self.parent = parent_view
+#         self.subset = subset
+#         self.dimension = self.parent_dictm.dimension
+#         self.dim_names = self.parent_dictm.dim_names[subset]
+#         self._data = {k: v[subset] for k, v in self.parent_dictm._data.items()}
     
-    def __setitem__(self, key, value):
-        self._validate_value(value, key)  # Validate before mutating
-        self.parent._init_as_actual(self.parent.copy())
-        new_dictm = getattr(self.parent, "{}m".format(self.dimname))
-        new_dictm[key] = value
+#     def __setitem__(self, key, value):
+#         self._validate_value(value, key)  # Validate before mutating
+#         self.parent._init_as_actual(self.parent.copy())
+#         new_dictm = getattr(self.parent, "{}m".format(self.dimname))
+#         new_dictm[key] = value
 
-    def copy(self):
-        d = DictM(self.parent, self.dimension)
-        for k, v in self.items():
-            d[k] = v.copy()
-        return d
+#     def copy(self):
+#         d = DictM(self.parent, self.dimension)
+#         for k, v in self.items():
+#             d[k] = v.copy()
+#         return d
 
 
-@convert_to_dict.register
-def convert_to_dict_dictm(obj: DictMBase):
-    return dict(obs._data)
+# @convert_to_dict.register
+# def convert_to_dict_dictm(obj: DictMBase):
+#     return dict(obs._data)
 
 # for backwards compat
 def _find_corresponding_multicol_key(key, keys_multicol):
@@ -429,8 +430,8 @@ class Raw(IndexMixin):
         self,
         adata: Optional['AnnData'] = None,
         X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Optional[DictMBase] = None,
-        varm: Optional[DictMBase] = None,
+        var: Optional[AxisArraysBase] = None,
+        varm: Optional[AxisArraysBase] = None,
     ):
         self._adata = adata
         self._n_obs = adata.n_obs
@@ -868,9 +869,9 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             obsm = convert_to_dict(obsm)
         if isinstance(varm, np.ndarray):
             varm = convert_to_dict(varm)
-        self._obsm = DictM(self, 0)
+        self._obsm = AxisArrays(self, 0)
         self._obsm.update(obsm)
-        self._varm = DictM(self, 1)
+        self._varm = AxisArrays(self, 1)
         self._varm.update(varm)
 
         self._check_dimensions()
@@ -1104,7 +1105,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self._uns = value
 
     @property
-    def obsm(self) -> DictMBase:
+    def obsm(self) -> AxisArraysBase:
         """Multi-dimensional annotation of observations (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
@@ -1116,14 +1117,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     @obsm.setter
     def obsm(self, value):
         value = convert_to_dict(value)  # make sure value is okay
-        obsm = DictM(self, 0)
+        obsm = AxisArrays(self, 0)
         obsm.update(value)
         if self.isview:
             self._init_as_actual(self.copy())
         self._obsm = obsm
 
     @property
-    def varm(self) -> DictMBase:
+    def varm(self) -> AxisArraysBase:
         """Multi-dimensional annotation of variables/ features (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray` of length
@@ -1135,7 +1136,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
     @varm.setter
     def varm(self, value):
         value = convert_to_dict(value)  # make sure value is okay
-        varm = DictM(self, 1)
+        varm = AxisArrays(self, 1)
         varm.update(value)
         if self.isview:
             self._init_as_actual(self.copy())
