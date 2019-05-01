@@ -1,11 +1,9 @@
 from abc import ABC, abstractmethod
-from collections import OrderedDict
 from collections.abc import MutableMapping
-from typing import Mapping, Optional, Union, Tuple
+from typing import Mapping, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse
 
 if False:
     from .base import AnnData, Index  # noqa
@@ -23,11 +21,6 @@ class AlignedMapping(MutableMapping, ABC):
     @abstractmethod
     def isview(self):
         pass
-
-    # @abstractmethod # This could probably just get implemented here
-    # def _validate_value(self, val, key) -> "NoneType":
-    #     """Raises an error if value is invalid"""
-    #     pass
 
     def _validate_value(self, val, key) -> None:
         """Raises an error if value is invalid"""
@@ -53,19 +46,21 @@ class AlignedMapping(MutableMapping, ABC):
 
     @abstractmethod
     def view(self, parent, idx):
-        """Return a view of the object"""
+        """Returns a subetted copy-on-write view of the object"""
         pass
 
     @property
-    @abstractmethod
     def parent(self) -> "AnnData":
-        """The AnnData this is connected to"""
-        pass
+        return self._parent
 
     @property
     @abstractmethod
     def attrname(self) -> str:
         """What attr for the AnnData is this?"""
+        pass
+    
+    @abstractmethod
+    def copy(self):
         pass
 
     def __repr__(self):
@@ -73,6 +68,7 @@ class AlignedMapping(MutableMapping, ABC):
 
     def as_dict(self):
         return dict(self.items())
+
 
 class AlignedViewMixin:
     """
@@ -86,10 +82,6 @@ class AlignedViewMixin:
         The object this is a view of.
     """
     isview = True
-
-    # @property
-    # def parent_mapping(self):
-        # return getattr(self.parent._adata_ref, self.attrname)
 
     def __getitem__(self, key):
         return self.parent_mapping[key][self.subset_idx]
@@ -106,13 +98,14 @@ class AlignedViewMixin:
         self.parent._init_as_actual(adata)
 
     def __setitem__(self, key, value):
-        adata = self.parent.copy()
-        getattr(adata, self.attrname).__setitem__(key, value)
-        self.parent._init_as_actual(adata)
+        self._validate_value(value, key)  # Validate before mutating
+        self.parent._init_as_actual(self.parent.copy())
+        new_mapping = getattr(self.parent, self.attrname)
+        new_mapping[key] = value
 
-    def view(self, parent: "AnnData", idx):
+    def view(self, parent: "AnnData", subset_idx):
         """Returns a subsetted view of this object"""
-        return self.__class__(self, parent, idx)
+        return self.__class__(self, parent, subset_idx)
 
 class AlignedActualMixin:
     """
@@ -140,15 +133,6 @@ class AlignedActualMixin:
     
     def __contains__(self, k):
         return self._data.__contains__(k)
-
-class LayersBase(AlignedMapping):
-    attrname = "layers"
-
-class Layers(LayersBase, AlignedActualMixin):
-    pass
-
-class LayersView(LayersBase, AlignedViewMixin):
-    pass
 
 class AxisArraysBase(AlignedMapping):
     """
@@ -184,6 +168,12 @@ class AxisArraysBase(AlignedMapping):
             for icolumn, column in enumerate(value.T):
                 df['{}{}'.format(key, icolumn + 1)] = column
         return df
+    
+    def copy(self):
+        d = AxisArrays(self.parent, self._axis)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
 
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
@@ -195,15 +185,6 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
 
-    @property
-    def parent(self):
-        return self._parent
-
-    def copy(self):
-        new = AxisArrays(self.parent, self._axis)  # TODO: parent
-        new.update(self._data)
-        return new
-    
     def view(self, parent, subset):
         return AxisArraysView(self, parent, subset)
 
@@ -215,155 +196,34 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
         self.dim_names = parent_mapping.dim_names[subset_idx]
-    
-    @property
-    def parent(self):
-        return self._parent
 
-    def __setitem__(self, key, value):
-        self._validate_value(value, key)  # Validate before mutating
-        self.parent._init_as_actual(self.parent.copy())
-        new_axarr = getattr(self.parent, "{}m".format(self.dim))
-        new_axarr[key] = value
+
+class LayersBase(AlignedMapping):
+    """
+    Mapping of key: array-like, where array-like is aligned to both axes of the parent anndata.
+    """
+    attrname = "layers"
+    axes = (0, 1)
 
     def copy(self):
-        d = AxisArrays(self.parent, self._axis)
-        for k, v in self.items():
-            d[k] = v.copy()
-        return d
+        return Layers(
+            self.parent,
+            vals={k: v.copy() for k, v in self.items()}
+        )
 
-# class LayersBase(AlignedMapping):
-#     # def __init__(
-#         # self,
-#         # adata
-#     # )
-#     # def view(self, subset):
+class Layers(AlignedActualMixin, LayersBase):
+    def __init__(self, parent: 'AnnData', vals: Optional[Mapping] = None):
+        self._parent = parent
+        self._data = {}
+        if vals is not None:
+            self._data.update(vals)
 
-
-#     def __iter__(self):
-#         return self._data.__iter__()
-
-#     def __len__(self):
-#         return self._data.__len__()
+    def view(self, parent, subset_idx):
+        return LayersView(self, parent, subset_idx)
 
 
-# class LayersView(LayersBase):
-#     def __init__(self, parent, oidx, vidx):
-#         self.parent = parent
-#         self.parent_layer = parent_layer
-#         self._oidx = oidx
-#         self._vidx = vidx
-
-#     def __getitem__(self, key):
-#         return self._adata_ref.layers[key][self._oidx, self._vidx]
-
-# class Layers(LayersBase):
-#     def __init__(
-#         self,
-#         parent: "AnnData",
-#         layers: Mapping = {}
-#     ):
-#         self.parent = parent
-#         self.obs_names = parent.var_names
-#         self.var_names = parent.obs_names
-#         self._data = {}
-#         self.update(layers)
-
-#     def __getitem__(self, key):
-#         return self._data[key]
-
-#     def __setitem__(self, key, value):
-#         if value.shape != self.parent.shape:
-#             raise ValueError()
-#         self._data[key] = value
-
-#     def __delitem__(self, key):
-#         del self._data[key]
-
-
-class AnnDataLayers:
-    def __init__(
-        self,
-        adata: 'AnnData',
-        layers: Optional[Mapping[str, np.ndarray]] = None,
-        dtype: Union[str, np.dtype] = 'float32',
-        adata_ref: 'AnnData' = None,
-        oidx: 'Index' = None,
-        vidx: 'Index' = None,
-    ):
-        self._adata = adata
-        self._adata_ref = adata_ref
-        self._oidx = oidx
-        self._vidx = vidx
-
-        self._layers = OrderedDict()
-
-        for key, layer in (layers or {}).items():
-            if not isinstance(layer, np.ndarray) and not issparse(layer):
-                raise TypeError(
-                    'Layer {} is not a numpy.ndarray or scipy.sparse.spmatrix but a {}'
-                    .format(key, type(layer).__name__)
-                )
-            if layer.shape != self._adata.shape:
-                raise ValueError('Shape does not fit.')
-            if layer.dtype != np.dtype(dtype):
-                self._layers[key] = layer.astype(dtype, copy=False)
-            else:
-                self._layers[key] = layer
-
-    def __getitem__(self, key):
-        if self.isview:
-            return self._adata_ref.layers[key][self._oidx, self._vidx]
-        else:
-            return self._layers[key]
-
-    def __setitem__(self, key, value):
-        if not isinstance(value, np.ndarray) and not issparse(value):
-            raise ValueError('Value should be numpy array or sparse matrix')
-        if self.isview:
-            if key not in self._adata_ref.layers.keys():
-                # can't load _init_actual_AnnData from .base - circular
-                if self._adata.isbacked:
-                    raise ValueError(
-                        'You cannot modify elements of an AnnData view, '
-                        'but need a copy of the subset.\n\n'
-                        'Call `adata_subset = adata[index].copy(filename=...)`.')
-                self._adata._init_as_actual(self._adata.copy())
-                self._adata.layers[key] = value
-            else:
-                self._adata_ref.layers[key][self._oidx, self._vidx] = value
-        else:
-            if value.shape != self._adata.shape:
-                raise ValueError('Shape does not fit.')
-            self._layers[key] = value
-
-    def __delitem__(self, key):
-        self.__delattr__(key)
-
-    def __delattr__(self, key):
-        if self.isview:
-            adata = self._adata.copy()
-            adata.layers.__delattr__(key)
-            self._adata._init_as_actual(adata)
-        else:
-            del self._layers[key]
-
-    def keys(self):
-        return (self._adata_ref.layers if self.isview else self._layers).keys()
-
-    def items(self, copy=True):
-        if self.isview:
-            pairs = [(k, v[self._oidx, self._vidx]) for (k, v) in self._adata_ref.layers.items()]
-        else:
-            pairs = self._layers.items()
-        return [(k, v.copy()) for (k, v) in pairs] if copy else pairs
-
-    def as_dict(self, copy=True):
-        return dict(self.items(copy))
-
-    def __len__(self):
-        return len(self._adata_ref.layers if self.isview else self._layers)
-
-    @property
-    def isview(self):
-        return self._adata_ref is not None
+class LayersView(AlignedViewMixin, LayersBase):
+    def __init__(self, parent_mapping, parent_view, subset_idx):
+        self.parent_mapping = parent_mapping
+        self._parent = parent_view
+        self.subset_idx = subset_idx
