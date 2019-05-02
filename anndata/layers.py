@@ -27,11 +27,11 @@ class AlignedMapping(MutableMapping, ABC):
         Which axes is this aligned along?
     """
 
-    @property
-    @abstractmethod
-    def isview(self):
-        pass
-
+    def __repr__(self):
+        return "{} with keys: {}".format(
+            self.__class__.__name__, ', '.join(self.keys())
+        )
+    
     def _validate_value(self, val, key) -> None:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
@@ -51,7 +51,27 @@ class AlignedMapping(MutableMapping, ABC):
 
     @property
     @abstractmethod
-    def axes(self) -> Tuple:
+    def attrname(self) -> str:
+        """What attr for the AnnData is this?"""
+        pass
+
+    @property
+    @abstractmethod
+    def axes(self) -> Tuple[int, ...]:
+        """Which axes of the parent is this aligned to?"""
+        pass
+
+    @property
+    @abstractmethod
+    def isview(self) -> bool:
+        pass
+
+    @property
+    def parent(self) -> "AnnData":
+        return self._parent
+
+    @abstractmethod
+    def copy(self):
         pass
 
     @abstractmethod
@@ -59,26 +79,7 @@ class AlignedMapping(MutableMapping, ABC):
         """Returns a subetted copy-on-write view of the object"""
         pass
 
-    @property
-    def parent(self) -> "AnnData":
-        return self._parent
-
-    @property
-    @abstractmethod
-    def attrname(self) -> str:
-        """What attr for the AnnData is this?"""
-        pass
-
-    @abstractmethod
-    def copy(self):
-        pass
-
-    def __repr__(self):
-        return "{} with keys: {}".format(
-            self.__class__.__name__, ', '.join(self.keys())
-        )
-
-    def as_dict(self):
+    def as_dict(self) -> dict:  #TODO: Deprecate
         return dict(self)
 
 
@@ -98,11 +99,12 @@ class AlignedViewMixin:
     def __getitem__(self, key):
         return _subset(self.parent_mapping[key], self.subset_idx)
 
-    def __iter__(self):
-        return self.parent_mapping.keys().__iter__()
-
-    def __len__(self):
-        return len(self.parent_mapping)
+    def __setitem__(self, key, value):
+        self._validate_value(value, key)  # Validate before mutating
+        adata = self.parent.copy()
+        new_mapping = getattr(adata, self.attrname)
+        new_mapping[key] = value
+        self.parent._init_as_actual(adata)
 
     def __delitem__(self, key):
         self[key]  # Make sure it exists before bothering with a copy
@@ -111,12 +113,14 @@ class AlignedViewMixin:
         del new_mapping[key]
         self.parent._init_as_actual(adata)
 
-    def __setitem__(self, key, value):
-        self._validate_value(value, key)  # Validate before mutating
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        new_mapping[key] = value
-        self.parent._init_as_actual(adata)
+    def __contains__(self, key):
+        return key in self.parent_mapping
+
+    def __iter__(self):
+        return iter(self.parent_mapping)
+
+    def __len__(self):
+        return len(self.parent_mapping)
 
     def view(self, parent: "AnnData", subset_idx):
         """Returns a subsetted view of this object"""
@@ -138,17 +142,17 @@ class AlignedActualMixin:
         self._validate_value(value, key)
         self._data[key] = value
 
+    def __contains__(self, k):
+        return k in self._data
+
     def __delitem__(self, key):
         del self._data[key]
 
     def __iter__(self):
-        return self._data.__iter__()
+        return iter(self._data)
 
     def __len__(self):
-        return self._data.__len__()
-
-    def __contains__(self, k):
-        return self._data.__contains__(k)
+        return len(self._data)
 
 
 class AxisArraysBase(AlignedMapping):
@@ -156,6 +160,10 @@ class AxisArraysBase(AlignedMapping):
     Mapping of key: array-like, where array-like is aligned to an axis of parent AnnData.
     """
     _dimnames = ("obs", "var")
+
+    @property
+    def attrname(self):
+        return "{}m".format(self.dim)
 
     @property
     def axes(self):
@@ -167,9 +175,11 @@ class AxisArraysBase(AlignedMapping):
         """Name of the dimension this aligned to."""
         return self._dimnames[self._axis]
 
-    @property
-    def attrname(self):
-        return "{}m".format(self.dim)
+    def copy(self) -> "AxisArrays":
+        d = AxisArrays(self.parent, self._axis)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
 
     def flipped(self):
         """transpose"""
@@ -186,23 +196,19 @@ class AxisArraysBase(AlignedMapping):
                 df['{}{}'.format(key, icolumn + 1)] = column
         return df
 
-    def copy(self):
-        d = AxisArrays(self.parent, self._axis)
-        for k, v in self.items():
-            d[k] = v.copy()
-        return d
-
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
-    def __init__(self, parent, axis: int):
+    def __init__(self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None):
         self._parent = parent
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
         self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
+        if vals is not None:
+            self._data.update(vals)
 
-    def view(self, parent, subset):
+    def view(self, parent, subset) -> "AxisArraysView":
         return AxisArraysView(self, parent, subset)
 
 
@@ -217,31 +223,29 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
 
 class LayersBase(AlignedMapping):
     """
-    Mapping of key: array-like, where array-like is aligned to both axes of the parent anndata.
+    Mapping of key: array-like, where array-like is aligned to both axes of the
+    parent anndata.
     """
     attrname = "layers"
     axes = (0, 1)
 
-    def copy(self):
-        return Layers(
-            self.parent,
-            vals={k: v.copy() for k, v in self.items()}
-        )
+    def copy(self) -> "Layers":
+        return Layers(self.parent, vals={k: v.copy() for k, v in self.items()})
 
 
 class Layers(AlignedActualMixin, LayersBase):
-    def __init__(self, parent: 'AnnData', vals: Optional[Mapping] = None):
+    def __init__(self, parent: "AnnData", vals: Optional[Mapping] = None):
         self._parent = parent
-        self._data = {}
+        self._data = dict()
         if vals is not None:
             self._data.update(vals)
 
-    def view(self, parent, subset_idx):
+    def view(self, parent, subset_idx) -> "LayersView":
         return LayersView(self, parent, subset_idx)
 
 
 class LayersView(AlignedViewMixin, LayersBase):
-    def __init__(self, parent_mapping, parent_view, subset_idx):
+    def __init__(self, parent_mapping: LayersBase, parent_view: "AnnData", subset_idx):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
