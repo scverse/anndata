@@ -5,6 +5,7 @@ import pytest
 
 import anndata as ad
 
+from anndata.tests.helpers import gen_adata
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -135,6 +136,47 @@ def test_set_varm(adata):
     assert subset_hash == joblib.hash(subset)  # subset should not be changed by failed setting
 
     assert init_hash == joblib.hash(adata)
+
+
+@pytest.mark.parametrize('attr', [
+    "obsm",
+    "varm",
+    "layers"
+])
+def test_view_failed_delitem(attr):
+    adata = gen_adata((10, 10))
+    view = adata[5:7, :][:, :5]
+    adata_hash = joblib.hash(adata)
+    view_hash = joblib.hash(view)
+
+    with pytest.raises(KeyError):
+        getattr(view, attr).__delitem__("not a key")
+
+    assert view.isview
+    assert adata_hash == joblib.hash(adata)
+    assert view_hash == joblib.hash(view)
+
+
+@pytest.mark.parametrize('attr', [
+    "obsm",
+    "varm",
+    "layers"
+])
+def test_view_delitem(attr):
+    adata = gen_adata((10, 10))
+    getattr(adata, attr)["to_delete"] = np.ones((10, 10))
+    assert type(getattr(adata, attr)["to_delete"]) is np.ndarray
+    view = adata[5:7, :][:, :5]
+    adata_hash = joblib.hash(adata)
+    view_hash = joblib.hash(view)
+
+    getattr(view, attr).__delitem__("to_delete")
+
+    assert not view.isview
+    assert "to_delete" not in getattr(view, attr)
+    assert "to_delete" in getattr(adata, attr)
+    assert adata_hash == joblib.hash(adata)
+    assert view_hash != joblib.hash(view)
 
 
 def test_layers_view():
