@@ -1,5 +1,5 @@
 from string import ascii_letters
-from typing import Collection, Tuple, Type
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -46,9 +46,9 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: Collection[Type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    varm_types: Collection[Type] =(sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    layers_types: Collection[Type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame)
+    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    varm_types: "Collection[Type]" =(sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame)
 ) -> AnnData:
     """Helper function to generate a random anndata for testing purposes.
 
