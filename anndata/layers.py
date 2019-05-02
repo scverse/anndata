@@ -95,15 +95,18 @@ class AlignedViewMixin:
         return len(self.parent_mapping)
 
     def __delitem__(self, key):
+        self[key]  # Make sure it exists before bothering with a copy
         adata = self.parent.copy()
-        getattr(adata, self.attrname).__delitem__(key)
+        new_mapping = getattr(adata, self.attrname)
+        del new_mapping[key]
         self.parent._init_as_actual(adata)
 
     def __setitem__(self, key, value):
         self._validate_value(value, key)  # Validate before mutating
-        self.parent._init_as_actual(self.parent.copy())
-        new_mapping = getattr(self.parent, self.attrname)
+        adata = self.parent.copy()
+        new_mapping = getattr(adata, self.attrname)
         new_mapping[key] = value
+        self.parent._init_as_actual(adata)
 
     def view(self, parent: "AnnData", subset_idx):
         """Returns a subsetted view of this object"""
