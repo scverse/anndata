@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
+from functools import singledispatch
 from typing import Mapping, Optional, Tuple
 
 import numpy as np
@@ -7,6 +8,15 @@ import pandas as pd
 
 if False:
     from .base import AnnData, Index  # noqa
+
+
+@singledispatch
+def _subset(mat, subset_idx):
+    return mat[subset_idx]
+
+@_subset.register(pd.DataFrame)
+def _subset_df(df, subset_idx):
+    return df.iloc[subset_idx]
 
 
 class AlignedMapping(MutableMapping, ABC):
@@ -86,7 +96,7 @@ class AlignedViewMixin:
     isview = True
 
     def __getitem__(self, key):
-        return self.parent_mapping[key][self.subset_idx]
+        return _subset(self.parent_mapping[key], self.subset_idx)
 
     def __iter__(self):
         return self.parent_mapping.keys().__iter__()
