@@ -30,6 +30,10 @@ def convert_to_dict_ndarray(obj: np.ndarray):
         d[k] = obj[k]
     return d
 
+@convert_to_dict.register
+def convert_to_dict_nonetype(obj: None):
+    return dict()
+
 
 def make_index_unique(index: pd.Index, join: str = '-'):
     """Makes the index unique by appending '1', '2', etc.
