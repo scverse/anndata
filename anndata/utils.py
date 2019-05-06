@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 
 @singledispatch
-def convert_to_dict(obj):
+def convert_to_dict(obj) -> dict:
     return dict(obj)
 
 @convert_to_dict.register
@@ -31,7 +31,7 @@ def convert_to_dict_ndarray(obj: np.ndarray):
         d[k] = obj[k]
     return d
 
-@convert_to_dict.register
+@convert_to_dict.register(type(None))  # This is required for python < 3.7
 def convert_to_dict_nonetype(obj: None):
     return dict()
 
