@@ -819,30 +819,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # unstructured annotations
         self._uns = uns or OrderedDict()
 
-        # multi-dimensional array annotations
-        # None or {} → empty arrays
-        try:
-            if obsm is None:
-                obsm = dict()
-            if varm is None:
-                varm = dict()
-        except TypeError:
-            raise TypeError(
-                'TypeError: Empty data-type\n'
-                '--> try installing a more recent numpy version: \n'
-                '    pip install numpy --upgrade'
-            )
-
-        # TODO: Probably do this much earlier, potentially for backwards compat
-        # Think about consequences of making obsm a group in hdf
-        if isinstance(obsm, np.ndarray):
-            obsm = convert_to_dict(obsm)
-        if isinstance(varm, np.ndarray):
-            varm = convert_to_dict(varm)
-        self._obsm = AxisArrays(self, 0)
-        self._obsm.update(obsm)
-        self._varm = AxisArrays(self, 1)
-        self._varm.update(varm)
+        # TODO: Think about consequences of making obsm a group in hdf
+        self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
+        self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
 
         self._check_dimensions()
         self._check_uniqueness()
@@ -1086,9 +1065,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obsm.setter
     def obsm(self, value):
-        value = convert_to_dict(value)  # make sure value is okay
-        obsm = AxisArrays(self, 0)
-        obsm.update(value)
+        obsm = AxisArrays(self, 0, vals=convert_to_dict(value))
         if self.isview:
             self._init_as_actual(self.copy())
         self._obsm = obsm
@@ -1105,9 +1082,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @varm.setter
     def varm(self, value):
-        value = convert_to_dict(value)  # make sure value is okay
-        varm = AxisArrays(self, 1)
-        varm.update(value)
+        varm = AxisArrays(self, 1, vals=convert_to_dict(value))
         if self.isview:
             self._init_as_actual(self.copy())
         self._varm = varm

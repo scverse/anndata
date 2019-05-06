@@ -6,8 +6,7 @@ from typing import Mapping, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-if False:
-    from .base import AnnData, Index  # noqa
+from .utils import deprecated
 
 
 @singledispatch
@@ -76,10 +75,11 @@ class AlignedMapping(MutableMapping, ABC):
 
     @abstractmethod
     def view(self, parent, idx):
-        """Returns a subetted copy-on-write view of the object"""
+        """Returns a subet copy-on-write view of the object."""
         pass
 
-    def as_dict(self) -> dict:  #TODO: Deprecate
+    @deprecated("dict(obj)")
+    def as_dict(self) -> dict:
         return dict(self)
 
 
@@ -123,7 +123,6 @@ class AlignedViewMixin:
         return len(self.parent_mapping)
 
     def view(self, parent: "AnnData", subset_idx):
-        """Returns a subsetted view of this object"""
         return self.__class__(self, parent, subset_idx)
 
 
@@ -182,7 +181,7 @@ class AxisArraysBase(AlignedMapping):
         return d
 
     def flipped(self):
-        """transpose"""
+        """Transpose."""
         new = self.copy()
         new.dimension = abs(self._axis - 1)
         return new
@@ -206,7 +205,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
         if vals is not None:
-            self._data.update(vals)
+            self.update(vals)
 
     def view(self, parent, subset) -> "AxisArraysView":
         return AxisArraysView(self, parent, subset)
@@ -238,7 +237,7 @@ class Layers(AlignedActualMixin, LayersBase):
         self._parent = parent
         self._data = dict()
         if vals is not None:
-            self._data.update(vals)
+            self.update(vals)
 
     def view(self, parent, subset_idx) -> "LayersView":
         return LayersView(self, parent, subset_idx)
