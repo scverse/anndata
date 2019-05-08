@@ -7,7 +7,7 @@ import bz2
 import numpy as np
 import warnings
 
-from ..base import AnnData
+from .. import AnnData
 from .. import h5py
 from ..compat import PathLike, fspath
 from .utils import *

@@ -3,18 +3,17 @@ from collections.abc import MutableMapping
 from functools import singledispatch
 from typing import Mapping, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 
-from .utils import deprecated
+from ..utils import deprecated
 
 
 @singledispatch
 def _subset(mat, subset_idx):
     return mat[subset_idx]
 
-@_subset.register(pd.DataFrame)
-def _subset_df(df, subset_idx):
+@_subset.register
+def _subset_df(df: pd.DataFrame, subset_idx):
     return df.iloc[subset_idx]
 
 
@@ -30,7 +29,7 @@ class AlignedMapping(MutableMapping, ABC):
         return "{} with keys: {}".format(
             self.__class__.__name__, ', '.join(self.keys())
         )
-    
+
     def _validate_value(self, val, key) -> None:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
