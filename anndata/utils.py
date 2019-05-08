@@ -26,12 +26,9 @@ def convert_to_dict_ndarray(obj: np.ndarray):
             "Can only convert np.ndarray with compound dtypes to dict, passed "
             "array had '{}'.".format(obj.dtype)
         )
-    d = dict()
-    for k in obj.dtype.fields.keys():
-        d[k] = obj[k]
-    return d
+    return {k: obj[k] for k in obj.dtype.fields.keys()}
 
-@convert_to_dict.register(type(None))  # This is required for python < 3.7
+@convert_to_dict.register(type(None))
 def convert_to_dict_nonetype(obj: None):
     return dict()
 
