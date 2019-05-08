@@ -339,7 +339,7 @@ class Raw:
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
-            new._varm = self._varm.view(self, vidx)
+            new._varm = self._varm._view(self, vidx)
         return new
 
     def copy(self):
@@ -577,10 +577,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if isinstance(vidx, (int, np.int64)): vidx_normalized = slice(vidx, vidx+1, 1)
         obs_sub = adata_ref.obs.iloc[oidx_normalized]
         var_sub = adata_ref.var.iloc[vidx_normalized]
-        self._obsm = adata_ref.obsm.view(self, oidx_normalized)
-        self._varm = adata_ref.varm.view(self, vidx_normalized)
-        self._obsp = adata_ref.obsp.view(self, oidx_normalized)
-        self._varp = adata_ref.varp.view(self, vidx_normalized)
+        self._obsm = adata_ref.obsm._view(self, oidx_normalized)
+        self._varm = adata_ref.varm._view(self, vidx_normalized)
+        self._obsp = adata_ref.obsp._view(self, oidx_normalized)
+        self._varp = adata_ref.varp._view(self, vidx_normalized)
         # hackish solution here, no copy should be necessary
         uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
@@ -616,7 +616,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             self._init_X_as_view()
 
-        self._layers = adata_ref.layers.view(self, (oidx, vidx))
+        self._layers = adata_ref.layers._view(self, (oidx, vidx))
 
         # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:

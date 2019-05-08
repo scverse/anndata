@@ -75,7 +75,7 @@ class AlignedMapping(MutableMapping, ABC):
         pass
 
     @abstractmethod
-    def view(self, parent, idx):
+    def _view(self, parent, idx):
         """Returns a subet copy-on-write view of the object."""
         pass
 
@@ -123,7 +123,7 @@ class AlignedViewMixin:
     def __len__(self):
         return len(self.parent_mapping)
 
-    def view(self, parent: "AnnData", subset_idx):
+    def _view(self, parent: "AnnData", subset_idx):
         return self.__class__(self, parent, subset_idx)
 
 
@@ -208,7 +208,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if vals is not None:
             self.update(vals)
 
-    def view(self, parent, subset) -> "AxisArraysView":
+    def _view(self, parent, subset) -> "AxisArraysView":
         return AxisArraysView(self, parent, subset)
 
 
@@ -240,7 +240,7 @@ class Layers(AlignedActualMixin, LayersBase):
         if vals is not None:
             self.update(vals)
 
-    def view(self, parent, subset_idx) -> "LayersView":
+    def _view(self, parent, subset_idx) -> "LayersView":
         return LayersView(self, parent, subset_idx)
 
 
@@ -290,7 +290,7 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         if vals is not None:
             self.update(vals)
 
-    def view(self, parent, subset) -> "PairwiseArraysView":
+    def _view(self, parent, subset) -> "PairwiseArraysView":
         return PairwiseArraysView(self, parent, subset)
 
 
