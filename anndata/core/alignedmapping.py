@@ -12,7 +12,7 @@ from ..utils import deprecated
 def _subset(mat, subset_idx):
     return mat[subset_idx]
 
-@_subset.register
+@_subset.register(pd.DataFrame)
 def _subset_df(df: pd.DataFrame, subset_idx):
     return df.iloc[subset_idx]
 
