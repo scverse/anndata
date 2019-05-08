@@ -15,11 +15,11 @@ logger = get_logger(__name__)
 def convert_to_dict(obj) -> dict:
     return dict(obj)
 
-@convert_to_dict.register
+@convert_to_dict.register(dict)
 def convert_to_dict_dict(obj: dict):
     return obj
 
-@convert_to_dict.register
+@convert_to_dict.register(np.ndarray)
 def convert_to_dict_ndarray(obj: np.ndarray):
     if obj.dtype.fields is None:
         raise TypeError(
