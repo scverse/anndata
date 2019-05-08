@@ -16,8 +16,9 @@ class _SetItemMixin:
             adata_view, attr_name = self._view_args
             logger.warning(
                 'Trying to set attribute `.{}` of view, making a copy.'.format(attr_name))
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
+            new = adata_view.copy()
+            getattr(new, attr_name)[idx] = value
+            adata_view._init_as_actual(new)
 
 
 class _ViewMixin(_SetItemMixin):

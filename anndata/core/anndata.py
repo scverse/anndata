@@ -262,15 +262,6 @@ class AnnDataFileManager:
         return bool(self._file.id)
 
 
-def _init_actual_AnnData(adata_view):
-    if adata_view.isbacked:
-        raise ValueError(
-            'You cannot modify elements of an AnnData view, '
-            'but need a copy of the subset.\n\n'
-            'Call `adata_subset = adata[index].copy(filename=...)`.')
-    adata_view._init_as_actual(adata_view.copy())
-
-
 class Raw:
     def __init__(
         self,
