@@ -34,11 +34,13 @@ class AlignedMapping(MutableMapping, ABC):
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] != val.shape[i]:
+                right_shape = tuple(self.parent.shape[a] for a in self.axes)
                 raise ValueError(
                     "Value passed for key '{key}' is of incorrect shape. Values of"
-                    " {attrname} must match dimensions {axes} of parent."
-                    "value had shape {wrong_shape}.".format(
-                        key=key, attrname=self.attrname, axes=self.axes, wrong_shape=val.shape)
+                    " {attrname} must match dimensions {axes} of parent. value had"
+                    " shape {wrong_shape} while it should have had {right_shape}."
+                    .format(
+                        key=key, attrname=self.attrname, axes=self.axes, wrong_shape=val.shape, right_shape=right_shape)
                 )
         try:  # TODO: Handle objects with indices
             # Could probably also re-order index if it's contained
@@ -247,3 +249,57 @@ class LayersView(AlignedViewMixin, LayersBase):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
+
+
+class PairwiseArraysBase(AlignedMapping):
+    """
+    Mapping of key: array-like, where both axes of array-like are aligned to
+    one axis of the parent anndata.
+    """
+    _dimnames = ("obs", "var")
+
+    @property
+    def attrname(self):
+        return "{}p".format(self.dim)
+
+    @property
+    def axes(self):
+        """Axes of the parent this is aligned to"""
+        return (self._axis, self._axis)
+
+    @property
+    def dim(self):
+        """Name of the dimension this aligned to."""
+        return self._dimnames[self._axis]
+
+    def copy(self) -> "PairwiseArrays":
+        d = PairwiseArrays(self.parent, self._axis)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
+
+
+class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
+    def __init__(self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None):
+        self._parent = parent
+        if axis not in (0, 1):
+            raise ValueError()
+        self._axis = axis
+        self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
+        self._data = dict()
+        if vals is not None:
+            self.update(vals)
+
+    def view(self, parent, subset) -> "PairwiseArraysView":
+        return PairwiseArraysView(self, parent, subset)
+
+
+class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
+    def __init__(
+        self, parent_mapping: PairwiseArraysBase, parent_view: "AnnData", subset_idx
+    ):
+        self.parent_mapping = parent_mapping
+        self._parent = parent_view
+        self.subset_idx = (subset_idx, subset_idx)
+        self._axis = parent_mapping._axis
+        self.dim_names = parent_mapping.dim_names[subset_idx]
