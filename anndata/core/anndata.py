@@ -4,17 +4,16 @@ import os
 from enum import Enum
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from functools import reduce, singledispatch
+from functools import reduce
 from pathlib import Path
 from typing import Any, Union, Optional
 from typing import Iterable, Sized, Sequence, Mapping
-from typing import Tuple, List, Dict, KeysView
+from typing import Tuple, List
 from copy import deepcopy
 
 import numpy as np
 from numpy import ma
 import pandas as pd
-from numpy.lib.recfunctions import rec_drop_fields
 from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
@@ -41,14 +40,15 @@ except ImportError:
         def __rep__():
             return 'mock zappy.base.ZappyArray'
 
-from . import h5py
-from .layers import AxisArraysBase, AxisArrays, Layers
-# from .layers import AnnDataLayers
 
-from . import utils
-from .utils import Index, get_n_items_idx, convert_to_dict
-from .logging import anndata_logger as logger
-from .compat import PathLike
+from .alignedmapping import AxisArraysBase, AxisArrays, Layers
+from .. import h5py
+from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameView
+
+from .. import utils
+from ..utils import Index, get_n_items_idx, convert_to_dict
+from ..logging import anndata_logger as logger
+from ..compat import PathLike
 
 
 class StorageType(Enum):
@@ -271,70 +271,6 @@ def _init_actual_AnnData(adata_view):
     adata_view._init_as_actual(adata_view.copy())
 
 
-class _SetItemMixin:
-    def __setitem__(self, idx: Any, value: Any):
-        if self._view_args is None:
-            super().__setitem__(idx, value)
-        else:
-            adata_view, attr_name = self._view_args
-            logger.warning(
-                'Trying to set attribute `.{}` of view, making a copy.'.format(attr_name))
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
-
-
-class _ViewMixin(_SetItemMixin):
-    def __init__(self, *args, view_args: Tuple['AnnData', str] = None, **kwargs):
-        self._view_args = view_args
-        super().__init__(*args, **kwargs)
-
-    def __deepcopy__(self, memo):
-        parent, k = self._view_args
-        return deepcopy(getattr(parent._adata_ref, k))
-
-
-class ArrayView(_SetItemMixin, np.ndarray):
-    def __new__(
-        cls,
-        input_array: Sequence[Any],
-        view_args: Tuple['AnnData', str] = None,
-    ):
-        arr = np.asarray(input_array).view(cls)
-        arr._view_args = view_args
-        return arr
-
-    def __array_finalize__(self, obj: Optional[np.ndarray]):
-        if obj is None: return
-        self._view_args = getattr(obj, '_view_args', None)
-
-    def keys(self) -> KeysView[str]:
-        # it's a structured array
-        return self.dtype.names
-
-    def copy(self, order: str = 'C') -> np.ndarray:
-        # we want a conventional array
-        return np.array(self)
-
-    def toarray(self) -> np.ndarray:
-        return self.copy()
-
-
-class SparseCSRView(_ViewMixin, sparse.csr_matrix):
-    pass
-
-
-class SparseCSCView(_ViewMixin, sparse.csc_matrix):
-    pass
-
-
-class DictView(_ViewMixin, dict):
-    pass
-
-
-class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ['_view_args']
-
-
 class Raw(IndexMixin):
     def __init__(
         self,
@@ -403,7 +339,7 @@ class Raw(IndexMixin):
         oidx, vidx = self._normalize_indices(index)
         if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
         else: X = self._adata.file['raw.X'][oidx, vidx]
-        if isinstance(vidx, (int, np.int64)): 
+        if isinstance(vidx, (int, np.int64)):
             vidx = slice(vidx, vidx+1, 1)  # why this?
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
@@ -667,7 +603,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             obsm=None, varm=None, raw=None, layers=None,
             dtype='float32', shape=None,
             filename=None, filemode=None):
-        from .readwrite.read import _read_args_from_h5ad
+        from ..readwrite.read import _read_args_from_h5ad
 
         # view attributes
         self._isview = False
@@ -1872,7 +1808,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             Write sparse data as a dense matrix. Defaults to ``True`` if object is
             backed, otherwise to ``False``.
         """
-        from .readwrite.write import _write_h5ad
+        from ..readwrite.write import _write_h5ad
 
         if filename is None and not self.isbacked:
             raise ValueError('Provide a filename!')
@@ -1904,7 +1840,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         sep
              Separator for the data.
         """
-        from .readwrite.write import write_csvs
+        from ..readwrite.write import write_csvs
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
@@ -1915,7 +1851,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         filename
             The filename.
         """
-        from .readwrite.write import write_loom
+        from ..readwrite.write import write_loom
         write_loom(filename, self, write_obsm_varm = write_obsm_varm)
 
     def write_zarr(
@@ -1932,7 +1868,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         chunks
             Chunk shape.
         """
-        from .readwrite.write import write_zarr
+        from ..readwrite.write import write_zarr
         write_zarr(store, self, chunks=chunks)
 
     def chunked_X(self, chunk_size: Optional[int] = None):

@@ -8,7 +8,7 @@ import math
 import numpy as np
 from scipy.sparse import issparse
 
-from ..base import AnnData
+from .. import AnnData
 from .. import h5py
 from ..compat import PathLike, fspath
 from ..logging import get_logger
