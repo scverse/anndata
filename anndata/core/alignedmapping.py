@@ -76,7 +76,7 @@ class AlignedMapping(MutableMapping, ABC):
 
     @abstractmethod
     def _view(self, parent, idx):
-        """Returns a subet copy-on-write view of the object."""
+        """Returns a subset copy-on-write view of the object."""
         pass
 
     @deprecated("dict(obj)")
