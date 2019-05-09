@@ -1,5 +1,6 @@
 from copy import deepcopy
-from typing import Any, KeysView, Optional, Sequence, Tuple
+from functools import reduce
+from typing import Any, KeysView, Optional, Sequence, Tuple, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -8,36 +9,53 @@ from scipy import sparse
 from ..logging import anndata_logger as logger
 
 
+class ViewArgs(NamedTuple):
+    parent: "AnnData"
+    attrname: str
+    keys: Tuple[str, ...] = ()
+
+
 class _SetItemMixin:
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
-            adata_view, attr_name = self._view_args
+            adata_view, attr_name, keys = self._view_args
             logger.warning(
                 'Trying to set attribute `.{}` of view, making a copy.'.format(attr_name))
             new = adata_view.copy()
-            getattr(new, attr_name)[idx] = value
+            attr = getattr(new, attr_name)
+            container = reduce(lambda d, k: d[k], keys, attr)
+            container[idx] = value
             adata_view._init_as_actual(new)
 
 
 class _ViewMixin(_SetItemMixin):
-    def __init__(self, *args, view_args: Tuple['AnnData', str] = None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
+         **kwargs
+    ):
+        if view_args is not None:
+            view_args = ViewArgs(*view_args)
         self._view_args = view_args
         super().__init__(*args, **kwargs)
 
     def __deepcopy__(self, memo):
-        parent, k = self._view_args
-        return deepcopy(getattr(parent._adata_ref, k))
+        parent, attrname, keys = self._view_args
+        return deepcopy(getattr(parent._adata_ref, attrname))
 
 
 class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: Tuple['AnnData', str] = None,
+        view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
     ):
         arr = np.asarray(input_array).view(cls)
+        if view_args is not None:
+            view_args = ViewArgs(*view_args)
         arr._view_args = view_args
         return arr
 
