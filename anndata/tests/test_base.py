@@ -1,5 +1,4 @@
 from itertools import product
-from functools import partial
 
 import numpy as np
 from numpy import ma
@@ -183,7 +182,7 @@ def test_slicing_strings():
     with raises(IndexError): _ = adata['X', :]
     with raises(IndexError): _ = adata['A':'X', :]
     with raises(IndexError): _ = adata[:, 'a':'X']
-    
+
     # Test if errors are helpful
     with raises(KeyError, match=r"not_in_var"):
         adata[:, ["A", "B", "not_in_var"]]
@@ -469,7 +468,7 @@ def test_convenience():
             adata, adata_dense,
             lambda x: x.obs_vector(obs_k, layer=layer)
         )
-    
+
     for obs_k in ["a", "b", "c"]:
         assert_same_op_result(
             adata, adata_dense,
@@ -481,7 +480,7 @@ def test_convenience():
             adata, adata_dense,
             lambda x: x.var_vector(var_k, layer=layer)
         )
-    
+
     for var_k in ["s1", "s2", "anno2"]:
         assert_same_op_result(
             adata, adata_dense,
