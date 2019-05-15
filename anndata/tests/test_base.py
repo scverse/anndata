@@ -458,34 +458,34 @@ def test_convenience():
         assert np.all(r1 == r2)
         assert type(r1) == type(r2)
 
-    assert np.allclose(adata.get_obs_slice_1d("b"), np.array([1., 2.5]))
-    assert np.allclose(adata.raw.get_obs_slice_1d("c"), np.array([3, 6]))
-    assert np.all(adata.get_obs_slice_1d("anno1") == np.array(["c1", "c2"]))
-    assert np.allclose(adata.get_var_slice_1d("s1"), np.array([0, 1., 1.5]))
-    assert np.allclose(adata.raw.get_var_slice_1d("s2"), np.array([0, 5, 6]))
+    assert np.allclose(adata.obs_vector("b"), np.array([1., 2.5]))
+    assert np.allclose(adata.raw.obs_vector("c"), np.array([3, 6]))
+    assert np.all(adata.obs_vector("anno1") == np.array(["c1", "c2"]))
+    assert np.allclose(adata.var_vector("s1"), np.array([0, 1., 1.5]))
+    assert np.allclose(adata.raw.var_vector("s2"), np.array([0, 5, 6]))
 
     for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
         assert_same_op_result(
             adata, adata_dense,
-            lambda x: x.get_obs_slice_1d(obs_k, layer=layer)
+            lambda x: x.obs_vector(obs_k, layer=layer)
         )
     
     for obs_k in ["a", "b", "c"]:
         assert_same_op_result(
             adata, adata_dense,
-            lambda x: x.raw.get_obs_slice_1d(obs_k)
+            lambda x: x.raw.obs_vector(obs_k)
         )
 
     for var_k, layer in product(["s1", "s2", "anno2"], [None, "x2"]):
         assert_same_op_result(
             adata, adata_dense,
-            lambda x: x.get_var_slice_1d(var_k, layer=layer)
+            lambda x: x.var_vector(var_k, layer=layer)
         )
     
     for var_k in ["s1", "s2", "anno2"]:
         assert_same_op_result(
             adata, adata_dense,
-            lambda x: x.raw.get_var_slice_1d(var_k)
+            lambda x: x.raw.var_vector(var_k)
         )
 
 
@@ -513,12 +513,12 @@ def test_1d_slice_dtypes():
 
     new_obs_df = pd.DataFrame(index=adata.obs_names)
     for k in obs_df.columns:
-        new_obs_df[k] = adata.get_obs_slice_1d(k)
+        new_obs_df[k] = adata.obs_vector(k)
         new_obs_df[k].dtype is obs_df[k].dtype
     assert np.all(new_obs_df == obs_df)
     new_var_df = pd.DataFrame(index=adata.var_names)
     for k in var_df.columns:
-        new_var_df[k] = adata.get_var_slice_1d(k)
+        new_var_df[k] = adata.var_vector(k)
         new_var_df[k].dtype is var_df[k].dtype
     assert np.all(new_var_df == var_df)
 

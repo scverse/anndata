@@ -535,7 +535,7 @@ class Raw:
         var = _normalize_index(var, self.var_names)
         return obs, var
 
-    def get_var_slice_1d(self, k: str) -> np.ndarray:
+    def var_vector(self, k: str) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
         from `.X` or `.var`.
@@ -561,7 +561,7 @@ class Raw:
             a = a.toarray()
         return np.ravel(a)
 
-    def get_obs_slice_1d(self, k: str) -> np.ndarray:
+    def obs_vector(self, k: str) -> np.ndarray:
         """
         Convenience function for returning a 1 dimensional ndarray of values
         from `.X`.
@@ -1585,7 +1585,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.X
 
-    def get_obs_slice_1d(
+    def obs_vector(
         self, k: str, *, layer: Optional[str] = None
     ) -> np.ndarray:
         """
@@ -1624,7 +1624,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return np.ravel(a)
 
 
-    def get_var_slice_1d(
+    def var_vector(
         self, k, *, layer: Optional[str] = None
     ) -> np.ndarray:
         """
@@ -1662,17 +1662,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             a = a.toarray()
         return np.ravel(a)
 
-    @utils.deprecated("get_obs_slice_1d")
+    @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):
         """Get an array from the layer (default layer='X') along the observation dimension by first looking up
         obs.keys and then var.index."""
-        return self.get_obs_slice_1d(k=k, use_raw=use_raw, layer=layer)
+        return self.obs_vector(k=k, use_raw=use_raw, layer=layer)
 
-    @utils.deprecated("get_var_slice_1d")
+    @utils.deprecated("var_vector")
     def _get_var_array(self, k, use_raw=False, layer='X'):
         """Get an array from the layer (default layer='X') along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
-        return self.get_var_slice_1d(k=k, use_raw=use_raw, layer=layer)
+        return self.var_vector(k=k, use_raw=use_raw, layer=layer)
 
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
