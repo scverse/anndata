@@ -9,6 +9,7 @@ from typing import Any, Union, Optional
 from typing import Iterable, Sized, Sequence, Mapping, MutableMapping
 from typing import Tuple, List, Dict, KeysView
 from copy import deepcopy
+import warnings
 
 import numpy as np
 from numpy import ma
@@ -1611,7 +1612,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if "X" in self.layers:
                 pass
             else:
-                # TODO: Raise deprecation warning
+                warnings.warn(
+                    "In a future version of AnnData, access to `.X` by passing"
+                    " `layer='X'` will be removed. Instead pass `layer=None`.",
+                    FutureWarning
+                )
                 layer = None
 
         if k in self.obs:
@@ -1650,7 +1655,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if "X" in self.layers:
                 pass
             else:
-                # TODO: Raise deprecation warning
+                warnings.warn(
+                    "In a future version of AnnData, access to `.X` by passing"
+                    " `layer='X'` will be removed. Instead pass `layer=None`.",
+                    FutureWarning
+                )
                 layer = None
 
         if k in self.var:
