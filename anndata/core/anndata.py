@@ -1418,7 +1418,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
                            self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
                            self._obsm.copy(), self._varm.copy(),
                            raw=None if self._raw is None else self._raw.copy(),
-                           layers=self.layers.as_dict(),
+                           layers=dict(self.layers),
                            dtype=self._X.dtype.name if self._X is not None else 'float32')
         else:
             if filename is None:
@@ -2094,7 +2094,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self.strings_to_categoricals()
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs, var_len_str)
         var_rec, uns_var = df_to_records_fixed_width(self._var, var_len_str)
-        layers = self.layers.as_dict()
+        layers = dict(self.layers)
         d = {
             'X': self._X,
             'obs': obs_rec,
