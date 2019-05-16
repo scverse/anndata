@@ -6,6 +6,7 @@ from typing import Mapping, Optional, Tuple
 import pandas as pd
 
 from ..utils import deprecated
+from .views import asview, ViewArgs
 
 
 @singledispatch
@@ -98,7 +99,13 @@ class AlignedViewMixin:
     isview = True
 
     def __getitem__(self, key):
-        return _subset(self.parent_mapping[key], self.subset_idx)
+        return _subset(
+            asview(
+                self.parent_mapping[key],
+                ViewArgs(self.parent, self.attrname, (key,))
+            ),
+            self.subset_idx
+        )
 
     def __setitem__(self, key, value):
         self._validate_value(value, key)  # Validate before mutating

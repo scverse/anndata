@@ -1,5 +1,5 @@
 from copy import deepcopy
-from functools import reduce
+from functools import reduce, singledispatch
 from typing import Any, KeysView, Optional, Sequence, Tuple, NamedTuple
 
 import numpy as np
@@ -89,3 +89,30 @@ class DictView(_ViewMixin, dict):
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata = ['_view_args']
+
+
+@singledispatch
+def asview(obj, view_args):
+    raise NotImplementedError(
+        "No view type has been registered for {}".format(type(obj))
+    )
+
+@asview.register(np.ndarray)
+def asview_array(array, view_args):
+    return ArrayView(array, view_args=view_args)
+
+@asview.register(pd.DataFrame)
+def asview_df(df, view_args):
+    return DataFrameView(df, view_args=view_args)
+
+@asview.register(sparse.csr_matrix)
+def asview_csr(mtx, view_args):
+    return SparseCSRView(mtx, view_args=view_args)
+
+@asview.register(sparse.csc_matrix)
+def asview_csc(mtx, view_args):
+    return SparseCSCView(mtx, view_args=view_args)
+
+@asview.register(dict)
+def asview_dict(d, view_args):
+    return DictView(d, view_args=view_args)
