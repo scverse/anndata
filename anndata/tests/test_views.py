@@ -5,7 +5,7 @@ import pytest
 
 import anndata as ad
 
-from anndata.tests.helpers import gen_adata
+from anndata.tests.helpers import gen_adata, subset_func, slice_subset
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -94,7 +94,7 @@ def test_set_obsm(adata):
     orig_obsm_val = adata.obsm["o"].copy()
     subset_idx = np.random.choice(adata.obs_names, dim0_size, replace=False)
 
-    subset =  adata[subset_idx, :]
+    subset = adata[subset_idx, :]
     assert subset.isview
     subset.obsm = {"o": np.ones((dim0_size, dim1_size))}
     assert not subset.isview
@@ -115,7 +115,7 @@ def test_set_obsm(adata):
 def test_set_varm(adata):
     init_hash = joblib.hash(adata)
 
-    dim0_size = np.random.randint(2, adata.shape[0] - 1)
+    dim0_size = np.random.randint(2, adata.shape[1] - 1)
     dim1_size = np.random.randint(1, 99)
     orig_varm_val = adata.varm["o"].copy()
     subset_idx = np.random.choice(adata.var_names, dim0_size, replace=False)
@@ -134,6 +134,45 @@ def test_set_varm(adata):
     with pytest.raises(ValueError):
         subset.varm = {"o": np.ones((dim0_size - 1, dim1_size))}
     assert subset_hash == joblib.hash(subset)  # subset should not be changed by failed setting
+
+    assert init_hash == joblib.hash(adata)
+
+
+# TODO: Use different kind of subsetting for adata and view
+def test_set_subset_obsm(adata, subset_func):
+    init_hash = joblib.hash(adata)
+    orig_obsm_val = adata.obsm["o"].copy()
+
+    while True:
+        subset_idx = slice_subset(adata.obs_names)
+        if len(adata[subset_idx, :]) > 1:
+            break
+    subset = adata[subset_idx, :]
+
+    internal_idx = subset_func(np.arange(subset.obsm["o"].shape[0]))
+    assert subset.isview
+    subset.obsm["o"][internal_idx] = 1
+    assert not subset.isview
+    assert np.all(adata.obsm["o"] == orig_obsm_val)
+
+    assert init_hash == joblib.hash(adata)
+
+
+def test_set_subset_varm(adata, subset_func):
+    init_hash = joblib.hash(adata)
+    orig_varm_val = adata.varm["o"].copy()
+
+    while True:
+        subset_idx = slice_subset(adata.var_names)
+        if len(adata[:, subset_idx]) > 1:
+            break
+    subset = adata[:, subset_idx]
+
+    internal_idx = subset_func(np.arange(subset.varm["o"].shape[0]))
+    assert subset.isview
+    subset.varm["o"][internal_idx] = 1
+    assert not subset.isview
+    assert np.all(adata.varm["o"] == orig_varm_val)
 
     assert init_hash == joblib.hash(adata)
 
