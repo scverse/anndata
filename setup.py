@@ -1,6 +1,6 @@
 import sys
 if sys.version_info < (3,):
-    sys.exit('anndata requires Python >= 3.5')
+    sys.exit('anndata requires Python >= 3.6')
 from pathlib import Path
 
 from setuptools import setup, find_packages
@@ -25,7 +25,7 @@ setup(
         l.strip() for l in
         Path('requirements.txt').read_text('utf-8').splitlines()
     ],
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     packages=find_packages(),
     zip_safe=False,
     classifiers=[
@@ -38,8 +38,8 @@ setup(
         'Operating System :: Microsoft :: Windows',
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7'
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Topic :: Scientific/Engineering :: Visualization',
     ],
