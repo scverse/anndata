@@ -32,7 +32,7 @@ def adata():
         uns2=['some annotation'],
     )
     return ad.AnnData(
-        X, 
+        X,
         obs=obs_dict,
         var=var_dict,
         uns=uns_dict,
@@ -47,6 +47,7 @@ def adata():
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
+
 
 # this is very similar to the views test
 def test_backing(adata, tmp_path, backing_h5ad):
@@ -75,17 +76,15 @@ def test_backing(adata, tmp_path, backing_h5ad):
     with pytest.raises(ValueError):
         adata_subset.var['bar'] = -12
     with pytest.raises(ValueError):
-        adata_subset.obsm['o2'] = np.ones((2,2))
+        adata_subset.obsm['o2'] = np.ones((2, 2))
     with pytest.raises(ValueError):
         adata_subset.varm['v2'] = np.zeros((2, 2))
     with pytest.raises(ValueError):
         adata_subset.layers['float2'] = adata_subset.layers['float'].copy()
-    
+
     # Things should stay the same after failed operations
     assert subset_hash == joblib.hash(adata_subset)
     assert adata_subset.isview
-    
-
 
     # need to copy first
     adata_subset = adata_subset.copy(tmp_path / 'test.subset.h5ad')

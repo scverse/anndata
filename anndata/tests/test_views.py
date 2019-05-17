@@ -28,10 +28,6 @@ uns_dict = {  # unstructured annotation
     'uns2': ['some annotation']}
 
 
-# -------------------------------------------------------------------------------
-# The test functions
-# -------------------------------------------------------------------------------
-
 @pytest.fixture
 def adata():
     adata = ad.AnnData(np.empty((100, 100)))
@@ -39,9 +35,10 @@ def adata():
     adata.varm['o'] = np.zeros((100, 50))
     return adata
 
-@pytest.fixture(params=["obs", "var"])
-def obsvar_attrname(request):
-    return request.param
+# -------------------------------------------------------------------------------
+# The test functions
+# -------------------------------------------------------------------------------
+
 
 def test_views():
     X = np.array(X_list)
@@ -90,10 +87,10 @@ def test_set_varm_key(adata):
 
     assert init_hash == joblib.hash(adata)
 
+
 def test_set_obs(adata, subset_func):
     init_hash = joblib.hash(adata)
 
-    orig_obs = adata.obs.copy()
     subset = adata[subset_func(adata.obs_names), :]
 
     new_obs = pd.DataFrame(
@@ -112,7 +109,6 @@ def test_set_obs(adata, subset_func):
 def test_set_var(adata, subset_func):
     init_hash = joblib.hash(adata)
 
-    orig_var = adata.var.copy()
     subset = adata[:, subset_func(adata.var_names)]
 
     new_var = pd.DataFrame(
@@ -126,6 +122,7 @@ def test_set_var(adata, subset_func):
     assert np.all(subset.var == new_var)
 
     assert joblib.hash(adata) == init_hash
+
 
 def test_set_obsm(adata):
     init_hash = joblib.hash(adata)
@@ -245,7 +242,7 @@ def test_view_failed_delitem(attr):
 def test_view_delitem(attr):
     adata = gen_adata((10, 10))
     getattr(adata, attr)["to_delete"] = np.ones((10, 10))
-    assert type(getattr(adata, attr)["to_delete"]) is np.ndarray
+    assert type(getattr(adata, attr)["to_delete"]) is np.ndarray  # Shouldn't be a subclass, should be an ndarray
     view = adata[5:7, :][:, :5]
     adata_hash = joblib.hash(adata)
     view_hash = joblib.hash(view)

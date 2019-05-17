@@ -76,7 +76,7 @@ class AlignedMapping(MutableMapping, ABC):
         pass
 
     @abstractmethod
-    def _view(self, parent, idx):
+    def _view(self, parent, subset_idx):
         """Returns a subset copy-on-write view of the object."""
         pass
 
@@ -215,8 +215,8 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if vals is not None:
             self.update(vals)
 
-    def _view(self, parent, subset) -> "AxisArraysView":
-        return AxisArraysView(self, parent, subset)
+    def _view(self, parent, subset_idx) -> "AxisArraysView":
+        return AxisArraysView(self, parent, subset_idx)
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
@@ -297,8 +297,8 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         if vals is not None:
             self.update(vals)
 
-    def _view(self, parent, subset) -> "PairwiseArraysView":
-        return PairwiseArraysView(self, parent, subset)
+    def _view(self, parent, subset_idx) -> "PairwiseArraysView":
+        return PairwiseArraysView(self, parent, subset_idx)
 
 
 class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
