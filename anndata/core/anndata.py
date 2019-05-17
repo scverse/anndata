@@ -960,8 +960,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(value) != self.n_obs:
             raise ValueError('Length does not match.')
         utils.warn_no_string_index(value.index)
-        if self.isview: self._adata_ref._obs.iloc[self._oidx] = value
-        else: self._obs = value
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._obs = value
 
     @property
     def var(self) -> pd.DataFrame:
@@ -975,8 +976,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(value) != self.n_vars:
             raise ValueError('Length does not match.')
         utils.warn_no_string_index(value.index)
-        if self.isview: self._adata_ref._var.iloc[self._vidx] = value
-        else: self._var = value
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._var = value
 
     @property
     def uns(self) -> MutableMapping:

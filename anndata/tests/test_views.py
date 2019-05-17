@@ -39,6 +39,10 @@ def adata():
     adata.varm['o'] = np.zeros((100, 50))
     return adata
 
+@pytest.fixture(params=["obs", "var"])
+def obsvar_attrname(request):
+    return request.param
+
 def test_views():
     X = np.array(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
@@ -85,6 +89,43 @@ def test_set_varm_key(adata):
     assert np.all(adata.varm["o"] == orig_varm_val)
 
     assert init_hash == joblib.hash(adata)
+
+def test_set_obs(adata, subset_func):
+    init_hash = joblib.hash(adata)
+
+    orig_obs = adata.obs.copy()
+    subset = adata[subset_func(adata.obs_names), :]
+
+    new_obs = pd.DataFrame(
+        {"a": np.ones(subset.n_obs), "b": np.ones(subset.n_obs)},
+        index=subset.obs_names
+    )
+
+    assert subset.isview
+    subset.obs = new_obs
+    assert not subset.isview
+    assert np.all(subset.obs == new_obs)
+
+    assert joblib.hash(adata) == init_hash
+
+
+def test_set_var(adata, subset_func):
+    init_hash = joblib.hash(adata)
+
+    orig_var = adata.var.copy()
+    subset = adata[:, subset_func(adata.var_names)]
+
+    new_var = pd.DataFrame(
+        {"a": np.ones(subset.n_vars), "b": np.ones(subset.n_vars)},
+        index=subset.var_names
+    )
+
+    assert subset.isview
+    subset.var = new_var
+    assert not subset.isview
+    assert np.all(subset.var == new_var)
+
+    assert joblib.hash(adata) == init_hash
 
 def test_set_obsm(adata):
     init_hash = joblib.hash(adata)
