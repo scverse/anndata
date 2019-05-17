@@ -8,6 +8,7 @@ import anndata
 
 N, M = (100, 100)
 
+
 @pytest.fixture
 def adata():
     X = np.zeros((N, M))
@@ -16,7 +17,7 @@ def adata():
         index=["cell{:03d}".format(i) for i in range(N)]
     )
     var = pd.DataFrame(
-        index = ["gene{:03d}".format(i) for i in range(M)]
+        index=["gene{:03d}".format(i) for i in range(M)]
     )
     return anndata.AnnData(X, obs=obs, var=var)
 
@@ -42,7 +43,7 @@ def test_assigmnent_dict(adata):
     adata.varm = d_varm
     for k, v in d_varm.items():
         assert np.all(adata.varm[k] == v)
-    
+
 
 def test_setting_ndarray(adata):
     adata.obsm["a"] = np.ones((N, 10))
@@ -87,11 +88,12 @@ def test_setting_dataframe(adata):
     with pytest.raises(IndexError):
         adata.varm["c"] = bad_varm_df
 
+
 def test_setting_sparse(adata):
     obsm_sparse = sparse.random(N, 100)
     adata.obsm["a"] = obsm_sparse
     assert np.all((adata.obsm["a"] == obsm_sparse).data)
-    
+
     varm_sparse = sparse.random(M, 100)
     adata.varm["a"] = varm_sparse
     assert np.all((adata.varm["a"] == varm_sparse).data)

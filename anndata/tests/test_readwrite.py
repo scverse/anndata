@@ -1,12 +1,9 @@
 from importlib.util import find_spec
 from pathlib import Path
-from subprocess import run
 
 import numpy as np
 import pytest
 from scipy.sparse import csr_matrix, issparse
-from scipy import sparse
-import pandas as pd
 from pandas.api.types import is_categorical
 
 import anndata as ad

@@ -35,7 +35,7 @@ class _ViewMixin(_SetItemMixin):
         self,
         *args,
         view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
-         **kwargs
+        **kwargs
     ):
         if view_args is not None:
             view_args = ViewArgs(*view_args)
