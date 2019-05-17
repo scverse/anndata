@@ -1663,7 +1663,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 layer = None
 
         if k in self.var:
-            a = self.var[k].values
+            return self.var[k].values
         else:
             idx = self._normalize_indices((k, slice(None)))
             a = self._get_X(layer=layer)[idx]
@@ -1675,13 +1675,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def _get_obs_array(self, k, use_raw=False, layer=None):
         """Get an array from the layer (default layer='X') along the observation dimension by first looking up
         obs.keys and then var.index."""
-        return self.obs_vector(k=k, use_raw=use_raw, layer=layer)
+        if use_raw:
+            return self.raw.obs_vector(k)
+        else:
+            return self.obs_vector(k=k, layer=layer)
 
     @utils.deprecated("var_vector")
-    def _get_var_array(self, k, use_raw=False, layer='X'):
+    def _get_var_array(self, k, use_raw=False, layer=None):
         """Get an array from the layer (default layer='X') along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
-        return self.var_vector(k=k, use_raw=use_raw, layer=layer)
+        if use_raw:
+            return self.raw.var_vector(k)
+        else:
+            return self.var_vector(k=k, layer=layer)
 
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""

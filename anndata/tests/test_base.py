@@ -455,7 +455,7 @@ def test_convenience():
         r1 = op(a1)
         r2 = op(a2)
         assert np.all(r1 == r2)
-        assert type(r1) == type(r2)
+        assert type(r1) is type(r2)
 
     assert np.allclose(adata.obs_vector("b"), np.array([1., 2.5]))
     assert np.allclose(adata.raw.obs_vector("c"), np.array([3, 6]))
@@ -513,12 +513,12 @@ def test_1d_slice_dtypes():
     new_obs_df = pd.DataFrame(index=adata.obs_names)
     for k in obs_df.columns:
         new_obs_df[k] = adata.obs_vector(k)
-        new_obs_df[k].dtype is obs_df[k].dtype
+        assert new_obs_df[k].dtype is obs_df[k].dtype
     assert np.all(new_obs_df == obs_df)
     new_var_df = pd.DataFrame(index=adata.var_names)
     for k in var_df.columns:
         new_var_df[k] = adata.var_vector(k)
-        new_var_df[k].dtype is var_df[k].dtype
+        assert new_var_df[k].dtype is var_df[k].dtype
     assert np.all(new_var_df == var_df)
 
 
