@@ -1,3 +1,4 @@
+from functools import singledispatch
 from string import ascii_letters
 from typing import Tuple
 
@@ -7,6 +8,15 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData
+
+@singledispatch
+def asarray(x):
+    """Convert x to a numpy array"""
+    return np.asarray(x)
+
+@asarray.register(sparse.spmatrix)
+def asarray_sparse(x):
+    return x.toarray()
 
 def gen_typed_df(n, index=None):
     # TODO: Think about allowing index to be passed for n

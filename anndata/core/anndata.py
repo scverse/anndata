@@ -152,7 +152,7 @@ def _normalize_index(index, names):
             stop = None if stop is None else stop + 1
         step = index.step
         return slice(start, stop, step)
-    elif isinstance(index, (int, str)):
+    elif isinstance(index, (np.integer, int, str)):
         return name_idx(index)
     elif isinstance(index, (Sequence, np.ndarray, pd.Index)):
         # here, we replaced the implementation based on name_idx with this
@@ -334,8 +334,9 @@ class Raw(IndexMixin):
         oidx, vidx = self._normalize_indices(index)
         if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
         else: X = self._adata.file['raw.X'][oidx, vidx]
-        if isinstance(vidx, (int, np.int64)):
-            vidx = slice(vidx, vidx+1, 1)  # why this?
+        if isinstance(vidx, (int, np.integer)):
+            # To preserve two dimensional shape
+            vidx = slice(vidx, vidx + 1, 1)
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
@@ -523,12 +524,14 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         self.file = adata_ref.file
         # views on attributes of adata_ref
         oidx_normalized, vidx_normalized = oidx, vidx
-        if isinstance(oidx, (int, np.int64)): oidx_normalized = slice(oidx, oidx+1, 1)
-        if isinstance(vidx, (int, np.int64)): vidx_normalized = slice(vidx, vidx+1, 1)
+        if isinstance(oidx, (int, np.integer)): oidx_normalized = slice(oidx, oidx+1, 1)
+        if isinstance(vidx, (int, np.integer)): vidx_normalized = slice(vidx, vidx+1, 1)
         obs_sub = adata_ref.obs.iloc[oidx_normalized]
         var_sub = adata_ref.var.iloc[vidx_normalized]
         self._obsm = adata_ref.obsm._view(self, oidx_normalized)
         self._varm = adata_ref.varm._view(self, vidx_normalized)
+        # TODO: Should this be normalized
+        self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx_normalized)
         self._varp = adata_ref.varp._view(self, vidx_normalized)
         # hackish solution here, no copy should be necessary
@@ -539,7 +542,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
             self._n_obs = get_n_items_idx(obs_sub.index, adata_ref.n_obs)
-        elif isinstance(oidx, (int, np.int64)):
+        elif isinstance(oidx, (int, np.integer)):
             self._n_obs = 1
         elif isinstance(oidx, Sized):
             self._n_obs = get_n_items_idx(oidx, adata_ref.n_obs)
@@ -547,7 +550,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             raise KeyError('Unknown Index type')
         if isinstance(vidx, slice):
             self._n_vars = get_n_items_idx(var_sub.index, adata_ref.n_vars)
-        elif isinstance(vidx, (int, np.int64)):
+        elif isinstance(vidx, (int, np.integer)):
             self._n_vars = 1
         elif isinstance(vidx, Sized):
             self._n_vars = get_n_items_idx(vidx, adata_ref.n_vars)
@@ -565,8 +568,6 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             self._X = None
         else:
             self._init_X_as_view()
-
-        self._layers = adata_ref.layers._view(self, (oidx, vidx))
 
         # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:
