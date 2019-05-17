@@ -186,7 +186,7 @@ def test_set_subset_obsm(adata, subset_func):
 
     while True:
         subset_idx = slice_subset(adata.obs_names)
-        if len(adata[subset_idx, :]) > 1:
+        if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
 
@@ -205,7 +205,7 @@ def test_set_subset_varm(adata, subset_func):
 
     while True:
         subset_idx = slice_subset(adata.var_names)
-        if len(adata[:, subset_idx]) > 1:
+        if (adata[:, subset_idx]).shape[1] > 2:
             break
     subset = adata[:, subset_idx]
 
