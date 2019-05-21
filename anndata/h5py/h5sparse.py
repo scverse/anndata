@@ -7,8 +7,8 @@ import six
 import h5py
 import numpy as np
 import scipy.sparse as ss
-from scipy.sparse.sputils import IndexMixin
 
+from ..utils import unpack_index
 from ..compat import PathLike
 
 from .utils import _chunked_rows
@@ -236,7 +236,7 @@ def _zero_many(self, i, j):
 _cs_matrix._zero_many = _zero_many
 
 
-class SparseDataset(IndexMixin):
+class SparseDataset:
     """Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
     """
 
@@ -255,7 +255,7 @@ class SparseDataset(IndexMixin):
 
     def __getitem__(self, index):
         if index == (): index = slice(None)
-        row, col = self._unpack_index(index)
+        row, col = unpack_index(index)
         format_class = get_format_class(self.format_str)
         mock_matrix = format_class(self.shape, dtype=self.dtype)
         mock_matrix.data = self.h5py_group['data']
@@ -265,7 +265,7 @@ class SparseDataset(IndexMixin):
 
     def __setitem__(self, index, value):
         if index == (): index = slice(None)
-        row, col = self._unpack_index(index)
+        row, col = unpack_index(index)
         format_class = get_format_class(self.format_str)
         mock_matrix = format_class(self.shape, dtype=self.dtype)
         mock_matrix.data = self.h5py_group['data']

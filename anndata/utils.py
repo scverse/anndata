@@ -1,9 +1,10 @@
 import warnings
 from functools import wraps
-from typing import Mapping, Any, Sequence, Union, Sized, Optional
+from typing import Mapping, Any, Sequence, Union, Tuple
 
 import pandas as pd
 import numpy as np
+from scipy.sparse import spmatrix
 
 from .logging import get_logger
 if False:
@@ -132,7 +133,7 @@ class DeprecationMixinMeta(type):
         ]
 
 
-Index = Union[slice, int, np.int64, np.ndarray, Sized]
+Index = Union[slice, int, np.int64, np.ndarray, spmatrix]
 
 
 def get_n_items_idx(idx: Index, l: int):
@@ -147,3 +148,21 @@ def get_n_items_idx(idx: Index, l: int):
         return 1
     else:
         return len(idx)
+
+
+def unpack_index(index: Union[Index, Tuple[Index, Index]]) -> Tuple[Index, Index]:
+    # handle indexing with boolean matrices
+    if (
+        isinstance(index, (spmatrix, np.ndarray))
+        and index.ndim == 2
+        and index.dtype.kind == 'b'
+    ): return index.nonzero()
+
+    if not isinstance(index, tuple):
+        return index, slice(None)
+    elif len(index) == 2:
+        return index
+    elif len(index) == 1:
+        return index[0], slice(None)
+    else:
+        raise IndexError('invalid number of indices')

@@ -18,7 +18,6 @@ from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
-from scipy.sparse.sputils import IndexMixin
 from natsort import natsorted
 
 # try importing zarr
@@ -43,7 +42,7 @@ from . import h5py
 from .layers import AnnDataLayers
 
 from . import utils
-from .utils import Index, get_n_items_idx
+from .utils import Index, get_n_items_idx, unpack_index
 from .logging import anndata_logger as logger
 from .compat import PathLike
 
@@ -444,7 +443,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata = ['_view_args']
 
 
-class Raw(IndexMixin):
+class Raw:
     def __init__(
         self,
         adata: Optional['AnnData'] = None,
@@ -531,7 +530,7 @@ class Raw(IndexMixin):
                 packed_index = packed_index[0], packed_index[1].values
             if isinstance(packed_index[0], pd.Series):
                 packed_index = packed_index[0].values, packed_index[1]
-        obs, var = super()._unpack_index(packed_index)
+        obs, var = unpack_index(packed_index)
         obs = _normalize_index(obs, self._adata.obs_names)
         var = _normalize_index(var, self.var_names)
         return obs, var
@@ -551,7 +550,7 @@ class IndexDimError(IndexError):
         super().__init__(msg)
 
 
-class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
+class AnnData(metaclass=utils.DeprecationMixinMeta):
     """An annotated data matrix.
 
     :class:`~anndata.AnnData` stores a data matrix :attr:`X` together with annotations
@@ -1298,7 +1297,7 @@ class AnnData(IndexMixin, metaclass=utils.DeprecationMixinMeta):
             # Needs to be refactored once we support a tuple of two arbitrary index types
             if any(isinstance(i, np.ndarray) and i.dtype == bool for i in index):
                 return index
-        obs, var = super()._unpack_index(index)
+        obs, var = unpack_index(index)
         obs = _normalize_index(obs, self.obs_names)
         var = _normalize_index(var, self.var_names)
         return obs, var
