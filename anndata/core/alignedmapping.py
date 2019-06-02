@@ -24,6 +24,10 @@ class AlignedMapping(MutableMapping, ABC):
     ----------
     axes: Tuple[int]
         Which axes is this aligned along?
+    _view_class:
+        The view class for this aligned mapping.
+    _actual_class
+        The actual class (which has it's own data) for this aligned mapping.
     """
 
     def __repr__(self):
@@ -71,14 +75,15 @@ class AlignedMapping(MutableMapping, ABC):
     def parent(self) -> "AnnData":
         return self._parent
 
-    @abstractmethod
     def copy(self):
-        pass
+        d = self._actual_class(self.parent, self._axis)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
 
-    @abstractmethod
     def _view(self, parent, subset_idx):
         """Returns a subset copy-on-write view of the object."""
-        pass
+        return self._view_class(self, parent, subset_idx)
 
     @deprecated("dict(obj)")
     def as_dict(self) -> dict:
@@ -130,9 +135,6 @@ class AlignedViewMixin:
     def __len__(self):
         return len(self.parent_mapping)
 
-    def _view(self, parent: "AnnData", subset_idx):
-        return self.__class__(self, parent, subset_idx)
-
 
 class AlignedActualMixin:
     """
@@ -182,12 +184,6 @@ class AxisArraysBase(AlignedMapping):
         """Name of the dimension this aligned to."""
         return self._dimnames[self._axis]
 
-    def copy(self) -> "AxisArrays":
-        d = AxisArrays(self.parent, self._axis)
-        for k, v in self.items():
-            d[k] = v.copy()
-        return d
-
     def flipped(self):
         """Transpose."""
         new = self.copy()
@@ -215,9 +211,6 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if vals is not None:
             self.update(vals)
 
-    def _view(self, parent, subset_idx) -> "AxisArraysView":
-        return AxisArraysView(self, parent, subset_idx)
-
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(self, parent_mapping, parent_view, subset_idx):
@@ -228,6 +221,10 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self.dim_names = parent_mapping.dim_names[subset_idx]
 
 
+AxisArraysBase._view_class = AxisArraysView
+AxisArraysBase._actual_class = AxisArrays
+
+
 class LayersBase(AlignedMapping):
     """
     Mapping of key: array-like, where array-like is aligned to both axes of the
@@ -235,9 +232,6 @@ class LayersBase(AlignedMapping):
     """
     attrname = "layers"
     axes = (0, 1)
-
-    def copy(self) -> "Layers":
-        return Layers(self.parent, vals={k: v.copy() for k, v in self.items()})
 
 
 class Layers(AlignedActualMixin, LayersBase):
@@ -247,15 +241,16 @@ class Layers(AlignedActualMixin, LayersBase):
         if vals is not None:
             self.update(vals)
 
-    def _view(self, parent, subset_idx) -> "LayersView":
-        return LayersView(self, parent, subset_idx)
-
 
 class LayersView(AlignedViewMixin, LayersBase):
     def __init__(self, parent_mapping: LayersBase, parent_view: "AnnData", subset_idx):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
+
+
+LayersBase._view_class = LayersView
+LayersBase._actual_class = Layers
 
 
 class PairwiseArraysBase(AlignedMapping):
@@ -279,12 +274,6 @@ class PairwiseArraysBase(AlignedMapping):
         """Name of the dimension this aligned to."""
         return self._dimnames[self._axis]
 
-    def copy(self) -> "PairwiseArrays":
-        d = PairwiseArrays(self.parent, self._axis)
-        for k, v in self.items():
-            d[k] = v.copy()
-        return d
-
 
 class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None):
@@ -297,9 +286,6 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         if vals is not None:
             self.update(vals)
 
-    def _view(self, parent, subset_idx) -> "PairwiseArraysView":
-        return PairwiseArraysView(self, parent, subset_idx)
-
 
 class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
     def __init__(
@@ -310,3 +296,7 @@ class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
         self.subset_idx = (subset_idx, subset_idx)
         self._axis = parent_mapping._axis
         self.dim_names = parent_mapping.dim_names[subset_idx]
+
+
+PairwiseArraysBase._view_class = PairwiseArraysView
+PairwiseArraysBase._actual_class = PairwiseArrays
