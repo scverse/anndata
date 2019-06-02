@@ -1,6 +1,6 @@
 import warnings
 from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union, Tuple, Sized, Optional
+from typing import Mapping, Any, Sequence, Union, Tuple
 
 import pandas as pd
 import numpy as np

@@ -546,7 +546,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         filemode: Optional[str] = None,
         asview: bool = False,
-        *, obsp = None, varp = None, oidx: Index = None, vidx: Index = None):
+        *,
+        obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        oidx: Index = None,
+        vidx: Index = None
+    ):
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError('`X` has to be an AnnData object.')
@@ -1472,7 +1477,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if issparse(a):
             a = a.toarray()
         return np.ravel(a)
-
 
     def var_vector(
         self, k, *, layer: Optional[str] = None
