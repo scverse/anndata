@@ -141,15 +141,15 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         The filename.
     sparse
         Whether to read the data matrix as sparse.
-    cleanup:
-        Whether to remove all obs/var keys that do not store more than one unique value.
-    X_name:
+    cleanup
+        Whether to collapse all obs/var fields that only store one unique value into `.uns['loom-cleanup']`.
+    X_name
         Loompy key where the data matrix is stored.
-    obs_names:
+    obs_names
         Loompy key where the observation/cell names are stored.
-    var_names:
+    var_names
         Loompy key where the variable/gene names are stored.
-    **kwargs:
+    **kwargs
         Arguments to loompy.connect
     """
     filename = fspath(filename)  # allow passing pathlib.Path objects
@@ -180,21 +180,26 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         for key in varm_attrs:
             varm[key] = var.pop(key)
 
+        uns = {}
         if cleanup:
+            uns['loom-cleanup'] = {}
             for key in list(obs.keys()):
                 if len(set(obs[key])) == 1:
+                    uns['loom-cleanup'][f'obs-{key}'] = obs[key].iloc[0]
                     del obs[key]
             for key in list(var.keys()):
                 if len(set(var[key])) == 1:
+                    uns['loom-cleanup'][f'var-{key}'] = obs[key].iloc[0]
                     del var[key]
 
         adata = AnnData(
             X,
-            obs=obs,  # not ideal: make the generator a dict...
+            obs=obs,
             var=var,
             layers=layers,
             obsm=obsm if obsm else None,
             varm=varm if varm else None,
+            uns=uns,
             dtype=dtype)
     return adata
 
