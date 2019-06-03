@@ -80,11 +80,12 @@ sparse matrices in addition to the standard functionality.
 __author__ = ', '.join([
     'Philipp Angerer*',
     'Alex Wolf*',
+    'Isaac Virshup',
     'Sergei Rybakov',
 ])
 __email__ = ', '.join([
     'philipp.angerer@helmholtz-muenchen.de',
-    'alex.wolf@helmholtz-muenchen.de',
+    'f.alex.wolf@gmx.de',
     # We don’t need all, the main authors are sufficient.
 ])
 
