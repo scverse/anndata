@@ -9,14 +9,14 @@ Post v0.6 :small:`March 23, 2019`
 ---------------------------------
 
 - compatibility with Scipy >=1.3 by removing `IndexMixin` dependency, see `here <https://github.com/theislab/anndata/commit/6fb083477bc0b1f3eeccc62e10e4b477ae532346>`__ :noteversion:`0.6.20` :smaller:`thanks to P Angerer`
-- bug fix for https://github.com/theislab/anndata/issues/126 :noteversion:`0.6.19`
-- bug fix for reading excel files :noteversion:`0.6.19`
-- :attr:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
+- bug fix for second-indexing into views, see `here <https://github.com/theislab/anndata/issues/126>`__ :noteversion:`0.6.19` :smaller:`thanks to P Angerer`
+- bug fix for reading excel files :noteversion:`0.6.19` :smaller:`thanks to A Wolf`
+- :attr:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom` :smaller:`thanks to S Rybakov`
 - initialization from pandas DataFrames :smaller:`thanks to A Wolf`
-- iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`  :smaller:`thanks to S Rybakov`
+- iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X` :smaller:`thanks to S Rybakov`
 - support for reading zarr files: :func:`~anndata.read_zarr` :smaller:`thanks to T White`
 - changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical :noteversion:`0.6.16`
-- maintain dtype upon copy :noteversion:`0.6.13`
+- maintain dtype upon copy :noteversion:`0.6.13` :smaller:`thanks to A Wolf`
 
 
 Version 0.6 :small:`May 1, 2018`
