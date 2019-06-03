@@ -44,6 +44,4 @@ Version 0.4 :small:`December 23, 2017`
 
 - read/write `.loom <http://loompy.org>`__ files
 - scalability beyond dataset sizes that fit into memory: see this `blog post <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`__
-- :class:`~anndata.AnnData` has a :class:`~anndata.AnnData.raw` attribute
-   that simplifies storing the data matrix when you consider it "raw": see the
-   `clustering tutorial <https://github.com/theislab/scanpy_usage/tree/master/170505_seurat>`__
+- :class:`~anndata.AnnData` has a :class:`~anndata.AnnData.raw` attribute, which simplifies storing the data matrix when you consider it *raw*: see the `clustering tutorial <https://github.com/theislab/scanpy_usage/tree/master/170505_seurat>`__
