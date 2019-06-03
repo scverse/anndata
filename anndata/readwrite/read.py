@@ -144,7 +144,7 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
     cleanup
         Whether to collapse all obs/var fields that only store one unique value into `.uns['loom-cleanup']`.
     X_name
-        Loompy key where the data matrix is stored.
+        Loompy key with which the data matrix `.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
     var_names
