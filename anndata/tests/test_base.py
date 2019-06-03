@@ -1,3 +1,5 @@
+from itertools import product
+
 import numpy as np
 from numpy import ma
 import pandas as pd
@@ -180,7 +182,7 @@ def test_slicing_strings():
     with raises(IndexError): _ = adata['X', :]
     with raises(IndexError): _ = adata['A':'X', :]
     with raises(IndexError): _ = adata[:, 'a':'X']
-    
+
     # Test if errors are helpful
     with raises(KeyError, match=r"not_in_var"):
         adata[:, ["A", "B", "not_in_var"]]
@@ -438,6 +440,86 @@ def test_pickle():
 
 def test_to_df_dense():
     df = adata_dense.to_df()
+
+
+def test_convenience():
+    adata = adata_sparse.copy()
+    adata.layers["x2"] = adata.X * 2
+    adata.var["anno2"] = ["p1", "p2", "p3"]
+    adata.raw = adata
+    adata.X = adata.X / 2
+    adata_dense = adata.copy()
+    adata_dense.X = adata_dense.X.toarray()
+
+    def assert_same_op_result(a1, a2, op):
+        r1 = op(a1)
+        r2 = op(a2)
+        assert np.all(r1 == r2)
+        assert type(r1) is type(r2)
+
+    assert np.allclose(adata.obs_vector("b"), np.array([1., 2.5]))
+    assert np.allclose(adata.raw.obs_vector("c"), np.array([3, 6]))
+    assert np.all(adata.obs_vector("anno1") == np.array(["c1", "c2"]))
+    assert np.allclose(adata.var_vector("s1"), np.array([0, 1., 1.5]))
+    assert np.allclose(adata.raw.var_vector("s2"), np.array([0, 5, 6]))
+
+    for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
+        assert_same_op_result(
+            adata, adata_dense,
+            lambda x: x.obs_vector(obs_k, layer=layer)
+        )
+
+    for obs_k in ["a", "b", "c"]:
+        assert_same_op_result(
+            adata, adata_dense,
+            lambda x: x.raw.obs_vector(obs_k)
+        )
+
+    for var_k, layer in product(["s1", "s2", "anno2"], [None, "x2"]):
+        assert_same_op_result(
+            adata, adata_dense,
+            lambda x: x.var_vector(var_k, layer=layer)
+        )
+
+    for var_k in ["s1", "s2", "anno2"]:
+        assert_same_op_result(
+            adata, adata_dense,
+            lambda x: x.raw.var_vector(var_k)
+        )
+
+
+def test_1d_slice_dtypes():
+    N, M = 10, 20
+    obs_df = pd.DataFrame(
+        {
+            "cat": pd.Categorical(np.arange(N, dtype=int)),
+            "int": np.arange(N, dtype=int),
+            "float": np.arange(N, dtype=float),
+            "obj": [str(i) for i in np.arange(N, dtype=int)]
+        },
+        index=["cell{}".format(i) for i in np.arange(N, dtype=int)]
+    )
+    var_df = pd.DataFrame(
+        {
+            "cat": pd.Categorical(np.arange(M, dtype=int)),
+            "int": np.arange(M, dtype=int),
+            "float": np.arange(M, dtype=float),
+            "obj": [str(i) for i in np.arange(M, dtype=int)]
+        },
+        index=["gene{}".format(i) for i in np.arange(M, dtype=int)]
+    )
+    adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
+
+    new_obs_df = pd.DataFrame(index=adata.obs_names)
+    for k in obs_df.columns:
+        new_obs_df[k] = adata.obs_vector(k)
+        assert new_obs_df[k].dtype is obs_df[k].dtype
+    assert np.all(new_obs_df == obs_df)
+    new_var_df = pd.DataFrame(index=adata.var_names)
+    for k in var_df.columns:
+        new_var_df[k] = adata.var_vector(k)
+        assert new_var_df[k].dtype is var_df[k].dtype
+    assert np.all(new_var_df == var_df)
 
 
 def test_to_df_sparse():

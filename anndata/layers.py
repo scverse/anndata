@@ -44,6 +44,9 @@ class AnnDataLayers:
         else:
             return self._layers[key]
 
+    def __contains__(self, key):
+        return key in self._layers
+
     def __setitem__(self, key, value):
         if not isinstance(value, np.ndarray) and not issparse(value):
             raise ValueError('Value should be numpy array or sparse matrix')

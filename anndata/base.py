@@ -9,6 +9,7 @@ from typing import Any, Union, Optional
 from typing import Iterable, Sized, Sequence, Mapping, MutableMapping
 from typing import Tuple, List, Dict, KeysView
 from copy import deepcopy
+import warnings
 
 import numpy as np
 from numpy import ma
@@ -534,6 +535,56 @@ class Raw:
         obs = _normalize_index(obs, self._adata.obs_names)
         var = _normalize_index(var, self.var_names)
         return obs, var
+
+    def var_vector(self, k: str) -> np.ndarray:
+        """
+        Convenience function for returning a 1 dimensional ndarray of values
+        from `.X` or `.var`.
+
+        Made for convenience, not performance. Intentionally permissive about
+        arguments, for easy iterative use.
+
+        Params
+        ------
+        k
+            Key to use. Should be in `.obs_names` or `.var.columns`.
+
+        Returns
+        -------
+        A one dimensional nd array, with values for each var in the same order
+        as `.var_names`.
+        """
+        if k in self.var:
+            return self.var[k].values
+        else:
+            a = self[k, :].X
+        if issparse(a):
+            a = a.toarray()
+        return np.ravel(a)
+
+    def obs_vector(self, k: str) -> np.ndarray:
+        """
+        Convenience function for returning a 1 dimensional ndarray of values
+        from `.X`.
+
+        Made for convenience, not performance. Intentionally permissive about
+        arguments, for easy iterative use.
+
+        Params
+        ------
+        k
+            Key to use. Should be in `.var_names` or `.obs.columns`. If `use_raw`,
+            value should be in `.raw.var_names` instead of `.var_names`.
+
+        Returns
+        -------
+        A one dimensional nd array, with values for each obs in the same order
+        as `.obs_names`.
+        """
+        a = self[:, k].X
+        if issparse(a):
+            a = a.toarray()
+        return np.ravel(a)
 
 
 INDEX_DIM_ERROR_MSG = 'You tried to slice an AnnData(View) object with an' \
@@ -1464,54 +1515,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         adata_subset = self[index].copy()
         self._init_as_actual(adata_subset, dtype=self._X.dtype)
 
-    def _get_obs_array(self, k, use_raw=False, layer='X'):
-        """Get an array from the layer (default layer='X') along the observation dimension by first looking up
-        obs.keys and then var.index."""
-        in_raw_var_names = k in self.raw.var_names if self.raw is not None else False
-
-        if use_raw and self.raw is None:
-            raise ValueError('.raw doesn\'t exist')
-
-        if k in self.obs.keys():
-            x = self._obs[k]
-        elif in_raw_var_names and use_raw and layer == 'X':
-            x = self.raw[:, k].X
-        elif k in self.var_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
-            x = self[:, k].X if layer=='X' else self[:, k].layers[layer]
-        elif use_raw and layer != 'X':
-            raise ValueError('No layers in .raw')
-        elif layer != 'X' and layer not in self.layers.keys():
-            raise ValueError('Did not find {} in layers.keys.'
-                             .format(layer))
-        else:
-            raise ValueError('Did not find {} in obs.keys or var_names.'
-                             .format(k))
-        return x
-
-    def _get_var_array(self, k, use_raw=False, layer='X'):
-        """Get an array from the layer (default layer='X') along the variables dimension by first looking up
-        ``var.keys`` and then ``obs.index``."""
-        in_raw_obs_names = k in self.raw.obs_names if self.raw is not None else False
-
-        if use_raw and self.raw is None:
-            raise ValueError('.raw doesn\'t exist')
-
-        if k in self.var.keys():
-            x = self._var[k]
-        elif in_raw_obs_names and use_raw and layer == 'X':
-            x = self.raw[k].X
-        elif k in self.obs_names and not use_raw and (layer == 'X' or layer in self.layers.keys()):
-            x = self[k].X if layer=='X' else self[k].layers[layer]
-        elif use_raw and layer != 'X':
-            raise ValueError('No layers in .raw')
-        elif layer != 'X' and layer not in self.layers.keys():
-            raise ValueError('Did not find {} in layers.keys.'
-                             .format(layer))
-        else:
-            raise ValueError('Did not find {} in var.keys or obs_names.'
-                             .format(k))
-        return x
-
     def __setitem__(self, index: Index, val: Union[int, float, np.ndarray, sparse.spmatrix]):
         if self.isview:
             raise ValueError('Object is view and cannot be accessed with `[]`.')
@@ -1563,6 +1566,128 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             X = self._X
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
+
+    def _get_X(self, use_raw=False, layer=None):
+        """
+        Convenience method for getting expression values with common arguments and error handling.
+        """
+        is_layer = layer is not None
+        if use_raw and is_layer:
+            raise ValueError(
+                "Cannot use expression from both layer and raw. You provided:"
+                "'use_raw={}' and 'layer={}'".format(use_raw, layer)
+            )
+        if is_layer:
+            return self.layers[layer]
+        elif use_raw:
+            if self.raw is None:
+                raise ValueError("This AnnData doesn't have a value in `.raw`.")
+            return self.raw.X
+        else:
+            return self.X
+
+    def obs_vector(
+        self, k: str, *, layer: Optional[str] = None
+    ) -> np.ndarray:
+        """
+        Convenience function for returning a 1 dimensional ndarray of values
+        from `.X`, `.layers[k]`, or `.obs`.
+
+        Made for convenience, not performance. Intentionally permissive about
+        arguments, for easy iterative use.
+
+        Params
+        ------
+        k
+            Key to use. Should be in `.var_names` or `.obs.columns`.
+        layer
+            What layer values should be returned from. If `None`, `.X` is used.
+
+        Returns
+        -------
+        A one dimensional nd array, with values for each obs in the same order
+        as `.obs_names`.
+        """
+        if layer == "X":
+            if "X" in self.layers:
+                pass
+            else:
+                warnings.warn(
+                    "In a future version of AnnData, access to `.X` by passing"
+                    " `layer='X'` will be removed. Instead pass `layer=None`.",
+                    FutureWarning
+                )
+                layer = None
+
+        if k in self.obs:
+            return self.obs[k].values
+        else:
+            idx = self._normalize_indices((slice(None), k))
+            a = self._get_X(layer=layer)[idx]
+        if issparse(a):
+            a = a.toarray()
+        return np.ravel(a)
+
+
+    def var_vector(
+        self, k, *, layer: Optional[str] = None
+    ) -> np.ndarray:
+        """
+        Convenience function for returning a 1 dimensional ndarray of values
+        from `.X`, `.layers[k]`, or `.obs`.
+
+        Made for convenience, not performance. Intentionally permissive about
+        arguments, for easy iterative use.
+
+        Params
+        ------
+        k
+            Key to use. Should be in `.obs_names` or `.var.columns`.
+        layer
+            What layer values should be returned from. If `None`, `.X` is used.
+
+        Returns
+        -------
+        A one dimensional nd array, with values for each var in the same order
+        as `.var_names`.
+        """
+        if layer == "X":
+            if "X" in self.layers:
+                pass
+            else:
+                warnings.warn(
+                    "In a future version of AnnData, access to `.X` by passing"
+                    " `layer='X'` will be removed. Instead pass `layer=None`.",
+                    FutureWarning
+                )
+                layer = None
+
+        if k in self.var:
+            return self.var[k].values
+        else:
+            idx = self._normalize_indices((k, slice(None)))
+            a = self._get_X(layer=layer)[idx]
+        if issparse(a):
+            a = a.toarray()
+        return np.ravel(a)
+
+    @utils.deprecated("obs_vector")
+    def _get_obs_array(self, k, use_raw=False, layer=None):
+        """Get an array from the layer (default layer='X') along the observation dimension by first looking up
+        obs.keys and then var.index."""
+        if use_raw:
+            return self.raw.obs_vector(k)
+        else:
+            return self.obs_vector(k=k, layer=layer)
+
+    @utils.deprecated("var_vector")
+    def _get_var_array(self, k, use_raw=False, layer=None):
+        """Get an array from the layer (default layer='X') along the variables dimension by first looking up
+        ``var.keys`` and then ``obs.index``."""
+        if use_raw:
+            return self.raw.var_vector(k)
+        else:
+            return self.var_vector(k=k, layer=layer)
 
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
