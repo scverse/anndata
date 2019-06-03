@@ -8,6 +8,7 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 Post v0.6 :small:`March 23, 2019`
 ---------------------------------
 
+- compatibility with Scipy >=1.3 by removing `IndexMixin` dependency, see `here <https://github.com/theislab/anndata/commit/6fb083477bc0b1f3eeccc62e10e4b477ae532346>`__ :noteversion:`0.6.20` :smaller:`thanks to P Angerer`
 - bug fix for https://github.com/theislab/anndata/issues/126 :noteversion:`0.6.19`
 - bug fix for reading excel files :noteversion:`0.6.19`
 - :attr:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
