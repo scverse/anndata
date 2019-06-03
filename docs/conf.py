@@ -89,7 +89,7 @@ html_context = dict(
     conf_py_path='/docs/',    # Path in the checkout to the docs root
 )
 html_static_path = ['_static']
-
+html_show_sphinx = False
 
 def setup(app):
     app.add_stylesheet('css/custom.css')
