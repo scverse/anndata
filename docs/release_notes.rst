@@ -5,17 +5,16 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 .. role:: noteversion
 
 
-On master :small:`March 23, 2019`
+Post v0.6 :small:`March 23, 2019`
 ---------------------------------
 
-- maintain dtype upon read/write :noteversion:`to appear as 0.7`
 - bug fix for https://github.com/theislab/anndata/issues/126 :noteversion:`0.6.19`
 - bug fix for reading excel files :noteversion:`0.6.19`
 - :attr:`~anndata.AnnData.layers` inspired by `.loom <http://loompy.org>`__ files allows their information lossless reading via :func:`~anndata.read_loom`
-- initialization from pandas DataFrames
-- iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
-- support for reading zarr files: :func:`~anndata.read_zarr`
-- changed default compression to ``None`` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical :noteversion:`0.6.16`
+- initialization from pandas DataFrames :smaller:`thanks to A Wolf`
+- iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`  :smaller:`thanks to S Rybakov`
+- support for reading zarr files: :func:`~anndata.read_zarr` :smaller:`thanks to T White`
+- changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical :noteversion:`0.6.16`
 - maintain dtype upon copy :noteversion:`0.6.13`
 
 
@@ -44,10 +43,7 @@ Version 0.4 :small:`December 23, 2017`
 -------------------------------------
 
 - read/write `.loom <http://loompy.org>`__ files
-- scalability beyond dataset sizes that fit into memory: see this
-   `blog post
-   <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`__
+- scalability beyond dataset sizes that fit into memory: see this `blog post <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`__
 - :class:`~anndata.AnnData` has a :class:`~anndata.AnnData.raw` attribute
    that simplifies storing the data matrix when you consider it "raw": see the
-   `clustering tutorial
-   <https://github.com/theislab/scanpy_usage/tree/master/170505_seurat>`__
+   `clustering tutorial <https://github.com/theislab/scanpy_usage/tree/master/170505_seurat>`__
