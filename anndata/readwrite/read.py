@@ -2,6 +2,8 @@ from pathlib import Path
 from typing import Union, Optional
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
+import h5py as _h5py
+import pandas as pd
 import gzip
 import bz2
 import numpy as np
@@ -499,6 +501,23 @@ def _read_args_from_h5ad(
         d = load_sparse_csr(d, key=key)
     if not backed:
         f.close()
+    # backwards compat: set obs, var categoricals
+    k_to_delete = []
+    for k, v in d.get("uns", {}).items():
+        if k.endswith('_categories'):
+            k_stripped = k.replace('_categories', '')
+            if isinstance(v, (str, int)):  # fix categories with a single category
+                v = [v]
+            for ann in ['obs', 'var']:
+                print(k_stripped)
+                if k_stripped in d[ann]:
+                    d[ann][k_stripped] = pd.Categorical.from_codes(
+                        codes=d[ann][k_stripped].values,
+                        categories=v,
+                    )
+                    k_to_delete.append(k)
+    for k in k_to_delete:
+        del d["uns"][k]
     return AnnData._args_from_dict(d)
 
 
@@ -512,12 +531,19 @@ def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
 
     ds = f[key]
 
-    if isinstance(ds, h5py.Dataset) and 'sparse_format' in ds.attrs:
-        value = h5py._load_h5_dataset_as_sparse(ds, chunk_size)
-    elif isinstance(ds, h5py.Dataset):
-        value = np.empty(ds.shape, ds.dtype)
-        if 0 not in ds.shape:
-            ds.read_direct(value)
+    if isinstance(ds, h5py.Dataset):
+        if 'sparse_format' in ds.attrs:
+            value = h5py._load_h5_dataset_as_sparse(ds, chunk_size)
+        # Explicitly load obs, var this way for backwards compat
+        elif key in ["obs", "var"] \
+             or ds.attrs.get("source_format", None) == "dataframe":
+            value = _read_h5_dataframe(ds)
+        elif ds.shape != ():
+            value = np.empty(ds.shape, ds.dtype)
+            if 0 not in ds.shape:
+                ds.read_direct(value)
+        elif ds.shape == ():
+            value = ds[()]
     elif isinstance(ds, h5py.SparseDataset):
         value = ds.value
     else:
@@ -545,6 +571,17 @@ def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
     d[key_write] = value
     return
 
+def _read_h5_dataframe(dataset):
+    df = pd.DataFrame(dataset[:])
+    df.set_index(df.columns[0], inplace=True)
+    dt = dataset.dtype
+    for col in dt.names[1:]:
+        check = _h5py.check_dtype(enum=dt[col])
+        if not isinstance(check, dict):
+            continue
+        mapper = {v: k for k, v in check.items()}
+        df[col] = pd.Categorical(df[col].map(mapper), ordered=False)
+    return df
 
 def load_sparse_csr(d, key='X'):
     from scipy.sparse.csr import csr_matrix

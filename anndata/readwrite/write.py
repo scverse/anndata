@@ -220,7 +220,7 @@ def _write_in_zarr_chunks(za, key, value):
             else:
                 za[s0:e0, s1:e1] = value[s0:e0, s1:e1]
 
-
+# from .h5ad import write_h5ad as _write_h5ad
 def _write_h5ad(filename: PathLike, adata: AnnData, force_dense: bool = False, **kwargs):
     filename = Path(filename)
     if filename.suffix not in ('.h5', '.h5ad'):
@@ -233,6 +233,9 @@ def _write_h5ad(filename: PathLike, adata: AnnData, force_dense: bool = False, *
     if not dirname.is_dir():
         dirname.mkdir(parents=True, exist_ok=True)
     d = adata._to_dict_fixed_width_arrays()
+    # d = {
+        # "X": adata.X
+    # }
     # we're writing to a different location than the backing file
     # - load the matrix into the memory...
     if adata.isbacked and filename != adata.filename:
@@ -274,6 +277,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
 
     # ignore arrays with empty dtypes
     if value is None or not value.dtype.descr:
+        raise Exception(f"{key} has val none")
         return
     try:
         if key in set(f.keys()):
@@ -284,6 +288,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
                 and not isinstance(f[key], h5py.SparseDataset)
             )
             if not is_valid_group and not issparse(value):
+                raise Exception()
                 f[key][()] = value
                 return
             else:

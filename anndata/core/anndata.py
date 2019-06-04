@@ -823,7 +823,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         descr = (
             'AnnData object with n_obs × n_vars = {} × {} {}'
             .format(n_obs, n_vars, backed_at))
-        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:  # 'obsp', 'varp',
+        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:  # 'obsp', 'varp'
             keys = getattr(self, attr).keys()
             if len(keys) > 0:
                 descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
@@ -2185,46 +2185,46 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 d_true_keys[true_key] = None
 
-        # transform recarray to dataframe
-        for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
-            if d_true_keys[true_key] is not None:
-                for key in keys:
-                    if key in d_true_keys[true_key].dtype.names:
-                        d_true_keys[true_key] = pd.DataFrame.from_records(
-                            d_true_keys[true_key], index=key)
-                        break
-                d_true_keys[true_key].index = d_true_keys[true_key].index.astype('U')
-                # transform to unicode string
-                # TODO: this is quite a hack
-                for c in d_true_keys[true_key].columns:
-                    if is_string_dtype(d_true_keys[true_key][c]):
-                        d_true_keys[true_key][c] = pd.Index(
-                            d_true_keys[true_key][c]).astype('U').values
+        # # transform recarray to dataframe
+        # for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
+        #     if d_true_keys[true_key] is not None:
+        #         for key in keys:
+        #             if key in d_true_keys[true_key].dtype.names:
+        #                 d_true_keys[true_key] = pd.DataFrame.from_records(
+        #                     d_true_keys[true_key], index=key)
+        #                 break
+        #         d_true_keys[true_key].index = d_true_keys[true_key].index.astype('U')
+        #         # transform to unicode string
+        #         # TODO: this is quite a hack
+        #         for c in d_true_keys[true_key].columns:
+        #             if is_string_dtype(d_true_keys[true_key][c]):
+        #                 d_true_keys[true_key][c] = pd.Index(
+        #                     d_true_keys[true_key][c]).astype('U').values
 
         # these are the category fields
-        k_to_delete = []
-        items = (
-            ddata.items() if uns_is_not_key
-            else ddata['uns'].items() if 'uns' in ddata else []
-        )
-        for k, v in items:
-            if k.endswith('_categories'):
-                k_stripped = k.replace('_categories', '')
-                if isinstance(v, (str, int)):  # fix categories with a single category
-                    v = [v]
-                for ann in ['obs', 'var']:
-                    if k_stripped in d_true_keys[ann]:
-                        d_true_keys[ann][k_stripped] = pd.Categorical.from_codes(
-                            codes=d_true_keys[ann][k_stripped].values,
-                            categories=v,
-                        )
-                k_to_delete.append(k)
+        # k_to_delete = []
+        # items = (
+        #     ddata.items() if uns_is_not_key
+        #     else ddata['uns'].items() if 'uns' in ddata else []
+        # )
+        # for k, v in items:
+        #     if k.endswith('_categories'):
+        #         k_stripped = k.replace('_categories', '')
+        #         if isinstance(v, (str, int)):  # fix categories with a single category
+        #             v = [v]
+        #         for ann in ['obs', 'var']:
+        #             if k_stripped in d_true_keys[ann]:
+        #                 d_true_keys[ann][k_stripped] = pd.Categorical.from_codes(
+        #                     codes=d_true_keys[ann][k_stripped].values,
+        #                     categories=v,
+        #                 )
+        #         k_to_delete.append(k)
 
-        for k in k_to_delete:
-            if uns_is_not_key:
-                del ddata[k]
-            else:
-                del ddata['uns'][k]
+        # for k in k_to_delete:
+        #     if uns_is_not_key:
+        #         del ddata[k]
+        #     else:
+        #         del ddata['uns'][k]
 
         # assign the variables
         X = d_true_keys['X']

@@ -297,6 +297,8 @@ class PairwiseArraysBase(AlignedMapping):
         return self._dimnames[self._axis]
 
 
+
+# TODO: Allow these to be written, and add them back to anndata
 # class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
 #     def __init__(self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None):
 #         self._parent = parent
