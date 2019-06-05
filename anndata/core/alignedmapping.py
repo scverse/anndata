@@ -2,8 +2,11 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from functools import singledispatch
 from typing import Mapping, Optional, Tuple
+import warnings
 
+import numpy as np
 import pandas as pd
+from scipy.sparse import spmatrix
 
 from ..utils import deprecated
 from .views import asview, ViewArgs
@@ -53,6 +56,14 @@ class AlignedMapping(MutableMapping, ABC):
                 raise IndexError()  # Maybe not index error
         except AttributeError:
             pass
+        # TODO: Remove this as soon as writing dataframes works
+        if not isinstance(val, (np.ndarray, spmatrix)):
+            warnings.warn(
+                f"AnnData does not currently support writing or reading of "
+                f"'{type(val).__name__}' objects in {self.attrname} for either"
+                f" hdf5 or zarr formats.",
+                stacklevel=2
+            )
 
     @property
     @abstractmethod
