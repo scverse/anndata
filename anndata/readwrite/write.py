@@ -269,7 +269,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
     if value is None or not value.dtype.descr:
         return
     try:
-        if _set_matching_array(f, key, value, h5py.Dataset):
+        if _set_matching_array(f, key, value, h5py.Dataset, 'sparse_format'):
             return
         f.create_dataset(key, data=value, **kwargs)
     except TypeError:
@@ -299,15 +299,21 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
                 .format(key, e)
             )
 
-            
-def _set_matching_array(f, key, value, cls):
+
+def _set_matching_array(f, key, value, cls, excluded_attrs=None):
     if key not in set(f.keys()):
         return False
+    # also delete key if it has any forbidded attributes
+    any_excluded_attrs = (
+        excluded_attrs is not None
+        and {excluded_attrs} & set(f[key].attrs)
+    )
     if (
         isinstance(f[key], cls)
         and not issparse(value)
         and f[key].shape == value.shape
         and f[key].dtype == value.dtype
+        and not any_excluded_attrs
     ):
         f[key][()] = value
         return True
