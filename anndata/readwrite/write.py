@@ -147,7 +147,7 @@ def _write_key_value_to_zarr(f, key, value, **kwargs):
         return
     try:
         import zarr
-        if _set_matching_array(f, value, zarr.Array):
+        if _set_matching_array(f, key, value, zarr.Array):
             return
         #f.create_dataset(key, data=value, **kwargs)
         if key != 'X' and 'chunks' in kwargs:  # TODO: make this more explicit
@@ -269,7 +269,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
     if value is None or not value.dtype.descr:
         return
     try:
-        if _set_matching_array(f, value, h5py.Dataset):
+        if _set_matching_array(f, key, value, h5py.Dataset):
             return
         f.create_dataset(key, data=value, **kwargs)
     except TypeError:
@@ -300,7 +300,7 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
             )
 
             
-def _set_matching_array(f, value, cls):
+def _set_matching_array(f, key, value, cls):
     if key not in set(f.keys()):
         return False
     if (
