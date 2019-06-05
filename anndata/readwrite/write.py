@@ -148,10 +148,13 @@ def _write_key_value_to_zarr(f, key, value, **kwargs):
     try:
         if key in set(f.keys()):
             import zarr
-            is_valid_group = isinstance(f[key], zarr.hierarchy.Group) \
-                             and f[key].shape == value.shape \
-                             and f[key].dtype == value.dtype
-            if not is_valid_group and not issparse(value):
+            is_array_same_type = (
+                isinstance(f[key], zarr.Array)
+                and not issparse(value)
+                and f[key].shape == value.shape
+                and f[key].dtype == value.dtype
+            )
+            if is_array_same_type:
                 f[key][()] = value
                 return
             else:
@@ -277,13 +280,13 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
         return
     try:
         if key in set(f.keys()):
-            is_valid_group = (
-                isinstance(f[key], h5py.Group)
+            is_dataset_same_type = (
+                isinstance(f[key], h5py.Dataset)
+                and not issparse(value)
                 and f[key].shape == value.shape
                 and f[key].dtype == value.dtype
-                and not isinstance(f[key], h5py.SparseDataset)
             )
-            if not is_valid_group and not issparse(value):
+            if is_dataset_same_type:
                 f[key][()] = value
                 return
             else:
