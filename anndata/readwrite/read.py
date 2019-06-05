@@ -142,7 +142,7 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
     sparse
         Whether to read the data matrix as sparse.
     cleanup
-        Whether to collapse all obs/var fields that only store one unique value into `.uns['loom-cleanup']`.
+        Whether to collapse all obs/var fields that only store one unique value into `.uns['loom-.']`.
     X_name
         Loompy key with which the data matrix `.X` is initialized.
     obs_names
@@ -182,15 +182,20 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
 
         uns = {}
         if cleanup:
-            uns['loom-cleanup'] = {}
+            uns_obs = {}
             for key in list(obs.keys()):
                 if len(set(obs[key])) == 1:
-                    uns['loom-cleanup'][f'obs-{key}'] = obs[key].iloc[0]
+                    uns_obs[f'{key}'] = obs[key][0]
                     del obs[key]
+            if uns_obs:
+                uns['loom-obs'] = uns_obs
+            uns_var = {}
             for key in list(var.keys()):
                 if len(set(var[key])) == 1:
-                    uns['loom-cleanup'][f'var-{key}'] = obs[key].iloc[0]
+                    uns_var[f'{key}'] = var[key][0]
                     del var[key]
+            if uns_var:
+                uns['loom-var'] = uns_var
 
         adata = AnnData(
             X,
