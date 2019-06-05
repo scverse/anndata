@@ -146,19 +146,9 @@ def _write_key_value_to_zarr(f, key, value, **kwargs):
     if value is None or not value.dtype.descr:
         return
     try:
-        if key in set(f.keys()):
-            import zarr
-            is_array_same_type = (
-                isinstance(f[key], zarr.Array)
-                and not issparse(value)
-                and f[key].shape == value.shape
-                and f[key].dtype == value.dtype
-            )
-            if is_array_same_type:
-                f[key][()] = value
-                return
-            else:
-                del f[key]
+        import zarr
+        if _set_matching_array(f, value, zarr.Array):
+            return
         #f.create_dataset(key, data=value, **kwargs)
         if key != 'X' and 'chunks' in kwargs:  # TODO: make this more explicit
             del kwargs['chunks']
@@ -279,18 +269,8 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
     if value is None or not value.dtype.descr:
         return
     try:
-        if key in set(f.keys()):
-            is_dataset_same_type = (
-                isinstance(f[key], h5py.Dataset)
-                and not issparse(value)
-                and f[key].shape == value.shape
-                and f[key].dtype == value.dtype
-            )
-            if is_dataset_same_type:
-                f[key][()] = value
-                return
-            else:
-                del f[key]
+        if _set_matching_array(f, value, h5py.Dataset):
+            return
         f.create_dataset(key, data=value, **kwargs)
     except TypeError:
         try:
@@ -318,3 +298,18 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
                 'Could not save field with key = {!r} to hdf5 file: {}'
                 .format(key, e)
             )
+
+            
+def _set_matching_array(f, value, cls):
+    if key not in set(f.keys()):
+        return False
+    if (
+        isinstance(f[key], cls)
+        and not issparse(value)
+        and f[key].shape == value.shape
+        and f[key].dtype == value.dtype
+    ):
+        f[key][()] = value
+        return True
+    del f[key]
+    return False
