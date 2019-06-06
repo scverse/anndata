@@ -128,7 +128,7 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
 
 def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
               obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str='float32', **kwargs) -> AnnData:
-    """Read ``.loom``-formatted hdf5 file.
+    """Read `.loom`-formatted hdf5 file.
 
     This reads the whole file into memory.
 
