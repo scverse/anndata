@@ -136,7 +136,7 @@ def test_readwrite_loom(typ, tmp_path):
     adata_src.varm['X_b'] = np.zeros((adata_src.n_vars, 3))
     adata_src.write_loom(tmp_path / 'test.loom', write_obsm_varm=True)
 
-    adata = ad.read_loom(tmp_path / 'test.loom', sparse=typ is csr_matrix)
+    adata = ad.read_loom(tmp_path / 'test.loom', sparse=typ is csr_matrix, cleanup=True)
     if isinstance(X, np.ndarray):
         assert np.allclose(adata.X, X)
     else:
@@ -144,6 +144,9 @@ def test_readwrite_loom(typ, tmp_path):
         assert np.allclose(adata.X.toarray(), X.toarray())
     assert 'X_a' in adata.obsm_keys() and adata.obsm['X_a'].shape[1] == 2
     assert 'X_b' in adata.varm_keys() and adata.varm['X_b'].shape[1] == 3
+    # as we called with `cleanup=True`
+    assert 'oanno1b' in adata.uns['loom-obs']
+    assert 'vanno2' in adata.uns['loom-var']
 
 
 def test_read_csv():

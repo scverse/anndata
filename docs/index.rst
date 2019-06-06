@@ -7,10 +7,9 @@
 Report issues and see the code on `GitHub <https://github.com/theislab/anndata>`_.
 
 :class:`~anndata.AnnData` provides a scalable way of keeping track
-of data together with learned annotations. It is used within `Scanpy
-<https://github.com/theislab/scanpy>`_, for which it was initially
-developed. Both packages have been introduced in `Genome Biology (2018)
-<https://doi.org/10.1186/s13059-017-1382-0>`_.
+of data and learned annotations. It was initially built for
+`Scanpy <https://github.com/theislab/scanpy>`__
+`(Genome Biology, 2018) <https://doi.org/10.1186/s13059-017-1382-0>`__.
 
 .. include:: release_notes.rst
 
