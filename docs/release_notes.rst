@@ -1,5 +1,3 @@
-See all releases `here <https://github.com/theislab/anndata/releases>`_. The following lists selected improvements.
-
 .. role:: small
 .. role:: smaller
 .. role:: noteversion
