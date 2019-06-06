@@ -8,6 +8,7 @@ See all releases `here <https://github.com/theislab/anndata/releases>`_. The fol
 Post v0.6 :small:`March 23, 2019`
 ---------------------------------
 
+- Added convenience accesors :func:`anndata.AnnData.obs_vector` and :func:`anndata.AnnData.var_vector` for retrieving 1 dimensional arrays from :class:`~anndata.AnnData` objects. See `here <https://github.com/theislab/anndata/pull/144>`__ :noteversion:`0.6.21` :smaller:`thanks to I Virshup`
 - compatibility with Scipy >=1.3 by removing `IndexMixin` dependency, see `here <https://github.com/theislab/anndata/commit/6fb083477bc0b1f3eeccc62e10e4b477ae532346>`__ :noteversion:`0.6.20` :smaller:`thanks to P Angerer`
 - bug fix for second-indexing into views, see `here <https://github.com/theislab/anndata/issues/126>`__ :noteversion:`0.6.19` :smaller:`thanks to P Angerer`
 - bug fix for reading excel files :noteversion:`0.6.19` :smaller:`thanks to A Wolf`
