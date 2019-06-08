@@ -7,6 +7,7 @@ import h5py
 import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
+import warnings
 
 from ..utils import unpack_index
 from ..compat import PathLike
@@ -214,22 +215,17 @@ def _set_many(self, i, j, x):
         return
 
     else:
-        raise ValueError(
-            'Currently, you cannot change the sparsity structure of a SparseDataset.')
         # replace where possible
-        # mask = offsets > -1
-        # # offsets[mask]
-        # bool_data_mask = np.zeros(len(self.data), dtype=bool)
-        # bool_data_mask[offsets[mask]] = True
-        # self.data[bool_data_mask] = x[mask]
-        # # self.data[offsets[mask]] = x[mask]
-        # # only insertions remain
-        # mask = ~mask
-        # i = i[mask]
-        # i[i < 0] += M
-        # j = j[mask]
-        # j[j < 0] += N
-        # self._insert_many(i, j, x[mask])
+        mask = offsets > -1
+        if mask.any():
+            self.data[list(offsets[mask])] = x[mask]
+        # only insertions remain
+        mask = ~mask
+        i = i[mask]
+        i[i < 0] += M
+        j = j[mask]
+        j[j < 0] += N
+        self._insert_many(i, j, x[mask])
 
 
 backed_csr_matrix._set_many = _set_many
@@ -298,6 +294,21 @@ class SparseDataset:
         mock_matrix.indices = self.h5py_group['indices']
         mock_matrix.indptr = self.h5py_group['indptr']
         mock_matrix[row, col] = value
+
+        if mock_matrix.data.shape != self.h5py_group['data'].shape:
+            warnings.warn('Changing the sparsity structure of '
+                          'a SparseDataset can be very expensive')
+
+            self.h5py_group['data'].resize(mock_matrix.data.shape)
+            self.h5py_group['data'][()] = mock_matrix.data
+
+            if mock_matrix.indices.shape != self.h5py_group['indices'].shape:
+                self.h5py_group['indices'].resize(mock_matrix.indices.shape)
+            self.h5py_group['indices'][()] = mock_matrix.indices
+
+            if mock_matrix.indptr.shape != self.h5py_group['indptr'].shape:
+                self.h5py_group['indptr'].resize(mock_matrix.indptr.shape)
+            self.h5py_group['indptr'][()] = mock_matrix.indptr
 
     @property
     def shape(self):
