@@ -287,3 +287,9 @@ def test_layers_view():
     assert not view_adata.isview
     assert real_hash == joblib.hash(real_adata)
     assert view_hash != joblib.hash(view_adata)
+
+
+def test_view_of_view(adata, subset_func):
+    v1 = adata[:, subset_func(adata.var_names)]
+    v2 = subset[:, subset_func(subset.var_names)]
+    assert v2._adata_ref is adata
