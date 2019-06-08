@@ -1,6 +1,11 @@
+import joblib
 import numpy as np
+import pandas as pd
+import pytest
+
 import anndata as ad
 
+from anndata.tests.helpers import gen_adata, subset_func, slice_subset
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -22,6 +27,13 @@ uns_dict = {  # unstructured annotation
     'oanno1_colors': ['#000000', '#FFFFFF'],
     'uns2': ['some annotation']}
 
+
+@pytest.fixture
+def adata():
+    adata = ad.AnnData(np.empty((100, 100)))
+    adata.obsm['o'] = np.zeros((100, 50))
+    adata.varm['o'] = np.zeros((100, 50))
+    return adata
 
 # -------------------------------------------------------------------------------
 # The test functions
@@ -49,9 +61,229 @@ def test_views():
     assert adata_subset.obs['foo'].tolist() == list(range(2))
 
 
-def test_slice_copy():
-    adata = ad.AnnData(np.empty((100, 100)))
-    adata.obsm['o'] = np.empty((100, 50))
+# These tests could probably be condensed into a fixture based test for obsm and varm
+def test_set_obsm_key(adata):
+    init_hash = joblib.hash(adata)
 
-    adata = adata[:50]
-    adata.obsm['o'] = np.ones((50, 20))
+    orig_obsm_val = adata.obsm['o'].copy()
+    subset_obsm = adata[:50]
+    assert subset_obsm.isview
+    subset_obsm.obsm['o'] = np.ones((50, 20))
+    assert not subset_obsm.isview
+    assert np.all(adata.obsm["o"] == orig_obsm_val)
+
+    assert init_hash == joblib.hash(adata)
+
+
+def test_set_varm_key(adata):
+    init_hash = joblib.hash(adata)
+
+    orig_varm_val = adata.varm['o'].copy()
+    subset_varm = adata[:, :50]
+    assert subset_varm.isview
+    subset_varm.varm['o'] = np.ones((50, 20))
+    assert not subset_varm.isview
+    assert np.all(adata.varm["o"] == orig_varm_val)
+
+    assert init_hash == joblib.hash(adata)
+
+
+def test_set_obs(adata, subset_func):
+    init_hash = joblib.hash(adata)
+
+    subset = adata[subset_func(adata.obs_names), :]
+
+    new_obs = pd.DataFrame(
+        {"a": np.ones(subset.n_obs), "b": np.ones(subset.n_obs)},
+        index=subset.obs_names
+    )
+
+    assert subset.isview
+    subset.obs = new_obs
+    assert not subset.isview
+    assert np.all(subset.obs == new_obs)
+
+    assert joblib.hash(adata) == init_hash
+
+
+def test_set_var(adata, subset_func):
+    init_hash = joblib.hash(adata)
+
+    subset = adata[:, subset_func(adata.var_names)]
+
+    new_var = pd.DataFrame(
+        {"a": np.ones(subset.n_vars), "b": np.ones(subset.n_vars)},
+        index=subset.var_names
+    )
+
+    assert subset.isview
+    subset.var = new_var
+    assert not subset.isview
+    assert np.all(subset.var == new_var)
+
+    assert joblib.hash(adata) == init_hash
+
+
+def test_set_obsm(adata):
+    init_hash = joblib.hash(adata)
+
+    dim0_size = np.random.randint(2, adata.shape[0] - 1)
+    dim1_size = np.random.randint(1, 99)
+    orig_obsm_val = adata.obsm["o"].copy()
+    subset_idx = np.random.choice(adata.obs_names, dim0_size, replace=False)
+
+    subset = adata[subset_idx, :]
+    assert subset.isview
+    subset.obsm = {"o": np.ones((dim0_size, dim1_size))}
+    assert not subset.isview
+    assert np.all(orig_obsm_val == adata.obsm["o"])  # Checking for mutation
+    assert np.all(subset.obsm["o"] == np.ones((dim0_size, dim1_size)))
+
+    subset = adata[subset_idx, :]
+    subset_hash = joblib.hash(subset)
+    with pytest.raises(ValueError):
+        subset.obsm = {"o": np.ones((dim0_size + 1, dim1_size))}
+    with pytest.raises(ValueError):
+        subset.varm = {"o": np.ones((dim0_size - 1, dim1_size))}
+    assert subset_hash == joblib.hash(subset)
+
+    assert init_hash == joblib.hash(adata)  # Only modification have been made to a view
+
+
+def test_set_varm(adata):
+    init_hash = joblib.hash(adata)
+
+    dim0_size = np.random.randint(2, adata.shape[1] - 1)
+    dim1_size = np.random.randint(1, 99)
+    orig_varm_val = adata.varm["o"].copy()
+    subset_idx = np.random.choice(adata.var_names, dim0_size, replace=False)
+
+    subset = adata[:, subset_idx]
+    assert subset.isview
+    subset.varm = {"o": np.ones((dim0_size, dim1_size))}
+    assert not subset.isview
+    assert np.all(orig_varm_val == adata.varm["o"])  # Checking for mutation
+    assert np.all(subset.varm["o"] == np.ones((dim0_size, dim1_size)))
+
+    subset = adata[:, subset_idx]
+    subset_hash = joblib.hash(subset)
+    with pytest.raises(ValueError):
+        subset.varm = {"o": np.ones((dim0_size + 1, dim1_size))}
+    with pytest.raises(ValueError):
+        subset.varm = {"o": np.ones((dim0_size - 1, dim1_size))}
+    assert subset_hash == joblib.hash(subset)  # subset should not be changed by failed setting
+
+    assert init_hash == joblib.hash(adata)
+
+
+# TODO: Use different kind of subsetting for adata and view
+def test_set_subset_obsm(adata, subset_func):
+    init_hash = joblib.hash(adata)
+    orig_obsm_val = adata.obsm["o"].copy()
+
+    while True:
+        subset_idx = slice_subset(adata.obs_names)
+        if len(adata[subset_idx, :]) > 2:
+            break
+    subset = adata[subset_idx, :]
+
+    internal_idx = subset_func(np.arange(subset.obsm["o"].shape[0]))
+    assert subset.isview
+    subset.obsm["o"][internal_idx] = 1
+    assert not subset.isview
+    assert np.all(adata.obsm["o"] == orig_obsm_val)
+
+    assert init_hash == joblib.hash(adata)
+
+
+def test_set_subset_varm(adata, subset_func):
+    init_hash = joblib.hash(adata)
+    orig_varm_val = adata.varm["o"].copy()
+
+    while True:
+        subset_idx = slice_subset(adata.var_names)
+        if (adata[:, subset_idx]).shape[1] > 2:
+            break
+    subset = adata[:, subset_idx]
+
+    internal_idx = subset_func(np.arange(subset.varm["o"].shape[0]))
+    assert subset.isview
+    subset.varm["o"][internal_idx] = 1
+    assert not subset.isview
+    assert np.all(adata.varm["o"] == orig_varm_val)
+
+    assert init_hash == joblib.hash(adata)
+
+
+@pytest.mark.parametrize('attr', [
+    "obsm",
+    "varm",
+    "layers"
+])
+def test_view_failed_delitem(attr):
+    adata = gen_adata((10, 10))
+    view = adata[5:7, :][:, :5]
+    adata_hash = joblib.hash(adata)
+    view_hash = joblib.hash(view)
+
+    with pytest.raises(KeyError):
+        getattr(view, attr).__delitem__("not a key")
+
+    assert view.isview
+    assert adata_hash == joblib.hash(adata)
+    assert view_hash == joblib.hash(view)
+
+
+@pytest.mark.parametrize('attr', [
+    "obsm",
+    "varm",
+    "layers"
+])
+def test_view_delitem(attr):
+    adata = gen_adata((10, 10))
+    getattr(adata, attr)["to_delete"] = np.ones((10, 10))
+    assert type(getattr(adata, attr)["to_delete"]) is np.ndarray  # Shouldn't be a subclass, should be an ndarray
+    view = adata[5:7, :][:, :5]
+    adata_hash = joblib.hash(adata)
+    view_hash = joblib.hash(view)
+
+    getattr(view, attr).__delitem__("to_delete")
+
+    assert not view.isview
+    assert "to_delete" not in getattr(view, attr)
+    assert "to_delete" in getattr(adata, attr)
+    assert adata_hash == joblib.hash(adata)
+    assert view_hash != joblib.hash(view)
+
+
+def test_layers_view():
+    X = np.array([
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+    ])
+    L = np.array([
+        [10, 11, 12],
+        [13, 14, 15],
+        [16, 17, 18],
+    ])
+    real_adata = ad.AnnData(X)
+    real_adata.layers["L"] = L
+    view_adata = real_adata[1:, 1:]
+    real_hash = joblib.hash(real_adata)
+    view_hash = joblib.hash(view_adata)
+
+    assert view_adata.isview
+
+    with pytest.raises(ValueError):
+        view_adata.layers["L2"] = L + 2
+
+    assert view_adata.isview  # Failing to set layer item makes adata not view
+    assert real_hash == joblib.hash(real_adata)
+    assert view_hash == joblib.hash(view_adata)
+
+    view_adata.layers["L2"] = L[1:, 1:] + 2
+
+    assert not view_adata.isview
+    assert real_hash == joblib.hash(real_adata)
+    assert view_hash != joblib.hash(view_adata)

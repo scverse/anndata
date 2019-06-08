@@ -3,23 +3,24 @@
 import os
 from enum import Enum
 from collections import OrderedDict
+from collections.abc import MutableMapping
 from functools import reduce
 from pathlib import Path
 from typing import Any, Union, Optional
-from typing import Iterable, Sized, Sequence, Mapping, MutableMapping
-from typing import Tuple, List, Dict, KeysView
+from typing import Iterable, Sized, Sequence, Mapping
+from typing import Tuple, List
 from copy import deepcopy
 import warnings
 
 import numpy as np
 from numpy import ma
 import pandas as pd
-from numpy.lib.recfunctions import rec_drop_fields
 from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
 from natsort import natsorted
+
 
 # try importing zarr
 try:
@@ -39,13 +40,19 @@ except ImportError:
         def __rep__():
             return 'mock zappy.base.ZappyArray'
 
-from . import h5py
-from .layers import AnnDataLayers
 
-from . import utils
-from .utils import Index, get_n_items_idx, unpack_index
-from .logging import anndata_logger as logger
-from .compat import PathLike
+from .alignedmapping import (
+    AxisArraysBase, AxisArrays,
+    # PairwiseArraysBase, PairwiseArrays,
+    LayersBase, Layers
+)
+from .. import h5py
+from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameView
+
+from .. import utils
+from ..utils import Index, get_n_items_idx, convert_to_dict, unpack_index
+from ..logging import anndata_logger as logger
+from ..compat import PathLike
 
 
 class StorageType(Enum):
@@ -59,118 +66,6 @@ class StorageType(Enum):
     def classes(cls):
         print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
-
-
-class BoundRecArr(np.recarray):
-    """A :class:`numpy.recarray` to which fields can be added using ``.['key']``.
-
-    To enable this, it is bound to a instance of AnnData.
-    """
-    _attr_choices = ['obsm', 'varm']
-
-    def __new__(cls, input_array: np.ndarray, parent: Any, attr: str):
-        """
-        Parameters
-        ----------
-        input_array
-            A (structured) numpy array.
-        parent
-            Any object to which the BoundRecArr shall be bound to.
-        attr
-            The name of the attribute as which it appears in parent.
-        """
-        arr = np.asarray(input_array).view(cls)
-        arr._parent = parent
-        arr._attr = attr
-        return arr
-
-    def __array_finalize__(self, obj: Any):
-        if obj is None: return
-        self._parent = getattr(obj, '_parent', None)
-        self._attr = getattr(obj, '_attr', None)
-
-    def __reduce__(self) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-        pickled_state = super().__reduce__()
-        new_state = pickled_state[2] + (self.__dict__, )
-        return pickled_state[0], pickled_state[1], new_state
-
-    def __setstate__(self, state: Sequence[Mapping[str, Any]]):
-        for k, v in state[-1].items():
-            self.__setattr__(k, v)
-        super().__setstate__(state[0:-1])
-
-    def copy(self, order='C') -> 'BoundRecArr':
-        new = super().copy()
-        new._parent = self._parent
-        return new
-
-    def flipped(self) -> 'BoundRecArr':
-        new_attr = (self._attr_choices[1] if self._attr == self._attr_choices[0]
-                    else self._attr_choices[0])
-        return BoundRecArr(self, self._parent, new_attr)
-
-    def keys(self) -> Tuple[str, ...]:
-        return self.dtype.names
-
-    def __setitem__(self, key: str, arr: np.ndarray):
-        if not isinstance(arr, np.ndarray):
-            raise ValueError(
-                'Can only assign numpy ndarrays to .{}[{!r}], not objects of class {}'
-                .format(self._attr, key, type(arr))
-            )
-        if arr.ndim == 1:
-            raise ValueError('Use adata.obs or adata.var for 1-dimensional arrays.')
-        if self.shape[0] != arr.shape[0]:
-            raise ValueError(
-                'Can only assign an array of same length ({}), not of length {}.'
-                .format(self.shape[0], arr.shape[0])
-            )
-        # the following always allocates a new array
-        # even if the key already exists and dimensions match
-        # TODO: one could check for this case
-        # dtype
-        merged_dtype = []
-        found_key = False
-        for descr in self.dtype.descr:
-            if descr[0] == key:
-                merged_dtype.append((key, arr.dtype, arr.shape[1]))
-                found_key = True
-            else:
-                merged_dtype.append(descr)
-        if not found_key:
-            merged_dtype.append((key, arr.dtype, arr.shape[1]))
-        # create new array
-        new = np.empty(len(self), dtype=merged_dtype)
-        # fill the array
-        for name in new.dtype.names:
-            if name == key:
-                new[name] = arr
-            else:
-                new[name] = self[name]
-        # make it a BoundRecArr
-        # TODO: why can we not do this step before filling the array?
-        new = BoundRecArr(new, self._parent, self._attr)
-        setattr(self._parent, self._attr, new)
-
-    def __delitem__(self, key: str):
-        """Delete field with name."""
-        if key not in self.dtype.names:
-            raise ValueError(
-                'Currently, can only delete single names from {}.'
-                .format(self.dtype.names)
-            )
-        new_array = rec_drop_fields(self, key)
-        new = BoundRecArr(new_array, self._parent, self._attr)
-        setattr(self._parent, self._attr, new)
-
-    def to_df(self) -> pd.DataFrame:
-        """Convert to pandas dataframe."""
-        df = pd.DataFrame(index=RangeIndex(0, self.shape[0], name=None))
-        for key in self.keys():
-            value = self[key]
-            for icolumn, column in enumerate(value.T):
-                df['{}{}'.format(key, icolumn+1)] = column
-        return df
 
 
 # for backwards compat
@@ -257,7 +152,7 @@ def _normalize_index(index, names):
             stop = None if stop is None else stop + 1
         step = index.step
         return slice(start, stop, step)
-    elif isinstance(index, (int, str)):
+    elif isinstance(index, (np.integer, int, str)):
         return name_idx(index)
     elif isinstance(index, (Sequence, np.ndarray, pd.Index)):
         # here, we replaced the implementation based on name_idx with this
@@ -371,86 +266,13 @@ class AnnDataFileManager:
         return bool(self._file.id)
 
 
-def _init_actual_AnnData(adata_view):
-    if adata_view.isbacked:
-        raise ValueError(
-            'You cannot modify elements of an AnnData view, '
-            'but need a copy of the subset.\n\n'
-            'Call `adata_subset = adata[index].copy(filename=...)`.')
-    adata_view._init_as_actual(adata_view.copy())
-
-
-class _SetItemMixin:
-    def __setitem__(self, idx: Any, value: Any):
-        if self._view_args is None:
-            super().__setitem__(idx, value)
-        else:
-            adata_view, attr_name = self._view_args
-            logger.warning(
-                'Trying to set attribute `.{}` of view, making a copy.'.format(attr_name))
-            _init_actual_AnnData(adata_view)
-            getattr(adata_view, attr_name)[idx] = value
-
-
-class _ViewMixin(_SetItemMixin):
-    def __init__(self, *args, view_args: Tuple['AnnData', str] = None, **kwargs):
-        self._view_args = view_args
-        super().__init__(*args, **kwargs)
-
-    def __deepcopy__(self, memo):
-        parent, k = self._view_args
-        return deepcopy(getattr(parent._adata_ref, k))
-
-
-class ArrayView(_SetItemMixin, np.ndarray):
-    def __new__(
-        cls,
-        input_array: Sequence[Any],
-        view_args: Tuple['AnnData', str] = None,
-    ):
-        arr = np.asarray(input_array).view(cls)
-        arr._view_args = view_args
-        return arr
-
-    def __array_finalize__(self, obj: Optional[np.ndarray]):
-        if obj is None: return
-        self._view_args = getattr(obj, '_view_args', None)
-
-    def keys(self) -> KeysView[str]:
-        # it's a structured array
-        return self.dtype.names
-
-    def copy(self, order: str = 'C') -> np.ndarray:
-        # we want a conventional array
-        return np.array(self)
-
-    def toarray(self) -> np.ndarray:
-        return self.copy()
-
-
-class SparseCSRView(_ViewMixin, sparse.csr_matrix):
-    pass
-
-
-class SparseCSCView(_ViewMixin, sparse.csc_matrix):
-    pass
-
-
-class DictView(_ViewMixin, dict):
-    pass
-
-
-class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ['_view_args']
-
-
 class Raw:
     def __init__(
         self,
         adata: Optional['AnnData'] = None,
         X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Optional[BoundRecArr] = None,
-        varm: Optional[BoundRecArr] = None,
+        var: Optional[AxisArraysBase] = None,
+        varm: Optional[AxisArraysBase] = None,
     ):
         self._adata = adata
         self._n_obs = adata.n_obs
@@ -504,17 +326,22 @@ class Raw:
     def var_names(self):
         return self.var.index
 
+    @property
+    def obs_names(self):
+        return self._adata.obs_names
+
     def __getitem__(self, index):
         oidx, vidx = self._normalize_indices(index)
         if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
         else: X = self._adata.file['raw.X'][oidx, vidx]
-        if isinstance(vidx, (int, np.int64)): vidx = slice(vidx, vidx+1, 1)
+        if isinstance(vidx, (int, np.integer)):
+            # To preserve two dimensional shape
+            vidx = slice(vidx, vidx + 1, 1)
         var = self._var.iloc[vidx]
+        new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
-            varm = self._varm[vidx]
-        else:
-            varm = None
-        return Raw(self._adata, X=X, var=var, varm=varm)
+            new._varm = self._varm._view(self, vidx)
+        return new
 
     def copy(self):
         return Raw(self._adata, X=self._X.copy(), var=self._var.copy(),
@@ -719,7 +546,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         filemode: Optional[str] = None,
         asview: bool = False,
-        *, oidx: Index = None, vidx: Index = None):
+        *,
+        # obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        # varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        oidx: Index = None,
+        vidx: Index = None
+    ):
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError('`X` has to be an AnnData object.')
@@ -727,7 +559,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
-                obsm=obsm, varm=varm, raw=raw,
+                obsm=obsm, varm=varm,
+                # obsp=obsp, varp=varp,
+                raw=raw,
                 layers=layers,
                 dtype=dtype, shape=shape,
                 filename=filename, filemode=filemode)
@@ -745,12 +579,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self.file = adata_ref.file
         # views on attributes of adata_ref
         oidx_normalized, vidx_normalized = oidx, vidx
-        if isinstance(oidx, (int, np.int64)): oidx_normalized = slice(oidx, oidx+1, 1)
-        if isinstance(vidx, (int, np.int64)): vidx_normalized = slice(vidx, vidx+1, 1)
+        if isinstance(oidx, (int, np.integer)): oidx_normalized = slice(oidx, oidx+1, 1)
+        if isinstance(vidx, (int, np.integer)): vidx_normalized = slice(vidx, vidx+1, 1)
         obs_sub = adata_ref.obs.iloc[oidx_normalized]
         var_sub = adata_ref.var.iloc[vidx_normalized]
-        self._obsm = ArrayView(adata_ref.obsm[oidx_normalized], view_args=(self, 'obsm'))
-        self._varm = ArrayView(adata_ref.varm[vidx_normalized], view_args=(self, 'varm'))
+        self._obsm = adata_ref.obsm._view(self, oidx_normalized)
+        self._varm = adata_ref.varm._view(self, vidx_normalized)
+        # TODO: Should this be normalized
+        self._layers = adata_ref.layers._view(self, (oidx, vidx))
+        # self._obsp = adata_ref.obsp._view(self, oidx_normalized)
+        # self._varp = adata_ref.varp._view(self, vidx_normalized)
         # hackish solution here, no copy should be necessary
         uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
@@ -759,7 +597,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # fix _n_obs, _n_vars
         if isinstance(oidx, slice):
             self._n_obs = get_n_items_idx(obs_sub.index, adata_ref.n_obs)
-        elif isinstance(oidx, (int, np.int64)):
+        elif isinstance(oidx, (int, np.integer)):
             self._n_obs = 1
         elif isinstance(oidx, Sized):
             self._n_obs = get_n_items_idx(oidx, adata_ref.n_obs)
@@ -767,7 +605,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise KeyError('Unknown Index type')
         if isinstance(vidx, slice):
             self._n_vars = get_n_items_idx(var_sub.index, adata_ref.n_vars)
-        elif isinstance(vidx, (int, np.int64)):
+        elif isinstance(vidx, (int, np.integer)):
             self._n_vars = 1
         elif isinstance(vidx, Sized):
             self._n_vars = get_n_items_idx(vidx, adata_ref.n_vars)
@@ -785,8 +623,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._X = None
         else:
             self._init_X_as_view()
-
-        self._layers = AnnDataLayers(self, adata_ref=adata_ref, oidx=oidx, vidx=vidx)
 
         # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:
@@ -819,10 +655,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
-            obsm=None, varm=None, raw=None, layers=None,
+            obsm=None, varm=None,
+            # varp=None, obsp=None,
+            raw=None, layers=None,
             dtype='float32', shape=None,
             filename=None, filemode=None):
-        from .readwrite.read import _read_args_from_h5ad
+        from ..readwrite.read import _read_args_from_h5ad
 
         # view attributes
         self._isview = False
@@ -924,26 +762,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # unstructured annotations
         self._uns = uns or OrderedDict()
 
-        # multi-dimensional array annotations
-        # None or {} → empty arrays
-        try:
-            if not isinstance(obsm, np.ndarray) and not obsm:
-                obsm = np.empty(self._n_obs, dtype=[])
-            if not isinstance(varm, np.ndarray) and not varm:
-                varm = np.empty(self._n_vars, dtype=[])
-        except TypeError:
-            raise TypeError(
-                'TypeError: Empty data-type\n'
-                '--> try installing a more recent numpy version: \n'
-                '    pip install numpy --upgrade'
-            )
-        # deal with non-empty dictionaries
-        if isinstance(obsm, Mapping):
-             obsm = utils.convert_dictionary_to_structured_array(obsm)
-        if isinstance(varm, Mapping):
-             varm = utils.convert_dictionary_to_structured_array(varm)
-        self._obsm = BoundRecArr(obsm, self, 'obsm')
-        self._varm = BoundRecArr(varm, self, 'varm')
+        # TODO: Think about consequences of making obsm a group in hdf
+        self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
+        self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
+
+        # self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
+        # self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
 
         self._check_dimensions()
         self._check_uniqueness()
@@ -968,7 +792,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._clean_up_old_format(uns)
 
         # layers
-        self._layers = AnnDataLayers(self, layers, dtype)
+        self._layers = Layers(self, layers)
 
     def __sizeof__(self) -> int:
         size = 0
@@ -985,7 +809,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         descr = (
             'AnnData object with n_obs × n_vars = {} × {} {}'
             .format(n_obs, n_vars, backed_at))
-        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:
+        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:  # 'obsp', 'varp',
             keys = getattr(self, attr).keys()
             if len(keys) > 0:
                 descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
@@ -1057,7 +881,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                              .format(value.shape, self.shape))
 
     @property
-    def layers(self) -> AnnDataLayers:
+    def layers(self) -> LayersBase:
         """Dictionary-like object with values of the same dimensions as :attr:`X`.
 
         Layers in AnnData have API similar to loompy :ref:`loomlayers`.
@@ -1144,8 +968,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(value) != self.n_obs:
             raise ValueError('Length does not match.')
         utils.warn_no_string_index(value.index)
-        if self.isview: self._adata_ref._obs.iloc[self._oidx] = value
-        else: self._obs = value
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._obs = value
 
     @property
     def var(self) -> pd.DataFrame:
@@ -1159,8 +984,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(value) != self.n_vars:
             raise ValueError('Length does not match.')
         utils.warn_no_string_index(value.index)
-        if self.isview: self._adata_ref._var.iloc[self._vidx] = value
-        else: self._var = value
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._var = value
 
     @property
     def uns(self) -> MutableMapping:
@@ -1176,7 +1002,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._uns = value
 
     @property
-    def obsm(self) -> BoundRecArr:
+    def obsm(self) -> AxisArraysBase:
         """Multi-dimensional annotation of observations (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
@@ -1186,18 +1012,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self._obsm
 
     @obsm.setter
-    def obsm(self, value: np.ndarray):
-        if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign `np.ndarray`.')
-        if len(value) != self.n_obs:
-            raise ValueError('Length does not match.')
+    def obsm(self, value):
+        obsm = AxisArrays(self, 0, vals=convert_to_dict(value))
         if self.isview:
-            self._adata_ref._obsm[self._oidx] = value
-        else:
-            self._obsm = BoundRecArr(value, self, 'obsm')
+            self._init_as_actual(self.copy())
+        self._obsm = obsm
 
     @property
-    def varm(self) -> BoundRecArr:
+    def varm(self) -> AxisArraysBase:
         """Multi-dimensional annotation of variables/ features (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray` of length
@@ -1207,15 +1029,45 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self._varm
 
     @varm.setter
-    def varm(self, value: np.ndarray):
-        if not isinstance(value, np.ndarray):
-            raise ValueError('Can only assign `np.ndarray`.')
-        if len(value) != self.n_vars:
-            raise ValueError('Length does not match.')
+    def varm(self, value):
+        varm = AxisArrays(self, 1, vals=convert_to_dict(value))
         if self.isview:
-            self._adata_ref._varm[self._vidx] = value
-        else:
-            self._varm = BoundRecArr(value, self, 'varm')
+            self._init_as_actual(self.copy())
+        self._varm = varm
+
+    # @property
+    # def obsp(self) -> PairwiseArraysBase:
+    #     """Pairwise annotation of observations, a mutable mapping with array-like values.
+
+    #     Stores for each key, a two or higher-dimensional :class:`np.ndarray` whose
+    #     first two dimensions are of length ``n_obs``. Is sliced with ``data`` and
+    #     ``obs`` but behaves otherwise like a :class:`dict`.
+    #     """
+    #     return self._obsp
+
+    # @obsp.setter
+    # def obsp(self, value):
+    #     obsp = PairwiseArrays(self, 0, vals=convert_to_dict(value))
+    #     if self.isview:
+    #         self._init_as_actual(self.copy())
+    #     self._obsp = obsp
+
+    # @property
+    # def varp(self) -> PairwiseArraysBase:
+    #     """Pairwise annotation of observations, a mutable mapping with array-like values.
+
+    #     Stores for each key, a two or higher-dimensional :class:`np.ndarray` whose
+    #     first two dimensions are of length ``n_var``. Is sliced with ``data`` and
+    #     ``var`` but behaves otherwise like a :class:`dict`.
+    #     """
+    #     return self._varp
+
+    # @varp.setter
+    # def varp(self, value):
+    #     varp = PairwiseArrays(self, 1, vals=convert_to_dict(value))
+    #     if self.isview:
+    #         self._init_as_actual(self.copy())
+    #     self._varp = varp
 
     @property
     def obs_names(self) -> pd.Index:
@@ -1540,7 +1392,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 'You\'re trying to transpose a view of an `AnnData`, which is currently not implemented. '
                 'Call `.copy()` before transposing.')
-        layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items(copy=False)}
+        layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items()}
         if sparse.isspmatrix_csr(X):
             return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
                            self._varm.flipped(), self._obsm.flipped(),
@@ -1628,7 +1480,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             a = a.toarray()
         return np.ravel(a)
 
-
     def var_vector(
         self, k, *, layer: Optional[str] = None
     ) -> np.ndarray:
@@ -1700,7 +1551,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                            self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
                            self._obsm.copy(), self._varm.copy(),
                            raw=None if self._raw is None else self._raw.copy(),
-                           layers=self.layers.as_dict(),
+                           layers=dict(self.layers),
                            dtype=self._X.dtype.name if self._X is not None else 'float32')
         else:
             if filename is None:
@@ -2078,14 +1929,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Variables annot. `var` must have number of '
                              'columns of `X` ({}), but has {} rows.'
                              .format(self._n_vars, self._var.shape[0]))
-        if 'obsm' in key and len(self._obsm) != self._n_obs:
-            raise ValueError('Observations annot. `obsm` must have number of '
-                             'rows of `X` ({}), but has {} rows.'
-                             .format(self._n_obs, len(self._obsm)))
-        if 'varm' in key and len(self._varm) != self._n_vars:
-            raise ValueError('Variables annot. `varm` must have number of '
-                             'columns of `X` ({}), but has {} rows.'
-                             .format(self._n_vars, len(self._varm)))
+        if 'obsm' in key:
+            obsm = self._obsm
+            if not all([o.shape[0] == self._n_obs for o in obsm.values()]) and len(obsm.dim_names) != self._n_obs:
+                raise ValueError('Observations annot. `obsm` must have number of '
+                                'rows of `X` ({}), but has {} rows.'
+                                .format(self._n_obs, len(self._obsm)))
+        if 'varm' in key:
+            varm = self._varm
+            if not all([v.shape[0] == self._n_vars for v in varm.values()]) and len(varm.dim_names) != self._n_var:
+                raise ValueError('Variables annot. `varm` must have number of '
+                                'columns of `X` ({}), but has {} rows.'
+                                .format(self._n_vars, len(self._varm)))
 
     def write_h5ad(
         self,
@@ -2122,7 +1977,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Write sparse data as a dense matrix. Defaults to ``True`` if object is
             backed, otherwise to ``False``.
         """
-        from .readwrite.write import _write_h5ad
+        from ..readwrite.write import _write_h5ad
 
         if filename is None and not self.isbacked:
             raise ValueError('Provide a filename!')
@@ -2154,7 +2009,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         sep
              Separator for the data.
         """
-        from .readwrite.write import write_csvs
+        from ..readwrite.write import write_csvs
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
@@ -2165,7 +2020,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             The filename.
         """
-        from .readwrite.write import write_loom
+        from ..readwrite.write import write_loom
         write_loom(filename, self, write_obsm_varm = write_obsm_varm)
 
     def write_zarr(
@@ -2182,7 +2037,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         chunks
             Chunk shape.
         """
-        from .readwrite.write import write_zarr
+        from ..readwrite.write import write_zarr
         write_zarr(store, self, chunks=chunks)
 
     def chunked_X(self, chunk_size: Optional[int] = None):
@@ -2372,7 +2227,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self.strings_to_categoricals()
         obs_rec, uns_obs = df_to_records_fixed_width(self._obs, var_len_str)
         var_rec, uns_var = df_to_records_fixed_width(self._var, var_len_str)
-        layers = self.layers.as_dict()
+        layers = dict(self.layers)
         d = {
             'X': self._X,
             'obs': obs_rec,

@@ -33,7 +33,7 @@ def test_views():
     adata_view = adata[1:, 1:]
 
     assert adata_view.layers.isview
-    assert adata_view.layers._adata_ref == adata
+    assert adata_view.layers.parent_mapping == adata.layers
 
     assert adata_view.layers.keys() == adata.layers.keys()
     assert (adata_view.layers['L'] == adata.layers['L'][1:, 1:]).all()

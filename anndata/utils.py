@@ -1,5 +1,5 @@
 import warnings
-from functools import wraps
+from functools import wraps, singledispatch
 from typing import Mapping, Any, Sequence, Union, Tuple
 
 import pandas as pd
@@ -7,10 +7,30 @@ import numpy as np
 from scipy.sparse import spmatrix
 
 from .logging import get_logger
-if False:
-    from .base import BoundRecArr  # noqa
 
 logger = get_logger(__name__)
+
+
+@singledispatch
+def convert_to_dict(obj) -> dict:
+    return dict(obj)
+
+@convert_to_dict.register(dict)
+def convert_to_dict_dict(obj: dict):
+    return obj
+
+@convert_to_dict.register(np.ndarray)
+def convert_to_dict_ndarray(obj: np.ndarray):
+    if obj.dtype.fields is None:
+        raise TypeError(
+            "Can only convert np.ndarray with compound dtypes to dict, passed "
+            "array had '{}'.".format(obj.dtype)
+        )
+    return {k: obj[k] for k in obj.dtype.fields.keys()}
+
+@convert_to_dict.register(type(None))
+def convert_to_dict_nonetype(obj: None):
+    return dict()
 
 
 def make_index_unique(index: pd.Index, join: str = '-'):
