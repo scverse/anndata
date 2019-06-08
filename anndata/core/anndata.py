@@ -49,7 +49,7 @@ from .. import h5py
 from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameView
 
 from .. import utils
-from ..utils import Index, get_n_items_idx, convert_to_dict, unpack_index
+from ..utils import Index1D, Index, get_n_items_idx, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
 from ..compat import PathLike, warn_flatten
 
@@ -552,8 +552,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         *,
         # obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         # varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        oidx: Index = None,
-        vidx: Index = None
+        oidx: Index1D = None,
+        vidx: Index1D = None
     ):
         if asview:
             if not isinstance(X, AnnData):
@@ -1178,13 +1178,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             del self.file[attr]
             self.file._file.create_dataset(attr, data=value)
 
-    def _normalize_indices(self, index: Optional[Index]):
+    def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
         # deal with tuples of length 1
         if isinstance(index, tuple) and len(index) == 1:
             index = index[0]
         # deal with pd.Series
         if isinstance(index, pd.Series):
-            index = index.values
+            index: Index = index.values
         if isinstance(index, tuple):
             if len(index) > 2:
                 raise ValueError(
@@ -1227,9 +1227,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __getitem__(self, index: Index) -> 'AnnData':
         """Returns a sliced view of the object."""
-        return self._getitem_view(index)
-
-    def _getitem_view(self, index: Index) -> 'AnnData':
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
@@ -1344,7 +1341,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     _sanitize = strings_to_categoricals  # backwards compat
 
-    def _slice_uns_sparse_matrices_inplace(self, uns, oidx):
+    def _slice_uns_sparse_matrices_inplace(self, uns: MutableMapping, oidx: Index1D):
         # slice sparse spatrices of n_obs × n_obs in self.uns
         if not (isinstance(oidx, slice) and
                 oidx.start is None and oidx.step is None and oidx.stop is None):
@@ -1356,7 +1353,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         self.n_obs, self.n_obs):
                     uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
 
-    def _inplace_subset_var(self, index):
+    def _inplace_subset_var(self, index: Index1D):
         """Inplace subsetting along variables dimension.
 
         Same as ``adata = adata[:, index]``, but inplace.
@@ -1364,7 +1361,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         adata_subset = self[:, index].copy()
         self._init_as_actual(adata_subset, dtype=self._X.dtype)
 
-    def _inplace_subset_obs(self, index):
+    def _inplace_subset_obs(self, index: Index1D):
         """Inplace subsetting along variables dimension.
 
         Same as ``adata = adata[index, :]``, but inplace.
@@ -1397,14 +1394,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 'You\'re trying to transpose a view of an `AnnData`, which is currently not implemented. '
                 'Call `.copy()` before transposing.')
-        layers = {k:(v.T.tocsr() if sparse.isspmatrix_csr(v) else v.T) for (k, v) in self.layers.items()}
-        if sparse.isspmatrix_csr(X):
-            return AnnData(X.T.tocsr(), self._var, self._obs, self._uns,
-                           self._varm.flipped(), self._obsm.flipped(),
-                           filename=self.filename, layers=layers, dtype=self.X.dtype.name)
-        return AnnData(X.T, self._var, self._obs, self._uns,
-                       self._varm.flipped(), self._obsm.flipped(),
-                       filename=self.filename, layers=layers, dtype=self.X.dtype.name)
+
+        def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
+            return m.T.tocsr() if sparse.isspmatrix_csr(m) else m.T
+
+        return AnnData(
+            t_csr(X), self._var, self._obs, self._uns,
+            self._varm.flipped(), self._obsm.flipped(),
+            filename=self.filename,
+            layers={k: t_csr(v) for k, v in self.layers.items()},
+            dtype=self.X.dtype.name,
+        )
 
     T = property(transpose)
 
@@ -1892,8 +1892,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 var.loc[vars_intersect, new_c] = ad.var.loc[vars_intersect, c]
 
         if join == 'inner':
+            from scipy.sparse import vstack
             if any_sparse:
-                from scipy.sparse import vstack
                 X = vstack(Xs)
             else:
                 X = np.concatenate(Xs)

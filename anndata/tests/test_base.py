@@ -29,7 +29,8 @@ def test_creation():
         obs=dict(Obs=['A', 'B']),
         var=dict(Feat=['a', 'b', 'c']),
         obsm=dict(X_pca=np.array([[1, 2], [3, 4]])),
-        raw=dict(X=X, var={'var_names': ['a', 'b', 'c']}))
+        raw=dict(X=X, var=dict(var_names=['a', 'b', 'c'])),
+    )
 
     assert adata.raw.X.tolist() == X.tolist()
     assert adata.raw.var_names.tolist() == ['a', 'b', 'c']
@@ -51,8 +52,9 @@ def test_creation():
 
 def test_create_with_dfs():
     X = np.ones((6, 3))
-    obs = pd.DataFrame(
-        {'cat_anno': pd.Categorical(['a', 'a', 'a', 'a', 'b', 'a'])})
+    obs = pd.DataFrame(dict(
+        cat_anno=pd.Categorical(['a', 'a', 'a', 'a', 'b', 'a']),
+    ))
     obs_copy = obs.copy()
     adata = AnnData(X=X, obs=obs)
     assert obs.index.equals(obs_copy.index)
@@ -106,7 +108,6 @@ def test_indices_dtypes():
         dict(var_names=['a', 'b', 'c']))
     adata.obs_names = ['ö', 'a']
     assert adata.obs_names.tolist() == ['ö', 'a']
-
 
 
 def test_slicing():

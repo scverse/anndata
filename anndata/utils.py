@@ -153,10 +153,11 @@ class DeprecationMixinMeta(type):
         ]
 
 
-Index = Union[slice, int, np.int64, np.ndarray, spmatrix]
+Index1D = Union[slice, int, str, np.int64, np.ndarray]
+Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
 
 
-def get_n_items_idx(idx: Index, l: int):
+def get_n_items_idx(idx: Index1D, l: int):
     if isinstance(idx, np.ndarray) and idx.dtype == bool:
         return idx.sum()
     elif isinstance(idx, slice):
@@ -170,7 +171,7 @@ def get_n_items_idx(idx: Index, l: int):
         return len(idx)
 
 
-def unpack_index(index: Union[Index, Tuple[Index, Index]]) -> Tuple[Index, Index]:
+def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
     # handle indexing with boolean matrices
     if (
         isinstance(index, (spmatrix, np.ndarray))
