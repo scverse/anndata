@@ -164,11 +164,10 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
 
     adata.X[0, [0, 2]] = 10
     adata.X[1, [0, 2]] = [11, 12]
-    with pytest.raises(ValueError):
-        adata.X[2, 1] = 13
+    adata.X[2, 1] = 13
 
     assert adata.isbacked
 
     assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
     assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
-    assert np.all(adata.X[2, :] == np.array([7, 0, 9]))
+    assert adata.X[2, 1] == 13
