@@ -194,18 +194,22 @@ def _set_many(self, i, j, x):
         return
 
     else:
-        # raise ValueError(
-        #     'Currently, you cannot change the sparsity structure of a SparseDataset.')
+        raise ValueError(
+            'Currently, you cannot change the sparsity structure of a SparseDataset.')
         # replace where possible
-        mask = offsets > -1
-        self.data[offsets[mask]] = x[mask]
-        # only insertions remain
-        mask = ~mask
-        i = i[mask]
-        i[i < 0] += M
-        j = j[mask]
-        j[j < 0] += N
-        self._insert_many(i, j, x[mask])
+        # mask = offsets > -1
+        # # offsets[mask]
+        # bool_data_mask = np.zeros(len(self.data), dtype=bool)
+        # bool_data_mask[offsets[mask]] = True
+        # self.data[bool_data_mask] = x[mask]
+        # # self.data[offsets[mask]] = x[mask]
+        # # only insertions remain
+        # mask = ~mask
+        # i = i[mask]
+        # i[i < 0] += M
+        # j = j[mask]
+        # j[j < 0] += N
+        # self._insert_many(i, j, x[mask])
 
 
 _cs_matrix._set_many = _set_many

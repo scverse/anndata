@@ -121,3 +121,48 @@ def test_return_to_memory_mode(adata, backing_h5ad):
     bdata.filename = backing_h5ad
     # close the file
     bdata.filename = None
+
+
+def test_backed_modification(adata, backing_h5ad):
+    adata.X[:, 1] = 0  # Make it a little sparse
+    adata.X = sparse.csr_matrix(adata.X)
+    assert not adata.isbacked
+
+    # While this currently makes the file backed, it doesn't write it as sparse
+    adata.filename = backing_h5ad
+    adata.write()
+    assert not adata.file.isopen
+    assert adata.isbacked
+
+    adata.X[0, [0, 2]] = 10
+    adata.X[1, [0, 2]] = [11, 12]
+    adata.X[2, 1] = 13  # If it were written as sparse, this should fail
+
+    assert adata.isbacked
+
+    assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
+    assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
+    assert np.all(adata.X[2, :] == np.array([7, 13, 9]))
+
+
+def test_backed_modification_sparse(adata, backing_h5ad):
+    adata.X[:, 1] = 0  # Make it a little sparse
+    adata.X = sparse.csr_matrix(adata.X)
+    assert not adata.isbacked
+
+    adata.write(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad, backed="r+")
+
+    assert adata.filename == backing_h5ad
+    assert adata.isbacked
+
+    adata.X[0, [0, 2]] = 10
+    adata.X[1, [0, 2]] = [11, 12]
+    with pytest.raises(ValueError):
+        adata.X[2, 1] = 13
+
+    assert adata.isbacked
+
+    assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
+    assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
+    assert np.all(adata.X[2, :] == np.array([7, 0, 9]))
