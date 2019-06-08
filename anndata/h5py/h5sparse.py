@@ -192,11 +192,9 @@ def _set_many(self, i, j, x):
     duplicate entries.
     """
     i, j, M, N = self._prepare_indices(i, j)
+    x = np.array(x, dtype=self.dtype, copy=False, ndmin=1).ravel()
 
-    if np.isscalar(x):  # Scipy 1.3+ compat
-        n_samples = 1
-    else:
-        n_samples = len(x)
+    n_samples = x.size
     offsets = np.empty(n_samples, dtype=self.indices.dtype)
     ret = _sparsetools.csr_sample_offsets(M, N, self.indptr, self.indices,
                                           n_samples, i, j, offsets)
