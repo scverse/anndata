@@ -44,6 +44,12 @@ def adata():
         },
         dtype='int32'
     )
+
+
+@pytest.fixture(params=[sparse.csr_matrix, sparse.csc_matrix])
+def sparse_format(request):
+    return request.param
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
@@ -145,9 +151,9 @@ def test_backed_modification(adata, backing_h5ad):
     assert np.all(adata.X[2, :] == np.array([7, 13, 9]))
 
 
-def test_backed_modification_sparse(adata, backing_h5ad):
+def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     adata.X[:, 1] = 0  # Make it a little sparse
-    adata.X = sparse.csr_matrix(adata.X)
+    adata.X = sparse_format(adata.X)
     assert not adata.isbacked
 
     adata.write(backing_h5ad)
