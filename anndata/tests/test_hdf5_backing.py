@@ -142,7 +142,7 @@ def test_backed_modification(adata, backing_h5ad):
 
     adata.X[0, [0, 2]] = 10
     adata.X[1, [0, 2]] = [11, 12]
-    adata.X[2, 1] = 13  # If it were written as sparse, this should fail
+    adata.X[2, 1] = 13
 
     assert adata.isbacked
 
@@ -170,4 +170,4 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
 
     assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
     assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
-    assert adata.X[2, 1] == 13
+    assert np.all(adata.X[2, :] == np.array([7, 13, 9]))
