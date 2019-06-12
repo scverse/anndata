@@ -220,103 +220,104 @@ def _write_in_zarr_chunks(za, key, value):
             else:
                 za[s0:e0, s1:e1] = value[s0:e0, s1:e1]
 
-# from .h5ad import write_h5ad as _write_h5ad
-def _write_h5ad(filename: PathLike, adata: AnnData, force_dense: bool = False, **kwargs):
-    filename = Path(filename)
-    if filename.suffix not in ('.h5', '.h5ad'):
-        raise ValueError("Filename needs to end with '.h5ad'.")
-    if adata.isbacked:
-        # close so that we can reopen below
-        adata.file.close()
-    # create directory if it doesn't exist
-    dirname = filename.parent
-    if not dirname.is_dir():
-        dirname.mkdir(parents=True, exist_ok=True)
-    d = adata._to_dict_fixed_width_arrays()
-    # d = {
-        # "X": adata.X
-    # }
-    # we're writing to a different location than the backing file
-    # - load the matrix into the memory...
-    if adata.isbacked and filename != adata.filename:
-        d['X'] = adata.X[:]
-    # need to use 'a' if backed, otherwise we loose the backed objects
-    with h5py.File(filename, 'a' if adata.isbacked else 'w', force_dense=force_dense) as f:
-        for key, value in d.items():
-            _write_key_value_to_h5(f, key, value, **kwargs)
-    if adata.isbacked:
-        adata.file.open(filename, 'r+')
+from .h5ad import write_h5ad as _write_h5ad
+# def _write_h5ad(filename: PathLike, adata: AnnData, force_dense: bool = False, **kwargs):
+#     filename = Path(filename)
+#     if filename.suffix not in ('.h5', '.h5ad'):
+#         raise ValueError("Filename needs to end with '.h5ad'.")
+#     if adata.isbacked:
+#         # close so that we can reopen below
+#         adata.file.close()
+#     # create directory if it doesn't exist
+#     dirname = filename.parent
+#     if not dirname.is_dir():
+#         dirname.mkdir(parents=True, exist_ok=True)
+#     d = adata._to_dict_fixed_width_arrays()
+#     # d = {
+#         # "X": adata.X
+#     # }
+#     # we're writing to a different location than the backing file
+#     # - load the matrix into the memory...
+#     if adata.isbacked and filename != adata.filename:
+#         d['X'] = adata.X[:]
+#     # need to use 'a' if backed, otherwise we loose the backed objects
+#     with h5py.File(filename, 'a' if adata.isbacked else 'w', force_dense=force_dense) as f:
+#         for key, value in d.items():
+#             _write_key_value_to_h5(f, key, value, **kwargs)
+#     if adata.isbacked:
+#         adata.file.open(filename, 'r+')
 
 
-def _write_key_value_to_h5(f, key, value, **kwargs):
-    if isinstance(value, Mapping):
-        for k, v in value.items():
-            if not isinstance(k, str):
-                warnings.warn(
-                    'dict key {} transformed to str upon writing to h5,'
-                    'using string keys is recommended'
-                    .format(k)
-                )
-            _write_key_value_to_h5(f, key + '/' + str(k), v, **kwargs)
-        return
+# def _write_key_value_to_h5(f, key, value, **kwargs):
+#     print(key)
+#     if isinstance(value, Mapping):
+#         for k, v in value.items():
+#             if not isinstance(k, str):
+#                 warnings.warn(
+#                     'dict key {} transformed to str upon writing to h5,'
+#                     'using string keys is recommended'
+#                     .format(k)
+#                 )
+#             _write_key_value_to_h5(f, key + '/' + str(k), v, **kwargs)
+#         return
 
-    def preprocess_writing(value):
-        if value is None or issparse(value):
-            return value
-        else:
-            value = np.array(value)  # make sure value is an array
-            if value.ndim == 0: value = np.array([value])  # hm, why that?
-        # make sure string format is chosen correctly
-        if value.dtype.kind == 'U': value = value.astype(h5py.special_dtype(vlen=str))
-        return value
+#     def preprocess_writing(value):
+#         if value is None or issparse(value):
+#             return value
+#         else:
+#             value = np.array(value)  # make sure value is an array
+#             if value.ndim == 0: value = np.array([value])  # hm, why that?
+#         # make sure string format is chosen correctly
+#         if value.dtype.kind == 'U': value = value.astype(h5py.special_dtype(vlen=str))
+#         return value
 
-    value = preprocess_writing(value)
+#     value = preprocess_writing(value)
 
-    # FIXME: for some reason, we need the following for writing string arrays
-    if key in f.keys() and value is not None: del f[key]
+#     # FIXME: for some reason, we need the following for writing string arrays
+#     if key in f.keys() and value is not None: del f[key]
 
-    # ignore arrays with empty dtypes
-    if value is None or not value.dtype.descr:
-        raise Exception(f"{key} has val none")
-        return
-    try:
-        if key in set(f.keys()):
-            is_valid_group = (
-                isinstance(f[key], h5py.Group)
-                and f[key].shape == value.shape
-                and f[key].dtype == value.dtype
-                and not isinstance(f[key], h5py.SparseDataset)
-            )
-            if not is_valid_group and not issparse(value):
-                raise Exception()
-                f[key][()] = value
-                return
-            else:
-                del f[key]
-        f.create_dataset(key, data=value, **kwargs)
-    except TypeError:
-        try:
-            if value.dtype.names is None:
-                dt = h5py.special_dtype(vlen=str)
-                f.create_dataset(key, data=value, dtype=dt, **kwargs)
-            else:  # try writing composite datatypes with byte strings
-                new_dtype = [
-                    (dt[0], 'S{}'.format(int(dt[1][2:])*4))
-                    for dt in value.dtype.descr
-                ]
-                if key in set(f.keys()):
-                    if (
-                        f[key].shape == value.shape
-                        and f[key].dtype == value.dtype
-                    ):
-                        f[key][()] = value.astype(new_dtype)
-                        return
-                    else:
-                        del f[key]
-                f.create_dataset(
-                    key, data=value.astype(new_dtype), **kwargs)
-        except Exception as e:
-            warnings.warn(
-                'Could not save field with key = {!r} to hdf5 file: {}'
-                .format(key, e)
-            )
+#     # ignore arrays with empty dtypes
+#     if value is None or not value.dtype.descr:
+#         raise Exception(f"{key} has val none")
+#         return
+#     try:
+#         if key in set(f.keys()):
+#             is_valid_group = (
+#                 isinstance(f[key], h5py.Group)
+#                 and f[key].shape == value.shape
+#                 and f[key].dtype == value.dtype
+#                 and not isinstance(f[key], h5py.SparseDataset)
+#             )
+#             if not is_valid_group and not issparse(value):
+#                 raise Exception()
+#                 f[key][()] = value
+#                 return
+#             else:
+#                 del f[key]
+#         f.create_dataset(key, data=value, **kwargs)
+#     except TypeError:
+#         try:
+#             if value.dtype.names is None:
+#                 dt = h5py.special_dtype(vlen=str)
+#                 f.create_dataset(key, data=value, dtype=dt, **kwargs)
+#             else:  # try writing composite datatypes with byte strings
+#                 new_dtype = [
+#                     (dt[0], 'S{}'.format(int(dt[1][2:])*4))
+#                     for dt in value.dtype.descr
+#                 ]
+#                 if key in set(f.keys()):
+#                     if (
+#                         f[key].shape == value.shape
+#                         and f[key].dtype == value.dtype
+#                     ):
+#                         f[key][()] = value.astype(new_dtype)
+#                         return
+#                     else:
+#                         del f[key]
+#                 f.create_dataset(
+#                     key, data=value.astype(new_dtype), **kwargs)
+#         except Exception as e:
+#             warnings.warn(
+#                 'Could not save field with key = {!r} to hdf5 file: {}'
+#                 .format(key, e)
+#             )

@@ -2233,37 +2233,43 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         var = d_true_keys['var']
         varm = d_true_keys['varm']
         layers = d_true_keys['layers']
+        raw = {}
+        for k in ["raw.X", "raw.var", "raw.varm"]:
+            if k in ddata:
+                raw[k.replace("raw.", "")] = ddata[k]
+        if len(raw) == 0:
+            raw = None
 
-        raw = None
-        if 'raw.X' in ddata:
-            raw = {}
-            raw['X'] = ddata['raw.X']
-            del ddata['raw.X']
-            # get the dataframe
-            raw['var'] = pd.DataFrame.from_records(
-                ddata['raw.var'], index='index')
-            del ddata['raw.var']
-            raw['var'].index = raw['var'].index.astype('U')
-            # transform to unicode string
-            for c in raw['var'].columns:
-                if is_string_dtype(raw['var'][c]):
-                    raw['var'][c] = pd.Index(raw['var'][c]).astype('U').values
-            # these are the category fields
-            if 'raw.cat' in ddata:  # old h5ad didn't have that field
-                for k, v in ddata['raw.cat'].items():
-                    if k.endswith('_categories'):
-                        k_stripped = k.replace('_categories', '')
-                        if isinstance(v, (str, int)):  # fix categories with a single category
-                            v = [v]
-                        raw['var'][k_stripped] = pd.Categorical.from_codes(
-                            codes=raw['var'][k_stripped].values,
-                            categories=v)
-                del ddata['raw.cat']
-        if 'raw.varm' in ddata:
-            raw['varm'] = ddata['raw.varm']
-            del ddata['raw.varm']
-        elif raw is not None:
-            raw['varm'] = None
+        # raw = None
+        # if 'raw.X' in ddata:
+        #     raw = {}
+        #     raw['X'] = ddata['raw.X']
+        #     del ddata['raw.X']
+        #     # get the dataframe
+        #     raw['var'] = pd.DataFrame.from_records(
+        #         ddata['raw.var'], index='index')
+        #     del ddata['raw.var']
+        #     raw['var'].index = raw['var'].index.astype('U')
+        #     # transform to unicode string
+        #     for c in raw['var'].columns:
+        #         if is_string_dtype(raw['var'][c]):
+        #             raw['var'][c] = pd.Index(raw['var'][c]).astype('U').values
+        #     # these are the category fields
+        #     if 'raw.cat' in ddata:  # old h5ad didn't have that field
+        #         for k, v in ddata['raw.cat'].items():
+        #             if k.endswith('_categories'):
+        #                 k_stripped = k.replace('_categories', '')
+        #                 if isinstance(v, (str, int)):  # fix categories with a single category
+        #                     v = [v]
+        #                 raw['var'][k_stripped] = pd.Categorical.from_codes(
+        #                     codes=raw['var'][k_stripped].values,
+        #                     categories=v)
+        #         del ddata['raw.cat']
+        # if 'raw.varm' in ddata:
+        #     raw['varm'] = ddata['raw.varm']
+        #     del ddata['raw.varm']
+        # elif raw is not None:
+        #     raw['varm'] = None
 
         # the remaining fields are the unstructured annotation
         uns = (

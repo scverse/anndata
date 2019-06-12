@@ -520,6 +520,7 @@ def _read_args_from_h5ad(
         del d["uns"][k]
     return AnnData._args_from_dict(d)
 
+from . import h5ad
 
 def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
     if key_write is None: key_write = key
@@ -528,16 +529,17 @@ def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
         for k in f[key].keys():
             _read_key_value_from_h5(f, d[key_write], key + '/' + k, k, chunk_size)
         return
-
     ds = f[key]
 
     if isinstance(ds, h5py.Dataset):
         if 'sparse_format' in ds.attrs:
             value = h5py._load_h5_dataset_as_sparse(ds, chunk_size)
         # Explicitly load obs, var this way for backwards compat
-        elif key in ["obs", "var"] \
-             or ds.attrs.get("source_format", None) == "dataframe":
-            value = _read_h5_dataframe(ds)
+        elif key in ["obs", "var", "raw.var"] or \
+            ds.attrs.get("source_type", None) == "dataframe":
+            value = h5ad.read_dataframe(ds)
+            d[key_write] = value
+            return
         elif ds.shape != ():
             value = np.empty(ds.shape, ds.dtype)
             if 0 not in ds.shape:
@@ -571,17 +573,6 @@ def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
     d[key_write] = value
     return
 
-def _read_h5_dataframe(dataset):
-    df = pd.DataFrame(dataset[:])
-    df.set_index(df.columns[0], inplace=True)
-    dt = dataset.dtype
-    for col in dt.names[1:]:
-        check = _h5py.check_dtype(enum=dt[col])
-        if not isinstance(check, dict):
-            continue
-        mapper = {v: k for k, v in check.items()}
-        df[col] = pd.Categorical(df[col].map(mapper), ordered=False)
-    return df
 
 def load_sparse_csr(d, key='X'):
     from scipy.sparse.csr import csr_matrix

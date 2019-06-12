@@ -91,9 +91,9 @@ def test_read_write_maintain_obsmvarm_dtypes(backing_h5ad):
     assert type(orig.obsm["sparse"]) is type(curr.obsm["sparse"])
     assert np.all((orig.obsm["sparse"] == curr.obsm["sparse"]).toarray())
     assert np.all((orig.varm["sparse"] == curr.varm["sparse"]).toarray())
-    # assert type(orig.obsm["df"]) is type(curr.obsm["df"])
-    # assert np.all(orig.obsm["df"] == curr.obsm["df"])
-    # assert np.all(orig.varm["df"] == curr.varm["df"])
+    assert type(orig.obsm["df"]) is type(curr.obsm["df"])
+    assert np.all(orig.obsm["df"] == curr.obsm["df"])
+    assert np.all(orig.varm["df"] == curr.varm["df"])
 
 def test_maintain_layers(backing_h5ad):
     M, N = 100, 101
@@ -105,8 +105,8 @@ def test_maintain_layers(backing_h5ad):
     assert np.all(orig.layers["array"] == curr.layers["array"])
     assert type(orig.layers["sparse"]) is type(curr.layers["sparse"])
     assert np.all((orig.layers["sparse"] == curr.layers["sparse"]).toarray())
-    # assert type(orig.layers["df"]) is type(curr.layers["df"])
-    # assert np.all(orig.layers["df"] == curr.layers["df"])
+    assert type(orig.layers["df"]) is type(curr.layers["df"])
+    assert np.all(orig.layers["df"] == curr.layers["df"])
 
 
 def test_readwrite_sparse_as_dense(backing_h5ad):

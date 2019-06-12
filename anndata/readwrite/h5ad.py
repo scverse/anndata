@@ -9,7 +9,8 @@ from pandas.api.types import (
 )
 from scipy import sparse
 from .. import h5py
-from .. import AnnData
+# from .. import AnnData
+from ..core.anndata import AnnData, Raw
 from collections.abc import Mapping
 from multipledispatch import dispatch
 
@@ -78,6 +79,10 @@ def _correct_compound_dtype(value):
 
 
 def write_h5ad(filepath, adata, force_dense=False, dataset_kwargs={}, **kwargs):
+    fields = ["X", "obs", "var", "obsm", "varm", "layers", "uns"]
+    adata.strings_to_categoricals()
+    if adata.raw is not None:
+        adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = dataset_kwargs.copy()
     dataset_kwargs.update(kwargs)
     filepath = Path(filepath)
@@ -88,15 +93,7 @@ def write_h5ad(filepath, adata, force_dense=False, dataset_kwargs={}, **kwargs):
         X = adata.X[:]
     else:
         X = adata._X
-    fields = ["X", "obs", "var", "obsm", "varm", "layers", "uns"]
     with h5py.File(filepath, mode, force_dense=force_dense) as f:
-        # for k in fields:
-        #     if k in f:
-        #         del f[k]
-        # if adata.isbacked and filepath != adata.filename:
-        #     write_attribute(f, "X", adata.X[:])
-        # else:
-        #     write_attribute(f, "X", adata.X)
         write_attribute(f, "X", X, dataset_kwargs)
         write_attribute(f, "obs", adata.obs, dataset_kwargs)
         write_attribute(f, "var", adata.var, dataset_kwargs)
@@ -104,6 +101,7 @@ def write_h5ad(filepath, adata, force_dense=False, dataset_kwargs={}, **kwargs):
         write_attribute(f, "varm", adata.varm, dataset_kwargs)
         write_attribute(f, "layers", adata.layers, dataset_kwargs)
         write_attribute(f, "uns", adata.uns, dataset_kwargs)
+        write_attribute(f, "raw", adata.raw, dataset_kwargs)
     if adata.isbacked:
         adata.file.open(filepath, 'r+')
 
@@ -112,9 +110,15 @@ def write_h5ad(filepath, adata, force_dense=False, dataset_kwargs={}, **kwargs):
 def write_attribute(f, key, value):
     write_attribute(f, key, value, dict())
 
+@dispatch(h5py.File, str, Raw, dict)
+def write_attribute(f, key, value, dataset_kwargs={}):
+    write_attribute(f, 'raw.X', value.X, dataset_kwargs)
+    write_attribute(f, 'raw.var', value.var, dataset_kwargs)
+    write_attribute(f, 'raw.varm', value.varm, dataset_kwargs)
+
 @dispatch(h5py.File, str, object, dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f:
+    if key in f.keys():
         del f[key]
     # If it's not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
@@ -125,6 +129,8 @@ def write_attribute(f, key, value, dataset_kwargs={}):
 
 @dispatch(h5py.File, str, h5py.Dataset, dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
+    if key in f.keys():
+        del f[key]
     f.create_dataset(key, value, **dataset_kwargs)
 
 @dispatch(h5py.File, str, list, dict)
@@ -137,23 +143,33 @@ def write_attribute(f, key, value, dataset_kwargs={}):
 
 @dispatch(h5py.File, str, str, dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
+    if key in f.keys():
+        del f[key]
     new_val = np.string_(value)
     f.create_dataset(key, new_val, **dataset_kwargs)
 
 @dispatch(h5py.File, str, (float, np.floating), dict)
 def write_attribute(f, key, value, dataset_kwargs):
+    if key in f.keys():
+        del f[key]
     f.create_dataset(key, value, **dataset_kwargs)
 
 @dispatch(h5py.File, str, (int, np.integer), dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
+    if key in f.keys():
+        del f[key]
     f.create_dataset(key, value, **dataset_kwargs)
 
 @dispatch(h5py.File, str, (bool, np.bool_), dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
+    if key in f.keys():
+        del f[key]
     f.create_dataset(key, value, **dataset_kwargs)
 
 @dispatch(h5py.File, str, np.ndarray, dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
+    if key in f.keys() and key != "X":
+        del f[key]
     # Convert unicode to fixed length strings
     if value.dtype.kind == 'U':
         value = value.astype(np.string_)
@@ -165,10 +181,14 @@ def write_attribute(f, key, value, dataset_kwargs={}):
 
 @dispatch(h5py.File, str, sparse.spmatrix, dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
+    if key in f.keys() and key != "X":
+        del f[key]
     f.create_dataset(key, data=value, **dataset_kwargs)
 
 @dispatch(h5py.File, str, pd.DataFrame, dict)
 def write_attribute(f, key, value, dataset_kwargs={}):
+    if key in f.keys():
+        del f[key]
     recs = _df_to_hdf5_recarray(value)
     f.create_dataset(key, data=recs, **dataset_kwargs)
     f[key].attrs["source_type"] = "dataframe"
@@ -213,7 +233,7 @@ def read_group(group: h5py.Group):
 def read_dataset(dataset: h5py.Dataset):
     if dataset.attr.get("source_type", None) == "dataframe":
         return read_dataframe(dataset)
-    
+
     if "source_type" in dataset.attr:
         st = dataset.attr["source_type"]
         if "source_type" == pd.DataFrame():
