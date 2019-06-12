@@ -414,8 +414,9 @@ def _read_key_value_from_zarr(f, d, key, key_write=None):
     d[key_write] = value
     return
 
+from .h5ad import read_h5ad
 
-def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
+def _read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
     """Read ``.h5ad``-formatted hdf5 file.
 
     Parameters

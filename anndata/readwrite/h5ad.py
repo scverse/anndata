@@ -198,20 +198,30 @@ def write_attribute(f, key, value, dataset_kwargs={}):
     for sub_key, sub_value in value.items():
         write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs)
 
-def read_h5ad(filename):
+# TODO: backed and chunk_size
+def read_h5ad(filename, backed=None, chunk_size=None):
     d = {}
+    raw = {}
     with h5py.File(filename, "r") as f:
-        d["X"] = read_attribute(f["X"])
+        d["X"] = read_attribute(f.get("X", None))
         # Backwards compat for objects where dataframes weren't labelled
-        d["obs"] = read_dataframe(f["obs"])
-        d["var"] = read_dataframe(f["var"])
-        d["obsm"] = read_attribute(f["obsm"])
-        d["obsm"] = read_attribute(f["varm"])
-        d["uns"] = read_attribute(f["uns"])
-        d["layers"] = read_attribute(f["layers"])
+        d["obs"] = read_dataframe(f.get("obs", None))
+        d["var"] = read_dataframe(f.get("var", None))
+        d["obsm"] = read_attribute(f.get("obsm", None))
+        d["varm"] = read_attribute(f.get("varm", None))
+        d["uns"] = read_attribute(f.get("uns", None))
+        d["layers"] = read_attribute(f.get("layers", None))
+        for k in ["raw.X", "raw.var", "raw.varm"]:
+            if k in f:
+                raw[k.replace("raw.", "")] = read_attribute(f[k])
+    if len(raw) > 0:
+        d["raw"] = raw
+    if d.get("X", None) is not None:
+        d["dtype"] = d["X"].dtype
+    return AnnData(**d)
 
 def read_dataframe(dataset):
-    df = pd.DataFrame(dataset[:])
+    df = pd.DataFrame(dataset[()])
     df.set_index(df.columns[0], inplace=True)
     dt = dataset.dtype
     for col in dt.names[1:]:
@@ -224,22 +234,18 @@ def read_dataframe(dataset):
 
 def read_group(group: h5py.Group):
     d = dict()
-    for sub_key, sub_value in value.items():
-        d[sub_key] = read_attribute(sub_key, sub_value)
+    for sub_key, sub_value in group.items():
+        d[sub_key] = read_attribute(sub_value)
     return d
 
-# def read_sparse_dataset(dataset: h5py.SparseDataset)
-
 def read_dataset(dataset: h5py.Dataset):
-    if dataset.attr.get("source_type", None) == "dataframe":
+    if dataset.attrs.get("source_type", None) == "dataframe":
         return read_dataframe(dataset)
-
-    if "source_type" in dataset.attr:
-        st = dataset.attr["source_type"]
-        if "source_type" == pd.DataFrame():
-            return read_dataframe(dataset)
-    if value.ndim == 1 and len(value) == 1 and value.dtype.names is None:
-        value = value[0]
+    else:
+        value = dataset[()]
+        if len(value) == 1:
+            value = value[0]
+        return value
 
 @dispatch(h5py.Group)
 def read_attribute(value):
@@ -250,42 +256,10 @@ def read_attribute(value):
     return read_dataset(value)
 
 
+@dispatch(type(None))
+def read_attribute(value):
+    return None
 
-
-# class FailedMatch():
-#     pass
-# class Pattern(object):
-#     """Checks if an object matches the criteria
-
-#     Matches can be specified by 3 criteria
-
-#     * type: object must be instance of this type
-#     * attrs: object must have values equal to these attrs
-#     * func: these functions must return true when called on the object
-#     """
-#     def __init__(self, *, type, attrs: dict, funcs: list):
-#         self.type = type
-#         self.attr = attr
-#         self.funcs = funcs
-    
-#     def match(self, object):
-#         if not isinstance(object, self.type):
-#             return False
-#         for attr, value in self.attrs.items():
-#             obj_val = getattr(object, attr, FailedMatch)
-#             if obj_val is FailedMatch:
-#                 return False
-#             if obj_val != value:
-#                 return False
-#         for func in self.funcs:
-#             if func(object) == False:
-#                 return False
-#         return True
-
-# HdfDataFrame = Pattern(
-#     type=h5py.Datset,
-#     funcs=[
-#         lambda x: x.attrs["source_type"] == pd.DataFrame),
-#     ]
-# )
-
+@dispatch(h5py.SparseDataset)
+def read_attribute(value):
+    return value.value
