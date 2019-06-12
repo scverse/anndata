@@ -1,6 +1,7 @@
 # TODO:
 # - think about making all of the below subclasses
 # - think about supporting the COO format
+from collections.abc import Mapping
 from typing import Optional, Union, KeysView, NamedTuple
 
 import h5py
@@ -73,13 +74,20 @@ def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
     return data
 
 
-class Group:
+class Group(Mapping):
     """Like :class:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
     """
 
     def __init__(self, h5py_group, force_dense=False):
         self.h5py_group = h5py_group
         self.force_dense = force_dense
+
+    def __iter__(self):
+        for k in self.keys():
+            yield k
+
+    def __len__(self):
+        return len(self.h5py_group)
 
     def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, 'SparseDataset']:
         h5py_item = self.h5py_group[key]
