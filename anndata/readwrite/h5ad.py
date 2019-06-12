@@ -9,10 +9,8 @@ from pandas.api.types import (
 )
 from scipy import sparse
 from .. import h5py
-# from .. import AnnData
 from ..core.anndata import AnnData, Raw
 from collections.abc import Mapping
-from multipledispatch import dispatch
 
 
 def _df_to_hdf5_recarray(df, var_len_str=True):
@@ -105,21 +103,27 @@ def write_h5ad(filepath, adata, force_dense=False, dataset_kwargs={}, **kwargs):
     if adata.isbacked:
         adata.file.open(filepath, 'r+')
 
-# To allow the optional dataset_kwargs
-@dispatch(h5py.File, str, object)
-def write_attribute(f, key, value):
-    write_attribute(f, key, value, dict())
 
-@dispatch(h5py.File, str, Raw, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
+from functools import _find_impl, singledispatch
+
+
+def _write_method(cls):
+    return _find_impl(cls, H5AD_WRITE_REGISTRY)
+
+
+def write_attribute(f, key, value, dataset_kwargs):
+    if key in f:
+        del f[key]
+    _write_method(type(value))(f, key, value, dataset_kwargs)
+
+
+def write_raw(f, key, value, dataset_kwargs={}):
     write_attribute(f, 'raw.X', value.X, dataset_kwargs)
     write_attribute(f, 'raw.var', value.var, dataset_kwargs)
     write_attribute(f, 'raw.varm', value.varm, dataset_kwargs)
 
-@dispatch(h5py.File, str, object, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys():
-        del f[key]
+
+def write_not_implemented(f, key, value, dataset_kwargs={}):
     # If it's not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
     raise NotImplementedError(
@@ -127,49 +131,24 @@ def write_attribute(f, key, value, dataset_kwargs={}):
         f" has not been implemented yet."
     )
 
-@dispatch(h5py.File, str, h5py.Dataset, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys():
-        del f[key]
+
+def write_basic(f, key, value, dataset_kwargs={}):
     f.create_dataset(key, value, **dataset_kwargs)
 
-@dispatch(h5py.File, str, list, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    write_attribute(f, key, np.array(value), dataset_kwargs)
 
-@dispatch(h5py.File, str, type(None), dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
+def write_list(f, key, value, dataset_kwargs={}):
+    write_array(f, key, np.array(value), dataset_kwargs)
+
+
+def write_none(f, key, value, dataset_kwargs={}):
     pass
 
-@dispatch(h5py.File, str, str, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys():
-        del f[key]
-    new_val = np.string_(value)
-    f.create_dataset(key, new_val, **dataset_kwargs)
 
-@dispatch(h5py.File, str, (float, np.floating), dict)
-def write_attribute(f, key, value, dataset_kwargs):
-    if key in f.keys():
-        del f[key]
-    f.create_dataset(key, value, **dataset_kwargs)
+def write_str(f, key, value, dataset_kwargs={}):
+    f.create_dataset(key, np.string_(value), **dataset_kwargs)
 
-@dispatch(h5py.File, str, (int, np.integer), dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys():
-        del f[key]
-    f.create_dataset(key, value, **dataset_kwargs)
 
-@dispatch(h5py.File, str, (bool, np.bool_), dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys():
-        del f[key]
-    f.create_dataset(key, value, **dataset_kwargs)
-
-@dispatch(h5py.File, str, np.ndarray, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys() and key != "X":
-        del f[key]
+def write_array(f, key, value, dataset_kwargs={}):
     # Convert unicode to fixed length strings
     if value.dtype.kind == 'U':
         value = value.astype(np.string_)
@@ -179,24 +158,126 @@ def write_attribute(f, key, value, dataset_kwargs={}):
     #     return
     f.create_dataset(key, data=value, **dataset_kwargs)
 
-@dispatch(h5py.File, str, sparse.spmatrix, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys() and key != "X":
-        del f[key]
-    f.create_dataset(key, data=value, **dataset_kwargs)
 
-@dispatch(h5py.File, str, pd.DataFrame, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
-    if key in f.keys():
-        del f[key]
-    recs = _df_to_hdf5_recarray(value)
-    f.create_dataset(key, data=recs, **dataset_kwargs)
+def write_dataframe(f, key, value, dataset_kwargs={}):
+    f.create_dataset(key, data=_df_to_hdf5_recarray(value), **dataset_kwargs)
     f[key].attrs["source_type"] = "dataframe"
 
-@dispatch(h5py.File, str, Mapping, dict)
-def write_attribute(f, key, value, dataset_kwargs={}):
+
+def write_mapping(f, key, value, dataset_kwargs={}):
     for sub_key, sub_value in value.items():
         write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs)
+
+
+H5AD_WRITE_REGISTRY = {
+    Raw: write_raw,
+    object: write_not_implemented,
+    h5py.Dataset: write_basic,
+    list: write_list,
+    type(None): write_none,
+    str: write_str,
+    (float, np.floating): write_basic,
+    (int, np.integer): write_basic,
+    (bool, np.bool_): write_basic,
+    np.ndarray: write_array,
+    sparse.spmatrix: write_basic,
+    pd.DataFrame: write_dataframe,
+    Mapping: write_mapping
+}
+
+
+# To allow the optional dataset_kwargs
+# @dispatch(h5py.File, str, object)
+# def write_attribute(f, key, value):
+#     write_attribute(f, key, value, dict())
+
+# @dispatch(h5py.File, str, Raw, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     write_attribute(f, 'raw.X', value.X, dataset_kwargs)
+#     write_attribute(f, 'raw.var', value.var, dataset_kwargs)
+#     write_attribute(f, 'raw.varm', value.varm, dataset_kwargs)
+
+# @dispatch(h5py.File, str, object, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys():
+#         del f[key]
+#     # If it's not an array, try and make it an array. If that fails, pickle it.
+#     # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
+#     raise NotImplementedError(
+#         f"Failed to write value for {key}, since a writer for type {type(value)}"
+#         f" has not been implemented yet."
+#     )
+
+# @dispatch(h5py.File, str, h5py.Dataset, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys():
+#         del f[key]
+#     f.create_dataset(key, value, **dataset_kwargs)
+
+# @dispatch(h5py.File, str, list, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     write_attribute(f, key, np.array(value), dataset_kwargs)
+
+# @dispatch(h5py.File, str, type(None), dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     pass
+
+# @dispatch(h5py.File, str, str, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys():
+#         del f[key]
+#     new_val = np.string_(value)
+#     f.create_dataset(key, new_val, **dataset_kwargs)
+
+# @dispatch(h5py.File, str, (float, np.floating), dict)
+# def write_attribute(f, key, value, dataset_kwargs):
+#     if key in f.keys():
+#         del f[key]
+#     f.create_dataset(key, value, **dataset_kwargs)
+
+# @dispatch(h5py.File, str, (int, np.integer), dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys():
+#         del f[key]
+#     f.create_dataset(key, value, **dataset_kwargs)
+
+# @dispatch(h5py.File, str, (bool, np.bool_), dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys():
+#         del f[key]
+#     f.create_dataset(key, value, **dataset_kwargs)
+
+# @dispatch(h5py.File, str, np.ndarray, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys() and key != "X":
+#         del f[key]
+#     # Convert unicode to fixed length strings
+#     if value.dtype.kind == 'U':
+#         value = value.astype(np.string_)
+#     elif value.dtype.names is not None:
+#         value = _correct_compound_dtype(value)
+#     # elif value.dtype.name is None:
+#     #     return
+#     f.create_dataset(key, data=value, **dataset_kwargs)
+
+# @dispatch(h5py.File, str, sparse.spmatrix, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys() and key != "X":
+#         del f[key]
+#     f.create_dataset(key, data=value, **dataset_kwargs)
+
+# @dispatch(h5py.File, str, pd.DataFrame, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     if key in f.keys():
+#         del f[key]
+#     recs = _df_to_hdf5_recarray(value)
+#     f.create_dataset(key, data=recs, **dataset_kwargs)
+#     f[key].attrs["source_type"] = "dataframe"
+
+# @dispatch(h5py.File, str, Mapping, dict)
+# def write_attribute(f, key, value, dataset_kwargs={}):
+#     for sub_key, sub_value in value.items():
+#         write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs)
 
 # TODO: backed and chunk_size
 def read_h5ad(filename, backed=None, chunk_size=None):
@@ -218,6 +299,26 @@ def read_h5ad(filename, backed=None, chunk_size=None):
         d["raw"] = raw
     if d.get("X", None) is not None:
         d["dtype"] = d["X"].dtype
+    # Backwards compat
+    k_to_delete = [k for k, v in d.items() if v is None]
+    for k in k_to_delete:
+        del d[k]
+    k_to_delete = []
+    for k, v in d.get("uns", {}).items():
+        if k.endswith('_categories'):
+            k_stripped = k.replace('_categories', '')
+            if isinstance(v, (str, int)):  # fix categories with a single category
+                v = [v]
+            for ann in ['obs', 'var']:
+                print(k_stripped)
+                if k_stripped in d[ann]:
+                    d[ann][k_stripped] = pd.Categorical.from_codes(
+                        codes=d[ann][k_stripped].values,
+                        categories=v,
+                    )
+                    k_to_delete.append(k)
+    for k in k_to_delete:
+        del d["uns"][k]
     return AnnData(**d)
 
 def read_dataframe(dataset):
@@ -247,19 +348,43 @@ def read_dataset(dataset: h5py.Dataset):
             value = value[0]
         return value
 
-@dispatch(h5py.Group)
+@singledispatch
 def read_attribute(value):
+    raise NotImplementedError()
+
+@read_attribute.register(h5py.Group)
+def read_attribute_group(value):
     return read_group(value)
 
-@dispatch(h5py.Dataset)
-def read_attribute(value):
+@read_attribute.register(h5py.Dataset)
+def read_attribute_dataset(value):
     return read_dataset(value)
 
-
-@dispatch(type(None))
-def read_attribute(value):
+@read_attribute.register(type(None))
+def read_attribute_none(value):
     return None
 
-@dispatch(h5py.SparseDataset)
-def read_attribute(value):
+@read_attribute.register(h5py.SparseDataset)
+def read_attribute_sparse_dataset(value):
     return value.value
+
+# from abc import ABC, abstractmethod
+
+# class H5ADElement(ABC):
+#     @abstractmethod
+#     def match(self, element) -> bool:
+#         """Check whether element is a match for these methods"""
+
+
+# class H5ADReader:
+#     readers
+#     def __init__(self, filename):
+#         self.filename = filename
+
+#     def read(self, key):
+#         if not self.file.isopen():
+#             self.file = h5py.File(self.filename, "r")
+#         with h5py.File(self.filename, "r") as f:
+#             val = f[key]
+
+#     def read_partial
