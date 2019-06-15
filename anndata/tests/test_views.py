@@ -5,7 +5,12 @@ import pytest
 
 import anndata as ad
 
-from anndata.tests.helpers import gen_adata, subset_func, slice_subset
+from anndata.tests.helpers import (
+    gen_adata,
+    subset_func,
+    slice_subset,
+    single_subset
+)
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -290,6 +295,8 @@ def test_layers_view():
 
 
 def test_view_of_view(adata, subset_func):
-    v1 = adata[:, subset_func(adata.var_names)]
-    v2 = subset[:, subset_func(subset.var_names)]
+    s1 = subset_func(adata.var_names)
+    v1 = adata[:, s1]
+    s2 = subset_func(v1.var_names)
+    v2 = v1[:, s2]
     assert v2._adata_ref is adata
