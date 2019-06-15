@@ -128,6 +128,13 @@ def array_subset(index):
         replace=False
     )
 
+def array_int_subset(index):
+    return np.random.choice(
+        np.arange(len(index)),
+        size=np.random.randint(2, len(index), ()),
+        replace=False
+    )
+
 def slice_subset(index):
     points = np.random.choice(np.arange(len(index)), size=2, replace=False)
     return slice(*sorted(points))
@@ -136,6 +143,6 @@ def single_subset(index):
     return index[np.random.randint(0, len(index), size=())]
 
 
-@pytest.fixture(params=[array_subset, slice_subset, single_subset])
+@pytest.fixture(params=[array_subset, slice_subset, single_subset, array_int_subset])
 def subset_func(request):
     return request.param

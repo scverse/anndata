@@ -46,7 +46,7 @@ from .alignedmapping import (
     LayersBase, Layers
 )
 from .. import h5py
-from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameView
+from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameView, _resolve_idxs
 
 from .. import utils
 from ..utils import Index1D, Index, get_n_items_idx, convert_to_dict, unpack_index
@@ -575,6 +575,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 'Currently, you cannot index repeatedly into a backed AnnData, '
                 'that is, you cannot make a view of a view.')
         self._isview = True
+        if adata_ref.isview:
+            print(adata_ref.X.shape)
+            prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
+            adata_ref = adata_ref._adata_ref
+            oidx, vidx = _resolve_idxs(
+                (prev_oidx, prev_vidx),
+                (oidx, vidx),
+                adata_ref
+            )
+            print("o", oidx)
+            print("v", vidx)
+            
         self._adata_ref = adata_ref
         self._oidx = oidx
         self._vidx = vidx
@@ -638,7 +650,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self._adata_ref.X is None:
             self._X = None
             return
-        X = self._adata_ref._X[self._oidx, self._vidx]
+        X = self._adata_ref._X[self._oidx, self._vidx]  # This is being weird
         if isinstance(X, sparse.csr_matrix):
             self._X = SparseCSRView(X, view_args=(self, 'X'))
         elif isinstance(X, sparse.csc_matrix):

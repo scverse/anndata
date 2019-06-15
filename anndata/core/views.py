@@ -4,6 +4,7 @@ from typing import Any, KeysView, Optional, Sequence, Tuple, NamedTuple
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from ..logging import anndata_logger as logger
@@ -116,3 +117,48 @@ def asview_csc(mtx, view_args):
 @asview.register(dict)
 def asview_dict(d, view_args):
     return DictView(d, view_args=view_args)
+
+def _resolve_idxs(old, new, adata):
+    print("old", old)
+    print("new", new)
+    t = tuple(
+        _resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1)
+    )
+    print(t)
+    return t
+
+@singledispatch
+def _resolve_idx(old, new, l):
+    return old[new]
+
+@_resolve_idx.register(np.ndarray)
+def _resolve_idx_ndarray(old, new, l):
+    if is_bool_dtype(old) and is_bool_dtype(new):
+        return old & new
+    elif is_bool_dtype(old):
+        old = np.where(old)[0]
+    elif is_bool_dtype(new):
+        new = np.where(new)[0]
+    return old[new]
+
+@_resolve_idx.register(np.integer)
+@_resolve_idx.register(int)
+def _resolve_idx_scalar(old, new, l):
+    return np.array([old])[new]
+
+@_resolve_idx.register(slice)
+def _resolve_idx_slice(old, new, l):
+    if isinstance(new, slice):
+        return _resolve_idx_slice_slice(old, new, l)
+    else:
+        return np.arange(*old.indices(l))[new]
+
+def _resolve_idx_slice_slice(old, new, l):
+    r = range(*old.indices(l))[new]
+    # Convert back to slice
+    start, stop, step = r.start, r.stop, r.step
+    if len(r) == 0:
+        stop = start
+    elif stop < 0:
+        stop = None
+    return slice(start, stop, step)
