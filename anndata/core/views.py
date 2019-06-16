@@ -119,12 +119,9 @@ def asview_dict(d, view_args):
     return DictView(d, view_args=view_args)
 
 def _resolve_idxs(old, new, adata):
-    print("old", old)
-    print("new", new)
     t = tuple(
         _resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1)
     )
-    print(t)
     return t
 
 @singledispatch

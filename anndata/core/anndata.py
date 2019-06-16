@@ -126,7 +126,7 @@ def _check_2d_shape(X):
                          '{}-dimensional.'.format(len(X.shape)))
 
 
-def _normalize_index(index, names):
+def _normalize_index(index, names) -> Union[slice, int, "np.ndarray[int]"]:
     if not isinstance(names, RangeIndex):
         assert names.dtype != float and names.dtype != int, \
             'Don’t call _normalize_index with non-categorical/string names'
@@ -576,7 +576,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 'that is, you cannot make a view of a view.')
         self._isview = True
         if adata_ref.isview:
-            print(adata_ref.X.shape)
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs(
@@ -584,9 +583,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 (oidx, vidx),
                 adata_ref
             )
-            print("o", oidx)
-            print("v", vidx)
-            
         self._adata_ref = adata_ref
         self._oidx = oidx
         self._vidx = vidx
@@ -650,7 +646,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self._adata_ref.X is None:
             self._X = None
             return
-        X = self._adata_ref._X[self._oidx, self._vidx]  # This is being weird
+
+        X = self._adata_ref._X
+        oidx = self._oidx
+        vidx = self._vidx
+        if isinstance(oidx, (float, np.floating, int, np.integer)):
+            oidx = slice(oidx, oidx+1)
+        if isinstance(vidx, (float, np.floating, int, np.integer)):
+            vidx = slice(vidx, vidx+1)
+        X = self._adata_ref._X[oidx, :][:, vidx]
         if isinstance(X, sparse.csr_matrix):
             self._X = SparseCSRView(X, view_args=(self, 'X'))
         elif isinstance(X, sparse.csc_matrix):
@@ -661,8 +665,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._X = X
         else:
             shape = (
-                get_n_items_idx(self._oidx, self._adata_ref.n_obs),
-                get_n_items_idx(self._vidx, self._adata_ref.n_vars)
+                get_n_items_idx(oidx, self._adata_ref.n_obs),
+                get_n_items_idx(vidx, self._adata_ref.n_vars)
             )
             if np.isscalar(X):
                 X = X.view()
@@ -1202,6 +1206,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError(
                     'AnnData can only be sliced in rows and columns.')
             # deal with pd.Series
+            # TODO: The series should probablu be aligned first
             if isinstance(index[1], pd.Series):
                 index = index[0], index[1].values
             if isinstance(index[0], pd.Series):
