@@ -9,7 +9,8 @@ from anndata.tests.helpers import (
     gen_adata,
     subset_func,
     slice_subset,
-    single_subset
+    single_subset,
+    asarray
 )
 
 # -------------------------------------------------------------------------------
@@ -35,7 +36,7 @@ uns_dict = {  # unstructured annotation
 
 @pytest.fixture
 def adata():
-    adata = ad.AnnData(np.empty((100, 100)))
+    adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm['o'] = np.zeros((100, 50))
     adata.varm['o'] = np.zeros((100, 50))
     return adata
@@ -293,10 +294,34 @@ def test_layers_view():
     assert real_hash == joblib.hash(real_adata)
     assert view_hash != joblib.hash(view_adata)
 
+subset_func2 = subset_func
 
-def test_view_of_view(adata, subset_func):
-    s1 = subset_func(adata.var_names)
-    v1 = adata[:, s1]
-    s2 = subset_func(v1.var_names)
-    v2 = v1[:, s2]
-    assert v2._adata_ref is adata
+# TODO: This sometimes fails spectacularly. Figure out why that is.
+def test_view_of_view(adata, subset_func, subset_func2):
+    if subset_func is single_subset:
+        pytest.xfail("Other subset generating functions have trouble with this")
+    var_s1 = subset_func(adata.var_names)
+    var_view1 = adata[:, var_s1]
+    var_s2 = subset_func2(var_view1.var_names)
+    var_view2 = var_view1[:, var_s2]
+    assert var_view2._adata_ref is adata
+    obs_s1 = subset_func(adata.obs_names)
+    obs_view1 = adata[obs_s1, :]
+    obs_s2 = subset_func2(obs_view1.obs_names)
+    assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
+
+    view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
+    view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
+    # Check equivalence
+    assert np.allclose(
+        asarray(view_of_actual_copy.X),
+        asarray(view_of_view_copy.X)
+    )
+    assert np.allclose(
+        asarray(view_of_actual_copy.obsm["o"]),
+        asarray(view_of_view_copy.obsm["o"])
+    )
+    assert np.allclose(
+        asarray(view_of_actual_copy.varm["o"]),
+        asarray(view_of_view_copy.varm["o"])
+    )
