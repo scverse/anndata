@@ -393,7 +393,7 @@ def read_zarr(store):
     d = {}
     for key in f.keys():
         _read_key_value_from_zarr(f, d, key)
-    return AnnData(*AnnData._args_from_dict(d))
+    return AnnData(**d)
 
 
 def _read_key_value_from_zarr(f, d, key, key_write=None):
