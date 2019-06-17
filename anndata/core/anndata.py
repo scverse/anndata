@@ -870,21 +870,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return
         # If indices are both arrays, we need to modify them so we don't set values like coordinates
         # This can occur if there are succesive views
-        if (
-            self.isview
+        if (self.isview
             and isinstance(self._oidx, np.ndarray)
             and isinstance(self._vidx, np.ndarray)
-            and is_integer_dtype(self._oidx)
-            and is_integer_dtype(self._vidx)
         ):
-            value = value[np.argsort(self._oidx), :][:, np.argsort(self._vidx)]
-            oidx = np.zeros(self.n_obs, dtype=bool)
-            vidx = np.zeros(self.n_vars, dtype=bool)
-            oidx[self._oidx] = True
-            vidx[self._vidx] = True
+            oidx, vidx = np.ix_(self._oidx, self._vidx)
         else:
-            oidx = self._oidx
-            vidx = self._vidx
+            oidx, vidx = self._oidx, self._vidx
         var_get = self.n_vars == 1 and self.n_obs == len(value)
         obs_get = self.n_obs == 1 and self.n_vars == len(value)
         if var_get or obs_get or self.shape == value.shape:
@@ -897,16 +889,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self._set_backed('X', value)
             else:
                 if self.isview:
-                    # exit the view if we go from sparse to dense
-                    if (
-                        issparse(value) and not issparse(self._adata_ref._X)
-                        or not issparse(value) and issparse(self._adata_ref._X)
-                    ):
-                        self._init_as_actual(self.copy())
-                        self._X = value
-                    else:
-                        self._adata_ref._X[oidx, vidx] = value
-                        self._init_X_as_view()
+                    if sparse.issparse(self._adata_ref._X) and isinstance(value, np.ndarray):
+                        value = sparse.coo_matrix(value)
+                    self._adata_ref._X[oidx, vidx] = value
+                    self._init_X_as_view()
                 else:
                     self._X = value
         else:

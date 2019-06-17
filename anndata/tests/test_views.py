@@ -346,3 +346,16 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
             asarray(view_of_actual_copy.layers[k]),
             asarray(view_of_view_copy.layers[k])
         )))
+
+def test_view_of_view_modification():
+    adata = ad.AnnData(np.zeros((10, 10)))
+    adata[0, :][:, 5:].X = np.ones(5)
+    assert np.all(adata.X[0, 5:] == np.ones(5))
+    adata[[1,2], :][:, [1,2]].X = np.ones((2, 2))
+    assert np.all(adata.X[1:3, 1:3] == np.ones((2, 2)))
+
+    adata.X = sparse.csr_matrix(adata.X)
+    adata[0, :][:, 5:].X = np.ones(5) * 2
+    assert np.all(asarray(adata.X)[0, 5:] == np.ones(5) * 2)
+    adata[[1, 2], :][:, [1, 2]].X = np.ones((2, 2)) * 2
+    assert np.all(asarray(adata.X)[1:3, 1:3] == np.ones((2, 2)) * 2)
