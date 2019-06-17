@@ -1,6 +1,7 @@
-import h5py as _h5py
-
 from pathlib import Path
+from typing import Union
+
+import h5py as _h5py
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -76,8 +77,35 @@ def _correct_compound_dtype(value):
     return value.astype(new_dtype)
 
 
-def write_h5ad(filepath, adata, force_dense=False, dataset_kwargs={}, **kwargs):
-    fields = ["X", "obs", "var", "obsm", "varm", "layers", "uns"]
+def write_h5ad(filepath: Union[Path, str], adata: "AnnData", force_dense=False, dataset_kwargs={}, **kwargs):
+    """Write ``.h5ad``-formatted hdf5 file.
+
+    .. note::
+
+        Setting compression to ``'gzip'`` can save disk space but
+        will slow down writing and subsequent reading. Prior to
+        v0.6.16, this was the default for parameter
+        ``compression``.
+
+    Generally, if you have sparse data that are stored as a dense
+    matrix, you can dramatically improve performance and reduce
+    disk space by converting to a :class:`~scipy.sparse.csr_matrix`::
+
+        from scipy.sparse import csr_matrix
+        adata.X = csr_matrix(adata.X)
+
+    Parameters
+    ----------
+    adata
+        AnnData object to write.
+    filename
+        Filename of data file. Defaults to backing file.
+    compression : ``None``,  {``'gzip'``, ``'lzf'``} (default: ``None``)
+        See the h5py :ref:`dataset_compression`.
+    force_dense
+        Write sparse data as a dense matrix.
+    """
+    # fields = ["X", "obs", "var", "obsm", "varm", "layers", "uns"]
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
@@ -310,7 +338,6 @@ def read_h5ad(filename, backed=None, chunk_size=None):
             if isinstance(v, (str, int)):  # fix categories with a single category
                 v = [v]
             for ann in ['obs', 'var']:
-                print(k_stripped)
                 if k_stripped in d[ann]:
                     d[ann][k_stripped] = pd.Categorical.from_codes(
                         codes=d[ann][k_stripped].values,
