@@ -15,7 +15,7 @@ import numpy as np
 from numpy import ma
 import pandas as pd
 from pandas.core.index import RangeIndex
-from pandas.api.types import is_string_dtype, is_categorical
+from pandas.api.types import is_string_dtype, is_categorical, is_integer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 from natsort import natsorted
@@ -341,7 +341,7 @@ class Raw:
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
-            new._varm = self._varm._view(self, vidx)
+            new._varm = self._varm._view(self, (vidx,))
         return new
 
     def copy(self):
@@ -575,6 +575,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 'Currently, you cannot index repeatedly into a backed AnnData, '
                 'that is, you cannot make a view of a view.')
         self._isview = True
+        if isinstance(oidx, (int, np.integer)): oidx = slice(oidx, oidx+1, 1)
+        if isinstance(vidx, (int, np.integer)): vidx = slice(vidx, vidx+1, 1)
         if adata_ref.isview:
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
@@ -589,17 +591,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # the file is the same as of the reference object
         self.file = adata_ref.file
         # views on attributes of adata_ref
-        oidx_normalized, vidx_normalized = oidx, vidx
-        if isinstance(oidx, (int, np.integer)): oidx_normalized = slice(oidx, oidx+1, 1)
-        if isinstance(vidx, (int, np.integer)): vidx_normalized = slice(vidx, vidx+1, 1)
-        obs_sub = adata_ref.obs.iloc[oidx_normalized]
-        var_sub = adata_ref.var.iloc[vidx_normalized]
-        self._obsm = adata_ref.obsm._view(self, oidx_normalized)
-        self._varm = adata_ref.varm._view(self, vidx_normalized)
-        # TODO: Should this be normalized
+        obs_sub = adata_ref.obs.iloc[oidx]
+        var_sub = adata_ref.var.iloc[vidx]
+        self._obsm = adata_ref.obsm._view(self, (oidx,))
+        self._varm = adata_ref.varm._view(self, (vidx,))
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
-        # self._obsp = adata_ref.obsp._view(self, oidx_normalized)
-        # self._varp = adata_ref.varp._view(self, vidx_normalized)
+        # self._obsp = adata_ref.obsp._view(self, oidx)
+        # self._varp = adata_ref.varp._view(self, vidx)
         # hackish solution here, no copy should be necessary
         uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
@@ -647,14 +645,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._X = None
             return
 
-        X = self._adata_ref._X
-        oidx = self._oidx
-        vidx = self._vidx
-        if isinstance(oidx, (float, np.floating, int, np.integer)):
-            oidx = slice(oidx, oidx+1)
-        if isinstance(vidx, (float, np.floating, int, np.integer)):
-            vidx = slice(vidx, vidx+1)
-        X = self._adata_ref._X[oidx, :][:, vidx]
+        X = self._adata_ref._X[self._oidx, :][:, self._vidx]
+
         if isinstance(X, sparse.csr_matrix):
             self._X = SparseCSRView(X, view_args=(self, 'X'))
         elif isinstance(X, sparse.csc_matrix):
@@ -665,8 +657,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._X = X
         else:
             shape = (
-                get_n_items_idx(oidx, self._adata_ref.n_obs),
-                get_n_items_idx(vidx, self._adata_ref.n_vars)
+                get_n_items_idx(self._oidx, self._adata_ref.n_obs),
+                get_n_items_idx(self._vidx, self._adata_ref.n_vars)
             )
             if np.isscalar(X):
                 X = X.view()
@@ -853,21 +845,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.file['X']
             if self.isview:
                 X = X[self._oidx, self._vidx]
-            return X
         else:
-            if self.n_obs == 1 and self.n_vars == 1:
-                warn_flatten()
-                return self._X[0, 0]
-            elif self.n_obs == 1 or self.n_vars == 1:
-                warn_flatten()
-                X = self._X
-                if issparse(self._X): X = self._X.toarray()
-                return X.flatten()
-            else:
-                return self._X
+            X = self._X
+        if self.n_obs == 1 and self.n_vars == 1:
+            return self._X[0, 0]
+            return X[0, 0]
+        elif self.n_obs == 1 or self.n_vars == 1:
+            if issparse(X): X = X.toarray()
+            return X.flatten()
+        else:
+            return X
+
 
     @X.setter
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
+        if not isinstance(value, (np.ndarray, sparse.spmatrix)):
+            value = np.array(value)
         if value is None:
             if self.isview:
                 raise ValueError('Copy the view before setting the data matrix to `None`.')
@@ -875,12 +868,31 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError('Not implemented.')
             self._X = None
             return
+        # If indices are both arrays, we need to modify them so we don't set values like coordinates
+        # This can occur if there are succesive views
+        if (
+            self.isview
+            and isinstance(self._oidx, np.ndarray)
+            and isinstance(self._vidx, np.ndarray)
+            and is_integer_dtype(self._oidx)
+            and is_integer_dtype(self._vidx)
+        ):
+            value = value[np.argsort(self._oidx), :][:, np.argsort(self._vidx)]
+            oidx = np.zeros(self.n_obs, dtype=bool)
+            vidx = np.zeros(self.n_vars, dtype=bool)
+            oidx[self._oidx] = True
+            vidx[self._vidx] = True
+        else:
+            oidx = self._oidx
+            vidx = self._vidx
         var_get = self.n_vars == 1 and self.n_obs == len(value)
         obs_get = self.n_obs == 1 and self.n_vars == len(value)
         if var_get or obs_get or self.shape == value.shape:
+            if self.shape != value.shape:
+                value = value.reshape(self.shape)
             if self.isbacked:
                 if self.isview:
-                    self.file['X'][self._oidx, self._vidx] = value
+                    self.file['X'][oidx, vidx] = value
                 else:
                     self._set_backed('X', value)
             else:
@@ -893,7 +905,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         self._init_as_actual(self.copy())
                         self._X = value
                     else:
-                        self._adata_ref._X[self._oidx, self._vidx] = value
+                        self._adata_ref._X[oidx, vidx] = value
                         self._init_X_as_view()
                 else:
                     self._X = value

@@ -13,11 +13,17 @@ from .views import asview, ViewArgs
 
 
 @singledispatch
-def _subset(mat, subset_idx):
-    return mat[subset_idx]
+def _subset(a, subset_idx: Tuple):
+    # Have to subset one dimension at a time because numpy does dumb coordinate indexing for multiple arrays
+    idxr = [slice(None) for i in range(len(subset_idx))]
+    for i in range(len(subset_idx)):
+        idxr_dim = idxr.copy()
+        idxr_dim[i] = subset_idx[i]
+        a = a[tuple(idxr_dim)]
+    return a
 
 @_subset.register(pd.DataFrame)
-def _subset_df(df: pd.DataFrame, subset_idx):
+def _subset_df(df: pd.DataFrame, subset_idx: Tuple):
     return df.iloc[subset_idx]
 
 
@@ -92,7 +98,7 @@ class AlignedMapping(MutableMapping, ABC):
             d[k] = v.copy()
         return d
 
-    def _view(self, parent, subset_idx):
+    def _view(self, parent: "AnnData", subset_idx: Tuple):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
@@ -224,7 +230,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
-    def __init__(self, parent_mapping, parent_view, subset_idx):
+    def __init__(self, parent_mapping: AxisArraysBase, parent_view: "AnnData", subset_idx):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
