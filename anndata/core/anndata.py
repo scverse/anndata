@@ -15,7 +15,7 @@ import numpy as np
 from numpy import ma
 import pandas as pd
 from pandas.core.index import RangeIndex
-from pandas.api.types import is_string_dtype, is_categorical, is_integer_dtype
+from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
 from natsort import natsorted
@@ -848,7 +848,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             X = self._X
         if self.n_obs == 1 and self.n_vars == 1:
-            return self._X[0, 0]
             return X[0, 0]
         elif self.n_obs == 1 or self.n_vars == 1:
             if issparse(X): X = X.toarray()
