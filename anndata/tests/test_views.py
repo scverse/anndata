@@ -331,6 +331,14 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
         asarray(view_of_actual_copy.X),
         asarray(view_of_view_copy.X)
     )
+    assert np.all(asarray(eq(
+        view_of_actual_copy.obs,
+        view_of_view_copy.obs
+    )))
+    assert np.all(asarray(eq(
+        view_of_actual_copy.var,
+        view_of_view_copy.var
+    )))
     for k in adata.obsm.keys():
         assert np.all(asarray(eq(
             view_of_actual_copy.obsm[k],
@@ -338,8 +346,8 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
         )))
     for k in adata.varm.keys():
         assert np.all(asarray(eq(
-            asarray(view_of_actual_copy.layers[k]),
-            asarray(view_of_view_copy.layers[k])
+            asarray(view_of_actual_copy.varm[k]),
+            asarray(view_of_view_copy.varm[k])
         )))
     for k in adata.layers.keys():
         assert np.all(asarray(eq(
