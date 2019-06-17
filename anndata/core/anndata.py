@@ -127,47 +127,50 @@ def _check_2d_shape(X):
                          '{}-dimensional.'.format(len(X.shape)))
 
 
-def _normalize_index(index, names) -> Union[slice, int, "np.ndarray[int]"]:
-    if not isinstance(names, RangeIndex):
-        assert names.dtype != float and names.dtype != int, \
+def _normalize_index(indexer, index: pd.Index) -> Union[slice, int, "np.ndarray[int]"]:
+    if not isinstance(index, RangeIndex):
+        assert index.dtype != float and index.dtype != int, \
             'Don’t call _normalize_index with non-categorical/string names'
 
     # the following is insanely slow for sequences, we replaced it using pandas below
     def name_idx(i):
         if isinstance(i, str):
-            # `where` returns an 1-tuple (1D array) of found indices
-            i_found = np.where(names == i)[0]
-            if len(i_found) == 0:  # returns array of length 0 if nothing is found
-                raise IndexError(
-                    'Key "{}" is not valid observation/variable name/index.'
-                    .format(i))
-            i = i_found[0]
+            i = index.get_loc(i)
         return i
 
-    if isinstance(index, slice):
-        start = name_idx(index.start)
-        stop = name_idx(index.stop)
+    if isinstance(indexer, slice):
+        start = name_idx(indexer.start)
+        stop = name_idx(indexer.stop)
         # string slices can only be inclusive, so +1 in that case
-        if isinstance(index.stop, str):
+        if isinstance(indexer.stop, str):
             stop = None if stop is None else stop + 1
-        step = index.step
+        step = indexer.step
         return slice(start, stop, step)
-    elif isinstance(index, (np.integer, int, str)):
-        return name_idx(index)
-    elif isinstance(index, (Sequence, np.ndarray, pd.Index)):
-        # here, we replaced the implementation based on name_idx with this
-        # incredibly faster one
-        positions = pd.Series(index=names, data=range(len(names)))
-        positions = positions[index]
-        if positions.isnull().values.any():
-            not_found = positions.index[positions.isnull().values]
-            raise KeyError(
-                "Values {}, from {}, are not valid obs/ var names or indices."
-                .format(list(not_found), list(positions.index)))
-        return positions.values
+    elif isinstance(indexer, (np.integer, int)):
+        return indexer
+    elif isinstance(indexer, str):
+        return index.get_loc(indexer) # int
+    elif isinstance(indexer, (Sequence, np.ndarray, pd.Index)):
+        if not isinstance(indexer, (np.ndarray, pd.Index)):
+            indexer = np.array(indexer)
+        if issubclass(indexer.dtype.type, (np.integer, np.floating)):
+            return indexer  # Might not work for range indexes
+        elif issubclass(indexer.dtype.type, np.bool_):
+            assert indexer.shape == index.shape
+            positions = np.where(indexer)[0]
+            return positions  # np.ndarray[int]
+        else:  # indexer should be string array
+            positions = index.get_indexer(indexer)
+            if np.any(positions < 0):
+                not_found = indexer[positions < 0]
+                raise KeyError(
+                    "Values {}, from {}, are not valid obs/ var names or indices."
+                    .format(list(not_found), list(indexer))
+                )
+            return positions  # np.ndarray[int]
     else:
-        raise IndexError('Unknown index {!r} of type {}'
-                         .format(index, type(index)))
+        raise IndexError('Unknown indexer {!r} of type {}'
+                         .format(indexer, type(indexer)))
 
 
 def _gen_dataframe(anno, length, index_names):
@@ -1185,7 +1188,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError(
                     'AnnData can only be sliced in rows and columns.')
             # deal with pd.Series
-            # TODO: The series should probablu be aligned first
+            # TODO: The series should probably be aligned first
             if isinstance(index[1], pd.Series):
                 index = index[0], index[1].values
             if isinstance(index[0], pd.Series):
