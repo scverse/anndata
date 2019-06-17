@@ -123,7 +123,7 @@ def gen_adata(
 def array_bool_subset(index, min_size=2):
     b = np.zeros(len(index), dtype=bool)
     selected = np.random.choice(
-        range(len(index)), 
+        range(len(index)),
         size=np.random.randint(min_size, len(index), ()),
         replace=False
     )
