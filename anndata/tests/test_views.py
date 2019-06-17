@@ -1,5 +1,8 @@
+from operator import eq
+
 import joblib
 import numpy as np
+from scipy import sparse
 import pandas as pd
 import pytest
 
@@ -40,6 +43,15 @@ def adata():
     adata.obsm['o'] = np.zeros((100, 50))
     adata.varm['o'] = np.zeros((100, 50))
     return adata
+
+@pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
+def adata_parameterized(request):
+    return gen_adata(shape=(200, 300), X_type=request.param)
+
+
+@pytest.fixture(params=[np.array, sparse.csr_matrix, sparse.csc_matrix])
+def matrix_type(request):
+    return request.param
 
 # -------------------------------------------------------------------------------
 # The test functions
@@ -296,32 +308,41 @@ def test_layers_view():
 
 subset_func2 = subset_func
 
-# TODO: This sometimes fails spectacularly. Figure out why that is.
-def test_view_of_view(adata, subset_func, subset_func2):
+# TODO: This can be flaky. Make that stop
+def test_view_of_view(matrix_type, subset_func, subset_func2):
+    adata = gen_adata((30, 15), X_type=matrix_type)
     if subset_func is single_subset:
         pytest.xfail("Other subset generating functions have trouble with this")
-    var_s1 = subset_func(adata.var_names)
+    var_s1 = subset_func(adata.var_names, min_size=4)
     var_view1 = adata[:, var_s1]
     var_s2 = subset_func2(var_view1.var_names)
     var_view2 = var_view1[:, var_s2]
     assert var_view2._adata_ref is adata
-    obs_s1 = subset_func(adata.obs_names)
+    obs_s1 = subset_func(adata.obs_names, min_size=4)
     obs_view1 = adata[obs_s1, :]
     obs_s2 = subset_func2(obs_view1.obs_names)
     assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
 
     view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
+
     # Check equivalence
     assert np.allclose(
         asarray(view_of_actual_copy.X),
         asarray(view_of_view_copy.X)
     )
-    assert np.allclose(
-        asarray(view_of_actual_copy.obsm["o"]),
-        asarray(view_of_view_copy.obsm["o"])
-    )
-    assert np.allclose(
-        asarray(view_of_actual_copy.varm["o"]),
-        asarray(view_of_view_copy.varm["o"])
-    )
+    for k in adata.obsm.keys():
+        assert np.all(asarray(eq(
+            view_of_actual_copy.obsm[k],
+            view_of_view_copy.obsm[k]
+        )))
+    for k in adata.varm.keys():
+        assert np.all(asarray(eq(
+            asarray(view_of_actual_copy.layers[k]),
+            asarray(view_of_view_copy.layers[k])
+        )))
+    for k in adata.layers.keys():
+        assert np.all(asarray(eq(
+            asarray(view_of_actual_copy.layers[k]),
+            asarray(view_of_view_copy.layers[k])
+        )))
