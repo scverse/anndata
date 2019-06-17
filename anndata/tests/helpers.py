@@ -120,6 +120,15 @@ def gen_adata(
     )
     return adata
 
+def array_bool_subset(index, min_size=2):
+    b = np.zeros(len(index), dtype=bool)
+    selected = np.random.choice(
+        range(len(index)), 
+        size=np.random.randint(min_size, len(index), ()),
+        replace=False
+    )
+    b[selected] = True
+    return b
 
 def array_subset(index, min_size=2):
     if len(index) < min_size:
@@ -156,6 +165,6 @@ def single_subset(index):
     return index[np.random.randint(0, len(index), size=())]
 
 
-@pytest.fixture(params=[array_subset, slice_subset, single_subset, array_int_subset])
+@pytest.fixture(params=[array_subset, slice_subset, single_subset, array_int_subset, array_bool_subset])
 def subset_func(request):
     return request.param
