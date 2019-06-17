@@ -130,12 +130,8 @@ def _resolve_idx(old, new, l):
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(old, new, l):
-    if is_bool_dtype(old) and is_bool_dtype(new):
-        return old & new
-    elif is_bool_dtype(old):
+    if is_bool_dtype(old):
         old = np.where(old)[0]
-    elif is_bool_dtype(new):
-        new = np.where(new)[0]
     return old[new]
 
 @_resolve_idx.register(np.integer)
