@@ -43,10 +43,11 @@ except ImportError:
 from .alignedmapping import (
     AxisArraysBase, AxisArrays,
     # PairwiseArraysBase, PairwiseArrays,
-    LayersBase, Layers
+    LayersBase, Layers,
+    _subset
 )
 from .. import h5py
-from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameView, _resolve_idxs
+from .views import ArrayView, DictView, DataFrameView, _resolve_idxs, asview, ViewArgs
 
 from .. import utils
 from ..utils import Index1D, Index, get_n_items_idx, convert_to_dict, unpack_index
@@ -630,8 +631,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # set data
         if self.isbacked:
             self._X = None
-        else:
-            self._init_X_as_view()
 
         # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:
@@ -639,30 +638,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._raw = adata_ref.raw[oidx]
         else:
             self._raw = None
-
-    def _init_X_as_view(self):
-        if self._adata_ref.X is None:
-            self._X = None
-            return
-
-        X = self._adata_ref._X[self._oidx, :][:, self._vidx]
-
-        if isinstance(X, sparse.csr_matrix):
-            self._X = SparseCSRView(X, view_args=(self, 'X'))
-        elif isinstance(X, sparse.csc_matrix):
-            self._X = SparseCSCView(X, view_args=(self, 'X'))
-        elif issparse(X):
-            raise ValueError('View on non-csr/csc sparse matrices not implemented.')
-        elif isinstance(X, ZappyArray): # ZappyArray acts as a view itself
-            self._X = X
-        else:
-            shape = (
-                get_n_items_idx(self._oidx, self._adata_ref.n_obs),
-                get_n_items_idx(self._vidx, self._adata_ref.n_vars)
-            )
-            if np.isscalar(X):
-                X = X.view()
-            self._X = ArrayView(X.reshape(shape), view_args=(self, 'X'))
 
     def _init_as_actual(
             self, X=None, obs=None, var=None, uns=None,
@@ -845,6 +820,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.file['X']
             if self.isview:
                 X = X[self._oidx, self._vidx]
+        elif self.isview:
+            X = _subset(
+                asview(
+                    self._adata_ref.X,
+                    ViewArgs(self._adata_ref, "X")
+                ),
+                (self._oidx, self._vidx)
+            )
         else:
             X = self._X
         if self.n_obs == 1 and self.n_vars == 1:
@@ -891,7 +874,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     if sparse.issparse(self._adata_ref._X) and isinstance(value, np.ndarray):
                         value = sparse.coo_matrix(value)
                     self._adata_ref._X[oidx, vidx] = value
-                    self._init_X_as_view()
                 else:
                     self._X = value
         else:
@@ -1562,16 +1544,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            return AnnData(self._X.copy() if self._X is not None else None,
-                           self._obs.copy(),
-                           self._var.copy(),
+            X = self.X
+            if X is not None:
+                X = X.copy()
+                if X.shape != self.shape:
+                    X = X.reshape(self.shape)
+            return AnnData(X,
+                           self.obs.copy(),
+                           self.var.copy(),
                            # deepcopy on DictView does not work and is unnecessary
                            # as uns was copied already before
-                           self._uns.copy() if isinstance(self._uns, DictView) else deepcopy(self._uns),
-                           self._obsm.copy(), self._varm.copy(),
+                           self.uns.copy() if isinstance(self.uns, DictView) else deepcopy(self.uns),
+                           self.obsm.copy(), self.varm.copy(),
                            raw=None if self._raw is None else self._raw.copy(),
                            layers=dict(self.layers),
-                           dtype=self._X.dtype.name if self._X is not None else 'float32')
+                           dtype=self.X.dtype.name if self.X is not None else 'float32')
         else:
             if filename is None:
                 raise ValueError(
