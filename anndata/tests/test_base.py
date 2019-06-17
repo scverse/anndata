@@ -179,10 +179,10 @@ def test_slicing_strings():
     assert adata[:, 'b':'c'].X.tolist() == [[2, 3], [5, 6]]
 
     from pytest import raises
-    with raises(IndexError): _ = adata[:, 'X']
-    with raises(IndexError): _ = adata['X', :]
-    with raises(IndexError): _ = adata['A':'X', :]
-    with raises(IndexError): _ = adata[:, 'a':'X']
+    with raises(KeyError): _ = adata[:, 'X']
+    with raises(KeyError): _ = adata['X', :]
+    with raises(KeyError): _ = adata['A':'X', :]
+    with raises(KeyError): _ = adata[:, 'a':'X']
 
     # Test if errors are helpful
     with raises(KeyError, match=r"not_in_var"):
