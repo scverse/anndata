@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from functools import singledispatch
-from typing import Mapping, Optional, Tuple
+from typing import Mapping, Optional, Tuple, Iterable
 import warnings
 
 import numpy as np
@@ -14,13 +14,11 @@ from .views import asview, ViewArgs
 
 @singledispatch
 def _subset(a, subset_idx: Tuple):
-    # Have to subset one dimension at a time because numpy does dumb coordinate indexing for multiple arrays
-    idxr = [slice(None) for i in range(len(subset_idx))]
-    for i in range(len(subset_idx)):
-        idxr_dim = idxr.copy()
-        idxr_dim[i] = subset_idx[i]
-        a = a[tuple(idxr_dim)]
-    return a
+    # Select as combination of indexes, not coordinates
+    # Correcting for indexing behaviour of np.ndarray
+    if all(isinstance(x, Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+    return a[subset_idx]
 
 @_subset.register(pd.DataFrame)
 def _subset_df(df: pd.DataFrame, subset_idx: Tuple):
