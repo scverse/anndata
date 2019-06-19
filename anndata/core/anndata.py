@@ -1,6 +1,5 @@
 """Main class and helper functions.
 """
-import os
 from enum import Enum
 from collections import OrderedDict
 from collections.abc import MutableMapping
@@ -1152,7 +1151,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     # write the content of self to the old file
                     # and close the file
                     self.write()
-                    os.rename(self.filename, filename)
+                    self.filename.rename(filename)
                 else:
                     # do nothing
                     return
