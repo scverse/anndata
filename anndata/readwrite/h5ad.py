@@ -115,10 +115,17 @@ def write_h5ad(filepath: Union[Path, str], adata: "AnnData", force_dense=False, 
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
+    # we're writing to a different location than the backing file
+    # - load the matrix into the memory... 
+    # TODO: don't load the matrix into memory
     if adata.isbacked and filepath != adata.filename:
         X = adata.X[:]
     else:
-        X = adata._X
+        if adata.isbacked:
+            X = adata.X
+        else:
+            X = adata._X  # TODO: This isn't great, what if it's a view?
+            # This is so X won't be one dimensional
     with h5py.File(filepath, mode, force_dense=force_dense) as f:
         write_attribute(f, "X", X, dataset_kwargs)
         write_attribute(f, "obs", adata.obs, dataset_kwargs)
@@ -307,26 +314,50 @@ H5AD_WRITE_REGISTRY = {
 #     for sub_key, sub_value in value.items():
 #         write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs)
 
-# TODO: backed and chunk_size
+# TODO: chunk_size
 def read_h5ad(filename, backed=None, chunk_size=None):
     d = {}
     raw = {}
-    with h5py.File(filename, "r") as f:
+
+    if backed is None:
+        mode = "r"
+    else:
+        # Open in backed mode
+        assert backed in ["r+", "a"]
+        mode = backed
+        d["filename"] = filename
+        d["filemode"] = backed
+
+    # Start reading
+    f = h5py.File(filename, mode)
+    if mode != "r":
+        d["X"] = None
+    else:
+        # Handling backed objects
         d["X"] = read_attribute(f.get("X", None))
-        # Backwards compat for objects where dataframes weren't labelled
-        d["obs"] = read_dataframe(f.get("obs", None))
-        d["var"] = read_dataframe(f.get("var", None))
-        d["obsm"] = read_attribute(f.get("obsm", None))
-        d["varm"] = read_attribute(f.get("varm", None))
-        d["uns"] = read_attribute(f.get("uns", None))
-        d["layers"] = read_attribute(f.get("layers", None))
-        for k in ["raw.X", "raw.var", "raw.varm"]:
-            if k in f:
-                raw[k.replace("raw.", "")] = read_attribute(f[k])
+        rawX = read_attribute(f.get("raw.X", None))
+        if rawX is not None:
+            raw["X"] = rawX
+    # Backwards compat for objects where dataframes weren't labelled
+    d["obs"] = read_dataframe(f.get("obs", None))
+    d["var"] = read_dataframe(f.get("var", None))
+    d["obsm"] = read_attribute(f.get("obsm", None))
+    d["varm"] = read_attribute(f.get("varm", None))
+    d["uns"] = read_attribute(f.get("uns", None))
+    d["layers"] = read_attribute(f.get("layers", None))
+    # for k in ["raw.X", "raw.var", "raw.varm"]:
+    for k in ["raw.var", "raw.varm"]:
+        if k in f:
+            raw[k.replace("raw.", "")] = read_attribute(f[k])
+    # Done reading
+    if mode == "r":
+        f.close()
+
     if len(raw) > 0:
         d["raw"] = raw
     if d.get("X", None) is not None:
         d["dtype"] = d["X"].dtype
+
     # Backwards compat
     k_to_delete = [k for k, v in d.items() if v is None]
     for k in k_to_delete:
@@ -346,6 +377,7 @@ def read_h5ad(filename, backed=None, chunk_size=None):
                     k_to_delete.append(k)
     for k in k_to_delete:
         del d["uns"][k]
+
     return AnnData(**d)
 
 def read_dataframe(dataset):
@@ -371,8 +403,10 @@ def read_dataset(dataset: h5py.Dataset):
         return read_dataframe(dataset)
     else:
         value = dataset[()]
-        if len(value) == 1:
-            value = value[0]
+        if issubclass(value.dtype.type, np.string_):
+            value = value.astype(str)
+        if value.shape == ():
+            value = value[()]
         return value
 
 @singledispatch

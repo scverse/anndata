@@ -688,15 +688,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # init from file
         if filename is not None:
-            if any((X, obs, var, uns, obsm, varm)):
-                raise ValueError(
-                    'If initializing from `filename`, '
-                    'no further arguments may be passed.')
             self.file = AnnDataFileManager(self, filename, filemode)
-            X, obs, var, uns, obsm, varm, layers, raw = _read_args_from_h5ad(self, mode=filemode)
-            if X is not None:
-                # this is not a function that a user would use, hence it's fine to set the dtype
-                dtype = X.dtype.name
         else:
             self.file = AnnDataFileManager(self, None)
 
@@ -1601,16 +1593,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                            layers=self.layers.copy(),
                            dtype=dtype)
         else:
+            from ..readwrite import read_h5ad
             if filename is None:
                 raise ValueError(
                     'To copy an AnnData object in backed mode, '
                     'pass a filename: `.copy(filename=\'myfilename.h5ad\')`.')
-            if self.isview:
-                self.write(filename)
-            else:
-                from shutil import copyfile
-                copyfile(self.filename, filename)
-            return AnnData(filename=filename)
+            mode = self.file._filemode
+            self.write(filename)
+            return read_h5ad(filename, backed=mode)
+
 
     def concatenate(
         self, *adatas: 'AnnData',
