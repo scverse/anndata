@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Union
+from typing import Union, Tuple
 
 import h5py as _h5py
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
     is_string_dtype,
-    is_categorical
+    is_categorical_dtype
 )
 from scipy import sparse
 from .. import h5py
@@ -14,52 +14,37 @@ from ..core.anndata import AnnData, Raw
 from collections.abc import Mapping
 
 
-def _df_to_hdf5_recarray(df, var_len_str=True):
-    """Convert a pandas dataframe into a recarray h5py can write."""
-    if is_string_dtype(df.index):
-        if var_len_str:
-            index = df.index.values.astype(h5py.special_dtype(vlen=str))
-        else:
-            max_len_index = 0 if 0 in df.shape else df.index.map(len).max()
-            index = df.index.values.astype('S{}'.format(max_len_index))
-    else:
-        index = df.index.values
-    names = ['index']
-    arrays = [index]
-    formats = [index.dtype]
-    for k in df.columns:
-        names.append(k)
-        if is_string_dtype(df[k]) and not is_categorical(df[k]):
-            if var_len_str:
-                arrays.append(df[k].values)
-                formats.append(h5py.special_dtype(vlen=str))
-            else:
-                lengths = df[k].map(len)
-                if is_categorical(lengths):
-                    lengths = lengths.cat.as_ordered()
-                arrays.append(df[k].values.astype('S{}'.format(lengths.max())))
-                formats.append(arrays[-1].dtype)
-        elif is_categorical(df[k]):
-            arrays.append(df[k].cat.codes)
-            formats.append(_make_h5_cat_dtype(df[k].values))
-        else:
-            arrays.append(df[k].values)
-            formats.append(arrays[-1].dtype)
-    assert len(formats) == len(arrays)
-    return np.rec.fromarrays(
-        arrays,
-        dtype={'names': names, 'formats': formats})
-
-
-def _make_h5_cat_dtype(s):
-    """
-    This creates a hdf5 enum dtype based on a pandas categorical array.
-    """
-    dt = h5py.special_dtype(enum=(
+def make_h5_cat_dtype(s):
+    """This creates a hdf5 enum dtype based on a pandas categorical array."""
+    return h5py.special_dtype(enum=(
         s.codes.dtype,
         dict(zip(s.categories, np.unique(s.codes)))
     ))
-    return dt
+
+
+def to_h5_dtype(a: Union[np.ndarray, pd.Series]) -> Tuple[np.ndarray, np.dtype]:
+    """Given an ndarray, return tuple of hdf5 friendly array and dtype."""
+    if isinstance(a, pd.Series):
+        a = a.values
+    dtype = a.dtype
+    if is_categorical_dtype(dtype):
+        return a.codes, make_h5_cat_dtype(a)
+    elif is_string_dtype(dtype):
+        return a, h5py.special_dtype(vlen=str)
+    else:
+        return a, a.dtype
+
+
+def df_to_h5_recarray(df: pd.DataFrame) -> np.recarray:
+    if df.index.name is None:
+        names = ["index"] + list(df.columns)
+    else:
+        names = [df.index.name] + list(df.columns)
+    arrays, formats = zip(*(to_h5_dtype(x) for x in [df.index] + [df[k] for k in df]))
+    return np.rec.fromarrays(
+        arrays,
+        dtype={'names': names, 'formats': formats}
+    )
 
 
 def _to_hdf5_vlen_strings(value):
@@ -210,7 +195,7 @@ def write_array(f, key, value, dataset_kwargs={}):
 
 
 def write_dataframe(f, key, value, dataset_kwargs={}):
-    f.create_dataset(key, data=_df_to_hdf5_recarray(value), **dataset_kwargs)
+    f.create_dataset(key, data=df_to_h5_recarray(value), **dataset_kwargs)
     f[key].attrs["source_type"] = "dataframe"
 
 
