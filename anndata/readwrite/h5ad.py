@@ -61,6 +61,7 @@ def _make_h5_cat_dtype(s):
     ))
     return dt
 
+
 def _to_hdf5_vlen_strings(value):
     """
     This corrects compound dtypes to work with hdf5 files.
@@ -68,15 +69,13 @@ def _to_hdf5_vlen_strings(value):
     new_dtype = []
     for dt_name, dt_type in value.dtype.descr:
         if dt_type[1] == "U":
-            # new_dtype.append(
-            #     (dt_name, 'S{}'.format(int(dt_type[2:]) * 4))
-            # )
             new_dtype.append(
                 (dt_name, h5py.special_dtype(vlen=str))
             )
         else:
             new_dtype.append((dt_name, dt_type))
     return value.astype(new_dtype)
+
 
 def _from_fixed_length_strings(value):
     """Convert from fixed length strings to unicode.
@@ -86,19 +85,15 @@ def _from_fixed_length_strings(value):
     new_dtype = []
     for dt in value.dtype.descr:
         dt_list = list(dt)
-        dt_name, dt_type = dt[0], dt[1]
+        dt_type = dt[1]
         if isinstance(dt_type, tuple):
             dt_list[1] = "O"
             new_dtype.append(tuple(dt_list))
-            # new_dtype.append((dt_name, "O"))
         elif issubclass(np.dtype(dt_type).type, np.string_):
             dt_list[1] = 'U{}'.format(int(dt_type[2:]))
             new_dtype.append(tuple(dt_list))
-            # new_dtype.append(
-            #     (dt_name, 'U{}'.format(int(dt_type[2:])))
-            # )
         else:
-            new_dtype.append((dt_name, dt_type))
+            new_dtype.append(dt)
     return value.astype(new_dtype)
 
 
@@ -364,8 +359,10 @@ def read_dataset(dataset: h5py.Dataset):
             pass
         elif issubclass(value.dtype.type, np.string_):
             value = value.astype(str)
-        # elif len(value.dtype.descr) > 1:
-        #     value = _from_fixed_length_strings(value)  # For backwards compat
+            if len(value) == 1:  # Backwards compat, old datasets have strings written as one element 1d arrays
+                return value[0]
+        elif len(value.dtype.descr) > 1:  # Compound dtype
+            value = _from_fixed_length_strings(value)  # For backwards compat, now strings are written as variable length
         if value.shape == ():
             value = value[()]
         return value
