@@ -71,7 +71,7 @@ def _from_fixed_length_strings(value):
     for dt in value.dtype.descr:
         dt_list = list(dt)
         dt_type = dt[1]
-        if isinstance(dt_type, tuple):
+        if isinstance(dt_type, tuple):  # vlen strings, could probably match better
             dt_list[1] = "O"
             new_dtype.append(tuple(dt_list))
         elif issubclass(np.dtype(dt_type).type, np.string_):
@@ -224,7 +224,39 @@ H5AD_WRITE_REGISTRY = {
 }
 
 
-# TODO: chunk_size
+def read_h5ad_backed(filename, mode):
+    d = {"filename": filename, "filemode": mode}
+    raw = {}
+
+    f = h5py.File(filename, mode)
+
+    d["obs"] = read_dataframe(f.get("obs", None))
+    d["var"] = read_dataframe(f.get("var", None))
+    d["obsm"] = read_attribute(f.get("obsm", None))
+    d["varm"] = read_attribute(f.get("varm", None))
+    d["uns"] = read_attribute(f.get("uns", None))
+    d["layers"] = read_attribute(f.get("layers", None))
+
+    if "raw.var" in f:
+        raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
+    if "raw.varm" in f:
+        raw["varm"] = read_attribute(f["raw.varm"])
+
+    # Filter
+    d = {k: v for k, v in d.items() if v is not None}
+    raw = {k: v for k, v in raw.items() if v is not None}
+
+    if len(raw) > 0:
+        d["raw"] = raw
+    if f.get("X", None) is not None:
+        d["dtype"] = f["X"].dtype
+
+    _clean_uns(d)
+
+    return AnnData(**d)
+
+
+# TODO: chunks
 def read_h5ad(filename, backed=None, chunk_size=None):
     """Read ``.h5ad``-formatted hdf5 file.
 
@@ -242,55 +274,47 @@ def read_h5ad(filename, backed=None, chunk_size=None):
         until it reads the whole dataset.
         Higher size means higher memory consumption and higher loading speed.
     """
+    if backed not in {None, False}:
+        mode = backed
+        if mode is True:
+            mode = "r+"
+        assert mode in {"r", "r+", "a"}
+        return read_h5ad_backed(filename, mode)
+
     d = {}
     raw = {}
 
-    if backed is None:
-        mode = "r"
-    else:
-        # Open in backed mode
-        assert backed in ["r+", "a"]
-        mode = backed
-        d["filename"] = filename
-        d["filemode"] = backed
-
-    # Start reading
-    f = h5py.File(filename, mode)
-    if mode != "r":
-        d["X"] = None
-    else:
-        # Handling backed objects
+    with h5py.File(filename, "r") as f:
         d["X"] = read_attribute(f.get("X", None))
-        rawX = read_attribute(f.get("raw.X", None))
-        if rawX is not None:
-            raw["X"] = rawX
-    # Backwards compat for objects where dataframes weren't labelled
-    d["obs"] = read_dataframe(f.get("obs", None))
-    d["var"] = read_dataframe(f.get("var", None))
-    d["obsm"] = read_attribute(f.get("obsm", None))
-    d["varm"] = read_attribute(f.get("varm", None))
-    d["uns"] = read_attribute(f.get("uns", None))
-    d["layers"] = read_attribute(f.get("layers", None))
-    # for k in ["raw.X", "raw.var", "raw.varm"]:
-    # Raw
-    if "raw.var" in f:
-        raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-    if "raw.varm" in f:
-        raw["varm"] = read_attribute(f["raw.varm"])
+        # Backwards compat for objects where dataframes weren't labelled:
+        d["obs"] = read_dataframe(f.get("obs", None))
+        d["var"] = read_dataframe(f.get("var", None))
+        d["obsm"] = read_attribute(f.get("obsm", None))
+        d["varm"] = read_attribute(f.get("varm", None))
+        d["uns"] = read_attribute(f.get("uns", None))
+        d["layers"] = read_attribute(f.get("layers", None))
+        # Raw
+        raw["X"] = read_attribute(f.get("raw.X", None))
+        raw["varm"] = read_attribute(f.get("raw.varm", None))
+        if "raw.var" in f:
+            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
 
-    # Done reading
-    if mode == "r":
-        f.close()
+    # Filter
+    d = {k: v for k, v in d.items() if v is not None}
+    raw = {k: v for k, v in raw.items() if v is not None}
 
     if len(raw) > 0:
         d["raw"] = raw
     if d.get("X", None) is not None:
         d["dtype"] = d["X"].dtype
 
-    # Backwards compat
-    d = {k: v for k, v in d.items() if v is not None}
-    raw = {k: v for k, v in raw.items() if v is not None}
+    _clean_uns(d)  # backwards compat
 
+    return AnnData(**d)
+
+
+def _clean_uns(d):
+    """Compat function for when categorical keys were stored in uns."""
     k_to_delete = []
     for k, v in d.get("uns", {}).items():
         if k.endswith('_categories'):
@@ -306,8 +330,6 @@ def read_h5ad(filename, backed=None, chunk_size=None):
                     k_to_delete.append(k)
     for k in k_to_delete:
         del d["uns"][k]
-
-    return AnnData(**d)
 
 
 def read_dataframe(dataset):
@@ -351,14 +373,6 @@ def read_dataset(dataset: h5py.Dataset):
         if value.shape == ():
             value = value[()]
         return value
-        # if issubclass(value.dtype.type, np.string_):
-        #     value = value.astype(str)
-        # elif len(value.dtype.descr) > 1:
-        #     print(value.dtype.descr)
-        #     value = _from_fixed_length_strings(value)  # For backwards compat
-        # if value.shape == ():
-        #     value = value[()]
-        # return value
 
 @singledispatch
 def read_attribute(value):
