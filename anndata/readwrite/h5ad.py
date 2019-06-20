@@ -230,21 +230,18 @@ def read_h5ad_backed(filename, mode):
 
     f = h5py.File(filename, mode)
 
-    d["obs"] = read_dataframe(f.get("obs", None))
-    d["var"] = read_dataframe(f.get("var", None))
-    d["obsm"] = read_attribute(f.get("obsm", None))
-    d["varm"] = read_attribute(f.get("varm", None))
-    d["uns"] = read_attribute(f.get("uns", None))
-    d["layers"] = read_attribute(f.get("layers", None))
+    attributes = ["obsm", "varm", "uns", "layers"]
+    df_attributes = ["obs", "var"]
+
+    d.update({k: read_attribute(f[k]) for k in attributes if k in f})
+    for k in df_attributes:
+        if k in f:
+            d[k] = read_dataframe(f[k])
 
     if "raw.var" in f:
         raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
     if "raw.varm" in f:
         raw["varm"] = read_attribute(f["raw.varm"])
-
-    # Filter
-    d = {k: v for k, v in d.items() if v is not None}
-    raw = {k: v for k, v in raw.items() if v is not None}
 
     if len(raw) > 0:
         d["raw"] = raw
@@ -278,30 +275,21 @@ def read_h5ad(filename, backed=None, chunk_size=None):
         mode = backed
         if mode is True:
             mode = "r+"
-        assert mode in {"r", "r+", "a"}
+        assert mode in {"r", "r+"}
         return read_h5ad_backed(filename, mode)
 
-    d = {}
-    raw = {}
+    attributes = ["X", "obsm", "varm", "uns", "layers"]
+    df_attributes = ["obs", "var"]
+    raw_attributes = ["raw.X", "raw.varm"]
 
     with h5py.File(filename, "r") as f:
-        d["X"] = read_attribute(f.get("X", None))
-        # Backwards compat for objects where dataframes weren't labelled:
-        d["obs"] = read_dataframe(f.get("obs", None))
-        d["var"] = read_dataframe(f.get("var", None))
-        d["obsm"] = read_attribute(f.get("obsm", None))
-        d["varm"] = read_attribute(f.get("varm", None))
-        d["uns"] = read_attribute(f.get("uns", None))
-        d["layers"] = read_attribute(f.get("layers", None))
-        # Raw
-        raw["X"] = read_attribute(f.get("raw.X", None))
-        raw["varm"] = read_attribute(f.get("raw.varm", None))
+        d = {k: read_attribute(f[k]) for k in attributes if k in f}
+        raw = {k.replace("raw.", ""): read_attribute(f[k]) for k in raw_attributes if k in f}
+        for k in df_attributes:
+            if k in f:
+                d[k] = read_dataframe(f[k])
         if "raw.var" in f:
-            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-
-    # Filter
-    d = {k: v for k, v in d.items() if v is not None}
-    raw = {k: v for k, v in raw.items() if v is not None}
+            raw["var"] = read_dataframe(f["raw.var"])
 
     if len(raw) > 0:
         d["raw"] = raw
