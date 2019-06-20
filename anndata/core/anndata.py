@@ -607,23 +607,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
         self._n_obs = self._adata_ref.n_obs  # use the original n_obs here
         self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
-        # fix _n_obs, _n_vars
-        if isinstance(oidx, slice):
-            self._n_obs = get_n_items_idx(obs_sub.index, adata_ref.n_obs)
-        elif isinstance(oidx, (int, np.integer)):
-            self._n_obs = 1
-        elif isinstance(oidx, Sized):
-            self._n_obs = get_n_items_idx(oidx, adata_ref.n_obs)
-        else:
-            raise KeyError('Unknown Index type')
-        if isinstance(vidx, slice):
-            self._n_vars = get_n_items_idx(var_sub.index, adata_ref.n_vars)
-        elif isinstance(vidx, (int, np.integer)):
-            self._n_vars = 1
-        elif isinstance(vidx, Sized):
-            self._n_vars = get_n_items_idx(vidx, adata_ref.n_vars)
-        else:
-            raise KeyError('Unknown Index type')
         # fix categories
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
         self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
@@ -631,6 +614,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obs = DataFrameView(obs_sub, view_args=(self, 'obs'))
         self._var = DataFrameView(var_sub, view_args=(self, 'var'))
         self._uns = DictView(uns_new, view_args=(self, 'uns'))
+        self._n_obs = len(self.obs)
+        self._n_vars = len(self.var)
+
         # set data
         if self.isbacked:
             self._X = None
