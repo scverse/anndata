@@ -1,5 +1,6 @@
 from importlib.util import find_spec
 from pathlib import Path
+import tempfile
 
 import numpy as np
 import pytest
@@ -8,7 +9,7 @@ from pandas.api.types import is_categorical
 
 import anndata as ad
 
-from anndata.tests.helpers import gen_adata
+from anndata.tests.helpers import gen_adata, asarray
 
 HERE = Path(__file__).parent
 
@@ -47,6 +48,12 @@ var_dict = dict(  # annotation of variables / columns
 uns_dict = dict(  # unstructured annotation
     oanno1_colors=['#000000', '#FFFFFF'],
     uns2=['some annotation'],
+    uns3="another annotation",
+    uns4={
+        "a": 1,
+        "b": [2, 3],
+        "c": "4"
+    }
 )
 
 # -------------------------------------------------------------------------------
@@ -55,18 +62,32 @@ uns_dict = dict(  # unstructured annotation
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_h5ad(typ, backing_h5ad):
+    tmpdir = tempfile.TemporaryDirectory()
+    tmpdirpth = Path(tmpdir.name)
+    mid_pth = tmpdirpth / "mid.h5ad"
+
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not is_categorical(adata_src.obs['oanno1'])
     adata_src.raw = adata_src
     adata_src.write(backing_h5ad)
 
-    adata = ad.read(backing_h5ad)
+    adata_mid = ad.read(backing_h5ad)
+    adata_mid.write(mid_pth)
+
+    adata = ad.read_h5ad(mid_pth)
     assert is_categorical(adata.obs['oanno1'])
     assert not is_categorical(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
     assert is_categorical(adata.raw.var['vanno2'])
+    assert np.all(adata.obs == adata_src.obs)
+    assert np.all(adata.var == adata_src.var)
+    assert np.all(adata.var.index == adata_src.var.index)
+    assert adata.var.index.dtype == adata_src.var.index.dtype
+    assert type(adata.raw.X) == type(adata_src.raw.X)
+    assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
+    assert np.all(adata.raw.var == adata_src.raw.var)
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
@@ -107,6 +128,10 @@ def test_maintain_layers(backing_h5ad):
     assert np.all((orig.layers["sparse"] == curr.layers["sparse"]).toarray())
     assert type(orig.layers["df"]) is type(curr.layers["df"])
     assert np.all(orig.layers["df"] == curr.layers["df"])
+
+
+# def test_maintain_uns(backing_h5ad):
+    # adata = gen_adata()
 
 
 def test_readwrite_sparse_as_dense(backing_h5ad):

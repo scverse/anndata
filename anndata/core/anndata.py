@@ -674,7 +674,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raw=None, layers=None,
             dtype='float32', shape=None,
             filename=None, filemode=None):
-        from ..readwrite.read import _read_args_from_h5ad
 
         # view attributes
         self._isview = False
@@ -2152,131 +2151,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         selection = selection.toarray() if issparse(selection) else selection
         return selection if reverse is None else selection[reverse]
 
-    # @staticmethod
-    # def _args_from_dict(ddata: Mapping[str, Any]):
-    #     """Allows to construct an instance of AnnData from a dictionary.
-
-    #     Acts as interface for the communication with the hdf5 file.
-
-    #     In particular, from a dict that has been written using
-    #     ``AnnData._to_dict_fixed_width_arrays``.
-    #     """
-        # d_true_keys = {}
-        # # backwards compat
-        # uns_is_not_key = False
-        # valid_keys = []
-        # for keys in AnnData._H5_ALIASES.values():
-        #     valid_keys += keys
-        # valid_keys += ['raw.X', 'raw.var', 'raw.varm', 'raw.cat']
-        # for key in ddata.keys():
-        #     # if there is another key then the prdedefined
-        #     # then we are reading the old format
-        #     if key not in valid_keys:
-        #         uns_is_not_key = True
-
-        # for true_key, keys in AnnData._H5_ALIASES.items():
-        #     for key in keys:
-        #         if key in ddata:
-        #             d_true_keys[true_key] = ddata[key]
-        #             if uns_is_not_key: del ddata[key]
-        #             break
-        #     else:
-        #         d_true_keys[true_key] = None
-
-        # # transform recarray to dataframe
-        # for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
-        #     if d_true_keys[true_key] is not None:
-        #         for key in keys:
-        #             if key in d_true_keys[true_key].dtype.names:
-        #                 d_true_keys[true_key] = pd.DataFrame.from_records(
-        #                     d_true_keys[true_key], index=key)
-        #                 break
-        #         d_true_keys[true_key].index = d_true_keys[true_key].index.astype('U')
-        #         # transform to unicode string
-        #         # TODO: this is quite a hack
-        #         for c in d_true_keys[true_key].columns:
-        #             if is_string_dtype(d_true_keys[true_key][c]):
-        #                 d_true_keys[true_key][c] = pd.Index(
-        #                     d_true_keys[true_key][c]).astype('U').values
-
-        # these are the category fields
-        # k_to_delete = []
-        # items = (
-        #     ddata.items() if uns_is_not_key
-        #     else ddata['uns'].items() if 'uns' in ddata else []
-        # )
-        # for k, v in items:
-        #     if k.endswith('_categories'):
-        #         k_stripped = k.replace('_categories', '')
-        #         if isinstance(v, (str, int)):  # fix categories with a single category
-        #             v = [v]
-        #         for ann in ['obs', 'var']:
-        #             if k_stripped in d_true_keys[ann]:
-        #                 d_true_keys[ann][k_stripped] = pd.Categorical.from_codes(
-        #                     codes=d_true_keys[ann][k_stripped].values,
-        #                     categories=v,
-        #                 )
-        #         k_to_delete.append(k)
-
-        # for k in k_to_delete:
-        #     if uns_is_not_key:
-        #         del ddata[k]
-        #     else:
-        #         del ddata['uns'][k]
-
-        # assign the variables
-        # X = d_true_keys['X']
-        # obs = d_true_keys['obs']
-        # obsm = d_true_keys['obsm']
-        # var = d_true_keys['var']
-        # varm = d_true_keys['varm']
-        # layers = d_true_keys['layers']
-        # raw = {}
-        # for k in ["raw.X", "raw.var", "raw.varm"]:
-        #     if k in ddata:
-        #         raw[k.replace("raw.", "")] = ddata[k]
-        # if len(raw) == 0:
-        #     raw = None
-
-        # raw = None
-        # if 'raw.X' in ddata:
-        #     raw = {}
-        #     raw['X'] = ddata['raw.X']
-        #     del ddata['raw.X']
-        #     # get the dataframe
-        #     raw['var'] = pd.DataFrame.from_records(
-        #         ddata['raw.var'], index='index')
-        #     del ddata['raw.var']
-        #     raw['var'].index = raw['var'].index.astype('U')
-        #     # transform to unicode string
-        #     for c in raw['var'].columns:
-        #         if is_string_dtype(raw['var'][c]):
-        #             raw['var'][c] = pd.Index(raw['var'][c]).astype('U').values
-        #     # these are the category fields
-        #     if 'raw.cat' in ddata:  # old h5ad didn't have that field
-        #         for k, v in ddata['raw.cat'].items():
-        #             if k.endswith('_categories'):
-        #                 k_stripped = k.replace('_categories', '')
-        #                 if isinstance(v, (str, int)):  # fix categories with a single category
-        #                     v = [v]
-        #                 raw['var'][k_stripped] = pd.Categorical.from_codes(
-        #                     codes=raw['var'][k_stripped].values,
-        #                     categories=v)
-        #         del ddata['raw.cat']
-        # if 'raw.varm' in ddata:
-        #     raw['varm'] = ddata['raw.varm']
-        #     del ddata['raw.varm']
-        # elif raw is not None:
-        #     raw['varm'] = None
-
-        # the remaining fields are the unstructured annotation
-        # uns = (
-        #     ddata if uns_is_not_key
-        #     else ddata['uns'] if 'uns' in ddata
-        #     else {}
-        # )
-
-        # return X, obs, var, uns, obsm, varm, layers, raw
 
     def _to_dict_fixed_width_arrays(self, var_len_str=True):
         """A dict of arrays that stores data and annotation.
