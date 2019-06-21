@@ -320,6 +320,11 @@ def _clean_uns(d):
         del d["uns"][k]
 
 
+@singledispatch
+def read_attribute(value):
+    raise NotImplementedError()
+
+
 def read_dataframe(dataset):
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     # for k, dtype in dataset.dtype.descr:
@@ -336,6 +341,7 @@ def read_dataframe(dataset):
     return df
 
 
+@read_attribute.register(h5py.Group)
 def read_group(group: h5py.Group):
     d = dict()
     for sub_key, sub_value in group.items():
@@ -343,6 +349,7 @@ def read_group(group: h5py.Group):
     return d
 
 
+@read_attribute.register(h5py.Dataset)
 def read_dataset(dataset: h5py.Dataset):
     if dataset.attrs.get("source_type", None) == "dataframe":
         return read_dataframe(dataset)
@@ -362,22 +369,12 @@ def read_dataset(dataset: h5py.Dataset):
             value = value[()]
         return value
 
-@singledispatch
-def read_attribute(value):
-    raise NotImplementedError()
-
-@read_attribute.register(h5py.Group)
-def read_attribute_group(value):
-    return read_group(value)
-
-@read_attribute.register(h5py.Dataset)
-def read_attribute_dataset(value):
-    return read_dataset(value)
 
 @read_attribute.register(type(None))
 def read_attribute_none(value):
     return None
 
+
 @read_attribute.register(h5py.SparseDataset)
-def read_attribute_sparse_dataset(value):
+def read_sparse_dataset(value):
     return value.value
