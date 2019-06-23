@@ -183,6 +183,9 @@ def write_none(f, key, value, dataset_kwargs={}):
     pass
 
 def write_scalar(f, key, value, dataset_kwargs={}):
+    if "compression" in dataset_kwargs:  # Can't compress scalars, error is thrown
+        dataset_kwargs = dataset_kwargs.copy()
+        dataset_kwargs.pop("compression")
     write_array(f, key, np.array(value), dataset_kwargs)
 
 def write_array(f, key, value, dataset_kwargs={}):

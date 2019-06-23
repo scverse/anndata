@@ -56,12 +56,18 @@ uns_dict = dict(  # unstructured annotation
     }
 )
 
+
+@pytest.fixture(params=[{}, {"compression": "gzip"}])
+def dataset_kwargs(request):
+    return request.param
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_h5ad(typ, backing_h5ad):
+def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     tmpdir = tempfile.TemporaryDirectory()
     tmpdirpth = Path(tmpdir.name)
     mid_pth = tmpdirpth / "mid.h5ad"
@@ -70,10 +76,10 @@ def test_readwrite_h5ad(typ, backing_h5ad):
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not is_categorical(adata_src.obs['oanno1'])
     adata_src.raw = adata_src
-    adata_src.write(backing_h5ad)
+    adata_src.write(backing_h5ad, **dataset_kwargs)
 
     adata_mid = ad.read(backing_h5ad)
-    adata_mid.write(mid_pth)
+    adata_mid.write(mid_pth, **dataset_kwargs)
 
     adata = ad.read_h5ad(mid_pth)
     assert is_categorical(adata.obs['oanno1'])
