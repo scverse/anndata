@@ -16,9 +16,11 @@ from collections.abc import Mapping
 
 def make_h5_cat_dtype(s):
     """This creates a hdf5 enum dtype based on a pandas categorical array."""
+    # If this causes segfaults, try the alternative in the commit message
+    max_code = np.max(s.codes)
     return h5py.special_dtype(enum=(
         s.codes.dtype,
-        dict(zip(s.categories, np.unique(s.codes)))
+        dict(zip(s.categories, np.arange(max_code + 1)))
     ))
 
 

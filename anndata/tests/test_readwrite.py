@@ -3,9 +3,10 @@ from pathlib import Path
 import tempfile
 
 import numpy as np
+import pandas as pd
+from pandas.api.types import is_categorical
 import pytest
 from scipy.sparse import csr_matrix, issparse
-from pandas.api.types import is_categorical
 
 import anndata as ad
 
@@ -36,6 +37,7 @@ obs_dict = dict(  # annotation of observations / rows
     row_names=['name1', 'name2', 'name3'],  # row annotation
     oanno1=['cat1', 'cat2', 'cat2'],        # categorical annotation
     oanno1b=['cat1', 'cat1', 'cat1'],       # categorical annotation with one category
+    oanno1c=['cat1', 'cat1', np.nan],       # categorical annotation with a missing value
     oanno2=['o1', 'o2', 'o3'],              # string annotation
     oanno3=[2.1, 2.2, 2.3],                 # float annotation
 )
@@ -122,6 +124,7 @@ def test_read_write_maintain_obsmvarm_dtypes(backing_h5ad):
     assert np.all(orig.obsm["df"] == curr.obsm["df"])
     assert np.all(orig.varm["df"] == curr.varm["df"])
 
+
 def test_maintain_layers(backing_h5ad):
     M, N = 100, 101
     orig = gen_adata((M, N))
@@ -134,10 +137,6 @@ def test_maintain_layers(backing_h5ad):
     assert np.all((orig.layers["sparse"] == curr.layers["sparse"]).toarray())
     assert type(orig.layers["df"]) is type(curr.layers["df"])
     assert np.all(orig.layers["df"] == curr.layers["df"])
-
-
-# def test_maintain_uns(backing_h5ad):
-    # adata = gen_adata()
 
 
 def test_readwrite_sparse_as_dense(backing_h5ad):
@@ -257,3 +256,18 @@ def test_readwrite_hdf5_empty(read, write, name, tmp_path):
 def test_read_excel():
     adata = ad.read_excel(HERE / 'data/excel.xlsx', 'Sheet1', dtype=int)
     assert adata.X.tolist() == X_list
+
+
+def test_write_categorical(tmp_path):
+    adata_pth = tmp_path / "adata.h5ad"
+    orig = ad.AnnData(
+        X=np.ones((5, 5)),
+        obs=pd.DataFrame({
+            "cat1": ["a", "a", "b", np.nan, np.nan],
+            "cat2": pd.Categorical(["a", "a", "b", np.nan, np.nan])
+        })
+    )
+    orig.write_h5ad(adata_pth)
+    curr = ad.read_h5ad(adata_pth)
+    assert np.all(orig.obs.notna() == curr.obs.notna())
+    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
