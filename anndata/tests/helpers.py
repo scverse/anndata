@@ -135,7 +135,6 @@ def array_subset(index, min_size=2):
         raise ValueError(
             f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         )
-    print(index)
     return np.random.choice(
         index,
         size=np.random.randint(min_size, len(index), ()),

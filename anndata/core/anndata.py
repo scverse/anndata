@@ -810,12 +810,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if self.isview:
                 X = X[self._oidx, self._vidx]
         elif self.isview:
-            X = _subset(
-                asview(
+            X = asview(
+                _subset(
                     self._adata_ref.X,
-                    ViewArgs(self._adata_ref, "X")
+                    (self._oidx, self._vidx)
                 ),
-                (self._oidx, self._vidx)
+                ViewArgs(self._adata_ref, "X")
             )
         else:
             X = self._X
@@ -1546,7 +1546,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                            self.uns.copy() if isinstance(self.uns, DictView) else deepcopy(self.uns),
                            self.obsm.copy(), self.varm.copy(),
                            raw=None if self._raw is None else self._raw.copy(),
-                           layers=dict(self.layers),
+                           layers=self.layers.copy(),
                            dtype=self.X.dtype.name if self.X is not None else 'float32')
         else:
             if filename is None:

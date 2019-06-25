@@ -53,6 +53,10 @@ def adata_parameterized(request):
 def matrix_type(request):
     return request.param
 
+@pytest.fixture(params=["layers", "obsm", "varm"])
+def mapping_name(request):
+    return request.param
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
@@ -77,6 +81,26 @@ def test_views():
     assert not adata_subset.isview
 
     assert adata_subset.obs['foo'].tolist() == list(range(2))
+
+
+def test_modify_view_component(matrix_type, mapping_name):
+    def getter(x): return getattr(x, mapping_name)
+    adata = ad.AnnData(
+        np.zeros((10, 10)),
+        **{mapping_name:
+            {"m": matrix_type(asarray(sparse.random(10, 10)))}
+        }
+    )
+    init_hash = joblib.hash(adata)
+
+    subset = adata[:5, :][:, :5]
+    assert subset.isview
+    m = getattr(subset, mapping_name)["m"]
+    m[0, 0] = 100
+    assert not subset.isview
+    assert getattr(subset, mapping_name)["m"][0, 0] == 100
+
+    assert init_hash == joblib.hash(adata)
 
 
 # These tests could probably be condensed into a fixture based test for obsm and varm
