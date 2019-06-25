@@ -119,12 +119,12 @@ class AlignedViewMixin:
     isview = True
 
     def __getitem__(self, key):
-        return _subset(
-            asview(
+        return asview(
+            _subset(
                 self.parent_mapping[key],
-                ViewArgs(self.parent, self.attrname, (key,))
+                self.subset_idx
             ),
-            self.subset_idx
+            ViewArgs(self.parent, self.attrname, (key,))
         )
 
     def __setitem__(self, key, value):
@@ -247,6 +247,13 @@ class LayersBase(AlignedMapping):
     """
     attrname = "layers"
     axes = (0, 1)
+
+    # TODO: I thought I had a more elegant solution to overiding this...
+    def copy(self):
+        d = self._actual_class(self.parent)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
 
 
 class Layers(AlignedActualMixin, LayersBase):
