@@ -1235,7 +1235,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 df_sub[k].cat.remove_unused_categories(inplace=True)
                 # also correct the colors...
                 if k + '_colors' in uns:
-                    # this is a strange hack...cd wor   
+                    # this is a strange hack...
                     if np.array(uns[k + '_colors']).ndim == 0:
                         uns[k + '_colors'] = np.array(uns[k + '_colors'])[None]
                     elif np.array(uns[k + '_colors']).ndim > 1:
