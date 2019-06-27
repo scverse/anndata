@@ -156,7 +156,12 @@ def _normalize_index(indexer, index: pd.Index) -> Union[slice, int, "np.ndarray[
         if issubclass(indexer.dtype.type, (np.integer, np.floating)):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
-            assert indexer.shape == index.shape
+            if indexer.shape != index.shape:
+                raise IndexError(
+                    f"Boolean index does not match AnnData's shape along this "
+                    f"dimension. Boolean index has shape {indexer.shape} while "
+                    f"AnnData index has shape {index.shape}."
+                )
             positions = np.where(indexer)[0]
             return positions  # np.ndarray[int]
         else:  # indexer should be string array
@@ -1180,17 +1185,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 index = index[0], index[1].values
             if isinstance(index[0], pd.Series):
                 index = index[0].values, index[1]
-
-            no_slice = not any(isinstance(i, slice) for i in index)
-            both_scalars = all(isinstance(i, (int, str, type(None))) for i in index)
-            if no_slice and not both_scalars:
-                raise NotImplementedError(
-                    'Slicing with two indices at the same time is not yet implemented. '
-                    'As a workaround, do row and column slicing succesively.')
-            # Speed up and error prevention for boolean indices (Don’t convert to integer indices)
-            # Needs to be refactored once we support a tuple of two arbitrary index types
-            if any(isinstance(i, np.ndarray) and i.dtype == bool for i in index):
-                return index
         obs, var = unpack_index(index)
         obs = _normalize_index(obs, self.obs_names)
         var = _normalize_index(var, self.var_names)
