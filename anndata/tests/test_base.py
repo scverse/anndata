@@ -3,6 +3,7 @@ from itertools import product
 import numpy as np
 from numpy import ma
 import pandas as pd
+import pytest
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix
 
@@ -165,6 +166,20 @@ def test_boolean_slicing():
     assert adata[:, vars_selector][0:2, :].X.tolist() == [[1,2], [4,5]]
 
 
+def test_oob_boolean_slicing():
+    len1, len2 = np.random.choice(100, 2, replace=False)
+    with pytest.raises(IndexError) as e:
+        AnnData(np.empty((len1, 100)))[np.random.randint(0, 2, len2, dtype=bool), :]
+    assert str(len1) in str(e.value)
+    assert str(len2) in str(e.value)
+
+    len1, len2 = np.random.choice(100, 2, replace=False)
+    with pytest.raises(IndexError) as e:
+        AnnData(np.empty((100, len1)))[:, np.random.randint(0, 2, len2, dtype=bool)]
+    assert str(len1) in str(e.value)
+    assert str(len2) in str(e.value)
+
+
 def test_slicing_strings():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
@@ -229,14 +244,6 @@ def test_slicing_remove_unused_categories():
         dict(k=['a', 'a', 'b', 'b']))
     adata._sanitize()
     assert adata[2:4].obs['k'].cat.categories.tolist() == ['b']
-
-
-def test_slicing_integer_index():
-    adata = AnnData(
-        np.array([[0, 1, 2], [3, 4, 5]]),
-        var=dict(var_names=[10, 11, 12]))
-    sliced = adata[:, adata.X.sum(0) > 3]  # This used to fail
-    assert sliced.shape == (2, 2)
 
 
 def test_get_subset_annotation():

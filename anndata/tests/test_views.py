@@ -391,3 +391,15 @@ def test_view_of_view_modification():
     assert np.all(asarray(adata.X)[0, 5:] == np.ones(5) * 2)
     adata[[1, 2], :][:, [1, 2]].X = np.ones((2, 2)) * 2
     assert np.all(asarray(adata.X)[1:3, 1:3] == np.ones((2, 2)) * 2)
+
+
+def test_double_index(subset_func, subset_func2):
+    adata = gen_adata((10, 10))
+    obs_subset = subset_func(adata.obs_names)
+    var_subset = subset_func2(adata.var_names)
+    v1 = adata[obs_subset, var_subset]
+    v2 = adata[obs_subset, :][:, var_subset]
+
+    assert np.all(asarray(v1.X) == asarray(v2.X))
+    assert np.all(v1.obs == v2.obs)
+    assert np.all(v1.var == v2.var)
