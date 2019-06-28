@@ -174,7 +174,7 @@ def _gen_dataframe(anno, length, index_names):
         anno = anno.copy()
         if not is_string_dtype(anno.index):
             logger.warning('Transforming to str index.')
-            anno.index = anno.index.astype(str)        
+            anno.index = anno.index.astype(str)
         return anno
     if anno is None or len(anno) == 0:
         _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
@@ -1830,6 +1830,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         var = pd.DataFrame(index=var_names)
 
+        if join == 'inner':
+            ad_ref = all_adatas[0]
+            cols_intersect = set(ad_ref.var.columns)
+            for ad in all_adatas[1:]:
+                cols_intersect &= set(ad.var.columns)
+                cols_intersect = {
+                    col for col in cols_intersect
+                    if ad_ref.var.loc[var_names, col].equals(ad.var.loc[var_names, col])
+                }
+                if not cols_intersect: break
+
         obs_i = 0  # start of next adata’s observations in X
         out_obss = []
         for i, ad in enumerate(all_adatas):
@@ -1868,6 +1879,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # var
             for c in ad.var.columns:
+                if join == 'inner' and c in cols_intersect:
+                    if c not in var.columns:
+                        var.loc[vars_intersect, c] = ad.var.loc[vars_intersect, c]
+                    continue
                 new_c = c + (index_unique if index_unique is not None else '-') + categories[i]
                 var.loc[vars_intersect, new_c] = ad.var.loc[vars_intersect, c]
 

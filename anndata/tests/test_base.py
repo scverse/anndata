@@ -77,7 +77,7 @@ def test_create_from_df_with_obs_and_var():
     assert df.index.tolist() == ad.obs_names.tolist()
     assert obs.equals(ad.obs)
     assert var.equals(ad.var)
-    
+
     from pytest import raises
     with raises(ValueError, match=r'Index of obs must match index of X.'):
         AnnData(df, obs=obs.reset_index())
@@ -375,6 +375,34 @@ def test_concatenate():
     assert np.array_equal(var_ma.mask, var_ma_ref.mask)
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
 
+    # inner join duplicates
+    adata1 = AnnData(X1,
+                     {'obs_names': ['s1', 's2'],
+                      'anno1': ['c1', 'c2']},
+                     {'var_names': ['a', 'b', 'c'],
+                      'annoA': [0, 1, 2],
+                      'annoB': [1.1, 1.0, 2.0],
+                      'annoC': [1.1, 1.0, 2.0],
+                      'annoD': [2.1, 2.0, 3.0]})
+    adata2 = AnnData(X2,
+                     {'obs_names': ['s3', 's4'],
+                      'anno1': ['c3', 'c4']},
+                     {'var_names': ['a', 'b', 'c'],
+                      'annoA': [0, 1, 2],
+                      'annoB': [1.1, 1.0, 2.0],
+                      'annoC': [1.1, 1.0, 2.0],
+                      'annoD': [2.1, 2.0, 3.0]})
+    adata3 = AnnData(X3,
+                     {'obs_names': ['s1', 's2'],
+                      'anno2': ['d3', 'd4']},
+                     {'var_names': ['a', 'b', 'c'],
+                      'annoA': [0, 1, 2],
+                      'annoB': [1.1, 1.0, 2.0],
+                      'annoD': [2.1, 2.0, 3.1]})
+
+    adata = adata1.concatenate(adata2, adata3)
+    assert adata.var_keys() == ['annoA', 'annoB', 'annoC-0', 'annoD-0', 'annoC-1', 'annoD-1', 'annoD-2']
+
     # sparse data
     from scipy.sparse import csr_matrix
     X1 = csr_matrix([[0, 2, 3], [0, 5, 6]])
@@ -526,4 +554,3 @@ def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
     assert df.values.tolist() == X.tolist()
-
