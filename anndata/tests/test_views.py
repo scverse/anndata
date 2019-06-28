@@ -84,7 +84,6 @@ def test_views():
 
 
 def test_modify_view_component(matrix_type, mapping_name):
-    def getter(x): return getattr(x, mapping_name)
     adata = ad.AnnData(
         np.zeros((10, 10)),
         **{mapping_name:
