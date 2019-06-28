@@ -67,11 +67,11 @@ def test_views():
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32')
 
     assert adata[:, 0].isview
-    assert adata[:, 0].X.tolist() == [1, 4, 7]
+    assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
     adata[:2, 0].X = [0, 0]
 
-    assert adata[:, 0].X.tolist() == [0, 0, 7]
+    assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
 
     adata_subset = adata[:2, [0, 1]]
 

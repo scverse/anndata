@@ -64,13 +64,13 @@ def test_backing(adata, tmp_path, backing_h5ad):
     assert not adata.file.isopen
     assert adata.isbacked
     assert adata[:, 0].isview
-    assert adata[:, 0].X.tolist() == [1, 4, 7]
+    assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
     # this might give us a trouble as the user might not
     # know that the file is open again....
     assert adata.file.isopen
 
     adata[:2, 0].X = [0, 0]
-    assert adata[:, 0].X.tolist() == [0, 0, 7]
+    assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
 
     adata_subset = adata[:2, [0, 1]]
     assert adata_subset.isview
