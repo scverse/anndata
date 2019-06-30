@@ -51,7 +51,7 @@ from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameV
 from .. import utils
 from ..utils import Index, get_n_items_idx, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
-from ..compat import PathLike
+from ..compat import PathLike, warn_flatten
 
 
 class StorageType(Enum):
@@ -293,8 +293,10 @@ class Raw:
             else: return X
         else:
             if self.n_obs == 1 and self.n_vars == 1:
+                warn_flatten()
                 return self._X[0, 0]
             elif self.n_obs == 1 or self.n_vars == 1:
+                warn_flatten()
                 X = self._X
                 if issparse(self._X): X = self._X.toarray()
                 return X.flatten()
@@ -836,8 +838,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return X
         else:
             if self.n_obs == 1 and self.n_vars == 1:
+                warn_flatten()
                 return self._X[0, 0]
             elif self.n_obs == 1 or self.n_vars == 1:
+                warn_flatten()
                 X = self._X
                 if issparse(self._X): X = self._X.toarray()
                 return X.flatten()
