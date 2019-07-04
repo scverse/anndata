@@ -43,7 +43,8 @@ def warn_flatten():
         " returned a scalar and `adata[0, :]` returned a 1d array, post v0.7 they"
         " will return two dimensional arrays. If you would like to get a one "
         "dimensional array from your AnnData object, consider using the "
-        "`adata.obs_vector` or `adata.var_vector` methods.",
+        "`adata.obs_vector`, `adata.var_vector` methods or accessing the array"
+        " directly.",
         FutureWarning,
         stacklevel=2
     )
