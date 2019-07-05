@@ -51,7 +51,7 @@ from .views import ArrayView, SparseCSRView, SparseCSCView, DictView, DataFrameV
 from .. import utils
 from ..utils import Index, get_n_items_idx, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
-from ..compat import PathLike
+from ..compat import PathLike, warn_flatten
 
 
 class StorageType(Enum):
@@ -293,8 +293,10 @@ class Raw:
             else: return X
         else:
             if self.n_obs == 1 and self.n_vars == 1:
+                warn_flatten()
                 return self._X[0, 0]
             elif self.n_obs == 1 or self.n_vars == 1:
+                warn_flatten()
                 X = self._X
                 if issparse(self._X): X = self._X.toarray()
                 return X.flatten()
@@ -836,8 +838,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return X
         else:
             if self.n_obs == 1 and self.n_vars == 1:
+                warn_flatten()
                 return self._X[0, 0]
             elif self.n_obs == 1 or self.n_vars == 1:
+                warn_flatten()
                 X = self._X
                 if issparse(self._X): X = self._X.toarray()
                 return X.flatten()
@@ -1526,19 +1530,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def _get_obs_array(self, k, use_raw=False, layer=None):
         """Get an array from the layer (default layer='X') along the observation dimension by first looking up
         obs.keys and then var.index."""
-        if use_raw:
-            return self.raw.obs_vector(k)
-        else:
+        if not use_raw or k in self.obs.columns:
             return self.obs_vector(k=k, layer=layer)
+        else:
+            return self.raw.obs_vector(k)
 
     @utils.deprecated("var_vector")
     def _get_var_array(self, k, use_raw=False, layer=None):
         """Get an array from the layer (default layer='X') along the variables dimension by first looking up
         ``var.keys`` and then ``obs.index``."""
-        if use_raw:
-            return self.raw.var_vector(k)
-        else:
+        if not use_raw or k in self.var.columns:
             return self.var_vector(k=k, layer=layer)
+        else:
+            return self.raw.var_vector(k)
 
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
