@@ -385,7 +385,8 @@ class Raw:
         if k in self.var:
             return self.var[k].values
         else:
-            a = self[k, :].X
+            idx = self._normalize_indices((k, slice(None)))
+            a = self.X[idx]
         if issparse(a):
             a = a.toarray()
         return np.ravel(a)
@@ -409,7 +410,8 @@ class Raw:
         A one dimensional nd array, with values for each obs in the same order
         as `.obs_names`.
         """
-        a = self[:, k].X
+        idx = self._normalize_indices((slice(None), k))
+        a = self.X[idx]
         if issparse(a):
             a = a.toarray()
         return np.ravel(a)
