@@ -1,4 +1,4 @@
-from operator import eq
+from operator import eq, ne
 
 import joblib
 import numpy as np
@@ -49,7 +49,10 @@ def adata_parameterized(request):
     return gen_adata(shape=(200, 300), X_type=request.param)
 
 
-@pytest.fixture(params=[np.array, sparse.csr_matrix, sparse.csc_matrix])
+@pytest.fixture(
+    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
+    ids=["np_array", "scipy_csr", "scipy_csc"]
+)
 def matrix_type(request):
     return request.param
 
@@ -354,26 +357,26 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
         asarray(view_of_actual_copy.X),
         asarray(view_of_view_copy.X)
     )
-    assert np.all(asarray(eq(
+    assert not np.any(asarray(ne(
         view_of_actual_copy.obs,
         view_of_view_copy.obs
     )))
-    assert np.all(asarray(eq(
+    assert not np.any(asarray(ne(
         view_of_actual_copy.var,
         view_of_view_copy.var
     )))
     for k in adata.obsm.keys():
-        assert np.all(asarray(eq(
+        assert not np.any(asarray(ne(
             view_of_actual_copy.obsm[k],
             view_of_view_copy.obsm[k]
         )))
     for k in adata.varm.keys():
-        assert np.all(asarray(eq(
+        assert not np.any(asarray(ne(
             asarray(view_of_actual_copy.varm[k]),
             asarray(view_of_view_copy.varm[k])
         )))
     for k in adata.layers.keys():
-        assert np.all(asarray(eq(
+        assert not np.any(asarray(ne(
             asarray(view_of_actual_copy.layers[k]),
             asarray(view_of_view_copy.layers[k])
         )))
