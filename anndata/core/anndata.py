@@ -468,13 +468,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     var
         Key-indexed one-dimensional variables annotation of length #variables.
     uns
-        Key-index unstructured annotation.
+        Key-indexed unstructured annotation.
     obsm
         Key-indexed multi-dimensional observations annotation of length #observations.
         If passing a :class:`~numpy.ndarray`, it needs to have a structured datatype.
     varm
         Key-indexed multi-dimensional variables annotation of length #variables.
         If passing a :class:`~numpy.ndarray`, it needs to have a structured datatype.
+    layers
+        Key-indexed multi-dimensional arrays aligned to dimensions of `X`.
     dtype
         Data type used for storage.
     shape
@@ -483,8 +485,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Name of backing file. See :class:`anndata.h5py.File`.
     filemode
         Open mode of backing file. See :class:`anndata.h5py.File`.
-    layers
-        Dictionary with keys as layers' names and values as matrices of the same dimensions as X.
 
     See Also
     --------
@@ -500,26 +500,38 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     Notes
     -----
-    Multi-dimensional annotations are stored in :attr:`obsm` and :attr:`varm`.
-
-    Indexing into an AnnData object with a numeric is supposed to be positional,
-    like pandas’ :attr:`~pandas.DataFrame.iloc` accessor, while indexing with a string/categorical is
-    supposed to behave like :attr:`~pandas.DataFrame.loc`.
-
-    If the unstructured annotations :attr:`uns` contain a sparse matrix of shape
-    :attr:`n_obs` × :attr:`n_obs`, these are sliced when calling ``[]``.
-
-    A data matrix is flattened if either :attr:`n_obs` or :attr:`n_vars` is 1, so that
-    numpy's slicing behavior is reproduced::
-
-        adata = AnnData(np.ones((2, 2)))
-        adata[:, 0].X == adata.X[:, 0]
-
     :class:`~anndata.AnnData` stores observations (samples) of variables
     (features) in the rows of a matrix. This is the convention of the modern
     classics of statistics [Hastie09]_ and machine learning [Murphy12]_, the
     convention of dataframes both in R and Python and the established statistics
     and machine learning packages in Python (statsmodels_, scikit-learn_).
+
+    Single dimensional annotations of the observation and variables are stored in the :attr:`obs`
+    and :attr:`var` attributes as :class:`~pandas.DataFrame` s. This is intended for metrics
+    calculated over their axes. Multi-dimensional annotations are stored in :attr:`obsm` and
+    :attr:`varm`, which are aligned to the objects observation and variable dimensions
+    respectively. Additional measurements across both observations and variables are stored in
+    :attr:`layers`.
+
+    Indexing into an AnnData object can be performed by relative position with numeric indices
+    (like pandas' :attr:`~pandas.DataFrame.iloc`), or by labels (like :attr:`~pandas.DataFrame.loc`).
+    To avoid ambiguity, indexes of the AnnData object are converted to strings by the constructor.
+
+    Subsetting an AnnData object by indexing into it will also subset it's elements according to
+    the dimensions they were aligned to. This means an operation like `adata[list_of_obs, :]` will
+    also subset (albeit lazily) :attr:`obs`, :attr:`obsm`, and :attr:`layers`.
+
+    .. TODO: This will be deprecated as of v0.7 and introduction of obsp, varp
+
+    If the unstructured annotations :attr:`uns` contain a sparse matrix of shape
+    :attr:`n_obs` × :attr:`n_obs`, these are subset with the observation dimension.
+
+    Similar to Bioconductor's `ExpressionSet`, subsetting an AnnData object doesn't reduce the
+    dimensions of it's constituent arrays. This differs from behaviour of libraries like `pandas`,
+    `numpy`, and `xarray`. However, unlike the classes exposed by those libraries, there is no
+    concept of a one dimensional AnnData object. They have two inherent dimensions, :attr:`obs` and
+    :attr:`var`. Additionally, maintaining the dimensionality of the AnnData object allows for
+    consistent handling of :mod:`scipy.sparse` sparse matrices and :mod:`numpy` arrays.
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
