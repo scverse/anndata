@@ -219,6 +219,26 @@ def test_set_varm(adata):
 
     assert init_hash == joblib.hash(adata)
 
+# TODO: Determine if this is the intended behavior, or just the behaviour we've had for a while
+def test_set_subset_X(matrix_type, subset_func):
+    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+    init_hash = joblib.hash(adata)
+    orig_X_val = adata.X.copy()
+    while True:
+        subset_idx = slice_subset(adata.obs_names)
+        if len(adata[subset_idx, :]) > 2:
+            break
+    subset = adata[subset_idx, :]
+
+    subset = adata[:, subset_idx]
+
+    internal_idx = subset_func(np.arange(subset.X.shape[1]))
+    assert subset.isview
+    subset.X[:, internal_idx] = 1
+    assert not subset.isview
+    assert not np.any(asarray(adata.X != orig_X_val))
+
+    assert init_hash == joblib.hash(adata)
 
 # TODO: Use different kind of subsetting for adata and view
 def test_set_subset_obsm(adata, subset_func):
