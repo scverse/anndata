@@ -33,7 +33,7 @@ def test_get_obsvar_array_warn(adata):
         adata._get_var_array("s1")
 
 
-# TODO: Why doesn't mark this work?
+# TODO: Why doesn't this mark work?
 @pytest.mark.filterwarnings("ignore::DeprecationWarning:anndata[.*]")
 def test_get_obsvar_array(adata):
     assert np.allclose(
