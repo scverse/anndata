@@ -526,6 +526,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     If the unstructured annotations :attr:`uns` contain a sparse matrix of shape
     :attr:`n_obs` × :attr:`n_obs`, these are subset with the observation dimension.
 
+    Subsetting an AnnData object returns a view into the original object, meaning very little
+    additional memory is used upon subsetting. This is achieved through laziness, meaning
+    subsetting the constituent arrays is deferred until they are accessed. Copying a view causes
+    an equivalent "real" AnnData object to be generated. Attempting to modify a view (at any attribute
+    except X) is handled in a copy-on-modify manner, meaning the object is initialized in place.
+    Here's an example::
+
+        batch1 = adata[adata.obs["batch"] == "batch1", :]
+        batch1.obs["value"] = 0  # This makes batch1 a "real" anndata object, with it's own data
+
+    At the end of this snippet: `adata` was not modified, and `batch1` is it's own AnnData object
+    with it's own data.
+
     Similar to Bioconductor's `ExpressionSet`, subsetting an AnnData object doesn't reduce the
     dimensions of it's constituent arrays. This differs from behaviour of libraries like `pandas`,
     `numpy`, and `xarray`. However, unlike the classes exposed by those libraries, there is no
