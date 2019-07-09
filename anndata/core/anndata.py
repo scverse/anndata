@@ -39,6 +39,15 @@ except ImportError:
         def __rep__():
             return 'mock zappy.base.ZappyArray'
 
+# try importing dask
+try:
+    from dask.array import Array as DaskArray
+except ImportError:
+    class DaskArray:
+        @staticmethod
+        def __rep__():
+            return 'mock dask.array.core.Array'
+
 
 from .alignedmapping import (
     AxisArraysBase, AxisArrays,
@@ -61,10 +70,10 @@ class StorageType(Enum):
     Sparse = sparse.spmatrix
     ZarrArry = ZarrArray
     ZappyArry = ZappyArray
+    DaskArry = DaskArray
 
     @classmethod
     def classes(cls):
-        print(ZarrArray)
         return tuple(c.value for c in cls.__members__.values())
 
 
@@ -845,7 +854,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self._adata_ref.X,
                     (self._oidx, self._vidx)
                 ),
-                ViewArgs(self._adata_ref, "X")
+                ViewArgs(self, "X")
             )
         else:
             X = self._X
@@ -861,8 +870,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @X.setter
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
-        if not isinstance(value, (np.ndarray, sparse.spmatrix)):
-            value = np.array(value)
+        if not isinstance(value, StorageType.classes()):
+            # raise Exception(f"value was type {type(value)}")
+            value = np.array(value)  # Should this warn if the type isn't expected? Error even?
         if value is None:
             if self.isview:
                 raise ValueError('Copy the view before setting the data matrix to `None`.')

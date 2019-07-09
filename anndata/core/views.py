@@ -8,6 +8,7 @@ from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from ..logging import anndata_logger as logger
+from .anndata import ZappyArray
 
 
 class ViewArgs(NamedTuple):
@@ -17,6 +18,10 @@ class ViewArgs(NamedTuple):
 
 
 class _SetItemMixin:
+    """
+    Class which (when values are being set) lets their parent anndata view know, so it can make
+    a copy of itself. This implements copy-on-modify semantics for views of AnnData objects.
+    """
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
             super().__setitem__(idx, value)
@@ -88,7 +93,6 @@ class SparseCSCView(_ViewMixin, sparse.csc_matrix):
 class DictView(_ViewMixin, dict):
     pass
 
-
 class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata = ['_view_args']
 
@@ -118,6 +122,12 @@ def asview_csc(mtx, view_args):
 @asview.register(dict)
 def asview_dict(d, view_args):
     return DictView(d, view_args=view_args)
+
+@asview.register(ZappyArray)
+def asview_zappy(z, view_args):
+    # Previous code says ZappyArray works as view, but as far as I can tell they're immutable.
+    return z
+
 
 def _resolve_idxs(old, new, adata):
     t = tuple(
