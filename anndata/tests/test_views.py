@@ -1,4 +1,4 @@
-from operator import eq, ne
+from operator import eq, ne, mul
 
 import joblib
 import numpy as np
@@ -220,7 +220,7 @@ def test_set_varm(adata):
     assert init_hash == joblib.hash(adata)
 
 # TODO: Determine if this is the intended behavior, or just the behaviour we've had for a while
-def test_set_subset_X(matrix_type, subset_func):
+def test_not_set_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
@@ -239,6 +239,20 @@ def test_set_subset_X(matrix_type, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == joblib.hash(adata)
+
+def test_set_scalar_subset_X(matrix_type, subset_func):
+    adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
+    orig_X_val = adata.X.copy()
+    subset_idx = slice_subset(adata.obs_names)
+
+    adata_subset = adata[subset_idx, :]
+
+    adata_subset.X = 1
+
+    assert adata_subset.isview
+    assert np.all(asarray(adata[subset_idx, :].X) == 1)
+
+    assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
 
 # TODO: Use different kind of subsetting for adata and view
 def test_set_subset_obsm(adata, subset_func):

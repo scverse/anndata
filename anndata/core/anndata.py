@@ -870,9 +870,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @X.setter
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
-        if not isinstance(value, StorageType.classes()):
-            # raise Exception(f"value was type {type(value)}")
-            value = np.array(value)  # Should this warn if the type isn't expected? Error even?
+        if not isinstance(value, StorageType.classes()) and not np.isscalar(value):
+            value = np.array(value)  # TODO: Duck type this instead, maybe warn
         if value is None:
             if self.isview:
                 raise ValueError('Copy the view before setting the data matrix to `None`.')
@@ -889,10 +888,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             oidx, vidx = np.ix_(self._oidx, self._vidx)
         else:
             oidx, vidx = self._oidx, self._vidx
-        var_get = self.n_vars == 1 and self.n_obs == len(value)
-        obs_get = self.n_obs == 1 and self.n_vars == len(value)
-        if var_get or obs_get or self.shape == value.shape:
-            if self.shape != value.shape:
+        if (np.isscalar(value)
+            or (self.n_vars == 1 and self.n_obs == len(value))
+            or (self.n_obs == 1 and self.n_vars == len(value))
+            or self.shape == value.shape
+        ):
+            if not np.isscalar(value) and self.shape != value.shape:
+                # For assigning vector of values to 2d array or matrix
+                # Not neccesary for row of 2d array
                 value = value.reshape(self.shape)
             if self.isbacked:
                 if self.isview:
@@ -907,8 +910,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 else:
                     self._X = value
         else:
-            raise ValueError('Data matrix has wrong shape {}, need to be {}'
-                             .format(value.shape, self.shape))
+            raise ValueError(
+                f'Data matrix has wrong shape {value.shape}, need to be {self.shape}.'
+            )
 
     @property
     def layers(self) -> LayersBase:
