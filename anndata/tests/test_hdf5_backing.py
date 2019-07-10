@@ -172,3 +172,26 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
     assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
     assert np.all(adata.X[2, :] == np.array([7, 0, 9]))
+
+
+# TODO: Work around h5py not supporting this
+# def test_backed_view_modification(adata, backing_h5ad):
+#     adata.write(backing_h5ad)
+#     backed_adata = ad.read_h5ad(backing_h5ad, backed=True)
+
+#     backed_view = backed_adata[[1, 2], :]
+#     backed_view.X = 0
+
+#     assert np.all(backed_adata.X[:3, :] == 0)
+
+
+# TODO: Implement
+# def test_backed_view_modification_sparse(adata, backing_h5ad, sparse_format):
+#     adata[:, 1] = 0  # Make it a little sparse
+#     adata.X = sparse_format(adata.X)
+#     adata.write(backing_h5ad)
+#     backed_adata = ad.read_h5ad(backing_h5ad, backed=True)
+
+#     backed_view = backed_adata[[1,2], :]
+#     backed_view.X = 0
+#     assert np.all(backed_adata.X[[1,2], :] == 0)
