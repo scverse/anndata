@@ -38,6 +38,9 @@ class AlignedMapping(MutableMapping, ABC):
             self.__class__.__name__, ', '.join(self.keys())
         )
 
+    def _ipython_key_completions_(self):
+        return list(self.keys())
+
     def _validate_value(self, val, key) -> None:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
