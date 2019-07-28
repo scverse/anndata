@@ -1568,11 +1568,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            X = self.X
+            if self.isview:
+                # TODO: How do I unambiguously check if this is a copy?
+                # Subsetting this way means we don't have to have a view type
+                # defined for the matrix, which is needed for some of the current
+                # distributed backend.
+                X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
+            else:
+                X = self.X.copy()
+            # TODO: Figure out what case this is:
             if X is not None:
-                X = X.copy()
+                dtype = X.dtype
                 if X.shape != self.shape:
                     X = X.reshape(self.shape)
+            else:
+                dtype = "float32"
             return AnnData(X,
                            self.obs.copy(),
                            self.var.copy(),
@@ -1582,7 +1592,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                            self.obsm.copy(), self.varm.copy(),
                            raw=None if self._raw is None else self._raw.copy(),
                            layers=self.layers.copy(),
-                           dtype=self.X.dtype.name if self.X is not None else 'float32')
+                           dtype=dtype)
         else:
             if filename is None:
                 raise ValueError(
