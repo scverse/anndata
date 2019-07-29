@@ -3,6 +3,29 @@
 .. role:: noteversion
 
 
+On Master :small:`July 29, 2019`
+--------------------------------
+
+.. warning::
+
+    Breaking changes on master include: 
+
+    - Elements of `AnnData` objects don't have their dimensionality reduced when the main object is subset. This is to maintain consistency when subsetting. See discussion `here <https://github.com/theislab/anndata/issues/145>`__.
+    - While the `anndata.core` module currently exists, it may be renamed to `anndata._core` `#174 <https://github.com/theislab/anndata/issues/174>`__.
+
+    Currently broken features
+
+    - `sc.pp.normalize_per_cell` doesn't work on dask arrays. It just doesn't modify the matrix.
+
+
+- Views have been overhauled  `PR #164 <https://github.com/theislab/anndata/pull/164>`__.
+
+   - Indexing into a view no longer keeps a reference to intermediate view, `issue #62 <https://github.com/theislab/anndata/issues/62>`__.
+   - Views are now lazy. Elements of view of AnnData are not indexed until they're accessed.
+   - Indexing with scalars no longer reduces dimensionality of contained arrays, `issue #145 <https://github.com/theislab/anndata/issues/145>`__.
+   - All elements of AnnData should now follow the same rules about how they're subset, `issue #145 <https://github.com/theislab/anndata/issues/145>`__.
+   - Can now index by observations and variables at the same time.
+
 Post v0.6 :small:`June 6, 2019`
 ---------------------------------
 
@@ -40,7 +63,7 @@ Version 0.5 :small:`February 9, 2018`
 
 
 Version 0.4 :small:`December 23, 2017`
--------------------------------------
+--------------------------------------
 
 - read/write `.loom <http://loompy.org>`__ files
 - scalability beyond dataset sizes that fit into memory: see this `blog post <http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/>`__
