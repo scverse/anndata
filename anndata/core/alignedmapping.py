@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from functools import singledispatch
-from typing import Mapping, Optional, Tuple
+from typing import Mapping, Optional, Tuple, Iterable
 import warnings
 
 import numpy as np
@@ -13,11 +13,15 @@ from .views import asview, ViewArgs
 
 
 @singledispatch
-def _subset(mat, subset_idx):
-    return mat[subset_idx]
+def _subset(a, subset_idx: Tuple):
+    # Select as combination of indexes, not coordinates
+    # Correcting for indexing behaviour of np.ndarray
+    if all(isinstance(x, Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+    return a[subset_idx]
 
 @_subset.register(pd.DataFrame)
-def _subset_df(df: pd.DataFrame, subset_idx):
+def _subset_df(df: pd.DataFrame, subset_idx: Tuple):
     return df.iloc[subset_idx]
 
 
@@ -92,7 +96,7 @@ class AlignedMapping(MutableMapping, ABC):
             d[k] = v.copy()
         return d
 
-    def _view(self, parent, subset_idx):
+    def _view(self, parent: "AnnData", subset_idx: Tuple):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
@@ -115,12 +119,12 @@ class AlignedViewMixin:
     isview = True
 
     def __getitem__(self, key):
-        return _subset(
-            asview(
+        return asview(
+            _subset(
                 self.parent_mapping[key],
-                ViewArgs(self.parent, self.attrname, (key,))
+                self.subset_idx
             ),
-            self.subset_idx
+            ViewArgs(self.parent, self.attrname, (key,))
         )
 
     def __setitem__(self, key, value):
@@ -224,7 +228,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
-    def __init__(self, parent_mapping, parent_view, subset_idx):
+    def __init__(self, parent_mapping: AxisArraysBase, parent_view: "AnnData", subset_idx):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
@@ -243,6 +247,13 @@ class LayersBase(AlignedMapping):
     """
     attrname = "layers"
     axes = (0, 1)
+
+    # TODO: I thought I had a more elegant solution to overiding this...
+    def copy(self):
+        d = self._actual_class(self.parent)
+        for k, v in self.items():
+            d[k] = v.copy()
+        return d
 
 
 class Layers(AlignedActualMixin, LayersBase):

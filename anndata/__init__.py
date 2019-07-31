@@ -1,4 +1,4 @@
-from .core.anndata import AnnData
+from .core.anndata import AnnData, Raw
 from .readwrite import (
     read_h5ad, read_loom, read_hdf,
     read_excel, read_umi_tools,

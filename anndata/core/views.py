@@ -4,9 +4,11 @@ from typing import Any, KeysView, Optional, Sequence, Tuple, NamedTuple
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from ..logging import anndata_logger as logger
+from .anndata import ZappyArray
 
 
 class ViewArgs(NamedTuple):
@@ -16,6 +18,10 @@ class ViewArgs(NamedTuple):
 
 
 class _SetItemMixin:
+    """
+    Class which (when values are being set) lets their parent anndata view know, so it can make
+    a copy of itself. This implements copy-on-modify semantics for views of AnnData objects.
+    """
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
             super().__setitem__(idx, value)
@@ -75,6 +81,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
+# Unlike array views, SparseCSRView and SparseCSCView do not propagate through subsetting
 class SparseCSRView(_ViewMixin, sparse.csr_matrix):
     pass
 
@@ -85,7 +92,6 @@ class SparseCSCView(_ViewMixin, sparse.csc_matrix):
 
 class DictView(_ViewMixin, dict):
     pass
-
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata = ['_view_args']
@@ -116,3 +122,47 @@ def asview_csc(mtx, view_args):
 @asview.register(dict)
 def asview_dict(d, view_args):
     return DictView(d, view_args=view_args)
+
+@asview.register(ZappyArray)
+def asview_zappy(z, view_args):
+    # Previous code says ZappyArray works as view, but as far as I can tell they're immutable.
+    return z
+
+
+def _resolve_idxs(old, new, adata):
+    t = tuple(
+        _resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1)
+    )
+    return t
+
+@singledispatch
+def _resolve_idx(old, new, l):
+    return old[new]
+
+@_resolve_idx.register(np.ndarray)
+def _resolve_idx_ndarray(old, new, l):
+    if is_bool_dtype(old):
+        old = np.where(old)[0]
+    return old[new]
+
+@_resolve_idx.register(np.integer)
+@_resolve_idx.register(int)
+def _resolve_idx_scalar(old, new, l):
+    return np.array([old])[new]
+
+@_resolve_idx.register(slice)
+def _resolve_idx_slice(old, new, l):
+    if isinstance(new, slice):
+        return _resolve_idx_slice_slice(old, new, l)
+    else:
+        return np.arange(*old.indices(l))[new]
+
+def _resolve_idx_slice_slice(old, new, l):
+    r = range(*old.indices(l))[new]
+    # Convert back to slice
+    start, stop, step = r.start, r.stop, r.step
+    if len(r) == 0:
+        stop = start
+    elif stop < 0:
+        stop = None
+    return slice(start, stop, step)

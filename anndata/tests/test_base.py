@@ -3,6 +3,7 @@ from itertools import product
 import numpy as np
 from numpy import ma
 import pandas as pd
+import pytest
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix
 
@@ -29,7 +30,8 @@ def test_creation():
         obs=dict(Obs=['A', 'B']),
         var=dict(Feat=['a', 'b', 'c']),
         obsm=dict(X_pca=np.array([[1, 2], [3, 4]])),
-        raw=dict(X=X, var={'var_names': ['a', 'b', 'c']}))
+        raw=dict(X=X, var=dict(var_names=['a', 'b', 'c'])),
+    )
 
     assert adata.raw.X.tolist() == X.tolist()
     assert adata.raw.var_names.tolist() == ['a', 'b', 'c']
@@ -51,8 +53,9 @@ def test_creation():
 
 def test_create_with_dfs():
     X = np.ones((6, 3))
-    obs = pd.DataFrame(
-        {'cat_anno': pd.Categorical(['a', 'a', 'a', 'a', 'b', 'a'])})
+    obs = pd.DataFrame(dict(
+        cat_anno=pd.Categorical(['a', 'a', 'a', 'a', 'b', 'a']),
+    ))
     obs_copy = obs.copy()
     adata = AnnData(X=X, obs=obs)
     assert obs.index.equals(obs_copy.index)
@@ -108,16 +111,15 @@ def test_indices_dtypes():
     assert adata.obs_names.tolist() == ['ö', 'a']
 
 
-
 def test_slicing():
     adata = AnnData(np.array([[1, 2, 3],
                               [4, 5, 6]]))
 
-    assert adata[:, 0].X.tolist() == adata.X[:, 0].tolist()
+    # assert adata[:, 0].X.tolist() == adata.X[:, 0].tolist()  # No longer the case
 
-    assert adata[0, 0].X.tolist() == 1
-    assert adata[0, :].X.tolist() == [1, 2, 3]
-    assert adata[:, 0].X.tolist() == [1, 4]
+    assert adata[0, 0].X.tolist() == np.reshape(1, (1, 1)).tolist()
+    assert adata[0, :].X.tolist() == np.reshape([1, 2, 3], (1, 3)).tolist()
+    assert adata[:, 0].X.tolist() == np.reshape([1, 4], (2, 1)).tolist()
 
     assert adata[:, [0, 1]].X.tolist() == [[1, 2], [4, 5]]
     assert adata[:, np.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
@@ -125,11 +127,11 @@ def test_slicing():
     assert adata[:, 1:3].X.tolist() == [[2, 3], [5, 6]]
 
     assert adata[0:2, :][:, 0:2].X.tolist() == [[1,2], [4,5]]
-    assert adata[0:1, :][:, 0:2].X.tolist() == [1,2]
-    assert adata[0, :][:, 0].X.tolist() == 1
+    assert adata[0:1, :][:, 0:2].X.tolist() == np.reshape([1,2], (1, 2)).tolist()
+    assert adata[0, :][:, 0].X.tolist() == np.reshape(1, (1,1)).tolist()
     assert adata[:, 0:2][0:2, :].X.tolist() == [[1,2], [4,5]]
-    assert adata[:, 0:2][0:1, :].X.tolist() == [1,2]
-    assert adata[:, 0][0, :].X.tolist() == 1
+    assert adata[:, 0:2][0:1, :].X.tolist() == np.reshape([1,2], (1, 2)).tolist()
+    assert adata[:, 0][0, :].X.tolist() == np.reshape(1, (1,1)).tolist()
 
 
 def test_boolean_slicing():
@@ -138,21 +140,21 @@ def test_boolean_slicing():
 
     obs_selector = np.array([True, False], dtype=bool)
     vars_selector = np.array([True, False, False], dtype=bool)
-    assert adata[obs_selector, :][:, vars_selector].X.tolist() == 1
-    assert adata[:, vars_selector][obs_selector, :].X.tolist() == 1
-    assert adata[obs_selector, :][:, 0].X.tolist() == 1
-    assert adata[:, 0][obs_selector, :].X.tolist() == 1
-    assert adata[0, :][:, vars_selector].X.tolist() == 1
-    assert adata[:, vars_selector][0, :].X.tolist() == 1
+    assert adata[obs_selector, :][:, vars_selector].X.tolist() == [[1]]
+    assert adata[:, vars_selector][obs_selector, :].X.tolist() == [[1]]
+    assert adata[obs_selector, :][:, 0].X.tolist() == [[1]]
+    assert adata[:, 0][obs_selector, :].X.tolist() == [[1]]
+    assert adata[0, :][:, vars_selector].X.tolist() == [[1]]
+    assert adata[:, vars_selector][0, :].X.tolist() == [[1]]
 
     obs_selector = np.array([True, False], dtype=bool)
     vars_selector = np.array([True, True, False], dtype=bool)
-    assert adata[obs_selector, :][:, vars_selector].X.tolist() == [1, 2]
-    assert adata[:, vars_selector][obs_selector, :].X.tolist() == [1, 2]
-    assert adata[obs_selector, :][:, 0:2].X.tolist() == [1, 2]
-    assert adata[:, 0:2][obs_selector, :].X.tolist() == [1, 2]
-    assert adata[0, :][:, vars_selector].X.tolist() == [1, 2]
-    assert adata[:, vars_selector][0, :].X.tolist() == [1, 2]
+    assert adata[obs_selector, :][:, vars_selector].X.tolist() == [[1, 2]]
+    assert adata[:, vars_selector][obs_selector, :].X.tolist() == [[1, 2]]
+    assert adata[obs_selector, :][:, 0:2].X.tolist() == [[1, 2]]
+    assert adata[:, 0:2][obs_selector, :].X.tolist() == [[1, 2]]
+    assert adata[0, :][:, vars_selector].X.tolist() == [[1, 2]]
+    assert adata[:, vars_selector][0, :].X.tolist() == [[1, 2]]
 
     obs_selector = np.array([True, True], dtype=bool)
     vars_selector = np.array([True, True, False], dtype=bool)
@@ -164,24 +166,38 @@ def test_boolean_slicing():
     assert adata[:, vars_selector][0:2, :].X.tolist() == [[1,2], [4,5]]
 
 
+def test_oob_boolean_slicing():
+    len1, len2 = np.random.choice(100, 2, replace=False)
+    with pytest.raises(IndexError) as e:
+        AnnData(np.empty((len1, 100)))[np.random.randint(0, 2, len2, dtype=bool), :]
+    assert str(len1) in str(e.value)
+    assert str(len2) in str(e.value)
+
+    len1, len2 = np.random.choice(100, 2, replace=False)
+    with pytest.raises(IndexError) as e:
+        AnnData(np.empty((100, len1)))[:, np.random.randint(0, 2, len2, dtype=bool)]
+    assert str(len1) in str(e.value)
+    assert str(len2) in str(e.value)
+
+
 def test_slicing_strings():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
         dict(obs_names=['A', 'B']),
         dict(var_names=['a', 'b', 'c']))
 
-    assert adata['A', 'a'].X.tolist() == 1
-    assert adata['A', :].X.tolist() == [1, 2, 3]
-    assert adata[:, 'a'].X.tolist() == [1, 4]
+    assert adata['A', 'a'].X.tolist() == [[1]]
+    assert adata['A', :].X.tolist() == [[1, 2, 3]]
+    assert adata[:, 'a'].X.tolist() == [[1], [4]]
     assert adata[:, ['a', 'b']].X.tolist() == [[1, 2], [4, 5]]
     assert adata[:, np.array(['a', 'c'])].X.tolist() == [[1, 3], [4, 6]]
     assert adata[:, 'b':'c'].X.tolist() == [[2, 3], [5, 6]]
 
     from pytest import raises
-    with raises(IndexError): _ = adata[:, 'X']
-    with raises(IndexError): _ = adata['X', :]
-    with raises(IndexError): _ = adata['A':'X', :]
-    with raises(IndexError): _ = adata[:, 'a':'X']
+    with raises(KeyError): _ = adata[:, 'X']
+    with raises(KeyError): _ = adata['X', :]
+    with raises(KeyError): _ = adata['A':'X', :]
+    with raises(KeyError): _ = adata[:, 'a':'X']
 
     # Test if errors are helpful
     with raises(KeyError, match=r"not_in_var"):
@@ -228,14 +244,6 @@ def test_slicing_remove_unused_categories():
         dict(k=['a', 'a', 'b', 'b']))
     adata._sanitize()
     assert adata[2:4].obs['k'].cat.categories.tolist() == ['b']
-
-
-def test_slicing_integer_index():
-    adata = AnnData(
-        np.array([[0, 1, 2], [3, 4, 5]]),
-        var=dict(var_names=[10, 11, 12]))
-    sliced = adata[:, adata.X.sum(0) > 3]  # This used to fail
-    assert sliced.shape == (2, 2)
 
 
 def test_get_subset_annotation():
@@ -541,12 +549,12 @@ def test_1d_slice_dtypes():
     new_obs_df = pd.DataFrame(index=adata.obs_names)
     for k in obs_df.columns:
         new_obs_df[k] = adata.obs_vector(k)
-        assert new_obs_df[k].dtype is obs_df[k].dtype
+        assert new_obs_df[k].dtype == obs_df[k].dtype
     assert np.all(new_obs_df == obs_df)
     new_var_df = pd.DataFrame(index=adata.var_names)
     for k in var_df.columns:
         new_var_df[k] = adata.var_vector(k)
-        assert new_var_df[k].dtype is var_df[k].dtype
+        assert new_var_df[k].dtype == var_df[k].dtype
     assert np.all(new_var_df == var_df)
 
 
