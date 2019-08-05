@@ -14,6 +14,7 @@ from .. import h5py
 from ..compat import PathLike, fspath
 from .utils import *
 from .h5ad import read_h5ad
+from .zarr import read_zarr
 
 
 def read_csv(
@@ -379,41 +380,41 @@ def _read_text(
                    dtype=dtype)
 
 
-def read_zarr(store):
-    """Read from a hierarchical Zarr array store.
+# def read_zarr(store):
+#     """Read from a hierarchical Zarr array store.
 
-    Parameters
-    ----------
-    store
-        The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
-    """
-    if isinstance(store, Path):
-        store = str(store)
-    import zarr
-    f = zarr.open(store, mode='r')
-    d = {}
-    for key in f.keys():
-        _read_key_value_from_zarr(f, d, key)
-    return AnnData(**d)
+#     Parameters
+#     ----------
+#     store
+#         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
+#     """
+#     if isinstance(store, Path):
+#         store = str(store)
+#     import zarr
+#     f = zarr.open(store, mode='r')
+#     d = {}
+#     for key in f.keys():
+#         _read_key_value_from_zarr(f, d, key)
+#     return AnnData(**d)
 
 
-def _read_key_value_from_zarr(f, d, key, key_write=None):
-    import zarr
-    if key_write is None: key_write = key
-    if isinstance(f[key], zarr.hierarchy.Group):
-        d[key_write] = OrderedDict() if key == 'uns' else {}
-        for k in f[key].keys():
-            _read_key_value_from_zarr(f, d[key_write], key + '/' + k, k)
-        return
-    # the '()' means 'load everything into memory' (by contrast, ':'
-    # only works if not reading a scalar type)
-    if key != 'X':
-        value = f[key][()]
-    else:
-        value = f[key] # don't load X into memory
+# def _read_key_value_from_zarr(f, d, key, key_write=None):
+#     import zarr
+#     if key_write is None: key_write = key
+#     if isinstance(f[key], zarr.hierarchy.Group):
+#         d[key_write] = OrderedDict() if key == 'uns' else {}
+#         for k in f[key].keys():
+#             _read_key_value_from_zarr(f, d[key_write], key + '/' + k, k)
+#         return
+#     # the '()' means 'load everything into memory' (by contrast, ':'
+#     # only works if not reading a scalar type)
+#     if key != 'X':
+#         value = f[key][()]
+#     else:
+#         value = f[key] # don't load X into memory
 
-    d[key_write] = value
-    return
+#     d[key_write] = value
+#     return
 
 
 def load_sparse_csr(d, key='X'):

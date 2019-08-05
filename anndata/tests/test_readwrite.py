@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical
 import pytest
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import csr_matrix, csc_matrix, issparse
+from sklearn.utils.testing import assert_array_almost_equal
 
 import anndata as ad
 
@@ -171,6 +172,21 @@ def test_readwrite_dynamic(typ, backing_h5ad):
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
+@pytest.mark.parametrize('typ', [np.array, csr_matrix, csc_matrix])
+def test_readwrite_equivolent(typ):
+    tmpdir = tempfile.TemporaryDirectory()
+    tmpdirpth = Path(tmpdir.name)
+    h5ad_pth = tmpdirpth / "adata.h5ad"
+    zarr_pth = tmpdirpth / "adata.zarr"
+
+    M, N = 100, 101
+    adata = gen_adata((M, N), X_type=typ)
+    adata.write_h5ad(h5ad_pth)
+    adata.write_zarr(zarr_pth)
+    from_h5ad = ad.read_h5ad(h5ad_pth)
+    from_zarr = ad.read_zarr(zarr_pth)
+    # TODO: Check they're the same
+    assert_array_almost_equal(asarray(from_h5ad.X), asarray(from_zarr.X))
 
 @pytest.mark.skipif(not find_spec('zarr'), reason='Zarr is not installed')
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])

@@ -2078,7 +2078,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def write_zarr(
         self,
         store: Union[MutableMapping, PathLike],
-        chunks: Union[bool, int, Tuple[int, ...]],
+        chunks: Union[bool, int, Tuple[int, ...], None] = None,
     ):
         """Write a hierarchical Zarr array store.
 

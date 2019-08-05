@@ -99,14 +99,15 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
     create(fspath(filename), layers, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
-def write_zarr(store: Union[MutableMapping, PathLike], adata: AnnData, **kwargs):
-    if isinstance(store, Path):
-        store = str(store)
-    d = adata._to_dict_fixed_width_arrays(var_len_str=False)
-    import zarr
-    f = zarr.open(store, mode='w')
-    for key, value in d.items():
-        _write_key_value_to_zarr(f, key, value, **kwargs)
+from .zarr import write_zarr
+# def write_zarr(store: Union[MutableMapping, PathLike], adata: AnnData, **kwargs):
+#     if isinstance(store, Path):
+#         store = str(store)
+#     d = adata._to_dict_fixed_width_arrays(var_len_str=False)
+#     import zarr
+#     f = zarr.open(store, mode='w')
+#     for key, value in d.items():
+#         _write_key_value_to_zarr(f, key, value, **kwargs)
 
 
 def _write_key_value_to_zarr(f, key, value, **kwargs):
