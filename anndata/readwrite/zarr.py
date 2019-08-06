@@ -8,7 +8,6 @@ from scipy import sparse
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_string_dtype
 
-
 from ..core.anndata import AnnData
 import zarr
 import numcodecs
@@ -30,19 +29,6 @@ def write_zarr(store, adata, **dataset_kwargs):
     # write_attribute(f, "raw", adata.raw, dataset_kwargs)
 
 
-# def df_to_zarr_recarray(df: pd.DataFrame) -> np.recarray, dict:
-#     if df.index.name is None:
-#         names = ["index"] + list(df.columns)
-#     else:
-#         names = [df.index.name] + list(df.columns)
-#     arrays, formats = zip(*(to_h5_dtype(x)
-#                             for x in [df.index] + [df[k] for k in df]))
-#     return np.rec.fromarrays(
-#         arrays,
-#         dtype={'names': names, 'formats': formats}
-#     )
-
-
 def _write_method(cls):
     return _find_impl(cls, ZARR_WRITE_REGISTRY)
 
@@ -61,29 +47,6 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs):
             )
         write_attribute(f, f"{key}/{sub_k}", sub_v, dataset_kwargs)
 
-
-# def write_dataframe(f, key, df, dataset_kwargs):
-#     df = df.copy()
-#     if df.index.name is None:
-#         names = ["index"] + list(df.columns)
-#     else:
-#         names = [df.index.name] + list(df.columns)
-#     attrs = {}
-#     dtypes = {}
-#     for k, s in zip(names, [df.index] + [df[k] for k in df]):
-#         if is_categorical_dtype(s.dtype):
-#             attrs[f"{k}_categories"] = list(s.dtype.categories)
-#             df[k] = s.cat.codes
-#             # dtypes[k] = s.cat.codes.dtype
-#         elif is_string_dtype(s.dtype):
-#             dtypes[k] = "U"
-#     index_dtype = dtypes.pop(names[0], None)
-#     recs = df.to_records(column_dtypes=dtypes, index_dtypes=index_dtype)
-#     print(df)
-#     print(recs)
-#     f.create_dataset(key, data=recs, **dataset_kwargs)
-#     if len(attrs) > 0:
-#         f[key].attrs.update(attrs)
 
 def write_dataframe(z, k, df, dataset_kwargs):
     g = z.create_group(k)
@@ -166,7 +129,6 @@ ZARR_WRITE_REGISTRY = {
     # Raw: write_raw,
     # object: write_not_implemented,
     # h5py.Dataset: write_basic,
-    # list: write_list,
     # type(None): write_none,
     str: write_scalar,
     float: write_scalar,
@@ -180,6 +142,13 @@ ZARR_WRITE_REGISTRY = {
 
 
 def read_zarr(store):
+    """Read from a hierarchical Zarr array store.
+
+    Parameters
+    ----------
+    store
+        The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
+    """
     if isinstance(store, Path):
         store = str(store)
     import zarr
