@@ -1,3 +1,5 @@
+from functools import wraps
+
 # -------------------------------------------------------------------------------
 # Type conversion
 # -------------------------------------------------------------------------------
@@ -51,3 +53,21 @@ def convert_string(string):
         return None
     else:
         return string
+
+class AnnDataReadError(OSError):
+    """Error caused while trying to read in AnnData."""
+    pass
+
+def report_zarr_key_on_error(func):
+    @wraps(func)
+    def func_wrapper(elem, *args, **kwargs):
+        try:
+            return func(elem, *args, **kwargs)
+        except Exception as e:
+            if isinstance(e, AnnDataReadError):
+                raise e
+            else:
+                raise AnnDataReadError(
+                    f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {elem.store}."
+                )
+    return func_wrapper

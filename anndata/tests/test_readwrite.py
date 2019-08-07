@@ -99,6 +99,30 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert np.all(adata.raw.var == adata_src.raw.var)
 
 
+@pytest.mark.skipif(not find_spec('zarr'), reason='Zarr is not installed')
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_zarr(typ, tmp_path):
+    X = typ(X_list)
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_src.raw = adata_src
+    assert not is_categorical(adata_src.obs['oanno1'])
+    adata_src.write_zarr(tmp_path / 'test_zarr_dir', chunks=True)
+
+    adata = ad.read_zarr(tmp_path / 'test_zarr_dir')
+    assert is_categorical(adata.obs['oanno1'])
+    assert not is_categorical(adata.obs['oanno2'])
+    assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
+    assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+    assert is_categorical(adata.raw.var['vanno2'])
+    assert np.all(adata.obs == adata_src.obs)
+    assert np.all(adata.var == adata_src.var)
+    assert np.all(adata.var.index == adata_src.var.index)
+    assert adata.var.index.dtype == adata_src.var.index.dtype
+    assert type(adata.raw.X) == type(adata_src.raw.X)
+    assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
+    assert np.all(adata.raw.var == adata_src.raw.var)
+
+
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     X = typ(X_list)
@@ -187,20 +211,8 @@ def test_readwrite_equivolent(typ):
     from_zarr = ad.read_zarr(zarr_pth)
     # TODO: Check they're the same
     assert_array_almost_equal(asarray(from_h5ad.X), asarray(from_zarr.X))
-
-@pytest.mark.skipif(not find_spec('zarr'), reason='Zarr is not installed')
-@pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_zarr(typ, tmp_path):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert not is_categorical(adata_src.obs['oanno1'])
-    adata_src.write_zarr(tmp_path / 'test_zarr_dir', chunks=True)
-
-    adata = ad.read_zarr(tmp_path / 'test_zarr_dir')
-    assert is_categorical(adata.obs['oanno1'])
-    assert not is_categorical(adata.obs['oanno2'])
-    assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
-    assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+    assert np.all(from_h5ad.obs == from_zarr.obs)
+    assert np.all(from_h5ad.var == from_zarr.var)
 
 
 @pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')

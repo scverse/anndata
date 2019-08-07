@@ -8,7 +8,8 @@ from scipy import sparse
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_string_dtype
 
-from ..core.anndata import AnnData
+from ..core.anndata import AnnData, Raw
+from .utils import report_zarr_key_on_error
 import zarr
 import numcodecs
 
@@ -26,7 +27,7 @@ def write_zarr(store, adata, **dataset_kwargs):
     write_attribute(f, "varm", adata.varm, dataset_kwargs)
     write_attribute(f, "layers", adata.layers, dataset_kwargs)
     write_attribute(f, "uns", adata.uns, dataset_kwargs)
-    # write_attribute(f, "raw", adata.raw, dataset_kwargs)
+    write_attribute(f, "raw", adata.raw, dataset_kwargs)
 
 
 def _write_method(cls):
@@ -119,6 +120,16 @@ def write_csc(f, key, value, dataset_kwargs={}):
     group["indices"] = value.indices
     group["indptr"] = value.indptr
 
+def write_raw(f, key, value, dataset_kwargs={}):
+    print("writing raw")
+    group = f.create_group(key)
+    group.attrs["encoding-type"] = "raw"
+    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["shape"] = value.shape
+    write_attribute(group, 'X', value.X, dataset_kwargs)
+    write_attribute(group, 'var', value.var, dataset_kwargs)
+    write_attribute(group, 'varm', value.varm, dataset_kwargs)
+
 ZARR_WRITE_REGISTRY = {
     type(None): write_none,
     Mapping: write_mapping,
@@ -126,7 +137,7 @@ ZARR_WRITE_REGISTRY = {
     np.ndarray: write_array,
     list: write_array,
     pd.DataFrame: write_dataframe,
-    # Raw: write_raw,
+    Raw: write_raw,
     # object: write_not_implemented,
     # h5py.Dataset: write_basic,
     # type(None): write_none,
@@ -155,7 +166,14 @@ def read_zarr(store):
     f = zarr.open(store, mode='r')
     d = {}
     for k in f.keys():
-        d[k] = read_attribute(f[k])
+        # TODO: Probably put this in a decorator, put it on each atomic read func
+        # That way we can get the full key.
+        try:
+            d[k] = read_attribute(f[k])
+        except Exception:
+            raise OSError(
+                f"Reading key '{k}' from '{store}' caused the above error."
+            )
     return AnnData(**d)
 
 
@@ -163,11 +181,12 @@ def read_zarr(store):
 def read_attribute(value):
     raise NotImplementedError()
 
-
+@report_zarr_key_on_error
 @read_attribute.register(zarr.Array)
 def read_dataset(dataset):
-    return dataset[:]
+    return dataset[...]
 
+@report_zarr_key_on_error
 @read_attribute.register(zarr.Group)
 def read_group(group):
     if "encoding-type" in group.attrs:
@@ -178,10 +197,9 @@ def read_group(group):
             return read_csr(group)
         elif enctype == "csc_matrix":
             return read_csc(group)
-    else:
-        return {k: read_attribute(group[k]) for k in group.keys()}
+    return {k: read_attribute(group[k]) for k in group.keys()}
 
-
+@report_zarr_key_on_error
 def read_series(d):
     if "categories" in d.attrs:
         return pd.Categorical.from_codes(
@@ -192,23 +210,23 @@ def read_series(d):
     else:
         return d
 
-
+@report_zarr_key_on_error
 def read_csr(group):
     return sparse.csr_matrix(
         (group["data"], group["indices"], group["indptr"]),
         shape=group.attrs["shape"]
     )
 
+@report_zarr_key_on_error
 def read_csc(group):
     return sparse.csc_matrix(
         (group["data"], group["indices"], group["indptr"]),
         shape=group.attrs["shape"]
     )
 
+@report_zarr_key_on_error
 def read_dataframe(g):
-    print("READING DF")
     df = pd.DataFrame({k: read_series(g[k]) for k in g.keys()})
-    print(g.attrs["_index"])
     df.set_index(g.attrs["_index"], inplace=True)
     if g.attrs["_index"] == "_index":
         df.index.name = None
