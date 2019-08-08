@@ -9,7 +9,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_string_dtype
 
 from ..core.anndata import AnnData, Raw
-from .utils import report_zarr_key_on_error
+from .utils import report_key_on_error
 import zarr
 import numcodecs
 
@@ -176,13 +176,13 @@ def read_attribute(value):
 
 
 @read_attribute.register(zarr.Array)
-@report_zarr_key_on_error
+@report_key_on_error
 def read_dataset(dataset):
     return dataset[...]
 
 
 @read_attribute.register(zarr.Group)
-@report_zarr_key_on_error
+@report_key_on_error
 def read_group(group):
     if "encoding-type" in group.attrs:
         enctype = group.attrs["encoding-type"]
@@ -194,7 +194,7 @@ def read_group(group):
             return read_csc(group)
     return {k: read_attribute(group[k]) for k in group.keys()}
 
-@report_zarr_key_on_error
+@report_key_on_error
 def read_series(d):
     if "categories" in d.attrs:
         return pd.Categorical.from_codes(
@@ -205,21 +205,21 @@ def read_series(d):
     else:
         return d
 
-@report_zarr_key_on_error
+@report_key_on_error
 def read_csr(group):
     return sparse.csr_matrix(
         (group["data"], group["indices"], group["indptr"]),
         shape=group.attrs["shape"]
     )
 
-@report_zarr_key_on_error
+@report_key_on_error
 def read_csc(group):
     return sparse.csc_matrix(
         (group["data"], group["indices"], group["indptr"]),
         shape=group.attrs["shape"]
     )
 
-@report_zarr_key_on_error
+@report_key_on_error
 def read_dataframe(g):
     df = pd.DataFrame({k: read_series(g[k]) for k in g.keys()})
     df.set_index(g.attrs["_index"], inplace=True)

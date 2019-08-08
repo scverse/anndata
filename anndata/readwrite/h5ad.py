@@ -12,6 +12,7 @@ from scipy import sparse
 from .. import h5py
 from ..core.anndata import AnnData, Raw
 from collections.abc import Mapping
+from .utils import report_key_on_error
 
 
 def make_h5_cat_dtype(s):
@@ -321,7 +322,7 @@ def _clean_uns(d):
 def read_attribute(value):
     raise NotImplementedError()
 
-
+@report_key_on_error
 def read_dataframe(dataset):
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     # for k, dtype in dataset.dtype.descr:
@@ -339,6 +340,7 @@ def read_dataframe(dataset):
 
 
 @read_attribute.register(h5py.Group)
+@report_key_on_error
 def read_group(group: h5py.Group):
     d = dict()
     for sub_key, sub_value in group.items():
@@ -347,6 +349,7 @@ def read_group(group: h5py.Group):
 
 
 @read_attribute.register(h5py.Dataset)
+@report_key_on_error
 def read_dataset(dataset: h5py.Dataset):
     if dataset.attrs.get("source_type", None) == "dataframe":
         return read_dataframe(dataset)
@@ -373,5 +376,6 @@ def read_attribute_none(value):
 
 
 @read_attribute.register(h5py.SparseDataset)
+@report_key_on_error
 def read_sparse_dataset(value):
     return value.value

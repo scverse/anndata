@@ -1,5 +1,7 @@
 from functools import wraps
 
+import zarr
+
 # -------------------------------------------------------------------------------
 # Type conversion
 # -------------------------------------------------------------------------------
@@ -58,14 +60,14 @@ class AnnDataReadError(OSError):
     """Error caused while trying to read in AnnData."""
     pass
 
-def report_zarr_key_on_error(func):
+def report_key_on_error(func):
     """
     A decorator for zarr element reading which makes keys involved in errors get reported.
 
     Example
     -------
     >>> import zarr
-    >>> @report_zarr_key_on_error
+    >>> @report_key_on_error
         def read_arr(group):
             raise NotImplementedError()
     >>> z = zarr.open("tmp.zarr")
@@ -80,7 +82,11 @@ def report_zarr_key_on_error(func):
             if isinstance(e, AnnDataReadError):
                 raise e
             else:
+                if isinstance(elem, (zarr.Group, zarr.Array)):
+                    parent = elem.store # Not sure how to always get a name out of this
+                else:
+                    parent = elem.file.name
                 raise AnnDataReadError(
-                    f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {elem.store}."
+                    f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {parent}."
                 )
     return func_wrapper
