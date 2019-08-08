@@ -166,14 +166,7 @@ def read_zarr(store):
     f = zarr.open(store, mode='r')
     d = {}
     for k in f.keys():
-        # TODO: Probably put this in a decorator, put it on each atomic read func
-        # That way we can get the full key.
-        try:
-            d[k] = read_attribute(f[k])
-        except Exception:
-            raise OSError(
-                f"Reading key '{k}' from '{store}' caused the above error."
-            )
+        d[k] = read_attribute(f[k])
     return AnnData(**d)
 
 
@@ -181,13 +174,15 @@ def read_zarr(store):
 def read_attribute(value):
     raise NotImplementedError()
 
-@report_zarr_key_on_error
+
 @read_attribute.register(zarr.Array)
+@report_zarr_key_on_error
 def read_dataset(dataset):
     return dataset[...]
 
-@report_zarr_key_on_error
+
 @read_attribute.register(zarr.Group)
+@report_zarr_key_on_error
 def read_group(group):
     if "encoding-type" in group.attrs:
         enctype = group.attrs["encoding-type"]
