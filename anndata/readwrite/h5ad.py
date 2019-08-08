@@ -121,19 +121,10 @@ def write_h5ad(filepath: Union[Path, str], adata: "AnnData", force_dense=False, 
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
-    # we're writing to a different location than the backing file
-    # - load the matrix into the memory... 
-    # TODO: don't load the matrix into memory
-    if adata.isbacked and filepath != adata.filename:
-        X = adata.X[:]
-    else:
-        if adata.isbacked:
-            X = adata.X
-        else:
-            X = adata._X  # TODO: This isn't great, what if it's a view?
-            # This is so X won't be one dimensional
     with h5py.File(filepath, mode, force_dense=force_dense) as f:
-        write_attribute(f, "X", X, dataset_kwargs)
+        if not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+            # Otherwise, X should already be up to date
+            write_attribute(f, "X", adata.X, dataset_kwargs)
         write_attribute(f, "obs", adata.obs, dataset_kwargs)
         write_attribute(f, "var", adata.var, dataset_kwargs)
         write_attribute(f, "obsm", adata.obsm, dataset_kwargs)
@@ -224,6 +215,7 @@ H5AD_WRITE_REGISTRY = {
     np.integer: write_scalar,
     np.ndarray: write_array,
     sparse.spmatrix: write_basic,
+    h5py.SparseDataset: write_basic,
     pd.DataFrame: write_dataframe,
     Mapping: write_mapping
 }

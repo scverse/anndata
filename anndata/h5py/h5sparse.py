@@ -20,12 +20,25 @@ class BackedFormat(NamedTuple):
     backed_type: type
     memory_type: type
 
+class BackedSparseMatrixMixin:
+    """
+    Mixin class for backed sparse matrices.
 
-class backed_csr_matrix(ss.csr_matrix):
+    Largely needed for the case `backed_sparse_csr(...)[:]`, since that calls
+    copy on `.data`, `.indices`, and `.indptr`.
+    """
+    def copy(self):
+        if isinstance(self.data, h5py.Dataset):
+            return SparseDataset(self.data.parent).value
+        else:
+            return super().copy()
+
+
+class backed_csr_matrix(BackedSparseMatrixMixin, ss.csr_matrix):
     pass
 
 
-class backed_csc_matrix(ss.csc_matrix):
+class backed_csc_matrix(BackedSparseMatrixMixin, ss.csc_matrix):
     pass
 
 

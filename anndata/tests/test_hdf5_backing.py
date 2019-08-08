@@ -1,9 +1,12 @@
+from pathlib import Path
+
 import joblib
 import pytest
 import numpy as np
 from scipy import sparse
 
 import anndata as ad
+from anndata.tests.helpers import asarray
 
 
 # -------------------------------------------------------------------------------
@@ -45,15 +48,45 @@ def adata():
         dtype='int32'
     )
 
+@pytest.fixture(
+    params=[sparse.csr_matrix, sparse.csc_matrix, np.array],
+    ids=["scipy-csr", "scipy-csc", "np-array"]
+)
+def mtx_format(request):
+    return request.param
 
 @pytest.fixture(params=[sparse.csr_matrix, sparse.csc_matrix])
 def sparse_format(request):
     return request.param
 
+@pytest.fixture(params=["r+", "r", False])
+def backed_mode(request):
+    return request.param
+
+@pytest.fixture(params=[True, False])
+def force_dense(request):
+    return request.param
+
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
 
+# TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
+def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.h5ad"
+    backed_pth = base_pth / "backed.h5ad"
+
+    orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
+    orig.write(orig_pth)
+
+    backed = ad.read(orig_pth, backed=backed_mode)
+    backed.write(backed_pth, force_dense=force_dense)
+    backed.file.close()
+
+    from_backed = ad.read(backed_pth)
+    assert np.all(asarray(orig.X) == asarray(from_backed.X))
 
 # this is very similar to the views test
 def test_backing(adata, tmp_path, backing_h5ad):
@@ -95,8 +128,10 @@ def test_backing(adata, tmp_path, backing_h5ad):
     # need to copy first
     adata_subset = adata_subset.copy(tmp_path / 'test.subset.h5ad')
     # now transition to actual object
+    assert not adata_subset.isview
     adata_subset.obs['foo'] = range(2)
     assert not adata_subset.isview
+    assert adata_subset.isbacked
     assert adata_subset.obs['foo'].tolist() == list(range(2))
 
     # save
