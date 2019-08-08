@@ -59,6 +59,19 @@ class AnnDataReadError(OSError):
     pass
 
 def report_zarr_key_on_error(func):
+    """
+    A decorator for zarr element reading which makes keys involved in errors get reported.
+
+    Example
+    -------
+    >>> import zarr
+    >>> @report_zarr_key_on_error
+        def read_arr(group):
+            raise NotImplementedError()
+    >>> z = zarr.open("tmp.zarr")
+    >>> z["X"] = [1, 2, 3]
+    >>> read_arr(z["X"])
+    """
     @wraps(func)
     def func_wrapper(elem, *args, **kwargs):
         try:
