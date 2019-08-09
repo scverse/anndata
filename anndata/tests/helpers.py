@@ -1,9 +1,12 @@
-from functools import singledispatch
+from functools import singledispatch, wraps
 from string import ascii_letters
 from typing import Tuple
+from collections.abc import Mapping
+from warnings import warn
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
@@ -167,3 +170,139 @@ def single_subset(index):
 @pytest.fixture(params=[array_subset, slice_subset, single_subset, array_int_subset, array_bool_subset])
 def subset_func(request):
     return request.param
+
+def format_msg(elem_name):
+    if elem_name is not None:
+        return f"Error raised from element '{elem_name}'."
+    else:
+        return ""
+
+
+# TODO: it would be better to modify the other exception
+def report_name(func):
+    # @wraps(func)
+    def func_wrapper(*args, _elem_name=None, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if _elem_name is not None and not hasattr(e, "_name_attached"):
+                msg = format_msg(_elem_name)
+                args = list(e.args)
+                if len(args) == 0:
+                    args = [msg]
+                else:
+                    args[0] = f"{args[0]}\n\n{msg}"
+                e.args = tuple(args)
+                e._name_attached = True
+            raise e
+    return func_wrapper
+
+@report_name
+def _assert_equal(a, b):
+    """Allows reporting elem name for simple assertion."""
+    assert a == b
+
+@singledispatch
+def assert_equal(a, b, exact=False, elem_name=None):
+    _assert_equal(a, b, _elem_name=elem_name)
+
+@assert_equal.register(np.ndarray)
+def assert_equal_ndarray(a, b, exact=False, elem_name=None):
+    b = asarray(b)
+    if not exact and is_numeric_dtype(a) and is_numeric_dtype(b):
+        assert np.allclose(a, b, equal_nan=True), format_msg(elem_name)
+    elif (  # Structured dtype
+        not exact
+        and hasattr(a, "dtype") and hasattr(b, "dtype")
+        and len(a.dtype) > 1 and len(b.dtype) > 0
+    ):
+        assert_equal(pd.DataFrame(a), pd.DataFrame(b), exact, elem_name)
+    else:
+        assert np.all(a == b), format_msg(elem_name)
+
+@assert_equal.register(sparse.spmatrix)
+def assert_equal_sparse(a, b, exact=False, elem_name=None):
+    a = asarray(a)
+    assert_equal(b, a, exact, elem_name=elem_name)
+
+@assert_equal.register(pd.DataFrame)
+def are_equal_dataframe(a, b, exact=False, elem_name=None):
+    if not isinstance(b, pd.DataFrame):
+        assert_equal(b, a, exact, elem_name),  # a.values maybe?
+    if not exact:
+        report_name(pd.testing.assert_frame_equal)(
+            a, b,
+            check_names=False,
+            check_categorical=False,  # disable checking codes, still checks encoded values
+            # Should different orderings be allowed?
+            _elem_name=elem_name
+        )
+    else:
+        report_name(pd.testing.assert_frame_equal)(
+            a, b,
+            check_exact=True,
+            check_index_type=True,
+            check_names=False,
+            _elem_name=elem_name
+        )
+
+@assert_equal.register(Mapping)
+def assert_equal_mapping(a, b, exact=False, elem_name=None):
+    assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
+    for k in a.keys():
+        if elem_name is None: elem_name = ""
+        assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
+
+
+@assert_equal.register(pd.Index)
+def assert_equal_index(a, b, exact=False, elem_name=None):
+    if not exact:
+        report_name(pd.testing.assert_index_equal)(
+            a[np.argsort(a)],
+            b[np.argsort(b)],
+            check_names=False,
+            check_categorical=False,
+            _elem_name=elem_name,
+        )
+    else:
+        report_name(pd.testing.assert_index_equal)(
+            a, b,
+            # TODO: Remove check_names, needs read object to not have names
+            # or for there to be default names
+            check_names=False,
+            _elem_name=elem_name
+        )
+
+
+@assert_equal.register(AnnData)
+def assert_adata_equal(a, b, exact=False):
+    if a.isview:
+        warn("Cannot currently compare views.")
+        a = a.copy()
+    if b.isview:
+        warn("Cannot currently compare views")
+        b = b.copy()
+    assert_equal(a.obs_names, b.obs_names, exact, elem_name="obs_names")
+    assert_equal(a.var_names, b.var_names, exact, elem_name="var_names")
+    if not exact:
+        # Reorder all elements if neccesary
+        idx = [slice(None), slice(None)]
+        change_flag = False  # Since it's a pain to compare a list of pandas objects
+        if not np.all(a.obs_names == b.obs_names):
+            idx[0] = a.obs_names
+            change_flag = True
+        if not np.all(a.var_names == b.var_names):
+            idx[1] = a.var_names
+            change_flag = True
+        if change_flag:
+            b = b[tuple(idx)].copy()
+    assert_equal(a.obs, b.obs, exact, elem_name="obs")
+    assert_equal(a.var, b.var, exact, elem_name="var")
+    assert_equal(a.X, b.X, exact, elem_name="X")
+    for mapping_attr in ["obsm", "varm", "layers", "uns"]:
+        assert_equal(
+            getattr(a, mapping_attr),
+            getattr(b, mapping_attr),
+            exact,
+            elem_name=mapping_attr
+        )
