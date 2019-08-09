@@ -8,7 +8,7 @@ from functools import partial, singledispatch
 from anndata.tests.helpers import assert_equal, report_name, gen_adata
 
 # Testing to see if all error types can have the key name appended. 
-# Currently fails for 22/118many since they have required arguments. Not sure what to do about that.
+# Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
 #
 # @singledispatch
 # def iswarning(x):
@@ -38,7 +38,7 @@ def test_report_name():
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))
     def raise_error():
-        raise Exception("an error occured")
+        raise Exception("an error occured!")
     with pytest.raises(Exception) as e1:
         raise_error()
     with pytest.raises(Exception) as e2:
