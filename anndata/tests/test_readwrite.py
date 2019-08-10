@@ -11,7 +11,7 @@ from sklearn.utils.testing import assert_array_almost_equal
 
 import anndata as ad
 
-from anndata.tests.helpers import gen_adata, asarray
+from anndata.tests.helpers import gen_adata, asarray, assert_equal
 
 HERE = Path(__file__).parent
 
@@ -95,6 +95,7 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert np.all(adata.var.index == adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
     assert type(adata.raw.X) == type(adata_src.raw.X)
+    assert type(adata.raw.varm) == type(adata_src.raw.varm)
     assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
     assert np.all(adata.raw.var == adata_src.raw.var)
 
@@ -205,14 +206,14 @@ def test_readwrite_equivolent(typ):
 
     M, N = 100, 101
     adata = gen_adata((M, N), X_type=typ)
+    adata.raw = adata
+
     adata.write_h5ad(h5ad_pth)
     adata.write_zarr(zarr_pth)
     from_h5ad = ad.read_h5ad(h5ad_pth)
     from_zarr = ad.read_zarr(zarr_pth)
-    # TODO: Check they're the same
-    assert_array_almost_equal(asarray(from_h5ad.X), asarray(from_zarr.X))
-    assert np.all(from_h5ad.obs == from_zarr.obs)
-    assert np.all(from_h5ad.var == from_zarr.var)
+
+    assert_equal(from_h5ad, from_zarr)
 
 
 @pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')

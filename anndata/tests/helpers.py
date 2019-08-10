@@ -306,3 +306,7 @@ def assert_adata_equal(a, b, exact=False):
             exact,
             elem_name=mapping_attr
         )
+    if a.raw is not None:
+        assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw.X")
+        assert_equal(a.raw.var, b.raw.var, exact, elem_name="raw.var")
+        assert_equal(a.raw.varm, b.raw.varm, exact, elem_name="raw.varm")
