@@ -195,17 +195,6 @@ def read_group(group):
     return {k: read_attribute(group[k]) for k in group.keys()}
 
 @report_key_on_error
-def read_series(d):
-    if "categories" in d.attrs:
-        return pd.Categorical.from_codes(
-            d,
-            d.attrs["categories"],
-            ordered=False
-        )
-    else:
-        return d
-
-@report_key_on_error
 def read_csr(group):
     return sparse.csr_matrix(
         (group["data"], group["indices"], group["indptr"]),
@@ -229,3 +218,14 @@ def read_dataframe(g):
         assert set(g.attrs["column-order"]) == set(df.columns)
         df = df[g.attrs["column-order"]]
     return df
+
+@report_key_on_error
+def read_series(d):
+    if "categories" in d.attrs:
+        return pd.Categorical.from_codes(
+            d,
+            d.attrs["categories"],
+            ordered=False
+        )
+    else:
+        return d

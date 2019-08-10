@@ -115,6 +115,14 @@ class Group(Mapping):
         else:
             raise ValueError("Unexpected item type.")
 
+    @property
+    def attrs(self):
+        return self.h5py_group.attrs
+
+    @property
+    def name(self):
+        return self.h5py_group.name
+
     def __delitem__(self, name):
         self.h5py_group.__delitem__(name)
 

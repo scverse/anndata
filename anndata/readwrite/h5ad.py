@@ -38,16 +38,16 @@ def to_h5_dtype(a: Union[np.ndarray, pd.Series]) -> Tuple[np.ndarray, np.dtype]:
         return a, a.dtype
 
 
-def df_to_h5_recarray(df: pd.DataFrame) -> np.recarray:
-    if df.index.name is None:
-        names = ["index"] + list(df.columns)
-    else:
-        names = [df.index.name] + list(df.columns)
-    arrays, formats = zip(*(to_h5_dtype(x) for x in [df.index] + [df[k] for k in df]))
-    return np.rec.fromarrays(
-        arrays,
-        dtype={'names': names, 'formats': formats}
-    )
+# def df_to_h5_recarray(df: pd.DataFrame) -> np.recarray:
+#     if df.index.name is None:
+#         names = ["index"] + list(df.columns)
+#     else:
+#         names = [df.index.name] + list(df.columns)
+#     arrays, formats = zip(*(to_h5_dtype(x) for x in [df.index] + [df[k] for k in df]))
+#     return np.rec.fromarrays(
+#         arrays,
+#         dtype={'names': names, 'formats': formats}
+#     )
 
 
 def _to_hdf5_vlen_strings(value):
@@ -190,10 +190,27 @@ def write_array(f, key, value, dataset_kwargs={}):
         value = _to_hdf5_vlen_strings(value)
     f.create_dataset(key, data=value, **dataset_kwargs)
 
+def write_dataframe(f, key, df, dataset_kwargs={}):
+    if isinstance(f, h5py.File):  # If its the patched one
+        group = f.h5f.create_group(key)
+    else:
+        group = f.create_group(key)
+    group.attrs["encoding-type"] = "dataframe"
+    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["column-order"] = list(df.columns)
 
-def write_dataframe(f, key, value, dataset_kwargs={}):
-    f.create_dataset(key, data=df_to_h5_recarray(value), **dataset_kwargs)
-    f[key].attrs["source_type"] = "dataframe"
+    if df.index.name is not None:
+        index_name = df.index.name
+    else:
+        index_name = "_index"
+    group.attrs["_index"] = index_name
+    write_series(group, index_name, df.index, dataset_kwargs)
+    for colname, series in df.items():
+        write_series(f, f"{key}/{colname}", series, dataset_kwargs)
+
+def write_series(f, key, series, dataset_kwargs={}):
+    value, dtype = to_h5_dtype(series)
+    f.create_dataset(key, data=value, dtype=dtype)
 
 
 def write_mapping(f, key, value, dataset_kwargs={}):
@@ -323,7 +340,7 @@ def read_attribute(value):
     raise NotImplementedError()
 
 @report_key_on_error
-def read_dataframe(dataset):
+def read_dataframe_legacy(dataset):
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     # for k, dtype in dataset.dtype.descr:
     #     if issubclass(np.dtype(dtype).type, np.string_):
@@ -338,10 +355,38 @@ def read_dataframe(dataset):
         df[col] = pd.Categorical(df[col].map(mapper), ordered=False)
     return df
 
+@report_key_on_error
+def read_dataframe(group):
+    if not isinstance(group, h5py.Group):
+        return read_dataframe_legacy(group)
+    df = pd.DataFrame({k: read_series(group[k]) for k in group.keys()})
+    df.set_index(group.attrs["_index"], inplace=True)
+    if group.attrs["_index"] == "_index":
+        df.index.name = None
+    if "column-order" in group.attrs:
+        assert set(group.attrs["column-order"]) == set(df.columns)
+        df = df[group.attrs["column-order"]]
+    return df
+
+@report_key_on_error
+def read_series(dataset):
+    enum_info = _h5py.check_dtype(enum=dataset.dtype)
+    if enum_info is None:
+        return dataset[...]
+    else:
+        cats, codes = tuple(zip(*enum_info.items()))
+        return pd.Categorical.from_codes(
+            dataset[...],
+            # TODO: Test if this is always right
+            [cats[code] for code in codes],
+            ordered=False
+        )
 
 @read_attribute.register(h5py.Group)
 @report_key_on_error
 def read_group(group: h5py.Group):
+    if group.attrs.get("encoding-type", "") == "dataframe":
+        return read_dataframe(group)
     d = dict()
     for sub_key, sub_value in group.items():
         d[sub_key] = read_attribute(sub_value)
@@ -351,23 +396,20 @@ def read_group(group: h5py.Group):
 @read_attribute.register(h5py.Dataset)
 @report_key_on_error
 def read_dataset(dataset: h5py.Dataset):
-    if dataset.attrs.get("source_type", None) == "dataframe":
-        return read_dataframe(dataset)
-    else:
-        value = dataset[()]
-        if not hasattr(value, "dtype"):
-            return value
-        elif isinstance(value.dtype, str):
-            pass
-        elif issubclass(value.dtype.type, np.string_):
-            value = value.astype(str)
-            if len(value) == 1:  # Backwards compat, old datasets have strings written as one element 1d arrays
-                return value[0]
-        elif len(value.dtype.descr) > 1:  # Compound dtype
-            value = _from_fixed_length_strings(value)  # For backwards compat, now strings are written as variable length
-        if value.shape == ():
-            value = value[()]
+    value = dataset[()]
+    if not hasattr(value, "dtype"):
         return value
+    elif isinstance(value.dtype, str):
+        pass
+    elif issubclass(value.dtype.type, np.string_):
+        value = value.astype(str)
+        if len(value) == 1:  # Backwards compat, old datasets have strings written as one element 1d arrays
+            return value[0]
+    elif len(value.dtype.descr) > 1:  # Compound dtype
+        value = _from_fixed_length_strings(value)  # For backwards compat, now strings are written as variable length
+    if value.shape == ():
+        value = value[()]
+    return value
 
 
 @read_attribute.register(type(None))

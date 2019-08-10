@@ -1,4 +1,5 @@
 from functools import wraps
+from .. import h5py as patched_h5py
 
 import zarr
 
@@ -85,7 +86,10 @@ def report_key_on_error(func):
                 if isinstance(elem, (zarr.Group, zarr.Array)):
                     parent = elem.store # Not sure how to always get a name out of this
                 else:
-                    parent = elem.file.name
+                    if isinstance(elem, patched_h5py.Group):
+                        parent = elem.h5py_group.file.name
+                    else:
+                        parent = elem.file.name
                 raise AnnDataReadError(
                     f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {parent}."
                 )
