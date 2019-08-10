@@ -296,11 +296,11 @@ class Raw:
         if X is not None:
             self._X = X
             self._var = var
-            self._varm = varm
+            self._varm = AxisArrays(self, 1, varm)
         else:
             self._X = None if adata.isbacked else adata.X.copy()
             self._var = adata.var.copy()
-            self._varm = adata.varm.copy()
+            self._varm = AxisArrays(self, 1, adata.varm.copy())
 
     @property
     def X(self):
