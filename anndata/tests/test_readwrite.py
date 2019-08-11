@@ -195,10 +195,11 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     adata_one.write(backing_h5ad)
     adata = ad.read(backing_h5ad)
     assert adata.shape == (3, 1)
+    assert_equal(adata, adata_one)
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_dynamic(typ, backing_h5ad):
+def test_readwrite_backed(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
@@ -209,10 +210,11 @@ def test_readwrite_dynamic(typ, backing_h5ad):
     assert not is_categorical(adata.obs['oanno2'])
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
+    assert_equal(adata, adata_src)
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix, csc_matrix])
-def test_readwrite_equivolent(typ):
+def test_readwrite_equivolent_h5ad_zarr(typ):
     tmpdir = tempfile.TemporaryDirectory()
     tmpdirpth = Path(tmpdir.name)
     h5ad_pth = tmpdirpth / "adata.h5ad"

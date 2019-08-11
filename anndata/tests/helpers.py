@@ -180,7 +180,7 @@ def format_msg(elem_name):
 
 # TODO: it would be better to modify the other exception
 def report_name(func):
-    # @wraps(func)
+    @wraps(func)
     def func_wrapper(*args, _elem_name=None, **kwargs):
         try:
             return func(*args, **kwargs)
