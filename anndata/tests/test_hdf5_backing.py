@@ -6,7 +6,7 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import asarray
+from anndata.tests.helpers import asarray, gen_adata, assert_equal
 
 
 # -------------------------------------------------------------------------------
@@ -136,6 +136,22 @@ def test_backing(adata, tmp_path, backing_h5ad):
 
     # save
     adata_subset.write()
+
+# TODO: Also test updating the backing file inplace
+def test_backed_raw(tmp_path):
+    backed_pth = tmp_path / "backed.h5ad"
+    final_pth = tmp_path / "final.h5ad"
+    mem_adata = gen_adata((10, 10))
+    mem_adata.raw = mem_adata
+    mem_adata.write(backed_pth)
+
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    # TODO: Write method for comparing backed data with in memory data
+    # assert_equal(backed_adata, mem_adata)
+    backed_adata.write_h5ad(final_pth)
+
+    final_adata = ad.read_h5ad(final_pth)
+    assert_equal(final_adata, mem_adata)
 
 
 def test_double_index(adata, backing_h5ad):

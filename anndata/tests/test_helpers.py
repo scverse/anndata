@@ -59,6 +59,7 @@ def test_assert_equal():
         assert_equal(np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1])
 
     adata = gen_adata((10, 10))
+    adata.raw = adata.copy()
     assert_equal(adata, adata.copy(), exact=True)
     assert_equal(
         adata,
@@ -90,3 +91,21 @@ def test_assert_equal():
     assert_equal(csr, csc)
     assert_equal(csc, dense)
     assert_equal(dense, csc)
+
+def test_assert_equal_raw():
+    base = gen_adata((10, 10))
+    orig = base.copy()
+    orig.raw = base.copy()
+    mod = base.copy()
+    mod.X[0, 0] = mod.X[0, 0] + 1
+    to_compare = base.copy()
+    to_compare.raw = mod.copy()
+    with pytest.raises(AssertionError):
+        assert_equal(orig, to_compare)
+
+    mod = base.copy()
+    mod.var["new_val"] = 1
+    to_compare = base.copy()
+    to_compare.raw = mod.copy()
+    with pytest.raises(AssertionError):
+        assert_equal(orig, to_compare)

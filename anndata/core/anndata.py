@@ -306,7 +306,10 @@ class Raw:
     def X(self):
         if self._adata.isbacked:
             if not self._adata.file.isopen: self._adata.file.open()
-            X = self._adata.file['raw.X']
+            if "raw/X" in self._adata.file._file.h5f:
+                X = self._adata.file["raw/X"]
+            else:
+                X = self._adata.file['raw.X']  # Backwards compat
             if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
             else: return X
         else:
@@ -785,13 +788,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 self._raw = raw
             else:
                 # is dictionary from reading the file, nothing that is meant for a user
-                shape = self.file['raw.X'].shape if self.isbacked else raw['X'].shape
+                if self.isbacked:
+                    if "raw/X" in self.file._file.h5f:
+                        shape = self.file._file["raw/X"].shape
+                    elif "raw.X" in self.file._file.h5f:
+                        shape = self.file['raw.X'].shape  # Backwards compat
+                else:
+                    shape = raw["X"].shape
 
                 self._raw = Raw(
                     self,
-                    X=raw['X'],
+                    X=raw.get("X", None),
                     var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
-                    varm=raw['varm'] if 'varm' in raw else None)
+                    varm=raw['varm'] if 'varm' in raw else None
+                )
 
         # clean up old formats
         self._clean_up_old_format(uns)
