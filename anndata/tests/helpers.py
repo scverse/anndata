@@ -267,9 +267,6 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
     else:
         report_name(pd.testing.assert_index_equal)(
             a, b,
-            # TODO: Remove check_names, needs read object to not have names
-            # or for there to be default names
-            check_names=False,
             _elem_name=elem_name
         )
 

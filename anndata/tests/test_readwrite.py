@@ -198,6 +198,7 @@ def test_readwrite_dynamic(typ, backing_h5ad):
     assert adata.obs.index.tolist() == ['name1', 'name2', 'name3']
     assert adata.obs['oanno1'].cat.categories.tolist() == ['cat1', 'cat2']
 
+
 @pytest.mark.parametrize('typ', [np.array, csr_matrix, csc_matrix])
 def test_readwrite_equivolent(typ):
     tmpdir = tempfile.TemporaryDirectory()
@@ -215,6 +216,29 @@ def test_readwrite_equivolent(typ):
     from_zarr = ad.read_zarr(zarr_pth)
 
     assert_equal(from_h5ad, from_zarr)
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_changed_obs_var_names(tmp_path, diskfmt):
+    filepth = tmp_path / f"test.{diskfmt}"
+
+    orig = gen_adata((10, 10))
+    orig.obs_names.name = "obs"
+    orig.var_names.name = "var"
+    modified = orig.copy()
+    modified.obs_names.name = "cells"
+    modified.var_names.name = "genes"
+
+    getattr(orig, f"write_{diskfmt}")(filepth)
+    read = getattr(ad, f"read_{diskfmt}")(filepth)
+
+    assert_equal(orig, read, exact=True)
+    assert orig.var.index.name == "var"
+    assert read.obs.index.name == "obs"
+    with pytest.raises(AssertionError):
+        assert_equal(orig, modified, exact=True)
+    with pytest.raises(AssertionError):
+        assert_equal(read, modified, exact=True)
 
 
 @pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')
