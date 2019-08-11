@@ -64,6 +64,10 @@ uns_dict = dict(  # unstructured annotation
 def dataset_kwargs(request):
     return request.param
 
+@pytest.fixture(params=["h5ad", "zarr"])
+def diskfmt(request):
+    return request.param
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
@@ -98,6 +102,10 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert type(adata.raw.varm) == type(adata_src.raw.varm)
     assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
     assert np.all(adata.raw.var == adata_src.raw.var)
+    assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
+    assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
+    assert type(adata.uns["uns4"]["c"]) == type(adata_src.uns["uns4"]["c"])
+    assert_equal(adata, adata_src)
 
 
 @pytest.mark.skipif(not find_spec('zarr'), reason='Zarr is not installed')
@@ -122,6 +130,10 @@ def test_readwrite_zarr(typ, tmp_path):
     assert type(adata.raw.X) == type(adata_src.raw.X)
     assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
     assert np.all(adata.raw.var == adata_src.raw.var)
+    assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
+    assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
+    assert type(adata.uns["uns4"]["c"]) == type(adata_src.uns["uns4"]["c"])
+    assert_equal(adata, adata_src)
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
@@ -215,10 +227,9 @@ def test_readwrite_equivolent(typ):
     from_h5ad = ad.read_h5ad(h5ad_pth)
     from_zarr = ad.read_zarr(zarr_pth)
 
-    assert_equal(from_h5ad, from_zarr)
+    assert_equal(from_h5ad, from_zarr, exact=True)
 
 
-@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
 def test_changed_obs_var_names(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
 
@@ -325,3 +336,48 @@ def test_write_categorical(tmp_path):
     curr = ad.read_h5ad(adata_pth)
     assert np.all(orig.obs.notna() == curr.obs.notna())
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+
+# Round-tripping scanpy datasets
+
+@pytest.mark.skipif(not find_spec('scanpy'), reason='Scanpy is not installed')
+def test_scanpy_pbmc68k(tmp_path, diskfmt):
+    filepth = tmp_path / f"test.{diskfmt}"
+    import scanpy as sc
+    pbmc = sc.datasets.pbmc68k_reduced()
+    getattr(pbmc, f"write_{diskfmt}")(filepth)
+    read = getattr(ad, f"read_{diskfmt}")(filepth)
+
+    assert_equal(pbmc, read)  # Not expected to be exact due to `nan`s
+
+@pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
+def test_scanpy_krumsiek11(tmp_path, diskfmt):
+    filepth = tmp_path / f"test.{diskfmt}"
+    import scanpy as sc
+    orig = sc.datasets.krumsiek11()
+    del orig.uns["highlights"] # Can't write int keys
+    getattr(orig, f"write_{diskfmt}")(filepth)
+    read = getattr(ad, f"read_{diskfmt}")(filepth)
+
+    assert_equal(orig, read, exact=True)
+
+# Checking if we can read legacy zarr files
+# TODO: Check how I should add this file to the repo
+@pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
+@pytest.mark.skipif(
+    not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
+    reason="File not present."
+)
+def test_backwards_compat_zarr():
+    import scanpy as sc
+    import zarr
+    pbmc_orig = sc.datasets.pbmc68k_reduced()
+    # Old zarr writer couldn't do sparse arrays
+    pbmc_orig.raw._X = pbmc_orig.raw.X.toarray()
+    del pbmc_orig.uns["neighbors"]
+
+    # This was written out with anndata=0.6.22.post1
+    zarrpth = HERE / "data/pbmc68k_reduced_legacy.zarr.zip"
+    with zarr.ZipStore(zarrpth, mode="r") as z:
+        pbmc_zarr = ad.read_zarr(z)
+
+    assert_equal(pbmc_zarr, pbmc_orig)

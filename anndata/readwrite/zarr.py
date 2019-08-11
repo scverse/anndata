@@ -9,6 +9,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_string_dtype
 
 from ..core.anndata import AnnData, Raw
+from ..compat import _from_fixed_length_strings, _clean_uns
 from .utils import report_key_on_error
 import zarr
 import numcodecs
@@ -121,7 +122,6 @@ def write_csc(f, key, value, dataset_kwargs={}):
     group["indptr"] = value.indptr
 
 def write_raw(f, key, value, dataset_kwargs={}):
-    print("writing raw")
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
     group.attrs["encoding-version"] = "0.1.0"
@@ -166,7 +166,28 @@ def read_zarr(store):
     f = zarr.open(store, mode='r')
     d = {}
     for k in f.keys():
-        d[k] = read_attribute(f[k])
+        # Backwards compat
+        if k.startswith("raw."):
+            continue
+        if k in {"obs", "var"}:
+            d[k] = read_dataframe(f[k])
+        else:  # Base case
+            d[k] = read_attribute(f[k])
+
+    # Backwards compat
+    raw = {}
+    if "raw.var" in f:
+        raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
+    if "raw.varm" in f:
+        raw["varm"] = read_attribute(f["raw.varm"])
+    if "raw.X" in f:
+        raw["X"] = read_attribute(f["raw.X"])
+    if len(raw) > 0:
+        assert "raw" not in d
+        d["raw"] = raw
+
+    _clean_uns(d)
+
     return AnnData(**d)
 
 
@@ -178,8 +199,21 @@ def read_attribute(value):
 @read_attribute.register(zarr.Array)
 @report_key_on_error
 def read_dataset(dataset):
-    return dataset[...]
-
+    value = dataset[...]
+    if not hasattr(value, "dtype"):
+        return value
+    elif isinstance(value.dtype, str):
+        pass
+    elif issubclass(value.dtype.type, np.str_):
+        value = value.astype(object)
+    elif issubclass(value.dtype.type, np.string_):
+        value = value.astype(str).astype(object)  # bytestring -> unicode -> str
+    elif len(value.dtype.descr) > 1:  # Compound dtype
+        # For backwards compat, now strings are written as variable length
+        value = _from_fixed_length_strings(value)
+    if value.shape == ():
+        value = value[()]
+    return value
 
 @read_attribute.register(zarr.Group)
 @report_key_on_error
@@ -209,7 +243,19 @@ def read_csc(group):
     )
 
 @report_key_on_error
+def read_dataframe_legacy(dataset: zarr.Array):
+    """
+    Reads old format of dataframes
+    """
+    # NOTE: Likely that categoricals need to be removed from uns
+    df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
+    df.set_index(df.columns[0], inplace=True)
+    return df
+
+@report_key_on_error
 def read_dataframe(g):
+    if isinstance(g, zarr.Array):
+        return read_dataframe_legacy(g)
     df = pd.DataFrame({k: read_series(g[k]) for k in g.keys()})
     df.set_index(g.attrs["_index"], inplace=True)
     if g.attrs["_index"] == "_index":

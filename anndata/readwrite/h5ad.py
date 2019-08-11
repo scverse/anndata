@@ -11,6 +11,7 @@ from pandas.api.types import (
 from scipy import sparse
 from .. import h5py
 from ..core.anndata import AnnData, Raw
+from ..compat import _from_fixed_length_strings, _clean_uns
 from collections.abc import Mapping
 from .utils import report_key_on_error
 
@@ -38,18 +39,6 @@ def to_h5_dtype(a: Union[np.ndarray, pd.Series]) -> Tuple[np.ndarray, np.dtype]:
         return a, a.dtype
 
 
-# def df_to_h5_recarray(df: pd.DataFrame) -> np.recarray:
-#     if df.index.name is None:
-#         names = ["index"] + list(df.columns)
-#     else:
-#         names = [df.index.name] + list(df.columns)
-#     arrays, formats = zip(*(to_h5_dtype(x) for x in [df.index] + [df[k] for k in df]))
-#     return np.rec.fromarrays(
-#         arrays,
-#         dtype={'names': names, 'formats': formats}
-#     )
-
-
 def _to_hdf5_vlen_strings(value):
     """
     This corrects compound dtypes to work with hdf5 files.
@@ -62,26 +51,6 @@ def _to_hdf5_vlen_strings(value):
             )
         else:
             new_dtype.append((dt_name, dt_type))
-    return value.astype(new_dtype)
-
-
-def _from_fixed_length_strings(value):
-    """Convert from fixed length strings to unicode.
-
-    For backwards compatability with older files.
-    """
-    new_dtype = []
-    for dt in value.dtype.descr:
-        dt_list = list(dt)
-        dt_type = dt[1]
-        if isinstance(dt_type, tuple):  # vlen strings, could probably match better
-            dt_list[1] = "O"
-            new_dtype.append(tuple(dt_list))
-        elif issubclass(np.dtype(dt_type).type, np.string_):
-            dt_list[1] = 'U{}'.format(int(dt_type[2:]))
-            new_dtype.append(tuple(dt_list))
-        else:
-            new_dtype.append(dt)
     return value.astype(new_dtype)
 
 
@@ -272,7 +241,7 @@ def read_h5ad_backed(filename, mode):
     return AnnData(**d)
 
 
-# TODO: chunks
+# TODO: chunks, what are possible values for chunk_size?
 def read_h5ad(filename, backed=None, chunk_size=None):
     """Read ``.h5ad``-formatted hdf5 file.
 
@@ -320,25 +289,6 @@ def read_h5ad(filename, backed=None, chunk_size=None):
     return AnnData(**d)
 
 
-def _clean_uns(d):
-    """Compat function for when categorical keys were stored in uns."""
-    k_to_delete = []
-    for k, v in d.get("uns", {}).items():
-        if k.endswith('_categories'):
-            k_stripped = k.replace('_categories', '')
-            if isinstance(v, (str, int)):  # fix categories with a single category
-                v = [v]
-            for ann in ['obs', 'var']:
-                if k_stripped in d[ann]:
-                    d[ann][k_stripped] = pd.Categorical.from_codes(
-                        codes=d[ann][k_stripped].values,
-                        categories=v,
-                    )
-                    k_to_delete.append(k)
-    for k in k_to_delete:
-        del d["uns"][k]
-
-
 @singledispatch
 def read_attribute(value):
     raise NotImplementedError()
@@ -346,11 +296,12 @@ def read_attribute(value):
 
 @report_key_on_error
 def read_dataframe_legacy(dataset):
+    """
+    Read pre-anndata 0.7 dataframes.
+    """
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
-    # for k, dtype in dataset.dtype.descr:
-    #     if issubclass(np.dtype(dtype).type, np.string_):
-    #         df[k] = df[k].astype(str)
     df.set_index(df.columns[0], inplace=True)
+    # TODO: Decide whether to keep next few lines, since I don't this ever made a release
     dt = dataset.dtype
     for col in dt.names[1:]:
         check = _h5py.check_dtype(enum=dt[col])
@@ -382,10 +333,11 @@ def read_series(dataset):
         return dataset[...]
     else:
         cats, codes = tuple(zip(*enum_info.items()))
+        cats = np.array(cats)[np.argsort(codes)]
         return pd.Categorical.from_codes(
             dataset[...],
-            # TODO: Test if this is always right
-            [cats[code] for code in codes],
+            # TODO: Test if this is always right (kinda covered by test_scanpy_pbmc68k)
+            cats,
             ordered=False
         )
 
