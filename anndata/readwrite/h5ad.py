@@ -176,11 +176,13 @@ def write_list(f, key, value, dataset_kwargs={}):
 def write_none(f, key, value, dataset_kwargs={}):
     pass
 
+
 def write_scalar(f, key, value, dataset_kwargs={}):
     if "compression" in dataset_kwargs:  # Can't compress scalars, error is thrown
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs.pop("compression")
     write_array(f, key, np.array(value), dataset_kwargs)
+
 
 def write_array(f, key, value, dataset_kwargs={}):
     # Convert unicode to fixed length strings
@@ -190,8 +192,9 @@ def write_array(f, key, value, dataset_kwargs={}):
         value = _to_hdf5_vlen_strings(value)
     f.create_dataset(key, data=value, **dataset_kwargs)
 
+
 def write_dataframe(f, key, df, dataset_kwargs={}):
-    if isinstance(f, h5py.File):  # If its the patched one
+    if isinstance(f, h5py.File):  # If it's the patched one
         group = f.h5f.create_group(key)
     else:
         group = f.create_group(key)
@@ -207,6 +210,7 @@ def write_dataframe(f, key, df, dataset_kwargs={}):
     write_series(group, index_name, df.index, dataset_kwargs)
     for colname, series in df.items():
         write_series(f, f"{key}/{colname}", series, dataset_kwargs)
+
 
 def write_series(f, key, series, dataset_kwargs={}):
     value, dtype = to_h5_dtype(series)
@@ -339,6 +343,7 @@ def _clean_uns(d):
 def read_attribute(value):
     raise NotImplementedError()
 
+
 @report_key_on_error
 def read_dataframe_legacy(dataset):
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
@@ -355,6 +360,7 @@ def read_dataframe_legacy(dataset):
         df[col] = pd.Categorical(df[col].map(mapper), ordered=False)
     return df
 
+
 @report_key_on_error
 def read_dataframe(group):
     if not isinstance(group, h5py.Group):
@@ -367,6 +373,7 @@ def read_dataframe(group):
         assert set(group.attrs["column-order"]) == set(df.columns)
         df = df[group.attrs["column-order"]]
     return df
+
 
 @report_key_on_error
 def read_series(dataset):
@@ -381,6 +388,7 @@ def read_series(dataset):
             [cats[code] for code in codes],
             ordered=False
         )
+
 
 @read_attribute.register(h5py.Group)
 @report_key_on_error
