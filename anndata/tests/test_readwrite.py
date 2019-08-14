@@ -55,7 +55,10 @@ uns_dict = dict(  # unstructured annotation
     uns4={
         "a": 1,
         "b": [2, 3],
-        "c": "4"
+        "c": "4",
+        "d": np.ones(5),
+        "e": np.int32(7),
+        "f": [1, np.float32(2.5)]
     }
 )
 

@@ -147,6 +147,7 @@ ZARR_WRITE_REGISTRY = {
     bool: write_scalar,
     np.bool_: write_scalar,
     int: write_scalar,
+    np.integer: write_scalar,
     sparse.csr_matrix: write_csr,
     sparse.csc_matrix: write_csc,
 }
