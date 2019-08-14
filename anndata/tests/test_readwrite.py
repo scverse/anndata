@@ -56,9 +56,10 @@ uns_dict = dict(  # unstructured annotation
         "a": 1,
         "b": [2, 3],
         "c": "4",
-        "d": np.ones(5),
-        "e": np.int32(7),
-        "f": [1, np.float32(2.5)]
+        "d": ["some", "strings"],
+        "e": np.ones(5),
+        "f": np.int32(7),
+        "g": [1, np.float32(2.5)]
     }
 )
 
@@ -71,9 +72,32 @@ def dataset_kwargs(request):
 def diskfmt(request):
     return request.param
 
+diskfmt2 = diskfmt
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
+@pytest.mark.parametrize('typ', [np.array, csr_matrix])
+def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
+    tmpdir = Path(tmp_path)
+    pth1 = tmpdir / f"first.{diskfmt}"
+    write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
+    read1 = lambda : getattr(ad, f"read_{diskfmt}")(pth1)
+    pth2 = tmpdir / f"second.{diskfmt2}"
+    write2 = lambda x: getattr(x, f"write_{diskfmt2}")(pth2)
+    read2 = lambda : getattr(ad, f"read_{diskfmt2}")(pth2)
+
+    adata1 = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
+    write1(adata1)
+    adata2 = read1()
+    write2(adata2)
+    adata3 = read2()
+
+    assert_equal(adata2, adata1)
+    assert_equal(adata3, adata1)
+    assert_equal(adata2, adata1)
+
+
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])

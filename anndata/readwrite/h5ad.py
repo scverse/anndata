@@ -155,7 +155,7 @@ def write_scalar(f, key, value, dataset_kwargs={}):
 
 def write_array(f, key, value, dataset_kwargs={}):
     # Convert unicode to fixed length strings
-    if value.dtype.kind == 'U':
+    if value.dtype.kind in {'U', 'O'}:
         value = value.astype(h5py.special_dtype(vlen=str))
     elif value.dtype.names is not None:
         value = _to_hdf5_vlen_strings(value)

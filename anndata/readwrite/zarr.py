@@ -92,8 +92,21 @@ def write_not_implemented(f, key, value, dataset_kwargs={}):
         f" has not been implemented yet."
     )
 
-def write_array(f, key, value, dataset_kwargs):
-    f.create_dataset(key, data=value, **dataset_kwargs)
+def write_list(g, key, value, dataset_kwargs):
+    write_array(g, key, np.array(value), dataset_kwargs)
+
+def write_array(g, key, value, dataset_kwargs):
+    if value.dtype == object:
+        g.create_dataset(
+            key,
+            shape=value.shape,
+            dtype=object,
+            object_codec=numcodecs.VLenUTF8(),
+            **dataset_kwargs
+        )
+        g[key][:] = value
+    else:
+        g.create_dataset(key, data=value, **dataset_kwargs)
 
 # TODO: Not working quite right
 def write_scalar(f, key, value, dataset_kwargs):
@@ -134,8 +147,8 @@ ZARR_WRITE_REGISTRY = {
     type(None): write_none,
     Mapping: write_mapping,
     object: write_not_implemented,
-    np.ndarray: write_array,
-    list: write_array,
+    np.ndarray: write_array,  # Possibly merge with write_series
+    list: write_list,
     pd.DataFrame: write_dataframe,
     Raw: write_raw,
     # object: write_not_implemented,
