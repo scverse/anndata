@@ -410,3 +410,15 @@ def test_backwards_compat_zarr():
         pbmc_zarr = ad.read_zarr(z)
 
     assert_equal(pbmc_zarr, pbmc_orig)
+
+
+def test_zarr_chunk_X(tmp_path):
+    import zarr
+    zarr_pth = Path(tmp_path) / "test.zarr"
+    adata = gen_adata((100, 100), X_type=np.array)
+    adata.write_zarr(zarr_pth, chunks=(10, 10))
+
+    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won't take a Path
+    assert z["X"].chunks == (10, 10)
+    from_zarr = ad.read_zarr(zarr_pth)
+    assert_equal(from_zarr, adata)

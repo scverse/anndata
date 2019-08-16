@@ -14,14 +14,18 @@ from .utils import report_key_on_error
 import zarr
 import numcodecs
 
-def write_zarr(store, adata, **dataset_kwargs):
+
+def write_zarr(store, adata, chunks=None, **dataset_kwargs):
     if isinstance(store, Path):
         store = str(store)
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
     f = zarr.open(store, mode='w')
-    write_attribute(f, "X", adata.X, dataset_kwargs)
+    if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
+        write_attribute(f, "X", adata.X, {"chunks": chunks, **dataset_kwargs})
+    else:
+        write_attribute(f, "X", adata.X, dataset_kwargs)
     write_attribute(f, "obs", adata.obs, dataset_kwargs)
     write_attribute(f, "var", adata.var, dataset_kwargs)
     write_attribute(f, "obsm", adata.obsm, dataset_kwargs)
@@ -39,6 +43,7 @@ def write_attribute(f, key, value, dataset_kwargs):
     if key in f:
         del f[key]
     _write_method(type(value))(f, key, value, dataset_kwargs)
+
 
 def write_mapping(f, key, value: Mapping, dataset_kwargs):
     for sub_k, sub_v in value.items():
