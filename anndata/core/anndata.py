@@ -2162,35 +2162,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return selection if reverse is None else selection[reverse]
 
 
-    def _to_dict_fixed_width_arrays(self, var_len_str=True):
-        """A dict of arrays that stores data and annotation.
-
-        It is sufficient for reconstructing the object.
-        """
-        self.strings_to_categoricals()
-        obs_rec, uns_obs = df_to_records_fixed_width(self._obs, var_len_str)
-        var_rec, uns_var = df_to_records_fixed_width(self._var, var_len_str)
-        layers = dict(self.layers)
-        d = {
-            'X': self._X,
-            'obs': obs_rec,
-            'var': var_rec,
-            'obsm': self._obsm,
-            'varm': self._varm,
-            'layers': layers,
-            # add the categories to the unstructured annotation
-            'uns': {**self._uns, **uns_obs, **uns_var}}
-
-        if self.raw is not None:
-            self.strings_to_categoricals(self.raw._var)
-            var_rec, uns_var = df_to_records_fixed_width(self.raw._var, var_len_str)
-            d['raw.X'] = self.raw.X
-            d['raw.var'] = var_rec
-            d['raw.varm'] = self.raw.varm
-            d['raw.cat'] = uns_var
-
-        return d
-
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat
     # --------------------------------------------------------------------------
