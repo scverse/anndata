@@ -7,7 +7,6 @@ import pandas as pd
 from pandas.api.types import is_categorical
 import pytest
 from scipy.sparse import csr_matrix, csc_matrix, issparse
-from sklearn.utils.testing import assert_array_almost_equal
 
 import anndata as ad
 
@@ -98,8 +97,6 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-
-
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     tmpdir = tempfile.TemporaryDirectory()
@@ -171,6 +168,7 @@ def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
 
     adata = ad.read(backing_h5ad)
     assert adata.X.dtype == adata_src.X.dtype
+
 
 def test_read_write_maintain_obsmvarm_dtypes(backing_h5ad):
     M, N = 100, 101
@@ -366,7 +364,22 @@ def test_write_categorical(tmp_path):
     assert np.all(orig.obs.notna() == curr.obs.notna())
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
 
+
+def test_zarr_chunk_X(tmp_path):
+    import zarr
+    zarr_pth = Path(tmp_path) / "test.zarr"
+    adata = gen_adata((100, 100), X_type=np.array)
+    adata.write_zarr(zarr_pth, chunks=(10, 10))
+
+    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won't take a Path
+    assert z["X"].chunks == (10, 10)
+    from_zarr = ad.read_zarr(zarr_pth)
+    assert_equal(from_zarr, adata)
+
+################################
 # Round-tripping scanpy datasets
+################################
+
 
 @pytest.mark.skipif(not find_spec('scanpy'), reason='Scanpy is not installed')
 def test_scanpy_pbmc68k(tmp_path, diskfmt):
@@ -378,6 +391,7 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt):
 
     assert_equal(pbmc, read)  # Not expected to be exact due to `nan`s
 
+
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_scanpy_krumsiek11(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
@@ -388,6 +402,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
     read = getattr(ad, f"read_{diskfmt}")(filepth)
 
     assert_equal(orig, read, exact=True)
+
 
 # Checking if we can read legacy zarr files
 # TODO: Check how I should add this file to the repo
@@ -410,15 +425,3 @@ def test_backwards_compat_zarr():
         pbmc_zarr = ad.read_zarr(z)
 
     assert_equal(pbmc_zarr, pbmc_orig)
-
-
-def test_zarr_chunk_X(tmp_path):
-    import zarr
-    zarr_pth = Path(tmp_path) / "test.zarr"
-    adata = gen_adata((100, 100), X_type=np.array)
-    adata.write_zarr(zarr_pth, chunks=(10, 10))
-
-    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won't take a Path
-    assert z["X"].chunks == (10, 10)
-    from_zarr = ad.read_zarr(zarr_pth)
-    assert_equal(from_zarr, adata)

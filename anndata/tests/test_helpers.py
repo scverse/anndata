@@ -3,11 +3,10 @@ from string import ascii_letters
 import pytest
 import numpy as np
 from scipy import sparse
-from functools import partial, singledispatch
 
 from anndata.tests.helpers import assert_equal, report_name, gen_adata
 
-# Testing to see if all error types can have the key name appended. 
+# Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
 #
 # @singledispatch
@@ -35,10 +34,10 @@ from anndata.tests.helpers import assert_equal, report_name, gen_adata
 
 # Does this work for every warning?
 def test_report_name():
-    letters = np.array(list(ascii_letters))
-    tag = "".join(np.random.permutation(letters))
     def raise_error():
         raise Exception("an error occured!")
+    letters = np.array(list(ascii_letters))
+    tag = "".join(np.random.permutation(letters))
     with pytest.raises(Exception) as e1:
         raise_error()
     with pytest.raises(Exception) as e2:
@@ -51,8 +50,8 @@ def test_assert_equal():
     # ndarrays
     assert_equal(np.ones((10, 10)), np.ones((10, 10)))
     assert_equal(  # Should this require an exact test?
-        np.ones((10,10), dtype="i8"),
-        np.ones((10,10), dtype="f8")
+        np.ones((10, 10), dtype="i8"),
+        np.ones((10, 10), dtype="f8")
     )
     assert_equal(np.array(list(ascii_letters)), np.array(list(ascii_letters)), exact=True)
     with pytest.raises(AssertionError):
@@ -91,6 +90,7 @@ def test_assert_equal():
     assert_equal(csr, csc)
     assert_equal(csc, dense)
     assert_equal(dense, csc)
+
 
 def test_assert_equal_raw():
     base = gen_adata((10, 10))

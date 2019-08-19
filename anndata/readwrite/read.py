@@ -2,26 +2,23 @@ from pathlib import Path
 from typing import Union, Optional
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
-import h5py as _h5py
-import pandas as pd
 import gzip
 import bz2
 import numpy as np
-import warnings
 
 from .. import AnnData
 from .. import h5py
 from ..compat import PathLike, fspath
-from .utils import *
+from .utils import is_float
 from .h5ad import read_h5ad
 from .zarr import read_zarr
 
 
 def read_csv(
     filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str]=',',
-    first_column_names: Optional[bool]=None,
-    dtype: str='float32',
+    delimiter: Optional[str] = ',',
+    first_column_names: Optional[bool] = None,
+    dtype: str = 'float32',
 ) -> AnnData:
     """Read ``.csv`` file.
 
@@ -46,7 +43,7 @@ def read_csv(
 def read_excel(
     filename: PathLike,
     sheet: Union[str, int],
-    dtype: str='float32',
+    dtype: str = 'float32',
 ) -> AnnData:
     """Read ``.xlsx`` (Excel) file.
 
@@ -69,7 +66,7 @@ def read_excel(
     return AnnData(X, row, col, dtype=dtype)
 
 
-def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
+def read_umi_tools(filename: PathLike, dtype: str = 'float32') -> AnnData:
     """Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
@@ -89,9 +86,9 @@ def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
     for line in fh:
         t = line.decode('ascii').split('\t')  # gzip read bytes, hence the decoding
         try:
-            dod[t[1]].update({t[0]:int(t[2])})
+            dod[t[1]].update({t[0]: int(t[2])})
         except KeyError:
-            dod[t[1]] = {t[0]:int(t[2])}
+            dod[t[1]] = {t[0]: int(t[2])}
 
     df = DataFrame.from_dict(dod, orient='index')  # build the matrix
     df.fillna(value=0., inplace=True)  # many NaN, replace with zeros
@@ -131,7 +128,7 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
 
 
 def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
-              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str='float32', **kwargs) -> AnnData:
+              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str = 'float32', **kwargs) -> AnnData:
     """Read `.loom`-formatted hdf5 file.
 
     This reads the whole file into memory.
@@ -213,7 +210,7 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
     return adata
 
 
-def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
+def read_mtx(filename: PathLike, dtype: str = 'float32') -> AnnData:
     """Read ``.mtx`` file.
 
     Parameters
@@ -233,9 +230,9 @@ def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
 
 def read_text(
     filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str]=None,
-    first_column_names: Optional[bool]=None,
-    dtype: str='float32',
+    delimiter: Optional[str] = None,
+    first_column_names: Optional[bool] = None,
+    dtype: str = 'float32',
 ) -> AnnData:
     """Read ``.txt``, ``.tab``, ``.data`` (text) file.
 

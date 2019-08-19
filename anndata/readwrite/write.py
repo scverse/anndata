@@ -1,7 +1,5 @@
 import warnings
-from collections.abc import Mapping
 from pathlib import Path
-from typing import Union, MutableMapping
 
 import pandas as pd
 import math
@@ -9,9 +7,12 @@ import numpy as np
 from scipy.sparse import issparse
 
 from .. import AnnData
-from .. import h5py
 from ..compat import PathLike, fspath
 from ..logging import get_logger
+
+# Exports
+from .h5ad import write_h5ad as _write_h5ad
+from .zarr import write_zarr
 
 
 logger = get_logger(__name__)
@@ -99,9 +100,6 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
     create(fspath(filename), layers, row_attrs=row_attrs, col_attrs=col_attrs)
 
 
-from .zarr import write_zarr
-
-
 def _get_chunk_indices(za):
     # TODO: does zarr provide code for this?
     """
@@ -123,5 +121,3 @@ def _write_in_zarr_chunks(za, key, value):
                 za[s0:e0, s1:e1] = value[s0:e0, s1:e1].todense()
             else:
                 za[s0:e0, s1:e1] = value[s0:e0, s1:e1]
-
-from .h5ad import write_h5ad as _write_h5ad

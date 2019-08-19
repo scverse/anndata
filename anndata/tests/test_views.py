@@ -1,4 +1,4 @@
-from operator import eq, ne, mul
+from operator import ne, mul
 
 import joblib
 import numpy as np
@@ -37,12 +37,16 @@ uns_dict = {  # unstructured annotation
     'uns2': ['some annotation']}
 
 
+subset_func2 = subset_func
+
+
 @pytest.fixture
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm['o'] = np.zeros((100, 50))
     adata.varm['o'] = np.zeros((100, 50))
     return adata
+
 
 @pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
 def adata_parameterized(request):
@@ -55,6 +59,7 @@ def adata_parameterized(request):
 )
 def matrix_type(request):
     return request.param
+
 
 @pytest.fixture(params=["layers", "obsm", "varm"])
 def mapping_name(request):
@@ -219,6 +224,7 @@ def test_set_varm(adata):
 
     assert init_hash == joblib.hash(adata)
 
+
 # TODO: Determine if this is the intended behavior, or just the behaviour we've had for a while
 def test_not_set_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
@@ -240,6 +246,7 @@ def test_not_set_subset_X(matrix_type, subset_func):
 
     assert init_hash == joblib.hash(adata)
 
+
 def test_set_scalar_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
     orig_X_val = adata.X.copy()
@@ -253,6 +260,7 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
 
     assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+
 
 # TODO: Use different kind of subsetting for adata and view
 def test_set_subset_obsm(adata, subset_func):
@@ -366,7 +374,6 @@ def test_layers_view():
     assert real_hash == joblib.hash(real_adata)
     assert view_hash != joblib.hash(view_adata)
 
-subset_func2 = subset_func
 
 # TODO: This can be flaky. Make that stop
 def test_view_of_view(matrix_type, subset_func, subset_func2):
@@ -415,11 +422,12 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
             asarray(view_of_view_copy.layers[k])
         )))
 
+
 def test_view_of_view_modification():
     adata = ad.AnnData(np.zeros((10, 10)))
     adata[0, :][:, 5:].X = np.ones(5)
     assert np.all(adata.X[0, 5:] == np.ones(5))
-    adata[[1,2], :][:, [1,2]].X = np.ones((2, 2))
+    adata[[1, 2], :][:, [1, 2]].X = np.ones((2, 2))
     assert np.all(adata.X[1:3, 1:3] == np.ones((2, 2)))
 
     adata.X = sparse.csr_matrix(adata.X)

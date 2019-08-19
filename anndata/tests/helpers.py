@@ -12,6 +12,7 @@ from scipy import sparse
 
 from anndata import AnnData
 
+
 @singledispatch
 def asarray(x):
     """Convert x to a numpy array"""
@@ -52,7 +53,7 @@ def gen_typed_df_t2_size(m, n, index=None, columns=None):
     return df
 
 
-#TODO: Use hypothesis for this?
+# TODO: Use hypothesis for this?
 def gen_adata(
     shape: Tuple[int, int],
     X_type=sparse.csr_matrix,
@@ -60,7 +61,7 @@ def gen_adata(
     # obs_dtypes,
     # var_dtypes,
     obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    varm_types: "Collection[Type]" =(sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame)
 ) -> AnnData:
     """Helper function to generate a random anndata for testing purposes.
@@ -123,6 +124,7 @@ def gen_adata(
     )
     return adata
 
+
 def array_bool_subset(index, min_size=2):
     b = np.zeros(len(index), dtype=bool)
     selected = np.random.choice(
@@ -132,6 +134,7 @@ def array_bool_subset(index, min_size=2):
     )
     b[selected] = True
     return b
+
 
 def array_subset(index, min_size=2):
     if len(index) < min_size:
@@ -144,6 +147,7 @@ def array_subset(index, min_size=2):
         replace=False
     )
 
+
 def array_int_subset(index, min_size=2):
     if len(index) < min_size:
         raise ValueError(
@@ -155,6 +159,7 @@ def array_int_subset(index, min_size=2):
         replace=False
     )
 
+
 def slice_subset(index, min_size=2):
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
@@ -163,6 +168,7 @@ def slice_subset(index, min_size=2):
             break
     return s
 
+
 def single_subset(index):
     return index[np.random.randint(0, len(index), size=())]
 
@@ -170,6 +176,11 @@ def single_subset(index):
 @pytest.fixture(params=[array_subset, slice_subset, single_subset, array_int_subset, array_bool_subset])
 def subset_func(request):
     return request.param
+
+###################
+# Checking equality
+###################
+
 
 def format_msg(elem_name):
     if elem_name is not None:
@@ -180,6 +191,7 @@ def format_msg(elem_name):
 
 # TODO: it would be better to modify the other exception
 def report_name(func):
+    """Report name of element being tested if test fails."""
     @wraps(func)
     def func_wrapper(*args, _elem_name=None, **kwargs):
         try:
@@ -196,6 +208,7 @@ def report_name(func):
                 e._name_attached = True
             raise e
     return func_wrapper
+
 
 @report_name
 def _assert_equal(a, b):
@@ -250,9 +263,9 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
 def assert_equal_mapping(a, b, exact=False, elem_name=None):
     assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
     for k in a.keys():
-        if elem_name is None: elem_name = ""
+        if elem_name is None:
+            elem_name = ""
         assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
-
 
 @assert_equal.register(pd.Index)
 def assert_equal_index(a, b, exact=False, elem_name=None):
@@ -270,9 +283,19 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
             _elem_name=elem_name
         )
 
-
 @assert_equal.register(AnnData)
-def assert_adata_equal(a, b, exact=False):
+def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
+    """
+    Check whether two AnnData objects are equivalent, raising an AssertionError if they aren't.
+
+    Params
+    ------
+    a
+    b
+    exact
+        Whether comparisons should be exact or not. This has a somewhat flexible
+        meaning and should probably get refined in the future.
+    """
     if a.isview:
         warn("Cannot currently compare views.")
         a = a.copy()

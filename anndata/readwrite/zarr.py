@@ -6,13 +6,13 @@ import warnings
 import numpy as np
 from scipy import sparse
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_string_dtype
+from pandas.api.types import is_categorical_dtype
+import numcodecs
+import zarr
 
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
 from .utils import report_key_on_error
-import zarr
-import numcodecs
 
 
 def write_zarr(store, adata, chunks=None, **dataset_kwargs):
@@ -21,7 +21,7 @@ def write_zarr(store, adata, chunks=None, **dataset_kwargs):
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
-    f = zarr.open(store, mode='w')
+    f = zarr.open(store, mode="w")
     if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
         write_attribute(f, "X", adata.X, {"chunks": chunks, **dataset_kwargs})
     else:
@@ -39,23 +39,23 @@ def _write_method(cls):
     return _find_impl(cls, ZARR_WRITE_REGISTRY)
 
 
-def write_attribute(f, key, value, dataset_kwargs):
+def write_attribute(f, key, value, dataset_kwargs={}):
     if key in f:
         del f[key]
     _write_method(type(value))(f, key, value, dataset_kwargs)
 
 
-def write_mapping(f, key, value: Mapping, dataset_kwargs):
+def write_mapping(f, key, value: Mapping, dataset_kwargs={}):
     for sub_k, sub_v in value.items():
         if not isinstance(key, str):
             warnings.warn(
-                f'dict key {key} transformed to str upon writing to zarr, using '
-                'string keys is recommended.'
+                f"dict key {key} transformed to str upon writing to zarr, using "
+                "string keys is recommended."
             )
         write_attribute(f, f"{key}/{sub_k}", sub_v, dataset_kwargs)
 
 
-def write_dataframe(z, k, df, dataset_kwargs):
+def write_dataframe(z, k, df, dataset_kwargs={}):
     g = z.create_group(k)
     g.attrs["encoding-type"] = "dataframe"
     g.attrs["encoding-version"] = "0.1.0"
@@ -71,14 +71,14 @@ def write_dataframe(z, k, df, dataset_kwargs):
         write_series(g, colname, series, dataset_kwargs)
 
 
-def write_series(g, k, s, dataset_kwargs):
+def write_series(g, k, s, dataset_kwargs={}):
     if s.dtype == object:
         g.create_dataset(
             k,
             shape=s.shape,
             dtype=object,
             object_codec=numcodecs.VLenUTF8(),
-            **dataset_kwargs
+            **dataset_kwargs,
         )
         g[k][:] = s.values
     elif is_categorical_dtype(s):
@@ -97,28 +97,33 @@ def write_not_implemented(f, key, value, dataset_kwargs={}):
         f" has not been implemented yet."
     )
 
-def write_list(g, key, value, dataset_kwargs):
+
+def write_list(g, key, value, dataset_kwargs={}):
     write_array(g, key, np.array(value), dataset_kwargs)
 
-def write_array(g, key, value, dataset_kwargs):
+
+def write_array(g, key, value, dataset_kwargs={}):
     if value.dtype == object:
         g.create_dataset(
             key,
             shape=value.shape,
             dtype=object,
             object_codec=numcodecs.VLenUTF8(),
-            **dataset_kwargs
+            **dataset_kwargs,
         )
         g[key][:] = value
     else:
         g.create_dataset(key, data=value, **dataset_kwargs)
 
+
 # TODO: Not working quite right
-def write_scalar(f, key, value, dataset_kwargs):
+def write_scalar(f, key, value, dataset_kwargs={}):
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
+
 
 def write_none(f, key, value, dataset_kwargs={}):
     pass
+
 
 # TODO: Figure out what to do with dataset_kwargs for these
 def write_csr(f, key, value, dataset_kwargs={}):
@@ -130,6 +135,7 @@ def write_csr(f, key, value, dataset_kwargs={}):
     group["indices"] = value.indices
     group["indptr"] = value.indptr
 
+
 def write_csc(f, key, value, dataset_kwargs={}):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csc_matrix"
@@ -139,14 +145,16 @@ def write_csc(f, key, value, dataset_kwargs={}):
     group["indices"] = value.indices
     group["indptr"] = value.indptr
 
+
 def write_raw(f, key, value, dataset_kwargs={}):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
     group.attrs["encoding-version"] = "0.1.0"
     group.attrs["shape"] = value.shape
-    write_attribute(group, 'X', value.X, dataset_kwargs)
-    write_attribute(group, 'var', value.var, dataset_kwargs)
-    write_attribute(group, 'varm', value.varm, dataset_kwargs)
+    write_attribute(group, "X", value.X, dataset_kwargs)
+    write_attribute(group, "var", value.var, dataset_kwargs)
+    write_attribute(group, "varm", value.varm, dataset_kwargs)
+
 
 ZARR_WRITE_REGISTRY = {
     type(None): write_none,
@@ -181,8 +189,8 @@ def read_zarr(store):
     """
     if isinstance(store, Path):
         store = str(store)
-    import zarr
-    f = zarr.open(store, mode='r')
+
+    f = zarr.open(store, mode="r")
     d = {}
     for k in f.keys():
         # Backwards compat
@@ -234,6 +242,7 @@ def read_dataset(dataset):
         value = value[()]
     return value
 
+
 @read_attribute.register(zarr.Group)
 @report_key_on_error
 def read_group(group):
@@ -247,19 +256,20 @@ def read_group(group):
             return read_csc(group)
     return {k: read_attribute(group[k]) for k in group.keys()}
 
+
 @report_key_on_error
 def read_csr(group):
     return sparse.csr_matrix(
-        (group["data"], group["indices"], group["indptr"]),
-        shape=group.attrs["shape"]
+        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"]
     )
+
 
 @report_key_on_error
 def read_csc(group):
     return sparse.csc_matrix(
-        (group["data"], group["indices"], group["indptr"]),
-        shape=group.attrs["shape"]
+        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"]
     )
+
 
 @report_key_on_error
 def read_dataframe_legacy(dataset: zarr.Array):
@@ -270,6 +280,7 @@ def read_dataframe_legacy(dataset: zarr.Array):
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df
+
 
 @report_key_on_error
 def read_dataframe(g):
@@ -284,13 +295,10 @@ def read_dataframe(g):
         df = df[g.attrs["column-order"]]
     return df
 
+
 @report_key_on_error
 def read_series(d):
     if "categories" in d.attrs:
-        return pd.Categorical.from_codes(
-            d,
-            d.attrs["categories"],
-            ordered=False
-        )
+        return pd.Categorical.from_codes(d, d.attrs["categories"], ordered=False)
     else:
         return d

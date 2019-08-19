@@ -1,16 +1,18 @@
 """Main class and helper functions.
 """
-from enum import Enum
 from collections import OrderedDict
 from collections.abc import MutableMapping
+from copy import deepcopy
+from enum import Enum
 from functools import reduce
 from pathlib import Path
-from typing import Any, Union, Optional
-from typing import Iterable, Sized, Sequence, Mapping
-from typing import Tuple, List
-from copy import deepcopy
+from typing import (
+    Any, Union, Optional,
+    Iterable, Sequence, Mapping, Tuple, List
+)
 import warnings
 
+from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
@@ -18,7 +20,6 @@ from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
-from natsort import natsorted
 
 
 # try importing zarr
@@ -59,7 +60,7 @@ from .. import h5py
 from .views import ArrayView, DictView, DataFrameView, _resolve_idxs, asview, ViewArgs
 
 from .. import utils
-from ..utils import Index1D, Index, get_n_items_idx, convert_to_dict, unpack_index
+from ..utils import Index1D, Index, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
 from ..compat import PathLike, warn_flatten
 

@@ -57,9 +57,11 @@ def convert_string(string):
     else:
         return string
 
+
 class AnnDataReadError(OSError):
     """Error caused while trying to read in AnnData."""
     pass
+
 
 def report_key_on_error(func):
     """
@@ -84,7 +86,7 @@ def report_key_on_error(func):
                 raise e
             else:
                 if isinstance(elem, (zarr.Group, zarr.Array)):
-                    parent = elem.store # Not sure how to always get a name out of this
+                    parent = elem.store  # Not sure how to always get a name out of this
                 else:
                     if isinstance(elem, patched_h5py.Group):
                         parent = elem.h5py_group.file.name

@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+from functools import _find_impl, singledispatch
 from pathlib import Path
 from typing import Union, Tuple
 
@@ -9,10 +11,10 @@ from pandas.api.types import (
     is_categorical_dtype
 )
 from scipy import sparse
+
 from .. import h5py
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
-from collections.abc import Mapping
 from .utils import report_key_on_error
 
 
@@ -104,9 +106,6 @@ def write_h5ad(filepath: Union[Path, str], adata: "AnnData", force_dense=False, 
         write_attribute(f, "raw", adata.raw, dataset_kwargs)
     if adata.isbacked:
         adata.file.open(filepath, 'r+')
-
-
-from functools import _find_impl, singledispatch
 
 
 def _write_method(cls):
