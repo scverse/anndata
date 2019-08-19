@@ -126,15 +126,18 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike,
-              sparse: bool = True,
-              cleanup: bool = False,
-              X_name: str = 'spliced',
-              obs_names: str = 'CellID',
-              obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
-              var_names: str = 'Gene',
-              varm_names: Optional[Mapping[str, Iterable[str]]] = None,
-              dtype: str='float32', **kwargs) -> AnnData:
+def read_loom(
+    filename: PathLike,
+    sparse: bool = True,
+    cleanup: bool = False,
+    X_name: str = 'spliced',
+    obs_names: str = 'CellID',
+    obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    var_names: str = 'Gene',
+    varm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    dtype: str='float32',
+    **kwargs
+) -> AnnData:
     """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
