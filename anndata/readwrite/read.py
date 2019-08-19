@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union, Optional, Mapping
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
@@ -126,9 +126,19 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
-              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str='float32', **kwargs) -> AnnData:
-    """Read `.loom`-formatted hdf5 file.
+def read_loom(
+    filename: PathLike,
+    sparse: bool = True,
+    cleanup: bool = False,
+    X_name: str = 'spliced',
+    obs_names: str = 'CellID',
+    obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    var_names: str = 'Gene',
+    varm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    dtype: str='float32',
+    **kwargs
+) -> AnnData:
+    """Read ``.loom``-formatted hdf5 file.
 
     This reads the whole file into memory.
 
@@ -147,11 +157,18 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         Loompy key with which the data matrix `.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
-    var_names
+    obsm_names:
+        Loompy keys which will be constructed into observation matrices
+    var_names:
         Loompy key where the variable/gene names are stored.
-    **kwargs
+    obsm_names:
+        Loompy keys which will be constructed into variable matrices
+    **kwargs:
         Arguments to loompy.connect
     """
+    obsm_names = obsm_names or {}
+    varm_names = varm_names or {}
+
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
     with connect(filename, 'r', **kwargs) as lc:
@@ -165,18 +182,26 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
             if key != '': layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
 
         obs = dict(lc.col_attrs)
+
+        obsm = {}
+        for key, names in obsm_names.items():
+            obsm[key] = np.array([obs.pop(name) for name in names]).T
+
         if obs_names in obs.keys(): obs['obs_names'] = obs.pop(obs_names)
         obsm_attrs = [k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1]
 
-        obsm = {}
         for key in obsm_attrs:
             obsm[key] = obs.pop(key)
 
         var = dict(lc.row_attrs)
+
+        varm = {}
+        for key, names in varm_names.items():
+            varm[key] = np.array([var.pop(name) for name in names]).T
+
         if var_names in var.keys(): var['var_names'] = var.pop(var_names)
         varm_attrs = [k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1]
 
-        varm = {}
         for key in varm_attrs:
             varm[key] = var.pop(key)
 
