@@ -288,10 +288,10 @@ def _write_key_value_to_h5(f, key, value, **kwargs):
                 return
             else:
                 del f[key]
-        elif key.find('/') != -1:
+        elif '/' in key:
             # check if parent node exists and is not a group
             # for old h5ad files in which obsm/varm were stored as compound datasets
-            parent_node = key[0:key.find('/')]
+            parent_node = key[:key.index('/')]
             if parent_node in f.keys() and isinstance(f[parent_node], h5py.Dataset):
                 del f[parent_node]
         f.create_dataset(key, data=value, **kwargs)
