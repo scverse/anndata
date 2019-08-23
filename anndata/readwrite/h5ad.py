@@ -129,6 +129,7 @@ def write_attribute(f: H5Group, key: str, value, dataset_kwargs: Mapping):
     _write_method(type(value))(f, key, value, dataset_kwargs)
 
 
+# TODO: Make consistent with zarr. Should this be a group?
 def write_raw(f, key, value, dataset_kwargs={}):
     write_attribute(f, 'raw.X', value.X, dataset_kwargs)
     write_attribute(f, 'raw.var', value.var, dataset_kwargs)
@@ -341,7 +342,7 @@ def read_dataframe(group) -> pd.DataFrame:
 
 
 @report_key_on_error
-def read_series(dataset) -> pd.Series:
+def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     enum_info = h5py.check_dtype(enum=dataset.dtype)
     if enum_info is None:
         return dataset[...]
