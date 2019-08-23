@@ -137,9 +137,9 @@ def read_loom(
     cleanup: bool = False,
     X_name: str = 'spliced',
     obs_names: str = 'CellID',
-    obsm_names: Optional[Mapping[str, Iterable[str]]] = None, 
+    obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
     var_names: str = 'Gene',
-    varm_names: Optional[Mapping[str, Iterable[str]]] = None, 
+    varm_names: Optional[Mapping[str, Iterable[str]]] = None,
     dtype: str = 'float32',
     **kwargs
 ) -> AnnData:
