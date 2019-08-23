@@ -1,4 +1,5 @@
 from pathlib import Path
+from os import PathLike, fspath
 from typing import Union, Optional, Mapping
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
@@ -8,7 +9,6 @@ import numpy as np
 
 from .. import AnnData
 from .. import h5py
-from ..compat import PathLike, fspath
 from .utils import is_float
 from .h5ad import read_h5ad
 from .zarr import read_zarr

@@ -1,5 +1,6 @@
 import warnings
 from pathlib import Path
+from os import PathLike, fspath
 
 import pandas as pd
 import math
@@ -7,7 +8,6 @@ import numpy as np
 from scipy.sparse import issparse
 
 from .. import AnnData
-from ..compat import PathLike, fspath
 from ..logging import get_logger
 
 # Exports

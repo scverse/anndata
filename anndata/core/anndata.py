@@ -6,10 +6,10 @@ from copy import deepcopy
 from enum import Enum
 from functools import reduce
 from pathlib import Path
-from typing import (
-    Any, Union, Optional,
-    Iterable, Sequence, Mapping, Tuple, List
-)
+from os import PathLike
+from typing import Any, Union, Optional
+from typing import Iterable, Sequence, Mapping
+from typing import Tuple, List
 import warnings
 
 from natsort import natsorted
@@ -62,7 +62,7 @@ from .views import ArrayView, DictView, DataFrameView, _resolve_idxs, asview, Vi
 from .. import utils
 from ..utils import Index1D, Index, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
-from ..compat import PathLike, warn_flatten
+from ..compat import warn_flatten
 
 
 class StorageType(Enum):

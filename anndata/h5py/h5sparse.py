@@ -2,6 +2,7 @@
 # - think about making all of the below subclasses
 # - think about supporting the COO format
 from collections.abc import Mapping
+from os import PathLike
 from typing import Optional, Union, KeysView, NamedTuple
 
 import h5py
@@ -10,7 +11,6 @@ import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
 from ..utils import unpack_index
-from ..compat import PathLike
 
 from .utils import _chunked_rows
 
