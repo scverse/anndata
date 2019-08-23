@@ -1,6 +1,7 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
+from typing import Callable, Type, TypeVar, Union
 import warnings
 
 import numpy as np
@@ -15,7 +16,15 @@ from ..compat import _from_fixed_length_strings, _clean_uns
 from .utils import report_key_on_error
 
 
-def write_zarr(store, adata, chunks=None, **dataset_kwargs):
+T = TypeVar("T")
+
+
+def write_zarr(
+    store: Union[MutableMapping, str, Path],
+    adata: AnnData,
+    chunks=None,
+    **dataset_kwargs
+) -> None:
     if isinstance(store, Path):
         store = str(store)
     adata.strings_to_categoricals()
@@ -35,7 +44,7 @@ def write_zarr(store, adata, chunks=None, **dataset_kwargs):
     write_attribute(f, "raw", adata.raw, dataset_kwargs)
 
 
-def _write_method(cls):
+def _write_method(cls: Type[T]) -> Callable[[zarr.Group, str, T], None]:
     return _find_impl(cls, ZARR_WRITE_REGISTRY)
 
 
@@ -179,7 +188,7 @@ ZARR_WRITE_REGISTRY = {
 }
 
 
-def read_zarr(store):
+def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     """Read from a hierarchical Zarr array store.
 
     Parameters
@@ -258,21 +267,21 @@ def read_group(group):
 
 
 @report_key_on_error
-def read_csr(group):
+def read_csr(group: zarr.Group) -> sparse.csr_matrix:
     return sparse.csr_matrix(
         (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"]
     )
 
 
 @report_key_on_error
-def read_csc(group):
+def read_csc(group: zarr.Group) -> sparse.csc_matrix:
     return sparse.csc_matrix(
         (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"]
     )
 
 
 @report_key_on_error
-def read_dataframe_legacy(dataset: zarr.Array):
+def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """
     Reads old format of dataframes
     """
@@ -283,7 +292,7 @@ def read_dataframe_legacy(dataset: zarr.Array):
 
 
 @report_key_on_error
-def read_dataframe(g):
+def read_dataframe(g) -> pd.DataFrame:
     if isinstance(g, zarr.Array):
         return read_dataframe_legacy(g)
     df = pd.DataFrame({k: read_series(g[k]) for k in g.keys()})
@@ -297,7 +306,7 @@ def read_dataframe(g):
 
 
 @report_key_on_error
-def read_series(d):
+def read_series(d: zarr.Array) -> Union[zarr.Array, pd.Categorical]:
     if "categories" in d.attrs:
         return pd.Categorical.from_codes(d, d.attrs["categories"], ordered=False)
     else:

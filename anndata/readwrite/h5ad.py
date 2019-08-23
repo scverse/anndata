@@ -1,9 +1,9 @@
 from collections.abc import Mapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
-from typing import Union, Tuple
+from typing import Callable, Optional, Tuple, Type, TypeVar, Union
 
-import h5py as _h5py
+import h5py as h5py
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -12,13 +12,18 @@ from pandas.api.types import (
 )
 from scipy import sparse
 
-from .. import h5py
+from .. import h5py as adh5py
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
 from .utils import report_key_on_error
 
 
-def make_h5_cat_dtype(s):
+H5Group = Union[h5py.Group, h5py.File, adh5py.Group, adh5py.File]
+H5Dataset = Union[h5py.Dataset, adh5py.Dataset]
+T = TypeVar("T")
+
+
+def make_h5_cat_dtype(s: pd.Categorical) -> np.dtype:
     """This creates a hdf5 enum dtype based on a pandas categorical array."""
     # If this causes segfaults, try the alternative in the commit message
     max_code = np.max(s.codes)
@@ -41,7 +46,7 @@ def to_h5_dtype(a: Union[np.ndarray, pd.Series]) -> Tuple[np.ndarray, np.dtype]:
         return a, a.dtype
 
 
-def _to_hdf5_vlen_strings(value):
+def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
     """
     This corrects compound dtypes to work with hdf5 files.
     """
@@ -56,7 +61,13 @@ def _to_hdf5_vlen_strings(value):
     return value.astype(new_dtype)
 
 
-def write_h5ad(filepath: Union[Path, str], adata: "AnnData", force_dense=False, dataset_kwargs={}, **kwargs):
+def write_h5ad(
+    filepath: Union[Path, str],
+    adata: AnnData,
+    force_dense: bool = False,
+    dataset_kwargs: Mapping = {},
+    **kwargs
+) -> None:
     """Write ``.h5ad``-formatted hdf5 file.
 
     .. note::
@@ -93,7 +104,7 @@ def write_h5ad(filepath: Union[Path, str], adata: "AnnData", force_dense=False, 
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
-    with h5py.File(filepath, mode, force_dense=force_dense) as f:
+    with adh5py.File(filepath, mode, force_dense=force_dense) as f:
         if not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # Otherwise, X should already be up to date
             write_attribute(f, "X", adata.X, dataset_kwargs)
@@ -108,11 +119,11 @@ def write_h5ad(filepath: Union[Path, str], adata: "AnnData", force_dense=False, 
         adata.file.open(filepath, 'r+')
 
 
-def _write_method(cls):
+def _write_method(cls: Type[T]) -> Callable[[H5Group, str, T], None]:
     return _find_impl(cls, H5AD_WRITE_REGISTRY)
 
 
-def write_attribute(f, key, value, dataset_kwargs):
+def write_attribute(f: H5Group, key: str, value, dataset_kwargs: Mapping):
     if key in f:
         del f[key]
     _write_method(type(value))(f, key, value, dataset_kwargs)
@@ -155,14 +166,14 @@ def write_scalar(f, key, value, dataset_kwargs={}):
 def write_array(f, key, value, dataset_kwargs={}):
     # Convert unicode to fixed length strings
     if value.dtype.kind in {'U', 'O'}:
-        value = value.astype(h5py.special_dtype(vlen=str))
+        value = value.astype(adh5py.special_dtype(vlen=str))
     elif value.dtype.names is not None:
         value = _to_hdf5_vlen_strings(value)
     f.create_dataset(key, data=value, **dataset_kwargs)
 
 
 def write_dataframe(f, key, df, dataset_kwargs={}):
-    if isinstance(f, h5py.File):  # If it's the patched one
+    if isinstance(f, adh5py.File):  # If it's the patched one
         group = f.h5f.create_group(key)
     else:
         group = f.create_group(key)
@@ -193,7 +204,7 @@ def write_mapping(f, key, value, dataset_kwargs={}):
 H5AD_WRITE_REGISTRY = {
     Raw: write_raw,
     object: write_not_implemented,
-    h5py.Dataset: write_basic,
+    adh5py.Dataset: write_basic,
     list: write_list,
     type(None): write_none,
     str: write_scalar,
@@ -205,17 +216,17 @@ H5AD_WRITE_REGISTRY = {
     np.integer: write_scalar,
     np.ndarray: write_array,
     sparse.spmatrix: write_basic,
-    h5py.SparseDataset: write_basic,
+    adh5py.SparseDataset: write_basic,
     pd.DataFrame: write_dataframe,
     Mapping: write_mapping
 }
 
 
-def read_h5ad_backed(filename, mode):
+def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
     d = {"filename": filename, "filemode": mode}
     raw = {}
 
-    f = h5py.File(filename, mode)
+    f = adh5py.File(filename, mode)
 
     attributes = ["obsm", "varm", "uns", "layers"]
     df_attributes = ["obs", "var"]
@@ -241,7 +252,11 @@ def read_h5ad_backed(filename, mode):
 
 
 # TODO: chunks, what are possible values for chunk_size?
-def read_h5ad(filename, backed=None, chunk_size=None):
+def read_h5ad(
+    filename: Union[str, Path],
+    backed: Optional[Union[str, bool]] = None,
+    chunk_size=None
+) -> AnnData:
     """Read ``.h5ad``-formatted hdf5 file.
 
     Parameters
@@ -269,7 +284,7 @@ def read_h5ad(filename, backed=None, chunk_size=None):
     df_attributes = ["obs", "var"]
     raw_attributes = ["raw.X", "raw.varm"]
 
-    with h5py.File(filename, "r") as f:
+    with adh5py.File(filename, "r") as f:
         d = {k: read_attribute(f[k]) for k in attributes if k in f}
         raw = {k.replace("raw.", ""): read_attribute(f[k]) for k in raw_attributes if k in f}
         for k in df_attributes:
@@ -294,7 +309,7 @@ def read_attribute(value):
 
 
 @report_key_on_error
-def read_dataframe_legacy(dataset):
+def read_dataframe_legacy(dataset) -> pd.DataFrame:
     """
     Read pre-anndata 0.7 dataframes.
     """
@@ -303,7 +318,7 @@ def read_dataframe_legacy(dataset):
     # TODO: Decide whether to keep next few lines, since I don't this ever made a release
     dt = dataset.dtype
     for col in dt.names[1:]:
-        check = _h5py.check_dtype(enum=dt[col])
+        check = h5py.check_dtype(enum=dt[col])
         if not isinstance(check, dict):
             continue
         mapper = {v: k for k, v in check.items()}
@@ -312,8 +327,8 @@ def read_dataframe_legacy(dataset):
 
 
 @report_key_on_error
-def read_dataframe(group):
-    if not isinstance(group, h5py.Group):
+def read_dataframe(group) -> pd.DataFrame:
+    if not isinstance(group, adh5py.Group):
         return read_dataframe_legacy(group)
     df = pd.DataFrame({k: read_series(group[k]) for k in group.keys()})
     df.set_index(group.attrs["_index"], inplace=True)
@@ -326,8 +341,8 @@ def read_dataframe(group):
 
 
 @report_key_on_error
-def read_series(dataset):
-    enum_info = _h5py.check_dtype(enum=dataset.dtype)
+def read_series(dataset) -> pd.Series:
+    enum_info = h5py.check_dtype(enum=dataset.dtype)
     if enum_info is None:
         return dataset[...]
     else:
@@ -341,9 +356,9 @@ def read_series(dataset):
         )
 
 
-@read_attribute.register(h5py.Group)
+@read_attribute.register(adh5py.Group)
 @report_key_on_error
-def read_group(group: h5py.Group):
+def read_group(group: adh5py.Group) -> Union[dict, pd.DataFrame]:
     if group.attrs.get("encoding-type", "") == "dataframe":
         return read_dataframe(group)
     d = dict()
@@ -352,9 +367,9 @@ def read_group(group: h5py.Group):
     return d
 
 
-@read_attribute.register(h5py.Dataset)
+@read_attribute.register(adh5py.Dataset)
 @report_key_on_error
-def read_dataset(dataset: h5py.Dataset):
+def read_dataset(dataset: adh5py.Dataset):
     value = dataset[()]
     if not hasattr(value, "dtype"):
         return value
@@ -372,11 +387,11 @@ def read_dataset(dataset: h5py.Dataset):
 
 
 @read_attribute.register(type(None))
-def read_attribute_none(value):
+def read_attribute_none(value) -> None:
     return None
 
 
-@read_attribute.register(h5py.SparseDataset)
+@read_attribute.register(adh5py.SparseDataset)
 @report_key_on_error
-def read_sparse_dataset(value):
+def read_sparse_dataset(value) -> sparse.spmatrix:
     return value.value
