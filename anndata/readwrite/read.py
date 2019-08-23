@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union, Optional, Mapping
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
@@ -20,18 +20,19 @@ def read_csv(
     first_column_names: Optional[bool] = None,
     dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.csv`` file.
+    """\
+    Read `.csv` file.
 
-    Same as :func:`~anndata.read_text` but with default delimiter ``','``.
+    Same as :func:`~anndata.read_text` but with default delimiter `','`.
 
     Parameters
     ----------
     filename
         Data file.
     delimiter
-        Delimiter that separates data within text file. If ``None``, will split at
+        Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ``' '``.
+        splitting at single white space `' '`.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -45,7 +46,8 @@ def read_excel(
     sheet: Union[str, int],
     dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.xlsx`` (Excel) file.
+    """\
+    Read `.xlsx` (Excel) file.
 
     Assumes that the first columns stores the row names and the first row the
     column names.
@@ -67,7 +69,8 @@ def read_excel(
 
 
 def read_umi_tools(filename: PathLike, dtype: str = 'float32') -> AnnData:
-    """Read a gzipped condensed count matrix from umi_tools.
+    """\
+    Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
     ----------
@@ -96,9 +99,10 @@ def read_umi_tools(filename: PathLike, dtype: str = 'float32') -> AnnData:
 
 
 def read_hdf(filename: PathLike, key: str) -> AnnData:
-    """Read ``.h5`` (hdf5) file.
+    """\
+    Read `.h5` (hdf5) file.
 
-    Note: Also looks for fields ``row_names`` and ``col_names``.
+    Note: Also looks for fields `row_names` and `col_names`.
 
     Parameters
     ----------
@@ -127,9 +131,18 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
-              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str = 'float32', **kwargs) -> AnnData:
-    """Read `.loom`-formatted hdf5 file.
+def read_loom(
+  filename: PathLike,
+  sparse: bool = True,
+  cleanup: bool = False,
+  X_name: str = 'spliced',
+  obs_names: str = 'CellID',
+  var_names: str = 'Gene',
+  dtype: str = 'float32',
+  **kwargs
+) -> AnnData:
+    """\
+    Read `.loom`-formatted hdf5 file.
 
     This reads the whole file into memory.
 
@@ -148,11 +161,18 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         Loompy key with which the data matrix `.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
+    obsm_names
+        Loompy keys which will be constructed into observation matrices
     var_names
         Loompy key where the variable/gene names are stored.
-    **kwargs
+    obsm_names
+        Loompy keys which will be constructed into variable matrices
+    **kwargs:
         Arguments to loompy.connect
     """
+    obsm_names = obsm_names or {}
+    varm_names = varm_names or {}
+
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
     with connect(filename, 'r', **kwargs) as lc:
@@ -166,18 +186,26 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
             if key != '': layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
 
         obs = dict(lc.col_attrs)
+
+        obsm = {}
+        for key, names in obsm_names.items():
+            obsm[key] = np.array([obs.pop(name) for name in names]).T
+
         if obs_names in obs.keys(): obs['obs_names'] = obs.pop(obs_names)
         obsm_attrs = [k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1]
 
-        obsm = {}
         for key in obsm_attrs:
             obsm[key] = obs.pop(key)
 
         var = dict(lc.row_attrs)
+
+        varm = {}
+        for key, names in varm_names.items():
+            varm[key] = np.array([var.pop(name) for name in names]).T
+
         if var_names in var.keys(): var['var_names'] = var.pop(var_names)
         varm_attrs = [k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1]
 
-        varm = {}
         for key in varm_attrs:
             varm[key] = var.pop(key)
 
@@ -211,7 +239,8 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
 
 
 def read_mtx(filename: PathLike, dtype: str = 'float32') -> AnnData:
-    """Read ``.mtx`` file.
+    """\
+    Read `.mtx` file.
 
     Parameters
     ----------
@@ -234,18 +263,19 @@ def read_text(
     first_column_names: Optional[bool] = None,
     dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.txt``, ``.tab``, ``.data`` (text) file.
+    """\
+    Read `.txt`, `.tab`, `.data` (text) file.
 
-    Same as :func:`~anndata.read_csv` but with default delimiter ``None``.
+    Same as :func:`~anndata.read_csv` but with default delimiter `None`.
 
     Parameters
     ----------
     filename
         Data file, filename or stream.
     delimiter
-        Delimiter that separates data within text file. If ``None``, will split at
+        Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ``' '``.
+        splitting at single white space `' '`.
     first_column_names
         Assume the first column stores row names.
     dtype
