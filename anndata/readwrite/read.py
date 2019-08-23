@@ -1,4 +1,5 @@
 from pathlib import Path
+from os import PathLike, fspath
 from typing import Union, Optional, Mapping
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
@@ -9,7 +10,6 @@ import warnings
 
 from .. import AnnData
 from .. import h5py
-from ..compat import PathLike, fspath
 from .utils import *
 
 

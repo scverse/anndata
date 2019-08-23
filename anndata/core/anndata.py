@@ -5,6 +5,7 @@ from collections import OrderedDict
 from collections.abc import MutableMapping
 from functools import reduce
 from pathlib import Path
+from os import PathLike
 from typing import Any, Union, Optional
 from typing import Iterable, Sized, Sequence, Mapping
 from typing import Tuple, List
@@ -61,7 +62,7 @@ from .views import ArrayView, DictView, DataFrameView, _resolve_idxs, asview, Vi
 from .. import utils
 from ..utils import Index1D, Index, get_n_items_idx, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
-from ..compat import PathLike, warn_flatten
+from ..compat import warn_flatten
 
 
 class StorageType(Enum):
