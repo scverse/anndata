@@ -15,22 +15,23 @@ from .utils import *
 
 def read_csv(
     filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str]=',',
-    first_column_names: Optional[bool]=None,
-    dtype: str='float32',
+    delimiter: Optional[str] = ',',
+    first_column_names: Optional[bool] = None,
+    dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.csv`` file.
+    """\
+    Read `.csv` file.
 
-    Same as :func:`~anndata.read_text` but with default delimiter ``','``.
+    Same as :func:`~anndata.read_text` but with default delimiter `','`.
 
     Parameters
     ----------
     filename
         Data file.
     delimiter
-        Delimiter that separates data within text file. If ``None``, will split at
+        Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ``' '``.
+        splitting at single white space `' '`.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -42,9 +43,10 @@ def read_csv(
 def read_excel(
     filename: PathLike,
     sheet: Union[str, int],
-    dtype: str='float32',
+    dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.xlsx`` (Excel) file.
+    """\
+    Read `.xlsx` (Excel) file.
 
     Assumes that the first columns stores the row names and the first row the
     column names.
@@ -65,8 +67,9 @@ def read_excel(
     return AnnData(X, row, col, dtype=dtype)
 
 
-def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
-    """Read a gzipped condensed count matrix from umi_tools.
+def read_umi_tools(filename: PathLike, dtype: str = 'float32') -> AnnData:
+    """\
+    Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
     ----------
@@ -95,9 +98,10 @@ def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
 
 
 def read_hdf(filename: PathLike, key: str) -> AnnData:
-    """Read ``.h5`` (hdf5) file.
+    """\
+    Read `.h5` (hdf5) file.
 
-    Note: Also looks for fields ``row_names`` and ``col_names``.
+    Note: Also looks for fields `row_names` and `col_names`.
 
     Parameters
     ----------
@@ -135,10 +139,11 @@ def read_loom(
     obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
     var_names: str = 'Gene',
     varm_names: Optional[Mapping[str, Iterable[str]]] = None,
-    dtype: str='float32',
+    dtype: str = 'float32',
     **kwargs
 ) -> AnnData:
-    """Read ``.loom``-formatted hdf5 file.
+    """\
+    Read `.loom`-formatted hdf5 file.
 
     This reads the whole file into memory.
 
@@ -157,11 +162,11 @@ def read_loom(
         Loompy key with which the data matrix `.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
-    obsm_names:
+    obsm_names
         Loompy keys which will be constructed into observation matrices
-    var_names:
+    var_names
         Loompy key where the variable/gene names are stored.
-    obsm_names:
+    obsm_names
         Loompy keys which will be constructed into variable matrices
     **kwargs:
         Arguments to loompy.connect
@@ -234,8 +239,9 @@ def read_loom(
     return adata
 
 
-def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
-    """Read ``.mtx`` file.
+def read_mtx(filename: PathLike, dtype: str = 'float32') -> AnnData:
+    """\
+    Read `.mtx` file.
 
     Parameters
     ----------
@@ -254,22 +260,23 @@ def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
 
 def read_text(
     filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str]=None,
-    first_column_names: Optional[bool]=None,
-    dtype: str='float32',
+    delimiter: Optional[str] = None,
+    first_column_names: Optional[bool] = None,
+    dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.txt``, ``.tab``, ``.data`` (text) file.
+    """\
+    Read `.txt`, `.tab`, `.data` (text) file.
 
-    Same as :func:`~anndata.read_csv` but with default delimiter ``None``.
+    Same as :func:`~anndata.read_csv` but with default delimiter `None`.
 
     Parameters
     ----------
     filename
         Data file, filename or stream.
     delimiter
-        Delimiter that separates data within text file. If ``None``, will split at
+        Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ``' '``.
+        splitting at single white space `' '`.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -402,7 +409,8 @@ def _read_text(
 
 
 def read_zarr(store):
-    """Read from a hierarchical Zarr array store.
+    """\
+    Read from a hierarchical Zarr array store.
 
     Parameters
     ----------
@@ -439,16 +447,17 @@ def _read_key_value_from_zarr(f, d, key, key_write=None):
 
 
 def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
-    """Read ``.h5ad``-formatted hdf5 file.
+    """\
+    Read `.h5ad`-formatted hdf5 file.
 
     Parameters
     ----------
     filename
         File name of data file.
-    backed : {``None``, ``'r'``, ``'r+'``}
-        If ``'r'``, load :class:`~anndata.AnnData` in ``backed`` mode instead
+    backed: {`None`, `'r'`, `'r+'`}
+        If `'r'`, load :class:`~anndata.AnnData` in `backed` mode instead
         of fully loading it into memory (`memory` mode). If you want to modify
-        backed attributes of the AnnData object, you need to choose ``'r+'``.
+        backed attributes of the AnnData object, you need to choose `'r+'`.
     chunk_size
         Used only when loading sparse dataset that is stored as dense.
         Loading iterates through chunks of the dataset of this row size
@@ -483,12 +492,13 @@ def _read_args_from_h5ad(
     mode: Optional[str] = None,
     chunk_size: int = 6000
 ):
-    """Return a tuple with the parameters for initializing AnnData.
+    """\
+    Return a tuple with the parameters for initializing AnnData.
 
     Parameters
     ----------
     filename
-        Defaults to the objects filename if ``None``.
+        Defaults to the objects filename if `None`.
     """
     if filename is None and (adata is None or adata.filename is None):
         raise ValueError('Need either a filename or an AnnData object with file backing')
@@ -571,7 +581,7 @@ def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
     return
 
 
-def load_sparse_csr(d, key='X'):
+def load_sparse_csr(d, key: str = 'X'):
     from scipy.sparse.csr import csr_matrix
     key_csr = key + '_csr'
     d[key] = csr_matrix((d[key_csr + '_data'],
