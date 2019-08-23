@@ -1,6 +1,7 @@
 import warnings
 from collections.abc import Mapping
 from pathlib import Path
+from os import PathLike, fspath
 from typing import Union, MutableMapping
 
 import pandas as pd
@@ -10,7 +11,6 @@ from scipy.sparse import issparse
 
 from .. import AnnData
 from .. import h5py
-from ..compat import PathLike, fspath
 from ..logging import get_logger
 
 
