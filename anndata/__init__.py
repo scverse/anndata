@@ -89,6 +89,11 @@ __email__ = ', '.join([
     # We don’t need all, the main authors are sufficient.
 ])
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+try:
+    from setuptools_scm import get_version
+    __version__ = get_version(root='..', relative_to=__file__)
+    del get_version
+except (LookupError, ImportError):
+    from .compat import version
+    __version__ = version(__name__)
+    del version

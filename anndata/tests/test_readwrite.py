@@ -40,11 +40,14 @@ obs_dict = dict(  # annotation of observations / rows
     oanno1c=['cat1', 'cat1', np.nan],       # categorical annotation with a missing value
     oanno2=['o1', 'o2', 'o3'],              # string annotation
     oanno3=[2.1, 2.2, 2.3],                 # float annotation
+    oanno4=[3.3, 1.1, 2.2],                 # float annotation
 )
 
 var_dict = dict(  # annotation of variables / columns
     vanno1=[3.1, 3.2],
     vanno2=['cat1', 'cat1'],  # categorical annotation
+    vanno3=[2.1, 2.2],                 # float annotation
+    vanno4=[3.3, 1.1],                 # float annotation
 )
 
 uns_dict = dict(  # unstructured annotation
@@ -281,14 +284,22 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
 
 @pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-def test_readwrite_loom(typ, tmp_path):
+@pytest.mark.parametrize('obsm_names',[{},{'X_composed':['oanno3', 'oanno4']}])
+@pytest.mark.parametrize('varm_names',[{},{'X_composed2':['vanno3', 'vanno4']}])
+def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.obsm['X_a'] = np.zeros((adata_src.n_obs, 2))
     adata_src.varm['X_b'] = np.zeros((adata_src.n_vars, 3))
     adata_src.write_loom(tmp_path / 'test.loom', write_obsm_varm=True)
 
-    adata = ad.read_loom(tmp_path / 'test.loom', sparse=typ is csr_matrix, cleanup=True)
+    adata = ad.read_loom(
+        tmp_path / 'test.loom',
+        sparse=typ is csr_matrix,
+        obsm_names=obsm_names,
+        varm_names=varm_names,
+        cleanup=True,
+        )
     if isinstance(X, np.ndarray):
         assert np.allclose(adata.X, X)
     else:
@@ -299,6 +310,11 @@ def test_readwrite_loom(typ, tmp_path):
     # as we called with `cleanup=True`
     assert 'oanno1b' in adata.uns['loom-obs']
     assert 'vanno2' in adata.uns['loom-var']
+    for k,v in  obsm_names.items():
+        assert k in adata.obsm_keys() and adata.obsm[k].shape[1] == len(v)
+    for k,v in  varm_names.items():
+        assert k in adata.varm_keys() and adata.varm[k].shape[1] == len(v)
+
 
 
 def test_read_csv():

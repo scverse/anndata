@@ -1,10 +1,9 @@
 import sys
-if sys.version_info < (3,):
+if sys.version_info < (3, 6):
     sys.exit('anndata requires Python >= 3.6')
 from pathlib import Path
 
 from setuptools import setup, find_packages
-import versioneer
 
 try:
     from anndata import __author__, __email__
@@ -13,8 +12,8 @@ except ImportError:  # deps not yet installed
 
 setup(
     name='anndata',
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
+    use_scm_version=True,
+    setup_requires=['setuptools_scm'],
     description='Annotated Data.',
     long_description=Path('README.rst').read_text('utf-8'),
     url='http://github.com/theislab/anndata',
