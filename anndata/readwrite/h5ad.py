@@ -129,11 +129,14 @@ def write_attribute(f: H5Group, key: str, value, dataset_kwargs: Mapping):
     _write_method(type(value))(f, key, value, dataset_kwargs)
 
 
-# TODO: Make consistent with zarr. Should this be a group?
 def write_raw(f, key, value, dataset_kwargs={}):
-    write_attribute(f, 'raw.X', value.X, dataset_kwargs)
-    write_attribute(f, 'raw.var', value.var, dataset_kwargs)
-    write_attribute(f, 'raw.varm', value.varm, dataset_kwargs)
+    group = f.h5f.create_group(key)
+    group.attrs["encoding-type"] = "raw"
+    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["shape"] = value.shape
+    write_attribute(f, "raw/X", value.X, dataset_kwargs)
+    write_attribute(f, "raw/var", value.var, dataset_kwargs)
+    write_attribute(f, "raw/varm", value.varm, dataset_kwargs)
 
 
 def write_not_implemented(f, key, value, dataset_kwargs={}):
@@ -234,13 +237,16 @@ def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
 
     d.update({k: read_attribute(f[k]) for k in attributes if k in f})
     for k in df_attributes:
-        if k in f:
+        if k in f:  # Backwards compat
             d[k] = read_dataframe(f[k])
-
-    if "raw.var" in f:
-        raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-    if "raw.varm" in f:
-        raw["varm"] = read_attribute(f["raw.varm"])
+    if "raw" in f:
+        raw["var"] = read_attribute(f["raw/var"])
+        raw["varm"] = read_attribute(f["raw/varm"])
+    else:  # Legacy case
+        if "raw.var" in f:
+            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
+        if "raw.varm" in f:
+            raw["varm"] = read_attribute(f["raw.varm"])
 
     if len(raw) > 0:
         d["raw"] = raw
@@ -281,21 +287,29 @@ def read_h5ad(
         assert mode in {"r", "r+"}
         return read_h5ad_backed(filename, mode)
 
-    attributes = ["X", "obsm", "varm", "uns", "layers"]
-    df_attributes = ["obs", "var"]
-    raw_attributes = ["raw.X", "raw.varm"]
-
     with adh5py.File(filename, "r") as f:
-        d = {k: read_attribute(f[k]) for k in attributes if k in f}
-        raw = {k.replace("raw.", ""): read_attribute(f[k]) for k in raw_attributes if k in f}
-        for k in df_attributes:
-            if k in f:
+        d = {}
+        for k in f.keys():
+            # Backwards compat for old raw
+            if k.startswith("raw."):
+                continue
+            if k in {"obs", "var"}:
                 d[k] = read_dataframe(f[k])
-        if "raw.var" in f:
-            raw["var"] = read_dataframe(f["raw.var"])
+            else:  # Base case
+                d[k] = read_attribute(f[k])
 
-    if len(raw) > 0:
-        d["raw"] = raw
+        # Backwards compat for reading legacy raw
+        raw = {}
+        if "raw.var" in f:
+            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
+        if "raw.varm" in f:
+            raw["varm"] = read_attribute(f["raw.varm"])
+        if "raw.X" in f:
+            raw["X"] = read_attribute(f["raw.X"])
+        if len(raw) > 0:
+            assert "raw" not in d, f"File {filename} has both legacy and current raw formats."
+            d["raw"] = raw
+
     if d.get("X", None) is not None:
         d["dtype"] = d["X"].dtype
 
