@@ -7,9 +7,9 @@ from enum import Enum
 from functools import reduce
 from pathlib import Path
 from os import PathLike
-from typing import Any, Union, Optional
-from typing import Iterable, Sequence, Mapping
-from typing import Tuple, List
+from typing import Any, Union, Optional         # Meta
+from typing import Iterable, Sequence, Mapping  # Generic ABCs
+from typing import Tuple, List                  # Generic
 import warnings
 
 from natsort import natsorted
@@ -332,7 +332,7 @@ class Raw:
 
     @property
     def shape(self):
-        return self.X.shape
+        return (self.n_obs, self.n_vars)
 
     @property
     def var(self):
@@ -797,25 +797,28 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # raw
         if raw is None:
             self._raw = None
+        elif isinstance(raw, Raw):
+            self._raw = raw
         else:
-            if isinstance(raw, Raw):
-                self._raw = raw
-            else:
-                # is dictionary from reading the file, nothing that is meant for a user
-                if self.isbacked:
-                    if "raw/X" in self.file._file.h5f:
-                        shape = self.file._file["raw/X"].shape
-                    elif "raw.X" in self.file._file.h5f:
-                        shape = self.file['raw.X'].shape  # Backwards compat
+            # is dictionary from reading the file, nothing that is meant for a user
+            if self.isbacked:
+                if "raw/X" in self.file:
+                    shape = self.file["raw/X"].shape
+                elif "raw.X" in self.file:
+                    shape = self.file['raw.X'].shape  # Backwards compat
                 else:
-                    shape = raw["X"].shape
+                    raise KeyError(
+                        f"Tried to check shape of raw from {self.file.filename}, but there was no entry for 'raw/X'."
+                    )
+            else:
+                shape = raw["X"].shape
 
-                self._raw = Raw(
-                    self,
-                    X=raw.get("X", None),
-                    var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
-                    varm=raw['varm'] if 'varm' in raw else None
-                )
+            self._raw = Raw(
+                self,
+                X=raw.get("X", None),
+                var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
+                varm=raw['varm'] if 'varm' in raw else None
+            )
 
         # clean up old formats
         self._clean_up_old_format(uns)
