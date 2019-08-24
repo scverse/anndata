@@ -10,7 +10,9 @@ from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
+from anndata import h5py as adh5py
 from anndata import AnnData
+from anndata.core.views import ArrayView
 
 
 @singledispatch
@@ -21,6 +23,10 @@ def asarray(x):
 @asarray.register(sparse.spmatrix)
 def asarray_sparse(x):
     return x.toarray()
+
+@asarray.register(adh5py.SparseDataset)
+def asarray_sparse(x):
+    return asarray(x.value)
 
 def gen_typed_df(n, index=None):
     # TODO: Think about allowing index to be passed for n
@@ -233,6 +239,11 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     else:
         assert np.all(a == b), format_msg(elem_name)
 
+@assert_equal.register(ArrayView)
+def assert_equal_arrayview(a, b, exact=False, elem_name=None):
+    assert_equal(asarray(a), asarray(b), exact=exact, elem_name=elem_name)
+
+@assert_equal.register(adh5py.SparseDataset)
 @assert_equal.register(sparse.spmatrix)
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
@@ -296,12 +307,7 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
         Whether comparisons should be exact or not. This has a somewhat flexible
         meaning and should probably get refined in the future.
     """
-    if a.isview:
-        warn("Cannot currently compare views.")
-        a = a.copy()
-    if b.isview:
-        warn("Cannot currently compare views")
-        b = b.copy()
+    # There may be issues comparing views, since np.allclose can modify ArrayViews if they contain `nan`s
     assert_equal(a.obs_names, b.obs_names, exact, elem_name="obs_names")
     assert_equal(a.var_names, b.var_names, exact, elem_name="var_names")
     if not exact:

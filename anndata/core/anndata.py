@@ -232,6 +232,9 @@ class AnnDataFileManager:
         else:
             return 'Backing file manager of file {}.'.format(self.filename)
 
+    def __contains__(self, x) -> bool:
+        return x in self._file
+
     def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]:
         return self._file[key]
 
@@ -284,6 +287,7 @@ class AnnDataFileManager:
         return bool(self._file.id)
 
 
+# TODO: Implement views for Raw
 class Raw:
     def __init__(
         self,
@@ -306,24 +310,25 @@ class Raw:
     @property
     def X(self):
         if self._adata.isbacked:
-            if not self._adata.file.isopen: self._adata.file.open()
-            if "raw/X" in self._adata.file._file.h5f:
+            if not self._adata.file.isopen:
+                self._adata.file.open()
+            # Handle legacy file formats:
+            if "raw/X" in self._adata.file:
                 X = self._adata.file["raw/X"]
-            else:
+            elif "raw.X" in self._adata.file:
                 X = self._adata.file['raw.X']  # Backwards compat
-            if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
-            else: return X
-        else:
-            if self.n_obs == 1 and self.n_vars == 1:
-                warn_flatten()
-                return self._X[0, 0]
-            elif self.n_obs == 1 or self.n_vars == 1:
-                warn_flatten()
-                X = self._X
-                if issparse(self._X): X = self._X.toarray()
-                return X.flatten()
             else:
-                return self._X
+                raise AttributeError(
+                    f"Could not find dataset for raw X in file: {self._adata.file.filename}."
+                )
+            # Check if we need to subset
+            if self._adata.isview:
+                # TODO: As noted above, implement views of raw so we can know if we need to subset by var
+                return X[self._adata._oidx, slice(None)]
+            else:
+                return X
+        else:
+            return self._X
 
     @property
     def shape(self):
@@ -355,15 +360,22 @@ class Raw:
 
     def __getitem__(self, index):
         oidx, vidx = self._normalize_indices(index)
-        if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
-        else: X = self._adata.file['raw.X'][oidx, vidx]
+
+        # To preserve two dimensional shape
         if isinstance(vidx, (int, np.integer)):
-            # To preserve two dimensional shape
             vidx = slice(vidx, vidx + 1, 1)
+        if isinstance(oidx, (int, np.integer)):
+            oidx = slice(oidx, oidx + 1, 1)
+
+        if not self._adata.isbacked:
+            X = _subset(self.X, (oidx, vidx))
+        else:
+            X = None
+
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
-            new._varm = self._varm._view(self, (vidx,))
+            new._varm = self._varm._view(self, (vidx,)).copy()  # Since there is no view of raws
         return new
 
     def copy(self):
@@ -668,6 +680,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
             self._raw = adata_ref.raw[oidx]
+            self._raw._adata = self
         else:
             self._raw = None
 

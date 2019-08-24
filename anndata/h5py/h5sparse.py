@@ -1,7 +1,7 @@
 # TODO:
 # - think about making all of the below subclasses
 # - think about supporting the COO format
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from os import PathLike
 from typing import Optional, Union, KeysView, NamedTuple
 
@@ -311,6 +311,8 @@ class SparseDataset:
     def __getitem__(self, index):
         if index == (): index = slice(None)
         row, col = unpack_index(index)
+        if all(isinstance(x, Iterable) for x in (row, col)):
+            row, col = np.ix_(row, col)
         format_class = get_backed_class(self.format_str)
         mock_matrix = format_class(self.shape, dtype=self.dtype)
         mock_matrix.data = self.h5py_group['data']
@@ -321,6 +323,8 @@ class SparseDataset:
     def __setitem__(self, index, value):
         if index == (): index = slice(None)
         row, col = unpack_index(index)
+        if all(isinstance(x, Iterable) for x in (row, col)):
+            row, col = np.ix_(row, col)
         format_class = get_backed_class(self.format_str)
         mock_matrix = format_class(self.shape, dtype=self.dtype)
         mock_matrix.data = self.h5py_group['data']

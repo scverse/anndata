@@ -13,7 +13,8 @@ from anndata.tests.helpers import (
     subset_func,
     slice_subset,
     single_subset,
-    asarray
+    asarray,
+    assert_equal
 )
 
 # -------------------------------------------------------------------------------
@@ -378,6 +379,7 @@ def test_layers_view():
 # TODO: This can be flaky. Make that stop
 def test_view_of_view(matrix_type, subset_func, subset_func2):
     adata = gen_adata((30, 15), X_type=matrix_type)
+    adata.raw = adata
     if subset_func is single_subset:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
@@ -393,34 +395,7 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
     view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 
-    # Check equivalence
-    assert np.allclose(
-        asarray(view_of_actual_copy.X),
-        asarray(view_of_view_copy.X)
-    )
-    assert not np.any(asarray(ne(
-        view_of_actual_copy.obs,
-        view_of_view_copy.obs
-    )))
-    assert not np.any(asarray(ne(
-        view_of_actual_copy.var,
-        view_of_view_copy.var
-    )))
-    for k in adata.obsm.keys():
-        assert not np.any(asarray(ne(
-            view_of_actual_copy.obsm[k],
-            view_of_view_copy.obsm[k]
-        )))
-    for k in adata.varm.keys():
-        assert not np.any(asarray(ne(
-            asarray(view_of_actual_copy.varm[k]),
-            asarray(view_of_view_copy.varm[k])
-        )))
-    for k in adata.layers.keys():
-        assert not np.any(asarray(ne(
-            asarray(view_of_actual_copy.layers[k]),
-            asarray(view_of_view_copy.layers[k])
-        )))
+    assert_equal(view_of_actual_copy, view_of_view_copy, exact=True)
 
 
 def test_view_of_view_modification():

@@ -6,9 +6,9 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import asarray, gen_adata, assert_equal
+from anndata.tests.helpers import asarray, gen_adata, assert_equal, subset_func
 
-
+subset_func2 = subset_func
 # -------------------------------------------------------------------------------
 # Some test data
 # -------------------------------------------------------------------------------
@@ -146,12 +146,35 @@ def test_backed_raw(tmp_path):
     mem_adata.write(backed_pth)
 
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
-    # TODO: Write method for comparing backed data with in memory data
-    # assert_equal(backed_adata, mem_adata)
+    assert_equal(backed_adata, mem_adata)
     backed_adata.write_h5ad(final_pth)
 
     final_adata = ad.read_h5ad(final_pth)
     assert_equal(final_adata, mem_adata)
+
+def test_backed_raw_subset(
+    tmp_path,
+    subset_func,
+    subset_func2
+):
+    backed_pth = tmp_path / "backed.h5ad"
+    final_pth = tmp_path / "final.h5ad"
+    mem_adata = gen_adata((10, 10))
+    mem_adata.raw = mem_adata
+    obs_idx = subset_func(mem_adata.obs_names)
+    var_idx = subset_func2(mem_adata.var_names)
+    mem_adata.write(backed_pth)
+
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    backed_v = backed_adata[obs_idx, var_idx]
+    assert backed_v.isview
+    mem_v = mem_adata[obs_idx, var_idx]
+    assert_equal(backed_v, mem_v)
+    backed_v.write_h5ad(final_pth)
+
+    final_adata = ad.read_h5ad(final_pth)
+    # TODO: Figure out why this doesn't work if I don't copy
+    assert_equal(final_adata, mem_v.copy())
 
 
 def test_double_index(adata, backing_h5ad):
