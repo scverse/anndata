@@ -1,4 +1,6 @@
 # stuff necessary for docs generation
+setuptools_scm
+importlib_metadata>=0.7; python_version < '3.8'
 sphinx>=1.8
 sphinx-autodoc-typehints
 scanpydoc>=0.3.2
