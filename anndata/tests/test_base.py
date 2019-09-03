@@ -5,7 +5,7 @@ from numpy import ma
 import pandas as pd
 import pytest
 from scipy import sparse as sp
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, isspmatrix_csr
 
 from anndata import AnnData
 
@@ -374,12 +374,17 @@ def test_concatenate_dense():
         [np.nan, 3.0, 2.0, 1.0],
         [np.nan, 6.0, 5.0, 4.0],
         [np.nan, 3.0, 2.0, 1.0],
-        [np.nan, 6.0, 5.0, 4.0]]))
+        [np.nan, 6.0, 5.0, 4.0],
+    ]))
     assert np.array_equal(Xma.mask, Xma_ref.mask)
     assert np.allclose(Xma.compressed(), Xma_ref.compressed())
     var_ma = ma.masked_invalid(adata.var.values.tolist())
-    var_ma_ref = ma.masked_invalid(np.array(
-        [[0.0, np.nan, np.nan], [1.0, 2.0, 2.0], [2.0, 1.0, 1.0], [np.nan, 0.0, 0.0]]))
+    var_ma_ref = ma.masked_invalid(np.array([
+        [0.0, np.nan, np.nan],
+        [1.0, 2.0, 2.0],
+        [2.0, 1.0, 1.0],
+        [np.nan, 0.0, 0.0],
+    ]))
     assert np.array_equal(var_ma.mask, var_ma_ref.mask)
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
 
@@ -427,7 +432,7 @@ def test_concatenate_dense_duplicates():
     assert adata.var_keys() == ['annoA', 'annoB', 'annoC-0', 'annoD-0', 'annoC-1', 'annoD-1', 'annoD-2']
 
 
-def test_concatenate_sparse_data():
+def test_concatenate_sparse():
     # sparse data
     from scipy.sparse import csr_matrix
     X1 = csr_matrix([[0, 2, 3], [0, 5, 6]])
@@ -444,13 +449,13 @@ def test_concatenate_sparse_data():
         X2,
         dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
         dict(var_names=['d', 'c', 'b']),
-        layers=dict(Xs=X2)
+        layers=dict(Xs=X2),
     )
     adata3 = AnnData(
         X3,
         dict(obs_names=['s5', 's6'], anno2=['d3', 'd4']),
         dict(var_names=['d', 'c', 'b']),
-        layers=dict(Xs=X3)
+        layers=dict(Xs=X3),
     )
 
     # inner join
@@ -469,6 +474,41 @@ def test_concatenate_sparse_data():
         [0.0, 0.0, 2.0, 1.0],
         [0.0, 6.0, 5.0, 0.0],
     ]
+
+
+def test_concatenate_mixed():
+    X1 = csr_matrix(np.array([[1, 2, 0], [4, 0, 6], [0, 0, 9]]))
+    X2 = csr_matrix(np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]]))
+    X3 = csr_matrix(np.array([[1, 0, 3], [0, 0, 6], [0, 8, 0]]))
+    X4 = np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]])
+    adata1 = AnnData(
+        X1,
+        dict(obs_names=['s1', 's2', 's3'], anno1=['c1', 'c2', 'c3']),
+        dict(var_names=['a', 'b', 'c'], annoA=[0, 1, 2]),
+        layers=dict(counts=X1),
+    )
+    adata2 = AnnData(
+        X2,
+        dict(obs_names=['s4', 's5', 's6'], anno1=['c3', 'c4', 'c5']),
+        dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
+        layers=dict(counts=X4),  # sic
+    )
+    adata3 = AnnData(
+        X3,
+        dict(obs_names=['s7', 's8', 's9'], anno2=['d3', 'd4', 'd5']),
+        dict(var_names=['d', 'c', 'b'], annoA=[0, 2, 3], annoB=[0, 1, 2]),
+        layers=dict(counts=X3),
+    )
+    adata4 = AnnData(
+        X4,
+        dict(obs_names=['s4', 's5', 's6'], anno1=['c3', 'c4', 'c5']),
+        dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
+        layers=dict(counts=X2),  # sic
+    )
+
+    adata_all = AnnData.concatenate(adata1, adata2, adata3, adata4)
+    assert isspmatrix_csr(adata_all.X)
+    assert isspmatrix_csr(adata_all.layers['counts'])
 
 
 def test_rename_categories():

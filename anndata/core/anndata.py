@@ -1817,7 +1817,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 ad.var_names = utils.make_index_unique(ad.var_names)
                 if not printed_info:
                     logger.info(
-                        'Making variable names unique for controlled concatenation.')
+                        'Making variable names unique for controlled concatenation.'
+                    )
                     printed_info = True
 
         # define variable names of joint AnnData
@@ -1842,9 +1843,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         out_shape = (sum(a.n_obs for a in all_adatas), len(var_names))
 
-        any_sparse = any(issparse(a.X) for a in all_adatas)
+        sparse_Xs = [a.X for a in all_adatas if issparse(a.X)]
         if join == 'outer':
-            if any_sparse:  # not sure whether the lil_matrix is really the best option
+            if sparse_Xs:  # not sure whether the lil_matrix is really the best option
                 X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
             else:
                 X = np.empty(out_shape, dtype=self.X.dtype)
@@ -1854,21 +1855,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # create layers dict that contains layers shared among all AnnDatas
         layers = OrderedDict()
-        shared_layers = [key for key in all_adatas[0].layers.keys()
-                         if all([key in ad.layers.keys() for ad in all_adatas])]
+        shared_layers = [
+            key for key in all_adatas[0].layers.keys()
+            if all([key in ad.layers.keys() for ad in all_adatas])
+        ]
         for key in shared_layers:
             layers[key] = []
 
         # check whether tries to do 'outer' join and layers is non_empty.
         if join == 'outer' and len(shared_layers) > 0:
             logger.info(
-                'layers concatenation is not yet available for \'outer\' intersection and will be ignored.')
+                'layers concatenation is not yet available for \'outer\' intersection and will be ignored.'
+            )
 
         # check whether layers are not consistently set in all AnnData objects.
         n_layers = np.array([len(ad.layers.keys()) for ad in all_adatas])
         if join == 'inner' and not all(len(shared_layers) == n_layers):
             logger.info(
-                'layers are inconsistent - only layers that are shared among all AnnData objects are included.')
+                'layers are inconsistent - only layers that are shared among all AnnData objects are included.'
+            )
 
         var = pd.DataFrame(index=var_names)
 
@@ -1896,8 +1901,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if join == 'outer':
                 # this is pretty slow, I guess sparse matrices shouldn't be
                 # constructed like that
-                X[obs_i:obs_i+ad.n_obs,
-                  var_names.isin(vars_intersect)] = ad[:, vars_intersect].X
+                X[
+                    obs_i:obs_i+ad.n_obs,
+                    var_names.isin(vars_intersect)
+                ] = ad[:, vars_intersect].X
             else:
                 Xs.append(ad[:, vars_intersect].X)
             obs_i += ad.n_obs
@@ -1930,10 +1937,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         if join == 'inner':
             from scipy.sparse import vstack
-            if any_sparse:
-                X = vstack(Xs)
-            else:
-                X = np.concatenate(Xs)
+            X = vstack(Xs) if sparse_Xs else np.concatenate(Xs)
 
             for key in shared_layers:
                 if any(issparse(a.layers[key]) for a in all_adatas):
@@ -1943,14 +1947,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         obs = pd.concat(out_obss, sort=True)
 
-        if any_sparse:
-            sparse_format = all_adatas[0].X.getformat()
+        if sparse_Xs:
+            sparse_format = sparse_Xs[0].getformat()
             X = X.asformat(sparse_format)
+        if join == 'inner':
+            for key in shared_layers:
+                sparse_layers = [a.layers[key] for a in all_adatas if issparse(a.layers[key])]
+                if sparse_layers:
+                    sparse_format_l = sparse_layers[0].getformat()
+                    layers[key] = layers[key].asformat(sparse_format_l)
 
         new_adata = AnnData(X, obs, var, layers=layers) if join == 'inner' else AnnData(X, obs, var)
         if not obs.index.is_unique:
             logger.info(
-                'Or pass `index_unique!=None` to `.concatenate`.')
+                'Or pass `index_unique!=None` to `.concatenate`.'
+            )
         return new_adata
 
     def var_names_make_unique(self, join: str = '-'):
