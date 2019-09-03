@@ -325,30 +325,30 @@ def test_n_obs():
     assert adata1.n_obs == 2
 
 
-def test_concatenate():
+def test_concatenate_dense():
     # dense data
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
     X2 = np.array([[1, 2, 3], [4, 5, 6]])
     X3 = np.array([[1, 2, 3], [4, 5, 6]])
 
-    adata1 = AnnData(X1,
-                     {'obs_names': ['s1', 's2'],
-                      'anno1': ['c1', 'c2']},
-                     {'var_names': ['a', 'b', 'c'],
-                      'annoA': [0, 1, 2]},
-                     layers={'Xs': X1})
-    adata2 = AnnData(X2,
-                     {'obs_names': ['s3', 's4'],
-                      'anno1': ['c3', 'c4']},
-                     {'var_names': ['d', 'c', 'b'],
-                      'annoA': [0, 1, 2]},
-                     layers={'Xs': X2})
-    adata3 = AnnData(X3,
-                     {'obs_names': ['s1', 's2'],
-                      'anno2': ['d3', 'd4']},
-                     {'var_names': ['d', 'c', 'b'],
-                      'annoB': [0, 1, 2]},
-                     layers={'Xs': X3})
+    adata1 = AnnData(
+        X1,
+        dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
+        dict(var_names=['a', 'b', 'c'], annoA=[0, 1, 2]),
+        layers=dict(Xs=X1),
+    )
+    adata2 = AnnData(
+        X2,
+        dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
+        dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
+        layers={'Xs': X2},
+    )
+    adata3 = AnnData(
+        X3,
+        dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
+        dict(var_names=['d', 'c', 'b'], annoB=[0, 1, 2]),
+        layers=dict(Xs=X3),
+    )
 
     # inner join
     adata = adata1.concatenate(adata2, adata3)
@@ -383,55 +383,75 @@ def test_concatenate():
     assert np.array_equal(var_ma.mask, var_ma_ref.mask)
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
 
+
+def test_concatenate_dense_duplicates():
+    X1 = np.array([[1, 2, 3], [4, 5, 6]])
+    X2 = np.array([[1, 2, 3], [4, 5, 6]])
+    X3 = np.array([[1, 2, 3], [4, 5, 6]])
+
     # inner join duplicates
-    adata1 = AnnData(X1,
-                     {'obs_names': ['s1', 's2'],
-                      'anno1': ['c1', 'c2']},
-                     {'var_names': ['a', 'b', 'c'],
-                      'annoA': [0, 1, 2],
-                      'annoB': [1.1, 1.0, 2.0],
-                      'annoC': [1.1, 1.0, 2.0],
-                      'annoD': [2.1, 2.0, 3.0]})
-    adata2 = AnnData(X2,
-                     {'obs_names': ['s3', 's4'],
-                      'anno1': ['c3', 'c4']},
-                     {'var_names': ['a', 'b', 'c'],
-                      'annoA': [0, 1, 2],
-                      'annoB': [1.1, 1.0, 2.0],
-                      'annoC': [1.1, 1.0, 2.0],
-                      'annoD': [2.1, 2.0, 3.0]})
-    adata3 = AnnData(X3,
-                     {'obs_names': ['s1', 's2'],
-                      'anno2': ['d3', 'd4']},
-                     {'var_names': ['a', 'b', 'c'],
-                      'annoA': [0, 1, 2],
-                      'annoB': [1.1, 1.0, 2.0],
-                      'annoD': [2.1, 2.0, 3.1]})
+    adata1 = AnnData(
+        X1,
+        dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
+        dict(
+            var_names=['a', 'b', 'c'],
+            annoA=[0, 1, 2],
+            annoB=[1.1, 1.0, 2.0],
+            annoC=[1.1, 1.0, 2.0],
+            annoD=[2.1, 2.0, 3.0],
+        ),
+    )
+    adata2 = AnnData(
+        X2,
+        dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
+        dict(
+            var_names=['a', 'b', 'c'],
+            annoA=[0, 1, 2],
+            annoB=[1.1, 1.0, 2.0],
+            annoC=[1.1, 1.0, 2.0],
+            annoD=[2.1, 2.0, 3.0],
+        ),
+    )
+    adata3 = AnnData(
+        X3,
+        dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
+        dict(
+            var_names=['a', 'b', 'c'],
+            annoA=[0, 1, 2],
+            annoB=[1.1, 1.0, 2.0],
+            annoD=[2.1, 2.0, 3.1],
+        ),
+    )
 
     adata = adata1.concatenate(adata2, adata3)
     assert adata.var_keys() == ['annoA', 'annoB', 'annoC-0', 'annoD-0', 'annoC-1', 'annoD-1', 'annoD-2']
 
+
+def test_concatenate_sparse_data():
     # sparse data
     from scipy.sparse import csr_matrix
     X1 = csr_matrix([[0, 2, 3], [0, 5, 6]])
     X2 = csr_matrix([[0, 2, 3], [0, 5, 6]])
     X3 = csr_matrix([[1, 2, 0], [0, 5, 6]])
 
-    adata1 = AnnData(X1,
-                     {'obs_names': ['s1', 's2'],
-                      'anno1': ['c1', 'c2']},
-                     {'var_names': ['a', 'b', 'c']},
-                     layers={'Xs': X1})
-    adata2 = AnnData(X2,
-                     {'obs_names': ['s3', 's4'],
-                      'anno1': ['c3', 'c4']},
-                     {'var_names': ['d', 'c', 'b']},
-                     layers={'Xs': X2})
-    adata3 = AnnData(X3,
-                     {'obs_names': ['s5', 's6'],
-                      'anno2': ['d3', 'd4']},
-                     {'var_names': ['d', 'c', 'b']},
-                     layers={'Xs': X3})
+    adata1 = AnnData(
+        X1,
+        dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
+        dict(var_names=['a', 'b', 'c']),
+        layers=dict(Xs=X1),
+    )
+    adata2 = AnnData(
+        X2,
+        dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
+        dict(var_names=['d', 'c', 'b']),
+        layers=dict(Xs=X2)
+    )
+    adata3 = AnnData(
+        X3,
+        dict(obs_names=['s5', 's6'], anno2=['d3', 'd4']),
+        dict(var_names=['d', 'c', 'b']),
+        layers=dict(Xs=X3)
+    )
 
     # inner join
     adata = adata1.concatenate(adata2, adata3)
@@ -447,7 +467,9 @@ def test_concatenate():
         [0.0, 3.0, 2.0, 0.0],
         [0.0, 6.0, 5.0, 0.0],
         [0.0, 0.0, 2.0, 1.0],
-        [0.0, 6.0, 5.0, 0.0]]
+        [0.0, 6.0, 5.0, 0.0],
+    ]
+
 
 def test_rename_categories():
     X = np.ones((6, 3))
