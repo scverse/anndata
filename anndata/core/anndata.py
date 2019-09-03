@@ -434,7 +434,8 @@ class IndexDimError(IndexError):
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
-    """An annotated data matrix.
+    """\
+    An annotated data matrix.
 
     :class:`~anndata.AnnData` stores a data matrix :attr:`X` together with annotations
     of observations :attr:`obs`, variables :attr:`var` and unstructured annotations :attr:`uns`.
@@ -1032,7 +1033,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def obsm(self) -> AxisArraysBase:
         """Multi-dimensional annotation of observations (mutable structured :class:`~numpy.ndarray`).
 
-        Stores for each key, a two or higher-dimensional :class:`np.ndarray` of length
+        Stores for each key, a two or higher-dimensional :class:`numpy.ndarray` of length
         ``n_obs``. Is sliced with ``data`` and ``obs`` but behaves otherwise like a
         :class:`dict`.
         """
@@ -1312,8 +1313,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Params
         ------
         df
-            If ``df`` is ``None``, modifies both :attr:`obs` and :attr:`.var`,
-            otherwise modifies ``df`` inplace.
+            If `df` is `None`, modifies both :attr:`obs` and :attr:`var`,
+            otherwise modifies `df` inplace.
 
         Notes
         -----
