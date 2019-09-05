@@ -1,8 +1,6 @@
 from functools import wraps
 from .. import h5py as patched_h5py
 
-import zarr
-
 # -------------------------------------------------------------------------------
 # Type conversion
 # -------------------------------------------------------------------------------
@@ -71,8 +69,8 @@ def report_key_on_error(func):
     -------
     >>> import zarr
     >>> @report_key_on_error
-        def read_arr(group):
-            raise NotImplementedError()
+    ... def read_arr(group):
+    ...     raise NotImplementedError()
     >>> z = zarr.open("tmp.zarr")
     >>> z["X"] = [1, 2, 3]
     >>> read_arr(z["X"])
@@ -85,13 +83,16 @@ def report_key_on_error(func):
             if isinstance(e, AnnDataReadError):
                 raise e
             else:
-                if isinstance(elem, (zarr.Group, zarr.Array)):
+                try:
+                    import zarr
+                except ImportError:
+                    zarr = None
+                if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
                     parent = elem.store  # Not sure how to always get a name out of this
+                elif isinstance(elem, patched_h5py.Group):
+                    parent = elem.h5py_group.file.name
                 else:
-                    if isinstance(elem, patched_h5py.Group):
-                        parent = elem.h5py_group.file.name
-                    else:
-                        parent = elem.file.name
+                    parent = elem.file.name
                 raise AnnDataReadError(
                     f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {parent}."
                 )
