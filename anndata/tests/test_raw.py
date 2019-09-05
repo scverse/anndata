@@ -42,7 +42,7 @@ def test_raw(backing_h5ad):
     # init raw
     adata.raw = adata
 
-    assert adata.raw[:, 0].X.tolist() == [1, 4, 7]
+    assert adata.raw[:, 0].X.tolist() == [[1], [4], [7]]
 
     adata = adata[:, [0, 1]]
 
@@ -53,6 +53,6 @@ def test_raw(backing_h5ad):
     adata.write(backing_h5ad)
     adata = ad.read(backing_h5ad)
 
-    assert adata.raw[:, 0].X.tolist() == [1, 4, 7]
+    assert adata.raw[:, 0].X.tolist() == [[1], [4], [7]]
     assert adata.raw.var_names.tolist() == ['var1', 'var2', 'var3']
     assert adata.var_names.tolist() == ['var1', 'var2']

@@ -1,4 +1,4 @@
-from operator import eq, ne, mul
+from operator import ne, mul
 
 import joblib
 import numpy as np
@@ -13,7 +13,8 @@ from anndata.tests.helpers import (
     subset_func,
     slice_subset,
     single_subset,
-    asarray
+    asarray,
+    assert_equal
 )
 
 # -------------------------------------------------------------------------------
@@ -37,12 +38,16 @@ uns_dict = {  # unstructured annotation
     'uns2': ['some annotation']}
 
 
+subset_func2 = subset_func
+
+
 @pytest.fixture
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm['o'] = np.zeros((100, 50))
     adata.varm['o'] = np.zeros((100, 50))
     return adata
+
 
 @pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
 def adata_parameterized(request):
@@ -55,6 +60,7 @@ def adata_parameterized(request):
 )
 def matrix_type(request):
     return request.param
+
 
 @pytest.fixture(params=["layers", "obsm", "varm"])
 def mapping_name(request):
@@ -219,6 +225,7 @@ def test_set_varm(adata):
 
     assert init_hash == joblib.hash(adata)
 
+
 # TODO: Determine if this is the intended behavior, or just the behaviour we've had for a while
 def test_not_set_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
@@ -240,6 +247,7 @@ def test_not_set_subset_X(matrix_type, subset_func):
 
     assert init_hash == joblib.hash(adata)
 
+
 def test_set_scalar_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
     orig_X_val = adata.X.copy()
@@ -253,6 +261,7 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
 
     assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+
 
 # TODO: Use different kind of subsetting for adata and view
 def test_set_subset_obsm(adata, subset_func):
@@ -366,11 +375,11 @@ def test_layers_view():
     assert real_hash == joblib.hash(real_adata)
     assert view_hash != joblib.hash(view_adata)
 
-subset_func2 = subset_func
 
 # TODO: This can be flaky. Make that stop
 def test_view_of_view(matrix_type, subset_func, subset_func2):
     adata = gen_adata((30, 15), X_type=matrix_type)
+    adata.raw = adata
     if subset_func is single_subset:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
@@ -386,40 +395,14 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
     view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 
-    # Check equivalence
-    assert np.allclose(
-        asarray(view_of_actual_copy.X),
-        asarray(view_of_view_copy.X)
-    )
-    assert not np.any(asarray(ne(
-        view_of_actual_copy.obs,
-        view_of_view_copy.obs
-    )))
-    assert not np.any(asarray(ne(
-        view_of_actual_copy.var,
-        view_of_view_copy.var
-    )))
-    for k in adata.obsm.keys():
-        assert not np.any(asarray(ne(
-            view_of_actual_copy.obsm[k],
-            view_of_view_copy.obsm[k]
-        )))
-    for k in adata.varm.keys():
-        assert not np.any(asarray(ne(
-            asarray(view_of_actual_copy.varm[k]),
-            asarray(view_of_view_copy.varm[k])
-        )))
-    for k in adata.layers.keys():
-        assert not np.any(asarray(ne(
-            asarray(view_of_actual_copy.layers[k]),
-            asarray(view_of_view_copy.layers[k])
-        )))
+    assert_equal(view_of_actual_copy, view_of_view_copy, exact=True)
+
 
 def test_view_of_view_modification():
     adata = ad.AnnData(np.zeros((10, 10)))
     adata[0, :][:, 5:].X = np.ones(5)
     assert np.all(adata.X[0, 5:] == np.ones(5))
-    adata[[1,2], :][:, [1,2]].X = np.ones((2, 2))
+    adata[[1, 2], :][:, [1, 2]].X = np.ones((2, 2))
     assert np.all(adata.X[1:3, 1:3] == np.ones((2, 2)))
 
     adata.X = sparse.csr_matrix(adata.X)

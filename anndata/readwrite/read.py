@@ -6,11 +6,12 @@ from collections import OrderedDict
 import gzip
 import bz2
 import numpy as np
-import warnings
 
 from .. import AnnData
 from .. import h5py
-from .utils import *
+from .utils import is_float
+from .h5ad import read_h5ad
+from .zarr import read_zarr
 
 
 def read_csv(
@@ -88,9 +89,9 @@ def read_umi_tools(filename: PathLike, dtype: str = 'float32') -> AnnData:
     for line in fh:
         t = line.decode('ascii').split('\t')  # gzip read bytes, hence the decoding
         try:
-            dod[t[1]].update({t[0]:int(t[2])})
+            dod[t[1]].update({t[0]: int(t[2])})
         except KeyError:
-            dod[t[1]] = {t[0]:int(t[2])}
+            dod[t[1]] = {t[0]: int(t[2])}
 
     df = DataFrame.from_dict(dod, orient='index')  # build the matrix
     df.fillna(value=0., inplace=True)  # many NaN, replace with zeros
@@ -408,180 +409,7 @@ def _read_text(
                    dtype=dtype)
 
 
-def read_zarr(store):
-    """\
-    Read from a hierarchical Zarr array store.
-
-    Parameters
-    ----------
-    store
-        The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
-    """
-    if isinstance(store, Path):
-        store = str(store)
-    import zarr
-    f = zarr.open(store, mode='r')
-    d = {}
-    for key in f.keys():
-        _read_key_value_from_zarr(f, d, key)
-    return AnnData(*AnnData._args_from_dict(d))
-
-
-def _read_key_value_from_zarr(f, d, key, key_write=None):
-    import zarr
-    if key_write is None: key_write = key
-    if isinstance(f[key], zarr.hierarchy.Group):
-        d[key_write] = OrderedDict() if key == 'uns' else {}
-        for k in f[key].keys():
-            _read_key_value_from_zarr(f, d[key_write], key + '/' + k, k)
-        return
-    # the '()' means 'load everything into memory' (by contrast, ':'
-    # only works if not reading a scalar type)
-    if key != 'X':
-        value = f[key][()]
-    else:
-        value = f[key] # don't load X into memory
-
-    d[key_write] = value
-    return
-
-
-def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
-    """\
-    Read `.h5ad`-formatted hdf5 file.
-
-    Parameters
-    ----------
-    filename
-        File name of data file.
-    backed: {`None`, `'r'`, `'r+'`}
-        If `'r'`, load :class:`~anndata.AnnData` in `backed` mode instead
-        of fully loading it into memory (`memory` mode). If you want to modify
-        backed attributes of the AnnData object, you need to choose `'r+'`.
-    chunk_size
-        Used only when loading sparse dataset that is stored as dense.
-        Loading iterates through chunks of the dataset of this row size
-        until it reads the whole dataset.
-        Higher size means higher memory consumption and higher loading speed.
-    """
-    if isinstance(backed, bool):
-        # We pass `None`s through to h5py.File, and its default is “a”
-        # (=“r+”, but create the file if it doesn’t exist)
-        backed = 'r+' if backed else None
-        warnings.warn(
-            "In a future version, read_h5ad will no longer explicitly support "
-            "boolean arguments. Specify the read mode, or leave `backed=None`.",
-            DeprecationWarning,
-        )
-    if backed:
-        # open in backed-mode
-        return AnnData(filename=filename, filemode=backed)
-    else:
-        # load everything into memory
-        constructor_args = _read_args_from_h5ad(filename=filename, chunk_size=chunk_size)
-        X = constructor_args[0]
-        dtype = None
-        if X is not None:
-            dtype = X.dtype.name  # maintain dtype, since 0.7
-        return AnnData(*_read_args_from_h5ad(filename=filename, chunk_size=chunk_size), dtype=dtype)
-
-
-def _read_args_from_h5ad(
-    adata: AnnData = None,
-    filename: Optional[PathLike] = None,
-    mode: Optional[str] = None,
-    chunk_size: int = 6000
-):
-    """\
-    Return a tuple with the parameters for initializing AnnData.
-
-    Parameters
-    ----------
-    filename
-        Defaults to the objects filename if `None`.
-    """
-    if filename is None and (adata is None or adata.filename is None):
-        raise ValueError('Need either a filename or an AnnData object with file backing')
-
-    # we need to be able to call the function without reference to self when
-    # not reading in backed mode
-    backed = mode is not None
-    if filename is None and not backed:
-        filename = adata.filename
-
-    d = {}
-    if backed:
-        f = adata.file._file
-    else:
-        f = h5py.File(filename, 'r')
-    for key in f.keys():
-        if backed and key in AnnData._BACKED_ATTRS:
-            d[key] = None
-        else:
-            _read_key_value_from_h5(f, d, key, chunk_size=chunk_size)
-    # backwards compat: save X with the correct name
-    if 'X' not in d:
-        if backed == 'r+':
-            for key in AnnData._H5_ALIASES['X']:
-                if key in d:
-                    del f[key]
-                    f.create_dataset('X', data=d[key])
-                    break
-    # backwards compat: store sparse matrices properly
-    csr_keys = [key.replace('_csr_data', '')
-                for key in d if '_csr_data' in key]
-    for key in csr_keys:
-        d = load_sparse_csr(d, key=key)
-    if not backed:
-        f.close()
-    return AnnData._args_from_dict(d)
-
-
-def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
-    if key_write is None: key_write = key
-    if isinstance(f[key], h5py.Group):
-        d[key_write] = OrderedDict() if key == 'uns' else {}
-        for k in f[key].keys():
-            _read_key_value_from_h5(f, d[key_write], key + '/' + k, k, chunk_size)
-        return
-
-    ds = f[key]
-
-    if isinstance(ds, h5py.Dataset) and 'sparse_format' in ds.attrs:
-        value = h5py._load_h5_dataset_as_sparse(ds, chunk_size)
-    elif isinstance(ds, h5py.Dataset):
-        value = np.empty(ds.shape, ds.dtype)
-        if 0 not in ds.shape:
-            ds.read_direct(value)
-    elif isinstance(ds, h5py.SparseDataset):
-        value = ds.value
-    else:
-        value = ds[()]
-
-    def postprocess_reading(key, value):
-        # record arrays should stay record arrays and not become scalars
-        if value.ndim == 1 and len(value) == 1 and value.dtype.names is None:
-            value = value[0]
-        if hasattr(value, 'dtype') and value.dtype.kind == 'S':
-            value = value.astype(str)
-        # transform byte strings in recarrays to unicode strings
-        # TODO: come up with a better way of solving this, see also below
-        if (key not in AnnData._H5_ALIASES['obs']
-            and key not in AnnData._H5_ALIASES['var']
-            and key != 'raw.var'
-            and not isinstance(value, dict)
-            and hasattr(value, 'dtype') and value.dtype.names is not None):
-            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
-                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
-            value = value.astype(new_dtype)
-        return key, value
-
-    key, value = postprocess_reading(key, value)
-    d[key_write] = value
-    return
-
-
-def load_sparse_csr(d, key: str = 'X'):
+def load_sparse_csr(d, key='X'):
     from scipy.sparse.csr import csr_matrix
     key_csr = key + '_csr'
     d[key] = csr_matrix((d[key_csr + '_data'],

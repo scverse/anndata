@@ -1,17 +1,18 @@
 """Main class and helper functions.
 """
-from enum import Enum
 from collections import OrderedDict
 from collections.abc import MutableMapping
+from copy import deepcopy
+from enum import Enum
 from functools import reduce
 from pathlib import Path
 from os import PathLike
-from typing import Any, Union, Optional
-from typing import Iterable, Sized, Sequence, Mapping
-from typing import Tuple, List
-from copy import deepcopy
+from typing import Any, Union, Optional         # Meta
+from typing import Iterable, Sequence, Mapping  # Generic ABCs
+from typing import Tuple, List                  # Generic
 import warnings
 
+from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
@@ -19,7 +20,6 @@ from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
-from natsort import natsorted
 
 
 # try importing zarr
@@ -60,7 +60,7 @@ from .. import h5py
 from .views import ArrayView, DictView, DataFrameView, _resolve_idxs, asview, ViewArgs
 
 from .. import utils
-from ..utils import Index1D, Index, get_n_items_idx, convert_to_dict, unpack_index
+from ..utils import Index1D, Index, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
 from ..compat import warn_flatten
 
@@ -93,38 +93,6 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
     keys = [('{}{:03}of{:03}')
             .format(key_multicol, i+1, n_keys) for i in range(n_keys)]
     return keys
-
-
-def df_to_records_fixed_width(df, var_len_str=True):
-    uns = {}  # unstructured dictionary for storing categories
-    names = ['index']
-    if is_string_dtype(df.index):
-        if var_len_str:
-            index = df.index.values.astype(h5py.special_dtype(vlen=str))
-        else:
-            max_len_index = 0 if 0 in df.shape else df.index.map(len).max()
-            index = df.index.values.astype('S{}'.format(max_len_index))
-    else:
-        index = df.index.values
-    arrays = [index]
-    for k in df.columns:
-        names.append(k)
-        if is_string_dtype(df[k]) and not is_categorical(df[k]):
-            if var_len_str:
-                arrays.append(df[k].values.astype(h5py.special_dtype(vlen=str)))
-            else:
-                lengths = df[k].map(len)
-                if is_categorical(lengths): lengths = lengths.cat.as_ordered()
-                arrays.append(df[k].values.astype('S{}'.format(lengths.max())))
-        elif is_categorical(df[k]):
-            uns[k + '_categories'] = df[k].cat.categories
-            arrays.append(df[k].cat.codes)
-        else:
-            arrays.append(df[k].values)
-    formats = [v.dtype for v in arrays]
-    return np.rec.fromarrays(
-        arrays,
-        dtype={'names': names, 'formats': formats}), uns
 
 
 def _check_2d_shape(X):
@@ -232,6 +200,9 @@ class AnnDataFileManager:
         else:
             return 'Backing file manager of file {}.'.format(self.filename)
 
+    def __contains__(self, x) -> bool:
+        return x in self._file
+
     def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]:
         return self._file[key]
 
@@ -284,6 +255,7 @@ class AnnDataFileManager:
         return bool(self._file.id)
 
 
+# TODO: Implement views for Raw
 class Raw:
     def __init__(
         self,
@@ -297,34 +269,38 @@ class Raw:
         if X is not None:
             self._X = X
             self._var = var
-            self._varm = varm
+            self._varm = AxisArrays(self, 1, varm)
         else:
             self._X = None if adata.isbacked else adata.X.copy()
             self._var = adata.var.copy()
-            self._varm = adata.varm.copy()
+            self._varm = AxisArrays(self, 1, adata.varm.copy())
 
     @property
     def X(self):
         if self._adata.isbacked:
-            if not self._adata.file.isopen: self._adata.file.open()
-            X = self._adata.file['raw.X']
-            if self._adata.isview: return X[self._adata._oidx, self._adata._vidx]
-            else: return X
-        else:
-            if self.n_obs == 1 and self.n_vars == 1:
-                warn_flatten()
-                return self._X[0, 0]
-            elif self.n_obs == 1 or self.n_vars == 1:
-                warn_flatten()
-                X = self._X
-                if issparse(self._X): X = self._X.toarray()
-                return X.flatten()
+            if not self._adata.file.isopen:
+                self._adata.file.open()
+            # Handle legacy file formats:
+            if "raw/X" in self._adata.file:
+                X = self._adata.file["raw/X"]
+            elif "raw.X" in self._adata.file:
+                X = self._adata.file['raw.X']  # Backwards compat
             else:
-                return self._X
+                raise AttributeError(
+                    f"Could not find dataset for raw X in file: {self._adata.file.filename}."
+                )
+            # Check if we need to subset
+            if self._adata.isview:
+                # TODO: As noted above, implement views of raw so we can know if we need to subset by var
+                return X[self._adata._oidx, slice(None)]
+            else:
+                return X
+        else:
+            return self._X
 
     @property
     def shape(self):
-        return self.X.shape
+        return (self.n_obs, self.n_vars)
 
     @property
     def var(self):
@@ -352,15 +328,22 @@ class Raw:
 
     def __getitem__(self, index):
         oidx, vidx = self._normalize_indices(index)
-        if self._adata is not None or not self._adata.isbacked: X = self._X[oidx, vidx]
-        else: X = self._adata.file['raw.X'][oidx, vidx]
+
+        # To preserve two dimensional shape
         if isinstance(vidx, (int, np.integer)):
-            # To preserve two dimensional shape
             vidx = slice(vidx, vidx + 1, 1)
+        if isinstance(oidx, (int, np.integer)):
+            oidx = slice(oidx, oidx + 1, 1)
+
+        if not self._adata.isbacked:
+            X = _subset(self.X, (oidx, vidx))
+        else:
+            X = None
+
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
-            new._varm = self._varm._view(self, (vidx,))
+            new._varm = self._varm._view(self, (vidx,)).copy()  # Since there is no view of raws
         return new
 
     def copy(self):
@@ -666,6 +649,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
             self._raw = adata_ref.raw[oidx]
+            self._raw._adata = self
         else:
             self._raw = None
 
@@ -676,7 +660,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raw=None, layers=None,
             dtype='float32', shape=None,
             filename=None, filemode=None):
-        from ..readwrite.read import _read_args_from_h5ad
 
         # view attributes
         self._isview = False
@@ -690,15 +673,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # init from file
         if filename is not None:
-            if any((X, obs, var, uns, obsm, varm)):
-                raise ValueError(
-                    'If initializing from `filename`, '
-                    'no further arguments may be passed.')
             self.file = AnnDataFileManager(self, filename, filemode)
-            X, obs, var, uns, obsm, varm, layers, raw = _read_args_from_h5ad(self, mode=filemode)
-            if X is not None:
-                # this is not a function that a user would use, hence it's fine to set the dtype
-                dtype = X.dtype.name
         else:
             self.file = AnnDataFileManager(self, None)
 
@@ -791,18 +766,28 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # raw
         if raw is None:
             self._raw = None
+        elif isinstance(raw, Raw):
+            self._raw = raw
         else:
-            if isinstance(raw, Raw):
-                self._raw = raw
+            # is dictionary from reading the file, nothing that is meant for a user
+            if self.isbacked:
+                if "raw/X" in self.file:
+                    shape = self.file["raw/X"].shape
+                elif "raw.X" in self.file:
+                    shape = self.file['raw.X'].shape  # Backwards compat
+                else:
+                    raise KeyError(
+                        f"Tried to check shape of raw from {self.file.filename}, but there was no entry for 'raw/X'."
+                    )
             else:
-                # is dictionary from reading the file, nothing that is meant for a user
-                shape = self.file['raw.X'].shape if self.isbacked else raw['X'].shape
+                shape = raw["X"].shape
 
-                self._raw = Raw(
-                    self,
-                    X=raw['X'],
-                    var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
-                    varm=raw['varm'] if 'varm' in raw else None)
+            self._raw = Raw(
+                self,
+                X=raw.get("X", None),
+                var=_gen_dataframe(raw['var'], shape[1], ['var_names', 'col_names']),
+                varm=raw['varm'] if 'varm' in raw else None
+            )
 
         # clean up old formats
         self._clean_up_old_format(uns)
@@ -825,7 +810,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         descr = (
             'AnnData object with n_obs × n_vars = {} × {} {}'
             .format(n_obs, n_vars, backed_at))
-        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:  # 'obsp', 'varp',
+        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:  # 'obsp', 'varp'
             keys = getattr(self, attr).keys()
             if len(keys) > 0:
                 descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
@@ -946,6 +931,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
            If AnnData is a view, setting subsets of layers modifies the original data.
         """
         return self._layers
+
+    @layers.setter
+    def layers(self, value):
+        layers = Layers(self, vals=convert_to_dict(value))
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._layers = layers
 
     @property
     def raw(self) -> Raw:
@@ -1596,16 +1588,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                            layers=self.layers.copy(),
                            dtype=dtype)
         else:
+            from ..readwrite import read_h5ad
             if filename is None:
                 raise ValueError(
                     'To copy an AnnData object in backed mode, '
                     'pass a filename: `.copy(filename=\'myfilename.h5ad\')`.')
-            if self.isview:
-                self.write(filename)
-            else:
-                from shutil import copyfile
-                copyfile(self.filename, filename)
-            return AnnData(filename=filename)
+            mode = self.file._filemode
+            self.write(filename)
+            return read_h5ad(filename, backed=mode)
+
 
     def concatenate(
         self, *adatas: 'AnnData',
@@ -2094,7 +2085,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def write_zarr(
         self,
         store: Union[MutableMapping, PathLike],
-        chunks: Union[bool, int, Tuple[int, ...]],
+        chunks: Union[bool, int, Tuple[int, ...], None] = None,
     ):
         """Write a hierarchical Zarr array store.
 
@@ -2167,154 +2158,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         selection = selection.toarray() if issparse(selection) else selection
         return selection if reverse is None else selection[reverse]
 
-    @staticmethod
-    def _args_from_dict(ddata: Mapping[str, Any]):
-        """Allows to construct an instance of AnnData from a dictionary.
-
-        Acts as interface for the communication with the hdf5 file.
-
-        In particular, from a dict that has been written using
-        ``AnnData._to_dict_fixed_width_arrays``.
-        """
-        d_true_keys = {}
-        # backwards compat
-        uns_is_not_key = False
-        valid_keys = []
-        for keys in AnnData._H5_ALIASES.values():
-            valid_keys += keys
-        valid_keys += ['raw.X', 'raw.var', 'raw.varm', 'raw.cat']
-        for key in ddata.keys():
-            # if there is another key then the prdedefined
-            # then we are reading the old format
-            if key not in valid_keys:
-                uns_is_not_key = True
-
-        for true_key, keys in AnnData._H5_ALIASES.items():
-            for key in keys:
-                if key in ddata:
-                    d_true_keys[true_key] = ddata[key]
-                    if uns_is_not_key: del ddata[key]
-                    break
-            else:
-                d_true_keys[true_key] = None
-
-        # transform recarray to dataframe
-        for true_key, keys in AnnData._H5_ALIASES_NAMES.items():
-            if d_true_keys[true_key] is not None:
-                for key in keys:
-                    if key in d_true_keys[true_key].dtype.names:
-                        d_true_keys[true_key] = pd.DataFrame.from_records(
-                            d_true_keys[true_key], index=key)
-                        break
-                d_true_keys[true_key].index = d_true_keys[true_key].index.astype('U')
-                # transform to unicode string
-                # TODO: this is quite a hack
-                for c in d_true_keys[true_key].columns:
-                    if is_string_dtype(d_true_keys[true_key][c]):
-                        d_true_keys[true_key][c] = pd.Index(
-                            d_true_keys[true_key][c]).astype('U').values
-
-        # these are the category fields
-        k_to_delete = []
-        items = (
-            ddata.items() if uns_is_not_key
-            else ddata['uns'].items() if 'uns' in ddata else []
-        )
-        for k, v in items:
-            if k.endswith('_categories'):
-                k_stripped = k.replace('_categories', '')
-                if isinstance(v, (str, int)):  # fix categories with a single category
-                    v = [v]
-                for ann in ['obs', 'var']:
-                    if k_stripped in d_true_keys[ann]:
-                        d_true_keys[ann][k_stripped] = pd.Categorical.from_codes(
-                            codes=d_true_keys[ann][k_stripped].values,
-                            categories=v,
-                        )
-                k_to_delete.append(k)
-
-        for k in k_to_delete:
-            if uns_is_not_key:
-                del ddata[k]
-            else:
-                del ddata['uns'][k]
-
-        # assign the variables
-        X = d_true_keys['X']
-        obs = d_true_keys['obs']
-        obsm = d_true_keys['obsm']
-        var = d_true_keys['var']
-        varm = d_true_keys['varm']
-        layers = d_true_keys['layers']
-
-        raw = None
-        if 'raw.X' in ddata:
-            raw = {}
-            raw['X'] = ddata['raw.X']
-            del ddata['raw.X']
-            # get the dataframe
-            raw['var'] = pd.DataFrame.from_records(
-                ddata['raw.var'], index='index')
-            del ddata['raw.var']
-            raw['var'].index = raw['var'].index.astype('U')
-            # transform to unicode string
-            for c in raw['var'].columns:
-                if is_string_dtype(raw['var'][c]):
-                    raw['var'][c] = pd.Index(raw['var'][c]).astype('U').values
-            # these are the category fields
-            if 'raw.cat' in ddata:  # old h5ad didn't have that field
-                for k, v in ddata['raw.cat'].items():
-                    if k.endswith('_categories'):
-                        k_stripped = k.replace('_categories', '')
-                        if isinstance(v, (str, int)):  # fix categories with a single category
-                            v = [v]
-                        raw['var'][k_stripped] = pd.Categorical.from_codes(
-                            codes=raw['var'][k_stripped].values,
-                            categories=v)
-                del ddata['raw.cat']
-        if 'raw.varm' in ddata:
-            raw['varm'] = ddata['raw.varm']
-            del ddata['raw.varm']
-        elif raw is not None:
-            raw['varm'] = None
-
-        # the remaining fields are the unstructured annotation
-        uns = (
-            ddata if uns_is_not_key
-            else ddata['uns'] if 'uns' in ddata
-            else {}
-        )
-
-        return X, obs, var, uns, obsm, varm, layers, raw
-
-    def _to_dict_fixed_width_arrays(self, var_len_str=True):
-        """A dict of arrays that stores data and annotation.
-
-        It is sufficient for reconstructing the object.
-        """
-        self.strings_to_categoricals()
-        obs_rec, uns_obs = df_to_records_fixed_width(self._obs, var_len_str)
-        var_rec, uns_var = df_to_records_fixed_width(self._var, var_len_str)
-        layers = dict(self.layers)
-        d = {
-            'X': self._X,
-            'obs': obs_rec,
-            'var': var_rec,
-            'obsm': self._obsm,
-            'varm': self._varm,
-            'layers': layers,
-            # add the categories to the unstructured annotation
-            'uns': {**self._uns, **uns_obs, **uns_var}}
-
-        if self.raw is not None:
-            self.strings_to_categoricals(self.raw._var)
-            var_rec, uns_var = df_to_records_fixed_width(self.raw._var, var_len_str)
-            d['raw.X'] = self.raw.X
-            d['raw.var'] = var_rec
-            d['raw.varm'] = self.raw.varm
-            d['raw.cat'] = uns_var
-
-        return d
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat

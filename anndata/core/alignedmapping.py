@@ -63,14 +63,6 @@ class AlignedMapping(MutableMapping, ABC):
                 raise IndexError()  # Maybe not index error
         except AttributeError:
             pass
-        # TODO: Modify this as soon as writing dataframes works
-        if not isinstance(val, (np.ndarray, spmatrix)):
-            warnings.warn(
-                f"AnnData does not currently support writing or reading of "
-                f"'{type(val).__name__}' objects in {self.attrname} for either"
-                f" hdf5 or zarr formats.",
-                stacklevel=2
-            )
 
     @property
     @abstractmethod
@@ -300,6 +292,8 @@ class PairwiseArraysBase(AlignedMapping):
         return self._dimnames[self._axis]
 
 
+
+# TODO: Allow these to be written, and add them back to anndata
 # class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
 #     def __init__(self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None):
 #         self._parent = parent

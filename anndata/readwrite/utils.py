@@ -1,3 +1,8 @@
+from functools import wraps
+from .. import h5py as patched_h5py
+
+import zarr
+
 # -------------------------------------------------------------------------------
 # Type conversion
 # -------------------------------------------------------------------------------
@@ -51,3 +56,43 @@ def convert_string(string):
         return None
     else:
         return string
+
+
+class AnnDataReadError(OSError):
+    """Error caused while trying to read in AnnData."""
+    pass
+
+
+def report_key_on_error(func):
+    """
+    A decorator for zarr element reading which makes keys involved in errors get reported.
+
+    Example
+    -------
+    >>> import zarr
+    >>> @report_key_on_error
+        def read_arr(group):
+            raise NotImplementedError()
+    >>> z = zarr.open("tmp.zarr")
+    >>> z["X"] = [1, 2, 3]
+    >>> read_arr(z["X"])
+    """
+    @wraps(func)
+    def func_wrapper(elem, *args, **kwargs):
+        try:
+            return func(elem, *args, **kwargs)
+        except Exception as e:
+            if isinstance(e, AnnDataReadError):
+                raise e
+            else:
+                if isinstance(elem, (zarr.Group, zarr.Array)):
+                    parent = elem.store  # Not sure how to always get a name out of this
+                else:
+                    if isinstance(elem, patched_h5py.Group):
+                        parent = elem.h5py_group.file.name
+                    else:
+                        parent = elem.file.name
+                raise AnnDataReadError(
+                    f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {parent}."
+                )
+    return func_wrapper

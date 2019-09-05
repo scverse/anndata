@@ -1,11 +1,14 @@
+from pathlib import Path
+
 import joblib
 import pytest
 import numpy as np
 from scipy import sparse
 
 import anndata as ad
+from anndata.tests.helpers import asarray, gen_adata, assert_equal, subset_func
 
-
+subset_func2 = subset_func
 # -------------------------------------------------------------------------------
 # Some test data
 # -------------------------------------------------------------------------------
@@ -45,15 +48,45 @@ def adata():
         dtype='int32'
     )
 
+@pytest.fixture(
+    params=[sparse.csr_matrix, sparse.csc_matrix, np.array],
+    ids=["scipy-csr", "scipy-csc", "np-array"]
+)
+def mtx_format(request):
+    return request.param
 
 @pytest.fixture(params=[sparse.csr_matrix, sparse.csc_matrix])
 def sparse_format(request):
     return request.param
 
+@pytest.fixture(params=["r+", "r", False])
+def backed_mode(request):
+    return request.param
+
+@pytest.fixture(params=[True, False])
+def force_dense(request):
+    return request.param
+
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
 
+# TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
+def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.h5ad"
+    backed_pth = base_pth / "backed.h5ad"
+
+    orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
+    orig.write(orig_pth)
+
+    backed = ad.read(orig_pth, backed=backed_mode)
+    backed.write(backed_pth, force_dense=force_dense)
+    backed.file.close()
+
+    from_backed = ad.read(backed_pth)
+    assert np.all(asarray(orig.X) == asarray(from_backed.X))
 
 # this is very similar to the views test
 def test_backing(adata, tmp_path, backing_h5ad):
@@ -95,12 +128,53 @@ def test_backing(adata, tmp_path, backing_h5ad):
     # need to copy first
     adata_subset = adata_subset.copy(tmp_path / 'test.subset.h5ad')
     # now transition to actual object
+    assert not adata_subset.isview
     adata_subset.obs['foo'] = range(2)
     assert not adata_subset.isview
+    assert adata_subset.isbacked
     assert adata_subset.obs['foo'].tolist() == list(range(2))
 
     # save
     adata_subset.write()
+
+# TODO: Also test updating the backing file inplace
+def test_backed_raw(tmp_path):
+    backed_pth = tmp_path / "backed.h5ad"
+    final_pth = tmp_path / "final.h5ad"
+    mem_adata = gen_adata((10, 10))
+    mem_adata.raw = mem_adata
+    mem_adata.write(backed_pth)
+
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    assert_equal(backed_adata, mem_adata)
+    backed_adata.write_h5ad(final_pth)
+
+    final_adata = ad.read_h5ad(final_pth)
+    assert_equal(final_adata, mem_adata)
+
+def test_backed_raw_subset(
+    tmp_path,
+    subset_func,
+    subset_func2
+):
+    backed_pth = tmp_path / "backed.h5ad"
+    final_pth = tmp_path / "final.h5ad"
+    mem_adata = gen_adata((10, 10))
+    mem_adata.raw = mem_adata
+    obs_idx = subset_func(mem_adata.obs_names)
+    var_idx = subset_func2(mem_adata.var_names)
+    mem_adata.write(backed_pth)
+
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    backed_v = backed_adata[obs_idx, var_idx]
+    assert backed_v.isview
+    mem_v = mem_adata[obs_idx, var_idx]
+    assert_equal(backed_v, mem_v)
+    backed_v.write_h5ad(final_pth)
+
+    final_adata = ad.read_h5ad(final_pth)
+    # TODO: Figure out why this doesn't work if I don't copy
+    assert_equal(final_adata, mem_v.copy())
 
 
 def test_double_index(adata, backing_h5ad):
