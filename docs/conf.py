@@ -62,12 +62,20 @@ napoleon_use_param = True
 napoleon_custom_sections = [('Params', 'Parameters')]
 todo_include_todos = False
 nitpicky = True  # Report broken links
+suppress_warnings = ['ref.citation']
+
+
+def setup(app):
+    # Don’t allow broken links
+    # app.warningiserror = True
+    app.add_stylesheet('css/custom.css')
+
 
 intersphinx_mapping = dict(
     h5py=('http://docs.h5py.org/en/latest/', None),
     loompy=('https://linnarssonlab.org/loompy/', None),
     numpy=('https://docs.scipy.org/doc/numpy/', None),
-    pandas=('http://pandas.pydata.org/pandas-docs/stable/', None),
+    pandas=('https://pandas.pydata.org/pandas-docs/stable/', None),
     python=('https://docs.python.org/3', None),
     scipy=('https://docs.scipy.org/doc/scipy/reference/', None),
     sklearn=('https://scikit-learn.org/stable/', None),
