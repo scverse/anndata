@@ -23,29 +23,6 @@ H5Dataset = Union[h5py.Dataset, adh5py.Dataset]
 T = TypeVar("T")
 
 
-def make_h5_cat_dtype(s: pd.Categorical) -> np.dtype:
-    """This creates a hdf5 enum dtype based on a pandas categorical array."""
-    # If this causes segfaults, try the alternative in the commit message
-    max_code = np.max(s.codes)
-    return h5py.special_dtype(enum=(
-        s.codes.dtype,
-        dict(zip(s.categories, np.arange(max_code + 1)))
-    ))
-
-
-def to_h5_dtype(a: Union[np.ndarray, pd.Series]) -> Tuple[np.ndarray, np.dtype]:
-    """Given an ndarray, return tuple of hdf5 friendly array and dtype."""
-    if isinstance(a, pd.Series):
-        a = a.values
-    dtype = a.dtype
-    if is_categorical_dtype(dtype):
-        return a.codes, make_h5_cat_dtype(a)
-    elif is_string_dtype(dtype):
-        return a, h5py.special_dtype(vlen=str)
-    else:
-        return a, a.dtype
-
-
 def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
     """
     This corrects compound dtypes to work with hdf5 files.
@@ -177,7 +154,7 @@ def write_array(f, key, value, dataset_kwargs={}):
 
 
 def write_dataframe(f, key, df, dataset_kwargs={}):
-    group = f.create_group(key)
+    group = f.h5f.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
     group.attrs["encoding-version"] = "0.1.0"
     group.attrs["column-order"] = list(df.columns)
@@ -189,12 +166,24 @@ def write_dataframe(f, key, df, dataset_kwargs={}):
     group.attrs["_index"] = index_name
     write_series(group, index_name, df.index, dataset_kwargs)
     for colname, series in df.items():
-        write_series(f, f"{key}/{colname}", series, dataset_kwargs)
+        write_series(group, colname, series, dataset_kwargs)
 
 
 def write_series(f, key, series, dataset_kwargs={}):
-    value, dtype = to_h5_dtype(series)
-    f.create_dataset(key, data=value, dtype=dtype)
+    # f has to be actual h5py type, otherwise categoricals won't write
+    if series.dtype == object:  # Assuming it's string
+        f.create_dataset(
+            key,
+            data=series.values,
+            dtype=h5py.special_dtype(vlen=str),
+            **dataset_kwargs,
+        )
+    elif is_categorical_dtype(series):
+        f.create_dataset(key, shape=series.shape, dtype=series.cat.codes.dtype)
+        f[key][:] = series.cat.codes
+        f[key].attrs["categories"] = list(series.cat.categories)
+    else:
+        f[key] = series.values
 
 
 def write_mapping(f, key, value, dataset_kwargs={}):
@@ -341,7 +330,7 @@ def read_dataframe(group) -> pd.DataFrame:
     df.set_index(group.attrs["_index"], inplace=True)
     if group.attrs["_index"] == "_index":
         df.index.name = None
-    if "column-order" in group.attrs:
+    if "column-order" in group.attrs:  # TODO: Should this be optional?
         assert set(group.attrs["column-order"]) == set(df.columns)
         df = df[group.attrs["column-order"]]
     return df
@@ -349,18 +338,12 @@ def read_dataframe(group) -> pd.DataFrame:
 
 @report_key_on_error
 def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
-    enum_info = h5py.check_dtype(enum=dataset.dtype)
-    if enum_info is None:
-        return dataset[...]
-    else:
-        cats, codes = tuple(zip(*enum_info.items()))
-        cats = np.array(cats)[np.argsort(codes)]
+    if "categories" in dataset.attrs:
         return pd.Categorical.from_codes(
-            dataset[...],
-            # TODO: Test if this is always right (kinda covered by test_scanpy_pbmc68k)
-            cats,
-            ordered=False
+            dataset[...], dataset.attrs["categories"], ordered=False
         )
+    else:
+        return dataset[...]
 
 
 @read_attribute.register(adh5py.Group)
