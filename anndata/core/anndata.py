@@ -595,7 +595,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raw=raw,
                 layers=layers,
                 dtype=dtype, shape=shape,
-                filename=filename, filemode=filemode)
+                filename=filename, filemode=filemode,
+            )
 
     def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
         if adata_ref.isbacked and adata_ref.isview:
@@ -654,13 +655,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._raw = None
 
     def _init_as_actual(
-            self, X=None, obs=None, var=None, uns=None,
-            obsm=None, varm=None,
-            # varp=None, obsp=None,
-            raw=None, layers=None,
-            dtype='float32', shape=None,
-            filename=None, filemode=None):
-
+        self, X=None, obs=None, var=None, uns=None,
+        obsm=None, varm=None,
+        # varp=None, obsp=None,
+        raw=None, layers=None,
+        dtype='float32', shape=None,
+        filename=None, filemode=None,
+    ):
         # view attributes
         self._isview = False
         self._adata_ref = None
@@ -711,10 +712,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     break
             else:
                 class_names = ', '.join(c.__name__ for c in StorageType.classes())
-                raise ValueError('`X` needs to be of one of {}, not {}.'
-                                 .format(class_names, type(X)))
+                raise ValueError(
+                    f'`X` needs to be of one of {class_names}, not {type(X)}.'
+                )
             if shape is not None:
-                raise ValueError('`shape` needs to be `None` is `X` is not `None`.')
+                raise ValueError('`shape` needs to be `None` if `X` is not `None`.')
             _check_2d_shape(X)
             # if type doesn't match, a copy is made, otherwise, use a view
             if issparse(X) or isinstance(X, ma.MaskedArray):
@@ -723,8 +725,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if X.dtype != np.dtype(dtype): X = X.astype(dtype)
             elif isinstance(X, ZarrArray):
                 X = X.astype(dtype)
-            else:  # is np.ndarray
-                X = X.astype(dtype, copy=False)
+            else:  # is np.ndarray or a subclass, convert to true np.ndarray
+                X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X
             self._n_obs, self._n_vars = self._X.shape
@@ -853,7 +855,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X.flatten()
         # else:
         #     return X
-
 
     @X.setter
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
@@ -1646,23 +1647,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         --------
         Joining on intersection of variables.
 
-        >>> adata1 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['s1', 's2'],
-        >>>                   'anno1': ['c1', 'c2']},
-        >>>                  {'var_names': ['a', 'b', 'c'],
-        >>>                   'annoA': [0, 1, 2]})
-        >>> adata2 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['s3', 's4'],
-        >>>                   'anno1': ['c3', 'c4']},
-        >>>                  {'var_names': ['d', 'c', 'b'],
-        >>>                   'annoA': [0, 1, 2]})
-        >>> adata3 = AnnData(np.array([[1, 2, 3], [4, 5, 6]]),
-        >>>                  {'obs_names': ['s1', 's2'],
-        >>>                   'anno2': ['d3', 'd4']},
-        >>>                  {'var_names': ['d', 'c', 'b'],
-        >>>                   'annoA': [0, 2, 3],
-        >>>                   'annoB': [0, 1, 2]})
-        >>>
+        >>> adata1 = AnnData(
+        ...     np.array([[1, 2, 3], [4, 5, 6]]),
+        ...     dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
+        ...     dict(var_names=['a', 'b', 'c'], annoA=[0, 1, 2]),
+        ... )
+        >>> adata2 = AnnData(
+        ...     np.array([[1, 2, 3], [4, 5, 6]]),
+        ...     dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
+        ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
+        ... )
+        >>> adata3 = AnnData(
+        ... np.array([[1, 2, 3], [4, 5, 6]]),
+        ...     dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
+        ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 2, 3], annoB=[0, 1, 2]),
+        ... )
         >>> adata = adata1.concatenate(adata2, adata3)
         >>> adata
         AnnData object with n_obs × n_vars = 6 × 2
@@ -1767,19 +1766,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         For sparse data, everything behaves similarly, except that for ``join='outer'``, zeros are added.
 
         >>> from scipy.sparse import csr_matrix
-        >>> adata1 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
-        >>>                  {'obs_names': ['s1', 's2'],
-        >>>                   'anno1': ['c1', 'c2']},
-        >>>                  {'var_names': ['a', 'b', 'c']})
-        >>> adata2 = AnnData(csr_matrix([[0, 2, 3], [0, 5, 6]]),
-        >>>                  {'obs_names': ['s3', 's4'],
-        >>>                   'anno1': ['c3', 'c4']},
-        >>>                  {'var_names': ['d', 'c', 'b']})
-        >>> adata3 = AnnData(csr_matrix([[1, 2, 0], [0, 5, 6]]),
-        >>>                  {'obs_names': ['s5', 's6'],
-        >>>                   'anno2': ['d3', 'd4']},
-        >>>                  {'var_names': ['d', 'c', 'b']})
-        >>>
+        >>> adata1 = AnnData(
+        ...     csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
+        ...     dict(var_names=['a', 'b', 'c']),
+        ... )
+        >>> adata2 = AnnData(
+        ... csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
+        ...     dict(var_names=['d', 'c', 'b']),
+        ... )
+        >>> adata3 = AnnData(
+        ... csr_matrix([[1, 2, 0], [0, 5, 6]]),
+        ...     dict(obs_names=['s5', 's6'], anno2=['d3', 'd4']),
+        ...     dict(var_names=['d', 'c', 'b']),
+        ... )
         >>> adata = adata1.concatenate(adata2, adata3, join='outer')
         >>> adata.var_names
         Index(['a', 'b', 'c', 'd'], dtype='object')
@@ -1856,7 +1857,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # check whether tries to do 'outer' join and layers is non_empty.
         if join == 'outer' and len(shared_layers) > 0:
             logger.info(
-                'layers concatenation is not yet available for \'outer\' intersection and will be ignored.'
+                "layers concatenation is not yet available for 'outer' intersection and will be ignored."
             )
 
         # check whether layers are not consistently set in all AnnData objects.
@@ -1972,8 +1973,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             utils.warn_names_duplicates('var')
 
     def __contains__(self, key: Any):
-        raise AttributeError('AnnData has no attribute __contains__, '
-                             'don\'t check `in adata`.')
+        raise AttributeError(
+            'AnnData has no attribute __contains__, don’t check `in adata`.'
+        )
 
     def _check_dimensions(self, key=None):
         if key is None:
@@ -1981,25 +1983,35 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             key = {key}
         if 'obs' in key and len(self._obs) != self._n_obs:
-            raise ValueError('Observations annot. `obs` must have number of '
-                             'rows of `X` ({}), but has {} rows.'
-                             .format(self._n_obs, self._obs.shape[0]))
+            raise ValueError(
+                'Observations annot. `obs` must have number of rows of `X`'
+                f' ({self._n_obs}), but has {self._obs.shape[0]} rows.'
+            )
         if 'var' in key and len(self._var) != self._n_vars:
-            raise ValueError('Variables annot. `var` must have number of '
-                             'columns of `X` ({}), but has {} rows.'
-                             .format(self._n_vars, self._var.shape[0]))
+            raise ValueError(
+                'Variables annot. `var` must have number of columns of `X`'
+                f' ({self._n_vars}), but has {self._var.shape[0]} rows.'
+            )
         if 'obsm' in key:
             obsm = self._obsm
-            if not all([o.shape[0] == self._n_obs for o in obsm.values()]) and len(obsm.dim_names) != self._n_obs:
-                raise ValueError('Observations annot. `obsm` must have number of '
-                                'rows of `X` ({}), but has {} rows.'
-                                .format(self._n_obs, len(self._obsm)))
+            if (
+                not all([o.shape[0] == self._n_obs for o in obsm.values()])
+                and len(obsm.dim_names) != self._n_obs
+            ):
+                raise ValueError(
+                    'Observations annot. `obsm` must have number of rows of `X`'
+                    f' ({self._n_obs}), but has {len(obsm)} rows.'
+                )
         if 'varm' in key:
             varm = self._varm
-            if not all([v.shape[0] == self._n_vars for v in varm.values()]) and len(varm.dim_names) != self._n_var:
-                raise ValueError('Variables annot. `varm` must have number of '
-                                'columns of `X` ({}), but has {} rows.'
-                                .format(self._n_vars, len(self._varm)))
+            if (
+                not all([v.shape[0] == self._n_vars for v in varm.values()])
+                and len(varm.dim_names) != self._n_vars
+            ):
+                raise ValueError(
+                    'Variables annot. `varm` must have number of columns of `X`'
+                    f' ({self._n_vars}), but has {len(varm)} rows.'
+                )
 
     def write_h5ad(
         self,
