@@ -12,7 +12,11 @@ from ..logging import get_logger
 
 # Exports
 from .h5ad import write_h5ad as _write_h5ad
-from .zarr import write_zarr
+try:
+    from .zarr import write_zarr
+except ImportError as e:
+    def write_zarr(*_, **__):
+        raise e
 
 
 logger = get_logger(__name__)

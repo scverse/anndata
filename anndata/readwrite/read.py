@@ -11,7 +11,11 @@ from .. import AnnData
 from .. import h5py
 from .utils import is_float
 from .h5ad import read_h5ad
-from .zarr import read_zarr
+try:
+    from .zarr import read_zarr
+except ImportError as e:
+    def read_zarr(*_, **__):
+        raise e
 
 
 def read_csv(
