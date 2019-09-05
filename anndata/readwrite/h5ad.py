@@ -239,9 +239,12 @@ def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
     for k in df_attributes:
         if k in f:  # Backwards compat
             d[k] = read_dataframe(f[k])
+
     if "raw" in f:
-        raw["var"] = read_attribute(f["raw/var"])
-        raw["varm"] = read_attribute(f["raw/varm"])
+        if "raw/var" in f:
+            raw["var"] = read_attribute(f["raw/var"])
+        if "raw/varm" in f:
+            raw["varm"] = read_attribute(f["raw/varm"])
     else:  # Legacy case
         if "raw.var" in f:
             raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
