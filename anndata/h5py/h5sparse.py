@@ -163,8 +163,12 @@ class Group(Mapping):
             return self.h5py_group.create_dataset(
                 name=name, data=data, **kwargs)
 
+    def create_group(self, name, track_order=None):
+        return Group(self.h5py_group.create_group(name, track_order=track_order))
+
 
 Group.create_dataset.__doc__ = h5py.Group.create_dataset.__doc__
+Group.create_group.__doc__ = h5py.Group.create_group.__doc__
 
 
 class File(Group):

@@ -130,7 +130,7 @@ def write_attribute(f: H5Group, key: str, value, dataset_kwargs: Mapping):
 
 
 def write_raw(f, key, value, dataset_kwargs={}):
-    group = f.h5f.create_group(key)
+    group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
     group.attrs["encoding-version"] = "0.1.0"
     group.attrs["shape"] = value.shape
@@ -177,10 +177,7 @@ def write_array(f, key, value, dataset_kwargs={}):
 
 
 def write_dataframe(f, key, df, dataset_kwargs={}):
-    if isinstance(f, adh5py.File):  # If it's the patched one
-        group = f.h5f.create_group(key)
-    else:
-        group = f.create_group(key)
+    group = f.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
     group.attrs["encoding-version"] = "0.1.0"
     group.attrs["column-order"] = list(df.columns)
