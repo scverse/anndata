@@ -330,14 +330,6 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
     """
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
-    # TODO: Decide whether to keep next few lines, since I don't this ever made a release
-    dt = dataset.dtype
-    for col in dt.names[1:]:
-        check = h5py.check_dtype(enum=dt[col])
-        if not isinstance(check, dict):
-            continue
-        mapper = {v: k for k, v in check.items()}
-        df[col] = pd.Categorical(df[col].map(mapper), ordered=False)
     return df
 
 
