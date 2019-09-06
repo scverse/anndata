@@ -52,7 +52,7 @@ except ImportError:
 
 from .alignedmapping import (
     AxisArraysBase, AxisArrays,
-    # PairwiseArraysBase, PairwiseArrays,
+    PairwiseArraysBase, PairwiseArrays,
     LayersBase, Layers,
     _subset
 )
@@ -578,8 +578,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filemode: Optional[str] = None,
         asview: bool = False,
         *,
-        # obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        # varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         oidx: Index1D = None,
         vidx: Index1D = None
     ):
@@ -591,11 +591,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(
                 X=X, obs=obs, var=var, uns=uns,
                 obsm=obsm, varm=varm,
-                # obsp=obsp, varp=varp,
                 raw=raw,
                 layers=layers,
                 dtype=dtype, shape=shape,
-                filename=filename, filemode=filemode,
+                obsp=obsp, varp=varp,
+                filename=filename, filemode=filemode
             )
 
     def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
@@ -625,8 +625,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsm = adata_ref.obsm._view(self, (oidx,))
         self._varm = adata_ref.varm._view(self, (vidx,))
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
-        # self._obsp = adata_ref.obsp._view(self, oidx)
-        # self._varp = adata_ref.varp._view(self, vidx)
+        self._obsp = adata_ref.obsp._view(self, oidx)
+        self._varp = adata_ref.varp._view(self, vidx)
         # hackish solution here, no copy should be necessary
         uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
@@ -657,10 +657,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def _init_as_actual(
         self, X=None, obs=None, var=None, uns=None,
         obsm=None, varm=None,
-        # varp=None, obsp=None,
+        varp=None, obsp=None,
         raw=None, layers=None,
         dtype='float32', shape=None,
-        filename=None, filemode=None,
+        filename=None, filemode=None
     ):
         # view attributes
         self._isview = False
@@ -759,8 +759,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
         self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
 
-        # self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
-        # self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
+        self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
+        self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
 
         self._check_dimensions()
         self._check_uniqueness()
@@ -812,7 +812,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         descr = (
             'AnnData object with n_obs × n_vars = {} × {} {}'
             .format(n_obs, n_vars, backed_at))
-        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers']:  # 'obsp', 'varp'
+        for attr in ['obs', 'var', 'uns', 'obsm', 'varm', 'layers', 'obsp', 'varp']:
             keys = getattr(self, attr).keys()
             if len(keys) > 0:
                 descr += '\n    {}: {}'.format(attr, str(list(keys))[1:-1])
@@ -1064,39 +1064,39 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         self._varm = varm
 
-    # @property
-    # def obsp(self) -> PairwiseArraysBase:
-    #     """Pairwise annotation of observations, a mutable mapping with array-like values.
+    @property
+    def obsp(self) -> PairwiseArraysBase:
+        """Pairwise annotation of observations, a mutable mapping with array-like values.
 
-    #     Stores for each key, a two or higher-dimensional :class:`np.ndarray` whose
-    #     first two dimensions are of length ``n_obs``. Is sliced with ``data`` and
-    #     ``obs`` but behaves otherwise like a :class:`dict`.
-    #     """
-    #     return self._obsp
+        Stores for each key, a two or higher-dimensional :class:`np.ndarray` whose
+        first two dimensions are of length ``n_obs``. Is sliced with ``data`` and
+        ``obs`` but behaves otherwise like a :class:`dict`.
+        """
+        return self._obsp
 
-    # @obsp.setter
-    # def obsp(self, value):
-    #     obsp = PairwiseArrays(self, 0, vals=convert_to_dict(value))
-    #     if self.isview:
-    #         self._init_as_actual(self.copy())
-    #     self._obsp = obsp
+    @obsp.setter
+    def obsp(self, value):
+        obsp = PairwiseArrays(self, 0, vals=convert_to_dict(value))
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._obsp = obsp
 
-    # @property
-    # def varp(self) -> PairwiseArraysBase:
-    #     """Pairwise annotation of observations, a mutable mapping with array-like values.
+    @property
+    def varp(self) -> PairwiseArraysBase:
+        """Pairwise annotation of observations, a mutable mapping with array-like values.
 
-    #     Stores for each key, a two or higher-dimensional :class:`np.ndarray` whose
-    #     first two dimensions are of length ``n_var``. Is sliced with ``data`` and
-    #     ``var`` but behaves otherwise like a :class:`dict`.
-    #     """
-    #     return self._varp
+        Stores for each key, a two or higher-dimensional :class:`np.ndarray` whose
+        first two dimensions are of length ``n_var``. Is sliced with ``data`` and
+        ``var`` but behaves otherwise like a :class:`dict`.
+        """
+        return self._varp
 
-    # @varp.setter
-    # def varp(self, value):
-    #     varp = PairwiseArrays(self, 1, vals=convert_to_dict(value))
-    #     if self.isview:
-    #         self._init_as_actual(self.copy())
-    #     self._varp = varp
+    @varp.setter
+    def varp(self, value):
+        varp = PairwiseArrays(self, 1, vals=convert_to_dict(value))
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._varp = varp
 
     @property
     def obs_names(self) -> pd.Index:
@@ -1578,16 +1578,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X = X.reshape(self.shape)
             else:
                 dtype = "float32"
-            return AnnData(X,
-                           self.obs.copy(),
-                           self.var.copy(),
-                           # deepcopy on DictView does not work and is unnecessary
-                           # as uns was copied already before
-                           self.uns.copy() if isinstance(self.uns, DictView) else deepcopy(self.uns),
-                           self.obsm.copy(), self.varm.copy(),
-                           raw=None if self._raw is None else self._raw.copy(),
-                           layers=self.layers.copy(),
-                           dtype=dtype)
+            return AnnData(
+                X=X,
+                obs=self.obs.copy(),
+                var=self.var.copy(),
+                # deepcopy on DictView does not work and is unnecessary
+                # as uns was copied already before
+                uns=self.uns.copy() if isinstance(self.uns, DictView) else deepcopy(self.uns),
+                obsm=self.obsm.copy(),
+                varm=self.varm.copy(),
+                obsp=self.obsp.copy(),
+                varp=self.varp.copy(),
+                raw=None if self._raw is None else self._raw.copy(),
+                layers=self.layers.copy(),
+                dtype=dtype
+            )
         else:
             from ..readwrite import read_h5ad
             if filename is None:

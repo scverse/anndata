@@ -89,6 +89,8 @@ def write_h5ad(
         write_attribute(f, "var", adata.var, dataset_kwargs)
         write_attribute(f, "obsm", adata.obsm, dataset_kwargs)
         write_attribute(f, "varm", adata.varm, dataset_kwargs)
+        write_attribute(f, "obsp", adata.obsp, dataset_kwargs)
+        write_attribute(f, "varp", adata.varp, dataset_kwargs)
         write_attribute(f, "layers", adata.layers, dataset_kwargs)
         write_attribute(f, "uns", adata.uns, dataset_kwargs)
         write_attribute(f, "raw", adata.raw, dataset_kwargs)
@@ -218,7 +220,7 @@ def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
 
     f = adh5py.File(filename, mode)
 
-    attributes = ["obsm", "varm", "uns", "layers"]
+    attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
     df_attributes = ["obs", "var"]
 
     d.update({k: read_attribute(f[k]) for k in attributes if k in f})

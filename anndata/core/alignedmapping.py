@@ -292,30 +292,28 @@ class PairwiseArraysBase(AlignedMapping):
         return self._dimnames[self._axis]
 
 
-
-# TODO: Allow these to be written, and add them back to anndata
-# class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
-#     def __init__(self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None):
-#         self._parent = parent
-#         if axis not in (0, 1):
-#             raise ValueError()
-#         self._axis = axis
-#         self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
-#         self._data = dict()
-#         if vals is not None:
-#             self.update(vals)
+class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
+    def __init__(self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None):
+        self._parent = parent
+        if axis not in (0, 1):
+            raise ValueError()
+        self._axis = axis
+        self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
+        self._data = dict()
+        if vals is not None:
+            self.update(vals)
 
 
-# class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
-#     def __init__(
-#         self, parent_mapping: PairwiseArraysBase, parent_view: "AnnData", subset_idx
-#     ):
-#         self.parent_mapping = parent_mapping
-#         self._parent = parent_view
-#         self.subset_idx = (subset_idx, subset_idx)
-#         self._axis = parent_mapping._axis
-#         self.dim_names = parent_mapping.dim_names[subset_idx]
+class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
+    def __init__(
+        self, parent_mapping: PairwiseArraysBase, parent_view: "AnnData", subset_idx
+    ):
+        self.parent_mapping = parent_mapping
+        self._parent = parent_view
+        self.subset_idx = (subset_idx, subset_idx)
+        self._axis = parent_mapping._axis
+        self.dim_names = parent_mapping.dim_names[subset_idx]
 
 
-# PairwiseArraysBase._view_class = PairwiseArraysView
-# PairwiseArraysBase._actual_class = PairwiseArrays
+PairwiseArraysBase._view_class = PairwiseArraysView
+PairwiseArraysBase._actual_class = PairwiseArrays

@@ -305,6 +305,8 @@ def test_set_subset_varm(adata, subset_func):
 @pytest.mark.parametrize('attr', [
     "obsm",
     "varm",
+    "obsp",
+    "varp",
     "layers"
 ])
 def test_view_failed_delitem(attr):
@@ -324,6 +326,8 @@ def test_view_failed_delitem(attr):
 @pytest.mark.parametrize('attr', [
     "obsm",
     "varm",
+    "obsp",
+    "varp",
     "layers"
 ])
 def test_view_delitem(attr):
