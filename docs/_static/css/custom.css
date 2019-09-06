@@ -21,6 +21,14 @@
     /* slim font weight for non-link literals */
     font-weight: normal;
 }
+.rst-content tt.literal,
+.rst-content code.literal {
+    color: #404040;
+}
+.rst-content a tt.xref,
+.rst-content a code.xref {
+    text-decoration: underline;
+}
 
 
 .rst-content .annotation {
@@ -34,23 +42,19 @@
     background-color: transparent;
     border: 0 solid transparent;
 }
-.rst-content .annotation a tt.xref,
-.rst-content .annotation a code.xref {
-    text-decoration: underline;
-}
 
 
 .rst-content dl:not(.docutils) dl > dt {
-    /* mimick numpydoc’s blockquote style */
+    /* mimick rubric style used for other headings */
     /* TODO: once scanpydoc adds classes, also change return types */
-    font-weight: normal;
+    font-weight: bold;
     background: none transparent;
     border-left: none;
     margin: 0 0 12px;
     padding: 3px 0 0;
     font-size: 111.11%;
 }
-
-.rst-content tt.literal, .rst-content tt.literal, .rst-content code.literal {
-    color: #404040;
+.rst-content dl.field-list dl > dt {
+    /* parameter lists contain <strong> parts and don’t need bold font */
+    font-weight: unset;
 }
