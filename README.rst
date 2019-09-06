@@ -1,7 +1,9 @@
-|PyPI| |Docs| |Build Status| |Coverage|
+|PyPI| |Conda| |Docs| |Build Status| |Coverage|
 
 .. |PyPI| image:: https://img.shields.io/pypi/v/anndata.svg
    :target: https://pypi.org/project/anndata
+.. |Conda| image:: https://img.shields.io/conda/vn/conda-forge/anndata.svg
+   :target: https://anaconda.org/conda-forge/anndata
 .. |Docs| image:: https://readthedocs.com/projects/icb-anndata/badge/?version=latest
    :target: https://anndata.readthedocs.io
 .. |Build Status| image:: https://travis-ci.org/theislab/anndata.svg?branch=master
