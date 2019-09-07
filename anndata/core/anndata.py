@@ -581,7 +581,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         oidx: Index1D = None,
-        vidx: Index1D = None
+        vidx: Index1D = None,
     ):
         if asview:
             if not isinstance(X, AnnData):
@@ -595,7 +595,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 layers=layers,
                 dtype=dtype, shape=shape,
                 obsp=obsp, varp=varp,
-                filename=filename, filemode=filemode
+                filename=filename, filemode=filemode,
             )
 
     def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
@@ -612,7 +612,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             oidx, vidx = _resolve_idxs(
                 (prev_oidx, prev_vidx),
                 (oidx, vidx),
-                adata_ref
+                adata_ref,
             )
         self._adata_ref = adata_ref
         self._oidx = oidx
@@ -660,7 +660,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varp=None, obsp=None,
         raw=None, layers=None,
         dtype='float32', shape=None,
-        filename=None, filemode=None
+        filename=None, filemode=None,
     ):
         # view attributes
         self._isview = False
@@ -1591,7 +1591,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varp=self.varp.copy(),
                 raw=None if self._raw is None else self._raw.copy(),
                 layers=self.layers.copy(),
-                dtype=dtype
+                dtype=dtype,
             )
         else:
             from ..readwrite import read_h5ad
@@ -1609,7 +1609,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         join: str = 'inner',
         batch_key: str = 'batch',
         batch_categories: Sequence[Any] = None,
-        index_unique: Optional[str] = '-'
+        index_unique: Optional[str] = '-',
     ) -> 'AnnData':
         """Concatenate along the observations axis.
 
@@ -2023,7 +2023,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         compression: Optional[str] = None,
         compression_opts: Union[int, Any] = None,
-        force_dense: Optional[bool] = None
+        force_dense: Optional[bool] = None,
     ):
         """Write ``.h5ad``-formatted hdf5 file.
 
