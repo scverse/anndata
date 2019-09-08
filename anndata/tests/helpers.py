@@ -119,6 +119,14 @@ def gen_adata(
         "df": gen_typed_df_t2_size(M, N, index=obs_names, columns=var_names)
     }
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
+    obsp = {
+        "array": np.random.random((M, M)),
+        "sparse": sparse.random(M, M, format="csr"),
+    }
+    varp = {
+        "array": np.random.random((N, N)),
+        "sparse": sparse.random(N, N, format="csr"),
+    }
     adata = AnnData(
         X=X_type(np.random.binomial(100, .005, (M, N)).astype(X_dtype)),
         obs=obs,
@@ -126,6 +134,8 @@ def gen_adata(
         obsm=obsm,
         varm=varm,
         layers=layers,
+        obsp=obsp,
+        varp=varp,
         dtype=X_dtype
     )
     return adata
@@ -325,7 +335,7 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
     assert_equal(a.obs, b.obs, exact, elem_name="obs")
     assert_equal(a.var, b.var, exact, elem_name="var")
     assert_equal(a.X, b.X, exact, elem_name="X")
-    for mapping_attr in ["obsm", "varm", "layers", "uns"]:
+    for mapping_attr in ["obsm", "varm", "layers", "uns", "obsp", "varp"]:
         assert_equal(
             getattr(a, mapping_attr),
             getattr(b, mapping_attr),
@@ -333,6 +343,6 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
             elem_name=mapping_attr
         )
     if a.raw is not None:
-        assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw.X")
-        assert_equal(a.raw.var, b.raw.var, exact, elem_name="raw.var")
-        assert_equal(a.raw.varm, b.raw.varm, exact, elem_name="raw.varm")
+        assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw/X")
+        assert_equal(a.raw.var, b.raw.var, exact, elem_name="raw/var")
+        assert_equal(a.raw.varm, b.raw.varm, exact, elem_name="raw/varm")

@@ -39,6 +39,8 @@ def write_zarr(
     write_attribute(f, "var", adata.var, dataset_kwargs)
     write_attribute(f, "obsm", adata.obsm, dataset_kwargs)
     write_attribute(f, "varm", adata.varm, dataset_kwargs)
+    write_attribute(f, "obsp", adata.obsp, dataset_kwargs)
+    write_attribute(f, "varp", adata.varp, dataset_kwargs)
     write_attribute(f, "layers", adata.layers, dataset_kwargs)
     write_attribute(f, "uns", adata.uns, dataset_kwargs)
     write_attribute(f, "raw", adata.raw, dataset_kwargs)
