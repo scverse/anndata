@@ -72,3 +72,10 @@ def test_readwrite_loom(tmp_path):
 def test_backed():
     # backed mode for layers isn't implemented, layers stay in memory
     pass
+
+
+def test_copy():
+    adata = ad.AnnData(X=X, layers={'L': L.copy()})
+    bdata = adata.copy()
+    adata.layers['L'] += 10
+    assert np.all(adata.layers['L'] != bdata.layers['L']) #201
