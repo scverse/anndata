@@ -1,3 +1,2 @@
-include versioneer.py
-include anndata/_version.py
-include requirements.txt
+exclude .coveragerc .gitattributes .gitignore .readthedocs.yml .travis.yml
+prune docs

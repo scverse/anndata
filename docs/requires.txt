@@ -1,9 +1,13 @@
 # stuff necessary for docs generation
-sphinx>=1.8
+setuptools_scm
+importlib_metadata>=0.7; python_version < '3.8'
+# Sphinx 2 has nicer looking sections
+sphinx>=2.0.1
 sphinx-autodoc-typehints
-scanpydoc>=0.3.2
+scanpydoc>=0.4
 # dependencies of anndata
 pandas~=0.21
 scipy
 h5py
 natsort
+zarr

@@ -1,36 +1,44 @@
 from pathlib import Path
-from typing import Union, Optional
+from os import PathLike, fspath
+from typing import Union, Optional, Mapping
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
 import bz2
 import numpy as np
-import warnings
 
 from .. import AnnData
 from .. import h5py
-from ..compat import PathLike, fspath
-from .utils import *
+from .utils import is_float
+from .h5ad import read_h5ad
+
+try:
+    from .zarr import read_zarr
+except ImportError as e:
+
+    def read_zarr(*_, **__):
+        raise e
 
 
 def read_csv(
     filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str]=',',
-    first_column_names: Optional[bool]=None,
-    dtype: str='float32',
+    delimiter: Optional[str] = ',',
+    first_column_names: Optional[bool] = None,
+    dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.csv`` file.
+    """\
+    Read `.csv` file.
 
-    Same as :func:`~anndata.read_text` but with default delimiter ``','``.
+    Same as :func:`~anndata.read_text` but with default delimiter `','`.
 
     Parameters
     ----------
     filename
         Data file.
     delimiter
-        Delimiter that separates data within text file. If ``None``, will split at
+        Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ``' '``.
+        splitting at single white space `' '`.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -40,11 +48,10 @@ def read_csv(
 
 
 def read_excel(
-    filename: PathLike,
-    sheet: Union[str, int],
-    dtype: str='float32',
+    filename: PathLike, sheet: Union[str, int], dtype: str = 'float32'
 ) -> AnnData:
-    """Read ``.xlsx`` (Excel) file.
+    """\
+    Read `.xlsx` (Excel) file.
 
     Assumes that the first columns stores the row names and the first row the
     column names.
@@ -58,6 +65,7 @@ def read_excel(
     """
     # rely on pandas for reading an excel file
     from pandas import read_excel
+
     df = read_excel(fspath(filename), sheet)
     X = df.values[:, 1:]
     row = {'row_names': df.iloc[:, 0].values.astype(str)}
@@ -65,8 +73,9 @@ def read_excel(
     return AnnData(X, row, col, dtype=dtype)
 
 
-def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
-    """Read a gzipped condensed count matrix from umi_tools.
+def read_umi_tools(filename: PathLike, dtype: str = 'float32') -> AnnData:
+    """\
+    Read a gzipped condensed count matrix from umi_tools.
 
     Parameters
     ----------
@@ -83,21 +92,28 @@ def read_umi_tools(filename: PathLike, dtype: str='float32') -> AnnData:
     header = fh.readline()  # read the first line
 
     for line in fh:
-        t = line.decode('ascii').split('\t')  # gzip read bytes, hence the decoding
+        # gzip read bytes, hence the decoding
+        t = line.decode('ascii').split('\t')
         try:
-            dod[t[1]].update({t[0]:int(t[2])})
+            dod[t[1]].update({t[0]: int(t[2])})
         except KeyError:
-            dod[t[1]] = {t[0]:int(t[2])}
+            dod[t[1]] = {t[0]: int(t[2])}
 
     df = DataFrame.from_dict(dod, orient='index')  # build the matrix
-    df.fillna(value=0., inplace=True)  # many NaN, replace with zeros
-    return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns}, dtype=dtype)
+    df.fillna(value=0.0, inplace=True)  # many NaN, replace with zeros
+    return AnnData(
+        np.array(df),
+        dict(obs_names=df.index),
+        dict(var_names=df.columns),
+        dtype=dtype,
+    )
 
 
 def read_hdf(filename: PathLike, key: str) -> AnnData:
-    """Read ``.h5`` (hdf5) file.
+    """\
+    Read `.h5` (hdf5) file.
 
-    Note: Also looks for fields ``row_names`` and ``col_names``.
+    Note: Also looks for fields `row_names` and `col_names`.
 
     Parameters
     ----------
@@ -111,10 +127,10 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
         # a view and not a list is returned
         keys = [k for k in f.keys()]
         if key == '':
-            raise ValueError((
-                'The file {} stores the following sheets:\n{}\n'
-                'Call read/read_hdf5 with one of them.'
-            ).format(filename, keys))
+            raise ValueError(
+                f'The file {filename} stores the following sheets:\n{keys}\n'
+                f'Call read/read_hdf5 with one of them.'
+            )
         # read array
         X = f[key][()]
         # try to find row and column names
@@ -126,9 +142,20 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
-def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_name: str = 'spliced',
-              obs_names: str = 'CellID', var_names: str = 'Gene', dtype: str='float32', **kwargs) -> AnnData:
-    """Read `.loom`-formatted hdf5 file.
+def read_loom(
+    filename: PathLike,
+    sparse: bool = True,
+    cleanup: bool = False,
+    X_name: str = 'spliced',
+    obs_names: str = 'CellID',
+    obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    var_names: str = 'Gene',
+    varm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    dtype: str = 'float32',
+    **kwargs,
+) -> AnnData:
+    """\
+    Read `.loom`-formatted hdf5 file.
 
     This reads the whole file into memory.
 
@@ -147,36 +174,72 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
         Loompy key with which the data matrix `.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
+    obsm_names
+        Loompy keys which will be constructed into observation matrices
     var_names
         Loompy key where the variable/gene names are stored.
-    **kwargs
+    obsm_names
+        Loompy keys which will be constructed into variable matrices
+    **kwargs:
         Arguments to loompy.connect
     """
+    obsm_names = obsm_names or {}
+    varm_names = varm_names or {}
+
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
-    with connect(filename, 'r', **kwargs) as lc:
 
-        if X_name not in lc.layers.keys(): X_name = ''
-        X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
+    with connect(filename, 'r', **kwargs) as lc:
+        if X_name not in lc.layers.keys():
+            X_name = ''
+        X = (
+            lc.layers[X_name].sparse().T.tocsr()
+            if sparse
+            else lc.layers[X_name][()].T
+        )
 
         layers = OrderedDict()
-        if X_name != '': layers['matrix'] = lc.layers[''].sparse().T.tocsr() if sparse else lc.layers[''][()].T
+        if X_name != '':
+            layers['matrix'] = (
+                lc.layers[''].sparse().T.tocsr()
+                if sparse
+                else lc.layers[''][()].T
+            )
         for key in lc.layers.keys():
-            if key != '': layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
+            if key != '':
+                layers[key] = (
+                    lc.layers[key].sparse().T.tocsr()
+                    if sparse
+                    else lc.layers[key][()].T
+                )
 
         obs = dict(lc.col_attrs)
-        if obs_names in obs.keys(): obs['obs_names'] = obs.pop(obs_names)
-        obsm_attrs = [k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1]
 
         obsm = {}
+        for key, names in obsm_names.items():
+            obsm[key] = np.array([obs.pop(name) for name in names]).T
+
+        if obs_names in obs.keys():
+            obs['obs_names'] = obs.pop(obs_names)
+        obsm_attrs = [
+            k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1
+        ]
+
         for key in obsm_attrs:
             obsm[key] = obs.pop(key)
 
         var = dict(lc.row_attrs)
-        if var_names in var.keys(): var['var_names'] = var.pop(var_names)
-        varm_attrs = [k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1]
 
         varm = {}
+        for key, names in varm_names.items():
+            varm[key] = np.array([var.pop(name) for name in names]).T
+
+        if var_names in var.keys():
+            var['var_names'] = var.pop(var_names)
+        varm_attrs = [
+            k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1
+        ]
+
         for key in varm_attrs:
             varm[key] = var.pop(key)
 
@@ -205,12 +268,14 @@ def read_loom(filename: PathLike, sparse: bool = True, cleanup: bool = False, X_
             obsm=obsm if obsm else None,
             varm=varm if varm else None,
             uns=uns,
-            dtype=dtype)
+            dtype=dtype,
+        )
     return adata
 
 
-def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
-    """Read ``.mtx`` file.
+def read_mtx(filename: PathLike, dtype: str = 'float32') -> AnnData:
+    """\
+    Read `.mtx` file.
 
     Parameters
     ----------
@@ -220,31 +285,34 @@ def read_mtx(filename: PathLike, dtype: str='float32') -> AnnData:
         Numpy data type.
     """
     from scipy.io import mmread
+
     # could be rewritten accounting for dtype to be more performant
     X = mmread(fspath(filename)).astype(dtype)
     from scipy.sparse import csr_matrix
+
     X = csr_matrix(X)
     return AnnData(X, dtype=dtype)
 
 
 def read_text(
     filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str]=None,
-    first_column_names: Optional[bool]=None,
-    dtype: str='float32',
+    delimiter: Optional[str] = None,
+    first_column_names: Optional[bool] = None,
+    dtype: str = 'float32',
 ) -> AnnData:
-    """Read ``.txt``, ``.tab``, ``.data`` (text) file.
+    """\
+    Read `.txt`, `.tab`, `.data` (text) file.
 
-    Same as :func:`~anndata.read_csv` but with default delimiter ``None``.
+    Same as :func:`~anndata.read_csv` but with default delimiter `None`.
 
     Parameters
     ----------
     filename
         Data file, filename or stream.
     delimiter
-        Delimiter that separates data within text file. If ``None``, will split at
+        Delimiter that separates data within text file. If `None`, will split at
         arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space ``' '``.
+        splitting at single white space `' '`.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -292,8 +360,11 @@ def _read_text(
                 comments.append(comment)
         else:
             if delimiter is not None and delimiter not in line:
-                raise ValueError('Did not find delimiter "{}" in first line.'
-                                 .format(delimiter))
+                raise ValueError(
+                    'Did not find delimiter "{}" in first line.'.format(
+                        delimiter
+                    )
+                )
             line_list = line.split(delimiter)
             # the first column might be row names, so check the last
             if not is_float(line_list[-1]):
@@ -318,7 +389,8 @@ def _read_text(
             col_names = np.arange(len(data[0])).astype(str)
     col_names = np.array(col_names, dtype=str)
     # read another line to check if first column contains row names or not
-    if first_column_names is None: first_column_names = False
+    if first_column_names is None:
+        first_column_names = False
     for line in lines:
         line_list = line.split(delimiter)
         if first_column_names or not is_float(line_list[0]):
@@ -353,8 +425,9 @@ def _read_text(
     #   a lot of memory and CPU time
     if data[0].size != data[-1].size:
         raise ValueError(
-            'length of first line ({}) is different from length of last line ({})'
-            .format(data[0].size, data[-1].size))
+            f'Length of first line ({data[0].size}) is different '
+            f'from length of last line ({data[-1].size}).'
+        )
     data = np.array(data, dtype=dtype)
     # logg.msg('    constructed array from list of list', t=True, v=4)
     # transform row_names
@@ -370,195 +443,28 @@ def _read_text(
         col_names = col_names[1:]
     for iname, name in enumerate(col_names):
         col_names[iname] = name.strip('"')
-    return AnnData(data,
-                   obs={'obs_names': row_names},
-                   var={'var_names': col_names},
-                   dtype=dtype)
-
-
-def read_zarr(store):
-    """Read from a hierarchical Zarr array store.
-
-    Parameters
-    ----------
-    store
-        The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
-    """
-    if isinstance(store, Path):
-        store = str(store)
-    import zarr
-    f = zarr.open(store, mode='r')
-    d = {}
-    for key in f.keys():
-        _read_key_value_from_zarr(f, d, key)
-    return AnnData(*AnnData._args_from_dict(d))
-
-
-def _read_key_value_from_zarr(f, d, key, key_write=None):
-    import zarr
-    if key_write is None: key_write = key
-    if isinstance(f[key], zarr.hierarchy.Group):
-        d[key_write] = OrderedDict() if key == 'uns' else {}
-        for k in f[key].keys():
-            _read_key_value_from_zarr(f, d[key_write], key + '/' + k, k)
-        return
-    # the '()' means 'load everything into memory' (by contrast, ':'
-    # only works if not reading a scalar type)
-    if key != 'X':
-        value = f[key][()]
-    else:
-        value = f[key] # don't load X into memory
-
-    d[key_write] = value
-    return
-
-
-def read_h5ad(filename, backed: Optional[str] = None, chunk_size: int = 6000):
-    """Read ``.h5ad``-formatted hdf5 file.
-
-    Parameters
-    ----------
-    filename
-        File name of data file.
-    backed : {``None``, ``'r'``, ``'r+'``}
-        If ``'r'``, load :class:`~anndata.AnnData` in ``backed`` mode instead
-        of fully loading it into memory (`memory` mode). If you want to modify
-        backed attributes of the AnnData object, you need to choose ``'r+'``.
-    chunk_size
-        Used only when loading sparse dataset that is stored as dense.
-        Loading iterates through chunks of the dataset of this row size
-        until it reads the whole dataset.
-        Higher size means higher memory consumption and higher loading speed.
-    """
-    if isinstance(backed, bool):
-        # We pass `None`s through to h5py.File, and its default is “a”
-        # (=“r+”, but create the file if it doesn’t exist)
-        backed = 'r+' if backed else None
-        warnings.warn(
-            "In a future version, read_h5ad will no longer explicitly support "
-            "boolean arguments. Specify the read mode, or leave `backed=None`.",
-            DeprecationWarning,
-        )
-    if backed:
-        # open in backed-mode
-        return AnnData(filename=filename, filemode=backed)
-    else:
-        # load everything into memory
-        constructor_args = _read_args_from_h5ad(filename=filename, chunk_size=chunk_size)
-        X = constructor_args[0]
-        dtype = None
-        if X is not None:
-            dtype = X.dtype.name  # maintain dtype, since 0.7
-        return AnnData(*_read_args_from_h5ad(filename=filename, chunk_size=chunk_size), dtype=dtype)
-
-
-def _read_args_from_h5ad(
-    adata: AnnData = None,
-    filename: Optional[PathLike] = None,
-    mode: Optional[str] = None,
-    chunk_size: int = 6000
-):
-    """Return a tuple with the parameters for initializing AnnData.
-
-    Parameters
-    ----------
-    filename
-        Defaults to the objects filename if ``None``.
-    """
-    if filename is None and (adata is None or adata.filename is None):
-        raise ValueError('Need either a filename or an AnnData object with file backing')
-
-    # we need to be able to call the function without reference to self when
-    # not reading in backed mode
-    backed = mode is not None
-    if filename is None and not backed:
-        filename = adata.filename
-
-    d = {}
-    if backed:
-        f = adata.file._file
-    else:
-        f = h5py.File(filename, 'r')
-    for key in f.keys():
-        if backed and key in AnnData._BACKED_ATTRS:
-            d[key] = None
-        else:
-            _read_key_value_from_h5(f, d, key, chunk_size=chunk_size)
-    # backwards compat: save X with the correct name
-    if 'X' not in d:
-        if backed == 'r+':
-            for key in AnnData._H5_ALIASES['X']:
-                if key in d:
-                    del f[key]
-                    f.create_dataset('X', data=d[key])
-                    break
-    # backwards compat: store sparse matrices properly
-    csr_keys = [key.replace('_csr_data', '')
-                for key in d if '_csr_data' in key]
-    for key in csr_keys:
-        d = load_sparse_csr(d, key=key)
-    if not backed:
-        f.close()
-    return AnnData._args_from_dict(d)
-
-
-def _read_key_value_from_h5(f, d, key, key_write=None, chunk_size=6000):
-    if key_write is None: key_write = key
-    if isinstance(f[key], h5py.Group):
-        d[key_write] = OrderedDict() if key == 'uns' else {}
-        for k in f[key].keys():
-            _read_key_value_from_h5(f, d[key_write], key + '/' + k, k, chunk_size)
-        return
-
-    ds = f[key]
-
-    if isinstance(ds, h5py.Dataset) and 'sparse_format' in ds.attrs:
-        value = h5py._load_h5_dataset_as_sparse(ds, chunk_size)
-    elif isinstance(ds, h5py.Dataset):
-        value = np.empty(ds.shape, ds.dtype)
-        if 0 not in ds.shape:
-            ds.read_direct(value)
-    elif isinstance(ds, h5py.SparseDataset):
-        value = ds.value
-    else:
-        value = ds[()]
-
-    def postprocess_reading(key, value):
-        # record arrays should stay record arrays and not become scalars
-        if value.ndim == 1 and len(value) == 1 and value.dtype.names is None:
-            value = value[0]
-        if hasattr(value, 'dtype') and value.dtype.kind == 'S':
-            value = value.astype(str)
-        # transform byte strings in recarrays to unicode strings
-        # TODO: come up with a better way of solving this, see also below
-        if (key not in AnnData._H5_ALIASES['obs']
-            and key not in AnnData._H5_ALIASES['var']
-            and key != 'raw.var'
-            and not isinstance(value, dict)
-            and hasattr(value, 'dtype') and value.dtype.names is not None):
-            new_dtype = [((dt[0], 'U{}'.format(int(int(dt[1][2:])/4)))
-                          if dt[1][1] == 'S' else dt) for dt in value.dtype.descr]
-            value = value.astype(new_dtype)
-        return key, value
-
-    key, value = postprocess_reading(key, value)
-    d[key_write] = value
-    return
+    return AnnData(
+        data,
+        obs=dict(obs_names=row_names),
+        var=dict(var_names=col_names),
+        dtype=dtype,
+    )
 
 
 def load_sparse_csr(d, key='X'):
     from scipy.sparse.csr import csr_matrix
-    key_csr = key + '_csr'
-    d[key] = csr_matrix((d[key_csr + '_data'],
-                         d[key_csr + '_indices'],
-                         d[key_csr + '_indptr']),
-                        shape=d[key_csr + '_shape'])
+
+    key_csr = f'{key}_csr'
+    d[key] = csr_matrix(
+        (d[f'{key_csr}_data'], d[f'{key_csr}_indices'], d[f'{key_csr}_indptr']),
+        shape=d[f'{key_csr}_shape'],
+    )
     del_sparse_matrix_keys(d, key_csr)
     return d
 
 
 def del_sparse_matrix_keys(mapping, key_csr):
-    del mapping[key_csr + '_data']
-    del mapping[key_csr + '_indices']
-    del mapping[key_csr + '_indptr']
-    del mapping[key_csr + '_shape']
+    del mapping[f'{key_csr}_data']
+    del mapping[f'{key_csr}_indices']
+    del mapping[f'{key_csr}_indptr']
+    del mapping[f'{key_csr}_shape']

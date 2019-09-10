@@ -7,3 +7,4 @@ matplotlib
 sklearn
 xlrd
 joblib
+black

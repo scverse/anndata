@@ -1,6 +1,8 @@
 # TODO:
 # - think about making all of the below subclasses
 # - think about supporting the COO format
+from collections.abc import Iterable, Mapping
+from os import PathLike
 from typing import Optional, Union, KeysView, NamedTuple
 
 import h5py
@@ -10,7 +12,6 @@ from scipy.sparse import _sparsetools
 import warnings
 
 from ..utils import unpack_index
-from ..compat import PathLike
 
 from .utils import _chunked_rows
 
@@ -20,12 +21,25 @@ class BackedFormat(NamedTuple):
     backed_type: type
     memory_type: type
 
+class BackedSparseMatrixMixin:
+    """
+    Mixin class for backed sparse matrices.
 
-class backed_csr_matrix(ss.csr_matrix):
+    Largely needed for the case `backed_sparse_csr(...)[:]`, since that calls
+    copy on `.data`, `.indices`, and `.indptr`.
+    """
+    def copy(self):
+        if isinstance(self.data, h5py.Dataset):
+            return SparseDataset(self.data.parent).value
+        else:
+            return super().copy()
+
+
+class backed_csr_matrix(BackedSparseMatrixMixin, ss.csr_matrix):
     pass
 
 
-class backed_csc_matrix(ss.csc_matrix):
+class backed_csc_matrix(BackedSparseMatrixMixin, ss.csc_matrix):
     pass
 
 
@@ -74,13 +88,20 @@ def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
     return data
 
 
-class Group:
+class Group(Mapping):
     """Like :class:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
     """
 
     def __init__(self, h5py_group, force_dense=False):
         self.h5py_group = h5py_group
         self.force_dense = force_dense
+
+    def __iter__(self):
+        for k in self.keys():
+            yield k
+
+    def __len__(self):
+        return len(self.h5py_group)
 
     def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, 'SparseDataset']:
         h5py_item = self.h5py_group[key]
@@ -94,6 +115,14 @@ class Group:
             return h5py_item
         else:
             raise ValueError("Unexpected item type.")
+
+    @property
+    def attrs(self):
+        return self.h5py_group.attrs
+
+    @property
+    def name(self):
+        return self.h5py_group.name
 
     def __delitem__(self, name):
         self.h5py_group.__delitem__(name)
@@ -135,8 +164,12 @@ class Group:
             return self.h5py_group.create_dataset(
                 name=name, data=data, **kwargs)
 
+    def create_group(self, name, track_order=None):
+        return Group(self.h5py_group.create_group(name, track_order=track_order))
+
 
 Group.create_dataset.__doc__ = h5py.Group.create_dataset.__doc__
+Group.create_group.__doc__ = h5py.Group.create_group.__doc__
 
 
 class File(Group):
@@ -276,6 +309,8 @@ class SparseDataset:
     def __getitem__(self, index):
         if index == (): index = slice(None)
         row, col = unpack_index(index)
+        if all(isinstance(x, Iterable) for x in (row, col)):
+            row, col = np.ix_(row, col)
         format_class = get_backed_class(self.format_str)
         mock_matrix = format_class(self.shape, dtype=self.dtype)
         mock_matrix.data = self.h5py_group['data']
@@ -286,6 +321,8 @@ class SparseDataset:
     def __setitem__(self, index, value):
         if index == (): index = slice(None)
         row, col = unpack_index(index)
+        if all(isinstance(x, Iterable) for x in (row, col)):
+            row, col = np.ix_(row, col)
         format_class = get_backed_class(self.format_str)
         mock_matrix = format_class(self.shape, dtype=self.dtype)
         mock_matrix.data = self.h5py_group['data']

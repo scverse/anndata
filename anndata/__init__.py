@@ -1,11 +1,18 @@
-from .core.anndata import AnnData
+from .core.anndata import AnnData, Raw
 from .readwrite import (
-    read_h5ad, read_loom, read_hdf,
-    read_excel, read_umi_tools,
-    read_csv, read_text, read_mtx,
+    read_h5ad,
+    read_loom,
+    read_hdf,
+    read_excel,
+    read_umi_tools,
+    read_csv,
+    read_text,
+    read_mtx,
     read_zarr,
 )
-from .readwrite import read_h5ad as read  # backwards compat / shortcut for default format
+from .readwrite import (
+    read_h5ad as read,
+)  # backwards compat / shortcut for default format
 
 __doc__ = """\
 API
@@ -77,18 +84,24 @@ sparse matrices in addition to the standard functionality.
 
 """
 
-__author__ = ', '.join([
-    'Philipp Angerer*',
-    'Alex Wolf*',
-    'Isaac Virshup',
-    'Sergei Rybakov',
-])
-__email__ = ', '.join([
-    'philipp.angerer@helmholtz-muenchen.de',
-    'f.alex.wolf@gmx.de',
-    # We don’t need all, the main authors are sufficient.
-])
+__author__ = ', '.join(
+    ['Philipp Angerer*', 'Alex Wolf*', 'Isaac Virshup', 'Sergei Rybakov']
+)
+__email__ = ', '.join(
+    [
+        'philipp.angerer@helmholtz-muenchen.de',
+        'f.alex.wolf@gmx.de',
+        # We don’t need all, the main authors are sufficient.
+    ]
+)
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+try:
+    from setuptools_scm import get_version
+
+    __version__ = get_version(root='..', relative_to=__file__)
+    del get_version
+except (LookupError, ImportError):
+    from .compat import version
+
+    __version__ = version(__name__)
+    del version

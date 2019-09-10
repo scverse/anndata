@@ -1,6 +1,9 @@
 dist: xenial
 language: python
 cache: pip
+stages:
+  - name: static analysis
+  - name: test
 python:
   - "3.6"
   - "3.7"
@@ -15,3 +18,9 @@ script:
   - rst2html.py --halt=2 README.rst >/dev/null
 after_success:
   - codecov
+jobs:
+  include:
+      - stage: static analysis
+        python: "3.7"
+        script: black --diff
+        after_success: skip
