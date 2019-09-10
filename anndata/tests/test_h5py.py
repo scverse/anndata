@@ -9,12 +9,9 @@ from anndata import h5py
 
 def test_create_and_read_dataset(tmp_path):
     h5_path = tmp_path / 'test.h5'
-    sparse_matrix = ss.csr_matrix([
-        [0, 1, 0],
-        [0, 0, 1],
-        [0, 0, 0],
-        [1, 1, 0],
-    ], dtype=np.float64)
+    sparse_matrix = ss.csr_matrix(
+        [[0, 1, 0], [0, 0, 1], [0, 0, 0], [1, 1, 0]], dtype=np.float64
+    )
     with h5py.File(h5_path) as h5f:
         h5f.create_dataset('sparse/matrix', data=sparse_matrix)
     with h5py.File(h5_path) as h5f:
@@ -29,12 +26,9 @@ def test_create_and_read_dataset(tmp_path):
 def test_create_dataset_from_dataset(tmp_path):
     from_h5_path = tmp_path / 'from.h5'
     to_h5_path = tmp_path / 'to.h5'
-    sparse_matrix = ss.csr_matrix([
-        [0, 1, 0],
-        [0, 0, 1],
-        [0, 0, 0],
-        [1, 1, 0],
-    ], dtype=np.float64)
+    sparse_matrix = ss.csr_matrix(
+        [[0, 1, 0], [0, 0, 1], [0, 0, 0], [1, 1, 0]], dtype=np.float64
+    )
     with h5py.File(from_h5_path) as from_h5f:
         from_dset = from_h5f.create_dataset('sparse/matrix', data=sparse_matrix)
 
@@ -45,16 +39,10 @@ def test_create_dataset_from_dataset(tmp_path):
 
 def test_dataset_append(tmp_path):
     h5_path = tmp_path / 'test.h5'
-    sparse_matrix = ss.csr_matrix([
-        [0, 1, 0],
-        [0, 0, 1],
-        [0, 0, 0],
-        [1, 1, 0],
-    ], dtype=np.float64)
-    to_append = ss.csr_matrix([
-        [0, 1, 1],
-        [1, 0, 0],
-    ], dtype=np.float64)
+    sparse_matrix = ss.csr_matrix(
+        [[0, 1, 0], [0, 0, 1], [0, 0, 0], [1, 1, 0]], dtype=np.float64
+    )
+    to_append = ss.csr_matrix([[0, 1, 1], [1, 0, 0]], dtype=np.float64)
     appended_matrix = ss.vstack((sparse_matrix, to_append))
 
     with h5py.File(h5_path) as h5f:

@@ -23,7 +23,7 @@ def write_zarr(
     store: Union[MutableMapping, str, Path],
     adata: AnnData,
     chunks=None,
-    **dataset_kwargs
+    **dataset_kwargs,
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
@@ -271,14 +271,16 @@ def read_group(group):
 @report_key_on_error
 def read_csr(group: zarr.Group) -> sparse.csr_matrix:
     return sparse.csr_matrix(
-        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"]
+        (group["data"], group["indices"], group["indptr"]),
+        shape=group.attrs["shape"],
     )
 
 
 @report_key_on_error
 def read_csc(group: zarr.Group) -> sparse.csc_matrix:
     return sparse.csc_matrix(
-        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"]
+        (group["data"], group["indices"], group["indptr"]),
+        shape=group.attrs["shape"],
     )
 
 
@@ -310,6 +312,8 @@ def read_dataframe(g) -> pd.DataFrame:
 @report_key_on_error
 def read_series(d: zarr.Array) -> Union[zarr.Array, pd.Categorical]:
     if "categories" in d.attrs:
-        return pd.Categorical.from_codes(d, d.attrs["categories"], ordered=False)
+        return pd.Categorical.from_codes(
+            d, d.attrs["categories"], ordered=False
+        )
     else:
         return d

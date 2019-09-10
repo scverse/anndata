@@ -6,16 +6,8 @@ import numpy as np
 import anndata as ad
 
 
-X = np.array([
-    [1, 2, 3],
-    [4, 5, 6],
-    [7, 8, 9],
-])
-L = np.array([
-    [10, 11, 12],
-    [13, 14, 15],
-    [16, 17, 18],
-])
+X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
 
 
 def test_creation():
@@ -78,4 +70,4 @@ def test_copy():
     adata = ad.AnnData(X=X, layers={'L': L.copy()})
     bdata = adata.copy()
     adata.layers['L'] += 10
-    assert np.all(adata.layers['L'] != bdata.layers['L']) #201
+    assert np.all(adata.layers['L'] != bdata.layers['L'])  # 201

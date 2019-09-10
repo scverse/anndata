@@ -2,7 +2,6 @@ from functools import singledispatch, wraps
 from string import ascii_letters
 from typing import Tuple
 from collections.abc import Mapping
-from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -20,27 +19,30 @@ def asarray(x):
     """Convert x to a numpy array"""
     return np.asarray(x)
 
+
 @asarray.register(sparse.spmatrix)
 def asarray_sparse(x):
     return x.toarray()
+
 
 @asarray.register(adh5py.SparseDataset)
 def asarray_sparse(x):
     return asarray(x.value)
 
+
 def gen_typed_df(n, index=None):
     # TODO: Think about allowing index to be passed for n
     letters = np.fromiter(iter(ascii_letters), "U1")
     if n > len(letters):
-        letters = letters[:n // 2]  # Make sure categories are repeated
+        letters = letters[: n // 2]  # Make sure categories are repeated
     return pd.DataFrame(
-        {
-            "cat": pd.Categorical(np.random.choice(letters, n)),
-            "int64": np.random.randint(-50, 50, n),
-            "float64": np.random.random(n),
-            "uint8": np.random.randint(255, size=n, dtype="uint8")
-        },
-        index=index
+        dict(
+            cat=pd.Categorical(np.random.choice(letters, n)),
+            int64=np.random.randint(-50, 50, n),
+            float64=np.random.random(n),
+            uint8=np.random.randint(255, size=n, dtype="uint8"),
+        ),
+        index=index,
     )
 
 
@@ -66,9 +68,21 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame)
+    obsm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+    ),
+    varm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+    ),
+    layers_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+    ),
 ) -> AnnData:
     """Helper function to generate a random anndata for testing purposes.
 
@@ -101,34 +115,32 @@ def gen_adata(
     obs.rename(columns={"cat": "obs_cat"}, inplace=True)
     var.rename(columns={"cat": "var_cat"}, inplace=True)
 
-    obsm = {
-        "array": np.random.random((M, 50)),
-        "sparse": sparse.random(M, 100, format="csr"),
-        "df": gen_typed_df(M, obs_names)
-    }
+    obsm = dict(
+        array=np.random.random((M, 50)),
+        sparse=sparse.random(M, 100, format="csr"),
+        df=gen_typed_df(M, obs_names),
+    )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
-    varm = {
-        "array": np.random.random((N, 50)),
-        "sparse": sparse.random(N, 100, format="csr"),
-        "df": gen_typed_df(N, var_names)
-    }
+    varm = dict(
+        array=np.random.random((N, 50)),
+        sparse=sparse.random(N, 100, format="csr"),
+        df=gen_typed_df(N, var_names),
+    )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
-    layers = {
-        "array": np.random.random((M, N)),
-        "sparse": sparse.random(M, N, format="csr"),
-        "df": gen_typed_df_t2_size(M, N, index=obs_names, columns=var_names)
-    }
+    layers = dict(
+        array=np.random.random((M, N)),
+        sparse=sparse.random(M, N, format="csr"),
+        df=gen_typed_df_t2_size(M, N, index=obs_names, columns=var_names),
+    )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
-    obsp = {
-        "array": np.random.random((M, M)),
-        "sparse": sparse.random(M, M, format="csr"),
-    }
-    varp = {
-        "array": np.random.random((N, N)),
-        "sparse": sparse.random(N, N, format="csr"),
-    }
+    obsp = dict(
+        array=np.random.random((M, M)), sparse=sparse.random(M, M, format="csr")
+    )
+    varp = dict(
+        array=np.random.random((N, N)), sparse=sparse.random(N, N, format="csr")
+    )
     adata = AnnData(
-        X=X_type(np.random.binomial(100, .005, (M, N)).astype(X_dtype)),
+        X=X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype)),
         obs=obs,
         var=var,
         obsm=obsm,
@@ -136,7 +148,7 @@ def gen_adata(
         layers=layers,
         obsp=obsp,
         varp=varp,
-        dtype=X_dtype
+        dtype=X_dtype,
     )
     return adata
 
@@ -146,7 +158,7 @@ def array_bool_subset(index, min_size=2):
     selected = np.random.choice(
         range(len(index)),
         size=np.random.randint(min_size, len(index), ()),
-        replace=False
+        replace=False,
     )
     b[selected] = True
     return b
@@ -158,9 +170,7 @@ def array_subset(index, min_size=2):
             f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         )
     return np.random.choice(
-        index,
-        size=np.random.randint(min_size, len(index), ()),
-        replace=False
+        index, size=np.random.randint(min_size, len(index), ()), replace=False
     )
 
 
@@ -172,13 +182,15 @@ def array_int_subset(index, min_size=2):
     return np.random.choice(
         np.arange(len(index)),
         size=np.random.randint(min_size, len(index), ()),
-        replace=False
+        replace=False,
     )
 
 
 def slice_subset(index, min_size=2):
     while True:
-        points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
+        points = np.random.choice(
+            np.arange(len(index) + 1), size=2, replace=False
+        )
         s = slice(*sorted(points))
         if len(range(*s.indices(len(index)))) >= min_size:
             break
@@ -189,9 +201,18 @@ def single_subset(index):
     return index[np.random.randint(0, len(index), size=())]
 
 
-@pytest.fixture(params=[array_subset, slice_subset, single_subset, array_int_subset, array_bool_subset])
+@pytest.fixture(
+    params=[
+        array_subset,
+        slice_subset,
+        single_subset,
+        array_int_subset,
+        array_bool_subset,
+    ]
+)
 def subset_func(request):
     return request.param
+
 
 ###################
 # Checking equality
@@ -208,6 +229,7 @@ def format_msg(elem_name):
 # TODO: it would be better to modify the other exception
 def report_name(func):
     """Report name of element being tested if test fails."""
+
     @wraps(func)
     def func_wrapper(*args, _elem_name=None, **kwargs):
         try:
@@ -223,6 +245,7 @@ def report_name(func):
                 e.args = tuple(args)
                 e._name_attached = True
             raise e
+
     return func_wrapper
 
 
@@ -231,9 +254,11 @@ def _assert_equal(a, b):
     """Allows reporting elem name for simple assertion."""
     assert a == b
 
+
 @singledispatch
 def assert_equal(a, b, exact=False, elem_name=None):
     _assert_equal(a, b, _elem_name=elem_name)
+
 
 @assert_equal.register(np.ndarray)
 def assert_equal_ndarray(a, b, exact=False, elem_name=None):
@@ -242,16 +267,20 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
         assert np.allclose(a, b, equal_nan=True), format_msg(elem_name)
     elif (  # Structured dtype
         not exact
-        and hasattr(a, "dtype") and hasattr(b, "dtype")
-        and len(a.dtype) > 1 and len(b.dtype) > 0
+        and hasattr(a, "dtype")
+        and hasattr(b, "dtype")
+        and len(a.dtype) > 1
+        and len(b.dtype) > 0
     ):
         assert_equal(pd.DataFrame(a), pd.DataFrame(b), exact, elem_name)
     else:
         assert np.all(a == b), format_msg(elem_name)
 
+
 @assert_equal.register(ArrayView)
 def assert_equal_arrayview(a, b, exact=False, elem_name=None):
     assert_equal(asarray(a), asarray(b), exact=exact, elem_name=elem_name)
+
 
 @assert_equal.register(adh5py.SparseDataset)
 @assert_equal.register(sparse.spmatrix)
@@ -259,26 +288,30 @@ def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
 
+
 @assert_equal.register(pd.DataFrame)
 def are_equal_dataframe(a, b, exact=False, elem_name=None):
     if not isinstance(b, pd.DataFrame):
         assert_equal(b, a, exact, elem_name),  # a.values maybe?
     if not exact:
         report_name(pd.testing.assert_frame_equal)(
-            a, b,
+            a,
+            b,
             check_names=False,
-            check_categorical=False,  # disable checking codes, still checks encoded values
+            check_categorical=False,  # check encoded values, but not codes
             # Should different orderings be allowed?
-            _elem_name=elem_name
+            _elem_name=elem_name,
         )
     else:
         report_name(pd.testing.assert_frame_equal)(
-            a, b,
+            a,
+            b,
             check_exact=True,
             check_index_type=True,
             check_names=False,
-            _elem_name=elem_name
+            _elem_name=elem_name,
         )
+
 
 @assert_equal.register(Mapping)
 def assert_equal_mapping(a, b, exact=False, elem_name=None):
@@ -287,6 +320,7 @@ def assert_equal_mapping(a, b, exact=False, elem_name=None):
         if elem_name is None:
             elem_name = ""
         assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
+
 
 @assert_equal.register(pd.Index)
 def assert_equal_index(a, b, exact=False, elem_name=None):
@@ -299,15 +333,14 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
             _elem_name=elem_name,
         )
     else:
-        report_name(pd.testing.assert_index_equal)(
-            a, b,
-            _elem_name=elem_name
-        )
+        report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
+
 
 @assert_equal.register(AnnData)
 def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
     """
-    Check whether two AnnData objects are equivalent, raising an AssertionError if they aren't.
+    Check whether two AnnData objects are equivalent,
+    raising an AssertionError if they aren't.
 
     Params
     ------
@@ -317,13 +350,16 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
         Whether comparisons should be exact or not. This has a somewhat flexible
         meaning and should probably get refined in the future.
     """
-    # There may be issues comparing views, since np.allclose can modify ArrayViews if they contain `nan`s
+    # There may be issues comparing views, since np.allclose
+    # can modify ArrayViews if they contain `nan`s
     assert_equal(a.obs_names, b.obs_names, exact, elem_name="obs_names")
     assert_equal(a.var_names, b.var_names, exact, elem_name="var_names")
     if not exact:
         # Reorder all elements if neccesary
         idx = [slice(None), slice(None)]
-        change_flag = False  # Since it's a pain to compare a list of pandas objects
+        change_flag = (
+            False
+        )  # Since it's a pain to compare a list of pandas objects
         if not np.all(a.obs_names == b.obs_names):
             idx[0] = a.obs_names
             change_flag = True
@@ -340,7 +376,7 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
             getattr(a, mapping_attr),
             getattr(b, mapping_attr),
             exact,
-            elem_name=mapping_attr
+            elem_name=mapping_attr,
         )
     if a.raw is not None:
         assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw/X")

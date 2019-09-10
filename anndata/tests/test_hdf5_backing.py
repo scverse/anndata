@@ -13,55 +13,54 @@ subset_func2 = subset_func
 # Some test data
 # -------------------------------------------------------------------------------
 
+
 @pytest.fixture
 def adata():
-    X_list = [    # data matrix of shape n_obs x n_vars
+    X_list = [
         [1, 2, 3],
         [4, 5, 6],
         [7, 8, 9],
-    ]
+    ]  # data matrix of shape n_obs x n_vars
     X = np.array(X_list)
     obs_dict = dict(  # annotation of observations / rows
         row_names=['name1', 'name2', 'name3'],  # row annotation
-        oanno1=['cat1', 'cat2', 'cat2'],        # categorical annotation
-        oanno2=['o1', 'o2', 'o3'],              # string annotation
-        oanno3=[2.1, 2.2, 2.3],                 # float annotation
+        oanno1=['cat1', 'cat2', 'cat2'],  # categorical annotation
+        oanno2=['o1', 'o2', 'o3'],  # string annotation
+        oanno3=[2.1, 2.2, 2.3],  # float annotation
     )
-    var_dict = dict(  # annotation of variables / columns
-        vanno1=[3.1, 3.2, 3.3],
-    )
+    var_dict = dict(vanno1=[3.1, 3.2, 3.3])  # annotation of variables / columns
     uns_dict = dict(  # unstructured annotation
-        oanno1_colors=['#000000', '#FFFFFF'],
-        uns2=['some annotation'],
+        oanno1_colors=['#000000', '#FFFFFF'], uns2=['some annotation']
     )
     return ad.AnnData(
         X,
         obs=obs_dict,
         var=var_dict,
         uns=uns_dict,
-        obsm={"o1": np.zeros((X.shape[0], 10))},
-        varm={"v1": np.ones((X.shape[1], 20))},
-        layers={
-            "float": X.astype(float),
-            "sparse": sparse.csr_matrix(X)
-        },
-        dtype='int32'
+        obsm=dict(o1=np.zeros((X.shape[0], 10))),
+        varm=dict(v1=np.ones((X.shape[1], 20))),
+        layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
+        dtype='int32',
     )
+
 
 @pytest.fixture(
     params=[sparse.csr_matrix, sparse.csc_matrix, np.array],
-    ids=["scipy-csr", "scipy-csc", "np-array"]
+    ids=["scipy-csr", "scipy-csc", "np-array"],
 )
 def mtx_format(request):
     return request.param
+
 
 @pytest.fixture(params=[sparse.csr_matrix, sparse.csc_matrix])
 def sparse_format(request):
     return request.param
 
+
 @pytest.fixture(params=["r+", "r", False])
 def backed_mode(request):
     return request.param
+
 
 @pytest.fixture(params=[True, False])
 def force_dense(request):
@@ -87,6 +86,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
 
     from_backed = ad.read(backed_pth)
     assert np.all(asarray(orig.X) == asarray(from_backed.X))
+
 
 # this is very similar to the views test
 def test_backing(adata, tmp_path, backing_h5ad):
@@ -137,6 +137,7 @@ def test_backing(adata, tmp_path, backing_h5ad):
     # save
     adata_subset.write()
 
+
 # TODO: Also test updating the backing file inplace
 def test_backed_raw(tmp_path):
     backed_pth = tmp_path / "backed.h5ad"
@@ -152,11 +153,8 @@ def test_backed_raw(tmp_path):
     final_adata = ad.read_h5ad(final_pth)
     assert_equal(final_adata, mem_adata)
 
-def test_backed_raw_subset(
-    tmp_path,
-    subset_func,
-    subset_func2
-):
+
+def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
     mem_adata = gen_adata((10, 10))
