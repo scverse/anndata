@@ -906,7 +906,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def layers(self) -> LayersBase:
         """Dictionary-like object with values of the same dimensions as :attr:`X`.
 
-        Layers in AnnData have API similar to loompy :ref:`loomlayers`.
+        Layers in AnnData are inspired by loompy's :ref:`loomlayers`.
+
         Return the layer named ``"unspliced"``::
 
             adata.layers["unspliced"]
@@ -926,10 +927,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Return layers’ names::
 
             adata.layers.keys()
-
-        .. warning::
-
-           If AnnData is a view, setting subsets of layers modifies the original data.
         """
         return self._layers
 
