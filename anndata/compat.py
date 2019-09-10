@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+
 def version(package):
     try:
         from importlib.metadata import version
@@ -21,7 +22,7 @@ def warn_flatten():
         "`adata.obs_vector`, `adata.var_vector` methods or accessing the array"
         " directly.",
         FutureWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
 
@@ -56,8 +57,7 @@ def _clean_uns(d: dict):
             for ann in ['obs', 'var']:
                 if k_stripped in d[ann]:
                     d[ann][k_stripped] = pd.Categorical.from_codes(
-                        codes=d[ann][k_stripped].values,
-                        categories=v,
+                        codes=d[ann][k_stripped].values, categories=v
                     )
                     k_to_delete.append(k)
     for k in k_to_delete:
