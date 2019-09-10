@@ -282,10 +282,7 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
-@pytest.mark.skipif(
-    not find_spec('loompy'),
-    reason='Loompy is not installed (expected on Python 3.5)',
-)
+@pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed')
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 @pytest.mark.parametrize(
     'obsm_names', [{}, {'X_composed': ['oanno3', 'oanno4']}]
