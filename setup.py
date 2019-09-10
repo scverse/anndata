@@ -1,4 +1,5 @@
 import sys
+
 if sys.version_info < (3, 6):
     sys.exit('anndata requires Python >= 3.6')
 from pathlib import Path
@@ -21,8 +22,8 @@ setup(
     author_email=__email__,
     license='BSD-3-Clause',
     install_requires=[
-        l.strip() for l in
-        Path('requirements.txt').read_text('utf-8').splitlines()
+        l.strip()
+        for l in Path('requirements.txt').read_text('utf-8').splitlines()
     ],
     python_requires='>=3.6',
     packages=find_packages(),

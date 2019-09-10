@@ -26,7 +26,7 @@ def convert_to_dict_ndarray(obj: np.ndarray):
     if obj.dtype.fields is None:
         raise TypeError(
             "Can only convert np.ndarray with compound dtypes to dict, passed "
-            "array had '{}'.".format(obj.dtype)
+            f"array had '{obj.dtype}'."
         )
     return {k: obj[k] for k in obj.dtype.fields.keys()}
 

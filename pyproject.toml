@@ -6,4 +6,4 @@ build-backend = 'setuptools.build_meta'
 line-length = 80
 skip-string-normalization = true
 # Gradually remove these when there’s no PR
-exclude = '^/anndata/(h5py/h5sparse|readwrite/write).py$'
+exclude = '^/anndata/h5py/h5sparse.py$'
