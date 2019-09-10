@@ -3,28 +3,7 @@ requires = ['setuptools', 'setuptools_scm', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [tool.black]
+line-length = 80
 skip-string-normalization = true
 # Gradually remove these when there’s no PR
-exclude = """
-/anndata/(
-    logging|utils
-    |core/(anndata|alignedmapping|views)
-    |h5py/(utils|h5sparse)
-    |readwrite/(read|write|h5ad|zarr|utils)
-    |tests/(
-        helpers
-        |test_deprecations
-        |test_h5py
-        |test_helpers
-        |test_inplace_subset
-        |test_hdf5_backing
-        |test_layers
-        |test_raw
-        |test_obsmvarm
-        |test_obspvarp
-        |test_base
-        |test_views
-        |test_readwrite
-    )
-).py
-"""
+exclude = '^/anndata/(core/anndata|h5py/h5sparse|readwrite/write).py$'
