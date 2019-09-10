@@ -9,6 +9,7 @@ from scipy.sparse import issparse
 
 from .. import AnnData
 from ..logging import get_logger
+from . import WriteWarning
 
 # Exports
 from .h5ad import write_h5ad as _write_h5ad
@@ -53,7 +54,9 @@ def write_csvs(
     for key, value in d_write.items():
         if issparse(value):
             if not_yet_raised_sparse_warning:
-                warnings.warn('Omitting to write sparse annotation.')
+                warnings.warn(
+                    'Omitting to write sparse annotation.', WriteWarning
+                )
                 not_yet_raised_sparse_warning = False
             continue
         filename = dirname
@@ -68,7 +71,10 @@ def write_csvs(
             try:
                 df = pd.DataFrame(value)
             except Exception as e:
-                warnings.warn(f'Omitting to write {key!r}.', type(e))
+                warnings.warn(
+                    f'Omitting to write {key!r} of type {type(e)}.',
+                    WriteWarning,
+                )
                 continue
         df.to_csv(
             filename,

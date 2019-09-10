@@ -88,11 +88,11 @@ def test_setting_dataframe(adata):
 def test_setting_sparse(adata):
     obsm_sparse = sparse.random(M, 100)
     adata.obsm["a"] = obsm_sparse
-    assert np.all((adata.obsm["a"] == obsm_sparse).data)
+    assert not np.any((adata.obsm["a"] != obsm_sparse).data)
 
     varm_sparse = sparse.random(N, 100)
     adata.varm["a"] = varm_sparse
-    assert np.all((adata.varm["a"] == varm_sparse).data)
+    assert not np.any((adata.varm["a"] != varm_sparse).data)
 
     h = joblib.hash(adata)
 

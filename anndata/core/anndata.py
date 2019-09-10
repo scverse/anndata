@@ -438,6 +438,10 @@ class IndexDimError(IndexError):
         super().__init__(msg)
 
 
+class ImplicitModificationWarning(UserWarning):
+    pass
+
+
 class AnnData(metaclass=utils.DeprecationMixinMeta):
     """\
     An annotated data matrix.
@@ -1343,7 +1347,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 idx = np.where(
                     np.in1d(all_categories, df_sub[k].cat.categories)
                 )[0]
-            uns[f'{k}_colors'] = np.array(uns[f'{k}_colors'])[[idx]]
+            uns[f'{k}_colors'] = np.array(uns[f'{k}_colors'])[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\
@@ -1418,7 +1422,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             dfs = [self.obs, self.var]
             if self.isview:
                 if not self.isbacked:
-                    warnings.warn("Initializing view as actual.")
+                    warnings.warn(
+                        "Initializing view as actual.",
+                        ImplicitModificationWarning,
+                    )
                     self._init_as_actual(self.copy())
                 else:
                     dont_modify = True

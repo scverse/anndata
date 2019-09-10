@@ -1,5 +1,8 @@
 import numpy as np
+import pytest
+
 import anndata as ad
+from anndata.readwrite import WriteWarning
 
 
 # -------------------------------------------------------------------------------
@@ -50,7 +53,9 @@ def test_raw(backing_h5ad):
     assert adata.raw.var_names.tolist() == ['var1', 'var2', 'var3']
 
     # read write
-    adata.write(backing_h5ad)
+    with pytest.warns(WriteWarning, match="Initializing view as actual"):
+        # TODO: don’t modify adata just to write it
+        adata.write(backing_h5ad)
     adata = ad.read(backing_h5ad)
 
     assert adata.raw[:, 0].X.tolist() == [[1], [4], [7]]
