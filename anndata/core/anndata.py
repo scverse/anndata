@@ -1244,17 +1244,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def _remove_unused_categories(self, df_full, df_sub, uns):
         from pandas.api.types import is_categorical
         for k in df_full:
-            if is_categorical(df_full[k]):
-                all_categories = df_full[k].cat.categories
-                df_sub[k].cat.remove_unused_categories(inplace=True)
-                # also correct the colors...
-                if k + '_colors' in uns:
-                    # this is a strange hack...
-                    if np.array(uns[k + '_colors']).ndim == 0:
-                        uns[k + '_colors'] = np.array(uns[k + '_colors'])[None]
-                    uns[k + '_colors'] = np.array(uns[k + '_colors'])[
-                        np.where(np.in1d(
-                            all_categories, df_sub[k].cat.categories))[0]]
+            if not is_categorical(df_full[k]):
+                continue
+            all_categories = df_full[k].cat.categories
+            df_sub[k].cat.remove_unused_categories(inplace=True)
+            # also correct the colors...
+            if f'{k}_colors' not in uns:
+                continue
+            # this is a strange hack...
+            if np.array(uns[f'{k}_colors']).ndim == 0:
+                idx = [None]
+            else:
+                idx = [np.where(np.in1d(
+                    all_categories, df_sub[k].cat.categories
+                ))[0]]
+            uns[f'{k}_colors'] = np.array(uns[f'{k}_colors'])[idx]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """Rename categories of annotation ``key`` in
