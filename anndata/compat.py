@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 import pandas as pd
 
@@ -11,7 +9,7 @@ except ImportError:
 
     class ZarrArray:
         @staticmethod
-        def __rep__():
+        def __repr__():
             return 'mock zarr.core.Array'
 
 
@@ -21,7 +19,7 @@ except ImportError:
 
     class ZappyArray:
         @staticmethod
-        def __rep__():
+        def __repr__():
             return 'mock zappy.base.ZappyArray'
 
 
@@ -31,7 +29,7 @@ except ImportError:
 
     class DaskArray:
         @staticmethod
-        def __rep__():
+        def __repr__():
             return 'mock dask.array.core.Array'
 
 
