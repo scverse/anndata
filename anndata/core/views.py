@@ -22,13 +22,17 @@ class _SetItemMixin:
     Class which (when values are being set) lets their parent anndata view know, so it can make
     a copy of itself. This implements copy-on-modify semantics for views of AnnData objects.
     """
+
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
             adata_view, attr_name, keys = self._view_args
             logger.warning(
-                'Trying to set attribute `.{}` of view, making a copy.'.format(attr_name))
+                'Trying to set attribute `.{}` of view, making a copy.'.format(
+                    attr_name
+                )
+            )
             new = adata_view.copy()
             attr = getattr(new, attr_name)
             container = reduce(lambda d, k: d[k], keys, attr)
@@ -93,6 +97,7 @@ class SparseCSCView(_ViewMixin, sparse.csc_matrix):
 class DictView(_ViewMixin, dict):
     pass
 
+
 class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata = ['_view_args']
 
@@ -103,25 +108,31 @@ def asview(obj, view_args):
         "No view type has been registered for {}".format(type(obj))
     )
 
+
 @asview.register(np.ndarray)
 def asview_array(array, view_args):
     return ArrayView(array, view_args=view_args)
+
 
 @asview.register(pd.DataFrame)
 def asview_df(df, view_args):
     return DataFrameView(df, view_args=view_args)
 
+
 @asview.register(sparse.csr_matrix)
 def asview_csr(mtx, view_args):
     return SparseCSRView(mtx, view_args=view_args)
+
 
 @asview.register(sparse.csc_matrix)
 def asview_csc(mtx, view_args):
     return SparseCSCView(mtx, view_args=view_args)
 
+
 @asview.register(dict)
 def asview_dict(d, view_args):
     return DictView(d, view_args=view_args)
+
 
 @asview.register(ZappyArray)
 def asview_zappy(z, view_args):
@@ -130,14 +141,14 @@ def asview_zappy(z, view_args):
 
 
 def _resolve_idxs(old, new, adata):
-    t = tuple(
-        _resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1)
-    )
+    t = tuple(_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
     return t
+
 
 @singledispatch
 def _resolve_idx(old, new, l):
     return old[new]
+
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(old, new, l):
@@ -145,10 +156,12 @@ def _resolve_idx_ndarray(old, new, l):
         old = np.where(old)[0]
     return old[new]
 
+
 @_resolve_idx.register(np.integer)
 @_resolve_idx.register(int)
 def _resolve_idx_scalar(old, new, l):
     return np.array([old])[new]
+
 
 @_resolve_idx.register(slice)
 def _resolve_idx_slice(old, new, l):
@@ -156,6 +169,7 @@ def _resolve_idx_slice(old, new, l):
         return _resolve_idx_slice_slice(old, new, l)
     else:
         return np.arange(*old.indices(l))[new]
+
 
 def _resolve_idx_slice_slice(old, new, l):
     r = range(*old.indices(l))[new]

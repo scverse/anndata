@@ -36,6 +36,7 @@ from anndata.tests.helpers import assert_equal, report_name, gen_adata
 def test_report_name():
     def raise_error():
         raise Exception("an error occured!")
+
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))
     with pytest.raises(Exception) as e1:
@@ -50,12 +51,15 @@ def test_assert_equal():
     # ndarrays
     assert_equal(np.ones((10, 10)), np.ones((10, 10)))
     assert_equal(  # Should this require an exact test?
-        np.ones((10, 10), dtype="i8"),
-        np.ones((10, 10), dtype="f8")
+        np.ones((10, 10), dtype="i8"), np.ones((10, 10), dtype="f8")
     )
-    assert_equal(np.array(list(ascii_letters)), np.array(list(ascii_letters)), exact=True)
+    assert_equal(
+        np.array(list(ascii_letters)), np.array(list(ascii_letters)), exact=True
+    )
     with pytest.raises(AssertionError):
-        assert_equal(np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1])
+        assert_equal(
+            np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1]
+        )
 
     adata = gen_adata((10, 10))
     adata.raw = adata.copy()
@@ -64,9 +68,9 @@ def test_assert_equal():
         adata,
         adata[
             np.random.permutation(adata.obs_names),
-            np.random.permutation(adata.var_names)
+            np.random.permutation(adata.var_names),
         ].copy(),
-        exact=False
+        exact=False,
     )
     adata2 = adata.copy()
     to_modify = list(adata2.layers.keys())[0]

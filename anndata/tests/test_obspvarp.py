@@ -15,34 +15,28 @@ M, N = (100, 100)
 def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(
-        {"batch": np.array(["a", "b"])[np.random.randint(0, 2, M)]},
-        index=["cell{:03d}".format(i) for i in range(N)]
+        dict(batch=np.array(["a", "b"])[np.random.randint(0, 2, M)]),
+        index=[f"cell{i:03d}" for i in range(N)],
     )
-    var = pd.DataFrame(
-        index=["gene{:03d}".format(i) for i in range(N)]
-    )
+    var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
     return anndata.AnnData(X, obs=obs, var=var)
 
 
 def test_assigmnent_dict(adata):
-    d_obsp = {
-        "a": pd.DataFrame(
-            np.ones((M, M)),
-            columns=adata.obs_names,
-            index=adata.obs_names
+    d_obsp = dict(
+        a=pd.DataFrame(
+            np.ones((M, M)), columns=adata.obs_names, index=adata.obs_names
         ),
-        "b": np.zeros((M, M)),
-        "c": sparse.random(M, M, format="csr")
-    }
-    d_varp = {
-        "a": pd.DataFrame(
-            np.ones((N, N)),
-            columns=adata.var_names,
-            index=adata.var_names
+        b=np.zeros((M, M)),
+        c=sparse.random(M, M, format="csr"),
+    )
+    d_varp = dict(
+        a=pd.DataFrame(
+            np.ones((N, N)), columns=adata.var_names, index=adata.var_names
         ),
-        "b": np.zeros((N, N)),
-        "c": sparse.random(N, N, format="csr")
-    }
+        b=np.zeros((N, N)),
+        c=sparse.random(N, N, format="csr"),
+    )
     adata.obsp = d_obsp
     for k, v in d_obsp.items():
         assert np.all(asarray(adata.obsp[k]) == asarray(v))

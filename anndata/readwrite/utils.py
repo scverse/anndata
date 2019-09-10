@@ -58,6 +58,7 @@ def convert_string(string):
 
 class AnnDataReadError(OSError):
     """Error caused while trying to read in AnnData."""
+
     pass
 
 
@@ -75,6 +76,7 @@ def report_key_on_error(func):
     >>> z["X"] = [1, 2, 3]
     >>> read_arr(z["X"])
     """
+
     @wraps(func)
     def func_wrapper(elem, *args, **kwargs):
         try:
@@ -88,7 +90,9 @@ def report_key_on_error(func):
                 except ImportError:
                     zarr = None
                 if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-                    parent = elem.store  # Not sure how to always get a name out of this
+                    parent = (
+                        elem.store
+                    )  # Not sure how to always get a name out of this
                 elif isinstance(elem, patched_h5py.Group):
                     parent = elem.h5py_group.file.name
                 else:
@@ -96,4 +100,5 @@ def report_key_on_error(func):
                 raise AnnDataReadError(
                     f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {parent}."
                 )
+
     return func_wrapper

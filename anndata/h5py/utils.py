@@ -17,7 +17,7 @@ def _chunked_rows(X, chunk_size=1000, read=False):
         start = end
     if start < n:
         if read:
-            data_array = np.empty((n-start, m), type)
+            data_array = np.empty((n - start, m), type)
             X.read_direct(data_array, source_sel=np.s_[start:n, :])
         else:
             data_array = X[start:n]

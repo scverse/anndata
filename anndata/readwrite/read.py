@@ -11,9 +11,11 @@ from .. import AnnData
 from .. import h5py
 from .utils import is_float
 from .h5ad import read_h5ad
+
 try:
     from .zarr import read_zarr
 except ImportError as e:
+
     def read_zarr(*_, **__):
         raise e
 
@@ -46,9 +48,7 @@ def read_csv(
 
 
 def read_excel(
-    filename: PathLike,
-    sheet: Union[str, int],
-    dtype: str = 'float32',
+    filename: PathLike, sheet: Union[str, int], dtype: str = 'float32'
 ) -> AnnData:
     """\
     Read `.xlsx` (Excel) file.
@@ -65,6 +65,7 @@ def read_excel(
     """
     # rely on pandas for reading an excel file
     from pandas import read_excel
+
     df = read_excel(fspath(filename), sheet)
     X = df.values[:, 1:]
     row = {'row_names': df.iloc[:, 0].values.astype(str)}
@@ -91,15 +92,21 @@ def read_umi_tools(filename: PathLike, dtype: str = 'float32') -> AnnData:
     header = fh.readline()  # read the first line
 
     for line in fh:
-        t = line.decode('ascii').split('\t')  # gzip read bytes, hence the decoding
+        # gzip read bytes, hence the decoding
+        t = line.decode('ascii').split('\t')
         try:
             dod[t[1]].update({t[0]: int(t[2])})
         except KeyError:
             dod[t[1]] = {t[0]: int(t[2])}
 
     df = DataFrame.from_dict(dod, orient='index')  # build the matrix
-    df.fillna(value=0., inplace=True)  # many NaN, replace with zeros
-    return AnnData(np.array(df), {'obs_names': df.index}, {'var_names': df.columns}, dtype=dtype)
+    df.fillna(value=0.0, inplace=True)  # many NaN, replace with zeros
+    return AnnData(
+        np.array(df),
+        dict(obs_names=df.index),
+        dict(var_names=df.columns),
+        dtype=dtype,
+    )
 
 
 def read_hdf(filename: PathLike, key: str) -> AnnData:
@@ -120,10 +127,10 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
         # a view and not a list is returned
         keys = [k for k in f.keys()]
         if key == '':
-            raise ValueError((
-                'The file {} stores the following sheets:\n{}\n'
-                'Call read/read_hdf5 with one of them.'
-            ).format(filename, keys))
+            raise ValueError(
+                f'The file {filename} stores the following sheets:\n{keys}\n'
+                f'Call read/read_hdf5 with one of them.'
+            )
         # read array
         X = f[key][()]
         # try to find row and column names
@@ -145,7 +152,7 @@ def read_loom(
     var_names: str = 'Gene',
     varm_names: Optional[Mapping[str, Iterable[str]]] = None,
     dtype: str = 'float32',
-    **kwargs
+    **kwargs,
 ) -> AnnData:
     """\
     Read `.loom`-formatted hdf5 file.
@@ -181,15 +188,30 @@ def read_loom(
 
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
-    with connect(filename, 'r', **kwargs) as lc:
 
-        if X_name not in lc.layers.keys(): X_name = ''
-        X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
+    with connect(filename, 'r', **kwargs) as lc:
+        if X_name not in lc.layers.keys():
+            X_name = ''
+        X = (
+            lc.layers[X_name].sparse().T.tocsr()
+            if sparse
+            else lc.layers[X_name][()].T
+        )
 
         layers = OrderedDict()
-        if X_name != '': layers['matrix'] = lc.layers[''].sparse().T.tocsr() if sparse else lc.layers[''][()].T
+        if X_name != '':
+            layers['matrix'] = (
+                lc.layers[''].sparse().T.tocsr()
+                if sparse
+                else lc.layers[''][()].T
+            )
         for key in lc.layers.keys():
-            if key != '': layers[key] = lc.layers[key].sparse().T.tocsr() if sparse else lc.layers[key][()].T
+            if key != '':
+                layers[key] = (
+                    lc.layers[key].sparse().T.tocsr()
+                    if sparse
+                    else lc.layers[key][()].T
+                )
 
         obs = dict(lc.col_attrs)
 
@@ -197,8 +219,11 @@ def read_loom(
         for key, names in obsm_names.items():
             obsm[key] = np.array([obs.pop(name) for name in names]).T
 
-        if obs_names in obs.keys(): obs['obs_names'] = obs.pop(obs_names)
-        obsm_attrs = [k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1]
+        if obs_names in obs.keys():
+            obs['obs_names'] = obs.pop(obs_names)
+        obsm_attrs = [
+            k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1
+        ]
 
         for key in obsm_attrs:
             obsm[key] = obs.pop(key)
@@ -209,8 +234,11 @@ def read_loom(
         for key, names in varm_names.items():
             varm[key] = np.array([var.pop(name) for name in names]).T
 
-        if var_names in var.keys(): var['var_names'] = var.pop(var_names)
-        varm_attrs = [k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1]
+        if var_names in var.keys():
+            var['var_names'] = var.pop(var_names)
+        varm_attrs = [
+            k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1
+        ]
 
         for key in varm_attrs:
             varm[key] = var.pop(key)
@@ -240,7 +268,8 @@ def read_loom(
             obsm=obsm if obsm else None,
             varm=varm if varm else None,
             uns=uns,
-            dtype=dtype)
+            dtype=dtype,
+        )
     return adata
 
 
@@ -256,9 +285,11 @@ def read_mtx(filename: PathLike, dtype: str = 'float32') -> AnnData:
         Numpy data type.
     """
     from scipy.io import mmread
+
     # could be rewritten accounting for dtype to be more performant
     X = mmread(fspath(filename)).astype(dtype)
     from scipy.sparse import csr_matrix
+
     X = csr_matrix(X)
     return AnnData(X, dtype=dtype)
 
@@ -329,8 +360,11 @@ def _read_text(
                 comments.append(comment)
         else:
             if delimiter is not None and delimiter not in line:
-                raise ValueError('Did not find delimiter "{}" in first line.'
-                                 .format(delimiter))
+                raise ValueError(
+                    'Did not find delimiter "{}" in first line.'.format(
+                        delimiter
+                    )
+                )
             line_list = line.split(delimiter)
             # the first column might be row names, so check the last
             if not is_float(line_list[-1]):
@@ -355,7 +389,8 @@ def _read_text(
             col_names = np.arange(len(data[0])).astype(str)
     col_names = np.array(col_names, dtype=str)
     # read another line to check if first column contains row names or not
-    if first_column_names is None: first_column_names = False
+    if first_column_names is None:
+        first_column_names = False
     for line in lines:
         line_list = line.split(delimiter)
         if first_column_names or not is_float(line_list[0]):
@@ -390,8 +425,9 @@ def _read_text(
     #   a lot of memory and CPU time
     if data[0].size != data[-1].size:
         raise ValueError(
-            'length of first line ({}) is different from length of last line ({})'
-            .format(data[0].size, data[-1].size))
+            f'Length of first line ({data[0].size}) is different '
+            f'from length of last line ({data[-1].size}).'
+        )
     data = np.array(data, dtype=dtype)
     # logg.msg('    constructed array from list of list', t=True, v=4)
     # transform row_names
@@ -407,25 +443,28 @@ def _read_text(
         col_names = col_names[1:]
     for iname, name in enumerate(col_names):
         col_names[iname] = name.strip('"')
-    return AnnData(data,
-                   obs={'obs_names': row_names},
-                   var={'var_names': col_names},
-                   dtype=dtype)
+    return AnnData(
+        data,
+        obs=dict(obs_names=row_names),
+        var=dict(var_names=col_names),
+        dtype=dtype,
+    )
 
 
 def load_sparse_csr(d, key='X'):
     from scipy.sparse.csr import csr_matrix
-    key_csr = key + '_csr'
-    d[key] = csr_matrix((d[key_csr + '_data'],
-                         d[key_csr + '_indices'],
-                         d[key_csr + '_indptr']),
-                        shape=d[key_csr + '_shape'])
+
+    key_csr = f'{key}_csr'
+    d[key] = csr_matrix(
+        (d[f'{key_csr}_data'], d[f'{key_csr}_indices'], d[f'{key_csr}_indptr']),
+        shape=d[f'{key_csr}_shape'],
+    )
     del_sparse_matrix_keys(d, key_csr)
     return d
 
 
 def del_sparse_matrix_keys(mapping, key_csr):
-    del mapping[key_csr + '_data']
-    del mapping[key_csr + '_indices']
-    del mapping[key_csr + '_indptr']
-    del mapping[key_csr + '_shape']
+    del mapping[f'{key_csr}_data']
+    del mapping[f'{key_csr}_indices']
+    del mapping[f'{key_csr}_indptr']
+    del mapping[f'{key_csr}_shape']

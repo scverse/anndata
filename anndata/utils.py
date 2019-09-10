@@ -15,9 +15,11 @@ logger = get_logger(__name__)
 def convert_to_dict(obj) -> dict:
     return dict(obj)
 
+
 @convert_to_dict.register(dict)
 def convert_to_dict_dict(obj: dict):
     return obj
+
 
 @convert_to_dict.register(np.ndarray)
 def convert_to_dict_ndarray(obj: np.ndarray):
@@ -27,6 +29,7 @@ def convert_to_dict_ndarray(obj: np.ndarray):
             "array had '{}'.".format(obj.dtype)
         )
     return {k: obj[k] for k in obj.dtype.fields.keys()}
+
 
 @convert_to_dict.register(type(None))
 def convert_to_dict_nonetype(obj: None):
@@ -57,6 +60,7 @@ def make_index_unique(index: pd.Index, join: str = '-'):
     if index.is_unique:
         return index
     from collections import defaultdict
+
     values = index.values
     indices_dup = index.duplicated(keep='first')
     values_dup = values[indices_dup]
@@ -72,26 +76,33 @@ def make_index_unique(index: pd.Index, join: str = '-'):
 def warn_names_duplicates(attr: str):
     names = 'Observation' if attr == 'obs' else 'Variable'
     logger.info(
-        '{} names are not unique. '
-        'To make them unique, call `.{}_names_make_unique`.'
-        .format(names, attr))
+        f'{names} names are not unique. '
+        f'To make them unique, call `.{attr}_names_make_unique`.'
+    )
 
 
 def warn_no_string_index(names: Sequence[Any]):
     if not isinstance(names[0], str):
         logger.warning(
-            'AnnData expects string indices for some functionality, but your first two indices are: {}. '
-            .format(names[:2]))
+            f'AnnData expects string indices for some functionality, '
+            f'but your first two indices are: {names[:2]}. '
+        )
 
 
 def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     names = list(source.keys())
     try:  # transform to byte-strings
-        cols = [np.asarray(col) if np.array(col[0]).dtype.char not in {'U', 'S'}
-                else np.asarray(col).astype('U') for col in source.values()]
+        cols = [
+            np.asarray(col)
+            if np.array(col[0]).dtype.char not in {'U', 'S'}
+            else np.asarray(col).astype('U')
+            for col in source.values()
+        ]
     except UnicodeEncodeError:
         raise ValueError(
-            'Currently only support ascii strings. Don\'t use "ö" etc. for sample annotation.')
+            'Currently only support ascii strings. '
+            'Don’t use "ö" etc. for sample annotation.'
+        )
 
     # if old_index_key not in source:
     #     names.append(new_index_key)
@@ -99,7 +110,9 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     # else:
     #     names[names.index(old_index_key)] = new_index_key
     #     cols[names.index(old_index_key)] = cols[names.index(old_index_key)].astype('U')
-    dtype_list = list(zip(names, [str(c.dtype) for c in cols], [(c.shape[1],) for c in cols]))
+    dtype_list = list(
+        zip(names, [str(c.dtype) for c in cols], [(c.shape[1],) for c in cols])
+    )
     # might be unnecessary
     dtype = np.dtype(dtype_list)
 
@@ -119,20 +132,25 @@ def deprecated(new_name: str):
     as deprecated. It will result in a warning being emitted
     when the function is used.
     """
+
     def decorator(func):
         @wraps(func)
         def new_func(*args, **kwargs):
-            warnings.simplefilter('always', DeprecationWarning)  # turn off filter
+            warnings.simplefilter(
+                'always', DeprecationWarning
+            )  # turn off filter
             warnings.warn(
-                'Use {0} instead of {1}, {1} will be removed in the future.'
-                .format(new_name, func.__name__),
+                f'Use {new_name} instead of {func.__name__}, '
+                f'{func.__name__} will be removed in the future.',
                 category=DeprecationWarning,
                 stacklevel=2,
             )
             warnings.simplefilter('default', DeprecationWarning)  # reset filter
             return func(*args, **kwargs)
+
         setattr(new_func, '__deprecated', True)
         return new_func
+
     return decorator
 
 
@@ -141,6 +159,7 @@ class DeprecationMixinMeta(type):
     Use this as superclass so deprecated methods and properties
     do not appear in vars(MyClass)/dir(MyClass)
     """
+
     def __dir__(cls):
         def is_deprecated(attr):
             if isinstance(attr, property):
@@ -148,7 +167,8 @@ class DeprecationMixinMeta(type):
             return getattr(attr, '__deprecated', False)
 
         return [
-            item for item in type.__dir__(cls)
+            item
+            for item in type.__dir__(cls)
             if not is_deprecated(getattr(cls, item, None))
         ]
 
@@ -177,7 +197,8 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
         isinstance(index, (spmatrix, np.ndarray))
         and index.ndim == 2
         and index.dtype.kind == 'b'
-    ): return index.nonzero()
+    ):
+        return index.nonzero()
 
     if not isinstance(index, tuple):
         return index, slice(None)

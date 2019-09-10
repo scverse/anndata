@@ -1,15 +1,12 @@
 from collections.abc import Mapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
-from typing import Callable, Optional, Tuple, Type, TypeVar, Union
+from typing import Callable, Optional, Type, TypeVar, Union
 
 import h5py as h5py
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_string_dtype,
-    is_categorical_dtype
-)
+from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
 from .. import h5py as adh5py
@@ -30,9 +27,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
     new_dtype = []
     for dt_name, dt_type in value.dtype.descr:
         if dt_type[1] == "U":
-            new_dtype.append(
-                (dt_name, h5py.special_dtype(vlen=str))
-            )
+            new_dtype.append((dt_name, h5py.special_dtype(vlen=str)))
         else:
             new_dtype.append((dt_name, dt_type))
     return value.astype(new_dtype)
@@ -43,7 +38,7 @@ def write_h5ad(
     adata: AnnData,
     force_dense: bool = False,
     dataset_kwargs: Mapping = {},
-    **kwargs
+    **kwargs,
 ) -> None:
     """Write ``.h5ad``-formatted hdf5 file.
 
@@ -140,7 +135,9 @@ def write_none(f, key, value, dataset_kwargs={}):
 
 
 def write_scalar(f, key, value, dataset_kwargs={}):
-    if "compression" in dataset_kwargs:  # Can't compress scalars, error is thrown
+    if (
+        "compression" in dataset_kwargs
+    ):  # Can't compress scalars, error is thrown
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs.pop("compression")
     write_array(f, key, np.array(value), dataset_kwargs)
@@ -210,7 +207,7 @@ H5AD_WRITE_REGISTRY = {
     sparse.spmatrix: write_basic,
     adh5py.SparseDataset: write_basic,
     pd.DataFrame: write_dataframe,
-    Mapping: write_mapping
+    Mapping: write_mapping,
 }
 
 
@@ -253,7 +250,7 @@ def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
 def read_h5ad(
     filename: Union[str, Path],
     backed: Optional[Union[str, bool]] = None,
-    chunk_size=None
+    chunk_size=None,
 ) -> AnnData:
     """Read ``.h5ad``-formatted hdf5 file.
 
@@ -298,7 +295,9 @@ def read_h5ad(
         if "raw.X" in f:
             raw["X"] = read_attribute(f["raw.X"])
         if len(raw) > 0:
-            assert "raw" not in d, f"File {filename} has both legacy and current raw formats."
+            assert (
+                "raw" not in d
+            ), f"File {filename} has both legacy and current raw formats."
             d["raw"] = raw
 
     if d.get("X", None) is not None:
@@ -369,10 +368,14 @@ def read_dataset(dataset: adh5py.Dataset):
         pass
     elif issubclass(value.dtype.type, np.string_):
         value = value.astype(str)
-        if len(value) == 1:  # Backwards compat, old datasets have strings written as one element 1d arrays
+        if (
+            len(value) == 1
+        ):  # Backwards compat, old datasets have strings written as one element 1d arrays
             return value[0]
     elif len(value.dtype.descr) > 1:  # Compound dtype
-        value = _from_fixed_length_strings(value)  # For backwards compat, now strings are written as variable length
+        value = _from_fixed_length_strings(
+            value
+        )  # For backwards compat, now strings are written as variable length
     if value.shape == ():
         value = value[()]
     return value

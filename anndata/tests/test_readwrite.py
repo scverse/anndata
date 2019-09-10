@@ -19,35 +19,33 @@ HERE = Path(__file__).parent
 # Some test data
 # -------------------------------------------------------------------------------
 
-X_sp = csr_matrix([
-    [1, 0, 0],
-    [3, 0, 0],
-    [5, 6, 0],
-    [0, 0, 0],
-    [0, 0, 0]
-])
+X_sp = csr_matrix([[1, 0, 0], [3, 0, 0], [5, 6, 0], [0, 0, 0], [0, 0, 0]])
 
-X_list = [    # data matrix of shape n_obs x n_vars
-    [1, 0],
-    [3, 0],
-    [5, 6],
-]
+X_list = [[1, 0], [3, 0], [5, 6]]  # data matrix of shape n_obs x n_vars
 
 obs_dict = dict(  # annotation of observations / rows
     row_names=['name1', 'name2', 'name3'],  # row annotation
-    oanno1=['cat1', 'cat2', 'cat2'],        # categorical annotation
-    oanno1b=['cat1', 'cat1', 'cat1'],       # categorical annotation with one category
-    oanno1c=['cat1', 'cat1', np.nan],       # categorical annotation with a missing value
-    oanno2=['o1', 'o2', 'o3'],              # string annotation
-    oanno3=[2.1, 2.2, 2.3],                 # float annotation
-    oanno4=[3.3, 1.1, 2.2],                 # float annotation
+    oanno1=['cat1', 'cat2', 'cat2'],  # categorical annotation
+    oanno1b=[
+        'cat1',
+        'cat1',
+        'cat1',
+    ],  # categorical annotation with one category
+    oanno1c=[
+        'cat1',
+        'cat1',
+        np.nan,
+    ],  # categorical annotation with a missing value
+    oanno2=['o1', 'o2', 'o3'],  # string annotation
+    oanno3=[2.1, 2.2, 2.3],  # float annotation
+    oanno4=[3.3, 1.1, 2.2],  # float annotation
 )
 
 var_dict = dict(  # annotation of variables / columns
     vanno1=[3.1, 3.2],
     vanno2=['cat1', 'cat1'],  # categorical annotation
-    vanno3=[2.1, 2.2],                 # float annotation
-    vanno4=[3.3, 1.1],                 # float annotation
+    vanno3=[2.1, 2.2],  # float annotation
+    vanno4=[3.3, 1.1],  # float annotation
 )
 
 uns_dict = dict(  # unstructured annotation
@@ -61,8 +59,8 @@ uns_dict = dict(  # unstructured annotation
         "d": ["some", "strings"],
         "e": np.ones(5),
         "f": np.int32(7),
-        "g": [1, np.float32(2.5)]
-    }
+        "g": [1, np.float32(2.5)],
+    },
 )
 
 
@@ -70,9 +68,11 @@ uns_dict = dict(  # unstructured annotation
 def dataset_kwargs(request):
     return request.param
 
+
 @pytest.fixture(params=["h5ad", "zarr"])
 def diskfmt(request):
     return request.param
+
 
 diskfmt2 = diskfmt
 
@@ -84,10 +84,10 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
     pth1 = tmpdir / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
-    read1 = lambda : getattr(ad, f"read_{diskfmt}")(pth1)
+    read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
     pth2 = tmpdir / f"second.{diskfmt2}"
     write2 = lambda x: getattr(x, f"write_{diskfmt2}")(pth2)
-    read2 = lambda : getattr(ad, f"read_{diskfmt2}")(pth2)
+    read2 = lambda: getattr(ad, f"read_{diskfmt2}")(pth2)
 
     adata1 = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
     write1(adata1)
@@ -282,10 +282,17 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
-@pytest.mark.skipif(not find_spec('loompy'), reason='Loompy is not installed (expected on Python 3.5)')
+@pytest.mark.skipif(
+    not find_spec('loompy'),
+    reason='Loompy is not installed (expected on Python 3.5)',
+)
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
-@pytest.mark.parametrize('obsm_names',[{},{'X_composed':['oanno3', 'oanno4']}])
-@pytest.mark.parametrize('varm_names',[{},{'X_composed2':['vanno3', 'vanno4']}])
+@pytest.mark.parametrize(
+    'obsm_names', [{}, {'X_composed': ['oanno3', 'oanno4']}]
+)
+@pytest.mark.parametrize(
+    'varm_names', [{}, {'X_composed2': ['vanno3', 'vanno4']}]
+)
 def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -299,7 +306,7 @@ def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
         obsm_names=obsm_names,
         varm_names=varm_names,
         cleanup=True,
-        )
+    )
     if isinstance(X, np.ndarray):
         assert np.allclose(adata.X, X)
     else:
@@ -310,11 +317,10 @@ def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
     # as we called with `cleanup=True`
     assert 'oanno1b' in adata.uns['loom-obs']
     assert 'vanno2' in adata.uns['loom-var']
-    for k,v in  obsm_names.items():
+    for k, v in obsm_names.items():
         assert k in adata.obsm_keys() and adata.obsm[k].shape[1] == len(v)
-    for k,v in  varm_names.items():
+    for k, v in varm_names.items():
         assert k in adata.varm_keys() and adata.varm[k].shape[1] == len(v)
-
 
 
 def test_read_csv():
@@ -346,12 +352,29 @@ def test_write_csv(typ, tmp_path):
     adata.write_csvs(tmp_path / 'test_csv_dir', skip_data=False)
 
 
-@pytest.mark.parametrize(['read', 'write', 'name'], [
-    pytest.param(ad.read_h5ad, ad.readwrite.write._write_h5ad, 'test_empty.h5ad'),
-    pytest.param(ad.read_loom, ad.readwrite.write_loom, 'test_empty.loom', marks=pytest.mark.xfail(reason='Loom can’t handle 0×0 matrices')),
-    pytest.param(ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zarr'),
-    pytest.param(ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zip', marks=pytest.mark.xfail(reason='Zarr zip storage doesn’t seem to work…')),
-])
+@pytest.mark.parametrize(
+    ['read', 'write', 'name'],
+    [
+        pytest.param(
+            ad.read_h5ad, ad.readwrite.write._write_h5ad, 'test_empty.h5ad'
+        ),
+        pytest.param(
+            ad.read_loom,
+            ad.readwrite.write_loom,
+            'test_empty.loom',
+            marks=pytest.mark.xfail(reason='Loom can’t handle 0×0 matrices'),
+        ),
+        pytest.param(ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zarr'),
+        pytest.param(
+            ad.read_zarr,
+            ad.readwrite.write_zarr,
+            'test_empty.zip',
+            marks=pytest.mark.xfail(
+                reason='Zarr zip storage doesn’t seem to work…'
+            ),
+        ),
+    ],
+)
 def test_readwrite_hdf5_empty(read, write, name, tmp_path):
     if read is ad.read_zarr:
         pytest.importorskip('zarr')
@@ -370,10 +393,12 @@ def test_write_categorical(tmp_path):
     adata_pth = tmp_path / "adata.h5ad"
     orig = ad.AnnData(
         X=np.ones((5, 5)),
-        obs=pd.DataFrame({
-            "cat1": ["a", "a", "b", np.nan, np.nan],
-            "cat2": pd.Categorical(["a", "a", "b", np.nan, np.nan])
-        })
+        obs=pd.DataFrame(
+            dict(
+                cat1=["a", "a", "b", np.nan, np.nan],
+                cat2=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+            )
+        ),
     )
     orig.write_h5ad(adata_pth)
     curr = ad.read_h5ad(adata_pth)
@@ -383,6 +408,7 @@ def test_write_categorical(tmp_path):
 
 def test_zarr_chunk_X(tmp_path):
     import zarr
+
     zarr_pth = Path(tmp_path) / "test.zarr"
     adata = gen_adata((100, 100), X_type=np.array)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
@@ -391,6 +417,7 @@ def test_zarr_chunk_X(tmp_path):
     assert z["X"].chunks == (10, 10)
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
+
 
 ################################
 # Round-tripping scanpy datasets
@@ -401,6 +428,7 @@ def test_zarr_chunk_X(tmp_path):
 def test_scanpy_pbmc68k(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
     import scanpy as sc
+
     pbmc = sc.datasets.pbmc68k_reduced()
     getattr(pbmc, f"write_{diskfmt}")(filepth)
     read = getattr(ad, f"read_{diskfmt}")(filepth)
@@ -412,8 +440,9 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt):
 def test_scanpy_krumsiek11(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
     import scanpy as sc
+
     orig = sc.datasets.krumsiek11()
-    del orig.uns["highlights"] # Can't write int keys
+    del orig.uns["highlights"]  # Can't write int keys
     getattr(orig, f"write_{diskfmt}")(filepth)
     read = getattr(ad, f"read_{diskfmt}")(filepth)
 
@@ -425,11 +454,12 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.skipif(
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
-    reason="File not present."
+    reason="File not present.",
 )
 def test_backwards_compat_zarr():
     import scanpy as sc
     import zarr
+
     pbmc_orig = sc.datasets.pbmc68k_reduced()
     # Old zarr writer couldn't do sparse arrays
     pbmc_orig.raw._X = pbmc_orig.raw.X.toarray()

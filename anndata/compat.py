@@ -35,7 +35,9 @@ def _from_fixed_length_strings(value):
     for dt in value.dtype.descr:
         dt_list = list(dt)
         dt_type = dt[1]
-        if isinstance(dt_type, tuple):  # vlen strings, could probably match better
+        if isinstance(
+            dt_type, tuple
+        ):  # vlen strings, could probably match better
             dt_list[1] = "O"
             new_dtype.append(tuple(dt_list))
         elif issubclass(np.dtype(dt_type).type, np.string_):
@@ -52,7 +54,9 @@ def _clean_uns(d: dict):
     for k, v in d.get("uns", {}).items():
         if k.endswith('_categories'):
             k_stripped = k.replace('_categories', '')
-            if isinstance(v, (str, int)):  # fix categories with a single category
+            if isinstance(
+                v, (str, int)
+            ):  # fix categories with a single category
                 v = [v]
             for ann in ['obs', 'var']:
                 if k_stripped in d[ann]:
