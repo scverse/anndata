@@ -1,4 +1,4 @@
-from .core.anndata import AnnData, Raw
+from .core.anndata import AnnData, Raw, ImplicitModificationWarning
 from .readwrite import (
     read_h5ad,
     read_loom,
