@@ -14,6 +14,7 @@ import zarr
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
 from .utils import report_key_on_error
+from . import WriteWarning
 
 
 T = TypeVar("T")
@@ -61,7 +62,8 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs={}):
         if not isinstance(key, str):
             warnings.warn(
                 f"dict key {key} transformed to str upon writing to zarr, using "
-                "string keys is recommended."
+                "string keys is recommended.",
+                WriteWarning,
             )
         write_attribute(f, f"{key}/{sub_k}", sub_v, dataset_kwargs)
 

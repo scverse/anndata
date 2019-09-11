@@ -86,18 +86,17 @@ intersphinx_mapping = dict(
 
 
 html_theme = 'sphinx_rtd_theme'
-html_theme_options = dict(
-    navigation_depth=2,
-)
+html_theme_options = dict(navigation_depth=2)
 html_context = dict(
-    display_github=True,      # Integrate GitHub
-    github_user='theislab',   # Username
-    github_repo='anndata',    # Repo name
+    display_github=True,  # Integrate GitHub
+    github_user='theislab',  # Username
+    github_repo='anndata',  # Repo name
     github_version='master',  # Version
-    conf_py_path='/docs/',    # Path in the checkout to the docs root
+    conf_py_path='/docs/',  # Path in the checkout to the docs root
 )
 html_static_path = ['_static']
 html_show_sphinx = False
+
 
 def setup(app):
     app.add_stylesheet('css/custom.css')
@@ -108,12 +107,16 @@ def setup(app):
 
 htmlhelp_basename = f'{project}doc'
 doc_title = f'{project} Documentation'
-latex_documents = [
-    (master_doc, f'{project}.tex', doc_title, author, 'manual'),
-]
-man_pages = [
-    (master_doc, project, doc_title, [author], 1)
-]
+latex_documents = [(master_doc, f'{project}.tex', doc_title, author, 'manual')]
+man_pages = [(master_doc, project, doc_title, [author], 1)]
 texinfo_documents = [
-    (master_doc, project, doc_title, author, project, 'One line description of project.', 'Miscellaneous'),
+    (
+        master_doc,
+        project,
+        doc_title,
+        author,
+        project,
+        'One line description of project.',
+        'Miscellaneous',
+    )
 ]

@@ -66,11 +66,11 @@ def test_setting_ndarray(adata):
 def test_setting_sparse(adata):
     obsp_sparse = sparse.random(M, M)
     adata.obsp["a"] = obsp_sparse
-    assert np.all((adata.obsp["a"] == obsp_sparse).data)
+    assert not np.any((adata.obsp["a"] != obsp_sparse).data)
 
     varp_sparse = sparse.random(N, N)
     adata.varp["a"] = varp_sparse
-    assert np.all((adata.varp["a"] == varp_sparse).data)
+    assert not np.any((adata.varp["a"] != varp_sparse).data)
 
     h = joblib.hash(adata)
 

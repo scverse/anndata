@@ -8,7 +8,7 @@ from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from ..logging import anndata_logger as logger
-from .anndata import ZappyArray
+from ..compat import ZappyArray
 
 
 class ViewArgs(NamedTuple):
@@ -18,9 +18,10 @@ class ViewArgs(NamedTuple):
 
 
 class _SetItemMixin:
-    """
-    Class which (when values are being set) lets their parent anndata view know, so it can make
-    a copy of itself. This implements copy-on-modify semantics for views of AnnData objects.
+    """\
+    Class which (when values are being set) lets their parent anndata view know,
+    so it can make a copy of itself.
+    This implements copy-on-modify semantics for views of AnnData objects.
     """
 
     def __setitem__(self, idx: Any, value: Any):

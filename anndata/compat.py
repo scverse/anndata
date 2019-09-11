@@ -1,7 +1,36 @@
-import warnings
-
 import numpy as np
 import pandas as pd
+
+
+# try importing zarr, dask, and zappy
+try:
+    from zarr.core import Array as ZarrArray
+except ImportError:
+
+    class ZarrArray:
+        @staticmethod
+        def __repr__():
+            return 'mock zarr.core.Array'
+
+
+try:
+    from zappy.base import ZappyArray
+except ImportError:
+
+    class ZappyArray:
+        @staticmethod
+        def __repr__():
+            return 'mock zappy.base.ZappyArray'
+
+
+try:
+    from dask.array import Array as DaskArray
+except ImportError:
+
+    class DaskArray:
+        @staticmethod
+        def __repr__():
+            return 'mock dask.array.core.Array'
 
 
 def version(package):
@@ -10,20 +39,6 @@ def version(package):
     except ImportError:
         from importlib_metadata import version
     return version(package)
-
-
-def warn_flatten():
-    warnings.warn(
-        "In anndata v0.7+, arrays contained within an AnnData object will "
-        "maintain their dimensionality. For example, prior to v0.7 `adata[0, 0].X`"
-        " returned a scalar and `adata[0, :]` returned a 1d array, post v0.7 they"
-        " will return two dimensional arrays. If you would like to get a one "
-        "dimensional array from your AnnData object, consider using the "
-        "`adata.obs_vector`, `adata.var_vector` methods or accessing the array"
-        " directly.",
-        FutureWarning,
-        stacklevel=2,
-    )
 
 
 def _from_fixed_length_strings(value):
