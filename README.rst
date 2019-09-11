@@ -8,8 +8,8 @@
    :target: https://anndata.readthedocs.io
 .. |Build Status| image:: https://travis-ci.org/theislab/anndata.svg?branch=master
    :target: https://travis-ci.org/theislab/anndata
-.. |Coverage| image:: https://codecov.io/gh/theislab/anndata/branch/master/graph/badge.svg
-   :target: https://codecov.io/gh/theislab/anndata
+.. |Coverage| image:: https://api.codacy.com/project/badge/Coverage/b92ae35b691141ceb5f2ee74beaf39d3
+   :target: https://www.codacy.com/manual/theislab/anndata
 
 anndata - Annotated Data
 ========================
