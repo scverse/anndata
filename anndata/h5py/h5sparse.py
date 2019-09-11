@@ -54,7 +54,7 @@ def get_format_str(data):
     for fmt, backed_class, memory_class in FORMATS:
         if isinstance(data, memory_class):
             return fmt
-    raise ValueError("Data type {} is not supported.".format(type(data)))
+    raise ValueError(f"Data type {type(data)} is not supported.")
 
 
 def get_memory_class(format_str):

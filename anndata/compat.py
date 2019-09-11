@@ -56,7 +56,7 @@ def _from_fixed_length_strings(value):
             dt_list[1] = "O"
             new_dtype.append(tuple(dt_list))
         elif issubclass(np.dtype(dt_type).type, np.string_):
-            dt_list[1] = 'U{}'.format(int(dt_type[2:]))
+            dt_list[1] = f'U{int(dt_type[2:])}'
             new_dtype.append(tuple(dt_list))
         else:
             new_dtype.append(dt)

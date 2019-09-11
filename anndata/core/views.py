@@ -30,9 +30,7 @@ class _SetItemMixin:
         else:
             adata_view, attr_name, keys = self._view_args
             logger.warning(
-                'Trying to set attribute `.{}` of view, making a copy.'.format(
-                    attr_name
-                )
+                f'Trying to set attribute `.{attr_name}` of view, copying.'
             )
             new = adata_view.copy()
             attr = getattr(new, attr_name)
@@ -46,7 +44,7 @@ class _ViewMixin(_SetItemMixin):
         self,
         *args,
         view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
-        **kwargs
+        **kwargs,
     ):
         if view_args is not None:
             view_args = ViewArgs(*view_args)
@@ -106,7 +104,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 @singledispatch
 def asview(obj, view_args):
     raise NotImplementedError(
-        "No view type has been registered for {}".format(type(obj))
+        f"No view type has been registered for {type(obj)}"
     )
 
 
