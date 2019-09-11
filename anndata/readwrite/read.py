@@ -361,9 +361,7 @@ def _read_text(
         else:
             if delimiter is not None and delimiter not in line:
                 raise ValueError(
-                    'Did not find delimiter "{}" in first line.'.format(
-                        delimiter
-                    )
+                    f'Did not find delimiter "{delimiter}" in first line.'
                 )
             line_list = line.split(delimiter)
             # the first column might be row names, so check the last

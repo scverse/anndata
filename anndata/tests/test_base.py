@@ -655,7 +655,7 @@ def test_1d_slice_dtypes():
             float=np.arange(N, dtype=float),
             obj=[str(i) for i in np.arange(N, dtype=int)],
         ),
-        index=["cell{}".format(i) for i in np.arange(N, dtype=int)],
+        index=[f"cell{i}" for i in np.arange(N, dtype=int)],
     )
     var_df = pd.DataFrame(
         dict(
@@ -664,7 +664,7 @@ def test_1d_slice_dtypes():
             float=np.arange(M, dtype=float),
             obj=[str(i) for i in np.arange(M, dtype=int)],
         ),
-        index=["gene{}".format(i) for i in np.arange(M, dtype=int)],
+        index=[f"gene{i}" for i in np.arange(M, dtype=int)],
     )
     adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
 
