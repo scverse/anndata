@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import anndata as ad
-from anndata.readwrite import WriteWarning
+from anndata.core.anndata import ImplicitModificationWarning
 
 
 # -------------------------------------------------------------------------------
@@ -53,7 +53,9 @@ def test_raw(backing_h5ad):
     assert adata.raw.var_names.tolist() == ['var1', 'var2', 'var3']
 
     # read write
-    with pytest.warns(WriteWarning, match="Initializing view as actual"):
+    with pytest.warns(
+        ImplicitModificationWarning, match="Initializing view as actual"
+    ):
         # TODO: don’t modify adata just to write it
         adata.write(backing_h5ad)
     adata = ad.read(backing_h5ad)
