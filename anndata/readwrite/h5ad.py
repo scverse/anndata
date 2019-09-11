@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
 from typing import Callable, Optional, Type, TypeVar, Union
+from warnings import warn
 
 import h5py as h5py
 import numpy as np
@@ -178,9 +179,15 @@ def write_series(f, key, series, dataset_kwargs={}):
             **dataset_kwargs,
         )
     elif is_categorical_dtype(series):
-        f.create_dataset(key, shape=series.shape, dtype=series.cat.codes.dtype)
-        f[key][:] = series.cat.codes
-        f[key].attrs["categories"] = list(series.cat.categories)
+        cats = series.cat.categories.values
+        codes = series.cat.codes.values
+        category_key = f"_{key}_categories"  # TODO: Decide on naming convention here
+        if category_key in f:
+            # TODO: figure out what to do in case of name collision
+            raise NotImplementedError()
+        write_array(f, category_key, cats, dataset_kwargs)
+        code_dset = f.create_dataset(key, data=codes)
+        code_dset.attrs["categories"] = f[category_key].ref
     else:
         f[key] = series.values
 
@@ -327,22 +334,42 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
 def read_dataframe(group) -> pd.DataFrame:
     if not isinstance(group, adh5py.Group):
         return read_dataframe_legacy(group)
-    df = pd.DataFrame({k: read_series(group[k]) for k in group.keys()})
-    df.set_index(group.attrs["_index"], inplace=True)
-    if group.attrs["_index"] == "_index":
-        df.index.name = None
-    if "column-order" in group.attrs:  # TODO: Should this be optional?
-        assert set(group.attrs["column-order"]) == set(df.columns)
-        df = df[group.attrs["column-order"]]
+    columns = list(group.attrs["column-order"])
+    idx_key = group.attrs["_index"]
+    df = pd.DataFrame(
+        {k: read_series(group[k]) for k in columns},
+        index=read_series(group[idx_key]),
+        columns=list(columns)
+    )
+    if idx_key != "_index":
+        df.index.name = idx_key
     return df
 
 
 @report_key_on_error
 def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
-        return pd.Categorical.from_codes(
-            dataset[...], dataset.attrs["categories"], ordered=False
-        )
+        categories = dataset.attrs["categories"]
+        if isinstance(categories, h5py.Reference):
+            return pd.Categorical.from_codes(
+                dataset[...],
+                dataset.parent[dataset.attrs["categories"]][...],
+                ordered=False
+            )
+        else:
+            # TODO: remove this code at some point post 0.7
+            # TODO: Add tests for this
+            warn(
+                f"Your file '{dataset.file.name}' has invalid categorical "
+                "encodings due to being written from a development version of "
+                "AnnData. Rewrite the file ensure you can read it in the future.",
+                FutureWarning
+            )
+            return pd.Categorical.from_codes(
+                dataset[...],
+                dataset.attrs["categories"],
+                ordered=False
+            )
     else:
         return dataset[...]
 
