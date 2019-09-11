@@ -17,7 +17,7 @@ script:
   - python setup.py check --restructuredtext --strict
   - rst2html.py --halt=2 README.rst >/dev/null
 after_success:
-  - codecov
+  - python-codacy-coverage -r coverage.xml
 jobs:
   include:
       - stage: static analysis
