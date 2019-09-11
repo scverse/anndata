@@ -96,7 +96,7 @@ def test_views():
 def test_modify_view_component(matrix_type, mapping_name):
     adata = ad.AnnData(
         np.zeros((10, 10)),
-        **{mapping_name: {"m": matrix_type(asarray(sparse.random(10, 10)))}}
+        **{mapping_name: {"m": matrix_type(asarray(sparse.random(10, 10)))}},
     )
     init_hash = joblib.hash(adata)
 
