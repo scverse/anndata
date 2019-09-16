@@ -53,8 +53,13 @@ def _from_fixed_length_strings(value):
         if isinstance(
             dt_type, tuple
         ):  # vlen strings, could probably match better
-            dt_list[1] = "O"
-            new_dtype.append(tuple(dt_list))
+            # Fixing issues with h5py v2.10.0, could be cleaner
+            if issubclass(np.dtype(dt_type[0]).type, np.string_):
+                dt_list[1] = 'U{}'.format(int(dt_type[0][2:]))
+                new_dtype.append(tuple(dt_list))
+            else:
+                dt_list[1] = "O"
+                new_dtype.append(tuple(dt_list))
         elif issubclass(np.dtype(dt_type).type, np.string_):
             dt_list[1] = f'U{int(dt_type[2:])}'
             new_dtype.append(tuple(dt_list))
