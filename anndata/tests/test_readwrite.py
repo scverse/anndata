@@ -410,7 +410,12 @@ def test_write_large_categorical(tmp_path, diskfmt):
     M = int(1e5)
     N = 1000
     ls = np.array(list(ascii_letters))
-    cats = np.array(sorted("".join(np.random.choice(ls, np.random.choice(range(5, 30)))) for i in range(10000)))
+    cats = np.array(
+        sorted(
+            "".join(np.random.choice(ls, np.random.choice(range(5, 30))))
+            for i in range(10000)
+        )
+    )
     adata_pth = tmp_path / f"adata.{diskfmt}"
     n_cats = len(np.unique(cats))
     orig = ad.AnnData(
@@ -418,13 +423,16 @@ def test_write_large_categorical(tmp_path, diskfmt):
         obs=pd.DataFrame(
             dict(
                 cat1=cats[np.random.choice(n_cats, M)],
-                cat2=pd.Categorical.from_codes(np.random.choice(n_cats, M), cats),
+                cat2=pd.Categorical.from_codes(
+                    np.random.choice(n_cats, M), cats
+                ),
             )
         ),
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
     curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
     assert_equal(orig, curr)
+
 
 def test_zarr_chunk_X(tmp_path):
     import zarr

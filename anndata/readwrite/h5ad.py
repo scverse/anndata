@@ -181,7 +181,9 @@ def write_series(f, key, series, dataset_kwargs={}):
     elif is_categorical_dtype(series):
         cats = series.cat.categories.values
         codes = series.cat.codes.values
-        category_key = f"_{key}_categories"  # TODO: Decide on naming convention here
+        category_key = (
+            f"_{key}_categories"
+        )  # TODO: Decide on naming convention here
         if category_key in f:
             # TODO: figure out what to do in case of name collision
             raise NotImplementedError()
@@ -339,7 +341,7 @@ def read_dataframe(group) -> pd.DataFrame:
     df = pd.DataFrame(
         {k: read_series(group[k]) for k in columns},
         index=read_series(group[idx_key]),
-        columns=list(columns)
+        columns=list(columns),
     )
     if idx_key != "_index":
         df.index.name = idx_key
@@ -354,7 +356,7 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
             return pd.Categorical.from_codes(
                 dataset[...],
                 dataset.parent[dataset.attrs["categories"]][...],
-                ordered=False
+                ordered=False,
             )
         else:
             # TODO: remove this code at some point post 0.7
@@ -363,12 +365,10 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
                 f"Your file '{dataset.file.name}' has invalid categorical "
                 "encodings due to being written from a development version of "
                 "AnnData. Rewrite the file ensure you can read it in the future.",
-                FutureWarning
+                FutureWarning,
             )
             return pd.Categorical.from_codes(
-                dataset[...],
-                dataset.attrs["categories"],
-                ordered=False
+                dataset[...], dataset.attrs["categories"], ordered=False
             )
     else:
         return dataset[...]
