@@ -181,9 +181,7 @@ def write_series(f, key, series, dataset_kwargs={}):
     elif is_categorical_dtype(series):
         cats = series.cat.categories.values
         codes = series.cat.codes.values
-        category_key = (
-            f"_{key}_categories"
-        )  # TODO: Decide on naming convention here
+        category_key = f"_{key}_categories"
         if category_key in f:
             # TODO: figure out what to do in case of name collision
             raise NotImplementedError()
