@@ -154,6 +154,12 @@ def write_array(f, key, value, dataset_kwargs={}):
 
 
 def write_dataframe(f, key, df, dataset_kwargs={}):
+    # Check arguments
+    for reserved in ("__categories", "_index"):
+        if reserved in df.columns:
+            raise ValueError(
+                f"'{reserved}' is a reserved name for dataframe columns."
+            )
     group = f.h5f.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
     group.attrs["encoding-version"] = "0.1.0"
@@ -164,6 +170,7 @@ def write_dataframe(f, key, df, dataset_kwargs={}):
     else:
         index_name = "_index"
     group.attrs["_index"] = index_name
+
     write_series(group, index_name, df.index, dataset_kwargs)
     for colname, series in df.items():
         write_series(group, colname, series, dataset_kwargs)
@@ -181,10 +188,8 @@ def write_series(f, key, series, dataset_kwargs={}):
     elif is_categorical_dtype(series):
         cats = series.cat.categories.values
         codes = series.cat.codes.values
-        category_key = f"_{key}_categories"
-        if category_key in f:
-            # TODO: figure out what to do in case of name collision
-            raise NotImplementedError()
+        category_key = f"__categories/{key}"
+
         write_array(f, category_key, cats, dataset_kwargs)
         code_dset = f.create_dataset(key, data=codes)
         code_dset.attrs["categories"] = f[category_key].ref

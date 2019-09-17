@@ -406,6 +406,26 @@ def test_write_categorical(tmp_path):
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
 
 
+def test_dataframe_reserved_columns(tmp_path):
+    reserved = ("_index", "__categories")
+    adata_pth = tmp_path / "adata.h5ad"
+    orig = ad.AnnData(X=np.ones((5, 5)))
+    for colname in reserved:
+        to_write = orig.copy()
+        to_write.obs[colname] = np.ones(5)
+        with pytest.raises(ValueError) as e:
+            to_write.write(adata_pth)
+        assert colname in str(e.value)
+    for colname in reserved:
+        to_write = orig.copy()
+        to_write.varm["df"] = pd.DataFrame(
+            {colname: list("aabcd")}, index=to_write.var_names
+        )
+        with pytest.raises(ValueError) as e:
+            to_write.write(adata_pth)
+        assert colname in str(e.value)
+
+
 def test_write_large_categorical(tmp_path, diskfmt):
     M = 30_000
     N = 1000
