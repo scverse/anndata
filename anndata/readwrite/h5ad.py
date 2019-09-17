@@ -176,10 +176,10 @@ def write_dataframe(f, key, df, dataset_kwargs={}):
         write_series(group, colname, series, dataset_kwargs)
 
 
-def write_series(f, key, series, dataset_kwargs={}):
-    # f has to be actual h5py type, otherwise categoricals won't write
+def write_series(group, key, series, dataset_kwargs={}):
+    # group here is an h5py type, otherwise categoricals won't write
     if series.dtype == object:  # Assuming it's string
-        f.create_dataset(
+        group.create_dataset(
             key,
             data=series.values,
             dtype=h5py.special_dtype(vlen=str),
@@ -190,11 +190,11 @@ def write_series(f, key, series, dataset_kwargs={}):
         codes = series.cat.codes.values
         category_key = f"__categories/{key}"
 
-        write_array(f, category_key, cats, dataset_kwargs)
-        code_dset = f.create_dataset(key, data=codes)
-        code_dset.attrs["categories"] = f[category_key].ref
+        write_array(group, category_key, cats, dataset_kwargs)
+        write_array(group, key, codes, dataset_kwargs)
+        group[key].attrs["categories"] = group[category_key].ref
     else:
-        f[key] = series.values
+        group[key] = series.values
 
 
 def write_mapping(f, key, value, dataset_kwargs={}):
