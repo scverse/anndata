@@ -50,21 +50,17 @@ def _from_fixed_length_strings(value):
     for dt in value.dtype.descr:
         dt_list = list(dt)
         dt_type = dt[1]
-        if isinstance(
-            dt_type, tuple
-        ):  # vlen strings, could probably match better
-            # Fixing issues with h5py v2.10.0, could be cleaner
-            if issubclass(np.dtype(dt_type[0]).type, np.string_):
-                dt_list[1] = 'U{}'.format(int(dt_type[0][2:]))
-                new_dtype.append(tuple(dt_list))
-            else:
-                dt_list[1] = "O"
-                new_dtype.append(tuple(dt_list))
-        elif issubclass(np.dtype(dt_type).type, np.string_):
-            dt_list[1] = f'U{int(dt_type[2:])}'
-            new_dtype.append(tuple(dt_list))
-        else:
-            new_dtype.append(dt)
+        # could probably match better
+        is_annotated = isinstance(dt_type, tuple)
+        if is_annotated:
+            dt_type = dt_type[0]
+        # Fixing issue introduced with h5py v2.10.0, see:
+        # https://github.com/h5py/h5py/issues/1307
+        if issubclass(np.dtype(dt_type).type, np.string_):
+            dt_list[1] = f"U{int(dt_type[2:])}"
+        elif is_annotated:
+            dt_list[1] = "O"  # Assumption that it's a vlen str
+        new_dtype.append(tuple(dt_list))
     return value.astype(new_dtype)
 
 
