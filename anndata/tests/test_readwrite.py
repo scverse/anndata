@@ -389,8 +389,8 @@ def test_read_excel():
     assert adata.X.tolist() == X_list
 
 
-def test_write_categorical(tmp_path):
-    adata_pth = tmp_path / "adata.h5ad"
+def test_write_categorical(tmp_path, diskfmt):
+    adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
         X=np.ones((5, 5)),
         obs=pd.DataFrame(
@@ -400,21 +400,22 @@ def test_write_categorical(tmp_path):
             )
         ),
     )
-    orig.write_h5ad(adata_pth)
-    curr = ad.read_h5ad(adata_pth)
+    getattr(orig, f"write_{diskfmt}")(adata_pth)
+    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
     assert np.all(orig.obs.notna() == curr.obs.notna())
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
 
 
-def test_dataframe_reserved_columns(tmp_path):
+def test_dataframe_reserved_columns(tmp_path, diskfmt):
     reserved = ("_index", "__categories")
-    adata_pth = tmp_path / "adata.h5ad"
+    adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(X=np.ones((5, 5)))
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
         with pytest.raises(ValueError) as e:
-            to_write.write(adata_pth)
+            getattr(to_write, f"write_{diskfmt}")(adata_pth)
+            # to_write.write(adata_pth)
         assert colname in str(e.value)
     for colname in reserved:
         to_write = orig.copy()
@@ -422,7 +423,8 @@ def test_dataframe_reserved_columns(tmp_path):
             {colname: list("aabcd")}, index=to_write.var_names
         )
         with pytest.raises(ValueError) as e:
-            to_write.write(adata_pth)
+            getattr(to_write, f"write_{diskfmt}")(adata_pth)
+            # to_write.write(adata_pth)
         assert colname in str(e.value)
 
 

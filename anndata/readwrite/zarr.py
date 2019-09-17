@@ -2,7 +2,7 @@ from collections.abc import Mapping, MutableMapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
 from typing import Callable, Type, TypeVar, Union
-import warnings
+from warnings import warn
 
 import numpy as np
 from scipy import sparse
@@ -60,7 +60,7 @@ def write_attribute(f, key, value, dataset_kwargs={}):
 def write_mapping(f, key, value: Mapping, dataset_kwargs={}):
     for sub_k, sub_v in value.items():
         if not isinstance(key, str):
-            warnings.warn(
+            warn(
                 f"dict key {key} transformed to str upon writing to zarr, using "
                 "string keys is recommended.",
                 WriteWarning,
@@ -68,38 +68,49 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs={}):
         write_attribute(f, f"{key}/{sub_k}", sub_v, dataset_kwargs)
 
 
-def write_dataframe(z, k, df, dataset_kwargs={}):
-    g = z.create_group(k)
-    g.attrs["encoding-type"] = "dataframe"
-    g.attrs["encoding-version"] = "0.1.0"
-    g.attrs["column-order"] = list(df.columns)
+def write_dataframe(z, key, df, dataset_kwargs={}):
+    # Check arguments
+    for reserved in ("__categories", "_index"):
+        if reserved in df.columns:
+            raise ValueError(
+                f"'{reserved}' is a reserved name for dataframe columns."
+            )
+    group = z.create_group(key)
+    group.attrs["encoding-type"] = "dataframe"
+    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["column-order"] = list(df.columns)
 
     if df.index.name is not None:
         index_name = df.index.name
     else:
         index_name = "_index"
-    g.attrs["_index"] = index_name
-    write_series(g, index_name, df.index, dataset_kwargs)
+    group.attrs["_index"] = index_name
+
+    write_series(group, index_name, df.index, dataset_kwargs)
     for colname, series in df.items():
-        write_series(g, colname, series, dataset_kwargs)
+        write_series(group, colname, series, dataset_kwargs)
 
 
-def write_series(g, k, s, dataset_kwargs={}):
-    if s.dtype == object:
-        g.create_dataset(
-            k,
-            shape=s.shape,
+def write_series(group, key, series, dataset_kwargs={}):
+    if series.dtype == object:
+        group.create_dataset(
+            key,
+            shape=series.shape,
             dtype=object,
             object_codec=numcodecs.VLenUTF8(),
             **dataset_kwargs,
         )
-        g[k][:] = s.values
-    elif is_categorical_dtype(s):
-        g.create_dataset(k, shape=s.shape, dtype=s.cat.codes.dtype)
-        g[k][:] = s.cat.codes
-        g[k].attrs["categories"] = list(s.cat.categories)
+        group[key][:] = series.values
+    elif is_categorical_dtype(series):
+        cats = series.cat.categories.values
+        codes = series.cat.codes.values
+        category_key = f"__categories/{key}"
+
+        write_array(group, category_key, cats, dataset_kwargs)
+        write_array(group, key, codes, dataset_kwargs)
+        group[key].attrs["categories"] = category_key
     else:
-        g[k] = s.values
+        group[key] = series.values
 
 
 def write_not_implemented(f, key, value, dataset_kwargs={}):
@@ -298,24 +309,37 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 
 
 @report_key_on_error
-def read_dataframe(g) -> pd.DataFrame:
-    if isinstance(g, zarr.Array):
-        return read_dataframe_legacy(g)
-    df = pd.DataFrame({k: read_series(g[k]) for k in g.keys()})
-    df.set_index(g.attrs["_index"], inplace=True)
-    if g.attrs["_index"] == "_index":
-        df.index.name = None
-    if "column-order" in g.attrs:
-        assert set(g.attrs["column-order"]) == set(df.columns)
-        df = df[g.attrs["column-order"]]
+def read_dataframe(group) -> pd.DataFrame:
+    if isinstance(group, zarr.Array):
+        return read_dataframe_legacy(group)
+    columns = list(group.attrs["column-order"])
+    idx_key = group.attrs["_index"]
+    df = pd.DataFrame(
+        {k: read_series(group[k]) for k in columns},
+        index=read_series(group[idx_key]),
+        columns=list(columns),
+    )
+    if idx_key != "_index":
+        df.index.name = idx_key
     return df
 
 
 @report_key_on_error
-def read_series(d: zarr.Array) -> Union[zarr.Array, pd.Categorical]:
-    if "categories" in d.attrs:
-        return pd.Categorical.from_codes(
-            d, d.attrs["categories"], ordered=False
-        )
+def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
+    if "categories" in dataset.attrs:
+        categories = dataset.attrs["categories"]
+        if isinstance(categories, str):
+            parent = zarr.open(dataset.store)[dataset.name.rstrip(dataset.basename)]
+            categories = parent[categories][...]
+        else:
+            # TODO: remove this code at some point post 0.7
+            # TODO: Add tests for this
+            warn(
+                f"Your file '{dataset.file.name}' has invalid categorical "
+                "encodings due to being written from a development version of "
+                "AnnData. Rewrite the file ensure you can read it in the future.",
+                FutureWarning,
+            )
+        return pd.Categorical.from_codes(dataset[...], categories, ordered=False)
     else:
-        return d
+        return dataset[...]
