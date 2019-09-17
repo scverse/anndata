@@ -245,7 +245,7 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix, csc_matrix])
-def test_readwrite_equivolent_h5ad_zarr(typ):
+def test_readwrite_equivalent_h5ad_zarr(typ):
     tmpdir = tempfile.TemporaryDirectory()
     tmpdirpth = Path(tmpdir.name)
     h5ad_pth = tmpdirpth / "adata.h5ad"
@@ -415,7 +415,6 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         to_write.obs[colname] = np.ones(5)
         with pytest.raises(ValueError) as e:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-            # to_write.write(adata_pth)
         assert colname in str(e.value)
     for colname in reserved:
         to_write = orig.copy()
@@ -424,7 +423,6 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         )
         with pytest.raises(ValueError) as e:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-            # to_write.write(adata_pth)
         assert colname in str(e.value)
 
 
