@@ -407,13 +407,13 @@ def test_write_categorical(tmp_path):
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
-    M = int(1e5)
+    M = 30_000
     N = 1000
     ls = np.array(list(ascii_letters))
     cats = np.array(
         sorted(
             "".join(np.random.choice(ls, np.random.choice(range(5, 30))))
-            for i in range(10000)
+            for i in range(int(10_000))
         )
     )
     adata_pth = tmp_path / f"adata.{diskfmt}"
