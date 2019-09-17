@@ -351,11 +351,7 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
         categories = dataset.attrs["categories"]
         if isinstance(categories, h5py.Reference):
-            return pd.Categorical.from_codes(
-                dataset[...],
-                dataset.parent[dataset.attrs["categories"]][...],
-                ordered=False,
-            )
+            categories = dataset.parent[dataset.attrs["categories"]][...]
         else:
             # TODO: remove this code at some point post 0.7
             # TODO: Add tests for this
@@ -365,9 +361,7 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,
             )
-            return pd.Categorical.from_codes(
-                dataset[...], dataset.attrs["categories"], ordered=False
-            )
+        return pd.Categorical.from_codes(dataset[...], categories, ordered=False)
     else:
         return dataset[...]
 
