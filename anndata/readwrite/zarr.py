@@ -329,7 +329,8 @@ def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
         categories = dataset.attrs["categories"]
         if isinstance(categories, str):
-            parent = zarr.open(dataset.store)[dataset.name.rstrip(dataset.basename)]
+            parent_name = dataset.name.rstrip(dataset.basename)
+            parent = zarr.open(dataset.store)[parent_name]
             categories = parent[categories][...]
         else:
             # TODO: remove this code at some point post 0.7
@@ -340,6 +341,8 @@ def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,
             )
-        return pd.Categorical.from_codes(dataset[...], categories, ordered=False)
+        return pd.Categorical.from_codes(
+            dataset[...], categories, ordered=False
+        )
     else:
         return dataset[...]

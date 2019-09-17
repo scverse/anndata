@@ -366,7 +366,9 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,
             )
-        return pd.Categorical.from_codes(dataset[...], categories, ordered=False)
+        return pd.Categorical.from_codes(
+            dataset[...], categories, ordered=False
+        )
     else:
         return dataset[...]
 
