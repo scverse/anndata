@@ -7,8 +7,8 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from anndata.h5py.utils import _chunked_rows
-from anndata.utils import unpack_index
+from ..h5py.utils import _chunked_rows
+from ..utils import unpack_index
 
 
 def create_formats(dataset_class, sparse_dataset_wrapper_class):
@@ -38,10 +38,10 @@ def create_formats(dataset_class, sparse_dataset_wrapper_class):
     backed_csc_matrix._zero_many = _zero_many
 
     return [
-            BackedFormat("csr_matrix", backed_csr_matrix, ss.csr_matrix),
-            BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
-            BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
-            BackedFormat("csc_matrix", backed_csc_matrix, ss.csc_matrix)
+        BackedFormat("csr_matrix", backed_csr_matrix, ss.csr_matrix),
+        BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
+        BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
+        BackedFormat("csc_matrix", backed_csc_matrix, ss.csc_matrix),
     ]
 
 
@@ -51,10 +51,20 @@ class BackedFormat(NamedTuple):
     memory_type: type
 
 
-def add_mapping_impl(dataset_impl_class, group_impl_class, X_encoding_attr_key, X_shape_attr_key, group_wrapper_class,
-                     sparse_dataset_wrapper_class, additional_wrapper_classes):
+def add_mapping_impl(
+    dataset_impl_class,
+    group_impl_class,
+    X_encoding_attr_key,
+    X_shape_attr_key,
+    group_wrapper_class,
+    sparse_dataset_wrapper_class,
+    additional_wrapper_classes,
+):
     formats = create_formats(dataset_impl_class, sparse_dataset_wrapper_class)
-    wrapper_classes = [sparse_dataset_wrapper_class, group_wrapper_class] + additional_wrapper_classes
+    wrapper_classes = [
+        sparse_dataset_wrapper_class,
+        group_wrapper_class,
+    ] + additional_wrapper_classes
     for c in wrapper_classes:
         c.FORMATS = formats
         c.X_ENCODING_FORMAT_ATTR = X_encoding_attr_key
@@ -122,12 +132,23 @@ class Group(Mapping):
         return len(self.group)
 
     def __getitem__(
-            self, key: str
-    ) -> Union['h5py.Group', 'h5py.Dataset', 'zarr.core.Array', 'zarr.hierarchy.Group', 'SparseDataset']:
+        self, key: str
+    ) -> Union[
+        'h5py.Group',
+        'h5py.Dataset',
+        'zarr.core.Array',
+        'zarr.hierarchy.Group',
+        'SparseDataset',
+    ]:
         item = self.group[key]
         if isinstance(item, self.__class__.GROUP_CLASS):
             encoding = item.attrs.get(self.__class__.X_ENCODING_FORMAT_ATTR, '')
-            if encoding == 'csr_matrix' or encoding == 'csc_matrix' or encoding == 'csr' or encoding == 'csc':
+            if (
+                encoding == 'csr_matrix'
+                or encoding == 'csc_matrix'
+                or encoding == 'csr'
+                or encoding == 'csc'
+            ):
                 return self.__class__.SPARSE_DATASET_WRAPPER_CLASS(item)
             else:
                 return self.__class__.GROUP_WRAPPER_CLASS(item)
@@ -150,8 +171,17 @@ class Group(Mapping):
     def __delitem__(self, name):
         self.group.__delitem__(name)
 
-    def __setitem__(self, key: str, value: Union[
-        'h5py.Group', 'h5py.Dataset', 'zarr.hierarchy.Group', 'zarr.core.Array', 'SparseDataset']):
+    def __setitem__(
+        self,
+        key: str,
+        value: Union[
+            'h5py.Group',
+            'h5py.Dataset',
+            'zarr.hierarchy.Group',
+            'zarr.core.Array',
+            'SparseDataset',
+        ],
+    ):
         self.group.__setitem__(key, value)
 
     def keys(self) -> KeysView[str]:
@@ -163,9 +193,7 @@ class Group(Mapping):
                 "`create_dataset` is only supported if `data` is passed."
             )
         if not isinstance(data, SparseDataset) and not ss.issparse(data):
-            return self.group.create_dataset(
-                name=name, data=data, **kwargs
-            )
+            return self.group.create_dataset(name=name, data=data, **kwargs)
         if self.force_dense:
             sds = self.group.create_dataset(
                 name=name, shape=data.shape, dtype=data.dtype, **kwargs
@@ -173,19 +201,24 @@ class Group(Mapping):
             for chunk, start, end in _chunked_rows(data, chunk_size):
                 sds[start:end] = chunk.toarray()
             sds.attrs['sparse_format'] = (
-                    data.format_str
-                    if isinstance(data, SparseDataset)
-                    else get_format_str(data, self.__class__.FORMATS)
+                data.format_str
+                if isinstance(data, SparseDataset)
+                else get_format_str(data, self.__class__.FORMATS)
             )
             return sds
         # SparseDataset or spmatrix
         group = self.group.create_group(name)
         if isinstance(data, SparseDataset):
-            for attr in [self.__class__.X_ENCODING_FORMAT_ATTR, self.__class__.X_SHAPE_ATTR]:
+            for attr in [
+                self.__class__.X_ENCODING_FORMAT_ATTR,
+                self.__class__.X_SHAPE_ATTR,
+            ]:
                 group.attrs[attr] = data.group.attrs[attr]
             get_dataset = data.group.__getitem__
         else:  # ss.issparse(data):
-            group.attrs[self.__class__.X_ENCODING_FORMAT_ATTR] = get_format_str(data, self.__class__.FORMATS)
+            group.attrs[self.__class__.X_ENCODING_FORMAT_ATTR] = get_format_str(
+                data, self.__class__.FORMATS
+            )
             group.attrs[self.__class__.X_SHAPE_ATTR] = data.shape
             get_dataset = lambda d: getattr(data, d)
         for dataset in ['data', 'indices', 'indptr']:
@@ -318,7 +351,9 @@ class SparseDataset:
     def append(self, sparse_matrix):
         shape = self.group.attrs[self.__class__.X_SHAPE_ATTR]
 
-        if self.format_str != get_format_str(sparse_matrix, self.__class__.FORMATS):
+        if self.format_str != get_format_str(
+            sparse_matrix, self.__class__.FORMATS
+        ):
             raise ValueError("Format not the same.")
 
         if self.format_str != 'csr' and self.format_str != 'csr_matrix':
@@ -341,7 +376,7 @@ class SparseDataset:
         new_shape = (orig_data_size + sparse_matrix.indptr.shape[0] - 1,)
         indptr.resize(new_shape)
         indptr[orig_data_size:] = (
-                sparse_matrix.indptr[1:].astype(np.int64) + append_offset
+            sparse_matrix.indptr[1:].astype(np.int64) + append_offset
         )
 
         # indices
@@ -353,6 +388,6 @@ class SparseDataset:
 
         # shape
         self.group.attrs[self.__class__.X_SHAPE_ATTR] = (
-                shape[0] + sparse_matrix.shape[0],
-                max(shape[1], sparse_matrix.shape[1]),
+            shape[0] + sparse_matrix.shape[0],
+            max(shape[1], sparse_matrix.shape[1]),
         )

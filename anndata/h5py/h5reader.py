@@ -1,6 +1,6 @@
 import anndata.mapping as adm
 
-import anndata.h5py as ah5py
+from .. import h5py as ah5py
 import os
 
 
@@ -9,7 +9,6 @@ def read_h5ad(filename, backed=None, chunk_size=None):
 
 
 class Reader(adm.MappingReader):
-
     def __init__(self):
         super().__init__(ah5py.Dataset)
 

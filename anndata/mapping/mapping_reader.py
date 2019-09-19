@@ -7,10 +7,8 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-import anndata as ad
-import anndata.mapping as adm
-from anndata.compat import _clean_uns
-from anndata.compat import _from_fixed_length_strings
+from .. import mapping as adm
+from ..compat import _from_fixed_length_strings, _clean_uns
 
 
 class AnnDataReadError(OSError):
@@ -42,15 +40,12 @@ def report_key_on_error(func):
             if isinstance(e, AnnDataReadError):
                 raise e
             else:
-                raise AnnDataReadError(
-                    str(e)
-                )
+                raise AnnDataReadError(str(e))
 
     return func_wrapper
 
 
 class MappingReader:
-
     def __init__(self, dataset_class):
         self.dataset_class = dataset_class
 
@@ -123,7 +118,7 @@ class MappingReader:
         elif issubclass(value.dtype.type, np.string_):
             value = value.astype(str)
             if (
-                    len(value) == 1
+                len(value) == 1
             ):  # Backwards compat, old datasets have strings written as one element 1d arrays
                 return value[0]
         elif len(value.dtype.descr) > 1:  # Compound dtype
@@ -138,7 +133,11 @@ class MappingReader:
     def read_sparse_dataset(self, value) -> sparse.spmatrix:
         return value.value
 
-    def read(self, filename: Union[str, Path], backed: Optional[Union[str, bool]] = None) -> 'AnnData':
+    def read(
+        self,
+        filename: Union[str, Path],
+        backed: Optional[Union[str, bool]] = None,
+    ) -> 'AnnData':
         """Read ``.h5ad`` and ``.zarr`` formatted hdf5 file.
 
         Parameters
@@ -167,6 +166,7 @@ class MappingReader:
 
         f = self.create_file(filename, mode if mode is not None else 'r')
         import anndata.zarr
+
         if mode is not None and not isinstance(f, anndata.zarr.File):
             # FIXME passing the filename only works for h5 files
             d = {"filename": filename, "filemode": mode}
@@ -190,7 +190,9 @@ class MappingReader:
                 raw["X"] = self.read_attribute(f["raw/X"])
         else:  # Legacy case
             if "raw.var" in f:
-                raw["var"] = self.read_dataframe(f["raw.var"])  # Backwards compat
+                raw["var"] = self.read_dataframe(
+                    f["raw.var"]
+                )  # Backwards compat
             if "raw.varm" in f:
                 raw["varm"] = self.read_attribute(f["raw.varm"])
             if mode is None and "raw.X" in f:
@@ -208,4 +210,6 @@ class MappingReader:
         if mode is not None and not isinstance(f, anndata.zarr.File):
             # FIXME, file will be opened again by backing manager
             self.close_file(f)
-        return ad.AnnData(**d)
+        from anndata import AnnData
+
+        return AnnData(**d)

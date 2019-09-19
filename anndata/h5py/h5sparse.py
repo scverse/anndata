@@ -4,13 +4,12 @@ from typing import Optional
 import h5py
 import numpy as np
 
-import anndata.mapping as adm
+from .. import mapping as adm
 
 Dataset = h5py.Dataset
 
 
 class Group(adm.Group):
-
     def __init__(self, group, force_dense=False):
         super().__init__(group, force_dense)
 
@@ -21,7 +20,9 @@ class SparseDataset(adm.SparseDataset):
 
     @property
     def value(self):
-        format_class = adm.get_memory_class(self.format_str, self.__class__.FORMATS)
+        format_class = adm.get_memory_class(
+            self.format_str, self.__class__.FORMATS
+        )
         object = self.group
         data_array = format_class(self.shape, dtype=self.dtype)
         data_array.data = np.empty(object['data'].shape, object['data'].dtype)
@@ -43,15 +44,15 @@ class File(Group):
     """
 
     def __init__(
-            self,
-            name: PathLike,
-            mode: Optional[str] = None,
-            driver: Optional[str] = None,
-            libver: Optional[str] = None,
-            userblock_size: Optional[int] = None,
-            swmr: bool = False,
-            force_dense: bool = False,
-            **kwds,
+        self,
+        name: PathLike,
+        mode: Optional[str] = None,
+        driver: Optional[str] = None,
+        libver: Optional[str] = None,
+        userblock_size: Optional[int] = None,
+        swmr: bool = False,
+        force_dense: bool = False,
+        **kwds,
     ):
         self.h5f = h5py.File(
             name,
@@ -59,7 +60,7 @@ class File(Group):
             driver=driver,
             libver=libver,
             userblock_size=userblock_size,
-            swmr=swmr
+            swmr=swmr,
         )
         super().__init__(self.h5f, force_dense)
 
@@ -88,8 +89,15 @@ class File(Group):
 
 File.__init__.__doc__ = h5py.File.__init__.__doc__
 
-adm.add_mapping_impl(h5py.Dataset, h5py.Group, 'h5sparse_format', 'h5sparse_shape', Group, SparseDataset, [File,
-                                                                                                           Dataset])
+adm.add_mapping_impl(
+    h5py.Dataset,
+    h5py.Group,
+    'h5sparse_format',
+    'h5sparse_shape',
+    Group,
+    SparseDataset,
+    [File, Dataset],
+)
 
 Group.create_dataset.__doc__ = h5py.Group.create_dataset.__doc__
 Group.create_group.__doc__ = h5py.Group.create_group.__doc__

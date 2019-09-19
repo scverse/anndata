@@ -1,9 +1,10 @@
 import numpy as np
 import scipy.sparse as sparse
 
-import anndata.mapping as adm
-import anndata.zarr as azarr
-from anndata.compat import _from_fixed_length_strings
+
+from .. import mapping as adm
+from .zarrsparse import Dataset, File
+from ..compat import _from_fixed_length_strings
 
 
 def read_zarr(filename, backed=None, chunk_size=None):
@@ -11,9 +12,8 @@ def read_zarr(filename, backed=None, chunk_size=None):
 
 
 class Reader(adm.MappingReader):
-
     def __init__(self):
-        super().__init__(azarr.Dataset)
+        super().__init__(Dataset)
 
     def read_csr(self, group: 'zarr.Group') -> sparse.csr_matrix:
         return sparse.csr_matrix(
@@ -48,7 +48,9 @@ class Reader(adm.MappingReader):
         elif issubclass(value.dtype.type, np.str_):
             value = value.astype(object)
         elif issubclass(value.dtype.type, np.string_):
-            value = value.astype(str).astype(object)  # bytestring -> unicode -> str
+            value = value.astype(str).astype(
+                object
+            )  # bytestring -> unicode -> str
         elif len(value.dtype.descr) > 1:  # Compound dtype
             # For backwards compat, now strings are written as variable length
             value = _from_fixed_length_strings(value)
@@ -57,7 +59,7 @@ class Reader(adm.MappingReader):
         return value
 
     def create_file(self, filename, mode):
-        return azarr.File(filename, mode=mode)
+        return File(filename, mode=mode)
 
     def close_file(self, f):
         pass
