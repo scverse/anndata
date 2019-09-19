@@ -45,6 +45,7 @@ from ..logging import anndata_logger as logger
 from ..compat import ZarrArray, ZappyArray, DaskArray
 import anndata.mapping as adm
 
+
 class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
@@ -768,7 +769,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X = X.astype(dtype)
             elif isinstance(X, ZarrArray):
                 X = X.astype(dtype)
-            elif not isinstance(X, adm.SparseDataset):  # is np.ndarray or a subclass, convert to true np.ndarray
+            elif not isinstance(
+                X, adm.SparseDataset
+            ):  # is np.ndarray or a subclass, convert to true np.ndarray
                 X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X
