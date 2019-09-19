@@ -21,11 +21,8 @@ For examples and further information, see this `blog post <https://falexwolf.de/
    Dataset
    SparseDataset
 """
-from h5py import Dataset, special_dtype
+from .zarrsparse import File, Group, SparseDataset, Dataset
+from .zarrreader import Reader, read_zarr
 
-from .h5sparse import Group, File, SparseDataset
-
-from .h5reader import read_h5ad
 # Problem: the H5py intersphinx is broken, and only contains e.g. `Dataset` directly.
 # So we can’t possibly link to it using :class:`Dataset`, since that will always find our version.
-Dataset.__doc__ = """Equivalent to :class:`h5py.Dataset <h5py:Dataset>`."""

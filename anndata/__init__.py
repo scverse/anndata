@@ -1,18 +1,16 @@
 from .core.anndata import AnnData, Raw
+from .h5py import read_h5ad
+from .h5py import read_h5ad as read  # backwards compat / shortcut for default format
 from .readwrite import (
-    read_h5ad,
     read_loom,
     read_hdf,
     read_excel,
     read_umi_tools,
     read_csv,
     read_text,
-    read_mtx,
-    read_zarr,
+    read_mtx
 )
-from .readwrite import (
-    read_h5ad as read,
-)  # backwards compat / shortcut for default format
+from .zarr import read_zarr
 
 __doc__ = """\
 API
@@ -89,9 +87,9 @@ __author__ = ', '.join(
 )
 __email__ = ', '.join(
     [
-        'philipp.angerer@helmholtz-muenchen.de',
-        'f.alex.wolf@gmx.de',
-        # We don’t need all, the main authors are sufficient.
+            'philipp.angerer@helmholtz-muenchen.de',
+            'f.alex.wolf@gmx.de',
+            # We don’t need all, the main authors are sufficient.
     ]
 )
 

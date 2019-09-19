@@ -43,7 +43,7 @@ from .. import h5py, utils
 from ..utils import Index1D, Index, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
 from ..compat import ZarrArray, ZappyArray, DaskArray
-
+import anndata.mapping as adm
 
 class StorageType(Enum):
     Array = np.ndarray
@@ -752,9 +752,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 class_names = ', '.join(
                     c.__name__ for c in StorageType.classes()
                 )
-                raise ValueError(
-                    f'`X` needs to be of one of {class_names}, not {type(X)}.'
-                )
+                # raise ValueError(
+                #     f'`X` needs to be of one of {class_names}, not {type(X)}.'
+                # )
             if shape is not None:
                 raise ValueError(
                     '`shape` needs to be `None` if `X` is not `None`.'
@@ -768,7 +768,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X = X.astype(dtype)
             elif isinstance(X, ZarrArray):
                 X = X.astype(dtype)
-            else:  # is np.ndarray or a subclass, convert to true np.ndarray
+            elif not isinstance(X, adm.SparseDataset):  # is np.ndarray or a subclass, convert to true np.ndarray
                 X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X

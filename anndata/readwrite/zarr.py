@@ -93,7 +93,8 @@ def write_series(g, k, s, dataset_kwargs={}):
             object_codec=numcodecs.VLenUTF8(),
             **dataset_kwargs,
         )
-        g[k][:] = s.values
+
+        g[k][:] = s.values.astype(str)
     elif is_categorical_dtype(s):
         g.create_dataset(k, shape=s.shape, dtype=s.cat.codes.dtype)
         g[k][:] = s.cat.codes
@@ -192,43 +193,43 @@ ZARR_WRITE_REGISTRY = {
 }
 
 
-def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
-    """Read from a hierarchical Zarr array store.
-
-    Parameters
-    ----------
-    store
-        The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
-    """
-    if isinstance(store, Path):
-        store = str(store)
-
-    f = zarr.open(store, mode="r")
-    d = {}
-    for k in f.keys():
-        # Backwards compat
-        if k.startswith("raw."):
-            continue
-        if k in {"obs", "var"}:
-            d[k] = read_dataframe(f[k])
-        else:  # Base case
-            d[k] = read_attribute(f[k])
-
-    # Backwards compat
-    raw = {}
-    if "raw.var" in f:
-        raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-    if "raw.varm" in f:
-        raw["varm"] = read_attribute(f["raw.varm"])
-    if "raw.X" in f:
-        raw["X"] = read_attribute(f["raw.X"])
-    if len(raw) > 0:
-        assert "raw" not in d
-        d["raw"] = raw
-
-    _clean_uns(d)
-
-    return AnnData(**d)
+# def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
+#     """Read from a hierarchical Zarr array store.
+#
+#     Parameters
+#     ----------
+#     store
+#         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
+#     """
+#     if isinstance(store, Path):
+#         store = str(store)
+#
+#     f = zarr.open(store, mode="r")
+#     d = {}
+#     for k in f.keys():
+#         # Backwards compat
+#         if k.startswith("raw."):
+#             continue
+#         if k in {"obs", "var"}:
+#             d[k] = read_dataframe(f[k])
+#         else:  # Base case
+#             d[k] = read_attribute(f[k])
+#
+#     # Backwards compat
+#     raw = {}
+#     if "raw.var" in f:
+#         raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
+#     if "raw.varm" in f:
+#         raw["varm"] = read_attribute(f["raw.varm"])
+#     if "raw.X" in f:
+#         raw["X"] = read_attribute(f["raw.X"])
+#     if len(raw) > 0:
+#         assert "raw" not in d
+#         d["raw"] = raw
+#
+#     _clean_uns(d)
+#
+#     return AnnData(**d)
 
 
 @singledispatch
