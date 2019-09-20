@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
+from types import MappingProxyType
 from typing import Callable, Optional, Type, TypeVar, Union
 from warnings import warn
 
@@ -38,7 +39,7 @@ def write_h5ad(
     filepath: Union[Path, str],
     adata: AnnData,
     force_dense: bool = False,
-    dataset_kwargs: Mapping = {},
+    dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
     """Write ``.h5ad``-formatted hdf5 file.
@@ -104,7 +105,7 @@ def write_attribute(f: H5Group, key: str, value, dataset_kwargs: Mapping):
     _write_method(type(value))(f, key, value, dataset_kwargs)
 
 
-def write_raw(f, key, value, dataset_kwargs={}):
+def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
     group.attrs["encoding-version"] = "0.1.0"
@@ -114,7 +115,7 @@ def write_raw(f, key, value, dataset_kwargs={}):
     write_attribute(f, "raw/varm", value.varm, dataset_kwargs)
 
 
-def write_not_implemented(f, key, value, dataset_kwargs={}):
+def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     # If it's not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
     raise NotImplementedError(
@@ -123,19 +124,19 @@ def write_not_implemented(f, key, value, dataset_kwargs={}):
     )
 
 
-def write_basic(f, key, value, dataset_kwargs={}):
+def write_basic(f, key, value, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(key, value, **dataset_kwargs)
 
 
-def write_list(f, key, value, dataset_kwargs={}):
+def write_list(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_array(f, key, np.array(value), dataset_kwargs)
 
 
-def write_none(f, key, value, dataset_kwargs={}):
+def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
     pass
 
 
-def write_scalar(f, key, value, dataset_kwargs={}):
+def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     if (
         "compression" in dataset_kwargs
     ):  # Can't compress scalars, error is thrown
@@ -144,7 +145,7 @@ def write_scalar(f, key, value, dataset_kwargs={}):
     write_array(f, key, np.array(value), dataset_kwargs)
 
 
-def write_array(f, key, value, dataset_kwargs={}):
+def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
     # Convert unicode to fixed length strings
     if value.dtype.kind in {'U', 'O'}:
         value = value.astype(adh5py.special_dtype(vlen=str))
@@ -153,7 +154,7 @@ def write_array(f, key, value, dataset_kwargs={}):
     f.create_dataset(key, data=value, **dataset_kwargs)
 
 
-def write_dataframe(f, key, df, dataset_kwargs={}):
+def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
@@ -176,7 +177,7 @@ def write_dataframe(f, key, df, dataset_kwargs={}):
         write_series(group, colname, series, dataset_kwargs)
 
 
-def write_series(group, key, series, dataset_kwargs={}):
+def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
     # group here is an h5py type, otherwise categoricals won't write
     if series.dtype == object:  # Assuming it's string
         group.create_dataset(
@@ -197,7 +198,7 @@ def write_series(group, key, series, dataset_kwargs={}):
         group[key] = series.values
 
 
-def write_mapping(f, key, value, dataset_kwargs={}):
+def write_mapping(f, key, value, dataset_kwargs=MappingProxyType({})):
     for sub_key, sub_value in value.items():
         write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs)
 

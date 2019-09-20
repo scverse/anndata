@@ -1,6 +1,7 @@
 from collections.abc import Mapping, MutableMapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
+from types import MappingProxyType
 from typing import Callable, Type, TypeVar, Union
 from warnings import warn
 
@@ -51,13 +52,13 @@ def _write_method(cls: Type[T]) -> Callable[[zarr.Group, str, T], None]:
     return _find_impl(cls, ZARR_WRITE_REGISTRY)
 
 
-def write_attribute(f, key, value, dataset_kwargs={}):
+def write_attribute(f, key, value, dataset_kwargs=MappingProxyType({})):
     if key in f:
         del f[key]
     _write_method(type(value))(f, key, value, dataset_kwargs)
 
 
-def write_mapping(f, key, value: Mapping, dataset_kwargs={}):
+def write_mapping(f, key, value: Mapping, dataset_kwargs=MappingProxyType({})):
     for sub_k, sub_v in value.items():
         if not isinstance(key, str):
             warn(
@@ -68,7 +69,7 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs={}):
         write_attribute(f, f"{key}/{sub_k}", sub_v, dataset_kwargs)
 
 
-def write_dataframe(z, key, df, dataset_kwargs={}):
+def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
@@ -91,7 +92,7 @@ def write_dataframe(z, key, df, dataset_kwargs={}):
         write_series(group, colname, series, dataset_kwargs)
 
 
-def write_series(group, key, series, dataset_kwargs={}):
+def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
     if series.dtype == object:
         group.create_dataset(
             key,
@@ -113,7 +114,7 @@ def write_series(group, key, series, dataset_kwargs={}):
         group[key] = series.values
 
 
-def write_not_implemented(f, key, value, dataset_kwargs={}):
+def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     # If it's not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
     raise NotImplementedError(
@@ -122,11 +123,11 @@ def write_not_implemented(f, key, value, dataset_kwargs={}):
     )
 
 
-def write_list(g, key, value, dataset_kwargs={}):
+def write_list(g, key, value, dataset_kwargs=MappingProxyType({})):
     write_array(g, key, np.array(value), dataset_kwargs)
 
 
-def write_array(g, key, value, dataset_kwargs={}):
+def write_array(g, key, value, dataset_kwargs=MappingProxyType({})):
     if value.dtype == object:
         g.create_dataset(
             key,
@@ -141,16 +142,16 @@ def write_array(g, key, value, dataset_kwargs={}):
 
 
 # TODO: Not working quite right
-def write_scalar(f, key, value, dataset_kwargs={}):
+def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
-def write_none(f, key, value, dataset_kwargs={}):
+def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
     pass
 
 
 # TODO: Figure out what to do with dataset_kwargs for these
-def write_csr(f, key, value, dataset_kwargs={}):
+def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csr_matrix"
     group.attrs["enocding-version"] = "0.1.0"
@@ -160,7 +161,7 @@ def write_csr(f, key, value, dataset_kwargs={}):
     group["indptr"] = value.indptr
 
 
-def write_csc(f, key, value, dataset_kwargs={}):
+def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csc_matrix"
     group.attrs["enocding-version"] = "0.1.0"
@@ -170,7 +171,7 @@ def write_csc(f, key, value, dataset_kwargs={}):
     group["indptr"] = value.indptr
 
 
-def write_raw(f, key, value, dataset_kwargs={}):
+def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
     group.attrs["encoding-version"] = "0.1.0"
