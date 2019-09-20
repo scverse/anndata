@@ -1,7 +1,9 @@
 from collections.abc import Mapping
 from functools import _find_impl, singledispatch
 from pathlib import Path
+from types import MappingProxyType
 from typing import Callable, Optional, Type, TypeVar, Union
+from warnings import warn
 
 import h5py as h5py
 import numpy as np
@@ -37,7 +39,7 @@ def write_h5ad(
     filepath: Union[Path, str],
     adata: AnnData,
     force_dense: bool = False,
-    dataset_kwargs: Mapping = {},
+    dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
     """Write ``.h5ad``-formatted hdf5 file.
@@ -103,7 +105,7 @@ def write_attribute(f: H5Group, key: str, value, dataset_kwargs: Mapping):
     _write_method(type(value))(f, key, value, dataset_kwargs)
 
 
-def write_raw(f, key, value, dataset_kwargs={}):
+def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
     group.attrs["encoding-version"] = "0.1.0"
@@ -113,7 +115,7 @@ def write_raw(f, key, value, dataset_kwargs={}):
     write_attribute(f, "raw/varm", value.varm, dataset_kwargs)
 
 
-def write_not_implemented(f, key, value, dataset_kwargs={}):
+def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     # If it's not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
     raise NotImplementedError(
@@ -122,19 +124,19 @@ def write_not_implemented(f, key, value, dataset_kwargs={}):
     )
 
 
-def write_basic(f, key, value, dataset_kwargs={}):
+def write_basic(f, key, value, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(key, value, **dataset_kwargs)
 
 
-def write_list(f, key, value, dataset_kwargs={}):
+def write_list(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_array(f, key, np.array(value), dataset_kwargs)
 
 
-def write_none(f, key, value, dataset_kwargs={}):
+def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
     pass
 
 
-def write_scalar(f, key, value, dataset_kwargs={}):
+def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     if (
         "compression" in dataset_kwargs
     ):  # Can't compress scalars, error is thrown
@@ -143,7 +145,7 @@ def write_scalar(f, key, value, dataset_kwargs={}):
     write_array(f, key, np.array(value), dataset_kwargs)
 
 
-def write_array(f, key, value, dataset_kwargs={}):
+def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
     # Convert unicode to fixed length strings
     if value.dtype.kind in {'U', 'O'}:
         value = value.astype(adh5py.special_dtype(vlen=str))
@@ -152,7 +154,13 @@ def write_array(f, key, value, dataset_kwargs={}):
     f.create_dataset(key, data=value, **dataset_kwargs)
 
 
-def write_dataframe(f, key, df, dataset_kwargs={}):
+def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
+    # Check arguments
+    for reserved in ("__categories", "_index"):
+        if reserved in df.columns:
+            raise ValueError(
+                f"'{reserved}' is a reserved name for dataframe columns."
+            )
     group = f.h5f.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
     group.attrs["encoding-version"] = "0.1.0"
@@ -163,29 +171,34 @@ def write_dataframe(f, key, df, dataset_kwargs={}):
     else:
         index_name = "_index"
     group.attrs["_index"] = index_name
+
     write_series(group, index_name, df.index, dataset_kwargs)
     for colname, series in df.items():
         write_series(group, colname, series, dataset_kwargs)
 
 
-def write_series(f, key, series, dataset_kwargs={}):
-    # f has to be actual h5py type, otherwise categoricals won't write
+def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
+    # group here is an h5py type, otherwise categoricals won't write
     if series.dtype == object:  # Assuming it's string
-        f.create_dataset(
+        group.create_dataset(
             key,
             data=series.values,
             dtype=h5py.special_dtype(vlen=str),
             **dataset_kwargs,
         )
     elif is_categorical_dtype(series):
-        f.create_dataset(key, shape=series.shape, dtype=series.cat.codes.dtype)
-        f[key][:] = series.cat.codes
-        f[key].attrs["categories"] = list(series.cat.categories)
+        cats = series.cat.categories.values
+        codes = series.cat.codes.values
+        category_key = f"__categories/{key}"
+
+        write_array(group, category_key, cats, dataset_kwargs)
+        write_array(group, key, codes, dataset_kwargs)
+        group[key].attrs["categories"] = group[category_key].ref
     else:
-        f[key] = series.values
+        group[key] = series.values
 
 
-def write_mapping(f, key, value, dataset_kwargs={}):
+def write_mapping(f, key, value, dataset_kwargs=MappingProxyType({})):
     for sub_key, sub_value in value.items():
         write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs)
 
@@ -327,21 +340,35 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
 def read_dataframe(group) -> pd.DataFrame:
     if not isinstance(group, adh5py.Group):
         return read_dataframe_legacy(group)
-    df = pd.DataFrame({k: read_series(group[k]) for k in group.keys()})
-    df.set_index(group.attrs["_index"], inplace=True)
-    if group.attrs["_index"] == "_index":
-        df.index.name = None
-    if "column-order" in group.attrs:  # TODO: Should this be optional?
-        assert set(group.attrs["column-order"]) == set(df.columns)
-        df = df[group.attrs["column-order"]]
+    columns = list(group.attrs["column-order"])
+    idx_key = group.attrs["_index"]
+    df = pd.DataFrame(
+        {k: read_series(group[k]) for k in columns},
+        index=read_series(group[idx_key]),
+        columns=list(columns),
+    )
+    if idx_key != "_index":
+        df.index.name = idx_key
     return df
 
 
 @report_key_on_error
 def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
+        categories = dataset.attrs["categories"]
+        if isinstance(categories, h5py.Reference):
+            categories = dataset.parent[dataset.attrs["categories"]][...]
+        else:
+            # TODO: remove this code at some point post 0.7
+            # TODO: Add tests for this
+            warn(
+                f"Your file '{dataset.file.name}' has invalid categorical "
+                "encodings due to being written from a development version of "
+                "AnnData. Rewrite the file ensure you can read it in the future.",
+                FutureWarning,
+            )
         return pd.Categorical.from_codes(
-            dataset[...], dataset.attrs["categories"], ordered=False
+            dataset[...], categories, ordered=False
         )
     else:
         return dataset[...]

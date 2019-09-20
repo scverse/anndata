@@ -1,5 +1,6 @@
 from importlib.util import find_spec
 from pathlib import Path
+from string import ascii_letters
 import tempfile
 
 import numpy as np
@@ -244,7 +245,7 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize('typ', [np.array, csr_matrix, csc_matrix])
-def test_readwrite_equivolent_h5ad_zarr(typ):
+def test_readwrite_equivalent_h5ad_zarr(typ):
     tmpdir = tempfile.TemporaryDirectory()
     tmpdirpth = Path(tmpdir.name)
     h5ad_pth = tmpdirpth / "adata.h5ad"
@@ -388,8 +389,8 @@ def test_read_excel():
     assert adata.X.tolist() == X_list
 
 
-def test_write_categorical(tmp_path):
-    adata_pth = tmp_path / "adata.h5ad"
+def test_write_categorical(tmp_path, diskfmt):
+    adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
         X=np.ones((5, 5)),
         obs=pd.DataFrame(
@@ -399,10 +400,58 @@ def test_write_categorical(tmp_path):
             )
         ),
     )
-    orig.write_h5ad(adata_pth)
-    curr = ad.read_h5ad(adata_pth)
+    getattr(orig, f"write_{diskfmt}")(adata_pth)
+    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
     assert np.all(orig.obs.notna() == curr.obs.notna())
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+
+
+def test_dataframe_reserved_columns(tmp_path, diskfmt):
+    reserved = ("_index", "__categories")
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+    orig = ad.AnnData(X=np.ones((5, 5)))
+    for colname in reserved:
+        to_write = orig.copy()
+        to_write.obs[colname] = np.ones(5)
+        with pytest.raises(ValueError) as e:
+            getattr(to_write, f"write_{diskfmt}")(adata_pth)
+        assert colname in str(e.value)
+    for colname in reserved:
+        to_write = orig.copy()
+        to_write.varm["df"] = pd.DataFrame(
+            {colname: list("aabcd")}, index=to_write.var_names
+        )
+        with pytest.raises(ValueError) as e:
+            getattr(to_write, f"write_{diskfmt}")(adata_pth)
+        assert colname in str(e.value)
+
+
+def test_write_large_categorical(tmp_path, diskfmt):
+    M = 30_000
+    N = 1000
+    ls = np.array(list(ascii_letters))
+    cats = np.array(
+        sorted(
+            "".join(np.random.choice(ls, np.random.choice(range(5, 30))))
+            for i in range(int(10_000))
+        )
+    )
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+    n_cats = len(np.unique(cats))
+    orig = ad.AnnData(
+        csr_matrix(([1], ([0], [0])), shape=(M, N)),
+        obs=pd.DataFrame(
+            dict(
+                cat1=cats[np.random.choice(n_cats, M)],
+                cat2=pd.Categorical.from_codes(
+                    np.random.choice(n_cats, M), cats
+                ),
+            )
+        ),
+    )
+    getattr(orig, f"write_{diskfmt}")(adata_pth)
+    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    assert_equal(orig, curr)
 
 
 def test_zarr_chunk_X(tmp_path):
