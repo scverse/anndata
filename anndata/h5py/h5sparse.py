@@ -2,8 +2,9 @@
 # - think about making all of the below subclasses
 # - think about supporting the COO format
 from collections.abc import Iterable, Mapping
+from itertools import accumulate, chain
 from os import PathLike
-from typing import Optional, Union, KeysView, NamedTuple
+from typing import Optional, Union, KeysView, NamedTuple, Tuple, Sequence
 
 import h5py
 import numpy as np
@@ -42,6 +43,9 @@ class backed_csr_matrix(BackedSparseMatrixMixin, ss.csr_matrix):
 
 class backed_csc_matrix(BackedSparseMatrixMixin, ss.csc_matrix):
     pass
+
+
+backed_sparse_matrix = Union[backed_csc_matrix, backed_csr_matrix]
 
 
 FORMATS = [
@@ -319,6 +323,71 @@ def _zero_many(self, i, j):
 
 backed_csr_matrix._zero_many = _zero_many
 backed_csc_matrix._zero_many = _zero_many
+
+
+def get_compressed_vectors(X: backed_sparse_matrix, row_idxs: "np.ndarray[int]") -> Tuple[Sequence, Sequence, Sequence]:
+    slices = [slice(*(X.indptr[i:i+2])) for i in row_idxs]
+    data = np.concatenate([X.data[s] for s in slices])
+    indices = np.concatenate([X.indices[s] for s in slices])
+    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
+    return data, indices, indptr
+
+
+def get_csc_cols(X: backed_csc_matrix, idxs: np.ndarray) -> ss.csc_matrix:
+    idxs = np.asarray(idxs)
+    if idxs.dtype == bool:
+        idxs = np.where(idxs)
+    return ss.csc_matrix(
+        get_compressed_vectors(X, idxs),
+        shape=(X.shape[0], len(idxs))
+    )
+
+
+def get_csr_rows(X: backed_csr_matrix, idxs: np.ndarray) -> ss.csr_matrix:
+    idxs = np.asarray(idxs)
+    if idxs.dtype == bool:
+        idxs = np.where(idxs)
+    return ss.csr_matrix(
+        get_compressed_vectors(X, idxs),
+        shape=(len(idxs), X.shape[1])
+    )
+
+
+def get_compressed_vector(X, idx: int) -> Tuple[Sequence, Sequence, Sequence]:
+    s = slice(*(X.indptr[idx:idx+2]))
+    data = X.data[s]
+    indices = X.indices[s]
+    indptr = [0, len(data)]
+    return data, indices, indptr
+
+
+def get_csc_col(X: backed_sparse_matrix, idx: int) -> ss.csc_matrix:
+    return ss.csc_matrix(
+        get_compressed_vector(X, idx),
+        shape=(X.shape[0], 1)
+    )
+
+
+def get_csr_row(X, idx: int) -> ss.csr_matrix:
+    return ss.csr_matrix(
+        get_compressed_vector(X, idx),
+        shape=(1, X.shape[1])
+    )
+
+
+def csc_get_sliceXint(X, row: slice, col: int):
+    return get_csc_col(X, col)[row, :]
+
+
+def csr_get_intXslice(X, row: int, col: slice):
+    return get_csr_row(X, row)[:, col]
+
+
+backed_csc_matrix._get_sliceXint = csc_get_sliceXint
+backed_csr_matrix._get_intXslice = csr_get_intXslice
+
+backed_csc_matrix._get_sliceXarray = lambda x, row, col: get_csc_cols(x, col)[row, :]
+backed_csr_matrix._get_arrayXslice = lambda x, row, col: get_csr_rows(x, row)[:, col]
 
 
 class SparseDataset:
