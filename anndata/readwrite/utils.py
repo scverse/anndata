@@ -1,5 +1,5 @@
 from functools import wraps
-from .. import h5py as patched_h5py
+from ..h5py import SparseDataset
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -93,8 +93,8 @@ def report_key_on_error(func):
                     parent = (
                         elem.store
                     )  # Not sure how to always get a name out of this
-                elif isinstance(elem, patched_h5py.Group):
-                    parent = elem.h5py_group.file.name
+                elif isinstance(elem, SparseDataset):
+                    parent = elem.group.file.name
                 else:
                     parent = elem.file.name
                 raise AnnDataReadError(

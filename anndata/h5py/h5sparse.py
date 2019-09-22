@@ -5,6 +5,7 @@ from collections.abc import Iterable, Mapping
 from itertools import accumulate, chain
 from os import PathLike
 from typing import Optional, Union, KeysView, NamedTuple, Tuple, Sequence
+from warnings import warn
 
 import h5py
 import numpy as np
@@ -32,7 +33,7 @@ class BackedSparseMatrixMixin:
 
     def copy(self):
         if isinstance(self.data, h5py.Dataset):
-            return SparseDataset(self.data.parent).value
+            return SparseDataset(self.data.parent).tomemory()
         else:
             return super().copy()
 
@@ -95,152 +96,6 @@ def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
         )
 
     return data
-
-
-class Group(Mapping):
-    """\
-    Like :class:`h5py.Group <h5py:Group>`, but able to handle sparse matrices.
-    """
-
-    def __init__(self, h5py_group, force_dense=False):
-        self.h5py_group = h5py_group
-        self.force_dense = force_dense
-
-    def __iter__(self):
-        for k in self.keys():
-            yield k
-
-    def __len__(self):
-        return len(self.h5py_group)
-
-    def __getitem__(
-        self, key: str
-    ) -> Union[h5py.Group, h5py.Dataset, 'SparseDataset']:
-        h5py_item = self.h5py_group[key]
-        if isinstance(h5py_item, h5py.Group):
-            if 'h5sparse_format' in h5py_item.attrs:
-                # detect the sparse matrix
-                return SparseDataset(h5py_item)
-            else:
-                return Group(h5py_item)
-        elif isinstance(h5py_item, h5py.Dataset):
-            return h5py_item
-        else:
-            raise ValueError("Unexpected item type.")
-
-    @property
-    def attrs(self):
-        return self.h5py_group.attrs
-
-    @property
-    def name(self):
-        return self.h5py_group.name
-
-    def __delitem__(self, name):
-        self.h5py_group.__delitem__(name)
-
-    def __setitem__(
-        self, key: str, value: Union[h5py.Group, h5py.Dataset, 'SparseDataset']
-    ):
-        self.h5py_group.__setitem__(key, value)
-
-    def keys(self) -> KeysView[str]:
-        return self.h5py_group.keys()
-
-    def create_dataset(self, name, data=None, chunk_size=6000, **kwargs):
-        if data is None:
-            raise NotImplementedError(
-                "`create_dataset` is only supported if `data` is passed."
-            )
-        if not isinstance(data, SparseDataset) and not ss.issparse(data):
-            return self.h5py_group.create_dataset(
-                name=name, data=data, **kwargs
-            )
-        if self.force_dense:
-            sds = self.h5py_group.create_dataset(
-                name=name, shape=data.shape, dtype=data.dtype, **kwargs
-            )
-            for chunk, start, end in _chunked_rows(data, chunk_size):
-                sds[start:end] = chunk.toarray()
-            sds.attrs['sparse_format'] = (
-                data.format_str
-                if isinstance(data, SparseDataset)
-                else get_format_str(data)
-            )
-            return sds
-        # SparseDataset or spmatrix
-        group = self.h5py_group.create_group(name)
-        if isinstance(data, SparseDataset):
-            for attr in ['h5sparse_format', 'h5sparse_shape']:
-                group.attrs[attr] = data.h5py_group.attrs[attr]
-            get_dataset = data.h5py_group.__getitem__
-        else:  # ss.issparse(data):
-            group.attrs['h5sparse_format'] = get_format_str(data)
-            group.attrs['h5sparse_shape'] = data.shape
-            get_dataset = lambda d: getattr(data, d)
-        for dataset in ['data', 'indices', 'indptr']:
-            group.create_dataset(
-                dataset, data=get_dataset(dataset), maxshape=(None,), **kwargs
-            )
-        return SparseDataset(group)
-
-    def create_group(self, name, track_order=None):
-        return Group(
-            self.h5py_group.create_group(name, track_order=track_order)
-        )
-
-
-Group.create_dataset.__doc__ = h5py.Group.create_dataset.__doc__
-Group.create_group.__doc__ = h5py.Group.create_group.__doc__
-
-
-class File(Group):
-    """\
-    Like :class:`h5py.File <h5py:File>`, but able to handle sparse matrices.
-    """
-
-    def __init__(
-        self,
-        name: PathLike,
-        mode: Optional[str] = None,
-        driver: Optional[str] = None,
-        libver: Optional[str] = None,
-        userblock_size: Optional[int] = None,
-        swmr: bool = False,
-        force_dense: bool = False,
-        **kwds,
-    ):
-        self.h5f = h5py.File(
-            name,
-            mode=mode,
-            driver=driver,
-            libver=libver,
-            userblock_size=userblock_size,
-            swmr=swmr,
-            **kwds,
-        )
-        super().__init__(self.h5f, force_dense)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.h5f.__exit__(exc_type, exc_value, traceback)
-
-    def close(self):
-        self.h5f.close()
-
-    @property
-    def id(self):
-        return self.h5f.id
-
-    @property
-    def filename(self):
-        return self.h5f.filename
-
-
-File.__init__.__doc__ = h5py.File.__init__.__doc__
-
 
 def _set_many(self, i, j, x):
     """\
@@ -395,19 +250,46 @@ class SparseDataset:
     Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
     """
 
-    def __init__(self, h5py_group):
-        self.h5py_group = h5py_group
+    def __init__(self, group):
+        self.group = group
+
+    @property
+    def dtype(self):
+        return self.group['data'].dtype
+
+    @property
+    def format_str(self):
+        if "h5sparse_format" in self.group.attrs:
+            return self.group.attrs['h5sparse_format']
+        else:
+            return self.group.attrs["encoding-type"].replace("_matrix", "")  # Should this be an extra field?
+
+    @property
+    def h5py_group(self):
+        warn(DeprecationWarning("Attribute `h5py_group` of SparseDatasets is deprecated. Use `group` instead."))
+        return self.group
+
+    @property
+    def name(self):
+        return self.group.name
+
+    @property
+    def shape(self):
+        if "h5sparse_shape" in self.group.attrs:
+            return tuple(self.group.attrs['h5sparse_shape'])
+        else:
+            return tuple(self.group.attrs["shape"])
+
+    @property
+    def value(self):
+        return self.tomemory()
 
     def __repr__(self):
         return (
             f'<HDF5 sparse dataset: format {self.format_str!r}, '
             f'shape {self.shape}, '
-            f'type {self.h5py_group["data"].dtype.str!r}>'
+            f'type {self.group["data"].dtype.str!r}>'
         )
-
-    @property
-    def format_str(self):
-        return self.h5py_group.attrs['h5sparse_format']
 
     def __getitem__(self, index):
         if index == ():
@@ -415,12 +297,8 @@ class SparseDataset:
         row, col = unpack_index(index)
         if all(isinstance(x, Iterable) for x in (row, col)):
             row, col = np.ix_(row, col)
-        format_class = get_backed_class(self.format_str)
-        mock_matrix = format_class(self.shape, dtype=self.dtype)
-        mock_matrix.data = self.h5py_group['data']
-        mock_matrix.indices = self.h5py_group['indices']
-        mock_matrix.indptr = self.h5py_group['indptr']
-        return mock_matrix[row, col]
+        mtx = self.tobacked()
+        return mtx[row, col]
 
     def __setitem__(self, index, value):
         if index == ():
@@ -428,40 +306,11 @@ class SparseDataset:
         row, col = unpack_index(index)
         if all(isinstance(x, Iterable) for x in (row, col)):
             row, col = np.ix_(row, col)
-        format_class = get_backed_class(self.format_str)
-        mock_matrix = format_class(self.shape, dtype=self.dtype)
-        mock_matrix.data = self.h5py_group['data']
-        mock_matrix.indices = self.h5py_group['indices']
-        mock_matrix.indptr = self.h5py_group['indptr']
+        mock_matrix = self.tobacked()
         mock_matrix[row, col] = value
 
-    @property
-    def shape(self):
-        return tuple(self.h5py_group.attrs['h5sparse_shape'])
-
-    @property
-    def dtype(self):
-        return self.h5py_group['data'].dtype
-
-    @property
-    def value(self):
-        format_class = get_memory_class(self.format_str)
-        object = self.h5py_group
-        data_array = format_class(self.shape, dtype=self.dtype)
-        data_array.data = np.empty(object['data'].shape, object['data'].dtype)
-        data_array.indices = np.empty(
-            object['indices'].shape, object['indices'].dtype
-        )
-        data_array.indptr = np.empty(
-            object['indptr'].shape, object['indptr'].dtype
-        )
-        object['data'].read_direct(data_array.data)
-        object['indices'].read_direct(data_array.indices)
-        object['indptr'].read_direct(data_array.indptr)
-        return data_array
-
     def append(self, sparse_matrix):
-        shape = self.h5py_group.attrs['h5sparse_shape']
+        shape = self.shape
 
         if self.format_str != get_format_str(sparse_matrix):
             raise ValueError("Format not the same.")
@@ -473,14 +322,14 @@ class SparseDataset:
             )
 
         # data
-        data = self.h5py_group['data']
+        data = self.group['data']
         orig_data_size = data.shape[0]
         new_shape = (orig_data_size + sparse_matrix.data.shape[0],)
         data.resize(new_shape)
         data[orig_data_size:] = sparse_matrix.data
 
         # indptr
-        indptr = self.h5py_group['indptr']
+        indptr = self.group['indptr']
         orig_data_size = indptr.shape[0]
         append_offset = indptr[-1]
         new_shape = (orig_data_size + sparse_matrix.indptr.shape[0] - 1,)
@@ -490,14 +339,32 @@ class SparseDataset:
         )
 
         # indices
-        indices = self.h5py_group['indices']
+        indices = self.group['indices']
         orig_data_size = indices.shape[0]
         new_shape = (orig_data_size + sparse_matrix.indices.shape[0],)
         indices.resize(new_shape)
         indices[orig_data_size:] = sparse_matrix.indices
 
         # shape
-        self.h5py_group.attrs['h5sparse_shape'] = (
+        if "h5sparse_shape" in self.group.attrs:
+            del self.group.attrs["h5sparse_shape"]
+        self.group.attrs['shape'] = (
             shape[0] + sparse_matrix.shape[0],
             max(shape[1], sparse_matrix.shape[1]),
         )
+
+    def tobacked(self):
+        format_class = get_backed_class(self.format_str)
+        mtx = format_class(self.shape, dtype=self.dtype)
+        mtx.data = self.group['data']
+        mtx.indices = self.group['indices']
+        mtx.indptr = self.group['indptr']
+        return mtx
+
+    def tomemory(self):
+        format_class = get_memory_class(self.format_str)
+        mtx = format_class(self.shape, dtype=self.dtype)
+        mtx.data = self.group['data'][...]
+        mtx.indices = self.group['indices'][...]
+        mtx.indptr = self.group['indptr'][...]
+        return mtx

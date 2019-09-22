@@ -4,7 +4,7 @@
 import numpy as np
 import scipy.sparse as ss
 
-from anndata import h5py
+import h5py
 
 
 def test_create_and_read_dataset(tmp_path):
