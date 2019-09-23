@@ -3,13 +3,14 @@ from string import ascii_letters
 from typing import Tuple
 from collections.abc import Mapping
 
+import h5py
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
-from anndata import h5py as adh5py
+from anndata.h5py import SparseDataset
 from anndata import AnnData
 from anndata.core.views import ArrayView
 
@@ -25,10 +26,14 @@ def asarray_sparse(x):
     return x.toarray()
 
 
-@asarray.register(adh5py.SparseDataset)
-def asarray_sparse(x):
+@asarray.register(SparseDataset)
+def asarray_sparse_dataset(x):
     return asarray(x.value)
 
+
+@asarray.register(h5py.Dataset)
+def asarray_h5py_dataset(x):
+    return x[...]
 
 def gen_typed_df(n, index=None):
     # TODO: Think about allowing index to be passed for n
@@ -282,9 +287,15 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
     assert_equal(asarray(a), asarray(b), exact=exact, elem_name=elem_name)
 
 
-@assert_equal.register(adh5py.SparseDataset)
+@assert_equal.register(SparseDataset)
 @assert_equal.register(sparse.spmatrix)
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
+    a = asarray(a)
+    assert_equal(b, a, exact, elem_name=elem_name)
+
+
+@assert_equal.register(h5py.Dataset)
+def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
 
