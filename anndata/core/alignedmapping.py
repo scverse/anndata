@@ -5,6 +5,7 @@ from typing import (
     Mapping,
     Optional,
     Tuple,
+    Type,
     Iterable,
     Sequence,
     Union,
@@ -22,11 +23,12 @@ from ..utils import deprecated
 from .views import asview, ViewArgs
 
 
-OneDIdx = Sequence[Union[int, bool]]
+OneDIdx = Union[Sequence[int], Sequence[bool]]
 TwoDIdx = Tuple[OneDIdx, OneDIdx]
 
-I = TypeVar("I", OneDIdx, TwoDIdx)
-V = TypeVar("V", pd.DataFrame, spmatrix, np.ndarray)
+I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
+# TODO: pd.DataFrame only allowed in AxisArrays?
+V = Union(pd.DataFrame, spmatrix, np.ndarray)
 
 
 @singledispatch
@@ -44,19 +46,11 @@ def _subset_df(df: pd.DataFrame, subset_idx: OneDIdx):
 
 
 class AlignedMapping(cabc.MutableMapping, ABC):
-    """
-    Attributes
-    ----------
-    axes
-        Which axes is this aligned along?
-    _view_class
-        The view class for this aligned mapping.
-    _actual_class
-        The actual class (which has it's own data) for this aligned mapping.
-    """
+    _view_class: ClassVar[Type["AlignedViewMixin"]]
+    """The view class for this aligned mapping."""
 
-    _view_class: ClassVar["AlignedViewMixin"]
-    _actual_class: ClassVar["AlignedActualMixin"]
+    _actual_class: ClassVar[Type["AlignedActualMixin"]]
+    """The actual class (which has it's own data) for this aligned mapping."""
 
     def __repr__(self):
         return f"{self.__class__.__name__,} with keys: {self.keys()}"
