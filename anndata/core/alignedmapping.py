@@ -23,7 +23,7 @@ from ..utils import deprecated
 from .views import asview, ViewArgs
 
 
-OneDIdx = Union[Sequence[int], Sequence[bool]]
+OneDIdx = Union[Sequence[int], Sequence[bool], slice]
 TwoDIdx = Tuple[OneDIdx, OneDIdx]
 
 I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
