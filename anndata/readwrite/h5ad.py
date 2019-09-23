@@ -14,7 +14,7 @@ from scipy import sparse
 from .. import h5py as adh5py
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns, Literal
-from .utils import report_key_on_error
+from .utils import report_key_on_error, idx_chunks_along_axis
 
 
 H5Group = Union[h5py.Group, h5py.File, adh5py.Group, adh5py.File]
@@ -39,7 +39,8 @@ def write_h5ad(
     filepath: Union[Path, str],
     adata: AnnData,
     *,
-    force_dense: bool = False,
+    force_dense: bool = None,
+    sparse_X_as_dense: bool = None,
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
@@ -76,8 +77,12 @@ def write_h5ad(
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
-    with adh5py.File(filepath, mode, force_dense=force_dense) as f:
-        if not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+    with adh5py.File(filepath, mode) as f:
+        if sparse_X_as_dense and isinstance(
+            adata.X, (sparse.spmatrix, adh5py.SparseDataset)
+        ):
+            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs)
+        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # Otherwise, X should already be up to date
             write_attribute(f, "X", adata.X, dataset_kwargs)
         write_attribute(f, "obs", adata.obs, dataset_kwargs)
@@ -150,6 +155,15 @@ def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
     elif value.dtype.names is not None:
         value = _to_hdf5_vlen_strings(value)
     f.create_dataset(key, data=value, **dataset_kwargs)
+
+
+def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
+    dset = f.h5f.create_dataset(
+        key, shape=value.shape, dtype=value.dtype, **dataset_kwargs
+    )
+    compressed_axis = int(isinstance(value, sparse.csc_matrix))
+    for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):
+        dset[idx] = value[idx].toarray()
 
 
 def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
@@ -261,11 +275,12 @@ def read_h5ad_backed(
     return AnnData(**d)
 
 
-# TODO: chunks, what are possible values for chunk_size?
 def read_h5ad(
     filename: Union[str, Path],
     backed: Union[Literal['r', 'r+'], bool, None] = None,
-    chunk_size=None,
+    *,
+    dense_X_as_sparse: Optional[Type[sparse.spmatrix]] = None,
+    chunk_size: int = 6000,
 ) -> AnnData:
     """\
     Read ``.h5ad``-formatted hdf5 file.
@@ -278,11 +293,16 @@ def read_h5ad(
         If ``'r'``, load :class:`~anndata.AnnData` in ``backed`` mode instead
         of fully loading it into memory (`memory` mode). If you want to modify
         backed attributes of the AnnData object, you need to choose ``'r+'``.
+    dense_X_as_sparse
+        If `adata.X` was saved as a dense array, passing a sparse matrix class
+        here will cause that array to be loaded in chunks of `chunk_size` as a
+        sparse matrix. Has no effect for backed mode.
     chunk_size
         Used only when loading sparse dataset that is stored as dense.
         Loading iterates through chunks of the dataset of this row size
         until it reads the whole dataset.
-        Higher size means higher memory consumption and higher loading speed.
+        Higher size means higher memory consumption and higher (to a point)
+        loading speed.
     """
     if backed not in {None, False}:
         mode = backed
@@ -297,7 +317,11 @@ def read_h5ad(
             # Backwards compat for old raw
             if k.startswith("raw."):
                 continue
-            if k in {"obs", "var"}:
+            if k == "X" and dense_X_as_sparse is not None:
+                d[k] = read_dense_as_sparse(
+                    f[k], dense_X_as_sparse, axis_chunk=chunk_size
+                )
+            elif k in {"obs", "var"}:
                 d[k] = read_dataframe(f[k])
             else:  # Base case
                 d[k] = read_attribute(f[k])
@@ -409,6 +433,35 @@ def read_dataset(dataset: adh5py.Dataset):
     if value.shape == ():
         value = value[()]
     return value
+
+
+@report_key_on_error
+def read_dense_as_sparse(
+    dataset: adh5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int
+):
+    if sparse_format == sparse.csr_matrix:
+        return read_dense_as_csr(dataset, axis_chunk)
+    elif sparse_format == sparse.csc_matrix:
+        return read_dense_as_csc(dataset, axis_chunk)
+    else:
+        raise ValueError(f"Cannot read dense array as type: {sparse_format}")
+
+
+def read_dense_as_csr(dataset, axis_chunk=6000):
+    sub_matrices = []
+    for idx in idx_chunks_along_axis(dataset.shape, 0, axis_chunk):
+        dense_chunk = dataset[idx]
+        sub_matrix = sparse.csr_matrix(dense_chunk)
+        sub_matrices.append(sub_matrix)
+    return sparse.vstack(sub_matrices, format="csr")
+
+
+def read_dense_as_csc(dataset, axis_chunk=6000):
+    sub_matrices = []
+    for idx in idx_chunks_along_axis(dataset.shape, 1, axis_chunk):
+        sub_matrix = sparse.csc_matrix(dataset[idx])
+        sub_matrices.append(sub_matrix)
+    return sparse.hstack(sub_matrices, format="csc")
 
 
 @read_attribute.register(type(None))

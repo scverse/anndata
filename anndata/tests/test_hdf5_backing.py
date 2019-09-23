@@ -158,7 +158,7 @@ def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
     mem_adata = gen_adata((10, 10))
-    mem_adata.raw = mem_adata
+    # mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
     mem_adata.write(backed_pth)

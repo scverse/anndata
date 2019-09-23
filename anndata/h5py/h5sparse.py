@@ -395,6 +395,11 @@ class SparseDataset:
 
     def __init__(self, h5py_group):
         self.h5py_group = h5py_group
+        self.file = h5py_group.file
+
+    @property
+    def name(self):
+        return self.h5py_group.name
 
     def __repr__(self):
         return (
@@ -444,19 +449,13 @@ class SparseDataset:
     @property
     def value(self):
         format_class = get_memory_class(self.format_str)
-        object = self.h5py_group
-        data_array = format_class(self.shape, dtype=self.dtype)
-        data_array.data = np.empty(object['data'].shape, object['data'].dtype)
-        data_array.indices = np.empty(
-            object['indices'].shape, object['indices'].dtype
-        )
-        data_array.indptr = np.empty(
-            object['indptr'].shape, object['indptr'].dtype
-        )
-        object['data'].read_direct(data_array.data)
-        object['indices'].read_direct(data_array.indices)
-        object['indptr'].read_direct(data_array.indptr)
-        return data_array
+        mtx = format_class(self.shape, dtype=self.dtype)
+        group = self.h5py_group
+        # read_direct had trouble with empty matrices, seems to take same amount of time
+        mtx.data = group["data"][...]
+        mtx.indices = group["indices"][...]
+        mtx.indptr = group["indptr"][...]
+        return mtx
 
     def append(self, sparse_matrix):
         shape = self.h5py_group.attrs['h5sparse_shape']
