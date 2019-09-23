@@ -28,7 +28,7 @@ TwoDIdx = Tuple[OneDIdx, OneDIdx]
 
 I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
 # TODO: pd.DataFrame only allowed in AxisArrays?
-V = Union(pd.DataFrame, spmatrix, np.ndarray)
+V = Union[pd.DataFrame, spmatrix, np.ndarray]
 
 
 @singledispatch
