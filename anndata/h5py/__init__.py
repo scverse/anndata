@@ -21,9 +21,4 @@ For examples and further information, see this `blog post <https://falexwolf.de/
    Dataset
    SparseDataset
 """
-from .h5sparse import File, Group, SparseDataset, _load_h5_dataset_as_sparse
-from h5py import Dataset, special_dtype
-
-# Problem: the H5py intersphinx is broken, and only contains e.g. `Dataset` directly.
-# So we can’t possibly link to it using :class:`Dataset`, since that will always find our version.
-Dataset.__doc__ = """Equivalent to :class:`h5py.Dataset <h5py:Dataset>`."""
+from .h5sparse import SparseDataset, _load_h5_dataset_as_sparse

@@ -13,6 +13,7 @@ from typing import Any, Union, Optional  # Meta
 from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
 from typing import Tuple, List  # Generic
 
+import h5py
 from natsort import natsorted
 import numpy as np
 from numpy import ma
@@ -39,7 +40,8 @@ from .views import (
     asview,
     _resolve_idxs,
 )
-from .. import h5py, utils
+from ..h5py import SparseDataset
+from .. import utils
 from ..utils import (
     Index1D,
     Index,
@@ -197,13 +199,11 @@ class AnnDataFileManager:
 
     def __getitem__(
         self, key: str
-    ) -> Union[h5py.Group, h5py.Dataset, h5py.SparseDataset]:
+    ) -> Union[h5py.Group, h5py.Dataset, SparseDataset]:
         return self._file[key]
 
     def __setitem__(
-        self,
-        key: str,
-        value: Union[h5py.Group, h5py.Dataset, h5py.SparseDataset],
+        self, key: str, value: Union[h5py.Group, h5py.Dataset, SparseDataset]
     ):
         self._file[key] = value
 
@@ -231,7 +231,8 @@ class AnnDataFileManager:
             raise ValueError(
                 'Cannot open backing file if backing not initialized.'
             )
-        self._file = h5py.File(self.filename, self._filemode, force_dense=True)
+        # self._file = h5py.File(self.filename, self._filemode, force_dense=True)
+        self._file = h5py.File(self.filename, self._filemode)
 
     def close(self):
         """Close the backing file, remember filename, do *not* change to memory mode."""
@@ -289,6 +290,8 @@ class Raw:
                     f"Could not find dataset for raw X in file: "
                     f"{self._adata.file.filename}."
                 )
+            if isinstance(X, h5py.Group):
+                X = SparseDataset(X)
             # Check if we need to subset
             if self._adata.isview:
                 # TODO: As noted above, implement views of raw
@@ -825,14 +828,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             # is dictionary from reading the file, nothing that is meant for a user
             if self.isbacked:
-                if "raw/X" in self.file:
-                    shape = self.file["raw/X"].shape
-                elif "raw.X" in self.file:
-                    shape = self.file['raw.X'].shape  # Backwards compat
-                else:
+                raw_key = "raw/X" if "raw/X" in self.file else "raw.X"
+                if raw_key not in self.file:
                     raise KeyError(
                         f"Tried to check shape of raw from {self.file.filename}, but there was no entry for 'raw/X'."
                     )
+                if isinstance(self.file[raw_key], h5py.Group):
+                    shape = self.file[raw_key].attrs["shape"]
+                else:
+                    shape = self.file[raw_key].shape
             else:
                 shape = raw["X"].shape
 
@@ -900,6 +904,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if not self.file.isopen:
                 self.file.open()
             X = self.file['X']
+            if isinstance(X, h5py.Group):
+                X = SparseDataset(X)
             if self.isview:
                 X = X[self._oidx, self._vidx]
         elif self.isview:
@@ -958,7 +964,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 value = value.reshape(self.shape)
             if self.isbacked:
                 if self.isview:
-                    self.file['X'][oidx, vidx] = value
+                    X = self.file['X']
+                    if isinstance(X, h5py.Group):
+                        X = SparseDataset(X)
+                    X[oidx, vidx] = value
                 else:
                     self._set_backed('X', value)
             else:
@@ -1282,7 +1291,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 # change from memory to backing-mode
                 # write the content of self to disk
-                self.write(filename, force_dense=True)
+                # self.write(filename, force_dense=True)
+                self.write(filename)
             # open new file for accessing
             self.file.open(filename, 'r+')
             # as the data is stored on disk, we can safely set self._X to None
@@ -1505,6 +1515,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         adata_subset = self[index].copy()
         self._init_as_actual(adata_subset, dtype=self._X.dtype)
 
+    # TODO: Update, possibly remove
     def __setitem__(
         self, index: Index, val: Union[int, float, np.ndarray, sparse.spmatrix]
     ):
@@ -2235,7 +2246,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self,
             compression=compression,
             compression_opts=compression_opts,
-            force_dense=force_dense,
+            # force_dense=force_dense,
         )
 
         if self.isbacked:
