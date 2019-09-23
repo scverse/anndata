@@ -14,7 +14,7 @@ from scipy import sparse
 from ..h5py import SparseDataset
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
-from .utils import report_key_on_error
+from .utils import report_key_on_error, idx_chunks_along_axis
 
 
 H5Group = Union[h5py.Group, h5py.File]
@@ -38,7 +38,9 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 def write_h5ad(
     filepath: Union[Path, str],
     adata: AnnData,
-    force_dense: bool = False,
+    *,
+    force_dense: bool = None,
+    sparse_X_as_dense: bool = None,
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
@@ -66,9 +68,17 @@ def write_h5ad(
         Filename of data file. Defaults to backing file.
     compression : ``None``,  {``'gzip'``, ``'lzf'``} (default: ``None``)
         See the h5py :ref:`dataset_compression`.
-    force_dense
+    sparse_X_as_dense
         Write sparse data as a dense matrix.
     """
+    if force_dense is not None:
+        warn(FutureWarning(
+            "The 'force_dense' argument is deprecated. Use 'sparse_X_as_dense' instead."
+        ))
+        assert sparse_X_as_dense is None, \
+            "Cannot specify both 'force_dense' and 'sparse_X_as_dense'"
+        sparse_X_as_dense = force_dense
+
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
@@ -78,9 +88,11 @@ def write_h5ad(
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
-    # with h5py.File(filepath, mode, force_dense=force_dense) as f:
     with h5py.File(filepath, mode) as f:
-        if not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+        if sparse_X_as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
+            if "X" in f: del f["X"]  # Normally handled by write_attribute
+            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs)
+        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # Otherwise, X should already be up to date
             write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
@@ -170,6 +182,14 @@ write_csc = partial(write_sparse_compressed, fmt="csc")
 
 def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(f, key, value.tobacked(), fmt=value.format_str, dataset_kwargs=dataset_kwargs)
+
+def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
+    print("writing sparse as dense")
+    dset = f.create_dataset(key, shape=value.shape, dtype=value.dtype, **dataset_kwargs)
+    compressed_axis = int(isinstance(value, sparse.csc_matrix))
+    for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):
+        dset[idx] = value[idx].toarray()
+
 
 def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
@@ -273,7 +293,7 @@ def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
     if X_dset is None:
         pass
     elif isinstance(X_dset, h5py.Group):
-        d["dtype"] = X_dset.attrs["dtype"]
+        d["dtype"] = X_dset["data"].dtype
     elif hasattr(X_dset, "dtype"):
         d["dtype"] = f["X"].dtype
     else:
@@ -284,11 +304,12 @@ def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
     return AnnData(**d)
 
 
-# TODO: chunks, what are possible values for chunk_size?
 def read_h5ad(
     filename: Union[str, Path],
     backed: Optional[Union[str, bool]] = None,
-    chunk_size=None,
+    *,
+    dense_X_as_sparse: Optional[Type[sparse.spmatrix]] = None,
+    chunk_size: int = 6000,
 ) -> AnnData:
     """Read ``.h5ad``-formatted hdf5 file.
 
@@ -300,11 +321,16 @@ def read_h5ad(
         If ``'r'``, load :class:`~anndata.AnnData` in ``backed`` mode instead
         of fully loading it into memory (`memory` mode). If you want to modify
         backed attributes of the AnnData object, you need to choose ``'r+'``.
+    dense_X_as_sparse
+        If `adata.X` was saved as a dense array, passing a sparse matrix class
+        here will cause that array to be loaded in chunks of `chunk_size` as a
+        sparse matrix. Has no effect for backed mode.
     chunk_size
         Used only when loading sparse dataset that is stored as dense.
         Loading iterates through chunks of the dataset of this row size
         until it reads the whole dataset.
-        Higher size means higher memory consumption and higher loading speed.
+        Higher size means higher memory consumption and higher (to a point)
+        loading speed.
     """
     if backed not in {None, False}:
         mode = backed
@@ -319,7 +345,9 @@ def read_h5ad(
             # Backwards compat for old raw
             if k.startswith("raw."):
                 continue
-            if k in {"obs", "var"}:
+            if k == "X" and dense_X_as_sparse is not None:
+                d[k] = read_dense_as_sparse(f[k], dense_X_as_sparse, axis_chunk=chunk_size)
+            elif k in {"obs", "var"}:
                 d[k] = read_dataframe(f[k])
             else:  # Base case
                 d[k] = read_attribute(f[k])
@@ -454,6 +482,32 @@ def read_dataset(dataset: h5py.Dataset):
     if value.shape == ():
         value = value[()]
     return value
+
+@report_key_on_error
+def read_dense_as_sparse(dataset: h5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int):
+    if sparse_format == sparse.csr_matrix:
+        return read_dense_as_csr(dataset, axis_chunk)
+    elif sparse_format == sparse.csc_matrix:
+        return read_dense_as_csc(dataset, axis_chunk)
+    else:
+        raise ValueError(f"Cannot read dense array as type: {sparse_format}")
+
+
+def read_dense_as_csr(dataset, axis_chunk=6000):
+    sub_matrices = []
+    for idx in idx_chunks_along_axis(dataset.shape, 0, axis_chunk):
+        dense_chunk = dataset[idx]
+        sub_matrix = sparse.csr_matrix(dense_chunk)
+        sub_matrices.append(sub_matrix)
+    return sparse.vstack(sub_matrices, format="csr")
+
+
+def read_dense_as_csc(dataset, axis_chunk=6000):
+    sub_matrices = []
+    for idx in idx_chunks_along_axis(dataset.shape, 1, axis_chunk):
+        sub_matrix = sparse.csc_matrix(dataset[idx])
+        sub_matrices.append(sub_matrix)
+    return sparse.hstack(sub_matrices, format="csc")
 
 
 @read_attribute.register(type(None))

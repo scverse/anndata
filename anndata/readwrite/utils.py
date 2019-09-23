@@ -5,6 +5,34 @@ from ..h5py import SparseDataset
 # Type conversion
 # -------------------------------------------------------------------------------
 
+# Could be numba'd if it returned tuples instead of slices
+def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
+    """
+    Gives indexer tuples chunked along an axis.
+
+    Params
+    ------
+    shape
+        Shape of array to be chunked
+    axis
+        Axis to chunk along
+    chunk_size
+        Size of chunk along axis
+
+    Returns
+    -------
+    An iterator of tuples for indexing into an array of passed shape.
+    """
+    total = shape[axis]
+    cur = 0
+    mutable_idx = [slice(None) for i in range(len(shape))]
+    while cur + chunk_size < total:
+        mutable_idx[axis] = slice(cur, cur+chunk_size)
+        yield tuple(mutable_idx)
+        cur += chunk_size
+    mutable_idx[axis] = slice(cur, None)
+    yield tuple(mutable_idx)
+
 
 def is_float(string):
     """Check whether string is float.

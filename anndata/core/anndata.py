@@ -2234,7 +2234,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self,
             compression=compression,
             compression_opts=compression_opts,
-            # force_dense=force_dense,
+            force_dense=force_dense,
         )
 
         if self.isbacked:
