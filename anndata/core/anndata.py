@@ -1291,8 +1291,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 # change from memory to backing-mode
                 # write the content of self to disk
-                # self.write(filename, force_dense=True)
-                self.write(filename)
+                self.write(filename, force_dense=True)
             # open new file for accessing
             self.file.open(filename, 'r+')
             # as the data is stored on disk, we can safely set self._X to None

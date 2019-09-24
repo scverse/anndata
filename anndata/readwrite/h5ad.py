@@ -78,9 +78,20 @@ def write_h5ad(
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
     with h5py.File(filepath, mode) as f:
-        if sparse_X_as_dense and isinstance(
-            adata.X, (sparse.spmatrix, adh5py.SparseDataset)
+        if (
+            sparse_X_as_dense
+            and isinstance(adata.X, SparseDataset)
+            and Path(adata.filename) == Path(filepath)
         ):
+            write_sparse_as_dense(f, "_X", adata.X, dataset_kwargs)
+            del f["X"]
+            f["X"] = f["_X"]
+            del f["_X"]
+        if sparse_X_as_dense and isinstance(
+            adata.X, (sparse.spmatrix, SparseDataset)
+        ):
+            if "X" in f:
+                del f["X"]  # Normally handled by write_attribute
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs)
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # Otherwise, X should already be up to date
@@ -165,7 +176,6 @@ def write_sparse_compressed(
     g = f.create_group(key)
     g.attrs["encoding-type"] = f"{fmt}_matrix"
     g.attrs["encoding-version"] = "0.1.0"
-    g.attrs["dtype"] = str(value.dtype)
     g.attrs["shape"] = value.shape
 
     g.create_dataset("data", data=value.data, **dataset_kwargs)
@@ -370,7 +380,7 @@ def read_h5ad(
         if X_dset is None:
             pass
         elif isinstance(X_dset, h5py.Group):
-            d["dtype"] = X_dset.attrs["dtype"]
+            d["dtype"] = X_dset["data"].dtype
         elif hasattr(X_dset, "dtype"):
             d["dtype"] = f["X"].dtype
         else:
