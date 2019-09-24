@@ -1,5 +1,5 @@
-from functools import wraps
-from ..h5py import SparseDataset
+from functools import wraps, singledispatch
+from ..core.sparsedataset import SparseDataset
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -82,6 +82,23 @@ def convert_string(string):
         return None
     else:
         return string
+
+# -------------------------------------------------------------------------------
+# Generic functions
+# -------------------------------------------------------------------------------
+
+
+@singledispatch
+def write_attribute(*args, **kwargs):
+    raise NotImplementedError("Unrecognized argument types for `write_attribute`.")
+
+# @singledispatch
+# def read_attribute(*args, **kwargs):
+#     raise NotImplementedError("Unrecognized argument types for `read_attribute`.")
+
+# -------------------------------------------------------------------------------
+# Errors handling
+# -------------------------------------------------------------------------------
 
 
 class AnnDataReadError(OSError):

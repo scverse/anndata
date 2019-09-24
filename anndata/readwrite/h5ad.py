@@ -5,16 +5,16 @@ from types import MappingProxyType
 from typing import Callable, Optional, Type, TypeVar, Union
 from warnings import warn
 
-import h5py as h5py
+import h5py
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
-from ..h5py import SparseDataset
+from ..core.sparsedataset import SparseDataset
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
-from .utils import report_key_on_error, idx_chunks_along_axis
+from .utils import report_key_on_error, idx_chunks_along_axis, write_attribute
 
 
 H5Group = Union[h5py.Group, h5py.File]
@@ -117,7 +117,9 @@ def _write_method(cls: Type[T]) -> Callable[[H5Group, str, T], None]:
     return _find_impl(cls, H5AD_WRITE_REGISTRY)
 
 
-def write_attribute(f: H5Group, key: str, value, *args, **kwargs):
+@write_attribute.register(h5py.File)
+@write_attribute.register(h5py.Group)
+def write_attribute_h5ad(f: H5Group, key: str, value, *args, **kwargs):
     if key in f:
         del f[key]
     _write_method(type(value))(f, key, value, *args, **kwargs)

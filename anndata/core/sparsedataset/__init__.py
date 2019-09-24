@@ -1,5 +1,12 @@
+"""This module implements on disk sparse datasets.
+
+This code was originally based on and uses the conventions of
+`h5sparse <https://github.com/appier/h5sparse>`_ by
+`Appier Inc. <https://www.appier.com/>`_.
+See the copyright and license note in this directory source code.
+"""
+
 # TODO:
-# - think about making all of the below subclasses
 # - think about supporting the COO format
 from collections.abc import Iterable
 from itertools import accumulate, chain
@@ -11,7 +18,7 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from ..utils import unpack_index
+from ...utils import unpack_index
 
 
 class BackedFormat(NamedTuple):
