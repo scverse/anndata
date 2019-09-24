@@ -177,6 +177,10 @@ def write_sparse_compressed(f, key, value, fmt: str, dataset_kwargs=MappingProxy
     g.attrs["encoding-version"] = "0.1.0"
     g.attrs["shape"] = value.shape
 
+    # Allow resizing
+    if "maxshape" not in dataset_kwargs:
+        dataset_kwargs = {"maxshape": (None,), **dataset_kwargs}
+
     g.create_dataset("data", data=value.data, **dataset_kwargs)
     g.create_dataset("indices", data=value.indices, **dataset_kwargs)
     g.create_dataset("indptr", data=value.indptr, **dataset_kwargs)
@@ -188,7 +192,6 @@ def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(f, key, value.tobacked(), fmt=value.format_str, dataset_kwargs=dataset_kwargs)
 
 def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
-    print("writing sparse as dense")
     dset = f.create_dataset(key, shape=value.shape, dtype=value.dtype, **dataset_kwargs)
     compressed_axis = int(isinstance(value, sparse.csc_matrix))
     for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):

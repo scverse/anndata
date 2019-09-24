@@ -1,10 +1,9 @@
 # TODO:
 # - think about making all of the below subclasses
 # - think about supporting the COO format
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from itertools import accumulate, chain
-from os import PathLike
-from typing import Optional, Union, KeysView, NamedTuple, Tuple, Sequence
+from typing import Union, NamedTuple, Tuple, Sequence
 from warnings import warn
 
 import h5py
@@ -13,8 +12,6 @@ import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
 from ..utils import unpack_index
-
-from .utils import _chunked_rows
 
 
 class BackedFormat(NamedTuple):
@@ -75,27 +72,6 @@ def get_backed_class(format_str):
             return backed_class
     raise ValueError(f"Format string {format_str} is not supported.")
 
-
-def _load_h5_dataset_as_sparse(sds, chunk_size=6000):
-    # efficient for csr, not so for csc (but still better than loompy it seems)
-    if not isinstance(sds, h5py.Dataset):
-        raise ValueError('sds should be a h5py Dataset')
-
-    if 'sparse_format' in sds.attrs:
-        sparse_class = get_memory_class(sds.attrs['sparse_format'])
-    else:
-        sparse_class = ss.csr_matrix
-
-    data = None
-
-    for chunk, _, _ in _chunked_rows(sds, chunk_size, True):
-        data = (
-            sparse_class(chunk)
-            if data is None
-            else ss.vstack([data, sparse_class(chunk)])
-        )
-
-    return data
 
 def _set_many(self, i, j, x):
     """\
@@ -310,15 +286,26 @@ class SparseDataset:
         mock_matrix[row, col] = value
 
     def append(self, sparse_matrix):
+        # Prep variables
         shape = self.shape
+        if isinstance(sparse_matrix, SparseDataset):
+            sparse_matrix = sparse_matrix.tobacked()
 
-        if self.format_str != get_format_str(sparse_matrix):
-            raise ValueError("Format not the same.")
-
-        if self.format_str != 'csr':
+        # Check input
+        if self.format_str not in {'csr', 'csc'}:
             raise NotImplementedError(
                 f"The append method for format {self.format_str} "
                 f"is not implemented."
+            )
+        if not isinstance(sparse_matrix, ss.spmatrix):
+            raise NotImplementedError(
+                "Currently, only sparse matrices of equivalent format can be "
+                "appended to a SparseDataset."
+            )
+        if self.format_str != get_format_str(sparse_matrix):
+            raise ValueError(
+                f"Matrices must have same format. Currently are "
+                f"'{self.format_str}' and '{get_format_str(sparse_matrix)}'"
             )
 
         # data
@@ -348,10 +335,19 @@ class SparseDataset:
         # shape
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
-        self.group.attrs['shape'] = (
-            shape[0] + sparse_matrix.shape[0],
-            max(shape[1], sparse_matrix.shape[1]),
-        )
+
+        # TODO: Do we want to allow different sizes on the unaligned axis?
+        if self.format_str == "csr":
+            new_shape = (
+                shape[0] + sparse_matrix.shape[0],
+                max(shape[1], sparse_matrix.shape[1]),
+            )
+        elif self.format_str == "csc":
+            new_shape = (
+                max(shape[0], sparse_matrix.shape[0]),
+                shape[1] + sparse_matrix.shape[1],
+            )
+        self.group.attrs['shape'] = new_shape
 
     def tobacked(self):
         format_class = get_backed_class(self.format_str)

@@ -21,4 +21,4 @@ For examples and further information, see this `blog post <https://falexwolf.de/
    Dataset
    SparseDataset
 """
-from .h5sparse import SparseDataset, _load_h5_dataset_as_sparse
+from .h5sparse import SparseDataset
