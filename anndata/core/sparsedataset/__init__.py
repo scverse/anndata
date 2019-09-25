@@ -140,21 +140,21 @@ FORMATS = [
 
 
 def get_format_str(data):
-    for fmt, _, memory_class in FORMATS:  # To appease codacy
+    for fmt, _, memory_class in FORMATS:
         if isinstance(data, memory_class):
             return fmt
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
 def get_memory_class(format_str):
-    for fmt, _, memory_class in FORMATS:  # To appease codacy
+    for fmt, _, memory_class in FORMATS:
         if format_str == fmt:
             return memory_class
     raise ValueError(f"Format string {format_str} is not supported.")
 
 
 def get_backed_class(format_str):
-    for fmt, backed_class, _ in FORMATS:  # To appease codacy
+    for fmt, backed_class, _ in FORMATS:
         if format_str == fmt:
             return backed_class
     raise ValueError(f"Format string {format_str} is not supported.")
