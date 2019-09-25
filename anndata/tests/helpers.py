@@ -38,6 +38,7 @@ def gen_typed_df(n, index=None):
     return pd.DataFrame(
         dict(
             cat=pd.Categorical(np.random.choice(letters, n)),
+            cat_ordered=pd.Categorical(np.random.choice(letters, n), ordered=True),
             int64=np.random.randint(-50, 50, n),
             float64=np.random.random(n),
             uint8=np.random.randint(255, size=n, dtype="uint8"),
@@ -297,9 +298,6 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
         report_name(pd.testing.assert_frame_equal)(
             a,
             b,
-            check_names=False,
-            check_categorical=False,  # check encoded values, but not codes
-            # Should different orderings be allowed?
             _elem_name=elem_name,
         )
     else:
@@ -308,7 +306,6 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
             b,
             check_exact=True,
             check_index_type=True,
-            check_names=False,
             _elem_name=elem_name,
         )
 
