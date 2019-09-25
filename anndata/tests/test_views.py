@@ -17,9 +17,9 @@ from anndata.tests.helpers import (
     assert_equal,
 )
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Some test data
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 # data matrix of shape n_obs x n_vars
 X_list = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
@@ -65,9 +65,9 @@ def mapping_name(request):
     return request.param
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # The test functions
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 
 def test_views():
@@ -96,7 +96,7 @@ def test_views():
 def test_modify_view_component(matrix_type, mapping_name):
     adata = ad.AnnData(
         np.zeros((10, 10)),
-        **{mapping_name: {"m": matrix_type(asarray(sparse.random(10, 10)))}},
+        **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
     init_hash = joblib.hash(adata)
 
@@ -110,7 +110,8 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert init_hash == joblib.hash(adata)
 
 
-# These tests could probably be condensed into a fixture based test for obsm and varm
+# TODO: These tests could probably be condensed into a fixture
+#       based test for obsm and varm
 def test_set_obsm_key(adata):
     init_hash = joblib.hash(adata)
 
@@ -143,7 +144,7 @@ def test_set_obs(adata, subset_func):
     subset = adata[subset_func(adata.obs_names), :]
 
     new_obs = pd.DataFrame(
-        {"a": np.ones(subset.n_obs), "b": np.ones(subset.n_obs)},
+        dict(a=np.ones(subset.n_obs), b=np.ones(subset.n_obs)),
         index=subset.obs_names,
     )
 
@@ -183,7 +184,7 @@ def test_set_obsm(adata):
 
     subset = adata[subset_idx, :]
     assert subset.isview
-    subset.obsm = {"o": np.ones((dim0_size, dim1_size))}
+    subset.obsm = dict(o=np.ones((dim0_size, dim1_size)))
     assert not subset.isview
     assert np.all(orig_obsm_val == adata.obsm["o"])  # Checking for mutation
     assert np.all(subset.obsm["o"] == np.ones((dim0_size, dim1_size)))
@@ -191,14 +192,13 @@ def test_set_obsm(adata):
     subset = adata[subset_idx, :]
     subset_hash = joblib.hash(subset)
     with pytest.raises(ValueError):
-        subset.obsm = {"o": np.ones((dim0_size + 1, dim1_size))}
+        subset.obsm = dict(o=np.ones((dim0_size + 1, dim1_size)))
     with pytest.raises(ValueError):
-        subset.varm = {"o": np.ones((dim0_size - 1, dim1_size))}
+        subset.varm = dict(o=np.ones((dim0_size - 1, dim1_size)))
     assert subset_hash == joblib.hash(subset)
 
-    assert init_hash == joblib.hash(
-        adata
-    )  # Only modification have been made to a view
+    # Only modification have been made to a view
+    assert init_hash == joblib.hash(adata)
 
 
 def test_set_varm(adata):
@@ -211,7 +211,7 @@ def test_set_varm(adata):
 
     subset = adata[:, subset_idx]
     assert subset.isview
-    subset.varm = {"o": np.ones((dim0_size, dim1_size))}
+    subset.varm = dict(o=np.ones((dim0_size, dim1_size)))
     assert not subset.isview
     assert np.all(orig_varm_val == adata.varm["o"])  # Checking for mutation
     assert np.all(subset.varm["o"] == np.ones((dim0_size, dim1_size)))
@@ -219,17 +219,16 @@ def test_set_varm(adata):
     subset = adata[:, subset_idx]
     subset_hash = joblib.hash(subset)
     with pytest.raises(ValueError):
-        subset.varm = {"o": np.ones((dim0_size + 1, dim1_size))}
+        subset.varm = dict(o=np.ones((dim0_size + 1, dim1_size)))
     with pytest.raises(ValueError):
-        subset.varm = {"o": np.ones((dim0_size - 1, dim1_size))}
-    assert subset_hash == joblib.hash(
-        subset
-    )  # subset should not be changed by failed setting
-
+        subset.varm = dict(o=np.ones((dim0_size - 1, dim1_size)))
+    # subset should not be changed by failed setting
+    assert subset_hash == joblib.hash(subset)
     assert init_hash == joblib.hash(adata)
 
 
-# TODO: Determine if this is the intended behavior, or just the behaviour we've had for a while
+# TODO: Determine if this is the intended behavior,
+#       or just the behaviour we've had for a while
 def test_not_set_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
@@ -324,9 +323,8 @@ def test_view_failed_delitem(attr):
 def test_view_delitem(attr):
     adata = gen_adata((10, 10))
     getattr(adata, attr)["to_delete"] = np.ones((10, 10))
-    assert (
-        type(getattr(adata, attr)["to_delete"]) is np.ndarray
-    )  # Shouldn't be a subclass, should be an ndarray
+    # Shouldn't be a subclass, should be an ndarray
+    assert type(getattr(adata, attr)["to_delete"]) is np.ndarray
     view = adata[5:7, :][:, :5]
     adata_hash = joblib.hash(adata)
     view_hash = joblib.hash(view)

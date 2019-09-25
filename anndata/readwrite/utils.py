@@ -90,9 +90,8 @@ def report_key_on_error(func):
                 except ImportError:
                     zarr = None
                 if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-                    parent = (
-                        elem.store
-                    )  # Not sure how to always get a name out of this
+                    # Not sure how to always get a name out of this
+                    parent = elem.store
                 elif isinstance(elem, patched_h5py.Group):
                     parent = elem.h5py_group.file.name
                 else:
