@@ -293,21 +293,15 @@ def assert_equal_sparse(a, b, exact=False, elem_name=None):
 @assert_equal.register(pd.DataFrame)
 def are_equal_dataframe(a, b, exact=False, elem_name=None):
     if not isinstance(b, pd.DataFrame):
-        assert_equal(b, a, exact, elem_name),  # a.values maybe?
-    if not exact:
-        report_name(pd.testing.assert_frame_equal)(
-            a,
-            b,
-            _elem_name=elem_name,
-        )
-    else:
-        report_name(pd.testing.assert_frame_equal)(
-            a,
-            b,
-            check_exact=True,
-            check_index_type=True,
-            _elem_name=elem_name,
-        )
+        assert_equal(b, a, exact, elem_name)  # , a.values maybe?
+
+    report_name(pd.testing.assert_frame_equal)(
+        a,
+        b,
+        check_index_type=exact,
+        check_exact=exact,
+        _elem_name=elem_name,
+    )
 
 
 @assert_equal.register(Mapping)
