@@ -136,9 +136,8 @@ def deprecated(new_name: str):
     def decorator(func):
         @wraps(func)
         def new_func(*args, **kwargs):
-            warnings.simplefilter(
-                'always', DeprecationWarning
-            )  # turn off filter
+            # turn off filter
+            warnings.simplefilter('always', DeprecationWarning)
             warnings.warn(
                 f'Use {new_name} instead of {func.__name__}, '
                 f'{func.__name__} will be removed in the future.',

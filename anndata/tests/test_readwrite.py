@@ -16,9 +16,10 @@ from anndata.tests.helpers import gen_adata, asarray, assert_equal
 HERE = Path(__file__).parent
 
 
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Some test data
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 X_sp = csr_matrix([[1, 0, 0], [3, 0, 0], [5, 6, 0], [0, 0, 0], [0, 0, 0]])
 
@@ -53,15 +54,15 @@ uns_dict = dict(  # unstructured annotation
     oanno1_colors=['#000000', '#FFFFFF'],
     uns2=['some annotation'],
     uns3="another annotation",
-    uns4={
-        "a": 1,
-        "b": [2, 3],
-        "c": "4",
-        "d": ["some", "strings"],
-        "e": np.ones(5),
-        "f": np.int32(7),
-        "g": [1, np.float32(2.5)],
-    },
+    uns4=dict(
+        a=1,
+        b=[2, 3],
+        c="4",
+        d=["some", "strings"],
+        e=np.ones(5),
+        f=np.int32(7),
+        g=[1, np.float32(2.5)],
+    ),
 )
 
 
@@ -75,11 +76,23 @@ def diskfmt(request):
     return request.param
 
 
+@pytest.fixture
+def rw(backing_h5ad):
+    M, N = 100, 101
+    orig = gen_adata((M, N))
+    orig.write(backing_h5ad)
+    curr = ad.read(backing_h5ad)
+    return curr, orig
+
+
 diskfmt2 = diskfmt
 
-# -------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # The test functions
-# -------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
+
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
@@ -126,13 +139,13 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert np.all(adata.var == adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
-    assert type(adata.raw.X) == type(adata_src.raw.X)
-    assert type(adata.raw.varm) == type(adata_src.raw.varm)
+    assert type(adata.raw.X) is type(adata_src.raw.X)
+    assert type(adata.raw.varm) is type(adata_src.raw.varm)
     assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
     assert np.all(adata.raw.var == adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
-    assert type(adata.uns["uns4"]["c"]) == type(adata_src.uns["uns4"]["c"])
+    assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
     assert_equal(adata, adata_src)
 
 
@@ -155,12 +168,12 @@ def test_readwrite_zarr(typ, tmp_path):
     assert np.all(adata.var == adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
-    assert type(adata.raw.X) == type(adata_src.raw.X)
+    assert type(adata.raw.X) is type(adata_src.raw.X)
     assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
     assert np.all(adata.raw.var == adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
-    assert type(adata.uns["uns4"]["c"]) == type(adata_src.uns["uns4"]["c"])
+    assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
     assert_equal(adata, adata_src)
 
 
@@ -174,12 +187,8 @@ def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     assert adata.X.dtype == adata_src.X.dtype
 
 
-def test_read_write_maintain_obsmvarm_dtypes(backing_h5ad):
-    M, N = 100, 101
-    orig = gen_adata((M, N))
-
-    orig.write(backing_h5ad)
-    curr = ad.read(backing_h5ad)
+def test_read_write_maintain_obsmvarm_dtypes(rw):
+    curr, orig = rw
 
     assert type(orig.obsm["array"]) is type(curr.obsm["array"])
     assert np.all(orig.obsm["array"] == curr.obsm["array"])
@@ -192,11 +201,8 @@ def test_read_write_maintain_obsmvarm_dtypes(backing_h5ad):
     assert np.all(orig.varm["df"] == curr.varm["df"])
 
 
-def test_maintain_layers(backing_h5ad):
-    M, N = 100, 101
-    orig = gen_adata((M, N))
-    orig.write(backing_h5ad)
-    curr = ad.read(backing_h5ad)
+def test_maintain_layers(rw):
+    curr, orig = rw
 
     assert type(orig.layers["array"]) is type(curr.layers["array"])
     assert np.all(orig.layers["array"] == curr.layers["array"])
