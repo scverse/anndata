@@ -273,6 +273,7 @@ class Raw:
 
     @property
     def X(self):
+        # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if self._adata.isbacked:
             if not self._adata.file.isopen:
                 self._adata.file.open()
@@ -902,7 +903,23 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.file['X']
             if isinstance(X, h5py.Group):
                 X = SparseDataset(X)
-            if self.isview:
+            # TODO: This should get replaced/ handled elsewhere
+            # This is so that we can index into a backed dense dataset with
+            # indices that aren't strictly increasing
+            if self.isview and isinstance(X, h5py.Dataset):
+                ordered = [self._oidx, self._vidx]  # this will be mutated
+                rev_order = [slice(None), slice(None)]
+                for axis, axis_idx in enumerate(ordered.copy()):
+                    if (
+                        isinstance(axis_idx, np.ndarray)
+                        and axis_idx.dtype.type != bool
+                    ):
+                        order = np.argsort(axis_idx)
+                        ordered[axis] = axis_idx[order]
+                        rev_order[axis] = np.argsort(order)
+                # from hdf5, then to real order
+                X = X[tuple(ordered)][tuple(rev_order)]
+            elif self.isview:
                 X = X[self._oidx, self._vidx]
         elif self.isview:
             X = asview(
@@ -1290,6 +1307,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _set_backed(self, attr, value):
         from ..readwrite.utils import write_attribute
+
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
