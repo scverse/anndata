@@ -1,19 +1,11 @@
+from warnings import warn
 from abc import ABC, abstractmethod
-import collections.abc as cabc
+from collections import abc as cabc
 from functools import singledispatch
-from typing import (
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    Iterable,
-    Sequence,
-    Union,
-    List,
-    TypeVar,
-    Iterator,
-    ClassVar,
-)
+from typing import TYPE_CHECKING
+from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
+from typing import Hashable, Iterable, Iterator, Mapping, Sequence  # ABCs
+from typing import Tuple, List, Dict  # Generic base types
 
 import numpy as np
 import pandas as pd
@@ -21,6 +13,9 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated
 from .views import asview, ViewArgs
+
+if TYPE_CHECKING:
+    from .anndata import AnnData
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -46,6 +41,14 @@ def _subset_df(df: pd.DataFrame, subset_idx: OneDIdx):
 
 
 class AlignedMapping(cabc.MutableMapping, ABC):
+    """\
+    An abstract base class for Mappings containing array-like values aligned
+    to either one or both AnnData axes.
+    """
+
+    _allow_df: bool
+    """If this mapping supports heterogeneous DataFrames"""
+
     _view_class: ClassVar[Type["AlignedViewMixin"]]
     """The view class for this aligned mapping."""
 
@@ -53,12 +56,12 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     """The actual class (which has it's own data) for this aligned mapping."""
 
     def __repr__(self):
-        return f"{self.__class__.__name__,} with keys: {self.keys()}"
+        return f"{type(self).__name__} with keys: {self.keys()}"
 
-    def _ipython_key_completions_(self) -> List[str]:
+    def _ipython_key_completions_(self) -> List[Hashable]:
         return list(self.keys())
 
-    def _validate_value(self, val: V, key: str) -> None:
+    def _validate_value(self, val: V, key: Hashable) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] != val.shape[i]:
@@ -75,6 +78,15 @@ class AlignedMapping(cabc.MutableMapping, ABC):
                 raise IndexError()  # Maybe not index error
         except AttributeError:
             pass
+        if not self._allow_df and isinstance(val, pd.DataFrame):
+            was_heterogeneous = val.dtypes.nunique() != 1
+            val = val.to_numpy()
+            if was_heterogeneous:
+                warn(
+                    f'Layer {key!r} converted to numpy array '
+                    f'with dtype {val.dtype}'
+                )
+        return val
 
     @property
     @abstractmethod
@@ -113,43 +125,41 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
 
 class AlignedViewMixin:
-    """
-    Attributes
-    ----------
-    parent
-        Reference to parent AnnData view
-    attrname
-        What attribute in the parent is this?
-    parent_mapping
-        The object this is a view of.
-    """
+    parent: "AnnData"
+    """Reference to parent AnnData view"""
+
+    attrname: str
+    """What attribute in the parent is this?"""
+
+    parent_mapping: Mapping[Hashable, V]
+    """The object this is a view of."""
 
     isview = True
 
-    def __getitem__(self, key: str) -> V:
+    def __getitem__(self, key: Hashable) -> V:
         return asview(
             _subset(self.parent_mapping[key], self.subset_idx),
             ViewArgs(self.parent, self.attrname, (key,)),
         )
 
-    def __setitem__(self, key: str, value: V):
-        self._validate_value(value, key)  # Validate before mutating
+    def __setitem__(self, key: Hashable, value: V):
+        value = self._validate_value(value, key)  # Validate before mutating
         adata = self.parent.copy()
         new_mapping = getattr(adata, self.attrname)
         new_mapping[key] = value
         self.parent._init_as_actual(adata)
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: Hashable):
         self[key]  # Make sure it exists before bothering with a copy
         adata = self.parent.copy()
         new_mapping = getattr(adata, self.attrname)
         del new_mapping[key]
         self.parent._init_as_actual(adata)
 
-    def __contains__(self, key: str) -> bool:
+    def __contains__(self, key: Hashable) -> bool:
         return key in self.parent_mapping
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[Hashable]:
         return iter(self.parent_mapping)
 
     def __len__(self) -> int:
@@ -157,28 +167,25 @@ class AlignedViewMixin:
 
 
 class AlignedActualMixin:
-    """
-    Attributes
-    _data: dict
-        Underlying mapping to the data
-    """
+    _data: Dict[Hashable, V]
+    """Underlying mapping to the data"""
 
     isview = False
 
-    def __getitem__(self, key: str) -> V:
+    def __getitem__(self, key: Hashable) -> V:
         return self._data[key]
 
-    def __setitem__(self, key: str, value: V):
-        self._validate_value(value, key)
+    def __setitem__(self, key: Hashable, value: V):
+        value = self._validate_value(value, key)
         self._data[key] = value
 
-    def __contains__(self, key: str) -> bool:
+    def __contains__(self, key: Hashable) -> bool:
         return key in self._data
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: Hashable):
         del self._data[key]
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[Hashable]:
         return iter(self._data)
 
     def __len__(self) -> int:
@@ -191,10 +198,11 @@ class AxisArraysBase(AlignedMapping):
     where array-like is aligned to an axis of parent AnnData.
     """
 
+    _allow_df = True
     _dimnames = ("obs", "var")
 
     @property
-    def attrname(self):
+    def attrname(self) -> str:
         return f"{self.dim}m"
 
     @property
@@ -261,6 +269,7 @@ class LayersBase(AlignedMapping):
     parent anndata.
     """
 
+    _allow_df = False
     attrname = "layers"
     axes = (0, 1)
 
@@ -302,6 +311,7 @@ class PairwiseArraysBase(AlignedMapping):
     one axis of the parent anndata.
     """
 
+    _allow_df = False
     _dimnames = ("obs", "var")
 
     @property
@@ -311,7 +321,7 @@ class PairwiseArraysBase(AlignedMapping):
     @property
     def axes(self) -> Tuple[int, int]:
         """Axes of the parent this is aligned to"""
-        return (self._axis, self._axis)
+        return self._axis, self._axis
 
     @property
     def dim(self) -> str:
