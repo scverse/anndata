@@ -5,7 +5,41 @@ from scipy import sparse
 
 import anndata as ad
 from anndata.core.sparsedataset import SparseDataset
-from anndata.tests.helpers import assert_equal
+from anndata.tests.helpers import assert_equal, subset_func
+
+subset_func2 = subset_func
+
+
+@pytest.fixture(scope="function")
+def ondisk_equivalent_adata(tmp_path):
+    csr_path = tmp_path / "csr.h5ad"
+    csc_path = tmp_path / "csc.h5ad"
+    dense_path = tmp_path / "dense.h5ad"
+
+    csr_mem = ad.AnnData(X=sparse.random(50, 50, format="csr", density=0.1))
+    csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
+
+    csr_mem.write_h5ad(csr_path)
+    csc_mem.write_h5ad(csc_path)
+    csr_mem.write_h5ad(dense_path, force_dense=True)
+
+    csr_disk = ad.read_h5ad(csr_path, backed="r")
+    csc_disk = ad.read_h5ad(csc_path, backed="r")
+    dense_disk = ad.read_h5ad(dense_path, backed="r")
+
+    return csr_mem, csr_disk, csc_disk, dense_disk
+
+
+def test_backed_indexing(ondisk_equivalent_adata, subset_func, subset_func2):
+    csr_mem, csr_disk, csc_disk, dense_disk = ondisk_equivalent_adata
+
+    obs_idx = subset_func(csr_mem.obs_names)
+    var_idx = subset_func2(csr_mem.var_names)
+
+    assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
+    assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
+    assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
+    assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
 @pytest.mark.parametrize(
