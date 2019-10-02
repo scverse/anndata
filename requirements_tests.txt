@@ -1,4 +1,4 @@
-loompy>=2.0.12; python_version>='3.6'
+loompy<3.0.0
 pytest>=3.9
 pytest-cov
 codacy-coverage
