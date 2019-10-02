@@ -8,3 +8,5 @@ sklearn
 xlrd
 joblib
 black
+# Temporary fix for loompy>3.0.0
+numpy-groupies
