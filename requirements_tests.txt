@@ -1,4 +1,4 @@
-loompy<3.0.0
+loompy>=3.0.5
 pytest>=3.9
 pytest-cov
 codacy-coverage
