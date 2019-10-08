@@ -21,7 +21,7 @@ def ondisk_equivalent_adata(tmp_path):
 
     csr_mem.write_h5ad(csr_path)
     csc_mem.write_h5ad(csc_path)
-    csr_mem.write_h5ad(dense_path, force_dense=True)
+    csr_mem.write_h5ad(dense_path, as_dense="X")
 
     csr_disk = ad.read_h5ad(csr_path, backed="r")
     csc_disk = ad.read_h5ad(csc_path, backed="r")
