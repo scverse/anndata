@@ -2,17 +2,21 @@
 
 This includes correct behaviour as well as throwing warnings.
 """
+import h5py
 import numpy as np
 import pytest
-from scipy.sparse import csr_matrix
+from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData
+
+from anndata.tests.helpers import assert_equal
 
 
 @pytest.fixture
 def adata():
     adata = AnnData(
-        X=csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]]),
         obs=dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
         var=dict(var_names=['a', 'b', 'c']),
     )
@@ -69,3 +73,21 @@ def test_obsvar_vector_Xlayer(adata):
         # This time it shouldn't throw a warning
         if "anndata" in r.filename:
             assert r.category is not FutureWarning
+
+
+def test_force_dense_deprecated(tmp_path):
+    dense_pth = tmp_path / "dense.h5ad"
+    adata = AnnData(X=sparse.random(10, 10, format="csr"))
+    adata.raw = adata
+
+    with pytest.warns(FutureWarning):
+        adata.write_h5ad(dense_pth, force_dense=True)
+    with h5py.File(dense_pth, "r") as f:
+        assert isinstance(f["X"], h5py.Dataset)
+        assert isinstance(f["raw/X"], h5py.Dataset)
+
+    dense = ad.read_h5ad(dense_pth)
+
+    assert isinstance(dense.X, np.ndarray)
+    assert isinstance(dense.raw.X, np.ndarray)
+    assert_equal(adata, dense)
