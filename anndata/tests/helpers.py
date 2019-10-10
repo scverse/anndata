@@ -303,25 +303,20 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
 @assert_equal.register(pd.DataFrame)
 def are_equal_dataframe(a, b, exact=False, elem_name=None):
     if not isinstance(b, pd.DataFrame):
-        assert_equal(b, a, exact, elem_name),  # a.values maybe?
-    if not exact:
-        report_name(pd.testing.assert_frame_equal)(
-            a,
-            b,
-            check_names=False,
-            check_categorical=False,  # check encoded values, but not codes
-            # Should different orderings be allowed?
-            _elem_name=elem_name,
-        )
-    else:
-        report_name(pd.testing.assert_frame_equal)(
-            a,
-            b,
-            check_exact=True,
-            check_index_type=True,
-            check_names=False,
-            _elem_name=elem_name,
-        )
+        assert_equal(b, a, exact, elem_name)  # , a.values maybe?
+
+    report_name(pd.testing.assert_frame_equal)(
+        a,
+        b,
+        check_index_type=exact,
+        check_exact=exact,
+        # If False: check encoded values, but not codes
+        check_categorical=exact,
+        # Should different orderings be allowed?
+        # check_like=exact,
+        check_names=False,
+        _elem_name=elem_name,
+    )
 
 
 @assert_equal.register(Mapping)

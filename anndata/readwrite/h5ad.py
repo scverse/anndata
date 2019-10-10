@@ -543,9 +543,8 @@ def read_dataset(dataset: h5py.Dataset):
         ):  # Backwards compat, old datasets have strings written as one element 1d arrays
             return value[0]
     elif len(value.dtype.descr) > 1:  # Compound dtype
-        value = _from_fixed_length_strings(
-            value
-        )  # For backwards compat, now strings are written as variable length
+        # For backwards compat, now strings are written as variable length
+        value = _from_fixed_length_strings(value)
     if value.shape == ():
         value = value[()]
     return value
