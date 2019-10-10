@@ -60,6 +60,26 @@ def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert):
         assert_equal(disk, from_disk)
 
 
+def test_sparse_to_dense_inplace(tmp_path, spmtx_format):
+    pth = tmp_path / "adata.h5ad"
+    orig = gen_adata((50, 50), spmtx_format)
+    orig.raw = orig
+    orig.write(pth)
+    backed = ad.read_h5ad(pth, backed="r+")
+    backed.write(as_dense=("X", "raw/X"))
+    new = ad.read_h5ad(pth)
+
+    assert_equal(orig, new)
+    assert_equal(backed, new)
+
+    assert isinstance(new.X, np.ndarray)
+    assert isinstance(new.raw.X, np.ndarray)
+    assert isinstance(orig.X, spmtx_format)
+    assert isinstance(orig.raw.X, spmtx_format)
+    assert isinstance(backed.X, h5py.Dataset)
+    assert isinstance(backed.raw.X, h5py.Dataset)
+
+
 def test_sparse_to_dense_errors(tmp_path):
     adata = ad.AnnData(X=sparse.random(50, 50, format="csr"))
     adata.layers["like_X"] = adata.X.copy()
