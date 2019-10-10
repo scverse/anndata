@@ -216,8 +216,8 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
     real_key = None  # Flag for if temporary key was used
     if key in f:
         if (
-            isinstance(value, (h5py.Group, h5py.Dataset, SparseDataset)
-            and value.filename == f.filename)
+            isinstance(value, (h5py.Group, h5py.Dataset, SparseDataset))
+            and value.file.filename == f.filename
         ):  # Write to temporary key before overwriting
             real_key = key
             # Transform key to temporary, e.g. raw/X -> raw/_X, or X -> _X

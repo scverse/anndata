@@ -277,6 +277,10 @@ class SparseDataset:
         return self.group.name
 
     @property
+    def file(self):
+        return self.group.file
+
+    @property
     def shape(self):
         if "h5sparse_shape" in self.group.attrs:
             return tuple(self.group.attrs['h5sparse_shape'])
