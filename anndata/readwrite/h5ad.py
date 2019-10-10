@@ -274,6 +274,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         write_array(group, category_key, cats, dataset_kwargs=dataset_kwargs)
         write_array(group, key, codes, dataset_kwargs=dataset_kwargs)
         group[key].attrs["categories"] = group[category_key].ref
+        group[category_key].attrs["ordered"] = series.cat.ordered
     else:
         group[key] = series.values
 
@@ -484,7 +485,9 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
         categories = dataset.attrs["categories"]
         if isinstance(categories, h5py.Reference):
-            categories = dataset.parent[dataset.attrs["categories"]][...]
+            categories_dset = dataset.parent[dataset.attrs["categories"]]
+            categories = categories_dset[...]
+            ordered = categories_dset.attrs.get("ordered", False)
         else:
             # TODO: remove this code at some point post 0.7
             # TODO: Add tests for this
@@ -495,7 +498,7 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
                 FutureWarning,
             )
         return pd.Categorical.from_codes(
-            dataset[...], categories, ordered=False
+            dataset[...], categories, ordered=ordered
         )
     else:
         return dataset[...]

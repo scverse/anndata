@@ -109,7 +109,10 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
 
         write_array(group, category_key, cats, dataset_kwargs)
         write_array(group, key, codes, dataset_kwargs)
+
         group[key].attrs["categories"] = category_key
+        # Must coerce np.bool_ to bool for json writing
+        group[category_key].attrs["ordered"] = bool(series.cat.ordered)
     else:
         group[key] = series.values
 
@@ -330,9 +333,12 @@ def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
         categories = dataset.attrs["categories"]
         if isinstance(categories, str):
+            categories_key = categories
             parent_name = dataset.name.rstrip(dataset.basename)
             parent = zarr.open(dataset.store)[parent_name]
-            categories = parent[categories][...]
+            categories_dset = parent[categories_key]
+            categories = categories_dset[...]
+            ordered = categories_dset.attrs.get("ordered", False)
         else:
             # TODO: remove this code at some point post 0.7
             # TODO: Add tests for this
@@ -343,7 +349,7 @@ def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
                 FutureWarning,
             )
         return pd.Categorical.from_codes(
-            dataset[...], categories, ordered=False
+            dataset[...], categories, ordered=ordered
         )
     else:
         return dataset[...]
