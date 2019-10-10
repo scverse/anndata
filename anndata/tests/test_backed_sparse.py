@@ -92,6 +92,28 @@ def test_dataset_append_disk(tmp_path, sparse_format, append_method):
     assert_equal(fromdisk, frommem)
 
 
+@pytest.mark.parametrize(
+    ["sparse_format", "a_shape", "b_shape"],
+    [
+        pytest.param("csr", (100, 100), (100, 200)),
+        pytest.param("csc", (100, 100), (200, 100)),
+    ],
+)
+def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape):
+    h5_path = tmp_path / "base.h5"
+    a_mem = sparse.random(*a_shape, format=sparse_format)
+    b_mem = sparse.random(*b_shape, format=sparse_format)
+
+    with h5py.File(h5_path, "a") as f:
+        ad.readwrite.h5ad.write_attribute(f, "a", a_mem)
+        ad.readwrite.h5ad.write_attribute(f, "b", b_mem)
+        a_disk = SparseDataset(f["a"])
+        b_disk = SparseDataset(f["b"])
+
+        with pytest.raises(AssertionError):
+            a_disk.append(b_disk)
+
+
 def test_wrong_formats(tmp_path):
     h5_path = tmp_path / "base.h5"
     base = sparse.random(100, 100, format="csr")
