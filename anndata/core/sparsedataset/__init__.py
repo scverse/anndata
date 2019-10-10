@@ -335,19 +335,32 @@ class SparseDataset:
                 f"'{self.format_str}' and '{get_format_str(sparse_matrix)}'"
             )
 
+        # shape
+        if self.format_str == "csr":
+            assert (
+                shape[1] == sparse_matrix.shape[1]
+            ), "CSR matrices must have same size of dimension 1 to be appended."
+            new_shape = (shape[0] + sparse_matrix.shape[0], shape[1])
+        elif self.format_str == "csc":
+            assert (
+                shape[0] == sparse_matrix.shape[0]
+            ), "CSC matrices must have same size of dimension 0 to be appended."
+            new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
+        if "h5sparse_shape" in self.group.attrs:
+            del self.group.attrs["h5sparse_shape"]
+        self.group.attrs['shape'] = new_shape
+
         # data
         data = self.group['data']
         orig_data_size = data.shape[0]
-        new_shape = (orig_data_size + sparse_matrix.data.shape[0],)
-        data.resize(new_shape)
+        data.resize((orig_data_size + sparse_matrix.data.shape[0],))
         data[orig_data_size:] = sparse_matrix.data
 
         # indptr
         indptr = self.group['indptr']
         orig_data_size = indptr.shape[0]
         append_offset = indptr[-1]
-        new_shape = (orig_data_size + sparse_matrix.indptr.shape[0] - 1,)
-        indptr.resize(new_shape)
+        indptr.resize((orig_data_size + sparse_matrix.indptr.shape[0] - 1,))
         indptr[orig_data_size:] = (
             sparse_matrix.indptr[1:].astype(np.int64) + append_offset
         )
@@ -355,26 +368,8 @@ class SparseDataset:
         # indices
         indices = self.group['indices']
         orig_data_size = indices.shape[0]
-        new_shape = (orig_data_size + sparse_matrix.indices.shape[0],)
-        indices.resize(new_shape)
+        indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
-
-        # shape
-        if "h5sparse_shape" in self.group.attrs:
-            del self.group.attrs["h5sparse_shape"]
-
-        # TODO: Do we want to allow different sizes on the unaligned axis?
-        if self.format_str == "csr":
-            new_shape = (
-                shape[0] + sparse_matrix.shape[0],
-                max(shape[1], sparse_matrix.shape[1]),
-            )
-        elif self.format_str == "csc":
-            new_shape = (
-                max(shape[0], sparse_matrix.shape[0]),
-                shape[1] + sparse_matrix.shape[1],
-            )
-        self.group.attrs['shape'] = new_shape
 
     def tobacked(self):
         format_class = get_backed_class(self.format_str)
