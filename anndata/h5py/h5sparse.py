@@ -3,7 +3,7 @@
 # - think about supporting the COO format
 from collections.abc import Iterable, Mapping
 from os import PathLike
-from typing import Optional, Union, KeysView, NamedTuple
+from typing import Optional, Union, KeysView, NamedTuple, Type
 
 import h5py
 import numpy as np
@@ -11,14 +11,14 @@ import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
 from ..utils import unpack_index
-
+from ..compat import Literal
 from .utils import _chunked_rows
 
 
 class BackedFormat(NamedTuple):
     format_str: str
-    backed_type: type
-    memory_type: type
+    backed_type: Type['BackedSparseMatrixMixin']
+    memory_type: Type[ss.spmatrix]
 
 
 class BackedSparseMatrixMixin:
@@ -198,7 +198,7 @@ class File(Group):
     def __init__(
         self,
         name: PathLike,
-        mode: Optional[str] = None,
+        mode: Optional[Literal['r', 'r+']] = None,
         driver: Optional[str] = None,
         libver: Optional[str] = None,
         userblock_size: Optional[int] = None,
