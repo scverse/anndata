@@ -42,7 +42,7 @@ from .views import (
 from .. import h5py, utils
 from ..utils import Index1D, Index, convert_to_dict, unpack_index
 from ..logging import anndata_logger as logger
-from ..compat import ZarrArray, ZappyArray, DaskArray
+from ..compat import ZarrArray, ZappyArray, DaskArray, Literal
 
 
 class StorageType(Enum):
@@ -171,7 +171,7 @@ class AnnDataFileManager:
         self,
         adata: 'AnnData',
         filename: Optional[PathLike] = None,
-        filemode: Optional[str] = None,
+        filemode: Optional[Literal['r', 'r+']] = None,
     ):
         self._adata = adata
         self.filename = filename
@@ -215,7 +215,7 @@ class AnnDataFileManager:
     def open(
         self,
         filename: Optional[PathLike] = None,
-        filemode: Optional[str] = None,
+        filemode: Optional[Literal['r', 'r+']] = None,
     ):
         if filename is not None:
             self.filename = filename
@@ -586,7 +586,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         dtype: Union[np.dtype, str] = 'float32',
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
-        filemode: Optional[str] = None,
+        filemode: Optional[Literal['r', 'r+']] = None,
         asview: bool = False,
         *,
         obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
@@ -2174,7 +2174,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def write_h5ad(
         self,
         filename: Optional[PathLike] = None,
-        compression: Optional[str] = None,
+        compression: Optional[Literal['gzip', 'lzf']] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None,
     ):
@@ -2182,11 +2182,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Write ``.h5ad``-formatted hdf5 file.
 
         .. note::
-
-            Setting compression to ``'gzip'`` can save disk space but
-            will slow down writing and subsequent reading. Prior to
-            v0.6.16, this was the default for parameter
-            ``compression``.
+           Setting compression to ``'gzip'`` can save disk space but
+           will slow down writing and subsequent reading. Prior to
+           v0.6.16, this was the default for parameter ``compression``.
 
         Generally, if you have sparse data that are stored as a dense
         matrix, you can dramatically improve performance and reduce
@@ -2199,7 +2197,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ----------
         filename
             Filename of data file. Defaults to backing file.
-        compression : ``None``,  {``'gzip'``, ``'lzf'``} (default: ``None``)
+        compression
             See the h5py :ref:`dataset_compression`.
         compression_opts
             See the h5py :ref:`dataset_compression`.
@@ -2217,7 +2215,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             force_dense = self.isbacked
 
         _write_h5ad(
-            filename,
+            Path(filename),
             self,
             compression=compression,
             compression_opts=compression_opts,
