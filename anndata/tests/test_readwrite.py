@@ -212,16 +212,6 @@ def test_maintain_layers(rw):
     )
 
 
-@pytest.mark.xfail
-def test_readwrite_sparse_as_dense(backing_h5ad):
-    adata_src = ad.AnnData(X_sp)
-    adata_src.write(backing_h5ad, force_dense=True)
-
-    adata = ad.read(backing_h5ad, chunk_size=2)
-    assert issparse(adata.X)
-    assert np.allclose(X_sp.toarray(), adata.X.toarray())
-
-
 @pytest.mark.parametrize('typ', [np.array, csr_matrix])
 def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     X = typ(X_list)
