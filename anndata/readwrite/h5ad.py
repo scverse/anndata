@@ -14,7 +14,7 @@ from scipy import sparse
 
 from ..core.sparsedataset import SparseDataset
 from ..core.anndata import AnnData, Raw
-from ..compat import _from_fixed_length_strings, _clean_uns
+from ..compat import _from_fixed_length_strings, _clean_uns, Literal
 from .utils import report_key_on_error, idx_chunks_along_axis, write_attribute
 
 
@@ -24,7 +24,7 @@ T = TypeVar("T")
 
 
 def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
-    """
+    """\
     This corrects compound dtypes to work with hdf5 files.
     """
     new_dtype = []
@@ -45,34 +45,6 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
-    """Write ``.h5ad``-formatted hdf5 file.
-
-    .. note::
-
-        Setting compression to ``'gzip'`` can save disk space but
-        will slow down writing and subsequent reading. Prior to
-        v0.6.16, this was the default for parameter
-        ``compression``.
-
-    Generally, if you have sparse data that are stored as a dense
-    matrix, you can dramatically improve performance and reduce
-    disk space by converting to a :class:`~scipy.sparse.csr_matrix`::
-
-        from scipy.sparse import csr_matrix
-        adata.X = csr_matrix(adata.X)
-
-    Parameters
-    ----------
-    adata
-        AnnData object to write.
-    filename
-        Filename of data file. Defaults to backing file.
-    compression : ``None``,  {``'gzip'``, ``'lzf'``} (default: ``None``)
-        See the h5py :ref:`dataset_compression`.
-    as_dense
-        Elements of the anndata to write as dense arrays. Currently only supports
-        "X" and "raw/X".
-    """
     if force_dense is not None:
         warn(FutureWarning(
             "The 'force_dense' argument is deprecated. Use `as_dense` instead."
@@ -99,8 +71,7 @@ def write_h5ad(
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
-    dataset_kwargs = dataset_kwargs.copy()
-    dataset_kwargs.update(kwargs)
+    dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
@@ -153,10 +124,11 @@ def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     # If it's not an array, try and make it an array. If that fails, pickle it.
-    # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
+    # Maybe rethink that, maybe this should just pickle,
+    # and have explicit implementations for everything else
     raise NotImplementedError(
-        f"Failed to write value for {key}, since a writer for type {type(value)}"
-        f" has not been implemented yet."
+        f"Failed to write value for {key}, "
+        f"since a writer for type {type(value)} has not been implemented yet."
     )
 
 
@@ -173,10 +145,9 @@ def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 
 def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
-    if (
-        "compression" in dataset_kwargs
-    ):  # Can't compress scalars, error is thrown
-        dataset_kwargs = dataset_kwargs.copy()
+    # Can't compress scalars, error is thrown
+    if "compression" in dataset_kwargs:
+        dataset_kwargs = dict(dataset_kwargs)
         dataset_kwargs.pop("compression")
     write_array(f, key, np.array(value), dataset_kwargs=dataset_kwargs)
 
@@ -306,8 +277,10 @@ H5AD_WRITE_REGISTRY = {
 }
 
 
-def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
-    d = {"filename": filename, "filemode": mode}
+def read_h5ad_backed(
+    filename: Union[str, Path], mode: Literal['r', 'r+']
+) -> AnnData:
+    d = dict(filename=filename, filemode=mode)
     raw = {}
 
     f = h5py.File(filename, mode)
@@ -350,19 +323,20 @@ def read_h5ad_backed(filename: Union[str, Path], mode: str) -> AnnData:
 
 def read_h5ad(
     filename: Union[str, Path],
-    backed: Optional[Union[str, bool]] = None,
+    backed: Union[Literal['r', 'r+'], bool, None] = None,
     *,
     as_sparse: Sequence[str] = (),
     as_sparse_fmt: Type[sparse.spmatrix] = sparse.csr_matrix,  # Is there a better way to do this?
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
-    """Read ``.h5ad``-formatted hdf5 file.
+    """\
+    Read ``.h5ad``-formatted hdf5 file.
 
     Parameters
     ----------
     filename
         File name of data file.
-    backed : {``None``, ``'r'``, ``'r+'``}
+    backed
         If ``'r'``, load :class:`~anndata.AnnData` in ``backed`` mode instead
         of fully loading it into memory (`memory` mode). If you want to modify
         backed attributes of the AnnData object, you need to choose ``'r+'``.
@@ -541,9 +515,8 @@ def read_dataset(dataset: h5py.Dataset):
         pass
     elif issubclass(value.dtype.type, np.string_):
         value = value.astype(str)
-        if (
-            len(value) == 1
-        ):  # Backwards compat, old datasets have strings written as one element 1d arrays
+        # Backwards compat, old datasets have strings as one element 1d arrays
+        if len(value) == 1:
             return value[0]
     elif len(value.dtype.descr) > 1:  # Compound dtype
         # For backwards compat, now strings are written as variable length
