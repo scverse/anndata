@@ -3,7 +3,7 @@ from functools import _find_impl, singledispatch, partial
 from pathlib import Path
 import re
 from types import MappingProxyType
-from typing import Callable, Optional, Sequence, Type, TypeVar, Union
+from typing import Callable, Sequence, Type, TypeVar, Union
 from warnings import warn
 
 import h5py
@@ -46,9 +46,11 @@ def write_h5ad(
     **kwargs,
 ) -> None:
     if force_dense is not None:
-        warn(FutureWarning(
-            "The 'force_dense' argument is deprecated. Use `as_dense` instead."
-        ))
+        warn(
+            FutureWarning(
+                "The 'force_dense' argument is deprecated. Use `as_dense` instead."
+            )
+        )
     if force_dense is True:
         if adata.raw is not None:
             as_dense = ("X", "raw/X")
@@ -77,15 +79,27 @@ def write_h5ad(
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
     with h5py.File(filepath, mode) as f:
-        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+        if "X" in as_dense and isinstance(
+            adata.X, (sparse.spmatrix, SparseDataset)
+        ):
+            write_sparse_as_dense(
+                f, "X", adata.X, dataset_kwargs=dataset_kwargs
+            )
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
             write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        if "raw/X" in as_dense and isinstance(adata.raw.X, (sparse.spmatrix, SparseDataset)):
-            write_sparse_as_dense(f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs)
-            write_attribute(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_attribute(f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs)
+        if "raw/X" in as_dense and isinstance(
+            adata.raw.X, (sparse.spmatrix, SparseDataset)
+        ):
+            write_sparse_as_dense(
+                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+            )
+            write_attribute(
+                f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs
+            )
+            write_attribute(
+                f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs
+            )
         else:
             write_attribute(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
@@ -94,7 +108,9 @@ def write_h5ad(
         write_attribute(f, "varm", adata.varm, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "obsp", adata.obsp, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
+        write_attribute(
+            f, "layers", adata.layers, dataset_kwargs=dataset_kwargs
+        )
         write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
     if adata.isbacked:
         adata.file.open(filepath, 'r+')
@@ -160,7 +176,10 @@ def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
         value = _to_hdf5_vlen_strings(value)
     f.create_dataset(key, data=value, **dataset_kwargs)
 
-def write_sparse_compressed(f, key, value, fmt: str, dataset_kwargs=MappingProxyType({})):
+
+def write_sparse_compressed(
+    f, key, value, fmt: str, dataset_kwargs=MappingProxyType({})
+):
     g = f.create_group(key)
     g.attrs["encoding-type"] = f"{fmt}_matrix"
     g.attrs["encoding-version"] = "0.1.0"
@@ -180,7 +199,13 @@ write_csc = partial(write_sparse_compressed, fmt="csc")
 
 
 def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
-    write_sparse_compressed(f, key, value.tobacked(), fmt=value.format_str, dataset_kwargs=dataset_kwargs)
+    write_sparse_compressed(
+        f,
+        key,
+        value.tobacked(),
+        fmt=value.format_str,
+        dataset_kwargs=dataset_kwargs,
+    )
 
 
 def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
@@ -195,7 +220,9 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
             key = re.sub(r"(.*)(\w(?!.*/))", r"\1_\2", key.rstrip("/"))
         else:
             del f[key]  # Wipe before write
-    dset = f.create_dataset(key, shape=value.shape, dtype=value.dtype, **dataset_kwargs)
+    dset = f.create_dataset(
+        key, shape=value.shape, dtype=value.dtype, **dataset_kwargs
+    )
     compressed_axis = int(isinstance(value, sparse.csc_matrix))
     for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):
         dset[idx] = value[idx].toarray()
@@ -252,7 +279,9 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
 
 def write_mapping(f, key, value, dataset_kwargs=MappingProxyType({})):
     for sub_key, sub_value in value.items():
-        write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs=dataset_kwargs)
+        write_attribute(
+            f, f"{key}/{sub_key}", sub_value, dataset_kwargs=dataset_kwargs
+        )
 
 
 H5AD_WRITE_REGISTRY = {
@@ -326,7 +355,7 @@ def read_h5ad(
     backed: Union[Literal['r', 'r+'], bool, None] = None,
     *,
     as_sparse: Sequence[str] = (),
-    as_sparse_fmt: Type[sparse.spmatrix] = sparse.csr_matrix,  # Is there a better way to do this?
+    as_sparse_fmt: Type[sparse.spmatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
     """\
@@ -382,10 +411,14 @@ def read_h5ad(
             if k.startswith("raw."):
                 continue
             if k == "X" and "X" in as_sparse:
-                d[k] = read_dense_as_sparse(f[k], as_sparse_fmt, axis_chunk=chunk_size)
+                d[k] = read_dense_as_sparse(
+                    f[k], as_sparse_fmt, axis_chunk=chunk_size
+                )
             elif k == "raw" and "raw/X" in as_sparse:
                 d[k] = {
-                    "X": read_dense_as_sparse(f[f"{k}/X"], as_sparse_fmt, axis_chunk=chunk_size),
+                    "X": read_dense_as_sparse(
+                        f[f"{k}/X"], as_sparse_fmt, axis_chunk=chunk_size
+                    ),
                     "var": read_dataframe(f[f"{k}/var"]),
                     "varm": read_attribute(f[f"{k}/varm"]),
                 }
@@ -483,7 +516,6 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
 #     return SparseDataset(group)
 
 
-
 @read_attribute.register(h5py.Group)
 @report_key_on_error
 def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
@@ -525,8 +557,11 @@ def read_dataset(dataset: h5py.Dataset):
         value = value[()]
     return value
 
+
 @report_key_on_error
-def read_dense_as_sparse(dataset: h5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int):
+def read_dense_as_sparse(
+    dataset: h5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int
+):
     if sparse_format == sparse.csr_matrix:
         return read_dense_as_csr(dataset, axis_chunk)
     elif sparse_format == sparse.csc_matrix:

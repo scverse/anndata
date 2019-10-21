@@ -197,9 +197,7 @@ class AnnDataFileManager:
         return self._file[key]
 
     def __setitem__(
-        self,
-        key: str,
-        value: Union[h5py.Group, h5py.Dataset, SparseDataset],
+        self, key: str, value: Union[h5py.Group, h5py.Dataset, SparseDataset]
     ):
         self._file[key] = value
 

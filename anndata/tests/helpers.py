@@ -35,6 +35,7 @@ def asarray_sparse_dataset(x):
 def asarray_h5py_dataset(x):
     return x[...]
 
+
 def gen_typed_df(n, index=None):
     # TODO: Think about allowing index to be passed for n
     letters = np.fromiter(iter(ascii_letters), "U1")

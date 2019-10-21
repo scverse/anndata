@@ -27,7 +27,7 @@ def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
     cur = 0
     mutable_idx = [slice(None) for i in range(len(shape))]
     while cur + chunk_size < total:
-        mutable_idx[axis] = slice(cur, cur+chunk_size)
+        mutable_idx[axis] = slice(cur, cur + chunk_size)
         yield tuple(mutable_idx)
         cur += chunk_size
     mutable_idx[axis] = slice(cur, None)
@@ -83,6 +83,7 @@ def convert_string(string):
     else:
         return string
 
+
 # -------------------------------------------------------------------------------
 # Generic functions
 # -------------------------------------------------------------------------------
@@ -90,7 +91,10 @@ def convert_string(string):
 
 @singledispatch
 def write_attribute(*args, **kwargs):
-    raise NotImplementedError("Unrecognized argument types for `write_attribute`.")
+    raise NotImplementedError(
+        "Unrecognized argument types for `write_attribute`."
+    )
+
 
 # @singledispatch
 # def read_attribute(*args, **kwargs):

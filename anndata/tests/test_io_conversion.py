@@ -117,6 +117,8 @@ def test_dense_to_sparse_errors(tmp_path):
     adata.write(dense_pth)
 
     with pytest.raises(NotImplementedError):
-        ad.read_h5ad(dense_pth, as_sparse=("X",), as_sparse_fmt=sparse.coo_matrix)
+        ad.read_h5ad(
+            dense_pth, as_sparse=("X",), as_sparse_fmt=sparse.coo_matrix
+        )
     with pytest.raises(NotImplementedError):
         ad.read_h5ad(dense_pth, as_sparse=("layers/like_X",))

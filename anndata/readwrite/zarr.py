@@ -51,6 +51,7 @@ def write_zarr(
 def _write_method(cls: Type[T]) -> Callable[[zarr.Group, str, T], None]:
     return _find_impl(cls, ZARR_WRITE_REGISTRY)
 
+
 @write_attribute.register(zarr.Group)
 def write_attribute_zarr(f, key, value, dataset_kwargs=MappingProxyType({})):
     if key in f:
