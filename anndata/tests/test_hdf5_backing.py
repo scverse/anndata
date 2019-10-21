@@ -81,7 +81,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
     orig.write(orig_pth)
 
     backed = ad.read(orig_pth, backed=backed_mode)
-    backed.write(backed_pth, force_dense=force_dense)
+    backed.write(backed_pth, as_dense=["X"])
     backed.file.close()
 
     from_backed = ad.read(backed_pth)

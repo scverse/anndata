@@ -231,7 +231,6 @@ class AnnDataFileManager:
             raise ValueError(
                 'Cannot open backing file if backing not initialized.'
             )
-        # self._file = h5py.File(self.filename, self._filemode, force_dense=True)
         self._file = h5py.File(self.filename, self._filemode)
 
     def close(self):
@@ -2216,6 +2215,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         compression: Optional[Literal['gzip', 'lzf']] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None,
+        as_dense: Sequence[str] = (),
     ):
         """\
         Write ``.h5ad``-formatted hdf5 file.
@@ -2240,6 +2240,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             See the h5py :ref:`dataset_compression`.
         compression_opts
             See the h5py :ref:`dataset_compression`.
+        as_dense
+            Sparse arrays in AnnData object to write as dense. Currently only
+            supports `X` and `raw/X`.
         force_dense
             Write sparse data as a dense matrix.
             Defaults to ``True`` if object is backed, otherwise to ``False``.
@@ -2250,15 +2253,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError('Provide a filename!')
         if filename is None:
             filename = self.filename
-        if force_dense is None:
-            force_dense = self.isbacked
 
         _write_h5ad(
             Path(filename),
             self,
             compression=compression,
             compression_opts=compression_opts,
-            # force_dense=force_dense,
+            force_dense=force_dense,
+            as_dense=as_dense,
         )
 
         if self.isbacked:
