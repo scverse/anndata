@@ -10,7 +10,7 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from collections.abc import Iterable
 from itertools import accumulate, chain
-from typing import Union, NamedTuple, Tuple, Sequence
+from typing import Union, NamedTuple, Tuple, Sequence, Type
 from warnings import warn
 
 import h5py
@@ -23,8 +23,8 @@ from ...utils import unpack_index
 
 class BackedFormat(NamedTuple):
     format_str: str
-    backed_type: type
-    memory_type: type
+    backed_type: Type['BackedSparseMatrixMixin']
+    memory_type: Type[ss.spmatrix]
 
 
 class BackedSparseMatrixMixin:
