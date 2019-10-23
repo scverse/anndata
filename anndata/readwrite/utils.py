@@ -139,9 +139,8 @@ def report_key_on_error(func):
                 except ImportError:
                     zarr = None
                 if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-                    parent = (
-                        elem.store
-                    )  # Not sure how to always get a name out of this
+                    # Not sure how to always get a name out of this
+                    parent = elem.store
                 elif isinstance(elem, SparseDataset):
                     parent = elem.group.file.name
                 else:
