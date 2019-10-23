@@ -1,9 +1,16 @@
+"""This module implements on disk sparse datasets.
+
+This code was originally based on and uses the conventions of
+`h5sparse <https://github.com/appier/h5sparse>`_ by
+`Appier Inc. <https://www.appier.com/>`_.
+See the copyright and license note in this directory source code.
+"""
+
 # TODO:
-# - think about making all of the below subclasses
 # - think about supporting the COO format
 from collections.abc import Iterable
 from itertools import accumulate, chain
-from typing import Union, NamedTuple, Tuple, Sequence
+from typing import Union, NamedTuple, Tuple, Sequence, Type
 from warnings import warn
 
 import h5py
@@ -11,8 +18,7 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from ..utils import unpack_index
-from ..compat import Literal
+from ...utils import unpack_index
 
 
 class BackedFormat(NamedTuple):
@@ -36,12 +42,92 @@ class BackedSparseMatrixMixin:
             return super().copy()
 
 
+def slice_len(s: slice, l: int):
+    """Returns length of `a[s]` where `len(a) == l`."""
+    return len(range(*s.indices(l)))
+
+
+def slice_as_int(s: slice, l: int):
+    """Converts slices of length 1 to the integer index they'll access."""
+    out = list(range(*s.indices(l)))
+    assert len(out) == 1
+    return out[0]
+
+
+def get_compressed_vectors(
+    X: "backed_sparse_matrix", row_idxs: "np.ndarray[int]"
+) -> Tuple[Sequence, Sequence, Sequence]:
+    slices = [slice(*(X.indptr[i : i + 2])) for i in row_idxs]
+    data = np.concatenate([X.data[s] for s in slices])
+    indices = np.concatenate([X.indices[s] for s in slices])
+    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
+    return data, indices, indptr
+
+
+def get_compressed_vector(
+    X: "backed_sparse_matrix", idx: int
+) -> Tuple[Sequence, Sequence, Sequence]:
+    s = slice(*(X.indptr[idx : idx + 2]))
+    data = X.data[s]
+    indices = X.indices[s]
+    indptr = [0, len(data)]
+    return data, indices, indptr
+
+
 class backed_csr_matrix(BackedSparseMatrixMixin, ss.csr_matrix):
-    pass
+    def _get_intXslice(self, row, col):
+        return ss.csr_matrix(
+            get_compressed_vector(self, row), shape=(1, self.shape[1])
+        )[:, col]
+
+    def _get_sliceXslice(self, row, col):
+        out_shape = (
+            slice_len(row, self.shape[0]),
+            slice_len(col, self.shape[1]),
+        )
+        if out_shape[0] == 1:
+            return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
+        elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
+            return self._get_arrayXslice(
+                np.arange(*row.indices(self.shape[0])), col
+            )
+        return super()._get_sliceXslice(row, col)
+
+    def _get_arrayXslice(self, row, col):
+        idxs = np.asarray(row)
+        if idxs.dtype == bool:
+            idxs = np.where(idxs)
+        return ss.csr_matrix(
+            get_compressed_vectors(self, idxs), shape=(len(idxs), self.shape[1])
+        )[:, col]
 
 
 class backed_csc_matrix(BackedSparseMatrixMixin, ss.csc_matrix):
-    pass
+    def _get_sliceXint(self, row, col):
+        return ss.csc_matrix(
+            get_compressed_vector(self, col), shape=(self.shape[0], 1)
+        )[row, :]
+
+    def _get_sliceXslice(self, row, col):
+        out_shape = (
+            slice_len(row, self.shape[0]),
+            slice_len(col, self.shape[1]),
+        )
+        if out_shape[1] == 1:
+            return self._get_sliceXint(row, slice_as_int(col, self.shape[1]))
+        elif out_shape[0] == self.shape[0] and out_shape[1] < self.shape[1]:
+            return self._get_sliceXarray(
+                row, np.arange(*col.indices(self.shape[1]))
+            )
+        return super()._get_sliceXslice(row, col)
+
+    def _get_sliceXarray(self, row, col):
+        idxs = np.asarray(col)
+        if idxs.dtype == bool:
+            idxs = np.where(idxs)
+        return ss.csc_matrix(
+            get_compressed_vectors(self, idxs), shape=(self.shape[0], len(idxs))
+        )[row, :]
 
 
 backed_sparse_matrix = Union[backed_csc_matrix, backed_csr_matrix]
@@ -54,21 +140,21 @@ FORMATS = [
 
 
 def get_format_str(data):
-    for fmt, backed_class, memory_class in FORMATS:
+    for fmt, _, memory_class in FORMATS:
         if isinstance(data, memory_class):
             return fmt
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
 def get_memory_class(format_str):
-    for fmt, backed_class, memory_class in FORMATS:
+    for fmt, _, memory_class in FORMATS:
         if format_str == fmt:
             return memory_class
     raise ValueError(f"Format string {format_str} is not supported.")
 
 
 def get_backed_class(format_str):
-    for fmt, backed_class, memory_class in FORMATS:
+    for fmt, backed_class, _ in FORMATS:
         if format_str == fmt:
             return backed_class
     raise ValueError(f"Format string {format_str} is not supported.")
@@ -157,69 +243,6 @@ backed_csr_matrix._zero_many = _zero_many
 backed_csc_matrix._zero_many = _zero_many
 
 
-def get_compressed_vectors(
-    X: backed_sparse_matrix, row_idxs: "np.ndarray[int]"
-) -> Tuple[Sequence, Sequence, Sequence]:
-    slices = [slice(*(X.indptr[i : i + 2])) for i in row_idxs]
-    data = np.concatenate([X.data[s] for s in slices])
-    indices = np.concatenate([X.indices[s] for s in slices])
-    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
-    return data, indices, indptr
-
-
-def get_csc_cols(X: backed_csc_matrix, idxs: np.ndarray) -> ss.csc_matrix:
-    idxs = np.asarray(idxs)
-    if idxs.dtype == bool:
-        idxs = np.where(idxs)
-    return ss.csc_matrix(
-        get_compressed_vectors(X, idxs), shape=(X.shape[0], len(idxs))
-    )
-
-
-def get_csr_rows(X: backed_csr_matrix, idxs: np.ndarray) -> ss.csr_matrix:
-    idxs = np.asarray(idxs)
-    if idxs.dtype == bool:
-        idxs = np.where(idxs)
-    return ss.csr_matrix(
-        get_compressed_vectors(X, idxs), shape=(len(idxs), X.shape[1])
-    )
-
-
-def get_compressed_vector(X, idx: int) -> Tuple[Sequence, Sequence, Sequence]:
-    s = slice(*(X.indptr[idx : idx + 2]))
-    data = X.data[s]
-    indices = X.indices[s]
-    indptr = [0, len(data)]
-    return data, indices, indptr
-
-
-def get_csc_col(X: backed_sparse_matrix, idx: int) -> ss.csc_matrix:
-    return ss.csc_matrix(get_compressed_vector(X, idx), shape=(X.shape[0], 1))
-
-
-def get_csr_row(X, idx: int) -> ss.csr_matrix:
-    return ss.csr_matrix(get_compressed_vector(X, idx), shape=(1, X.shape[1]))
-
-
-def csc_get_sliceXint(X, row: slice, col: int):
-    return get_csc_col(X, col)[row, :]
-
-
-def csr_get_intXslice(X, row: int, col: slice):
-    return get_csr_row(X, row)[:, col]
-
-
-backed_csc_matrix._get_sliceXint = csc_get_sliceXint
-backed_csr_matrix._get_intXslice = csr_get_intXslice
-
-backed_csc_matrix._get_sliceXarray = lambda x, row, col: get_csc_cols(x, col)[
-    row, :
-]
-backed_csr_matrix._get_arrayXslice = lambda x, row, col: get_csr_rows(x, row)[
-    :, col
-]
-
-
 class SparseDataset:
     """\
     Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
@@ -237,9 +260,8 @@ class SparseDataset:
         if "h5sparse_format" in self.group.attrs:
             return self.group.attrs['h5sparse_format']
         else:
-            return self.group.attrs["encoding-type"].replace(
-                "_matrix", ""
-            )  # Should this be an extra field?
+            # Should this be an extra field?
+            return self.group.attrs["encoding-type"].replace("_matrix", "")
 
     @property
     def h5py_group(self):

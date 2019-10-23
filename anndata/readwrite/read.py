@@ -5,10 +5,11 @@ from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
 import bz2
+
+import h5py
 import numpy as np
 
 from .. import AnnData
-from .. import h5py
 from .utils import is_float
 from .h5ad import read_h5ad
 

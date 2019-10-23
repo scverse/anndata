@@ -40,7 +40,7 @@ from .views import (
     asview,
     _resolve_idxs,
 )
-from ..h5py import SparseDataset
+from .sparsedataset import SparseDataset
 from .. import utils
 from ..utils import (
     Index1D,
@@ -1298,13 +1298,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._X = None
 
     def _set_backed(self, attr, value):
-        if not isinstance(self.file[attr], h5py.SparseDataset) and not issparse(
-            value
-        ):
-            self.file[attr] = value
-        else:
-            del self.file[attr]
-            self.file._file.create_dataset(attr, data=value)
+        from ..readwrite.utils import write_attribute
+
+        write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
         # deal with tuples of length 1

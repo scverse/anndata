@@ -14,7 +14,7 @@ import zarr
 
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
-from .utils import report_key_on_error
+from .utils import report_key_on_error, write_attribute
 from . import WriteWarning
 
 
@@ -52,7 +52,8 @@ def _write_method(cls: Type[T]) -> Callable[[zarr.Group, str, T], None]:
     return _find_impl(cls, ZARR_WRITE_REGISTRY)
 
 
-def write_attribute(f, key, value, dataset_kwargs=MappingProxyType({})):
+@write_attribute.register(zarr.Group)
+def write_attribute_zarr(f, key, value, dataset_kwargs=MappingProxyType({})):
     if key in f:
         del f[key]
     _write_method(type(value))(f, key, value, dataset_kwargs)
