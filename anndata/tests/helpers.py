@@ -10,7 +10,7 @@ from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
-from anndata.h5py import SparseDataset
+from anndata.core.sparsedataset import SparseDataset
 from anndata import AnnData
 from anndata.core.views import ArrayView
 

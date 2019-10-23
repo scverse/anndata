@@ -4,7 +4,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.h5py import SparseDataset
+from anndata.core.sparsedataset import SparseDataset
 from anndata.tests.helpers import assert_equal
 
 
