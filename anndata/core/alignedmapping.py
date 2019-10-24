@@ -1,4 +1,3 @@
-from warnings import warn
 from abc import ABC, abstractmethod
 from collections import abc as cabc
 from functools import singledispatch
