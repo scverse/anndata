@@ -2,6 +2,7 @@ from importlib.util import find_spec
 
 import pytest
 import numpy as np
+import pandas as pd
 
 from anndata import AnnData, read_loom, read_h5ad
 from anndata.tests.helpers import gen_typed_df_t2_size
@@ -41,13 +42,24 @@ def test_views():
     assert not adata_view.isview
 
 
-def test_set_dataframe():
+@pytest.mark.parametrize(
+    "df,homogenous,dtype",
+    [
+        (lambda: gen_typed_df_t2_size(*X.shape), True, np.object_),
+        (lambda: pd.DataFrame(X ** 2), False, np.int_),
+    ],
+)
+def test_set_dataframe(homogenous, df, dtype):
     adata = AnnData(X)
-    df = gen_typed_df_t2_size(*X.shape)
-    with pytest.warns(UserWarning, match=r"Layer 'df'.*dtype object"):
-        adata.layers["df"] = df
+    if homogenous:
+        with pytest.warns(UserWarning, match=r"Layer 'df'.*dtype object"):
+            adata.layers["df"] = df()
+    else:
+        with pytest.warns(None) as warnings:
+            adata.layers["df"] = df()
+            assert not len(warnings)
     assert isinstance(adata.layers["df"], np.ndarray)
-    assert np.issubdtype(adata.layers["df"].dtype, object)
+    assert np.issubdtype(adata.layers["df"].dtype, dtype)
 
 
 def test_readwrite(backing_h5ad):

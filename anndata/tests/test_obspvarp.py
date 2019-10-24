@@ -6,9 +6,9 @@ import pytest
 from scipy import sparse
 
 import anndata
-from anndata.tests.helpers import asarray
+from anndata.tests.helpers import asarray, gen_typed_df_t2_size
 
-M, N = (100, 100)
+M, N = (200, 100)
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(
         dict(batch=np.array(["a", "b"])[np.random.randint(0, 2, M)]),
-        index=[f"cell{i:03d}" for i in range(N)],
+        index=[f"cell{i:03d}" for i in range(M)],
     )
     var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
     return anndata.AnnData(X, obs=obs, var=var)
@@ -83,3 +83,24 @@ def test_setting_sparse(adata):
         adata.varp["b"] = bad_varp_sparse
 
     assert h == joblib.hash(adata)
+
+
+@pytest.mark.parametrize("field,dim", [("obsp", M), ("varp", N)])
+@pytest.mark.parametrize(
+    "df,homogenous,dtype",
+    [
+        (lambda dim: gen_typed_df_t2_size(dim, dim), True, np.object_),
+        (lambda dim: pd.DataFrame(np.random.randn(dim, dim)), False, np.float_),
+    ],
+    ids=["heterogeneous", "homogeneous"],
+)
+def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
+    if homogenous:
+        with pytest.warns(UserWarning, match=r"Layer 'df'.*dtype object"):
+            getattr(adata, field)["df"] = df(dim)
+    else:
+        with pytest.warns(None) as warnings:
+            getattr(adata, field)["df"] = df(dim)
+            assert not len(warnings)
+    assert isinstance(getattr(adata, field)["df"], np.ndarray)
+    assert np.issubdtype(getattr(adata, field)["df"].dtype, dtype)
