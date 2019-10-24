@@ -1029,17 +1029,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self._raw
 
     @raw.setter
-    def raw(self, value: Optional['AnnData']):
-        if value is None:
-            self._raw = None
-        elif isinstance(value, AnnData):
-            if self.isview:
-                self._init_as_actual(self.copy())
-            self._raw = Raw(value)
-        else:
+    def raw(self, value: 'AnnData'):
+        if not isinstance(value, AnnData):
             raise ValueError(
-                'Can only init raw attribute with an AnnData object or `None`.'
+                'Can only init raw attribute with an AnnData object. '
+                'Do `del adata.raw` to delete it'
             )
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._raw = Raw(value)
+
+    @raw.deleter
+    def raw(self):
+        self._raw = None
 
     @property
     def n_obs(self) -> int:
