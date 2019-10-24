@@ -40,7 +40,13 @@ from .views import (
     _resolve_idxs,
 )
 from .. import h5py, utils
-from ..utils import Index1D, Index, convert_to_dict, unpack_index
+from ..utils import (
+    Index1D,
+    Index,
+    convert_to_dict,
+    unpack_index,
+    ensure_df_homogeneous,
+)
 from ..logging import anndata_logger as logger
 from ..compat import ZarrArray, ZappyArray, DaskArray
 
@@ -737,7 +743,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         raise ValueError(
                             'Index of var must match columns of X.'
                         )
-                X = X.values
+                X = ensure_df_homogeneous(X, 'X')
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -917,7 +923,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if not isinstance(value, StorageType.classes()) and not np.isscalar(
             value
         ):
-            value = np.array(value)  # TODO: Duck type this instead, maybe warn
+            if hasattr(value, "to_numpy") and hasattr(value, "dtypes"):
+                value = ensure_df_homogeneous(value, "X")
+            else:  # TODO: asarray? asanyarray?
+                value = np.array(value)
         if value is None:
             if self.isview:
                 raise ValueError(

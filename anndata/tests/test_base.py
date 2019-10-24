@@ -36,9 +36,7 @@ def test_creation():
     assert adata.raw.X.tolist() == X.tolist()
     assert adata.raw.var_names.tolist() == ['a', 'b', 'c']
 
-    from pytest import raises
-
-    with raises(ValueError):
+    with pytest.raises(ValueError):
         AnnData(np.array([[1, 2], [3, 4]]), dict(TooLong=[1, 2, 3, 4]))
 
     # init with empty data matrix
@@ -83,12 +81,25 @@ def test_create_from_df_with_obs_and_var():
     assert obs.equals(ad.obs)
     assert var.equals(ad.var)
 
-    from pytest import raises
-
-    with raises(ValueError, match=r'Index of obs must match index of X.'):
+    with pytest.raises(
+        ValueError, match=r'Index of obs must match index of X.'
+    ):
         AnnData(df, obs=obs.reset_index())
-    with raises(ValueError, match=r'Index of var must match columns of X.'):
+    with pytest.raises(
+        ValueError, match=r'Index of var must match columns of X.'
+    ):
         AnnData(df, var=var.reset_index())
+
+
+def test_df_warnings():
+    df = pd.DataFrame(
+        dict(A=[1, 2, 3], B=[1., 2., 3.]),
+        index=['a', 'b', 'c'],
+    )
+    with pytest.warns(UserWarning, match=r"X.*dtype float64"):
+        adata = AnnData(df)
+    with pytest.warns(UserWarning, match=r"X.*dtype float64"):
+        adata.X = df
 
 
 def test_names():
@@ -215,21 +226,19 @@ def test_slicing_strings():
     assert adata[:, np.array(['a', 'c'])].X.tolist() == [[1, 3], [4, 6]]
     assert adata[:, 'b':'c'].X.tolist() == [[2, 3], [5, 6]]
 
-    from pytest import raises
-
-    with raises(KeyError):
+    with pytest.raises(KeyError):
         _ = adata[:, 'X']
-    with raises(KeyError):
+    with pytest.raises(KeyError):
         _ = adata['X', :]
-    with raises(KeyError):
+    with pytest.raises(KeyError):
         _ = adata['A':'X', :]
-    with raises(KeyError):
+    with pytest.raises(KeyError):
         _ = adata[:, 'a':'X']
 
     # Test if errors are helpful
-    with raises(KeyError, match=r"not_in_var"):
+    with pytest.raises(KeyError, match=r"not_in_var"):
         adata[:, ["A", "B", "not_in_var"]]
-    with raises(KeyError, match=r"not_in_obs"):
+    with pytest.raises(KeyError, match=r"not_in_obs"):
         adata[["A", "B", "not_in_obs"], :]
 
 
@@ -319,9 +328,7 @@ def test_append_col():
     # this worked in the initial AnnData, but not with a dataframe
     # adata.obs[['new2', 'new3']] = [['A', 'B'], ['c', 'd']]
 
-    from pytest import raises
-
-    with raises(ValueError):
+    with pytest.raises(ValueError):
         adata.obs['new4'] = 'far too long'.split()
 
 
@@ -342,9 +349,7 @@ def test_set_obs():
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
     assert adata.obs_names.tolist() == [0, 1]
 
-    from pytest import raises
-
-    with raises(ValueError):
+    with pytest.raises(ValueError):
         adata.obs = pd.DataFrame(dict(a=[3, 4, 5]))
         adata.obs = dict(a=[1, 2])
 

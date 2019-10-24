@@ -96,7 +96,9 @@ def test_setting_sparse(adata):
 )
 def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
     if homogenous:
-        with pytest.warns(UserWarning, match=rf"{dim.title()} 'df'.*dtype object"):
+        with pytest.warns(
+            UserWarning, match=rf"{field.title()} 'df'.*dtype object"
+        ):
             getattr(adata, field)["df"] = df(dim)
     else:
         with pytest.warns(None) as warnings:

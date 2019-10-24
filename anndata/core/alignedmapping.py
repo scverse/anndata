@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from ..utils import deprecated
+from ..utils import deprecated, ensure_df_homogeneous
 from .views import asview, ViewArgs
 
 if TYPE_CHECKING:
@@ -73,14 +73,8 @@ class AlignedMapping(cabc.MutableMapping, ABC):
                     f"it should have had {right_shape}."
                 )
         if not self._allow_df and isinstance(val, pd.DataFrame):
-            was_heterogeneous = val.dtypes.nunique() != 1
-            val = val.to_numpy()
-            if was_heterogeneous:
-                name = self.attrname.title().rstrip('s')
-                warn(
-                    f'{name} {key!r} converted to numpy array '
-                    f'with dtype {val.dtype}'
-                )
+            name = self.attrname.title().rstrip('s')
+            val = ensure_df_homogeneous(val, f'{name} {key!r}')
         return val
 
     @property
