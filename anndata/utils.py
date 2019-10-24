@@ -89,6 +89,13 @@ def warn_no_string_index(names: Sequence[Any]):
         )
 
 
+def ensure_df_homogeneous(df: pd.DataFrame, name: str) -> np.ndarray:
+    arr = df.to_numpy()
+    if df.dtypes.nunique() != 1:
+        warnings.warn(f'{name} converted to numpy array with dtype {arr.dtype}')
+    return arr
+
+
 def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     names = list(source.keys())
     try:  # transform to byte-strings

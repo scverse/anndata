@@ -210,8 +210,6 @@ def test_maintain_layers(rw):
     assert not np.any(
         (orig.layers["sparse"] != curr.layers["sparse"]).toarray()
     )
-    assert type(orig.layers["df"]) is type(curr.layers["df"])
-    assert np.all(orig.layers["df"] == curr.layers["df"])
 
 
 @pytest.mark.xfail
