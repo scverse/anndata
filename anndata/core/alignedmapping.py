@@ -46,7 +46,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     to either one or both AnnData axes.
     """
 
-    _allow_df: bool
+    _allow_df: ClassVar[bool]
     """If this mapping supports heterogeneous DataFrames"""
 
     _view_class: ClassVar[Type["AlignedViewMixin"]]
@@ -72,12 +72,6 @@ class AlignedMapping(cabc.MutableMapping, ABC):
                     f"{self.axes} of parent. Value had shape {val.shape} while "
                     f"it should have had {right_shape}."
                 )
-        try:  # TODO: Handle objects with indices
-            # Could probably also re-order index if it's contained
-            if not (val.index == self.dim_names).all():
-                raise IndexError()  # Maybe not index error
-        except AttributeError:
-            pass
         if not self._allow_df and isinstance(val, pd.DataFrame):
             was_heterogeneous = val.dtypes.nunique() != 1
             val = val.to_numpy()
@@ -230,6 +224,14 @@ class AxisArraysBase(AlignedMapping):
                 df[f'{key}{icolumn + 1}'] = column
         return df
 
+    def _validate_value(self, val: V, key: Hashable) -> V:
+        if hasattr(val, "index") and not (val.index == self.dim_names).all():
+            # Could probably also re-order index if it's contained
+            raise ValueError(
+                f"value.index does not match parent’s axis {self.axes[0]} names"
+            )
+        return super()._validate_value(self, val, key)
+
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
     def __init__(
@@ -337,7 +339,6 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
-        self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
         if vals is not None:
             self.update(vals)
@@ -354,7 +355,6 @@ class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
         self._parent = parent_view
         self.subset_idx = (subset_idx, subset_idx)
         self._axis = parent_mapping._axis
-        self.dim_names = parent_mapping.dim_names[subset_idx]
 
 
 PairwiseArraysBase._view_class = PairwiseArraysView
