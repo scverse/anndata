@@ -76,8 +76,9 @@ class AlignedMapping(cabc.MutableMapping, ABC):
             was_heterogeneous = val.dtypes.nunique() != 1
             val = val.to_numpy()
             if was_heterogeneous:
+                name = self.attrname.title().rstrip('s')
                 warn(
-                    f'Layer {key!r} converted to numpy array '
+                    f'{name} {key!r} converted to numpy array '
                     f'with dtype {val.dtype}'
                 )
         return val
@@ -230,7 +231,7 @@ class AxisArraysBase(AlignedMapping):
             raise ValueError(
                 f"value.index does not match parent’s axis {self.axes[0]} names"
             )
-        return super()._validate_value(self, val, key)
+        return super()._validate_value(val, key)
 
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
