@@ -55,7 +55,7 @@ def gen_typed_df(n, index=None):
     )
 
 
-def gen_typed_df_t2_size(m, n, index=None, columns=None):
+def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     s = 0
     df = pd.DataFrame()
     new_vals = gen_typed_df(m)
@@ -137,9 +137,7 @@ def gen_adata(
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
-        array=np.random.random((M, N)),
-        sparse=sparse.random(M, N, format="csr"),
-        df=gen_typed_df_t2_size(M, N, index=obs_names, columns=var_names),
+        array=np.random.random((M, N)), sparse=sparse.random(M, N, format="csr")
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
@@ -358,9 +356,8 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
     if not exact:
         # Reorder all elements if neccesary
         idx = [slice(None), slice(None)]
-        change_flag = (
-            False
-        )  # Since it's a pain to compare a list of pandas objects
+        # Since it's a pain to compare a list of pandas objects
+        change_flag = False
         if not np.all(a.obs_names == b.obs_names):
             idx[0] = a.obs_names
             change_flag = True

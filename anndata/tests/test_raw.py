@@ -63,3 +63,6 @@ def test_raw(backing_h5ad):
     assert adata.raw[:, 0].X.tolist() == [[1], [4], [7]]
     assert adata.raw.var_names.tolist() == ['var1', 'var2', 'var3']
     assert adata.var_names.tolist() == ['var1', 'var2']
+
+    del adata.raw
+    assert adata.raw is None

@@ -24,12 +24,12 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from .alignedmapping import (
-    AxisArraysBase,
     AxisArrays,
-    PairwiseArraysBase,
+    AxisArraysView,
     PairwiseArrays,
-    LayersBase,
+    PairwiseArraysView,
     Layers,
+    LayersView,
     _subset,
 )
 from .views import (
@@ -42,7 +42,13 @@ from .views import (
 )
 from .sparsedataset import SparseDataset
 from .. import utils
-from ..utils import Index1D, Index, convert_to_dict, unpack_index
+from ..utils import (
+    Index1D,
+    Index,
+    convert_to_dict,
+    unpack_index,
+    ensure_df_homogeneous,
+)
 from ..logging import anndata_logger as logger
 from ..compat import ZarrArray, ZappyArray, DaskArray, Literal
 
@@ -254,8 +260,8 @@ class Raw:
         self,
         adata: Optional['AnnData'] = None,
         X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Optional[AxisArraysBase] = None,
-        varm: Optional[AxisArraysBase] = None,
+        var: Union[AxisArrays, AxisArraysView, None] = None,
+        varm: Union[AxisArrays, AxisArraysView, None] = None,
     ):
         self._adata = adata
         self._n_obs = adata.n_obs
@@ -298,7 +304,7 @@ class Raw:
 
     @property
     def shape(self):
-        return (self.n_obs, self.n_vars)
+        return self.n_obs, self.n_vars
 
     @property
     def var(self):
@@ -740,7 +746,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         raise ValueError(
                             'Index of var must match columns of X.'
                         )
-                X = X.values
+                X = ensure_df_homogeneous(X, 'X')
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -939,7 +945,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if not isinstance(value, StorageType.classes()) and not np.isscalar(
             value
         ):
-            value = np.array(value)  # TODO: Duck type this instead, maybe warn
+            if hasattr(value, "to_numpy") and hasattr(value, "dtypes"):
+                value = ensure_df_homogeneous(value, "X")
+            else:  # TODO: asarray? asanyarray?
+                value = np.array(value)
         if value is None:
             if self.isview:
                 raise ValueError(
@@ -992,7 +1001,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
 
     @property
-    def layers(self) -> LayersBase:
+    def layers(self) -> Union[Layers, LayersView]:
         """\
         Dictionary-like object with values of the same dimensions as :attr:`X`.
 
@@ -1054,17 +1063,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self._raw
 
     @raw.setter
-    def raw(self, value: Optional['AnnData']):
-        if not (isinstance(value, AnnData) or value is None):
+    def raw(self, value: 'AnnData'):
+        if not isinstance(value, AnnData):
             raise ValueError(
-                'Can only init raw attribute with an AnnData object or `None`.'
+                'Can only init raw attribute with an AnnData object. '
+                'Do `del adata.raw` to delete it'
             )
-        if value is None:
-            self._raw = None
-        else:
-            if self.isview:
-                self._init_as_actual(self.copy())
-            self._raw = Raw(value)
+        if self.isview:
+            self._init_as_actual(self.copy())
+        self._raw = Raw(value)
+
+    @raw.deleter
+    def raw(self):
+        self._raw = None
 
     @property
     def n_obs(self) -> int:
@@ -1126,7 +1137,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._uns = value
 
     @property
-    def obsm(self) -> AxisArraysBase:
+    def obsm(self) -> Union[AxisArrays, AxisArraysView]:
         """\
         Multi-dimensional annotation of observations
         (mutable structured :class:`~numpy.ndarray`).
@@ -1146,7 +1157,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsm = obsm
 
     @property
-    def varm(self) -> AxisArraysBase:
+    def varm(self) -> Union[AxisArrays, AxisArraysView]:
         """\
         Multi-dimensional annotation of variables/ features
         (mutable structured :class:`~numpy.ndarray`).
@@ -1166,7 +1177,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varm = varm
 
     @property
-    def obsp(self) -> PairwiseArraysBase:
+    def obsp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
         """\
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
@@ -1186,7 +1197,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsp = obsp
 
     @property
-    def varp(self) -> PairwiseArraysBase:
+    def varp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
         """\
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
@@ -1954,6 +1965,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(adatas) == 0:
             return self
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
+            warnings.warn(
+                'Trying to treat first argument of `concatenate` as sequence '
+                'of AnnDatas. Do `AnnData.concatenate(*adata_list)` instead of '
+                '`adata_list[0].concatenate(adata_list[1:])`.'
+            )
             adatas = adatas[0]  # backwards compatibility
         all_adatas = (self,) + tuple(adatas)
 

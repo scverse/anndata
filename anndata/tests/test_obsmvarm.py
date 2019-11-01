@@ -63,10 +63,10 @@ def test_setting_ndarray(adata):
 
 def test_setting_dataframe(adata):
     obsm_df = pd.DataFrame(
-        dict(b_1=np.ones(M), b_2=["a" for i in range(M)]), index=adata.obs_names
+        dict(b_1=np.ones(M), b_2=["a"] * M), index=adata.obs_names
     )
     varm_df = pd.DataFrame(
-        dict(b_1=np.ones(N), b_2=["a" for i in range(N)]), index=adata.var_names
+        dict(b_1=np.ones(N), b_2=["a"] * N), index=adata.var_names
     )
 
     adata.obsm["b"] = obsm_df
@@ -76,12 +76,12 @@ def test_setting_dataframe(adata):
 
     bad_obsm_df = obsm_df.copy()
     bad_obsm_df.reset_index(inplace=True)
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError):
         adata.obsm["c"] = bad_obsm_df
 
     bad_varm_df = varm_df.copy()
     bad_varm_df.reset_index(inplace=True)
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError):
         adata.varm["c"] = bad_varm_df
 
 
