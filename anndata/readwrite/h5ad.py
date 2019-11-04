@@ -43,6 +43,31 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
+    if force_dense is not None:
+        warn(
+            FutureWarning(
+                "The 'force_dense' argument is deprecated. Use `as_dense` instead."
+            )
+        )
+    if force_dense is True:
+        if adata.raw is not None:
+            as_dense = ("X", "raw/X")
+        else:
+            as_dense = ("X",)
+    if isinstance(as_dense, str):
+        as_dense = [as_dense]
+    if "raw.X" in as_dense:
+        as_dense = list(as_dense)
+        as_dense[as_dense.index("raw.X")] = "raw/X"
+    if any(val not in {"X", "raw/X"} for val in as_dense):
+        raise NotImplementedError(
+            "Currently, only `X` and `raw/X` are supported values in `as_dense`"
+        )
+    if "raw/X" in as_dense and adata.raw is None:
+        raise ValueError(
+            "Cannot specify writing `raw/X` to dense if it doesn't exist."
+        )
+
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
