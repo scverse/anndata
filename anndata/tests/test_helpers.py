@@ -1,9 +1,11 @@
 from string import ascii_letters
 
+import pandas as pd
 import pytest
 import numpy as np
 from scipy import sparse
 
+import anndata as ad
 from anndata.tests.helpers import assert_equal, report_name, gen_adata
 
 # Testing to see if all error types can have the key name appended.
@@ -30,6 +32,12 @@ from anndata.tests.helpers import assert_equal, report_name, gen_adata
 #     with pytest.raises(exception) as err:
 #         report_name(throw)(exception, _elem_name=tag)
 #     assert tag in str(err.value)
+
+
+@pytest.fixture(scope="function")
+def reusable_adata():
+    """Reusable anndata for when tests shouldn't mutate it"""
+    return gen_adata((10, 10))
 
 
 # Does this work for every warning?
@@ -64,14 +72,15 @@ def test_assert_equal():
     adata = gen_adata((10, 10))
     adata.raw = adata.copy()
     assert_equal(adata, adata.copy(), exact=True)
-    assert_equal(
-        adata,
-        adata[
-            np.random.permutation(adata.obs_names),
-            np.random.permutation(adata.var_names),
-        ].copy(),
-        exact=False,
-    )
+    # TODO: I'm not sure this is good behaviour, I've disabled in for now.
+    # assert_equal(
+    #     adata,
+    #     adata[
+    #         np.random.permutation(adata.obs_names),
+    #         np.random.permutation(adata.var_names),
+    #     ].copy(),
+    #     exact=False,
+    # )
     adata2 = adata.copy()
     to_modify = list(adata2.layers.keys())[0]
     del adata2.layers[to_modify]
@@ -113,3 +122,56 @@ def test_assert_equal_raw():
     to_compare.raw = mod.copy()
     with pytest.raises(AssertionError):
         assert_equal(orig, to_compare)
+
+
+# TODO: Should views be equal to actual?
+# Should they not be if an exact comparison is made?
+def test_assert_equal_alignedmapping():
+    adata1 = gen_adata((10, 10))
+    adata2 = adata1.copy()
+
+    for attr in ["obsm", "varm", "layers", "obsp", "varp"]:
+        assert_equal(getattr(adata1, attr), getattr(adata2, attr))
+
+    # Checking that subsetting other axis only changes some attrs
+    obs_subset = adata2[:5, :]
+    for attr in ["obsm", "layers", "obsp"]:
+        with pytest.raises(AssertionError):
+            assert_equal(getattr(adata1, attr), getattr(obs_subset, attr))
+    for attr in ["varm", "varp"]:
+        assert_equal(getattr(adata1, attr), getattr(obs_subset, attr))
+
+    var_subset = adata2[:, 5:]
+    for attr in ["varm", "layers", "varp"]:
+        with pytest.raises(AssertionError):
+            assert_equal(getattr(adata1, attr), getattr(var_subset, attr))
+    for attr in ["obsm", "obsp"]:
+        assert_equal(getattr(adata1, attr), getattr(var_subset, attr))
+
+
+def test_assert_equal_alignedmapping_empty():
+    chars = np.array(list(ascii_letters))
+    adata = ad.AnnData(
+        X=np.zeros((10, 10)),
+        obs=pd.DataFrame(
+            [], index=np.random.choice(chars[:20], 10, replace=False)
+        ),
+        var=pd.DataFrame(
+            [], index=np.random.choice(chars[:20], 10, replace=False)
+        ),
+    )
+    diff_idx = ad.AnnData(
+        X=np.zeros((10, 10)),
+        obs=pd.DataFrame(
+            [], index=np.random.choice(chars[20:], 10, replace=False)
+        ),
+        var=pd.DataFrame(
+            [], index=np.random.choice(chars[20:], 10, replace=False)
+        ),
+    )
+    same_idx = ad.AnnData(adata.X, obs=adata.obs.copy(), var=adata.var.copy())
+
+    for attr in ["obsm", "varm", "layers", "obsp", "varp"]:
+        with pytest.raises(AssertionError):
+            assert_equal(getattr(adata, attr), getattr(diff_idx, attr))
+        assert_equal(getattr(adata, attr), getattr(same_idx, attr))
