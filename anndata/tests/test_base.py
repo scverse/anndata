@@ -364,7 +364,7 @@ def test_multicol():
 def test_n_obs():
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     assert adata.n_obs == 3
-    adata1 = adata[:2,]
+    adata1 = adata[:2]
     assert adata1.n_obs == 2
 
 
