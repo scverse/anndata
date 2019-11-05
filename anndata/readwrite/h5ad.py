@@ -337,7 +337,7 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
         if isinstance(categories, h5py.Reference):
             categories_dset = dataset.parent[dataset.attrs["categories"]]
             categories = categories_dset[...]
-            ordered = categories_dset.attrs.get("ordered", False)
+            ordered = bool(categories_dset.attrs.get("ordered", False))
         else:
             # TODO: remove this code at some point post 0.7
             # TODO: Add tests for this
