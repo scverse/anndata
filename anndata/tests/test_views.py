@@ -338,6 +338,20 @@ def test_view_delitem(attr):
     assert view_hash != joblib.hash(view)
 
 
+@pytest.mark.parametrize(
+    'attr', ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]
+)
+def test_view_delattr(attr):
+    base = gen_adata((10, 10))
+    # Indexing into obs and var just to get indexes
+    subset = base[5:7, :5]
+    empty = ad.AnnData(subset.X, obs=subset.obs[[]], var=subset.var[[]])
+    delattr(subset, attr)
+    assert not subset.isview
+    # Should now have same value as default
+    assert_equal(getattr(subset, attr), getattr(empty, attr))
+
+
 def test_layers_view():
     X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
