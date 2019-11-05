@@ -13,6 +13,7 @@ from scipy import sparse
 from anndata.core.sparsedataset import SparseDataset
 from anndata import AnnData
 from anndata.core.views import ArrayView
+from anndata.core.alignedmapping import AlignedMapping
 
 
 @singledispatch
@@ -271,6 +272,7 @@ def assert_equal(a, b, exact=False, elem_name=None):
 def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     b = asarray(b)
     if not exact and is_numeric_dtype(a) and is_numeric_dtype(b):
+        assert a.shape == b.shape, format_msg(elem_name)
         assert np.allclose(a, b, equal_nan=True), format_msg(elem_name)
     elif (  # Structured dtype
         not exact
@@ -308,7 +310,12 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
         assert_equal(b, a, exact, elem_name)  # , a.values maybe?
 
     report_name(pd.testing.assert_frame_equal)(
-        a, b, check_index_type=exact, check_exact=exact, _elem_name=elem_name
+        a,
+        b,
+        check_index_type=exact,
+        check_exact=exact,
+        _elem_name=elem_name,
+        check_frame_type=False,
     )
 
 
@@ -321,12 +328,27 @@ def assert_equal_mapping(a, b, exact=False, elem_name=None):
         assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
 
 
+@assert_equal.register(AlignedMapping)
+def assert_equal_alignedmapping(a, b, exact=False, elem_name=None):
+    a_indices = (a.parent.obs_names, a.parent.var_names)
+    b_indices = (b.parent.obs_names, b.parent.var_names)
+    for axis_idx in a.axes:
+        assert_equal(
+            a_indices[axis_idx],
+            b_indices[axis_idx],
+            exact=exact,
+            elem_name=axis_idx,
+        )
+    assert a.attrname == b.attrname, format_msg(elem_name)
+    assert_equal_mapping(a, b, exact=exact, elem_name=elem_name)
+
+
 @assert_equal.register(pd.Index)
 def assert_equal_index(a, b, exact=False, elem_name=None):
     if not exact:
         report_name(pd.testing.assert_index_equal)(
-            a[np.argsort(a)],
-            b[np.argsort(b)],
+            a,
+            b,
             check_names=False,
             check_categorical=False,
             _elem_name=elem_name,
