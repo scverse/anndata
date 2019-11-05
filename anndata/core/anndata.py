@@ -1036,6 +1036,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         self._layers = layers
 
+    @layers.deleter
+    def layers(self):
+        self.layers = dict()
+
     @property
     def raw(self) -> Raw:
         """\
@@ -1075,6 +1079,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @raw.deleter
     def raw(self):
+        if self.isview:
+            self._init_as_actual(self.copy())
         self._raw = None
 
     @property
@@ -1103,6 +1109,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         self._obs = value
 
+    @obs.deleter
+    def obs(self):
+        self.obs = pd.DataFrame(index=self.obs_names)
+
     @property
     def var(self) -> pd.DataFrame:
         """\
@@ -1121,6 +1131,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         self._var = value
 
+    @var.deleter
+    def var(self):
+        self.var = pd.DataFrame(index=self.var_names)
+
     @property
     def uns(self) -> MutableMapping:
         """Unstructured annotation (ordered dictionary)."""
@@ -1135,6 +1149,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isview:
             self._init_as_actual(self.copy())
         self._uns = value
+
+    @uns.deleter
+    def uns(self):
+        self.uns = OrderedDict()
 
     @property
     def obsm(self) -> Union[AxisArrays, AxisArraysView]:
@@ -1156,6 +1174,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         self._obsm = obsm
 
+    @obsm.deleter
+    def obsm(self):
+        self.obsm = dict()
+
     @property
     def varm(self) -> Union[AxisArrays, AxisArraysView]:
         """\
@@ -1175,6 +1197,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isview:
             self._init_as_actual(self.copy())
         self._varm = varm
+
+    @varm.deleter
+    def varm(self):
+        self.varm = dict()
 
     @property
     def obsp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
@@ -1196,6 +1222,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         self._obsp = obsp
 
+    @obsp.deleter
+    def obsp(self):
+        self.obsp = dict()
+
     @property
     def varp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
         """\
@@ -1215,6 +1245,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isview:
             self._init_as_actual(self.copy())
         self._varp = varp
+
+    @varp.deleter
+    def varp(self):
+        self.varp = dict()
 
     @property
     def obs_names(self) -> pd.Index:

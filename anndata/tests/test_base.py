@@ -8,6 +8,7 @@ from scipy import sparse as sp
 from scipy.sparse import csr_matrix, isspmatrix_csr
 
 from anndata import AnnData
+from helpers import assert_equal, gen_adata
 
 
 # some test objects that we use below
@@ -99,6 +100,16 @@ def test_df_warnings():
         adata = AnnData(df)
     with pytest.warns(UserWarning, match=r"X.*dtype float64"):
         adata.X = df
+
+
+def test_attr_deletion():
+    full = gen_adata((30, 30))
+    # Empty has just X, obs_names, var_names
+    empty = AnnData(full.X, obs=full.obs[[]], var=full.var[[]])
+    for attr in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
+        delattr(full, attr)
+        assert_equal(getattr(full, attr), getattr(empty, attr))
+    assert_equal(full, empty, exact=True)
 
 
 def test_names():
