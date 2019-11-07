@@ -219,7 +219,11 @@ class AxisArraysBase(AlignedMapping):
         return df
 
     def _validate_value(self, val: V, key: Hashable) -> V:
-        if hasattr(val, "index") and not (val.index == self.dim_names).all():
+        if (
+            hasattr(val, "index")
+            and isinstance(val.index, cabc.Collection)
+            and not (val.index == self.dim_names).all()
+        ):
             # Could probably also re-order index if it's contained
             raise ValueError(
                 f"value.index does not match parent’s axis {self.axes[0]} names"
