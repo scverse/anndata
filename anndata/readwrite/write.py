@@ -104,7 +104,7 @@ def write_loom(
     elif len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
         logger.warning(
             f'The loom file will lack these fields:\n'
-            f'{adata.obsm.keys() + adata.varm.keys()}\n'
+            f'{adata.obsm.keys() | adata.varm.keys()}\n'
             f'Use write_obsm_varm=True to export multi-dimensional annotations'
         )
 
