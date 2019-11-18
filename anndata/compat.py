@@ -75,9 +75,25 @@ def _from_fixed_length_strings(value):
         # https://github.com/h5py/h5py/issues/1307
         if issubclass(np.dtype(dt_type).type, np.string_):
             dt_list[1] = f"U{int(dt_type[2:])}"
-        elif is_annotated:
+        elif is_annotated or issubclass(np.dtype(dt_type).type, np.str_):
             dt_list[1] = "O"  # Assumption that it's a vlen str
         new_dtype.append(tuple(dt_list))
+    return value.astype(new_dtype)
+
+
+def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
+    """
+    Convert variable length strings to fixed length.
+
+    Currently a workaround for
+    https://github.com/zarr-developers/zarr-python/pull/422
+    """
+    new_dtype = []
+    for dt_name, (dt_type, _) in value.dtype.fields.items():
+        if dt_type.str[1] in ("U", "O"):
+            new_dtype.append((dt_name, "U200"))
+        else:
+            new_dtype.append((dt_name, dt_type))
     return value.astype(new_dtype)
 
 

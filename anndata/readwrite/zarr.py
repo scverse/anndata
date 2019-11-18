@@ -13,7 +13,11 @@ import numcodecs
 import zarr
 
 from ..core.anndata import AnnData, Raw
-from ..compat import _from_fixed_length_strings, _clean_uns
+from ..compat import (
+    _from_fixed_length_strings,
+    _to_fixed_length_strings,
+    _clean_uns,
+)
 from .utils import (
     report_read_key_on_error,
     report_write_key_on_error,
@@ -150,6 +154,11 @@ def write_array(g, key, value, dataset_kwargs=MappingProxyType({})):
             **dataset_kwargs,
         )
         g[key][:] = value
+    elif value.dtype.kind == "V":
+        # Structured dtype
+        g.create_dataset(
+            key, data=_to_fixed_length_strings(value), **dataset_kwargs
+        )
     else:
         g.create_dataset(key, data=value, **dataset_kwargs)
 

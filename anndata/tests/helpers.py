@@ -1,4 +1,4 @@
-from functools import singledispatch, wraps
+from functools import singledispatch, partial, wraps
 from string import ascii_letters
 from typing import Tuple
 from collections.abc import Mapping
@@ -35,6 +35,17 @@ def asarray_sparse_dataset(x):
 @asarray.register(h5py.Dataset)
 def asarray_h5py_dataset(x):
     return x[...]
+
+
+def gen_vstr_recarray(m, n, dtype=None):
+    size = m * n
+    lengths = np.random.randint(3, 5, size)
+    letters = np.array(list(ascii_letters))
+    gen_word = lambda l: "".join(np.random.choice(letters, l))
+    arr = np.array([gen_word(l) for l in lengths]).reshape(m, n)
+    return pd.DataFrame(
+        arr, columns=[gen_word(5) for i in range(n)]
+    ).to_records(index=False, column_dtypes=dtype)
 
 
 def gen_typed_df(n, index=None):
@@ -147,6 +158,10 @@ def gen_adata(
     varp = dict(
         array=np.random.random((N, N)), sparse=sparse.random(N, N, format="csr")
     )
+    uns = dict(
+        O_recarray=gen_vstr_recarray(N, 5),
+        # U_recarray=gen_vstr_recarray(N, 5, "U4")
+    )
     adata = AnnData(
         X=X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype)),
         obs=obs,
@@ -157,6 +172,7 @@ def gen_adata(
         obsp=obsp,
         varp=varp,
         dtype=X_dtype,
+        uns=uns,
     )
     return adata
 
