@@ -2,11 +2,11 @@ import pytest
 import zarr
 import h5py
 
-from anndata.readwrite.utils import report_key_on_error, AnnDataReadError
+from anndata.readwrite.utils import report_read_key_on_error, AnnDataReadError
 
 
 def test_key_error(tmp_path):
-    @report_key_on_error
+    @report_read_key_on_error
     def read_attr(group):
         raise NotImplementedError()
 
