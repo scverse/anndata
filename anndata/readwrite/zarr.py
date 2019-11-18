@@ -14,7 +14,11 @@ import zarr
 
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns
-from .utils import report_key_on_error, write_attribute
+from .utils import (
+    report_read_key_on_error,
+    report_write_key_on_error,
+    write_attribute,
+)
 from . import WriteWarning
 
 
@@ -70,6 +74,7 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs=MappingProxyType({})):
         write_attribute(f, f"{key}/{sub_k}", sub_v, dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
@@ -93,6 +98,7 @@ def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
         write_series(group, colname, series, dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
     if series.dtype == object:
         group.create_dataset(
@@ -118,6 +124,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         group[key] = series.values
 
 
+@report_write_key_on_error
 def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     # If it's not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
@@ -127,10 +134,12 @@ def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     )
 
 
+@report_write_key_on_error
 def write_list(g, key, value, dataset_kwargs=MappingProxyType({})):
     write_array(g, key, np.array(value), dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_array(g, key, value, dataset_kwargs=MappingProxyType({})):
     if value.dtype == object:
         g.create_dataset(
@@ -146,15 +155,18 @@ def write_array(g, key, value, dataset_kwargs=MappingProxyType({})):
 
 
 # TODO: Not working quite right
+@report_write_key_on_error
 def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
     pass
 
 
 # TODO: Figure out what to do with dataset_kwargs for these
+@report_write_key_on_error
 def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csr_matrix"
@@ -165,6 +177,7 @@ def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
     group["indptr"] = value.indptr
 
 
+@report_write_key_on_error
 def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csc_matrix"
@@ -253,7 +266,7 @@ def read_attribute(value):
 
 
 @read_attribute.register(zarr.Array)
-@report_key_on_error
+@report_read_key_on_error
 def read_dataset(dataset):
     value = dataset[...]
     if not hasattr(value, "dtype"):
@@ -273,7 +286,7 @@ def read_dataset(dataset):
 
 
 @read_attribute.register(zarr.Group)
-@report_key_on_error
+@report_read_key_on_error
 def read_group(group):
     if "encoding-type" in group.attrs:
         enctype = group.attrs["encoding-type"]
@@ -286,7 +299,7 @@ def read_group(group):
     return {k: read_attribute(group[k]) for k in group.keys()}
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_csr(group: zarr.Group) -> sparse.csr_matrix:
     return sparse.csr_matrix(
         (group["data"], group["indices"], group["indptr"]),
@@ -294,7 +307,7 @@ def read_csr(group: zarr.Group) -> sparse.csr_matrix:
     )
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_csc(group: zarr.Group) -> sparse.csc_matrix:
     return sparse.csc_matrix(
         (group["data"], group["indices"], group["indptr"]),
@@ -302,7 +315,7 @@ def read_csc(group: zarr.Group) -> sparse.csc_matrix:
     )
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """
     Reads old format of dataframes
@@ -313,7 +326,7 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     return df
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_dataframe(group) -> pd.DataFrame:
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)
@@ -329,7 +342,7 @@ def read_dataframe(group) -> pd.DataFrame:
     return df
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
         categories = dataset.attrs["categories"]

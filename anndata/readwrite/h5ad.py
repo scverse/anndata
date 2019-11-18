@@ -15,7 +15,13 @@ from scipy import sparse
 from ..core.sparsedataset import SparseDataset
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns, Literal
-from .utils import report_key_on_error, idx_chunks_along_axis, write_attribute
+from .utils import (
+    report_read_key_on_error,
+    report_write_key_on_error,
+    idx_chunks_along_axis,
+    write_attribute,
+    read_attribute,
+)
 
 
 H5Group = Union[h5py.Group, h5py.File]
@@ -138,6 +144,7 @@ def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_attribute(f, "raw/varm", value.varm, dataset_kwargs=dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     # If it's not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle,
@@ -148,18 +155,22 @@ def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
     )
 
 
+@report_write_key_on_error
 def write_basic(f, key, value, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(key, data=value, **dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_list(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_array(f, key, np.array(value), dataset_kwargs=dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
     pass
 
 
+@report_write_key_on_error
 def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     # Can't compress scalars, error is thrown
     if "compression" in dataset_kwargs:
@@ -168,6 +179,7 @@ def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_array(f, key, np.array(value), dataset_kwargs=dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
     # Convert unicode to fixed length strings
     if value.dtype.kind in {'U', 'O'}:
@@ -177,6 +189,7 @@ def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(key, data=value, **dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_sparse_compressed(
     f, key, value, fmt: str, dataset_kwargs=MappingProxyType({})
 ):
@@ -198,6 +211,7 @@ write_csr = partial(write_sparse_compressed, fmt="csr")
 write_csc = partial(write_sparse_compressed, fmt="csc")
 
 
+@report_write_key_on_error
 def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
         f,
@@ -208,6 +222,7 @@ def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
     )
 
 
+@report_write_key_on_error
 def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
     real_key = None  # Flag for if temporary key was used
     if key in f:
@@ -232,6 +247,7 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
         del f[key]
 
 
+@report_write_key_on_error
 def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
@@ -255,6 +271,7 @@ def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
         write_series(group, colname, series, dataset_kwargs=dataset_kwargs)
 
 
+@report_write_key_on_error
 def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
     # group here is an h5py type, otherwise categoricals won't write
     if series.dtype == object:  # Assuming it's string
@@ -457,12 +474,7 @@ def read_h5ad(
     return AnnData(**d)
 
 
-@singledispatch
-def read_attribute(value):
-    raise NotImplementedError()
-
-
-@report_key_on_error
+@report_read_key_on_error
 def read_dataframe_legacy(dataset) -> pd.DataFrame:
     """
     Read pre-anndata 0.7 dataframes.
@@ -472,7 +484,7 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
     return df
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_dataframe(group) -> pd.DataFrame:
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
@@ -488,7 +500,7 @@ def read_dataframe(group) -> pd.DataFrame:
     return df
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
         categories = dataset.attrs["categories"]
@@ -512,13 +524,13 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
         return dataset[...]
 
 
-# @report_key_on_error
+# @report_read_key_on_error
 # def read_sparse_dataset_backed(group: h5py.Group) -> sparse.spmatrix:
 #     return SparseDataset(group)
 
 
 @read_attribute.register(h5py.Group)
-@report_key_on_error
+@report_read_key_on_error
 def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     if "h5sparse_format" in group.attrs:  # Backwards compat
         return SparseDataset(group).tomemory()
@@ -539,7 +551,7 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
 
 
 @read_attribute.register(h5py.Dataset)
-@report_key_on_error
+@report_read_key_on_error
 def read_dataset(dataset: h5py.Dataset):
     value = dataset[()]
     if not hasattr(value, "dtype"):
@@ -559,7 +571,7 @@ def read_dataset(dataset: h5py.Dataset):
     return value
 
 
-@report_key_on_error
+@report_read_key_on_error
 def read_dense_as_sparse(
     dataset: h5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int
 ):
@@ -586,8 +598,3 @@ def read_dense_as_csc(dataset, axis_chunk=6000):
         sub_matrix = sparse.csc_matrix(dataset[idx])
         sub_matrices.append(sub_matrix)
     return sparse.hstack(sub_matrices, format="csc")
-
-
-@read_attribute.register(type(None))
-def read_attribute_none(value) -> None:
-    return None

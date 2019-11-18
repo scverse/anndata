@@ -1,4 +1,5 @@
 from functools import wraps, singledispatch
+import sys
 from ..core.sparsedataset import SparseDataset
 
 # -------------------------------------------------------------------------------
@@ -96,9 +97,17 @@ def write_attribute(*args, **kwargs):
     )
 
 
-# @singledispatch
-# def read_attribute(*args, **kwargs):
-#     raise NotImplementedError("Unrecognized argument types for `read_attribute`.")
+@singledispatch
+def read_attribute(*args, **kwargs):
+    raise NotImplementedError(
+        "Unrecognized argument types for `read_attribute`."
+    )
+
+
+@read_attribute.register(type(None))
+def read_attribute_none(value) -> None:
+    return None
+
 
 # -------------------------------------------------------------------------------
 # Errors handling
@@ -111,14 +120,14 @@ class AnnDataReadError(OSError):
     pass
 
 
-def report_key_on_error(func):
+def report_read_key_on_error(func):
     """
     A decorator for zarr element reading which makes keys involved in errors get reported.
 
     Example
     -------
     >>> import zarr
-    >>> @report_key_on_error
+    >>> @report_read_key_on_error
     ... def read_arr(group):
     ...     raise NotImplementedError()
     >>> z = zarr.open("tmp.zarr")
@@ -148,5 +157,55 @@ def report_key_on_error(func):
                 raise AnnDataReadError(
                     f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {parent}."
                 )
+
+    return func_wrapper
+
+
+def report_write_key_on_error(func):
+    """
+    A decorator for zarr element reading which makes keys involved in errors get reported.
+
+    Example
+    -------
+    >>> import zarr
+    >>> @report_write_key_on_error
+    ... def write_arr(group, key, val):
+    ...     raise NotImplementedError()
+    >>> z = zarr.open("tmp.zarr")
+    >>> X = [1, 2, 3]
+    >>> write_arr(z, "X", X)
+    """
+
+    @wraps(func)
+    def func_wrapper(elem, key, val, *args, **kwargs):
+        try:
+            return func(elem, key, val, *args, **kwargs)
+        except Exception as e:
+            if isinstance(e, AnnDataReadError):
+                raise e
+            else:
+                try:
+                    import zarr
+                except ImportError:
+                    zarr = None
+                if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
+                    parent = (
+                        elem.store
+                    )  # Not sure how to always get a name out of this
+                elif isinstance(elem, SparseDataset):
+                    parent = elem.group.file.name
+                else:
+                    parent = elem.file.name
+                raise type(e)(
+                    "\n\n".join(
+                        (
+                            str(e),
+                            f"Above error raised while writing key '{key}' of type {type(val)} from {parent}.",
+                        )
+                    )
+                )
+                # raise AnnDataReadError(
+                #     f"Above error raised while writing key '{key}' of type {type(val)} from {parent}."
+                # )
 
     return func_wrapper
