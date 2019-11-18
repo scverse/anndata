@@ -35,7 +35,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
     """
     new_dtype = []
     for dt_name, dt_type in value.dtype.descr:
-        if dt_type[1] == "U":
+        if dt_type[1] in ("U", "O"):
             new_dtype.append((dt_name, h5py.special_dtype(vlen=str)))
         else:
             new_dtype.append((dt_name, dt_type))

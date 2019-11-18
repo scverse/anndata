@@ -465,17 +465,29 @@ def test_zarr_chunk_X(tmp_path):
 # Round-tripping scanpy datasets
 ################################
 
+diskfmt2 = diskfmt
+
 
 @pytest.mark.skipif(not find_spec('scanpy'), reason='Scanpy is not installed')
-def test_scanpy_pbmc68k(tmp_path, diskfmt):
-    filepth = tmp_path / f"test.{diskfmt}"
+def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
+    read1 = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write1 = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+    read2 = lambda pth: getattr(ad, f"read_{diskfmt2}")(pth)
+    write2 = lambda adata, pth: getattr(adata, f"write_{diskfmt2}")(pth)
+
+    filepth1 = tmp_path / f"test1.{diskfmt}"
+    filepth2 = tmp_path / f"test2.{diskfmt2}"
+
     import scanpy as sc
 
     pbmc = sc.datasets.pbmc68k_reduced()
-    getattr(pbmc, f"write_{diskfmt}")(filepth)
-    read = getattr(ad, f"read_{diskfmt}")(filepth)
+    write1(pbmc, filepth1)
+    from_disk1 = read1(filepth1)  # Do we read okay
+    write2(from_disk1, filepth2)  # Can we round trip
+    from_disk2 = read2(filepth2)
 
-    assert_equal(pbmc, read)  # Not expected to be exact due to `nan`s
+    assert_equal(pbmc, from_disk1)  # Not expected to be exact due to `nan`s
+    assert_equal(pbmc, from_disk2)
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
