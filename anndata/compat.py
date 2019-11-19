@@ -75,7 +75,7 @@ def _from_fixed_length_strings(value):
         # https://github.com/h5py/h5py/issues/1307
         if issubclass(np.dtype(dt_type).type, np.string_):
             dt_list[1] = f"U{int(dt_type[2:])}"
-        elif is_annotated or issubclass(np.dtype(dt_type).type, np.str_):
+        elif is_annotated or np.issubdtype(np.dtype(dt_type), np.str_):
             dt_list[1] = "O"  # Assumption that it's a vlen str
         new_dtype.append(tuple(dt_list))
     return value.astype(new_dtype)
@@ -91,9 +91,9 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     new_dtype = []
     for dt_name, (dt_type, dt_offset) in value.dtype.fields.items():
         if dt_type.kind == "O":
-            #  Asumming the objects are str
+            #  Assuming the objects are str
             size = max(len(x.encode()) for x in value.getfield("O", dt_offset))
-            new_dtype.append((dt_name, f"U{size}"))
+            new_dtype.append((dt_name, ("U", size)))
         else:
             new_dtype.append((dt_name, dt_type))
     return value.astype(new_dtype)
