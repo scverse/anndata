@@ -112,6 +112,8 @@ def read_attribute_none(value) -> None:
 # -------------------------------------------------------------------------------
 # Errors handling
 # -------------------------------------------------------------------------------
+# TODO: Is there a consistent way to do this which just modifies the previously
+# thrown error? Could do a warning?
 
 
 class AnnDataReadError(OSError):
@@ -200,12 +202,10 @@ def report_write_key_on_error(func):
                     "\n\n".join(
                         (
                             str(e),
-                            f"Above error raised while writing key '{key}' of type {type(val)} from {parent}.",
+                            f"Above error raised while writing key '{key}' of "
+                            f"type {type(val)} from {parent}.",
                         )
                     )
-                )
-                # raise AnnDataReadError(
-                #     f"Above error raised while writing key '{key}' of type {type(val)} from {parent}."
-                # )
+                ).with_traceback(sys.exc_info()[2])
 
     return func_wrapper
