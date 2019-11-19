@@ -1,4 +1,4 @@
-from functools import singledispatch, partial, wraps
+from functools import singledispatch, wraps
 from string import ascii_letters
 from typing import Tuple
 from collections.abc import Mapping

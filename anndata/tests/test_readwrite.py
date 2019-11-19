@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical
 import pytest
-from scipy.sparse import csr_matrix, csc_matrix, issparse
+from scipy.sparse import csr_matrix, csc_matrix
 
 import anndata as ad
 

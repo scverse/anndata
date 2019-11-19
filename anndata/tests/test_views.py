@@ -1,4 +1,4 @@
-from operator import ne, mul
+from operator import mul
 
 import joblib
 import numpy as np
