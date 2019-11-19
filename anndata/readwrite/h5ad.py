@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from functools import _find_impl, singledispatch, partial
+from functools import _find_impl, partial
 from pathlib import Path
 import re
 from types import MappingProxyType

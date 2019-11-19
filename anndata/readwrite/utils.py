@@ -122,6 +122,20 @@ class AnnDataReadError(OSError):
     pass
 
 
+def _get_parent(elem):
+    try:
+        import zarr
+    except ImportError:
+        zarr = None
+    if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
+        parent = elem.store  # Not sure how to always get a name out of this
+    elif isinstance(elem, SparseDataset):
+        parent = elem.group.file.name
+    else:
+        parent = elem.file.name
+    return parent
+
+
 def report_read_key_on_error(func):
     """
     A decorator for zarr element reading which makes keys involved in errors get reported.
@@ -145,19 +159,10 @@ def report_read_key_on_error(func):
             if isinstance(e, AnnDataReadError):
                 raise e
             else:
-                try:
-                    import zarr
-                except ImportError:
-                    zarr = None
-                if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-                    # Not sure how to always get a name out of this
-                    parent = elem.store
-                elif isinstance(elem, SparseDataset):
-                    parent = elem.group.file.name
-                else:
-                    parent = elem.file.name
+                parent = _get_parent(elem)
                 raise AnnDataReadError(
-                    f"Above error raised while reading key '{elem.name}' of type {type(elem)} from {parent}."
+                    f"Above error raised while reading key '{elem.name}' of "
+                    f"type {type(elem)} from {parent}."
                 )
 
     return func_wrapper
@@ -183,29 +188,11 @@ def report_write_key_on_error(func):
         try:
             return func(elem, key, val, *args, **kwargs)
         except Exception as e:
-            if isinstance(e, AnnDataReadError):
-                raise e
-            else:
-                try:
-                    import zarr
-                except ImportError:
-                    zarr = None
-                if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-                    parent = (
-                        elem.store
-                    )  # Not sure how to always get a name out of this
-                elif isinstance(elem, SparseDataset):
-                    parent = elem.group.file.name
-                else:
-                    parent = elem.file.name
-                raise type(e)(
-                    "\n\n".join(
-                        (
-                            str(e),
-                            f"Above error raised while writing key '{key}' of "
-                            f"type {type(val)} from {parent}.",
-                        )
-                    )
-                ).with_traceback(sys.exc_info()[2])
+            parent = _get_parent(elem)
+            raise type(e)(
+                f"{e}\n\n"
+                f"Above error raised while writing key '{key}' of {type(elem)}"
+                f" from {parent}."
+            ).with_traceback(sys.exc_info()[2])
 
     return func_wrapper
