@@ -89,9 +89,11 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     https://github.com/zarr-developers/zarr-python/pull/422
     """
     new_dtype = []
-    for dt_name, (dt_type, _) in value.dtype.fields.items():
-        if dt_type.str[1] in ("U", "O"):
-            new_dtype.append((dt_name, "U200"))
+    for dt_name, (dt_type, dt_offset) in value.dtype.fields.items():
+        if dt_type.kind == "O":
+            #  Asumming the objects are str
+            size = max(len(x.encode()) for x in value.getfield("O", dt_offset))
+            new_dtype.append((dt_name, f"U{size}"))
         else:
             new_dtype.append((dt_name, dt_type))
     return value.astype(new_dtype)
