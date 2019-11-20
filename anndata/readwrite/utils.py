@@ -1,5 +1,4 @@
 from functools import wraps, singledispatch
-import sys
 from ..core.sparsedataset import SparseDataset
 
 # -------------------------------------------------------------------------------
@@ -193,6 +192,6 @@ def report_write_key_on_error(func):
                 f"{e}\n\n"
                 f"Above error raised while writing key '{key}' of {type(elem)}"
                 f" from {parent}."
-            ).with_traceback(sys.exc_info()[2])
+            ) from e
 
     return func_wrapper
