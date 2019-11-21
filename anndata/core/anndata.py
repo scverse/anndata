@@ -360,6 +360,18 @@ class Raw:
             varm=None if self._varm is None else self._varm.copy(),
         )
 
+    def to_adata(self):
+        """Create full AnnData object.
+        """
+        return AnnData(
+            X=self._X.copy(),
+            var=self._var.copy(),
+            varm=None if self._varm is None else self._varm.copy(),
+            obs=self._adata.obs.copy(),
+            obsm=self._adata.obsm.copy(),
+            uns=self._adata.uns.copy()
+        )
+
     def _normalize_indices(self, packed_index):
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
