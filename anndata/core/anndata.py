@@ -369,7 +369,7 @@ class Raw:
             varm=None if self._varm is None else self._varm.copy(),
             obs=self._adata.obs.copy(),
             obsm=self._adata.obsm.copy(),
-            uns=self._adata.uns.copy()
+            uns=self._adata.uns.copy(),
         )
 
     def _normalize_indices(self, packed_index):
