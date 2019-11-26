@@ -1416,16 +1416,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             all_categories = df_full[k].cat.categories
             df_sub[k].cat.remove_unused_categories(inplace=True)
             # also correct the colors...
-            if f'{k}_colors' not in uns:
+            color_key = f"{k}_colors"
+            if color_key not in uns:
                 continue
-            # this is a strange hack...
-            if np.array(uns[f'{k}_colors']).ndim == 0:
-                idx = None
+            color_vec = uns[color_key]
+            if np.array(color_vec).ndim == 0:
+                # Make 0D arrays into 1D ones
+                uns[color_key] = np.array(color_vec)[(None,)]
+            elif len(color_vec) != len(all_categories):
+                # Reset colors
+                del uns[color_key]
             else:
                 idx = np.where(
                     np.in1d(all_categories, df_sub[k].cat.categories)
                 )[0]
-            uns[f'{k}_colors'] = np.array(uns[f'{k}_colors'])[(idx,)]
+                uns[color_key] = np.array(color_vec)[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\
