@@ -12,7 +12,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
-from ..core.sparsedataset import SparseDataset
+from ..core.sparse_dataset import SparseDataset
 from ..core.anndata import AnnData, Raw
 from ..compat import _from_fixed_length_strings, _clean_uns, Literal
 from .utils import (
