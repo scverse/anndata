@@ -1420,9 +1420,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if color_key not in uns:
                 continue
             color_vec = uns[color_key]
-            # this is a strange hack...
-            # What case is this? Does this happen?
             if np.array(color_vec).ndim == 0:
+                # Make 0D arrays into 1D ones
                 uns[color_key] = np.array(color_vec)[(None,)]
             elif len(color_vec) != len(all_categories):
                 # Reset colors
