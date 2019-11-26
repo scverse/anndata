@@ -12,7 +12,8 @@ from pandas.api.types import is_categorical_dtype
 import numcodecs
 import zarr
 
-from ..core.anndata import AnnData, Raw
+from ..core.anndata import AnnData
+from ..core.raw import Raw
 from ..compat import (
     _from_fixed_length_strings,
     _to_fixed_length_strings,
