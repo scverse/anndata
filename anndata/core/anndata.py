@@ -1424,7 +1424,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # What case is this? Does this happen?
             if np.array(color_vec).ndim == 0:
                 uns[color_key] = np.array(color_vec)[(None,)]
-            elif len(color_vec) < len(all_categories):
+            elif len(color_vec) != len(all_categories):
                 # Reset colors
                 del uns[color_key]
             else:
