@@ -16,8 +16,8 @@ def test_uns_color_subset():
 
     adata = AnnData(np.ones((5, 5)), obs=obs, uns=uns)
 
-    # If number of categories does not match number of colors, they should be
-    # reset
+    # If number of categories does not match number of colors,
+    # they should be reset
     v = adata[:, [0, 1]]
     assert "cat1_colors" not in v.uns
     assert "cat2_colors" not in v.uns
