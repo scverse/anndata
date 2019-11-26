@@ -9,10 +9,10 @@ def test_uns_color_subset():
     obs = pd.DataFrame(index=[f"cell{i}" for i in range(5)])
     obs["cat1"] = pd.Series(list("aabcd"), index=obs.index, dtype="category")
     obs["cat2"] = pd.Series(list("aabbb"), index=obs.index, dtype="category")
-    uns = {
-        "cat1_colors": ["red", "green", "blue"],
-        "cat2_colors": ["red", "green", "blue"],
-    }
+    uns = dict(
+        cat1_colors=["red", "green", "blue"],
+        cat2_colors=["red", "green", "blue"],
+    )
 
     adata = AnnData(np.ones((5, 5)), obs=obs, uns=uns)
 
