@@ -40,7 +40,7 @@ from .views import (
     asview,
     _resolve_idxs,
 )
-from .sparsedataset import SparseDataset
+from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import (
     Index1D,
