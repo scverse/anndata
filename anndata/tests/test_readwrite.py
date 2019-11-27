@@ -424,23 +424,24 @@ def test_write_large_categorical(tmp_path, diskfmt):
     M = 30_000
     N = 1000
     ls = np.array(list(ascii_letters))
-    cats = np.array(
-        sorted(
+
+    def random_cats(n):
+        cats = {
             "".join(np.random.choice(ls, np.random.choice(range(5, 30))))
-            for i in range(int(10_000))
-        )
-    )
+            for _ in range(n)
+        }
+        while len(cats) < n:  # For the rare case that there’s duplicates
+            cats |= random_cats(n - len(cats))
+        return cats
+
+    cats = np.array(sorted(random_cats(10_000)))
     adata_pth = tmp_path / f"adata.{diskfmt}"
     n_cats = len(np.unique(cats))
     orig = ad.AnnData(
         csr_matrix(([1], ([0], [0])), shape=(M, N)),
-        obs=pd.DataFrame(
-            dict(
-                cat1=cats[np.random.choice(n_cats, M)],
-                cat2=pd.Categorical.from_codes(
-                    np.random.choice(n_cats, M), cats
-                ),
-            )
+        obs=dict(
+            cat1=cats[np.random.choice(n_cats, M)],
+            cat2=pd.Categorical.from_codes(np.random.choice(n_cats, M), cats),
         ),
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
