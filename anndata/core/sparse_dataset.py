@@ -8,9 +8,9 @@ See the copyright and license note in this directory source code.
 
 # TODO:
 # - think about supporting the COO format
-from collections.abc import Iterable
+import collections.abc as cabc
 from itertools import accumulate, chain
-from typing import Union, NamedTuple, Tuple, Sequence, Type
+from typing import Union, NamedTuple, Tuple, Sequence, Iterable, Type
 from warnings import warn
 
 import h5py
@@ -18,16 +18,22 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from .index import unpack_index
+try:
+    # Not really important, just for IDEs to be more helpful
+    from scipy.sparse.compressed import _cs_matrix
+except ImportError:
+    _cs_matrix = ss.spmatrix
+
+from .index import unpack_index, Index
 
 
 class BackedFormat(NamedTuple):
     format_str: str
-    backed_type: Type['BackedSparseMatrixMixin']
+    backed_type: Type['BackedSparseMatrix']
     memory_type: Type[ss.spmatrix]
 
 
-class BackedSparseMatrixMixin:
+class BackedSparseMatrix(_cs_matrix):
     """\
     Mixin class for backed sparse matrices.
 
@@ -35,52 +41,84 @@ class BackedSparseMatrixMixin:
     copy on `.data`, `.indices`, and `.indptr`.
     """
 
-    def copy(self):
+    def copy(self) -> ss.spmatrix:
         if isinstance(self.data, h5py.Dataset):
-            return SparseDataset(self.data.parent).tomemory()
+            return SparseDataset(self.data.parent).to_memory()
         else:
             return super().copy()
 
+    def _set_many(self, i: Iterable[int], j: Iterable[int], x):
+        """\
+        Sets value at each (i, j) to x
 
-def slice_len(s: slice, l: int):
-    """Returns length of `a[s]` where `len(a) == l`."""
-    return len(range(*s.indices(l)))
+        Here (i,j) index major and minor respectively, and must not contain
+        duplicate entries.
+        """
+        # Scipy 1.3+ compat
+        n_samples = 1 if np.isscalar(x) else len(x)
+        offsets = self._offsets(i, j, n_samples)
+
+        if -1 not in offsets:
+            # make a list for interaction with h5py
+            offsets = list(offsets)
+            # only affects existing non-zero cells
+            self.data[offsets] = x
+            return
+
+        else:
+            raise ValueError(
+                'You cannot change the sparsity structure of a SparseDataset.'
+            )
+            # replace where possible
+            # mask = offsets > -1
+            # # offsets[mask]
+            # bool_data_mask = np.zeros(len(self.data), dtype=bool)
+            # bool_data_mask[offsets[mask]] = True
+            # self.data[bool_data_mask] = x[mask]
+            # # self.data[offsets[mask]] = x[mask]
+            # # only insertions remain
+            # mask = ~mask
+            # i = i[mask]
+            # i[i < 0] += M
+            # j = j[mask]
+            # j[j < 0] += N
+            # self._insert_many(i, j, x[mask])
+
+    def _zero_many(self, i: Sequence[int], j: Sequence[int]):
+        """\
+        Sets value at each (i, j) to zero, preserving sparsity structure.
+
+        Here (i,j) index major and minor respectively.
+        """
+        offsets = self._offsets(i, j, len(i))
+
+        # only assign zeros to the existing sparsity structure
+        self.data[list(offsets[offsets > -1])] = 0
+
+    def _offsets(
+        self, i: Iterable[int], j: Iterable[int], n_samples: int
+    ) -> np.ndarray:
+        i, j, M, N = self._prepare_indices(i, j)
+        offsets = np.empty(n_samples, dtype=self.indices.dtype)
+        ret = _sparsetools.csr_sample_offsets(
+            M, N, self.indptr, self.indices, n_samples, i, j, offsets
+        )
+        if ret == 1:
+            # rinse and repeat
+            self.sum_duplicates()
+            _sparsetools.csr_sample_offsets(
+                M, N, self.indptr, self.indices, n_samples, i, j, offsets
+            )
+        return offsets
 
 
-def slice_as_int(s: slice, l: int):
-    """Converts slices of length 1 to the integer index they'll access."""
-    out = list(range(*s.indices(l)))
-    assert len(out) == 1
-    return out[0]
-
-
-def get_compressed_vectors(
-    X: "backed_sparse_matrix", row_idxs: "np.ndarray[int]"
-) -> Tuple[Sequence, Sequence, Sequence]:
-    slices = [slice(*(X.indptr[i : i + 2])) for i in row_idxs]
-    data = np.concatenate([X.data[s] for s in slices])
-    indices = np.concatenate([X.indices[s] for s in slices])
-    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
-    return data, indices, indptr
-
-
-def get_compressed_vector(
-    X: "backed_sparse_matrix", idx: int
-) -> Tuple[Sequence, Sequence, Sequence]:
-    s = slice(*(X.indptr[idx : idx + 2]))
-    data = X.data[s]
-    indices = X.indices[s]
-    indptr = [0, len(data)]
-    return data, indices, indptr
-
-
-class backed_csr_matrix(BackedSparseMatrixMixin, ss.csr_matrix):
-    def _get_intXslice(self, row, col):
+class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
+    def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:
         return ss.csr_matrix(
             get_compressed_vector(self, row), shape=(1, self.shape[1])
         )[:, col]
 
-    def _get_sliceXslice(self, row, col):
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:
         out_shape = (
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
@@ -93,7 +131,7 @@ class backed_csr_matrix(BackedSparseMatrixMixin, ss.csr_matrix):
             )
         return super()._get_sliceXslice(row, col)
 
-    def _get_arrayXslice(self, row, col):
+    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
         idxs = np.asarray(row)
         if idxs.dtype == bool:
             idxs = np.where(idxs)
@@ -102,13 +140,13 @@ class backed_csr_matrix(BackedSparseMatrixMixin, ss.csr_matrix):
         )[:, col]
 
 
-class backed_csc_matrix(BackedSparseMatrixMixin, ss.csc_matrix):
-    def _get_sliceXint(self, row, col):
+class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
+    def _get_sliceXint(self, row: slice, col: int) -> ss.csc_matrix:
         return ss.csc_matrix(
             get_compressed_vector(self, col), shape=(self.shape[0], 1)
         )[row, :]
 
-    def _get_sliceXslice(self, row, col):
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csc_matrix:
         out_shape = (
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
@@ -121,7 +159,7 @@ class backed_csc_matrix(BackedSparseMatrixMixin, ss.csc_matrix):
             )
         return super()._get_sliceXslice(row, col)
 
-    def _get_sliceXarray(self, row, col):
+    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
         idxs = np.asarray(col)
         if idxs.dtype == bool:
             idxs = np.where(idxs)
@@ -130,117 +168,63 @@ class backed_csc_matrix(BackedSparseMatrixMixin, ss.csc_matrix):
         )[row, :]
 
 
-backed_sparse_matrix = Union[backed_csc_matrix, backed_csr_matrix]
-
-
 FORMATS = [
     BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
     BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
 ]
 
 
-def get_format_str(data):
+def slice_len(s: slice, l: int) -> int:
+    """Returns length of `a[s]` where `len(a) == l`."""
+    return len(range(*s.indices(l)))
+
+
+def slice_as_int(s: slice, l: int) -> int:
+    """Converts slices of length 1 to the integer index they'll access."""
+    out = list(range(*s.indices(l)))
+    assert len(out) == 1
+    return out[0]
+
+
+def get_compressed_vectors(
+    x: BackedSparseMatrix, row_idxs: Iterable[int]
+) -> Tuple[Sequence, Sequence, Sequence]:
+    slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
+    data = np.concatenate([x.data[s] for s in slices])
+    indices = np.concatenate([x.indices[s] for s in slices])
+    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
+    return data, indices, indptr
+
+
+def get_compressed_vector(
+    x: BackedSparseMatrix, idx: int
+) -> Tuple[Sequence, Sequence, Sequence]:
+    s = slice(*(x.indptr[idx : idx + 2]))
+    data = x.data[s]
+    indices = x.indices[s]
+    indptr = [0, len(data)]
+    return data, indices, indptr
+
+
+def get_format_str(data: ss.spmatrix) -> str:
     for fmt, _, memory_class in FORMATS:
         if isinstance(data, memory_class):
             return fmt
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
-def get_memory_class(format_str):
+def get_memory_class(format_str: str) -> Type[ss.spmatrix]:
     for fmt, _, memory_class in FORMATS:
         if format_str == fmt:
             return memory_class
     raise ValueError(f"Format string {format_str} is not supported.")
 
 
-def get_backed_class(format_str):
+def get_backed_class(format_str: str) -> Type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format_str == fmt:
             return backed_class
     raise ValueError(f"Format string {format_str} is not supported.")
-
-
-def _set_many(self, i, j, x):
-    """\
-    Sets value at each (i, j) to x
-
-    Here (i,j) index major and minor respectively, and must not contain
-    duplicate entries.
-    """
-    i, j, M, N = self._prepare_indices(i, j)
-
-    if np.isscalar(x):  # Scipy 1.3+ compat
-        n_samples = 1
-    else:
-        n_samples = len(x)
-    offsets = np.empty(n_samples, dtype=self.indices.dtype)
-    ret = _sparsetools.csr_sample_offsets(
-        M, N, self.indptr, self.indices, n_samples, i, j, offsets
-    )
-    if ret == 1:
-        # rinse and repeat
-        self.sum_duplicates()
-        _sparsetools.csr_sample_offsets(
-            M, N, self.indptr, self.indices, n_samples, i, j, offsets
-        )
-
-    if -1 not in offsets:
-        # make a list for interaction with h5py
-        offsets = list(offsets)
-        # only affects existing non-zero cells
-        self.data[offsets] = x
-        return
-
-    else:
-        raise ValueError(
-            'Currently, you cannot change the sparsity structure of a SparseDataset.'
-        )
-        # replace where possible
-        # mask = offsets > -1
-        # # offsets[mask]
-        # bool_data_mask = np.zeros(len(self.data), dtype=bool)
-        # bool_data_mask[offsets[mask]] = True
-        # self.data[bool_data_mask] = x[mask]
-        # # self.data[offsets[mask]] = x[mask]
-        # # only insertions remain
-        # mask = ~mask
-        # i = i[mask]
-        # i[i < 0] += M
-        # j = j[mask]
-        # j[j < 0] += N
-        # self._insert_many(i, j, x[mask])
-
-
-backed_csr_matrix._set_many = _set_many
-backed_csc_matrix._set_many = _set_many
-
-
-def _zero_many(self, i, j):
-    """\
-    Sets value at each (i, j) to zero, preserving sparsity structure.
-
-    Here (i,j) index major and minor respectively.
-    """
-    i, j, M, N = self._prepare_indices(i, j)
-
-    n_samples = len(i)
-    offsets = np.empty(n_samples, dtype=self.indices.dtype)
-    ret = _sparsetools.csr_sample_offsets(
-        M, N, self.indptr, self.indices, n_samples, i, j, offsets
-    )
-    if ret == 1:
-        # rinse and repeat
-        self.sum_duplicates()
-        _sparsetools.csr_sample_offsets(
-            M, N, self.indptr, self.indices, n_samples, i, j, offsets
-        )
-
-    # only assign zeros to the existing sparsity structure
-    self.data[list(offsets[offsets > -1])] = 0
-
-
-backed_csr_matrix._zero_many = _zero_many
-backed_csc_matrix._zero_many = _zero_many
 
 
 class SparseDataset:
@@ -248,15 +232,15 @@ class SparseDataset:
     Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
     """
 
-    def __init__(self, group):
+    def __init__(self, group: h5py.Group):
         self.group = group
 
     @property
-    def dtype(self):
+    def dtype(self) -> np.dtype:
         return self.group['data'].dtype
 
     @property
-    def format_str(self):
+    def format_str(self) -> str:
         if "h5sparse_format" in self.group.attrs:
             return self.group.attrs['h5sparse_format']
         else:
@@ -264,74 +248,76 @@ class SparseDataset:
             return self.group.attrs["encoding-type"].replace("_matrix", "")
 
     @property
-    def h5py_group(self):
+    def h5py_group(self) -> h5py.Group:
         warn(
-            DeprecationWarning(
-                "Attribute `h5py_group` of SparseDatasets is deprecated. Use `group` instead."
-            )
+            "Attribute `h5py_group` of SparseDatasets is deprecated. "
+            "Use `group` instead.",
+            DeprecationWarning,
         )
         return self.group
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self.group.name
 
     @property
-    def file(self):
+    def file(self) -> h5py.File:
         return self.group.file
 
     @property
-    def shape(self):
-        if "h5sparse_shape" in self.group.attrs:
-            return tuple(self.group.attrs['h5sparse_shape'])
-        else:
-            return tuple(self.group.attrs["shape"])
+    def shape(self) -> Tuple[int, int]:
+        shape = self.group.attrs.get('h5sparse_shape')
+        return tuple(self.group.attrs["shape"] if shape is None else shape)
 
     @property
-    def value(self):
-        return self.tomemory()
+    def value(self) -> ss.spmatrix:
+        return self.to_memory()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f'<HDF5 sparse dataset: format {self.format_str!r}, '
             f'shape {self.shape}, '
             f'type {self.group["data"].dtype.str!r}>'
         )
 
-    def __getitem__(self, index):
-        if index == ():
-            index = slice(None)
-        row, col = unpack_index(index)
-        if all(isinstance(x, Iterable) for x in (row, col)):
-            row, col = np.ix_(row, col)
-        mtx = self.tobacked()
+    def __getitem__(
+        self, index: Union[Index, Tuple[()]]
+    ) -> Union[float, ss.spmatrix]:
+        row, col = self._normalize_index(index)
+        mtx = self.to_backed()
         return mtx[row, col]
 
-    def __setitem__(self, index, value):
+    def __setitem__(self, index: Union[Index, Tuple[()]], value):
+        row, col = self._normalize_index(index)
+        mock_matrix = self.to_backed()
+        mock_matrix[row, col] = value
+
+    def _normalize_index(
+        self, index: Union[Index, Tuple[()]]
+    ) -> Tuple[np.ndarray, np.ndarray]:
         if index == ():
             index = slice(None)
         row, col = unpack_index(index)
-        if all(isinstance(x, Iterable) for x in (row, col)):
+        if all(isinstance(x, cabc.Iterable) for x in (row, col)):
             row, col = np.ix_(row, col)
-        mock_matrix = self.tobacked()
-        mock_matrix[row, col] = value
+        return row, col
 
-    def append(self, sparse_matrix):
+    def append(self, sparse_matrix: ss.spmatrix):
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, SparseDataset):
-            sparse_matrix = sparse_matrix.tobacked()
+            sparse_matrix = sparse_matrix.to_backed()
 
         # Check input
-        if self.format_str not in {'csr', 'csc'}:
-            raise NotImplementedError(
-                f"The append method for format {self.format_str} "
-                f"is not implemented."
-            )
-        if not isinstance(sparse_matrix, ss.spmatrix):
+        if not ss.isspmatrix(sparse_matrix):
             raise NotImplementedError(
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
+            )
+        if self.format_str not in {"csr", "csc"}:
+            raise NotImplementedError(
+                f"The append method for format {self.format_str} "
+                f"is not implemented."
             )
         if self.format_str != get_format_str(sparse_matrix):
             raise ValueError(
@@ -350,6 +336,8 @@ class SparseDataset:
                 shape[0] == sparse_matrix.shape[0]
             ), "CSC matrices must have same size of dimension 0 to be appended."
             new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
+        else:
+            assert False, "We forgot to update this branching to a new format"
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
         self.group.attrs['shape'] = new_shape
@@ -375,7 +363,7 @@ class SparseDataset:
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
 
-    def tobacked(self):
+    def to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format_str)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group['data']
@@ -383,7 +371,7 @@ class SparseDataset:
         mtx.indptr = self.group['indptr']
         return mtx
 
-    def tomemory(self):
+    def to_memory(self) -> ss.spmatrix:
         format_class = get_memory_class(self.format_str)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group['data'][...]

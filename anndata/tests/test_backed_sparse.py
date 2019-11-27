@@ -59,7 +59,7 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method):
         diskmtx = SparseDataset(f["mtx"])
 
         diskmtx.append(b)
-        fromdisk = diskmtx.tomemory()
+        fromdisk = diskmtx.to_memory()
 
     frommem = append_method([a, b])
 
@@ -85,7 +85,7 @@ def test_dataset_append_disk(tmp_path, sparse_format, append_method):
         b_disk = SparseDataset(f["b"])
 
         a_disk.append(b_disk)
-        fromdisk = a_disk.tomemory()
+        fromdisk = a_disk.to_memory()
 
     frommem = append_method([a, b])
 
@@ -121,7 +121,7 @@ def test_wrong_formats(tmp_path):
     with h5py.File(h5_path, "a") as f:
         ad.readwrite.h5ad.write_attribute(f, "base", base)
         disk_mtx = SparseDataset(f["base"])
-        pre_checks = disk_mtx.tomemory()
+        pre_checks = disk_mtx.to_memory()
 
         with pytest.raises(ValueError):
             disk_mtx.append(sparse.random(100, 100, format="csc"))
@@ -135,7 +135,7 @@ def test_wrong_formats(tmp_path):
         with pytest.raises(NotImplementedError):
             disk_mtx.append(disk_dense)
 
-        post_checks = disk_mtx.tomemory()
+        post_checks = disk_mtx.to_memory()
 
     # Check nothing changed
     assert not np.any((pre_checks != post_checks).toarray())
