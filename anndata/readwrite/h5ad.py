@@ -217,7 +217,7 @@ def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
         f,
         key,
-        value.tobacked(),
+        value.to_backed(),
         fmt=value.format_str,
         dataset_kwargs=dataset_kwargs,
     )
@@ -534,7 +534,7 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
 @report_read_key_on_error
 def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     if "h5sparse_format" in group.attrs:  # Backwards compat
-        return SparseDataset(group).tomemory()
+        return SparseDataset(group).to_memory()
 
     encoding_type = group.attrs.get("encoding-type", "")
     if encoding_type in {"", "raw"}:
@@ -542,7 +542,7 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     elif encoding_type == "dataframe":
         return read_dataframe(group)
     elif encoding_type in {"csr_matrix", "csc_matrix"}:
-        return SparseDataset(group).tomemory()
+        return SparseDataset(group).to_memory()
     else:
         raise ValueError(f"Unfamiliar 'encoding-type': {encoding_type}.")
     d = dict()
