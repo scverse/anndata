@@ -39,7 +39,7 @@ from .views import (
     DictView,
     DataFrameView,
     ViewArgs,
-    asview,
+    as_view,
     _resolve_idxs,
 )
 from .sparse_dataset import SparseDataset
@@ -577,7 +577,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             elif self.isview:
                 X = X[self._oidx, self._vidx]
         elif self.isview:
-            X = asview(
+            X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
                 ViewArgs(self, "X"),
             )
