@@ -196,3 +196,26 @@ def report_write_key_on_error(func):
             ) from e
 
     return func_wrapper
+
+
+def _read_legacy_raw(
+    f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "varm")
+):
+    """\
+    Backwards compat for reading legacy raw.
+    Makes sure that no modern raw group coexists with legacy raw.* groups.
+    """
+    if modern_raw:
+        if any(k.startswith("raw.") for k in f):
+            what = f'File {f.filename}' if hasattr(f, "filename") else 'Store'
+            raise ValueError(f"{what} has both legacy and current raw formats.")
+        return modern_raw
+
+    raw = {}
+    if "X" in attrs and "raw.X" in f:
+        raw["X"] = read_attr(f["raw.X"])
+    if "var" in attrs and "raw.var" in f:
+        raw["var"] = read_df(f["raw.var"])  # Backwards compat
+    if "varm" in attrs and "raw.varm" in f:
+        raw["varm"] = read_attr(f["raw.varm"])
+    return raw

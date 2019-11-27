@@ -5,7 +5,7 @@ from numpy import ma
 import pandas as pd
 import pytest
 from scipy import sparse as sp
-from scipy.sparse import csr_matrix, isspmatrix_csr
+from scipy.sparse import csr_matrix, isspmatrix_csr, issparse
 
 from anndata import AnnData
 from helpers import assert_equal, gen_adata
@@ -699,3 +699,27 @@ def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
     assert df.values.tolist() == X.tolist()
+
+
+def test_copy():
+    adata_copy = adata_sparse.copy()
+
+    def assert_eq_not_id(a, b):
+        assert a is not b
+        assert issparse(a) == issparse(b)
+        if issparse(a):
+            assert np.all(a.data == b.data)
+            assert np.all(a.indices == b.indices)
+            assert np.all(a.indptr == b.indptr)
+        else:
+            assert np.all(a == b)
+
+    assert adata_sparse is not adata_copy
+    assert_eq_not_id(adata_sparse.X, adata_copy.X)
+    for attr in "layers var obs obsm varm".split():
+        map_sprs = getattr(adata_sparse, attr)
+        map_copy = getattr(adata_copy, attr)
+        assert map_sprs is not map_copy
+        assert_eq_not_id(map_sprs.keys(), map_copy.keys())
+        for key in map_sprs.keys():
+            assert_eq_not_id(map_sprs[key], map_copy[key])

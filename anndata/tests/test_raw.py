@@ -9,11 +9,11 @@ from anndata.core.anndata import ImplicitModificationWarning
 # Some test data
 # -------------------------------------------------------------------------------
 
-X_list = [
+data = [
     [1, 2, 3],
     [4, 5, 6],
     [7, 8, 9],
-]  # data matrix of shape n_obs x n_vars
+]  # data matrix of shape n_obs × n_vars
 
 obs_dict = dict(  # annotation of observations / rows
     row_names=['name1', 'name2', 'name3'],  # row annotation
@@ -31,38 +31,51 @@ uns_dict = dict(  # unstructured annotation
 )
 
 
+@pytest.fixture
+def adata_raw():
+    adata = ad.AnnData(
+        np.array(data), obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32'
+    )
+    adata.raw = adata
+    return adata[:, [0, 1]]
+
+
 # -------------------------------------------------------------------------------
 # The test functions
 # -------------------------------------------------------------------------------
 
 
-def test_raw(backing_h5ad):
-    X = np.array(X_list)
-    adata = ad.AnnData(
-        X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32'
-    )
+def test_raw_init(adata_raw):
+    assert adata_raw.var_names.tolist() == ['var1', 'var2']
+    assert adata_raw.raw.var_names.tolist() == ['var1', 'var2', 'var3']
+    assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
 
-    # init raw
-    adata.raw = adata
 
-    assert adata.raw[:, 0].X.tolist() == [[1], [4], [7]]
+def test_raw_del(adata_raw):
+    del adata_raw.raw
+    assert adata_raw.raw is None
 
-    adata = adata[:, [0, 1]]
 
-    assert adata.var_names.tolist() == ['var1', 'var2']
-    assert adata.raw.var_names.tolist() == ['var1', 'var2', 'var3']
-
-    # read write
+def test_raw_rw(adata_raw, backing_h5ad):
     with pytest.warns(
         ImplicitModificationWarning, match="Initializing view as actual"
-    ):
-        # TODO: don’t modify adata just to write it
-        adata.write(backing_h5ad)
-    adata = ad.read(backing_h5ad)
+    ):  # TODO: don’t modify adata just to write it
+        adata_raw.write(backing_h5ad)
+    adata_raw = ad.read(backing_h5ad)
 
-    assert adata.raw[:, 0].X.tolist() == [[1], [4], [7]]
-    assert adata.raw.var_names.tolist() == ['var1', 'var2', 'var3']
-    assert adata.var_names.tolist() == ['var1', 'var2']
+    assert adata_raw.var_names.tolist() == ['var1', 'var2']
+    assert adata_raw.raw.var_names.tolist() == ['var1', 'var2', 'var3']
+    assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
 
-    del adata.raw
-    assert adata.raw is None
+
+def test_raw_backed(adata_raw, backing_h5ad):
+    with pytest.warns(
+        ImplicitModificationWarning, match="Initializing view as actual"
+    ):  # TODO: don’t modify adata just to write it
+        adata_raw.filename = backing_h5ad
+
+    assert adata_raw.var_names.tolist() == ['var1', 'var2']
+    assert adata_raw.raw.var_names.tolist() == ['var1', 'var2', 'var3']
+    if adata_raw.raw[:, 0].X.shape[1] != 1:
+        pytest.xfail("Raw is broken for backed slices")
+    assert adata_raw.raw[:, 0].X[:].tolist() == [[1], [4], [7]]
