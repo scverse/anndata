@@ -1,10 +1,11 @@
-from collections.abc import Mapping
-from functools import _find_impl, partial
-from pathlib import Path
 import re
-from types import MappingProxyType
-from typing import Callable, Sequence, Type, TypeVar, Union
+import collections.abc as cabc
+from functools import _find_impl, partial
 from warnings import warn
+from pathlib import Path
+from types import MappingProxyType
+from typing import Callable, Type, TypeVar, Union
+from typing import Collection, Sequence, Mapping
 
 import h5py
 import numpy as np
@@ -13,6 +14,7 @@ from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
 from ..core.sparse_dataset import SparseDataset
+from ..core.file_backing import AnnDataFileManager
 from ..core.anndata import AnnData
 from ..core.raw import Raw
 from ..compat import _from_fixed_length_strings, _clean_uns, Literal
@@ -22,6 +24,7 @@ from .utils import (
     idx_chunks_along_axis,
     write_attribute,
     read_attribute,
+    _read_legacy_raw,
 )
 
 
@@ -54,9 +57,8 @@ def write_h5ad(
 ) -> None:
     if force_dense is not None:
         warn(
-            FutureWarning(
-                "The 'force_dense' argument is deprecated. Use `as_dense` instead."
-            )
+            "The 'force_dense' argument is deprecated. Use `as_dense` instead.",
+            FutureWarning,
         )
     if force_dense is True:
         if adata.raw is not None:
@@ -325,7 +327,7 @@ H5AD_WRITE_REGISTRY = {
     sparse.csc_matrix: write_csc,
     SparseDataset: write_sparse_dataset,
     pd.DataFrame: write_dataframe,
-    Mapping: write_mapping,
+    cabc.Mapping: write_mapping,
 }
 
 
@@ -333,7 +335,6 @@ def read_h5ad_backed(
     filename: Union[str, Path], mode: Literal['r', 'r+']
 ) -> AnnData:
     d = dict(filename=filename, filemode=mode)
-    raw = {}
 
     f = h5py.File(filename, mode)
 
@@ -345,19 +346,8 @@ def read_h5ad_backed(
         if k in f:  # Backwards compat
             d[k] = read_dataframe(f[k])
 
-    if "raw" in f:
-        if "raw/var" in f:
-            raw["var"] = read_attribute(f["raw/var"])
-        if "raw/varm" in f:
-            raw["varm"] = read_attribute(f["raw/varm"])
-    else:  # Legacy case
-        if "raw.var" in f:
-            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-        if "raw.varm" in f:
-            raw["varm"] = read_attribute(f["raw.varm"])
+    d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
-    if len(raw) > 0:
-        d["raw"] = raw
     X_dset = f.get("X", None)
     if X_dset is None:
         pass
@@ -427,28 +417,28 @@ def read_h5ad(
                 "Currently only `X` and `raw/X` can be read as sparse."
             )
 
+    rdasp = partial(
+        read_dense_as_sparse,
+        sparse_format=as_sparse_fmt,
+        axis_chunk=chunk_size,
+    )
+
     with h5py.File(filename, "r") as f:
         d = {}
         for k in f.keys():
             # Backwards compat for old raw
-            if k.startswith("raw."):
+            if k == "raw" or k.startswith("raw."):
                 continue
             if k == "X" and "X" in as_sparse:
-                d[k] = read_dense_as_sparse(
-                    f[k], as_sparse_fmt, axis_chunk=chunk_size
-                )
-            elif k == "raw" and "raw/X" in as_sparse:
-                d[k] = {
-                    "X": read_dense_as_sparse(
-                        f[f"{k}/X"], as_sparse_fmt, axis_chunk=chunk_size
-                    ),
-                    "var": read_dataframe(f[f"{k}/var"]),
-                    "varm": read_attribute(f[f"{k}/varm"]),
-                }
+                d[k] = rdasp(f[k])
+            elif k == "raw":
+                assert False, "unexpected raw format"
             elif k in {"obs", "var"}:
                 d[k] = read_dataframe(f[k])
             else:  # Base case
                 d[k] = read_attribute(f[k])
+
+        d["raw"] = _read_raw(f, as_sparse, rdasp)
 
         X_dset = f.get("X", None)
         if X_dset is None:
@@ -460,23 +450,28 @@ def read_h5ad(
         else:
             raise ValueError()
 
-        # Backwards compat for reading legacy raw
-        raw = {}
-        if "raw.var" in f:
-            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-        if "raw.varm" in f:
-            raw["varm"] = read_attribute(f["raw.varm"])
-        if "raw.X" in f:
-            raw["X"] = read_attribute(f["raw.X"])
-        if len(raw) > 0:
-            assert (
-                "raw" not in d
-            ), f"File {filename} has both legacy and current raw formats."
-            d["raw"] = raw
-
     _clean_uns(d)  # backwards compat
 
     return AnnData(**d)
+
+
+def _read_raw(
+    f: Union[h5py.File, AnnDataFileManager],
+    as_sparse: Collection[str] = (),
+    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] = None,
+    *,
+    attrs: Collection[str] = ("X", "var", "varm"),
+):
+    if as_sparse:
+        assert rdasp is not None, 'must supply rdasp if as_sparse is supplied'
+    raw = {}
+    if "X" in attrs and "raw/X" in f:
+        read_x = rdasp if "raw/X" in as_sparse else read_attribute
+        raw["X"] = read_x(f["raw/X"])
+    for v in ("var", "varm"):
+        if v in attrs and f"raw/{v}" in f:
+            raw[v] = read_attribute(f[f"raw/{v}"])
+    return _read_legacy_raw(f, raw, read_dataframe, read_attribute, attrs=attrs)
 
 
 @report_read_key_on_error
