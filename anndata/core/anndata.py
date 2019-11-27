@@ -260,7 +260,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         layers: Optional[
             Mapping[str, Union[np.ndarray, sparse.spmatrix]]
         ] = None,
-        raw: Union[Raw, Mapping[str, Any], None] = None,
+        raw: Optional[Mapping[str, Any]] = None,
         dtype: Union[np.dtype, str] = 'float32',
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
@@ -489,38 +489,27 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._check_dimensions()
         self._check_uniqueness()
 
-        # raw
-        if raw is None:
-            self._raw = None
-        elif isinstance(raw, Raw):
-            self._raw = raw
-        elif isinstance(raw, cabc.Mapping):
-            # is dictionary from reading the file,
-            # nothing that is meant for a user
-            if self.isbacked:
-                raw_key = "raw/X" if "raw/X" in self.file else "raw.X"
-                if raw_key not in self.file:
-                    raise KeyError(
-                        f"Tried to check shape of raw from {self.filename}, "
-                        f"but there was no entry for 'raw/X'."
-                    )
-                if isinstance(self.file[raw_key], h5py.Group):
-                    shape = self.file[raw_key].attrs["shape"]
-                else:
-                    shape = self.file[raw_key].shape
-            else:
-                shape = raw["X"].shape
+        if self.filename:
+            assert not isinstance(
+                raw, Raw
+            ), "got raw from other adata but also filename?"
+            from ..readwrite.h5ad import _read_raw, _read_legacy_raw_h5ad
 
-            self._raw = Raw(
-                self,
-                X=raw.get("X", None),
-                var=_gen_dataframe(
-                    raw['var'], shape[1], ['var_names', 'col_names']
-                ),
-                varm=raw['varm'] if 'varm' in raw else None,
-            )
-        else:
-            raise ValueError(f'raw has unknown type {type(raw)}')
+            # Read raw dict from file
+            raw, raw_override = {}, raw
+            if "raw" in self.file:
+                raw = _read_raw(self.file)
+            _read_legacy_raw_h5ad(self.file, raw, self.filename)
+
+            # override retrieved entries with specified ones
+            if raw_override:
+                raw.update(raw_override)
+        if raw and isinstance(raw, cabc.Mapping):
+            raw = Raw(self, **raw)
+        elif raw:  # is a Raw from another AnnData
+            raw = raw.copy()
+            raw._adata = self
+        self._raw = raw if raw else None
 
         # clean up old formats
         self._clean_up_old_format(uns)
@@ -1426,7 +1415,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X = X.reshape(self.shape)
             else:
                 dtype = "float32"
-            return AnnData(
+            adata = AnnData(
                 X=X,
                 obs=self.obs.copy(),
                 var=self.var.copy(),
@@ -1439,10 +1428,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varm=self.varm.copy(),
                 obsp=self.obsp.copy(),
                 varp=self.varp.copy(),
-                raw=None if self._raw is None else self._raw.copy(),
                 layers=self.layers.copy(),
                 dtype=dtype,
             )
+            if self._raw is not None:
+                adata._raw = self._raw.copy()
+                adata._raw._adata = adata
+            return adata
         else:
             from ..readwrite import read_h5ad
 

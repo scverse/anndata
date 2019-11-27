@@ -1,4 +1,7 @@
 from functools import wraps, singledispatch
+from typing import Mapping, Any
+
+from .. import AnnData, Raw
 from ..core.sparsedataset import SparseDataset
 
 # -------------------------------------------------------------------------------
@@ -196,3 +199,18 @@ def report_write_key_on_error(func):
             ) from e
 
     return func_wrapper
+
+
+def _read_legacy_raw_into(f, raw, read_df, read_attr, filename=None):
+    what = f'File {filename}' if filename else 'Store'
+    # Backwards compat for reading legacy raw
+    assert not (
+        raw and any(k.startswith("raw.") for k in f)
+    ), f"{what} has both legacy and current raw formats."
+    raw = {}
+    if "raw.var" in f:
+        raw["var"] = read_df(f["raw.var"])  # Backwards compat
+    if "raw.varm" in f:
+        raw["varm"] = read_attr(f["raw.varm"])
+    if "raw.X" in f:
+        raw["X"] = read_attr(f["raw.X"])

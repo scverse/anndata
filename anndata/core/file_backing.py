@@ -1,6 +1,6 @@
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Iterator
 
 import h5py
 
@@ -33,6 +33,9 @@ class AnnDataFileManager:
 
     def __contains__(self, x) -> bool:
         return x in self._file
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._file)
 
     def __getitem__(
         self, key: str

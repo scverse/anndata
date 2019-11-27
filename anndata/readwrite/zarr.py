@@ -23,6 +23,7 @@ from .utils import (
     report_read_key_on_error,
     report_write_key_on_error,
     write_attribute,
+    _read_legacy_raw_into,
 )
 from . import WriteWarning
 
@@ -253,21 +254,15 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         else:  # Base case
             d[k] = read_attribute(f[k])
 
-    # Backwards compat
-    raw = {}
-    if "raw.var" in f:
-        raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-    if "raw.varm" in f:
-        raw["varm"] = read_attribute(f["raw.varm"])
-    if "raw.X" in f:
-        raw["X"] = read_attribute(f["raw.X"])
-    if len(raw) > 0:
-        assert "raw" not in d
-        d["raw"] = raw
+    _read_legacy_raw_zarr(f, d.setdefault("raw", {}))
 
     _clean_uns(d)
 
     return AnnData(**d)
+
+
+def _read_legacy_raw_zarr(f, raw):
+    return _read_legacy_raw_into(f, raw, read_dataframe, read_attribute)
 
 
 @singledispatch

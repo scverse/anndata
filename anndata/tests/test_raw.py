@@ -55,8 +55,7 @@ def test_raw(backing_h5ad):
     # read write
     with pytest.warns(
         ImplicitModificationWarning, match="Initializing view as actual"
-    ):
-        # TODO: don’t modify adata just to write it
+    ):  # TODO: don’t modify adata just to write it
         adata.write(backing_h5ad)
     adata = ad.read(backing_h5ad)
 
