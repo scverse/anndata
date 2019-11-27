@@ -7,12 +7,13 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
+from . import anndata
 from ..logging import anndata_logger as logger
 from ..compat import ZappyArray
 
 
 class ViewArgs(NamedTuple):
-    parent: "AnnData"
+    parent: "anndata.AnnData"
     attrname: str
     keys: Tuple[str, ...] = ()
 
@@ -43,7 +44,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
+        view_args: Tuple['anndata.AnnData', str, Tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -60,7 +61,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
+        view_args: Tuple['anndata.AnnData', str, Tuple[str, ...]] = None,
     ):
         arr = np.asarray(input_array).view(cls)
         if view_args is not None:
@@ -84,7 +85,8 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
-# Unlike array views, SparseCSRView and SparseCSCView do not propagate through subsetting
+# Unlike array views, SparseCSRView and SparseCSCView
+# do not propagate through subsetting
 class SparseCSRView(_ViewMixin, sparse.csr_matrix):
     pass
 
@@ -102,40 +104,41 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 
 @singledispatch
-def asview(obj, view_args):
+def as_view(obj, view_args):
     raise NotImplementedError(
         f"No view type has been registered for {type(obj)}"
     )
 
 
-@asview.register(np.ndarray)
-def asview_array(array, view_args):
+@as_view.register(np.ndarray)
+def as_view_array(array, view_args):
     return ArrayView(array, view_args=view_args)
 
 
-@asview.register(pd.DataFrame)
-def asview_df(df, view_args):
+@as_view.register(pd.DataFrame)
+def as_view_df(df, view_args):
     return DataFrameView(df, view_args=view_args)
 
 
-@asview.register(sparse.csr_matrix)
-def asview_csr(mtx, view_args):
+@as_view.register(sparse.csr_matrix)
+def as_view_csr(mtx, view_args):
     return SparseCSRView(mtx, view_args=view_args)
 
 
-@asview.register(sparse.csc_matrix)
-def asview_csc(mtx, view_args):
+@as_view.register(sparse.csc_matrix)
+def as_view_csc(mtx, view_args):
     return SparseCSCView(mtx, view_args=view_args)
 
 
-@asview.register(dict)
-def asview_dict(d, view_args):
+@as_view.register(dict)
+def as_view_dict(d, view_args):
     return DictView(d, view_args=view_args)
 
 
-@asview.register(ZappyArray)
-def asview_zappy(z, view_args):
-    # Previous code says ZappyArray works as view, but as far as I can tell they're immutable.
+@as_view.register(ZappyArray)
+def as_view_zappy(z, view_args):
+    # Previous code says ZappyArray works as view,
+    # but as far as I can tell they're immutable.
     return z
 
 
