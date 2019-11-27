@@ -10,7 +10,7 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous
 from . import raw, anndata
-from .views import asview, ViewArgs
+from .views import as_view, ViewArgs
 from .index import _subset
 
 
@@ -108,7 +108,7 @@ class AlignedViewMixin:
     isview = True
 
     def __getitem__(self, key: Hashable) -> V:
-        return asview(
+        return as_view(
             _subset(self.parent_mapping[key], self.subset_idx),
             ViewArgs(self.parent, self.attrname, (key,)),
         )
