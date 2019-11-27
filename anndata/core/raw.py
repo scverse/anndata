@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Union, Mapping, Sequence
 
 import h5py
 import numpy as np
@@ -16,16 +16,18 @@ from .sparse_dataset import SparseDataset
 class Raw:
     def __init__(
         self,
-        adata: Optional['anndata.AnnData'] = None,
+        adata: 'anndata.AnnData',
         X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Union[AxisArrays, AxisArraysView, None] = None,
-        varm: Union[AxisArrays, AxisArraysView, None] = None,
+        var: Union[pd.DataFrame, Mapping[str, Sequence], None] = None,
+        varm: Union[AxisArrays, Mapping[str, np.ndarray], None] = None,
     ):
+        from .anndata import _gen_dataframe
+
         self._adata = adata
         self._n_obs = adata.n_obs
         if X is not None:
             self._X = X
-            self._var = var
+            self._var = _gen_dataframe(var, X.shape[1], ['var_names'])
             self._varm = AxisArrays(self, 1, varm)
         else:
             self._X = None if adata.isbacked else adata.X.copy()

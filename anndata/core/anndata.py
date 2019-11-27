@@ -259,7 +259,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         layers: Optional[
             Mapping[str, Union[np.ndarray, sparse.spmatrix]]
         ] = None,
-        raw: Optional[Raw] = None,
+        raw: Union[Raw, Mapping[str, Any], None] = None,
         dtype: Union[np.dtype, str] = 'float32',
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
@@ -493,7 +493,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._raw = None
         elif isinstance(raw, Raw):
             self._raw = raw
-        else:
+        elif isinstance(raw, cabc.Mapping):
             # is dictionary from reading the file,
             # nothing that is meant for a user
             if self.isbacked:
@@ -518,6 +518,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 ),
                 varm=raw['varm'] if 'varm' in raw else None,
             )
+        else:
+            raise ValueError(f'raw has unknown type {type(raw)}')
 
         # clean up old formats
         self._clean_up_old_format(uns)
