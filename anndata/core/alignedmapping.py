@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import abc as cabc
 from functools import singledispatch
-from typing import TYPE_CHECKING
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Hashable, Iterable, Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
@@ -11,10 +10,8 @@ import pandas as pd
 from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous
+from . import raw, anndata
 from .views import asview, ViewArgs
-
-if TYPE_CHECKING:
-    from .anndata import AnnData
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -94,7 +91,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         pass
 
     @property
-    def parent(self) -> "AnnData":
+    def parent(self) -> Union["anndata.AnnData", "raw.Raw"]:
         return self._parent
 
     def copy(self):
@@ -103,7 +100,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
             d[k] = v.copy()
         return d
 
-    def _view(self, parent: "AnnData", subset_idx: I):
+    def _view(self, parent: "anndata.AnnData", subset_idx: I):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
@@ -113,7 +110,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
 
 class AlignedViewMixin:
-    parent: "AnnData"
+    parent: "anndata.AnnData"
     """Reference to parent AnnData view"""
 
     attrname: str
@@ -233,7 +230,10 @@ class AxisArraysBase(AlignedMapping):
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
     def __init__(
-        self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None
+        self,
+        parent: Union["anndata.AnnData", "raw.Raw"],
+        axis: int,
+        vals: Union[Mapping, AxisArraysBase, None] = None,
     ):
         self._parent = parent
         if axis not in (0, 1):
@@ -249,7 +249,7 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(
         self,
         parent_mapping: AxisArraysBase,
-        parent_view: "AnnData",
+        parent_view: "anndata.AnnData",
         subset_idx: OneDIdx,
     ):
         self.parent_mapping = parent_mapping
@@ -282,7 +282,9 @@ class LayersBase(AlignedMapping):
 
 
 class Layers(AlignedActualMixin, LayersBase):
-    def __init__(self, parent: "AnnData", vals: Optional[Mapping] = None):
+    def __init__(
+        self, parent: "anndata.AnnData", vals: Optional[Mapping] = None
+    ):
         self._parent = parent
         self._data = dict()
         if vals is not None:
@@ -293,7 +295,7 @@ class LayersView(AlignedViewMixin, LayersBase):
     def __init__(
         self,
         parent_mapping: LayersBase,
-        parent_view: "AnnData",
+        parent_view: "anndata.AnnData",
         subset_idx: TwoDIdx,
     ):
         self.parent_mapping = parent_mapping
@@ -331,7 +333,10 @@ class PairwiseArraysBase(AlignedMapping):
 
 class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(
-        self, parent: "AnnData", axis: int, vals: Optional[Mapping] = None
+        self,
+        parent: "anndata.AnnData",
+        axis: int,
+        vals: Optional[Mapping] = None,
     ):
         self._parent = parent
         if axis not in (0, 1):
@@ -346,7 +351,7 @@ class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
     def __init__(
         self,
         parent_mapping: PairwiseArraysBase,
-        parent_view: "AnnData",
+        parent_view: "anndata.AnnData",
         subset_idx: OneDIdx,
     ):
         self.parent_mapping = parent_mapping
