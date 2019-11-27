@@ -23,7 +23,7 @@ adata_sparse = AnnData(
 def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]))
     AnnData(np.array([[1, 2], [3, 4]]), {}, {})
-    AnnData(ma.array([[1, 2], [3, 4]]), uns={'mask': [0, 1, 1, 0]})
+    AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
     AnnData(sp.eye(2))
     X = np.array([[1, 2, 3], [4, 5, 6]])
     adata = AnnData(
@@ -42,7 +42,7 @@ def test_creation():
 
     # init with empty data matrix
     shape = (3, 5)
-    adata = AnnData(None, uns={'test': np.array((3, 3))}, shape=shape)
+    adata = AnnData(None, uns=dict(test=np.array((3, 3))), shape=shape)
     assert adata.X is None
     assert adata.shape == shape
     assert 'test' in adata.uns
