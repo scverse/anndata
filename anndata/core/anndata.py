@@ -1638,10 +1638,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         * No annotations are maintained in the returned object.
         * The data matrix is densified in case it is sparse.
         """
-        if issparse(self._X):
-            X = self._X.toarray()
+        if issparse(self.X):
+            X = self.X.toarray()
         else:
-            X = self._X
+            X = self.X
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
     def _get_X(self, use_raw=False, layer=None):
