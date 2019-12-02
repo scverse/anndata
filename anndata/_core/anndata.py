@@ -26,14 +26,7 @@ from scipy.sparse import issparse
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D
 from .file_backing import AnnDataFileManager
-from .aligned_mapping import (
-    AxisArrays,
-    AxisArraysView,
-    PairwiseArrays,
-    PairwiseArraysView,
-    Layers,
-    LayersView,
-)
+from .aligned_mapping import AxisArrays, PairwiseArrays, Layers
 from .views import (
     ArrayView,
     DictView,
@@ -502,7 +495,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._clean_up_old_format(uns)
 
         # layers
-        self._layers = Layers(self, layers)
+        self._layers = Layers(self, vals=convert_to_dict(layers))
 
     def __sizeof__(self) -> int:
         size = 0
@@ -651,7 +644,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
 
     @property
-    def layers(self) -> Union[Layers, LayersView]:
+    def layers(self) -> Layers:
         """\
         Dictionary-like object with values of the same dimensions as :attr:`X`.
 
@@ -857,7 +850,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self.uns = OrderedDict()
 
     @property
-    def obsm(self) -> Union[AxisArrays, AxisArraysView]:
+    def obsm(self) -> AxisArrays:
         """\
         Multi-dimensional annotation of observations
         (mutable structured :class:`~numpy.ndarray`).
@@ -880,7 +873,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self.obsm = dict()
 
     @property
-    def varm(self) -> Union[AxisArrays, AxisArraysView]:
+    def varm(self) -> AxisArrays:
         """\
         Multi-dimensional annotation of variables/features
         (mutable structured :class:`~numpy.ndarray`).
@@ -903,7 +896,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self.varm = dict()
 
     @property
-    def obsp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
+    def obsp(self) -> PairwiseArrays:
         """\
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
@@ -926,7 +919,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self.obsp = dict()
 
     @property
-    def varp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
+    def varp(self) -> PairwiseArrays:
         """\
         Pairwise annotation of observations,
         a mutable mapping with array-like values.

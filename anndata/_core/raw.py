@@ -6,9 +6,10 @@ import pandas as pd
 from scipy import sparse
 from scipy.sparse import issparse
 
+from ..utils import convert_to_dict
 from . import anndata
 from .index import _normalize_index, _subset, unpack_index
-from .aligned_mapping import AxisArrays, AxisArraysView
+from .aligned_mapping import AxisArrays
 from .sparse_dataset import SparseDataset
 
 
@@ -29,11 +30,11 @@ class Raw:
         if adata.isbacked == (X is None):
             self._X = X
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
-            self._varm = AxisArrays(self, 1, varm)
+            self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
         elif X is None:  # construct from adata
             self._X = adata.X.copy()
             self._var = adata.var.copy()
-            self._varm = AxisArrays(self, 1, adata.varm.copy())
+            self._varm = AxisArrays(self, 1, vals=adata.varm)
         elif adata.isbacked:
             raise ValueError("Cannot specify X if adata is backed")
 
