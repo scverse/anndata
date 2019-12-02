@@ -1601,7 +1601,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Data matrix is transposed, observations and variables are interchanged.
         """
         if not self.isbacked:
-            X = self._X
+            X = self.X
         else:
             X = self.file['X']
         if self.isview:
