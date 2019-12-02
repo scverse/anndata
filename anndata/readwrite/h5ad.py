@@ -83,8 +83,8 @@ def write_h5ad(
         adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
-    mode = "a" if adata.isbacked else "w"
-    if adata.isbacked:  # close so that we can reopen below
+    mode = "a" if adata.filename else "w"
+    if adata.filename:  # close so that we can reopen below
         adata.file.close()
     with h5py.File(filepath, mode) as f:
         if "X" in as_dense and isinstance(
@@ -93,8 +93,8 @@ def write_h5ad(
             write_sparse_as_dense(
                 f, "X", adata.X, dataset_kwargs=dataset_kwargs
             )
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
-            # If adata.isbacked, X should already be up to date
+        elif not (adata.filename and Path(adata.filename) == Path(filepath)):
+            # If adata.filename, X should already be up to date
             write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
             adata.raw.X, (sparse.spmatrix, SparseDataset)
@@ -120,7 +120,7 @@ def write_h5ad(
             f, "layers", adata.layers, dataset_kwargs=dataset_kwargs
         )
         write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
-    if adata.isbacked:
+    if adata.filename:
         adata.file.open(filepath, 'r+')
 
 

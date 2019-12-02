@@ -39,7 +39,7 @@ def test_views():
     adata_view.layers['T'] = X[1:, 1:]
 
     assert not adata_view.layers.is_view
-    assert not adata_view.isview
+    assert not adata_view.is_view
 
 
 @pytest.mark.parametrize(
