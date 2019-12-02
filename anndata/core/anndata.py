@@ -24,9 +24,9 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from .raw import Raw
-from .index import _normalize_indices, Index, Index1D
+from .index import _normalize_indices, _subset, Index, Index1D
 from .file_backing import AnnDataFileManager
-from .aligned_mapping import AxisArrays, PairwiseArrays, Layers, _subset
+from .aligned_mapping import AxisArrays, PairwiseArrays, Layers
 from .views import (
     ArrayView,
     DictView,

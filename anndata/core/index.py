@@ -1,3 +1,5 @@
+import collections.abc as cabc
+from functools import singledispatch
 from typing import Union, Sequence, Optional, Tuple
 
 import numpy as np
@@ -127,3 +129,17 @@ def get_n_items_idx(idx: Index1D, l: int):
         return 1
     else:
         return len(idx)
+
+
+@singledispatch
+def _subset(a: Union[np.ndarray, spmatrix, pd.DataFrame], subset_idx: Index):
+    # Select as combination of indexes, not coordinates
+    # Correcting for indexing behaviour of np.ndarray
+    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+    return a[subset_idx]
+
+
+@_subset.register(pd.DataFrame)
+def _subset_df(df: pd.DataFrame, subset_idx: Index):
+    return df.iloc[subset_idx]

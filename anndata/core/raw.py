@@ -7,8 +7,8 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from . import anndata
-from .index import _normalize_index, unpack_index
-from .aligned_mapping import AxisArrays, _subset
+from .index import _normalize_index, _subset, unpack_index
+from .aligned_mapping import AxisArrays
 from .sparsedataset import SparseDataset
 
 
