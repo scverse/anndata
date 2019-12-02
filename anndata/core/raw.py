@@ -8,7 +8,7 @@ from scipy.sparse import issparse
 
 from . import anndata
 from .index import _normalize_index, unpack_index
-from .alignedmapping import AxisArrays, AxisArraysView, _subset
+from .aligned_mapping import AxisArrays, _subset
 from .sparsedataset import SparseDataset
 
 
@@ -28,13 +28,13 @@ class Raw:
         if X is not None:
             self._X = X
             self._var = _gen_dataframe(var, X.shape[1], ['var_names'])
-            self._varm = AxisArrays(self, 1, varm)
+            self._varm = AxisArrays(self, 1, vals=(varm or {}))
         else:
             self._X = None if adata.isbacked else adata.X.copy()
             self._var = _gen_dataframe(
                 adata.var.copy(), adata.n_vars, ['var_names']
             )
-            self._varm = AxisArrays(self, 1, adata.varm.copy())
+            self._varm = AxisArrays(self, 1, vals=adata.varm)
 
     @property
     def X(self):

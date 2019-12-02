@@ -13,7 +13,7 @@ from scipy import sparse
 from anndata.core.sparsedataset import SparseDataset
 from anndata import AnnData
 from anndata.core.views import ArrayView
-from anndata.core.alignedmapping import AlignedMapping
+from anndata.core.aligned_mapping import AlignedMapping
 
 
 @singledispatch
