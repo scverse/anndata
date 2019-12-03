@@ -314,6 +314,11 @@ class SparseDataset:
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
             )
+        if self.format_str not in {"csr", "csc"}:
+            raise NotImplementedError(
+                f"The append method for format {self.format_str} "
+                f"is not implemented."
+            )
         if self.format_str != get_format_str(sparse_matrix):
             raise ValueError(
                 f"Matrices must have same format. Currently are "
@@ -332,10 +337,7 @@ class SparseDataset:
             ), "CSC matrices must have same size of dimension 0 to be appended."
             new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
         else:
-            raise NotImplementedError(
-                f"The append method for format {self.format_str} "
-                f"is not implemented."
-            )
+            assert False, "We forgot to update this branching to a new format"
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
         self.group.attrs['shape'] = new_shape
