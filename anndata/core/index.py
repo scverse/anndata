@@ -117,20 +117,6 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
         raise IndexError('invalid number of indices')
 
 
-def get_n_items_idx(idx: Index1D, l: int):
-    if isinstance(idx, np.ndarray) and idx.dtype == bool:
-        return idx.sum()
-    elif isinstance(idx, slice):
-        start = 0 if idx.start is None else idx.start
-        stop = l if idx.stop is None else idx.stop
-        step = 1 if idx.step is None else idx.step
-        return (stop - start) // step
-    elif isinstance(idx, (int, np.int_, np.int64, np.int32)):
-        return 1
-    else:
-        return len(idx)
-
-
 @singledispatch
 def _subset(a: Union[np.ndarray, spmatrix, pd.DataFrame], subset_idx: Index):
     # Select as combination of indexes, not coordinates
