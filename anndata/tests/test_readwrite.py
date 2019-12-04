@@ -400,6 +400,21 @@ def test_write_categorical(tmp_path, diskfmt):
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
 
 
+def test_write_categorical_index(tmp_path, diskfmt):
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+    orig = ad.AnnData(
+        X=np.ones((5, 5)),
+        uns={"df": pd.DataFrame(index=pd.Categorical(list("aabcd")))},
+    )
+    getattr(orig, f"write_{diskfmt}")(adata_pth)
+    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    # Also covered by next assertion, but checking this value specifically
+    pd.testing.assert_index_equal(
+        orig.uns["df"].index, curr.uns["df"].index, exact=True
+    )
+    assert_equal(orig, curr, exact=True)
+
+
 def test_dataframe_reserved_columns(tmp_path, diskfmt):
     reserved = ("_index", "__categories")
     adata_pth = tmp_path / f"adata.{diskfmt}"
