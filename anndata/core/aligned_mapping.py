@@ -196,6 +196,27 @@ class AlignedActual(AlignedMapping, ABC):
         return len(self._data)
 
 
+def _set_qualname(cls: Type):
+    """
+    Correctly sets `__[qual]name__` and renames the `module.__dict__` entry
+    so pickling still works. Bonus: Autocompletion suggests full qualname:
+    aligned_mapping.<tab> → ..., AxisArrays, AxisArrays._Actual, ...
+    """
+    import sys
+
+    for suffix in ["Actual", "View"]:
+        if suffix not in cls.__name__:
+            continue
+        old = cls.__qualname__
+        # _FooActual → Foo._Actual
+        cls.__qualname__ = old.replace("_", "").replace(suffix, f"._{suffix}")
+        cls.__name__ = f"_{suffix}"
+
+        setattr(sys.modules[__name__], cls.__qualname__, cls)
+        delattr(sys.modules[__name__], old)
+        return cls
+
+
 class AxisArrays(AlignedMapping, ABC):
     """
     Mapping of key→array-like,
@@ -279,8 +300,8 @@ class _AxisArraysView(AlignedView, AxisArrays):
         self.dim_names = parent_mapping.dim_names[subset_idx]
 
 
-AxisArrays._View = _AxisArraysView
-AxisArrays._Actual = _AxisArraysActual
+AxisArrays._View = _set_qualname(_AxisArraysView)
+AxisArrays._Actual = _set_qualname(_AxisArraysActual)
 
 
 class Layers(AlignedMapping, ABC):
@@ -319,8 +340,8 @@ class _LayersView(AlignedView, Layers):
         self.subset_idx = subset_idx
 
 
-Layers._View = _LayersView
-Layers._Actual = _LayersActual
+Layers._View = _set_qualname(_LayersView)
+Layers._Actual = _set_qualname(_LayersActual)
 
 
 class PairwiseArrays(AlignedMapping, ABC):
@@ -376,5 +397,5 @@ class _PairwiseArraysView(AlignedView, PairwiseArrays):
         self._axis = parent_mapping._axis
 
 
-PairwiseArrays._View = _PairwiseArraysView
-PairwiseArrays._Actual = _PairwiseArraysActual
+PairwiseArrays._View = _set_qualname(_PairwiseArraysView)
+PairwiseArrays._Actual = _set_qualname(_PairwiseArraysActual)
