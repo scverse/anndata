@@ -283,16 +283,16 @@ class SparseDataset:
     def __getitem__(
         self, index: Union[Index, Tuple[()]]
     ) -> Union[float, ss.spmatrix]:
-        row, col = self._slice(index)
+        row, col = self._normalize_index(index)
         mtx = self.to_backed()
         return mtx[row, col]
 
     def __setitem__(self, index: Union[Index, Tuple[()]], value):
-        row, col = self._slice(index)
+        row, col = self._normalize_index(index)
         mock_matrix = self.to_backed()
         mock_matrix[row, col] = value
 
-    def _slice(
+    def _normalize_index(
         self, index: Union[Index, Tuple[()]]
     ) -> Tuple[np.ndarray, np.ndarray]:
         if index == ():
