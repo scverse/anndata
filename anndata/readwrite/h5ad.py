@@ -282,15 +282,19 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
             **dataset_kwargs,
         )
     elif is_categorical_dtype(series):
-        cats = series.cat.categories.values
-        codes = series.cat.codes.values
+        # This should work for categorical Index and Series
+        categorical: pd.Categorical = series.values
+        categories: np.ndarray = categorical.categories.values
+        codes: np.ndarray = categorical.codes
         category_key = f"__categories/{key}"
 
-        write_array(group, category_key, cats, dataset_kwargs=dataset_kwargs)
+        write_array(
+            group, category_key, categories, dataset_kwargs=dataset_kwargs
+        )
         write_array(group, key, codes, dataset_kwargs=dataset_kwargs)
 
         group[key].attrs["categories"] = group[category_key].ref
-        group[category_key].attrs["ordered"] = series.cat.ordered
+        group[category_key].attrs["ordered"] = categorical.ordered
     else:
         group[key] = series.values
 

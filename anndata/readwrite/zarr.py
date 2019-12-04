@@ -114,16 +114,20 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         )
         group[key][:] = series.values
     elif is_categorical_dtype(series):
-        cats = series.cat.categories.values
-        codes = series.cat.codes.values
+        # This should work for categorical Index and Series
+        categorical: pd.Categorical = series.values
+        categories: np.ndarray = categorical.categories.values
+        codes: np.ndarray = categorical.codes
         category_key = f"__categories/{key}"
 
-        write_array(group, category_key, cats, dataset_kwargs)
-        write_array(group, key, codes, dataset_kwargs)
+        write_array(
+            group, category_key, categories, dataset_kwargs=dataset_kwargs
+        )
+        write_array(group, key, codes, dataset_kwargs=dataset_kwargs)
 
         group[key].attrs["categories"] = category_key
         # Must coerce np.bool_ to bool for json writing
-        group[category_key].attrs["ordered"] = bool(series.cat.ordered)
+        group[category_key].attrs["ordered"] = bool(categorical.ordered)
     else:
         group[key] = series.values
 
