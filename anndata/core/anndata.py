@@ -507,7 +507,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._clean_up_old_format(uns)
 
         # layers
-        self._layers = Layers(self, vals=(layers or {}))
+        self._layers = Layers(self, vals=convert_to_dict(layers))
 
     def __sizeof__(self) -> int:
         size = 0

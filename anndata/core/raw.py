@@ -6,6 +6,7 @@ import pandas as pd
 from scipy import sparse
 from scipy.sparse import issparse
 
+from ..utils import convert_to_dict
 from . import anndata
 from .index import _normalize_index, _subset, unpack_index
 from .aligned_mapping import AxisArrays
@@ -28,12 +29,10 @@ class Raw:
         if X is not None:
             self._X = X
             self._var = _gen_dataframe(var, X.shape[1], ['var_names'])
-            self._varm = AxisArrays(self, 1, vals=(varm or {}))
+            self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
         else:
             self._X = None if adata.filename else adata.X.copy()
-            self._var = _gen_dataframe(
-                adata.var.copy(), adata.n_vars, ['var_names']
-            )
+            self._var = adata.var.copy()
             self._varm = AxisArrays(self, 1, vals=adata.varm)
 
     @property
