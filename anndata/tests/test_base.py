@@ -600,6 +600,49 @@ def test_concatenate_mixed():
     assert isspmatrix_csr(adata_all.layers['counts'])
 
 
+def test_concatenate_with_raw():
+    # dense data
+    X1 = np.array([[1, 2, 3], [4, 5, 6]])
+    X2 = np.array([[1, 2, 3], [4, 5, 6]])
+    X3 = np.array([[1, 2, 3], [4, 5, 6]])
+
+    adata1 = AnnData(
+        X1,
+        dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
+        dict(var_names=['a', 'b', 'c'], annoA=[0, 1, 2]),
+        layers=dict(Xs=X1),
+    )
+    adata2 = AnnData(
+        X2,
+        dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
+        dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
+        layers={'Xs': X2},
+    )
+    adata3 = AnnData(
+        X3,
+        dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
+        dict(var_names=['d', 'c', 'b'], annoB=[0, 1, 2]),
+        layers=dict(Xs=X3),
+    )
+
+    adata1.raw = adata1
+    adata2.raw = adata2
+    adata3.raw = adata3
+
+    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    assert adata_all.raw is not None
+
+    del adata3.raw
+    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    assert adata_all.raw is None
+
+    del adata1.raw
+    del adata2.raw
+    assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
+    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    assert adata_all.raw is None
+
+
 def test_rename_categories():
     X = np.ones((6, 3))
     obs = pd.DataFrame(
