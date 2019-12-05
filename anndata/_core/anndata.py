@@ -1826,11 +1826,34 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     sparse_format_l = sparse_layers[0].getformat()
                     layers[key] = layers[key].asformat(sparse_format_l)
 
+        # raw
+        num_raws = sum(1 for _adata in all_adatas if _adata.raw is not None)
+        if num_raws == 0:
+            new_adata_raw = None
+        elif num_raws == len(all_adatas):
+            _raws = [_adata.raw.to_adata() for _adata in all_adatas]
+            new_adata_raw = self.concatenate(
+                *_raws,
+                join=join,
+                batch_key=batch_key,
+                batch_categories=batch_categories,
+                index_unique=index_unique,
+            )
+        else:
+            logger.warning(
+                'Only some adata objects have `.raw` attribute, not concatenating them.'
+            )
+            new_adata_raw = None
+
         new_adata = (
             AnnData(X, obs, var, layers=layers)
             if join == 'inner'
             else AnnData(X, obs, var)
         )
+
+        if new_adata_raw:
+            new_adata.raw = new_adata_raw
+
         if not obs.index.is_unique:
             logger.info('Or pass `index_unique!=None` to `.concatenate`.')
         return new_adata
