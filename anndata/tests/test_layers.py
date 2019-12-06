@@ -25,7 +25,7 @@ def test_views():
     adata = AnnData(X=X, layers=dict(L=L.copy()))
     adata_view = adata[1:, 1:]
 
-    assert adata_view.layers.isview
+    assert adata_view.layers.is_view
     assert adata_view.layers.parent_mapping == adata.layers
 
     assert adata_view.layers.keys() == adata.layers.keys()
@@ -38,8 +38,8 @@ def test_views():
 
     adata_view.layers['T'] = X[1:, 1:]
 
-    assert not adata_view.layers.isview
-    assert not adata_view.isview
+    assert not adata_view.layers.is_view
+    assert not adata_view.is_view
 
 
 @pytest.mark.parametrize(

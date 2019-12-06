@@ -57,7 +57,7 @@ class Raw:
         if isinstance(X, h5py.Group):
             X = SparseDataset(X)
         # Check if we need to subset
-        if self._adata.isview:
+        if self._adata.is_view:
             # TODO: As noted above, implement views of raw
             #       so we can know if we need to subset by var
             return X[self._adata._oidx, slice(None)]

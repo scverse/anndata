@@ -96,7 +96,7 @@ def test_backing(adata, tmp_path, backing_h5ad):
     adata.write()
     assert not adata.file.is_open
     assert adata.isbacked
-    assert adata[:, 0].isview
+    assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
     # this might give us a trouble as the user might not
     # know that the file is open again....
@@ -106,7 +106,7 @@ def test_backing(adata, tmp_path, backing_h5ad):
     assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
 
     adata_subset = adata[:2, [0, 1]]
-    assert adata_subset.isview
+    assert adata_subset.is_view
     subset_hash = joblib.hash(adata_subset)
 
     # cannot set view in backing mode...
@@ -123,14 +123,14 @@ def test_backing(adata, tmp_path, backing_h5ad):
 
     # Things should stay the same after failed operations
     assert subset_hash == joblib.hash(adata_subset)
-    assert adata_subset.isview
+    assert adata_subset.is_view
 
     # need to copy first
     adata_subset = adata_subset.copy(tmp_path / 'test.subset.h5ad')
     # now transition to actual object
-    assert not adata_subset.isview
+    assert not adata_subset.is_view
     adata_subset.obs['foo'] = range(2)
-    assert not adata_subset.isview
+    assert not adata_subset.is_view
     assert adata_subset.isbacked
     assert adata_subset.obs['foo'].tolist() == list(range(2))
 
@@ -165,7 +165,7 @@ def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
 
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
     backed_v = backed_adata[obs_idx, var_idx]
-    assert backed_v.isview
+    assert backed_v.is_view
     mem_v = mem_adata[obs_idx, var_idx]
     assert_equal(backed_v, mem_v)
     backed_v.write_h5ad(final_pth)
