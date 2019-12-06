@@ -294,17 +294,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
 
     def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
-        if adata_ref.isbacked and adata_ref.isview:
+        if adata_ref.isbacked and adata_ref.is_view:
             raise ValueError(
                 'Currently, you cannot index repeatedly into a backed AnnData, '
                 'that is, you cannot make a view of a view.'
             )
-        self._isview = True
+        self._is_view = True
         if isinstance(oidx, (int, np.integer)):
             oidx = slice(oidx, oidx + 1, 1)
         if isinstance(vidx, (int, np.integer)):
             vidx = slice(vidx, vidx + 1, 1)
-        if adata_ref.isview:
+        if adata_ref.is_view:
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs(
@@ -368,7 +368,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filemode=None,
     ):
         # view attributes
-        self._isview = False
+        self._is_view = False
         self._adata_ref = None
         self._oidx = None
         self._vidx = None
@@ -539,7 +539,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return descr
 
     def __repr__(self) -> str:
-        if self.isview:
+        if self.is_view:
             return 'View of ' + self._gen_repr(self.n_obs, self.n_vars)
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
@@ -561,7 +561,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # TODO: This should get replaced/ handled elsewhere
             # This is so that we can index into a backed dense dataset with
             # indices that aren't strictly increasing
-            if self.isview and isinstance(X, h5py.Dataset):
+            if self.is_view and isinstance(X, h5py.Dataset):
                 ordered = [self._oidx, self._vidx]  # this will be mutated
                 rev_order = [slice(None), slice(None)]
                 for axis, axis_idx in enumerate(ordered.copy()):
@@ -574,9 +574,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         rev_order[axis] = np.argsort(order)
                 # from hdf5, then to real order
                 X = X[tuple(ordered)][tuple(rev_order)]
-            elif self.isview:
+            elif self.is_view:
                 X = X[self._oidx, self._vidx]
-        elif self.isview:
+        elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
                 ViewArgs(self, "X"),
@@ -602,7 +602,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:  # TODO: asarray? asanyarray?
                 value = np.array(value)
         if value is None:
-            if self.isview:
+            if self.is_view:
                 raise ValueError(
                     'Copy the view before setting the data matrix to `None`.'
                 )
@@ -614,7 +614,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # so we don’t set values like coordinates
         # This can occur if there are succesive views
         if (
-            self.isview
+            self.is_view
             and isinstance(self._oidx, np.ndarray)
             and isinstance(self._vidx, np.ndarray)
         ):
@@ -632,7 +632,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Not neccesary for row of 2d array
                 value = value.reshape(self.shape)
             if self.isbacked:
-                if self.isview:
+                if self.is_view:
                     X = self.file['X']
                     if isinstance(X, h5py.Group):
                         X = SparseDataset(X)
@@ -640,7 +640,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 else:
                     self._set_backed('X', value)
             else:
-                if self.isview:
+                if self.is_view:
                     if sparse.issparse(self._adata_ref._X) and isinstance(
                         value, np.ndarray
                     ):
@@ -686,7 +686,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @layers.setter
     def layers(self, value):
         layers = Layers(self, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._layers = layers
 
@@ -727,13 +727,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 'Can only init raw attribute with an AnnData object. '
                 'Do `del adata.raw` to delete it'
             )
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._raw = Raw(value)
 
     @raw.deleter
     def raw(self):
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._raw = None
 
@@ -759,7 +759,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(value) != self.n_obs:
             raise ValueError('Length does not match.')
         utils.warn_no_string_index(value.index)
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._obs = value
 
@@ -781,7 +781,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(value) != self.n_vars:
             raise ValueError('Length does not match.')
         utils.warn_no_string_index(value.index)
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._var = value
 
@@ -800,7 +800,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 'Only mutable mapping types (e.g. dict) are allowed for `.uns`.'
             )
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._uns = value
 
@@ -824,7 +824,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @obsm.setter
     def obsm(self, value):
         obsm = AxisArrays(self, 0, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._obsm = obsm
 
@@ -848,7 +848,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @varm.setter
     def varm(self, value):
         varm = AxisArrays(self, 1, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._varm = varm
 
@@ -872,7 +872,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @obsp.setter
     def obsp(self, value):
         obsp = PairwiseArrays(self, 0, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._obsp = obsp
 
@@ -896,7 +896,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @varp.setter
     def varp(self, value):
         varp = PairwiseArrays(self, 1, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._varp = varp
 
@@ -954,9 +954,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.filename is not None
 
     @property
-    def isview(self) -> bool:
-        """``True`` if object is view of another AnnData object, ``False`` otherwise."""
-        return self._isview
+    def is_view(self) -> bool:
+        """\
+        `True` if object is view of another AnnData object,
+        `False` otherwise.
+        """
+        return self._is_view
 
     @property
     def filename(self) -> Optional[Path]:
@@ -1125,7 +1128,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         dont_modify = False  # only necessary for backed views
         if df is None:
             dfs = [self.obs, self.var]
-            if self.isview:
+            if self.is_view:
                 if not self.isbacked:
                     warnings.warn(
                         "Initializing view as actual.",
@@ -1203,7 +1206,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def __setitem__(
         self, index: Index, val: Union[int, float, np.ndarray, sparse.spmatrix]
     ):
-        if self.isview:
+        if self.is_view:
             raise ValueError('Object is view and cannot be accessed with `[]`.')
         obs, var = self._normalize_indices(index)
         if not self.isbacked:
@@ -1226,7 +1229,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.X
         else:
             X = self.file['X']
-        if self.isview:
+        if self.is_view:
             raise ValueError(
                 'You\'re trying to transpose a view of an `AnnData`, which is currently not implemented. '
                 'Call `.copy()` before transposing.'
@@ -1390,7 +1393,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.isview:
+            if self.is_view:
                 # TODO: How do I unambiguously check if this is a copy?
                 # Subsetting this way means we don't have to have a view type
                 # defined for the matrix, which is needed for some of the
@@ -2127,6 +2130,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @utils.deprecated('obsm_keys')
     def smpm_keys(self):
         return self.obsm_keys()
+
+    @property
+    @utils.deprecated('is_view')
+    def isview(self):
+        return self.is_view
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys

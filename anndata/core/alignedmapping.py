@@ -73,7 +73,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
     @property
     @abstractmethod
-    def isview(self) -> bool:
+    def is_view(self) -> bool:
         pass
 
     @property
@@ -105,7 +105,7 @@ class AlignedViewMixin:
     parent_mapping: Mapping[Hashable, V]
     """The object this is a view of."""
 
-    isview = True
+    is_view = True
 
     def __getitem__(self, key: Hashable) -> V:
         return as_view(
@@ -141,7 +141,7 @@ class AlignedActualMixin:
     _data: Dict[Hashable, V]
     """Underlying mapping to the data"""
 
-    isview = False
+    is_view = False
 
     def __getitem__(self, key: Hashable) -> V:
         return self._data[key]

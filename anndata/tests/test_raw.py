@@ -56,6 +56,14 @@ def test_raw_del(adata_raw):
     assert adata_raw.raw is None
 
 
+def test_raw_of_view(adata_raw):
+    adata_view = adata_raw[adata_raw.obs["oanno1"] == "cat2"]
+    assert adata_view.raw.X.tolist() == [
+        [4, 5, 6],
+        [7, 8, 9],
+    ]
+
+
 def test_raw_rw(adata_raw, backing_h5ad):
     with pytest.warns(
         ImplicitModificationWarning, match="Initializing view as actual"
