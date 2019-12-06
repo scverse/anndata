@@ -4,7 +4,7 @@ if sys.version_info < (3, 6):
     sys.exit('anndata requires Python >= 3.6')
 from pathlib import Path
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 
 try:
     from anndata import __author__, __email__
@@ -26,7 +26,7 @@ setup(
         for l in Path('requirements.txt').read_text('utf-8').splitlines()
     ],
     python_requires='>=3.6',
-    packages=find_packages(),
+    packages=find_namespace_packages(include=['anndata.*']),
     zip_safe=False,
     classifiers=[
         'Environment :: Console',
