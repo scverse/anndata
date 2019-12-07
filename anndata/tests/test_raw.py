@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import anndata as ad
-from anndata.core.anndata import ImplicitModificationWarning
+from anndata._core.anndata import ImplicitModificationWarning
 
 
 # -------------------------------------------------------------------------------

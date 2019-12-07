@@ -10,10 +10,10 @@ from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
-from anndata.core.sparse_dataset import SparseDataset
+from anndata._core.sparse_dataset import SparseDataset
 from anndata import AnnData
-from anndata.core.views import ArrayView
-from anndata.core.alignedmapping import AlignedMapping
+from anndata._core.views import ArrayView
+from anndata._core.alignedmapping import AlignedMapping
 
 
 @singledispatch

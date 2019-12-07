@@ -1,5 +1,5 @@
 from functools import wraps, singledispatch
-from ..core.sparse_dataset import SparseDataset
+from .._core.sparse_dataset import SparseDataset
 
 # -------------------------------------------------------------------------------
 # Type conversion

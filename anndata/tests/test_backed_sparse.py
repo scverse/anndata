@@ -4,7 +4,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.core.sparse_dataset import SparseDataset
+from anndata._core.sparse_dataset import SparseDataset
 from anndata.tests.helpers import assert_equal, subset_func
 
 subset_func2 = subset_func
