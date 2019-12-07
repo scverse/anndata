@@ -7,7 +7,7 @@ import pytest
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, isspmatrix_csr, issparse
 
-from anndata import AnnData
+from anndata import AnnData, Raw
 from helpers import assert_equal, gen_adata
 
 
@@ -606,6 +606,8 @@ def test_concatenate_with_raw():
     X2 = np.array([[1, 2, 3], [4, 5, 6]])
     X3 = np.array([[1, 2, 3], [4, 5, 6]])
 
+    X4 = np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+
     adata1 = AnnData(
         X1,
         dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
@@ -625,12 +627,30 @@ def test_concatenate_with_raw():
         layers=dict(Xs=X3),
     )
 
+    adata4 = AnnData(
+        X4,
+        dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
+        dict(var_names=['a', 'b', 'c', 'z'], annoA=[0, 1, 2, 3]),
+        layers=dict(Xs=X4),
+    )
+
     adata1.raw = adata1
     adata2.raw = adata2
     adata3.raw = adata3
 
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
-    assert adata_all.raw is not None
+    assert isinstance(adata_all.raw, Raw)
+    assert set(adata_all.raw.var_names) == {'b', 'c'}
+
+    adata_all = AnnData.concatenate(adata1, adata2, adata3, join='outer')
+    assert isinstance(adata_all.raw, Raw)
+    assert set(adata_all.raw.var_names) == {'a', 'b', 'c', 'd'}
+
+    adata3.raw = adata4
+    adata_all = AnnData.concatenate(adata1, adata2, adata3, join='outer')
+    assert isinstance(adata_all.raw, Raw)
+    assert set(adata_all.raw.var_names) == {'a', 'b', 'c', 'd', 'z'}
+    assert set(adata_all.var_names) == {'a', 'b', 'c', 'd'}
 
     del adata3.raw
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
