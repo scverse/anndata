@@ -1,5 +1,5 @@
-from .core.anndata import AnnData
-from .core.raw import Raw
+from ._core.anndata import AnnData
+from ._core.raw import Raw
 from .readwrite import (
     read_h5ad,
     read_loom,

@@ -13,10 +13,10 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
-from ..core.sparse_dataset import SparseDataset
-from ..core.file_backing import AnnDataFileManager
-from ..core.anndata import AnnData
-from ..core.raw import Raw
+from .._core.sparse_dataset import SparseDataset
+from .._core.file_backing import AnnDataFileManager
+from .._core.anndata import AnnData
+from .._core.raw import Raw
 from ..compat import _from_fixed_length_strings, _clean_uns, Literal
 from .utils import (
     report_read_key_on_error,
