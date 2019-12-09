@@ -26,6 +26,29 @@ On Master :small:`July 29, 2019`
    - All elements of AnnData should now follow the same rules about how they're subset, `issue #145 <https://github.com/theislab/anndata/issues/145>`__.
    - Can now index by observations and variables at the same time.
 
+
+- IO has been overhauled `PR #167 <https://github.com/theislab/anndata/pull/167>`_
+
+    - Reading and writing has been overhauled for simplification and speed.
+        - Time and memory usage can be half of previous in typical use cases
+    - Zarr backend now supports sparse arrays, and generally is closer to having the same features as HDF5.
+    - Backed mode should see significant speed and memory improvements for access along compressed dimensions and IO. `PR #241 <https://github.com/theislab/anndata/pull/241>`_.
+
+
+- Mapping elements (i.e. `obsm`, `varm`, `layers`, etc.) have been overhauled.
+
+    - New attributes `obsp` and `varp` have been added for two dimensional arrays where each axis corresponds to a single axis of the AnnData object. `PR #207 <https://github.com/theislab/anndata/pull/207>`_
+        - This is intended to store values like cell-by-cell graphs, which are currently stored in `uns`.
+    - DataFrames and sparse arrays are now allowed in mapping elements
+    - All mapping attributes now share an implementation and will have the same behaviour. `PR #164 <https://github.com/theislab/anndata/pull/164>`_
+
+
+- Miscellaneous improvements
+    - Mapping attributes now have ipython tab completion (e.g. `adata.obsm["\t` can provide suggestions) `PR #183 <https://github.com/theislab/anndata/pull/183>`_.
+    - `AnnData` attributes are now delete-able (e.g. `del adata.raw`) `PR #242 <https://github.com/theislab/anndata/pull/242>`_.
+    - Many many bug fixes
+
+
 Post v0.6 :small:`June 6, 2019`
 ---------------------------------
 
