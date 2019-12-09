@@ -18,5 +18,6 @@ of data and learned annotations. It was initially built for
    :hidden:
 
    api
+   fileformat-prose
    benchmarks
    references
