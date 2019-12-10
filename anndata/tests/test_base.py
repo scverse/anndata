@@ -641,16 +641,26 @@ def test_concatenate_with_raw():
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == {'b', 'c'}
+    assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
+    assert np.array_equal(adata_all.raw.X, adata_all.X)
 
     adata_all = AnnData.concatenate(adata1, adata2, adata3, join='outer')
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == {'a', 'b', 'c', 'd'}
+    assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
+    print(adata_all.raw.X, adata_all.X)
+    assert np.array_equal(
+        np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X)
+    )
 
     adata3.raw = adata4
     adata_all = AnnData.concatenate(adata1, adata2, adata3, join='outer')
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == {'a', 'b', 'c', 'd', 'z'}
     assert set(adata_all.var_names) == {'a', 'b', 'c', 'd'}
+    assert not np.array_equal(
+        np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X)
+    )
 
     del adata3.raw
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
