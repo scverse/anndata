@@ -627,7 +627,7 @@ def test_pickle():
 
     adata = AnnData()
     adata2 = pickle.loads(pickle.dumps(adata))
-    assert adata2.obsm.parent == adata2
+    assert adata2.obsm.parent is adata2
 
 
 def test_to_df_dense():
