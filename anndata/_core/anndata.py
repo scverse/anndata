@@ -1835,7 +1835,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # raw
         have_raw = [_adata.raw is not None for _adata in all_adatas]
         if all(have_raw):
-            new_adata_raw = self.concatenate(
+            new_adata_raw = AnnData.concatenate(
                 *[_adata.raw.to_adata() for _adata in all_adatas],
                 join=join,
                 batch_key=batch_key,
