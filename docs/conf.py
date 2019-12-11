@@ -45,6 +45,7 @@ extensions = [
     # 'plot_generator',
     # 'plot_directive',
     'sphinx_autodoc_typehints',  # needs to be after napoleon
+    'sphinx_issues',
     # 'ipython_directive',
     # 'ipython_console_highlighting',
     'scanpydoc',
@@ -94,6 +95,7 @@ html_context = dict(
     github_version='master',  # Version
     conf_py_path='/docs/',  # Path in the checkout to the docs root
 )
+issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_static_path = ['_static']
 html_show_sphinx = False
 
