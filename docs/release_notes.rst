@@ -25,6 +25,35 @@ On Master :small:`July 29, 2019`
   - All elements of AnnData should now follow the same rules about how they're subset, see :issue:`145`.
   - Can now index by observations and variables at the same time.
 
+
+- IO has been overhauled in PR :pr:`167`:
+
+  - Reading and writing has been overhauled for simplification and speed.
+
+    - Time and memory usage can be half of previous in typical use cases
+
+  - Zarr backend now supports sparse arrays, and generally is closer to having the same features as HDF5.
+  - Backed mode should see significant speed and memory improvements for access along compressed dimensions and IO. PR :pr:`241`.
+
+
+- Mapping attributes (i.e. `obsm`, `varm`, `layers`, etc.) have been overhauled:
+
+  - New attributes :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` have been added for two dimensional arrays where each axis corresponds to a single axis of the AnnData object. PR :pr:`207`.
+
+    - These are intended to store values like cell-by-cell graphs, which are currently stored in :attr:`~anndata.AnnData.uns`.
+
+  - Sparse arrays are now allowed as values in all mapping attributes.
+  - DataFrames are now allowed as values in :attr:`~anndata.AnnData.obsm` and :attr:`~anndata.AnnData.varm`.
+  - All mapping attributes now share an implementation and will have the same behaviour. PR :pr:`164`.
+
+
+- Miscellaneous improvements
+
+  - Mapping attributes now have ipython tab completion (e.g. `adata.obsm["\\t` can provide suggestions) PR :pr:`183`.
+  - :class:`~anndata.AnnData` attributes are now delete-able (e.g. `del adata.raw`) PR :pr:`242`.
+  - Many many bug fixes
+
+
 Post v0.6 :small:`June 6, 2019`
 ---------------------------------
 
