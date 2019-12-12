@@ -94,13 +94,13 @@ def test_backing(adata, tmp_path, backing_h5ad):
 
     adata.filename = backing_h5ad
     adata.write()
-    assert not adata.file.isopen
+    assert not adata.file.is_open
     assert adata.isbacked
     assert adata[:, 0].isview
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
     # this might give us a trouble as the user might not
     # know that the file is open again....
-    assert adata.file.isopen
+    assert adata.file.is_open
 
     adata[:2, 0].X = [0, 0]
     assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
@@ -209,7 +209,7 @@ def test_backed_modification(adata, backing_h5ad):
     # While this currently makes the file backed, it doesn't write it as sparse
     adata.filename = backing_h5ad
     adata.write()
-    assert not adata.file.isopen
+    assert not adata.file.is_open
     assert adata.isbacked
 
     adata.X[0, [0, 2]] = 10

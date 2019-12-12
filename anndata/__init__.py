@@ -1,4 +1,5 @@
-from .core.anndata import AnnData, Raw
+from .core.anndata import AnnData
+from .core.raw import Raw
 from .readwrite import (
     read_h5ad,
     read_loom,
@@ -10,9 +11,9 @@ from .readwrite import (
     read_mtx,
     read_zarr,
 )
-from .readwrite import (
-    read_h5ad as read,
-)  # backwards compat / shortcut for default format
+
+# backwards compat / shortcut for default format
+from .readwrite import read_h5ad as read
 
 __doc__ = """\
 API

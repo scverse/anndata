@@ -5,6 +5,7 @@ from ..core.sparse_dataset import SparseDataset
 # Type conversion
 # -------------------------------------------------------------------------------
 
+
 # Could be numba'd if it returned tuples instead of slices
 def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
     """

@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
 from collections import abc as cabc
-from functools import singledispatch
 from typing import TYPE_CHECKING
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
-from typing import Hashable, Iterable, Iterator, Mapping, Sequence  # ABCs
+from typing import Hashable, Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
 
 import numpy as np
@@ -12,6 +11,7 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous
 from .views import asview, ViewArgs
+from .index import _subset
 
 if TYPE_CHECKING:
     from .anndata import AnnData
@@ -23,20 +23,6 @@ TwoDIdx = Tuple[OneDIdx, OneDIdx]
 I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
 # TODO: pd.DataFrame only allowed in AxisArrays?
 V = Union[pd.DataFrame, spmatrix, np.ndarray]
-
-
-@singledispatch
-def _subset(a: V, subset_idx: I):
-    # Select as combination of indexes, not coordinates
-    # Correcting for indexing behaviour of np.ndarray
-    if all(isinstance(x, Iterable) for x in subset_idx):
-        subset_idx = np.ix_(*subset_idx)
-    return a[subset_idx]
-
-
-@_subset.register(pd.DataFrame)
-def _subset_df(df: pd.DataFrame, subset_idx: OneDIdx):
-    return df.iloc[subset_idx]
 
 
 class AlignedMapping(cabc.MutableMapping, ABC):

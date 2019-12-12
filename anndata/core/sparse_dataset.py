@@ -18,7 +18,7 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from ..utils import unpack_index
+from .index import unpack_index
 
 
 class BackedFormat(NamedTuple):
