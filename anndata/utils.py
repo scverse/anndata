@@ -1,10 +1,9 @@
 import warnings
 from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union, Tuple
+from typing import Mapping, Any, Sequence
 
 import pandas as pd
 import numpy as np
-from scipy.sparse import spmatrix
 
 from .logging import get_logger
 
@@ -177,40 +176,3 @@ class DeprecationMixinMeta(type):
             for item in type.__dir__(cls)
             if not is_deprecated(getattr(cls, item, None))
         ]
-
-
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
-
-
-def get_n_items_idx(idx: Index1D, l: int):
-    if isinstance(idx, np.ndarray) and idx.dtype == bool:
-        return idx.sum()
-    elif isinstance(idx, slice):
-        start = 0 if idx.start is None else idx.start
-        stop = l if idx.stop is None else idx.stop
-        step = 1 if idx.step is None else idx.step
-        return (stop - start) // step
-    elif isinstance(idx, (int, np.int_, np.int64, np.int32)):
-        return 1
-    else:
-        return len(idx)
-
-
-def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
-    # handle indexing with boolean matrices
-    if (
-        isinstance(index, (spmatrix, np.ndarray))
-        and index.ndim == 2
-        and index.dtype.kind == 'b'
-    ):
-        return index.nonzero()
-
-    if not isinstance(index, tuple):
-        return index, slice(None)
-    elif len(index) == 2:
-        return index
-    elif len(index) == 1:
-        return index[0], slice(None)
-    else:
-        raise IndexError('invalid number of indices')
