@@ -116,4 +116,7 @@ def _clean_uns(d: dict):
                     )
                     k_to_delete.append(k)
     for k in k_to_delete:
-        del d["uns"][k]
+        try:
+            del d["uns"][k]
+        except KeyError:
+            continue
