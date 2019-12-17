@@ -10,15 +10,14 @@ On Master :small:`July 29, 2019`
    Breaking changes on master include:
 
    - Elements of :class:`~anndata.AnnData` objects don't have their dimensionality reduced when the main object is subset. This is to maintain consistency when subsetting. See discussion in :issue:`145`.
-   - While the :mod:`anndata.core` module currently exists, it will be made private and its contents are not stable, see :issue:`174`.
+   - Internal modules like `anndata.core` are private and their contents are not stable: See :issue:`174`.
 
    Currently broken features
 
    - `sc.pp.normalize_per_cell` doesn't work on dask arrays. It just doesn't modify the matrix.
 
 
-- Views have been overhauled in :pr:`164`.
-
+View overhaul :pr:`164`
   - Indexing into a view no longer keeps a reference to intermediate view, see :issue:`62`.
   - Views are now lazy. Elements of view of AnnData are not indexed until they're accessed.
   - Indexing with scalars no longer reduces dimensionality of contained arrays, see :issue:`145`.
@@ -26,8 +25,7 @@ On Master :small:`July 29, 2019`
   - Can now index by observations and variables at the same time.
 
 
-- IO has been overhauled in PR :pr:`167`:
-
+IO overhaul :pr:`167`
   - Reading and writing has been overhauled for simplification and speed.
 
     - Time and memory usage can be half of previous in typical use cases
@@ -36,8 +34,7 @@ On Master :small:`July 29, 2019`
   - Backed mode should see significant speed and memory improvements for access along compressed dimensions and IO. PR :pr:`241`.
 
 
-- Mapping attributes (i.e. `obsm`, `varm`, `layers`, etc.) have been overhauled:
-
+Mapping attributes overhaul :smaller:`(obsm, varm, layers, …)`
   - New attributes :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` have been added for two dimensional arrays where each axis corresponds to a single axis of the AnnData object. PR :pr:`207`.
 
     - These are intended to store values like cell-by-cell graphs, which are currently stored in :attr:`~anndata.AnnData.uns`.
@@ -47,31 +44,40 @@ On Master :small:`July 29, 2019`
   - All mapping attributes now share an implementation and will have the same behaviour. PR :pr:`164`.
 
 
-- Miscellaneous improvements
-
+Miscellaneous improvements
   - Mapping attributes now have ipython tab completion (e.g. `adata.obsm["\\t` can provide suggestions) PR :pr:`183`.
   - :class:`~anndata.AnnData` attributes are now delete-able (e.g. `del adata.raw`) PR :pr:`242`.
   - Many many bug fixes
 
 
-Post v0.6 :small:`June 6, 2019`
----------------------------------
+Versions 0.6.*
+--------------
 
-- convenience accesors :func:`~anndata.AnnData.obs_vector`, :func:`~anndata.AnnData.var_vector` for 1d arrays, see PR :pr:`144` :noteversion:`0.6.21` :smaller:`thanks to I Virshup`
-- compatibility with Scipy >=1.3 by removing `IndexMixin` dependency, see :pr:`151` :noteversion:`0.6.20` :smaller:`thanks to P Angerer`
-- bug fix for second-indexing into views, see :issue:`126` :noteversion:`0.6.19` :smaller:`thanks to P Angerer`
-- bug fix for reading excel files :noteversion:`0.6.19` :smaller:`thanks to A Wolf`
-- :attr:`~anndata.AnnData.layers` inspired by `.loom`_ files allows their information lossless reading via :func:`~anndata.read_loom` :smaller:`thanks to S Rybakov`
-- initialization from pandas DataFrames :smaller:`thanks to A Wolf`
-- iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X` :smaller:`thanks to S Rybakov`
-- support for reading zarr files: :func:`~anndata.read_zarr` :smaller:`thanks to T White`
-- changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical :noteversion:`0.6.16`
-- maintain dtype upon copy :noteversion:`0.6.13` :smaller:`thanks to A Wolf`
-
+- better support for aligned mappings (obsm, varm, layers)
+  :noteversion:`0.6.22` :pr:`155` :smaller:`thanks to I Virshup`
+- convenience accesors :func:`~anndata.AnnData.obs_vector`, :func:`~anndata.AnnData.var_vector` for 1d arrays.
+  :noteversion:`0.6.21` :pr:`144` :smaller:`thanks to I Virshup`
+- compatibility with Scipy >=1.3 by removing `IndexMixin` dependency.
+  :noteversion:`0.6.20` :pr:`151` :smaller:`thanks to P Angerer`
+- bug fix for second-indexing into views.
+  :noteversion:`0.6.19` :commit:`0ab553f368a93c52923f8cc700a066440824e8d8` :smaller:`thanks to P Angerer`
+- bug fix for reading excel files.
+  :noteversion:`0.6.19` :commit:`90bea2c1721d5dbfad20975b14809c63cc126ae8` :smaller:`thanks to A Wolf`
+- changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical.
+  :noteversion:`0.6.16` :commit:`21d8033dc560794b8eb8b58a693e30f4d154554e` :smaller:`thanks to A Wolf`
+- maintain dtype upon copy.
+  :noteversion:`0.6.13` :commit:`534bea4b04a542d33743050a63c8b7dbff8b4d9a` :smaller:`thanks to A Wolf`
+- :attr:`~anndata.AnnData.layers` inspired by `.loom`_ files allows their information lossless reading via :func:`~anndata.read_loom`.
+  :noteversion:`0.6.7`–:noteversion:`0.6.9` :pr:`46` & :pr:`48` :smaller:`thanks to S Rybakov`
+- support for reading zarr files: :func:`~anndata.read_zarr`
+  :noteversion:`0.6.7` :pr:`38` :smaller:`thanks to T White`
+- initialization from pandas DataFrames
+  :noteversion:`0.6.` :commit:`648bcc8a33f645de1e483bd6f9f5a3cb34ff43a3` :smaller:`thanks to A Wolf`
+- iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
+  :noteversion:`0.6.1` :pr:`20` :smaller:`thanks to S Rybakov`
 
 Version 0.6 :small:`May 1, 2018`
---------------------------------
-
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 - compatibility with Seurat converter
 - tremendous speedup for :func:`~anndata.AnnData.concatenate`
 - bug fix for deep copy of unstructured annotation after slicing

@@ -71,18 +71,6 @@ Writing to other formats.
    AnnData.write_loom
    AnnData.write_zarr
 
-h5py
-----
-
-Independent of :class:`~anndata.AnnData`, the submodule :class:`anndata.h5py`
-provides a thin wrapper of `h5py <http://www.h5py.org/>`_ that is able to handle
-sparse matrices in addition to the standard functionality.
-
-.. autosummary::
-   :toctree: .
-
-   h5py
-
 """
 
 __author__ = ", ".join(

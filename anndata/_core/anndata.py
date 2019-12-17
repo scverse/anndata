@@ -162,9 +162,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     shape
         Shape tuple (#observations, #variables). Can only be provided if ``X`` is ``None``.
     filename
-        Name of backing file. See :class:`anndata.h5py.File`.
+        Name of backing file. See :class:`File`.
     filemode
-        Open mode of backing file. See :class:`anndata.h5py.File`.
+        Open mode of backing file. See :class:`File`.
 
     See Also
     --------
@@ -849,7 +849,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
 
-        Stores for each key a two or higher-dimensional :class:`np.ndarray`
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
         whose first two dimensions are of length ``n_obs``.
         Is sliced with ``data`` and ``obs`` but behaves otherwise like a
         :term:`mapping`.
@@ -873,7 +873,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
 
-        Stores for each key, a two or higher-dimensional :class:`np.ndarray`
+        Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray`
         whose first two dimensions are of length ``n_var``.
         Is sliced with ``data`` and ``var`` but behaves otherwise like a
         :term:`mapping`.

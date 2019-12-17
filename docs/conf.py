@@ -80,8 +80,19 @@ intersphinx_mapping = dict(
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
+    zarr=("https://zarr.readthedocs.io/en/stable/", None),
 )
-
+qualname_overrides = {
+    "anndata._core.anndata.AnnData": "anndata.AnnData",
+    # Temporarily
+    "anndata._core.raw.Raw": "anndata.AnnData",
+    "anndata._core.views.ArrayView": "numpy.ndarray",
+    **{
+        f"anndata._core.aligned_mapping.{cls}{kind}": "typing.Mapping"
+        for cls in "Layers AxisArrays PairwiseArrays".split()
+        for kind in ["", "View"]
+    },
+}
 
 # -- Options for HTML output ----------------------------------------------
 
