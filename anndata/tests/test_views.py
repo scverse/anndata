@@ -25,15 +25,15 @@ from anndata.tests.helpers import (
 X_list = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
 # annotation of observations / rows
 obs_dict = dict(
-    row_names=['name1', 'name2', 'name3'],  # row annotation
-    oanno1=['cat1', 'cat2', 'cat2'],  # categorical annotation
-    oanno2=['o1', 'o2', 'o3'],  # string annotation
+    row_names=["name1", "name2", "name3"],  # row annotation
+    oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
+    oanno2=["o1", "o2", "o3"],  # string annotation
     oanno3=[2.1, 2.2, 2.3],  # float annotation
 )
 # annotation of variables / columns
 var_dict = dict(vanno1=[3.1, 3.2, 3.3])
 # unstructured annotation
-uns_dict = dict(oanno1_colors=['#000000', '#FFFFFF'], uns2=['some annotation'])
+uns_dict = dict(oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"])
 
 
 subset_func2 = subset_func
@@ -42,8 +42,8 @@ subset_func2 = subset_func
 @pytest.fixture
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
-    adata.obsm['o'] = np.zeros((100, 50))
-    adata.varm['o'] = np.zeros((100, 50))
+    adata.obsm["o"] = np.zeros((100, 50))
+    adata.varm["o"] = np.zeros((100, 50))
     return adata
 
 
@@ -72,9 +72,7 @@ def mapping_name(request):
 
 def test_views():
     X = np.array(X_list)
-    adata = ad.AnnData(
-        X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32'
-    )
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype="int32")
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
@@ -87,10 +85,10 @@ def test_views():
 
     assert adata_subset.is_view
     # now transition to actual object
-    adata_subset.obs['foo'] = range(2)
+    adata_subset.obs["foo"] = range(2)
     assert not adata_subset.is_view
 
-    assert adata_subset.obs['foo'].tolist() == list(range(2))
+    assert adata_subset.obs["foo"].tolist() == list(range(2))
 
 
 def test_modify_view_component(matrix_type, mapping_name):
@@ -115,10 +113,10 @@ def test_modify_view_component(matrix_type, mapping_name):
 def test_set_obsm_key(adata):
     init_hash = joblib.hash(adata)
 
-    orig_obsm_val = adata.obsm['o'].copy()
+    orig_obsm_val = adata.obsm["o"].copy()
     subset_obsm = adata[:50]
     assert subset_obsm.is_view
-    subset_obsm.obsm['o'] = np.ones((50, 20))
+    subset_obsm.obsm["o"] = np.ones((50, 20))
     assert not subset_obsm.is_view
     assert np.all(adata.obsm["o"] == orig_obsm_val)
 
@@ -128,10 +126,10 @@ def test_set_obsm_key(adata):
 def test_set_varm_key(adata):
     init_hash = joblib.hash(adata)
 
-    orig_varm_val = adata.varm['o'].copy()
+    orig_varm_val = adata.varm["o"].copy()
     subset_varm = adata[:, :50]
     assert subset_varm.is_view
-    subset_varm.varm['o'] = np.ones((50, 20))
+    subset_varm.varm["o"] = np.ones((50, 20))
     assert not subset_varm.is_view
     assert np.all(adata.varm["o"] == orig_varm_val)
 
@@ -144,8 +142,7 @@ def test_set_obs(adata, subset_func):
     subset = adata[subset_func(adata.obs_names), :]
 
     new_obs = pd.DataFrame(
-        dict(a=np.ones(subset.n_obs), b=np.ones(subset.n_obs)),
-        index=subset.obs_names,
+        dict(a=np.ones(subset.n_obs), b=np.ones(subset.n_obs)), index=subset.obs_names,
     )
 
     assert subset.is_view
@@ -304,7 +301,7 @@ def test_set_subset_varm(adata, subset_func):
     assert init_hash == joblib.hash(adata)
 
 
-@pytest.mark.parametrize('attr', ["obsm", "varm", "obsp", "varp", "layers"])
+@pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_failed_delitem(attr):
     adata = gen_adata((10, 10))
     view = adata[5:7, :][:, :5]
@@ -319,7 +316,7 @@ def test_view_failed_delitem(attr):
     assert view_hash == joblib.hash(view)
 
 
-@pytest.mark.parametrize('attr', ["obsm", "varm", "obsp", "varp", "layers"])
+@pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_delitem(attr):
     adata = gen_adata((10, 10))
     getattr(adata, attr)["to_delete"] = np.ones((10, 10))
@@ -339,7 +336,7 @@ def test_view_delitem(attr):
 
 
 @pytest.mark.parametrize(
-    'attr', ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]
+    "attr", ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]
 )
 def test_view_delattr(attr):
     base = gen_adata((10, 10))
@@ -393,9 +390,7 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
     obs_s2 = subset_func2(obs_view1.obs_names)
     assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
 
-    view_of_actual_copy = (
-        adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
-    )
+    view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
 
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 

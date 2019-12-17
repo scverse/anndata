@@ -30,9 +30,7 @@ class _SetItemMixin:
             super().__setitem__(idx, value)
         else:
             adata_view, attr_name, keys = self._view_args
-            logger.warning(
-                f'Trying to set attribute `.{attr_name}` of view, copying.'
-            )
+            logger.warning(f"Trying to set attribute `.{attr_name}` of view, copying.")
             new = adata_view.copy()
             attr = getattr(new, attr_name)
             container = reduce(lambda d, k: d[k], keys, attr)
@@ -44,7 +42,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: Tuple['anndata.AnnData', str, Tuple[str, ...]] = None,
+        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -61,7 +59,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: Tuple['anndata.AnnData', str, Tuple[str, ...]] = None,
+        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
     ):
         arr = np.asarray(input_array).view(cls)
         if view_args is not None:
@@ -71,13 +69,13 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
     def __array_finalize__(self, obj: Optional[np.ndarray]):
         if obj is not None:
-            self._view_args = getattr(obj, '_view_args', None)
+            self._view_args = getattr(obj, "_view_args", None)
 
     def keys(self) -> KeysView[str]:
         # it's a structured array
         return self.dtype.names
 
-    def copy(self, order: str = 'C') -> np.ndarray:
+    def copy(self, order: str = "C") -> np.ndarray:
         # we want a conventional array
         return np.array(self)
 
@@ -100,14 +98,12 @@ class DictView(_ViewMixin, dict):
 
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ['_view_args']
+    _metadata = ["_view_args"]
 
 
 @singledispatch
 def as_view(obj, view_args):
-    raise NotImplementedError(
-        f"No view type has been registered for {type(obj)}"
-    )
+    raise NotImplementedError(f"No view type has been registered for {type(obj)}")
 
 
 @as_view.register(np.ndarray)

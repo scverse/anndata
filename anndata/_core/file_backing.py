@@ -14,9 +14,9 @@ class AnnDataFileManager:
 
     def __init__(
         self,
-        adata: 'anndata.AnnData',
+        adata: "anndata.AnnData",
         filename: Optional[PathLike] = None,
-        filemode: Optional[Literal['r', 'r+']] = None,
+        filemode: Optional[Literal["r", "r+"]] = None,
     ):
         self._adata = adata
         self.filename = filename
@@ -27,9 +27,9 @@ class AnnDataFileManager:
 
     def __repr__(self) -> str:
         if self.filename is None:
-            return 'Backing file manager: no file is set.'
+            return "Backing file manager: no file is set."
         else:
-            return f'Backing file manager of file {self.filename}.'
+            return f"Backing file manager of file {self.filename}."
 
     def __contains__(self, x) -> bool:
         return x in self._file
@@ -37,9 +37,7 @@ class AnnDataFileManager:
     def __iter__(self) -> Iterator[str]:
         return iter(self._file)
 
-    def __getitem__(
-        self, key: str
-    ) -> Union[h5py.Group, h5py.Dataset, SparseDataset]:
+    def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, SparseDataset]:
         return self._file[key]
 
     def __setitem__(
@@ -61,16 +59,14 @@ class AnnDataFileManager:
     def open(
         self,
         filename: Optional[PathLike] = None,
-        filemode: Optional[Literal['r', 'r+']] = None,
+        filemode: Optional[Literal["r", "r+"]] = None,
     ):
         if filename is not None:
             self.filename = filename
         if filemode is not None:
             self._filemode = filemode
         if self.filename is None:
-            raise ValueError(
-                'Cannot open backing file if backing not initialized.'
-            )
+            raise ValueError("Cannot open backing file if backing not initialized.")
         self._file = h5py.File(self.filename, self._filemode)
 
     def close(self):

@@ -55,8 +55,8 @@ class AlignedMapping(cabc.MutableMapping, ABC):
                     f"it should have had {right_shape}."
                 )
         if not self._allow_df and isinstance(val, pd.DataFrame):
-            name = self.attrname.title().rstrip('s')
-            val = ensure_df_homogeneous(val, f'{name} {key!r}')
+            name = self.attrname.title().rstrip("s")
+            val = ensure_df_homogeneous(val, f"{name} {key!r}")
         return val
 
     @property
@@ -198,7 +198,7 @@ class AxisArraysBase(AlignedMapping):
         for key in self.keys():
             value = self[key]
             for icolumn, column in enumerate(value.T):
-                df[f'{key}{icolumn + 1}'] = column
+                df[f"{key}{icolumn + 1}"] = column
         return df
 
     def _validate_value(self, val: V, key: Hashable) -> V:
@@ -268,9 +268,7 @@ class LayersBase(AlignedMapping):
 
 
 class Layers(AlignedActualMixin, LayersBase):
-    def __init__(
-        self, parent: "anndata.AnnData", vals: Optional[Mapping] = None
-    ):
+    def __init__(self, parent: "anndata.AnnData", vals: Optional[Mapping] = None):
         self._parent = parent
         self._data = dict()
         if vals is not None:
@@ -319,10 +317,7 @@ class PairwiseArraysBase(AlignedMapping):
 
 class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(
-        self,
-        parent: "anndata.AnnData",
-        axis: int,
-        vals: Optional[Mapping] = None,
+        self, parent: "anndata.AnnData", axis: int, vals: Optional[Mapping] = None,
     ):
         self._parent = parent
         if axis not in (0, 1):

@@ -15,18 +15,18 @@ def adata():
     return ad.AnnData(
         np.zeros((20, 10)),
         obs=pd.DataFrame(
-            {"obs_key": list(ascii_letters[:20])},
+            dict(obs_key=list(ascii_letters[:20])),
             index=[f"cell{i}" for i in range(20)],
         ),
         var=pd.DataFrame(
-            {"var_key": np.arange(10)}, index=[f"gene{i}" for i in range(10)]
+            dict(var_key=np.arange(10)), index=[f"gene{i}" for i in range(10)]
         ),
-        varm={"varm_key": np.zeros((10, 20))},
-        obsm={"obsm_key": np.zeros((20, 20))},
-        layers={"layers_key": np.zeros((20, 10))},
-        obsp={"obsp_key": np.zeros((20, 20))},
-        varp={"varp_key": np.zeros((10, 10))},
-        uns={"uns_key": dict(zip("abc", range(3)))},
+        varm=dict(varm_key=np.zeros((10, 20))),
+        obsm=dict(obsm_key=np.zeros((20, 20))),
+        layers=dict(layers_key=np.zeros((20, 10))),
+        obsp=dict(obsp_key=np.zeros((20, 20))),
+        varp=dict(varp_key=np.zeros((10, 10))),
+        uns=dict(uns_key=dict(zip("abc", range(3)))),
     )
 
 
@@ -57,6 +57,4 @@ def test_removal(adata, adata_attr):
     attr = adata_attr
     assert re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE)
     delattr(adata, attr)
-    assert (
-        re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE) is None
-    )
+    assert re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE) is None

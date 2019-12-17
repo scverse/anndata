@@ -23,15 +23,13 @@ def adata():
 def test_assigmnent_dict(adata):
     d_obsm = dict(
         a=pd.DataFrame(
-            dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]),
-            index=adata.obs_names,
+            dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]), index=adata.obs_names,
         ),
         b=np.zeros((M, 2)),
     )
     d_varm = dict(
         a=pd.DataFrame(
-            dict(a1=np.ones(N), a2=[f"a{i}" for i in range(N)]),
-            index=adata.var_names,
+            dict(a1=np.ones(N), a2=[f"a{i}" for i in range(N)]), index=adata.var_names,
         ),
         b=np.zeros((N, 2)),
     )
@@ -62,12 +60,8 @@ def test_setting_ndarray(adata):
 
 
 def test_setting_dataframe(adata):
-    obsm_df = pd.DataFrame(
-        dict(b_1=np.ones(M), b_2=["a"] * M), index=adata.obs_names
-    )
-    varm_df = pd.DataFrame(
-        dict(b_1=np.ones(N), b_2=["a"] * N), index=adata.var_names
-    )
+    obsm_df = pd.DataFrame(dict(b_1=np.ones(M), b_2=["a"] * M), index=adata.obs_names)
+    varm_df = pd.DataFrame(dict(b_1=np.ones(N), b_2=["a"] * N), index=adata.var_names)
 
     adata.obsm["b"] = obsm_df
     assert np.all(adata.obsm["b"] == obsm_df)

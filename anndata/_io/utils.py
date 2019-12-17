@@ -62,9 +62,9 @@ def is_int(string):
 def convert_bool(string):
     """Check whether string is boolean.
     """
-    if string == 'True':
+    if string == "True":
         return True, True
-    elif string == 'False':
+    elif string == "False":
         return True, False
     else:
         return False, False
@@ -79,7 +79,7 @@ def convert_string(string):
         return float(string)
     elif convert_bool(string)[0]:
         return convert_bool(string)[1]
-    elif string == 'None':
+    elif string == "None":
         return None
     else:
         return string
@@ -92,16 +92,12 @@ def convert_string(string):
 
 @singledispatch
 def write_attribute(*args, **kwargs):
-    raise NotImplementedError(
-        "Unrecognized argument types for `write_attribute`."
-    )
+    raise NotImplementedError("Unrecognized argument types for `write_attribute`.")
 
 
 @singledispatch
 def read_attribute(*args, **kwargs):
-    raise NotImplementedError(
-        "Unrecognized argument types for `read_attribute`."
-    )
+    raise NotImplementedError("Unrecognized argument types for `read_attribute`.")
 
 
 @read_attribute.register(type(None))
@@ -198,16 +194,14 @@ def report_write_key_on_error(func):
     return func_wrapper
 
 
-def _read_legacy_raw(
-    f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "varm")
-):
+def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "varm")):
     """\
     Backwards compat for reading legacy raw.
     Makes sure that no modern raw group coexists with legacy raw.* groups.
     """
     if modern_raw:
         if any(k.startswith("raw.") for k in f):
-            what = f'File {f.filename}' if hasattr(f, "filename") else 'Store'
+            what = f"File {f.filename}" if hasattr(f, "filename") else "Store"
             raise ValueError(f"{what} has both legacy and current raw formats.")
         return modern_raw
 

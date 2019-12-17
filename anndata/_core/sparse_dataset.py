@@ -29,7 +29,7 @@ from .index import unpack_index, Index
 
 class BackedFormat(NamedTuple):
     format_str: str
-    backed_type: Type['BackedSparseMatrix']
+    backed_type: Type["BackedSparseMatrix"]
     memory_type: Type[ss.spmatrix]
 
 
@@ -67,7 +67,7 @@ class BackedSparseMatrix(_cs_matrix):
 
         else:
             raise ValueError(
-                'You cannot change the sparsity structure of a SparseDataset.'
+                "You cannot change the sparsity structure of a SparseDataset."
             )
             # replace where possible
             # mask = offsets > -1
@@ -126,9 +126,7 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
         if out_shape[0] == 1:
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
         elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
-            return self._get_arrayXslice(
-                np.arange(*row.indices(self.shape[0])), col
-            )
+            return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
         return super()._get_sliceXslice(row, col)
 
     def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
@@ -154,9 +152,7 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
         if out_shape[1] == 1:
             return self._get_sliceXint(row, slice_as_int(col, self.shape[1]))
         elif out_shape[0] == self.shape[0] and out_shape[1] < self.shape[1]:
-            return self._get_sliceXarray(
-                row, np.arange(*col.indices(self.shape[1]))
-            )
+            return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
         return super()._get_sliceXslice(row, col)
 
     def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
@@ -237,12 +233,12 @@ class SparseDataset:
 
     @property
     def dtype(self) -> np.dtype:
-        return self.group['data'].dtype
+        return self.group["data"].dtype
 
     @property
     def format_str(self) -> str:
         if "h5sparse_format" in self.group.attrs:
-            return self.group.attrs['h5sparse_format']
+            return self.group.attrs["h5sparse_format"]
         else:
             # Should this be an extra field?
             return self.group.attrs["encoding-type"].replace("_matrix", "")
@@ -266,7 +262,7 @@ class SparseDataset:
 
     @property
     def shape(self) -> Tuple[int, int]:
-        shape = self.group.attrs.get('h5sparse_shape')
+        shape = self.group.attrs.get("h5sparse_shape")
         return tuple(self.group.attrs["shape"] if shape is None else shape)
 
     @property
@@ -275,14 +271,12 @@ class SparseDataset:
 
     def __repr__(self) -> str:
         return (
-            f'<HDF5 sparse dataset: format {self.format_str!r}, '
-            f'shape {self.shape}, '
+            f"<HDF5 sparse dataset: format {self.format_str!r}, "
+            f"shape {self.shape}, "
             f'type {self.group["data"].dtype.str!r}>'
         )
 
-    def __getitem__(
-        self, index: Union[Index, Tuple[()]]
-    ) -> Union[float, ss.spmatrix]:
+    def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
         row, col = self._normalize_index(index)
         mtx = self.to_backed()
         return mtx[row, col]
@@ -340,16 +334,16 @@ class SparseDataset:
             assert False, "We forgot to update this branching to a new format"
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
-        self.group.attrs['shape'] = new_shape
+        self.group.attrs["shape"] = new_shape
 
         # data
-        data = self.group['data']
+        data = self.group["data"]
         orig_data_size = data.shape[0]
         data.resize((orig_data_size + sparse_matrix.data.shape[0],))
         data[orig_data_size:] = sparse_matrix.data
 
         # indptr
-        indptr = self.group['indptr']
+        indptr = self.group["indptr"]
         orig_data_size = indptr.shape[0]
         append_offset = indptr[-1]
         indptr.resize((orig_data_size + sparse_matrix.indptr.shape[0] - 1,))
@@ -358,7 +352,7 @@ class SparseDataset:
         )
 
         # indices
-        indices = self.group['indices']
+        indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
@@ -366,15 +360,15 @@ class SparseDataset:
     def to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format_str)
         mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self.group['data']
-        mtx.indices = self.group['indices']
-        mtx.indptr = self.group['indptr']
+        mtx.data = self.group["data"]
+        mtx.indices = self.group["indices"]
+        mtx.indptr = self.group["indptr"]
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
         format_class = get_memory_class(self.format_str)
         mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self.group['data'][...]
-        mtx.indices = self.group['indices'][...]
-        mtx.indptr = self.group['indptr'][...]
+        mtx.data = self.group["data"][...]
+        mtx.indices = self.group["indices"][...]
+        mtx.indptr = self.group["indptr"][...]
         return mtx

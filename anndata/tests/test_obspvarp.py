@@ -24,16 +24,12 @@ def adata():
 
 def test_assigmnent_dict(adata):
     d_obsp = dict(
-        a=pd.DataFrame(
-            np.ones((M, M)), columns=adata.obs_names, index=adata.obs_names
-        ),
+        a=pd.DataFrame(np.ones((M, M)), columns=adata.obs_names, index=adata.obs_names),
         b=np.zeros((M, M)),
         c=sparse.random(M, M, format="csr"),
     )
     d_varp = dict(
-        a=pd.DataFrame(
-            np.ones((N, N)), columns=adata.var_names, index=adata.var_names
-        ),
+        a=pd.DataFrame(np.ones((N, N)), columns=adata.var_names, index=adata.var_names),
         b=np.zeros((N, N)),
         c=sparse.random(N, N, format="csr"),
     )
@@ -96,9 +92,7 @@ def test_setting_sparse(adata):
 )
 def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
     if homogenous:
-        with pytest.warns(
-            UserWarning, match=rf"{field.title()} 'df'.*dtype object"
-        ):
+        with pytest.warns(UserWarning, match=rf"{field.title()} 'df'.*dtype object"):
             getattr(adata, field)["df"] = df(dim)
     else:
         with pytest.warns(None) as warnings:

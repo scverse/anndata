@@ -44,7 +44,7 @@ def write_zarr(
         adata.strings_to_categoricals(adata.raw.var)
     f = zarr.open(store, mode="w")
     if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
-        write_attribute(f, "X", adata.X, {"chunks": chunks, **dataset_kwargs})
+        write_attribute(f, "X", adata.X, dict(chunks=chunks, **dataset_kwargs))
     else:
         write_attribute(f, "X", adata.X, dataset_kwargs)
     write_attribute(f, "obs", adata.obs, dataset_kwargs)
@@ -85,9 +85,7 @@ def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
-            raise ValueError(
-                f"'{reserved}' is a reserved name for dataframe columns."
-            )
+            raise ValueError(f"'{reserved}' is a reserved name for dataframe columns.")
     group = z.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
     group.attrs["encoding-version"] = "0.1.0"
@@ -122,9 +120,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         codes: np.ndarray = categorical.codes
         category_key = f"__categories/{key}"
 
-        write_array(
-            group, category_key, categories, dataset_kwargs=dataset_kwargs
-        )
+        write_array(group, category_key, categories, dataset_kwargs=dataset_kwargs)
         write_array(group, key, codes, dataset_kwargs=dataset_kwargs)
 
         group[key].attrs["categories"] = category_key
@@ -162,9 +158,7 @@ def write_array(g, key, value, dataset_kwargs=MappingProxyType({})):
         g[key][:] = value
     elif value.dtype.kind == "V":
         # Structured dtype
-        g.create_dataset(
-            key, data=_to_fixed_length_strings(value), **dataset_kwargs
-        )
+        g.create_dataset(key, data=_to_fixed_length_strings(value), **dataset_kwargs)
     else:
         g.create_dataset(key, data=value, **dataset_kwargs)
 
@@ -307,16 +301,14 @@ def read_group(group):
 @report_read_key_on_error
 def read_csr(group: zarr.Group) -> sparse.csr_matrix:
     return sparse.csr_matrix(
-        (group["data"], group["indices"], group["indptr"]),
-        shape=group.attrs["shape"],
+        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"],
     )
 
 
 @report_read_key_on_error
 def read_csc(group: zarr.Group) -> sparse.csc_matrix:
     return sparse.csc_matrix(
-        (group["data"], group["indices"], group["indptr"]),
-        shape=group.attrs["shape"],
+        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"],
     )
 
 
@@ -367,8 +359,6 @@ def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,
             )
-        return pd.Categorical.from_codes(
-            dataset[...], categories, ordered=ordered
-        )
+        return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
     else:
         return dataset[...]
