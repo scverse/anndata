@@ -547,10 +547,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def __eq__(self, other):
         """Equality testing"""
         raise NotImplementedError(
-            (
-                'Equality comparisons are not supported for AnnData objects, '
-                'instead compare the desired attributes.'
-            )
+            'Equality comparisons are not supported for AnnData objects, '
+            'instead compare the desired attributes.'
         )
 
     @property
