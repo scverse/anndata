@@ -26,7 +26,7 @@ class Raw:
         self._adata = adata
         self._n_obs = adata.n_obs
         # construct manually
-        if adata.isbacked == (X is None):
+        if bool(adata.backing) == (X is None):
             self._X = X
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
             self._varm = AxisArrays(self, 1, varm)
@@ -34,13 +34,13 @@ class Raw:
             self._X = adata.X.copy()
             self._var = adata.var.copy()
             self._varm = AxisArrays(self, 1, adata.varm.copy())
-        elif adata.isbacked:
+        elif adata.backing:
             raise ValueError("Cannot specify X if adata is backed")
 
     @property
     def X(self) -> Union[SparseDataset, np.ndarray, sparse.spmatrix]:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
-        if not self._adata.isbacked:
+        if not self._adata.backing:
             return self._X
         if not self._adata.file.is_open:
             self._adata.file.open()
@@ -51,8 +51,7 @@ class Raw:
             X = self._adata.file["raw.X"]  # Backwards compat
         else:
             raise AttributeError(
-                f"Could not find dataset for raw X in file: "
-                f"{self._adata.file.filename}."
+                f"Could not find dataset for raw X in file: {self._adata.backing}."
             )
         if isinstance(X, h5py.Group):
             X = SparseDataset(X)
@@ -101,7 +100,7 @@ class Raw:
         if isinstance(oidx, (int, np.integer)):
             oidx = slice(oidx, oidx + 1, 1)
 
-        if not self._adata.isbacked:
+        if not self._adata.backing:
             X = _subset(self.X, (oidx, vidx))
         else:
             X = None

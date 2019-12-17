@@ -47,8 +47,9 @@ def make_index_unique(index: pd.Index, join: str = "-"):
 
     Examples
     --------
-    >>> adata1 = sc.AnnData(np.ones((3, 2)), {'obs_names': ['a', 'b', 'c']})
-    >>> adata2 = sc.AnnData(np.zeros((3, 2)), {'obs_names': ['d', 'b', 'b']})
+    >>> from anndata import AnnData
+    >>> adata1 = AnnData(np.ones((3, 2)), dict(obs_names=['a', 'b', 'c']))
+    >>> adata2 = AnnData(np.zeros((3, 2)), dict(obs_names=['d', 'b', 'b']))
     >>> adata = adata1.concatenate(adata2)
     >>> adata.obs_names
     Index(['a', 'b', 'c', 'd', 'b', 'b'], dtype='object')
