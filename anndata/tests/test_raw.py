@@ -80,7 +80,7 @@ def test_raw_backed(adata_raw, backing_h5ad):
     with pytest.warns(
         ImplicitModificationWarning, match="Initializing view as actual"
     ):  # TODO: don’t modify adata just to write it
-        adata_raw.filename = backing_h5ad
+        adata_raw.backing = backing_h5ad
 
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]

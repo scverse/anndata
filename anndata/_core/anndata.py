@@ -129,10 +129,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     .. figure:: https://falexwolf.de/img/scanpy/anndata.svg
        :width: 350px
 
-    An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
-    dataframe, for instance, ``adata_subset = adata[:, list_of_variable_names]``.
+    An :class:`~anndata.AnnData` object `adata` can be sliced like a pandas
+    dataframe, for instance, `adata_subset = adata[:, list_of_variable_names]`.
     :class:`~anndata.AnnData`'s basic structure is similar to R's ExpressionSet
-    [Huber15]_. If setting an ``.h5ad``-formatted HDF5 backing file ``.filename``,
+    [Huber15]_. If setting `.backing` to a `.h5ad`-formatted HDF5 file,
     data remains on the disk but is automatically loaded into memory if needed.
     See this `blog post`_ for more details.
 
@@ -161,7 +161,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Data type used for storage.
     shape
         Shape tuple (#observations, #variables). Can only be provided if ``X`` is ``None``.
-    filename
+    backing
         Name of backing file. See :class:`File`.
     filemode
         Open mode of backing file. See :class:`File`.
@@ -260,7 +260,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         raw: Optional[Mapping[str, Any]] = None,
         dtype: Union[np.dtype, str] = "float32",
         shape: Optional[Tuple[int, int]] = None,
-        filename: Optional[PathLike] = None,
+        backing: Optional[PathLike] = None,
         filemode: Optional[Literal["r", "r+"]] = None,
         asview: bool = False,
         *,
@@ -268,12 +268,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         oidx: Index1D = None,
         vidx: Index1D = None,
+        filename=None,
     ):
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError("`X` has to be an AnnData object.")
             self._init_as_view(X, oidx, vidx)
         else:
+            if filename and backing:
+                raise ValueError("cannot specify backing and the obsolete filename")
+            elif filename:
+                warnings.warn("use `backing` instead of `filename`", DeprecationWarning)
+                backing = filename
             self._init_as_actual(
                 X=X,
                 obs=obs,
@@ -287,12 +293,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 shape=shape,
                 obsp=obsp,
                 varp=varp,
-                filename=filename,
+                backing=backing,
                 filemode=filemode,
             )
 
     def _init_as_view(self, adata_ref: "AnnData", oidx: Index, vidx: Index):
-        if adata_ref.isbacked and adata_ref.is_view:
+        if adata_ref.backing and adata_ref.is_view:
             raise ValueError(
                 "Currently, you cannot index repeatedly into a backed AnnData, "
                 "that is, you cannot make a view of a view."
@@ -335,7 +341,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._n_vars = len(self.var)
 
         # set data
-        if self.isbacked:
+        if self.backing:
             self._X = None
 
         # set raw, easy, as it's immutable anyways...
@@ -360,7 +366,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         layers=None,
         dtype="float32",
         shape=None,
-        filename=None,
+        backing=None,
         filemode=None,
     ):
         # view attributes
@@ -374,8 +380,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # ----------------------------------------------------------------------
 
         # init from file
-        if filename is not None:
-            self.file = AnnDataFileManager(self, filename, filemode)
+        if backing is not None:
+            self.file = AnnDataFileManager(self, backing, filemode)
         else:
             self.file = AnnDataFileManager(self, None)
 
@@ -476,7 +482,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._check_dimensions()
         self._check_uniqueness()
 
-        if self.filename:
+        if self.backing:
             assert not isinstance(
                 raw, Raw
             ), "got raw from other adata but also filename?"
@@ -503,8 +509,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return size
 
     def _gen_repr(self, n_obs, n_vars) -> str:
-        if self.isbacked:
-            backed_at = f"backed at '{self.filename}'"
+        if self.backing:
+            backed_at = f"backed at '{self.backing}'"
         else:
             backed_at = ""
         descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars} {backed_at}"
@@ -544,7 +550,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def X(self) -> Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]]:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
-        if self.isbacked:
+        if self.backing:
             if not self.file.is_open:
                 self.file.open()
             X = self.file["X"]
@@ -593,7 +599,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError(
                     "Copy the view before setting the data matrix to `None`."
                 )
-            if self.isbacked:
+            if self.backing:
                 raise ValueError("Not implemented.")
             self._X = None
             return
@@ -618,7 +624,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # For assigning vector of values to 2d array or matrix
                 # Not neccesary for row of 2d array
                 value = value.reshape(self.shape)
-            if self.isbacked:
+            if self.backing:
                 if self.is_view:
                     X = self.file["X"]
                     if isinstance(X, h5py.Group):
@@ -936,9 +942,36 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return sorted(list(self._uns.keys()))
 
     @property
-    def isbacked(self) -> bool:
-        """``True`` if object is backed on disk, ``False`` otherwise."""
-        return self.filename is not None
+    def backing(self) -> Union[Path, Any, None]:
+        """\
+        Kind of backing. Currently we support backing to a :class:`~pathlib.Path`,
+        but other kinds may come in the future.
+
+        Change to backing mode by setting `backing` to a `.h5ad` file.
+
+        - Setting the filename writes the stored data to disk.
+        - Setting the filename when the filename was previously another name
+          moves the backing file from the previous file to the new file. If you
+          want to copy the previous file, use `copy(filename='new_filename')`.
+
+        Examples
+        --------
+        >>> adata = AnnData(np.ones((3, 2)), dict(obs_names=['a', 'b', 'c']))
+        >>> adata.backing = 'small.h5ad'
+        >>> def do_things(adata: AnnData):
+        ...     if adata.backing:
+        ...         raise ValueError(f'Can’t send as adata’s backed to {adata.backing}')
+        ...     send_over_the_wire(adata)
+        """
+        return self.file.filename
+
+    @backing.setter
+    def backing(self, value: Optional[Path]):
+        self._back_to_file(value)
+
+    @backing.deleter
+    def backing(self):
+        self._back_to_file(None)
 
     @property
     def is_view(self) -> bool:
@@ -948,37 +981,24 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         return self._is_view
 
-    @property
-    def filename(self) -> Optional[Path]:
-        """\
-        Change to backing mode by setting the filename of a ``.h5ad`` file.
-
-        - Setting the filename writes the stored data to disk.
-        - Setting the filename when the filename was previously another name
-          moves the backing file from the previous file to the new file. If you
-          want to copy the previous file, use ``copy(filename='new_filename')``.
-        """
-        return self.file.filename
-
-    @filename.setter
-    def filename(self, filename: Optional[PathLike]):
+    def _back_to_file(self, filename: Optional[PathLike]):
         # convert early for later comparison
         filename = None if filename is None else Path(filename)
         # change from backing-mode back to full loading into memory
         if filename is None:
-            if self.filename is not None:
+            if self.backing is not None:
                 self.file._to_memory_mode()
             else:
-                # both filename and self.filename are None
+                # both filename and self.backing are None
                 # do nothing
                 return
         else:
-            if self.filename is not None:
-                if self.filename != filename:
+            if self.backing is not None:
+                if self.backing != filename:
                     # write the content of self to the old file
                     # and close the file
                     self.write()
-                    self.filename.rename(filename)
+                    self.backing.rename(filename)
                 else:
                     # do nothing
                     return
@@ -1003,7 +1023,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def __delitem__(self, index: Index):
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
-        if not self.isbacked:
+        if not self.backing:
             del self._X[obs, var]
         else:
             X = self.file["X"]
@@ -1114,7 +1134,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if df is None:
             dfs = [self.obs, self.var]
             if self.is_view:
-                if not self.isbacked:
+                if not self.backing:
                     warnings.warn(
                         "Initializing view as actual.", ImplicitModificationWarning,
                     )
@@ -1191,7 +1211,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.is_view:
             raise ValueError("Object is view and cannot be accessed with `[]`.")
         obs, var = self._normalize_indices(index)
-        if not self.isbacked:
+        if not self.backing:
             self._X[obs, var] = val
         else:
             X = self.file["X"]
@@ -1207,7 +1227,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Data matrix is transposed, observations and variables are interchanged.
         """
-        if not self.isbacked:
+        if not self.backing:
             X = self.X
         else:
             X = self.file["X"]
@@ -1227,7 +1247,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._uns,
             self._varm.flipped(),
             self._obsm.flipped(),
-            filename=self.filename,
+            backing=self.backing,
             layers={k: t_csr(v) for k, v in self.layers.items()},
             dtype=self.X.dtype.name,
         )
@@ -1375,7 +1395,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
-        if not self.isbacked:
+        if not self.backing:
             if self.is_view:
                 # TODO: How do I unambiguously check if this is a copy?
                 # Subsetting this way means we don't have to have a view type
@@ -1481,7 +1501,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
         ... )
         >>> adata3 = AnnData(
-        ... np.array([[1, 2, 3], [4, 5, 6]]),
+        ...     np.array([[1, 2, 3], [4, 5, 6]]),
         ...     dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 2, 3], annoB=[0, 1, 2]),
         ... )
@@ -1616,7 +1636,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 0., 2., 1.],
                [0., 6., 5., 0.]], dtype=float32)
         """
-        if self.isbacked:
+        if self.backing:
             raise ValueError("Currently, concatenate does only work in 'memory' mode.")
 
         if len(adatas) == 0:
@@ -1898,10 +1918,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         from .._io.write import _write_h5ad
 
-        if filename is None and not self.isbacked:
+        if filename is None and not self.backing:
             raise ValueError("Provide a filename!")
         if filename is None:
-            filename = self.filename
+            filename = self.backing
 
         _write_h5ad(
             Path(filename),
@@ -1912,7 +1932,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             as_dense=as_dense,
         )
 
-        if self.isbacked:
+        if self.backing:
             self.file.close()
 
     write = write_h5ad  # a shortcut and backwards compat
@@ -2023,7 +2043,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("select should be int or array")
 
         reverse = None
-        if self.isbacked:
+        if self.backing:
             # h5py can only slice with a sorted list of unique index values
             # so random batch with indices [2, 2, 5, 3, 8, 10, 8] will fail
             # this fixes the problem
@@ -2106,6 +2126,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @utils.deprecated("is_view")
     def isview(self):
         return self.is_view
+
+    @property
+    @utils.deprecated("backing")
+    def isbacked(self):
+        return bool(self.backing)
+
+    @property
+    @utils.deprecated("backing")
+    def filename(self):
+        return self.backing
+
+    @filename.setter
+    @utils.deprecated("backing")
+    def filename(self, filename):
+        self.backing = filename
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
