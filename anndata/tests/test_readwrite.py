@@ -349,19 +349,17 @@ def test_write_csv(typ, tmp_path):
 @pytest.mark.parametrize(
     ['read', 'write', 'name'],
     [
-        pytest.param(
-            ad.read_h5ad, ad.readwrite.write._write_h5ad, 'test_empty.h5ad'
-        ),
+        pytest.param(ad.read_h5ad, ad._io.write._write_h5ad, 'test_empty.h5ad'),
         pytest.param(
             ad.read_loom,
-            ad.readwrite.write_loom,
+            ad._io.write_loom,
             'test_empty.loom',
             marks=pytest.mark.xfail(reason='Loom can’t handle 0×0 matrices'),
         ),
-        pytest.param(ad.read_zarr, ad.readwrite.write_zarr, 'test_empty.zarr'),
+        pytest.param(ad.read_zarr, ad._io.write_zarr, 'test_empty.zarr'),
         pytest.param(
             ad.read_zarr,
-            ad.readwrite.write_zarr,
+            ad._io.write_zarr,
             'test_empty.zip',
             marks=pytest.mark.xfail(
                 reason='Zarr zip storage doesn’t seem to work…'
