@@ -126,7 +126,7 @@ def test_assert_equal_raw():
 
 # TODO: Should views be equal to actual?
 # Should they not be if an exact comparison is made?
-def test_assert_equal_alignedmapping():
+def test_assert_equal_aligned_mapping():
     adata1 = gen_adata((10, 10))
     adata2 = adata1.copy()
 
@@ -149,7 +149,7 @@ def test_assert_equal_alignedmapping():
         assert_equal(getattr(adata1, attr), getattr(var_subset, attr))
 
 
-def test_assert_equal_alignedmapping_empty():
+def test_assert_equal_aligned_mapping_empty():
     chars = np.array(list(ascii_letters))
     adata = ad.AnnData(
         X=np.zeros((10, 10)),

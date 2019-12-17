@@ -10,10 +10,10 @@ from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
-from anndata._core.sparse_dataset import SparseDataset
 from anndata import AnnData
 from anndata._core.views import ArrayView
-from anndata._core.alignedmapping import AlignedMapping
+from anndata._core.sparse_dataset import SparseDataset
+from anndata._core.aligned_mapping import AlignedMapping
 
 
 @singledispatch
@@ -345,7 +345,7 @@ def assert_equal_mapping(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(AlignedMapping)
-def assert_equal_alignedmapping(a, b, exact=False, elem_name=None):
+def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
     a_indices = (a.parent.obs_names, a.parent.var_names)
     b_indices = (b.parent.obs_names, b.parent.var_names)
     for axis_idx in a.axes:
