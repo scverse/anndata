@@ -85,13 +85,13 @@ sparse matrices in addition to the standard functionality.
 
 """
 
-__author__ = ', '.join(
-    ['Philipp Angerer*', 'Alex Wolf*', 'Isaac Virshup', 'Sergei Rybakov']
+__author__ = ", ".join(
+    ["Philipp Angerer*", "Alex Wolf*", "Isaac Virshup", "Sergei Rybakov"]
 )
-__email__ = ', '.join(
+__email__ = ", ".join(
     [
-        'philipp.angerer@helmholtz-muenchen.de',
-        'f.alex.wolf@gmx.de',
+        "philipp.angerer@helmholtz-muenchen.de",
+        "f.alex.wolf@gmx.de",
         # We don’t need all, the main authors are sufficient.
     ]
 )
@@ -99,7 +99,7 @@ __email__ = ', '.join(
 try:
     from setuptools_scm import get_version
 
-    __version__ = get_version(root='..', relative_to=__file__)
+    __version__ = get_version(root="..", relative_to=__file__)
     del get_version
 except (LookupError, ImportError):
     from .compat import version

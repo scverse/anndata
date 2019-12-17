@@ -35,7 +35,7 @@ def convert_to_dict_nonetype(obj: None):
     return dict()
 
 
-def make_index_unique(index: pd.Index, join: str = '-'):
+def make_index_unique(index: pd.Index, join: str = "-"):
     """Makes the index unique by appending '1', '2', etc.
 
     The first occurance of a non-unique value is ignored.
@@ -61,7 +61,7 @@ def make_index_unique(index: pd.Index, join: str = '-'):
     from collections import defaultdict
 
     values = index.values
-    indices_dup = index.duplicated(keep='first')
+    indices_dup = index.duplicated(keep="first")
     values_dup = values[indices_dup]
     counter = defaultdict(lambda: 0)
     for i, v in enumerate(values_dup):
@@ -73,25 +73,25 @@ def make_index_unique(index: pd.Index, join: str = '-'):
 
 
 def warn_names_duplicates(attr: str):
-    names = 'Observation' if attr == 'obs' else 'Variable'
+    names = "Observation" if attr == "obs" else "Variable"
     logger.info(
-        f'{names} names are not unique. '
-        f'To make them unique, call `.{attr}_names_make_unique`.'
+        f"{names} names are not unique. "
+        f"To make them unique, call `.{attr}_names_make_unique`."
     )
 
 
 def warn_no_string_index(names: Sequence[Any]):
     if not isinstance(names[0], str):
         logger.warning(
-            f'AnnData expects string indices for some functionality, '
-            f'but your first two indices are: {names[:2]}. '
+            f"AnnData expects string indices for some functionality, "
+            f"but your first two indices are: {names[:2]}. "
         )
 
 
 def ensure_df_homogeneous(df: pd.DataFrame, name: str) -> np.ndarray:
     arr = df.to_numpy()
     if df.dtypes.nunique() != 1:
-        warnings.warn(f'{name} converted to numpy array with dtype {arr.dtype}')
+        warnings.warn(f"{name} converted to numpy array with dtype {arr.dtype}")
     return arr
 
 
@@ -100,13 +100,13 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     try:  # transform to byte-strings
         cols = [
             np.asarray(col)
-            if np.array(col[0]).dtype.char not in {'U', 'S'}
-            else np.asarray(col).astype('U')
+            if np.array(col[0]).dtype.char not in {"U", "S"}
+            else np.asarray(col).astype("U")
             for col in source.values()
         ]
     except UnicodeEncodeError:
         raise ValueError(
-            'Currently only support ascii strings. '
+            "Currently only support ascii strings. "
             'Don’t use "ö" etc. for sample annotation.'
         )
 
@@ -143,17 +143,17 @@ def deprecated(new_name: str):
         @wraps(func)
         def new_func(*args, **kwargs):
             # turn off filter
-            warnings.simplefilter('always', DeprecationWarning)
+            warnings.simplefilter("always", DeprecationWarning)
             warnings.warn(
-                f'Use {new_name} instead of {func.__name__}, '
-                f'{func.__name__} will be removed in the future.',
+                f"Use {new_name} instead of {func.__name__}, "
+                f"{func.__name__} will be removed in the future.",
                 category=DeprecationWarning,
                 stacklevel=2,
             )
-            warnings.simplefilter('default', DeprecationWarning)  # reset filter
+            warnings.simplefilter("default", DeprecationWarning)  # reset filter
             return func(*args, **kwargs)
 
-        setattr(new_func, '__deprecated', True)
+        setattr(new_func, "__deprecated", True)
         return new_func
 
     return decorator
@@ -169,7 +169,7 @@ class DeprecationMixinMeta(type):
         def is_deprecated(attr):
             if isinstance(attr, property):
                 attr = attr.fget
-            return getattr(attr, '__deprecated', False)
+            return getattr(attr, "__deprecated", False)
 
         return [
             item

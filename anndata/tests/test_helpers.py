@@ -65,9 +65,7 @@ def test_assert_equal():
         np.array(list(ascii_letters)), np.array(list(ascii_letters)), exact=True
     )
     with pytest.raises(AssertionError):
-        assert_equal(
-            np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1]
-        )
+        assert_equal(np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1])
 
     adata = gen_adata((10, 10))
     adata.raw = adata.copy()
@@ -153,21 +151,13 @@ def test_assert_equal_aligned_mapping_empty():
     chars = np.array(list(ascii_letters))
     adata = ad.AnnData(
         X=np.zeros((10, 10)),
-        obs=pd.DataFrame(
-            [], index=np.random.choice(chars[:20], 10, replace=False)
-        ),
-        var=pd.DataFrame(
-            [], index=np.random.choice(chars[:20], 10, replace=False)
-        ),
+        obs=pd.DataFrame([], index=np.random.choice(chars[:20], 10, replace=False)),
+        var=pd.DataFrame([], index=np.random.choice(chars[:20], 10, replace=False)),
     )
     diff_idx = ad.AnnData(
         X=np.zeros((10, 10)),
-        obs=pd.DataFrame(
-            [], index=np.random.choice(chars[20:], 10, replace=False)
-        ),
-        var=pd.DataFrame(
-            [], index=np.random.choice(chars[20:], 10, replace=False)
-        ),
+        obs=pd.DataFrame([], index=np.random.choice(chars[20:], 10, replace=False)),
+        var=pd.DataFrame([], index=np.random.choice(chars[20:], 10, replace=False)),
     )
     same_idx = ad.AnnData(adata.X, obs=adata.obs.copy(), var=adata.var.copy())
 

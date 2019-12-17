@@ -27,18 +27,12 @@ def test_inplace_subset_var(matrix_type, subset_func):
     assert_array_equal(from_view.obs, modified.obs)
     assert_array_equal(from_view.var, modified.var)
     for k in from_view.obsm:
-        assert_array_equal(
-            asarray(from_view.obsm[k]), asarray(modified.obsm[k])
-        )
+        assert_array_equal(asarray(from_view.obsm[k]), asarray(modified.obsm[k]))
         assert_array_equal(asarray(orig.obsm[k]), asarray(modified.obsm[k]))
     for k in from_view.varm:
-        assert_array_equal(
-            asarray(from_view.varm[k]), asarray(modified.varm[k])
-        )
+        assert_array_equal(asarray(from_view.varm[k]), asarray(modified.varm[k]))
     for k in from_view.layers:
-        assert_array_equal(
-            asarray(from_view.layers[k]), asarray(modified.layers[k])
-        )
+        assert_array_equal(asarray(from_view.layers[k]), asarray(modified.layers[k]))
 
 
 def test_inplace_subset_obs(matrix_type, subset_func):
@@ -53,15 +47,9 @@ def test_inplace_subset_obs(matrix_type, subset_func):
     assert_array_equal(from_view.obs, modified.obs)
     assert_array_equal(from_view.var, modified.var)
     for k in from_view.obsm:
-        assert_array_equal(
-            asarray(from_view.obsm[k]), asarray(modified.obsm[k])
-        )
+        assert_array_equal(asarray(from_view.obsm[k]), asarray(modified.obsm[k]))
     for k in from_view.varm:
-        assert_array_equal(
-            asarray(from_view.varm[k]), asarray(modified.varm[k])
-        )
+        assert_array_equal(asarray(from_view.varm[k]), asarray(modified.varm[k]))
         assert_array_equal(asarray(orig.varm[k]), asarray(modified.varm[k]))
     for k in from_view.layers:
-        assert_array_equal(
-            asarray(from_view.layers[k]), asarray(modified.layers[k])
-        )
+        assert_array_equal(asarray(from_view.layers[k]), asarray(modified.layers[k]))

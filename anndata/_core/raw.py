@@ -16,7 +16,7 @@ from .sparse_dataset import SparseDataset
 class Raw:
     def __init__(
         self,
-        adata: 'anndata.AnnData',
+        adata: "anndata.AnnData",
         X: Union[np.ndarray, sparse.spmatrix, None] = None,
         var: Union[pd.DataFrame, Mapping[str, Sequence], None] = None,
         varm: Union[AxisArrays, Mapping[str, np.ndarray], None] = None,
@@ -28,7 +28,7 @@ class Raw:
         # construct manually
         if adata.isbacked == (X is None):
             self._X = X
-            self._var = _gen_dataframe(var, self.X.shape[1], ['var_names'])
+            self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
             self._X = adata.X.copy()
@@ -48,7 +48,7 @@ class Raw:
         if "raw/X" in self._adata.file:
             X = self._adata.file["raw/X"]
         elif "raw.X" in self._adata.file:
-            X = self._adata.file['raw.X']  # Backwards compat
+            X = self._adata.file["raw.X"]  # Backwards compat
         else:
             raise AttributeError(
                 f"Could not find dataset for raw X in file: "
@@ -203,12 +203,12 @@ class Raw:
 
 class IndexDimError(IndexError):
     MSG = (
-        'You tried to slice an AnnData(View) object with an'
-        '{}-dimensional index, but only 2 dimensions exist in such an object.'
+        "You tried to slice an AnnData(View) object with an"
+        "{}-dimensional index, but only 2 dimensions exist in such an object."
     )
     MSG_1D = (
-        '\nIf you tried to slice cells using adata[cells, ], '
-        'note that Python (unlike R) uses adata[cells, :] as slicing syntax.'
+        "\nIf you tried to slice cells using adata[cells, ], "
+        "note that Python (unlike R) uses adata[cells, :] as slicing syntax."
     )
 
     def __init__(self, n_dims: int):

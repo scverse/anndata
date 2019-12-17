@@ -26,17 +26,17 @@ logger = get_logger(__name__)
 
 
 def write_csvs(
-    dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ','
+    dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ","
 ):
     """See :meth:`~anndata.AnnData.write_csvs`.
     """
     dirname = Path(dirname)
-    if dirname.suffix == '.csv':
-        dirname = dirname.with_suffix('')
+    if dirname.suffix == ".csv":
+        dirname = dirname.with_suffix("")
     logger.info("writing '.csv' files to %s", dirname)
     if not dirname.is_dir():
         dirname.mkdir(parents=True, exist_ok=True)
-    dir_uns = dirname / 'uns'
+    dir_uns = dirname / "uns"
     if not dir_uns.is_dir():
         dir_uns.mkdir(parents=True, exist_ok=True)
     d = dict(
@@ -46,23 +46,19 @@ def write_csvs(
         varm=adata._varm.to_df(),
     )
     if not skip_data:
-        d['X'] = pd.DataFrame(
-            adata._X.toarray() if issparse(adata._X) else adata._X
-        )
+        d["X"] = pd.DataFrame(adata._X.toarray() if issparse(adata._X) else adata._X)
     d_write = {**d, **adata._uns}
     not_yet_raised_sparse_warning = True
     for key, value in d_write.items():
         if issparse(value):
             if not_yet_raised_sparse_warning:
-                warnings.warn(
-                    'Omitting to write sparse annotation.', WriteWarning
-                )
+                warnings.warn("Omitting to write sparse annotation.", WriteWarning)
                 not_yet_raised_sparse_warning = False
             continue
         filename = dirname
-        if key not in {'X', 'var', 'obs', 'obsm', 'varm'}:
+        if key not in {"X", "var", "obs", "obsm", "varm"}:
             filename = dir_uns
-        filename /= f'{key}.csv'
+        filename /= f"{key}.csv"
         df = value
         if not isinstance(value, pd.DataFrame):
             value = np.array(value)
@@ -72,29 +68,26 @@ def write_csvs(
                 df = pd.DataFrame(value)
             except Exception as e:
                 warnings.warn(
-                    f'Omitting to write {key!r} of type {type(e)}.',
-                    WriteWarning,
+                    f"Omitting to write {key!r} of type {type(e)}.", WriteWarning,
                 )
                 continue
         df.to_csv(
             filename,
             sep=sep,
-            header=key in {'obs', 'var', 'obsm', 'varm'},
-            index=key in {'obs', 'var'},
+            header=key in {"obs", "var", "obsm", "varm"},
+            index=key in {"obs", "var"},
         )
 
 
-def write_loom(
-    filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
-):
+def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
     filename = Path(filename)
-    row_attrs = {k: np.array(v) for k, v in adata.var.to_dict('list').items()}
-    row_attrs['var_names'] = adata.var_names.values
-    col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict('list').items()}
-    col_attrs['obs_names'] = adata.obs_names.values
+    row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
+    row_attrs["var_names"] = adata.var_names.values
+    col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict("list").items()}
+    col_attrs["obs_names"] = adata.obs_names.values
 
     if adata.X is None:
-        raise ValueError('loompy does not accept empty matrices as data')
+        raise ValueError("loompy does not accept empty matrices as data")
 
     if write_obsm_varm:
         for key in adata.obsm.keys():
@@ -103,12 +96,12 @@ def write_loom(
             row_attrs[key] = adata.varm[key]
     elif len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
         logger.warning(
-            f'The loom file will lack these fields:\n'
-            f'{adata.obsm.keys() | adata.varm.keys()}\n'
-            f'Use write_obsm_varm=True to export multi-dimensional annotations'
+            f"The loom file will lack these fields:\n"
+            f"{adata.obsm.keys() | adata.varm.keys()}\n"
+            f"Use write_obsm_varm=True to export multi-dimensional annotations"
         )
 
-    layers = {'': adata.X.T}
+    layers = {"": adata.X.T}
     for key in adata.layers.keys():
         layers[key] = adata.layers[key].T
 
@@ -132,7 +125,7 @@ def _get_chunk_indices(za):
 
 
 def _write_in_zarr_chunks(za, key, value):
-    if key != 'X':
+    if key != "X":
         za[:] = value  # don't chunk metadata
     else:
         for ci in _get_chunk_indices(za):

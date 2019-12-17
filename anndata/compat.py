@@ -10,7 +10,7 @@ except ImportError:
     class ZarrArray:
         @staticmethod
         def __repr__():
-            return 'mock zarr.core.Array'
+            return "mock zarr.core.Array"
 
 
 try:
@@ -20,7 +20,7 @@ except ImportError:
     class ZappyArray:
         @staticmethod
         def __repr__():
-            return 'mock zappy.base.ZappyArray'
+            return "mock zappy.base.ZappyArray"
 
 
 try:
@@ -30,7 +30,7 @@ except ImportError:
     class DaskArray:
         @staticmethod
         def __repr__():
-            return 'mock dask.array.core.Array'
+            return "mock dask.array.core.Array"
 
 
 try:
@@ -44,7 +44,7 @@ except ImportError:
             def __getitem__(cls, values):
                 if not isinstance(values, tuple):
                     values = (values,)
-                return type('Literal_', (Literal,), dict(__args__=values))
+                return type("Literal_", (Literal,), dict(__args__=values))
 
         class Literal(metaclass=LiteralMeta):
             pass
@@ -103,13 +103,11 @@ def _clean_uns(d: dict):
     """Compat function for when categorical keys were stored in uns."""
     k_to_delete = []
     for k, v in d.get("uns", {}).items():
-        if k.endswith('_categories'):
-            k_stripped = k.replace('_categories', '')
-            if isinstance(
-                v, (str, int)
-            ):  # fix categories with a single category
+        if k.endswith("_categories"):
+            k_stripped = k.replace("_categories", "")
+            if isinstance(v, (str, int)):  # fix categories with a single category
                 v = [v]
-            for ann in ['obs', 'var']:
+            for ann in ["obs", "var"]:
                 if k_stripped in d[ann]:
                     d[ann][k_stripped] = pd.Categorical.from_codes(
                         codes=d[ann][k_stripped].values, categories=v

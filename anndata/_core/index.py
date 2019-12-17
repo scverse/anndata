@@ -22,7 +22,7 @@ def _normalize_indices(
         index: Index = index.values
     if isinstance(index, tuple):
         if len(index) > 2:
-            raise ValueError('AnnData can only be sliced in rows and columns.')
+            raise ValueError("AnnData can only be sliced in rows and columns.")
         # deal with pd.Series
         # TODO: The series should probably be aligned first
         if isinstance(index[1], pd.Series):
@@ -50,7 +50,7 @@ def _normalize_index(
     if not isinstance(index, pd.RangeIndex):
         assert (
             index.dtype != float and index.dtype != int
-        ), 'Don’t call _normalize_index with non-categorical/string names'
+        ), "Don’t call _normalize_index with non-categorical/string names"
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
@@ -95,7 +95,7 @@ def _normalize_index(
                 )
             return positions  # np.ndarray[int]
     else:
-        raise IndexError(f'Unknown indexer {indexer!r} of type {type(indexer)}')
+        raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
 def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
@@ -103,7 +103,7 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
     if (
         isinstance(index, (spmatrix, np.ndarray))
         and index.ndim == 2
-        and index.dtype.kind == 'b'
+        and index.dtype.kind == "b"
     ):
         return index.nonzero()
 
@@ -114,7 +114,7 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
     elif len(index) == 1:
         return index[0], slice(None)
     else:
-        raise IndexError('invalid number of indices')
+        raise IndexError("invalid number of indices")
 
 
 @singledispatch

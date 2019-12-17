@@ -43,14 +43,14 @@ def test_backed_indexing(ondisk_equivalent_adata, subset_func, subset_func2):
 
 
 @pytest.mark.parametrize(
-    ['sparse_format', 'append_method'],
+    ["sparse_format", "append_method"],
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
 def test_dataset_append_memory(tmp_path, sparse_format, append_method):
-    h5_path = tmp_path / 'test.h5'
+    h5_path = tmp_path / "test.h5"
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
 
@@ -67,14 +67,14 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method):
 
 
 @pytest.mark.parametrize(
-    ['sparse_format', 'append_method'],
+    ["sparse_format", "append_method"],
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
 def test_dataset_append_disk(tmp_path, sparse_format, append_method):
-    h5_path = tmp_path / 'test.h5'
+    h5_path = tmp_path / "test.h5"
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
@@ -129,9 +129,7 @@ def test_wrong_formats(tmp_path):
             disk_mtx.append(sparse.random(100, 100, format="coo"))
         with pytest.raises(NotImplementedError):
             disk_mtx.append(np.random.random((100, 100)))
-        disk_dense = f.create_dataset(
-            "dense", data=np.random.random((100, 100))
-        )
+        disk_dense = f.create_dataset("dense", data=np.random.random((100, 100)))
         with pytest.raises(NotImplementedError):
             disk_mtx.append(disk_dense)
 
