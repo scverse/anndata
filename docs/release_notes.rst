@@ -17,7 +17,7 @@ On Master :small:`July 29, 2019`
    - `sc.pp.normalize_per_cell` doesn't work on dask arrays. It just doesn't modify the matrix.
 
 
-View overhaul :pr:`164`
+View overhaul – PR :pr:`164`
   - Indexing into a view no longer keeps a reference to intermediate view, see :issue:`62`.
   - Views are now lazy. Elements of view of AnnData are not indexed until they're accessed.
   - Indexing with scalars no longer reduces dimensionality of contained arrays, see :issue:`145`.
@@ -25,13 +25,14 @@ View overhaul :pr:`164`
   - Can now index by observations and variables at the same time.
 
 
-IO overhaul :pr:`167`
+IO overhaul – PR :pr:`167`
   - Reading and writing has been overhauled for simplification and speed.
 
     - Time and memory usage can be half of previous in typical use cases
 
   - Zarr backend now supports sparse arrays, and generally is closer to having the same features as HDF5.
   - Backed mode should see significant speed and memory improvements for access along compressed dimensions and IO. PR :pr:`241`.
+  - :class:`~pandas.Categorical`\ s can now be ordered (PR :pr:`230`) and written to disk with a large number of categories (PR :pr:`217`).
 
 
 Mapping attributes overhaul :smaller:`(obsm, varm, layers, …)`
