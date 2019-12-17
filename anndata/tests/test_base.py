@@ -379,6 +379,21 @@ def test_n_obs():
     assert adata1.n_obs == 2
 
 
+def test_equality_comparisons():
+    adata1 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
+    adata2 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
+    with pytest.raises(NotImplementedError):
+        adata1 == adata1
+    with pytest.raises(NotImplementedError):
+        adata1 == adata2
+    with pytest.raises(NotImplementedError):
+        adata1 != adata2
+    with pytest.raises(NotImplementedError):
+        adata1 == 1
+    with pytest.raises(NotImplementedError):
+        adata1 != 1
+
+
 def test_concatenate_dense():
     # dense data
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -612,7 +627,7 @@ def test_pickle():
 
     adata = AnnData()
     adata2 = pickle.loads(pickle.dumps(adata))
-    assert adata2.obsm.parent == adata2
+    assert adata2.obsm.parent is adata2
 
 
 def test_to_df_dense():

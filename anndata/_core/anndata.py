@@ -544,6 +544,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
 
+    def __eq__(self, other):
+        """Equality testing"""
+        raise NotImplementedError(
+            'Equality comparisons are not supported for AnnData objects, '
+            'instead compare the desired attributes.'
+        )
+
     @property
     def shape(self) -> Tuple[int, int]:
         """Shape of data matrix (:attr:`n_obs`, :attr:`n_vars`)."""
