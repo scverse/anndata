@@ -610,27 +610,27 @@ def test_concatenate_with_raw():
 
     adata1 = AnnData(
         X1,
-        dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
-        dict(var_names=['a', 'b', 'c'], annoA=[0, 1, 2]),
+        dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
+        dict(var_names=["a", "b", "c"], annoA=[0, 1, 2]),
         layers=dict(Xs=X1),
     )
     adata2 = AnnData(
         X2,
-        dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
-        dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
-        layers={'Xs': X2},
+        dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
+        dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
+        layers=dict(Xs=X2),
     )
     adata3 = AnnData(
         X3,
-        dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
-        dict(var_names=['d', 'c', 'b'], annoB=[0, 1, 2]),
+        dict(obs_names=["s1", "s2"], anno2=["d3", "d4"]),
+        dict(var_names=["d", "c", "b"], annoB=[0, 1, 2]),
         layers=dict(Xs=X3),
     )
 
     adata4 = AnnData(
         X4,
-        dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
-        dict(var_names=['a', 'b', 'c', 'z'], annoA=[0, 1, 2, 3]),
+        dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
+        dict(var_names=["a", "b", "c", "z"], annoA=[0, 1, 2, 3]),
         layers=dict(Xs=X4),
     )
 
@@ -640,23 +640,23 @@ def test_concatenate_with_raw():
 
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert isinstance(adata_all.raw, Raw)
-    assert set(adata_all.raw.var_names) == {'b', 'c'}
+    assert set(adata_all.raw.var_names) == {"b", "c"}
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
     assert np.array_equal(adata_all.raw.X, adata_all.X)
 
-    adata_all = AnnData.concatenate(adata1, adata2, adata3, join='outer')
+    adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
     assert isinstance(adata_all.raw, Raw)
-    assert set(adata_all.raw.var_names) == {'a', 'b', 'c', 'd'}
+    assert set(adata_all.raw.var_names) == set("abcd")
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
     assert np.array_equal(
         np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X)
     )
 
     adata3.raw = adata4
-    adata_all = AnnData.concatenate(adata1, adata2, adata3, join='outer')
+    adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
     assert isinstance(adata_all.raw, Raw)
-    assert set(adata_all.raw.var_names) == {'a', 'b', 'c', 'd', 'z'}
-    assert set(adata_all.var_names) == {'a', 'b', 'c', 'd'}
+    assert set(adata_all.raw.var_names) == set("abcdz")
+    assert set(adata_all.var_names) == set("abcd")
     assert not np.array_equal(
         np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X)
     )

@@ -1845,15 +1845,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new_adata.raw = new_adata_raw
         elif any(have_raw):
             warnings.warn(
-                (
-                    'Only some adata objects have `.raw` attribute, '
-                    'not concatenating `.raw` attributes.'
-                ),
+                "Only some adata objects have `.raw` attribute, "
+                "not concatenating `.raw` attributes.",
                 UserWarning,
             )
 
         if not obs.index.is_unique:
-            logger.info('Or pass `index_unique!=None` to `.concatenate`.')
+            logger.info("Or pass `index_unique!=None` to `.concatenate`.")
         return new_adata
 
     def var_names_make_unique(self, join: str = '-'):
