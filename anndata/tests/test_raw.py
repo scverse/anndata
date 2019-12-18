@@ -9,7 +9,11 @@ from anndata._core.anndata import ImplicitModificationWarning
 # Some test data
 # -------------------------------------------------------------------------------
 
-data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]  # data matrix of shape n_obs × n_vars
+data = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9],
+]  # data matrix of shape n_obs × n_vars
 
 obs_dict = dict(  # annotation of observations / rows
     row_names=['name1', 'name2', 'name3'],  # row annotation
@@ -54,7 +58,10 @@ def test_raw_del(adata_raw):
 
 def test_raw_of_view(adata_raw):
     adata_view = adata_raw[adata_raw.obs["oanno1"] == "cat2"]
-    assert adata_view.raw.X.tolist() == [[4, 5, 6], [7, 8, 9]]
+    assert adata_view.raw.X.tolist() == [
+        [4, 5, 6],
+        [7, 8, 9],
+    ]
 
 
 def test_raw_rw(adata_raw, backing_h5ad):
