@@ -648,9 +648,7 @@ def test_concatenate_with_raw():
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == set("abcd")
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
-    assert np.array_equal(
-        np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X)
-    )
+    assert np.array_equal(np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X))
 
     adata3.raw = adata4
     adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
@@ -665,8 +663,8 @@ def test_concatenate_with_raw():
     with pytest.warns(
         UserWarning,
         match=(
-            'Only some adata objects have `.raw` attribute, '
-            'not concatenating `.raw` attributes.'
+            "Only some adata objects have `.raw` attribute, "
+            "not concatenating `.raw` attributes."
         ),
     ):
         adata_all = AnnData.concatenate(adata1, adata2, adata3)
