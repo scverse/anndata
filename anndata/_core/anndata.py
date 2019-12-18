@@ -1844,8 +1844,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
             new_adata.raw = new_adata_raw
         elif any(have_raw):
-            logger.warning(
-                'Only some adata objects have `.raw` attribute, not concatenating `.raw` attributes.'
+            warnings.warn(
+                (
+                    'Only some adata objects have `.raw` attribute, '
+                    'not concatenating `.raw` attributes.'
+                ),
+                UserWarning,
             )
 
         if not obs.index.is_unique:

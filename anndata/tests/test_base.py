@@ -662,7 +662,14 @@ def test_concatenate_with_raw():
     )
 
     del adata3.raw
-    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    with pytest.warns(
+        UserWarning,
+        match=(
+            'Only some adata objects have `.raw` attribute, '
+            'not concatenating `.raw` attributes.'
+        ),
+    ):
+        adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert adata_all.raw is None
 
     del adata1.raw
