@@ -7,7 +7,7 @@ import pytest
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, isspmatrix_csr, issparse
 
-from anndata import AnnData
+from anndata import AnnData, Raw
 from helpers import assert_equal, gen_adata
 
 
@@ -567,6 +567,83 @@ def test_concatenate_mixed():
     adata_all = AnnData.concatenate(adata1, adata2, adata3, adata4)
     assert isspmatrix_csr(adata_all.X)
     assert isspmatrix_csr(adata_all.layers["counts"])
+
+
+def test_concatenate_with_raw():
+    # dense data
+    X1 = np.array([[1, 2, 3], [4, 5, 6]])
+    X2 = np.array([[1, 2, 3], [4, 5, 6]])
+    X3 = np.array([[1, 2, 3], [4, 5, 6]])
+
+    X4 = np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+
+    adata1 = AnnData(
+        X1,
+        dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
+        dict(var_names=["a", "b", "c"], annoA=[0, 1, 2]),
+        layers=dict(Xs=X1),
+    )
+    adata2 = AnnData(
+        X2,
+        dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
+        dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
+        layers=dict(Xs=X2),
+    )
+    adata3 = AnnData(
+        X3,
+        dict(obs_names=["s1", "s2"], anno2=["d3", "d4"]),
+        dict(var_names=["d", "c", "b"], annoB=[0, 1, 2]),
+        layers=dict(Xs=X3),
+    )
+
+    adata4 = AnnData(
+        X4,
+        dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
+        dict(var_names=["a", "b", "c", "z"], annoA=[0, 1, 2, 3]),
+        layers=dict(Xs=X4),
+    )
+
+    adata1.raw = adata1
+    adata2.raw = adata2
+    adata3.raw = adata3
+
+    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    assert isinstance(adata_all.raw, Raw)
+    assert set(adata_all.raw.var_names) == {"b", "c"}
+    assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
+    assert np.array_equal(adata_all.raw.X, adata_all.X)
+
+    adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
+    assert isinstance(adata_all.raw, Raw)
+    assert set(adata_all.raw.var_names) == set("abcd")
+    assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
+    assert np.array_equal(np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X))
+
+    adata3.raw = adata4
+    adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
+    assert isinstance(adata_all.raw, Raw)
+    assert set(adata_all.raw.var_names) == set("abcdz")
+    assert set(adata_all.var_names) == set("abcd")
+    assert not np.array_equal(
+        np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X)
+    )
+
+    del adata3.raw
+    with pytest.warns(
+        UserWarning,
+        match=(
+            "Only some adata objects have `.raw` attribute, "
+            "not concatenating `.raw` attributes."
+        ),
+    ):
+        adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    assert adata_all.raw is None
+
+    del adata1.raw
+    del adata2.raw
+    assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
+    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    assert adata_all.raw is None
 
 
 def test_rename_categories():

@@ -1797,6 +1797,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if join == "inner"
             else AnnData(X, obs, var)
         )
+
+        # raw
+        have_raw = [_adata.raw is not None for _adata in all_adatas]
+        if all(have_raw):
+            new_adata_raw = AnnData.concatenate(
+                *[_adata.raw.to_adata() for _adata in all_adatas],
+                join=join,
+                batch_key=batch_key,
+                batch_categories=batch_categories,
+                index_unique=index_unique,
+            )
+            new_adata.raw = new_adata_raw
+        elif any(have_raw):
+            warnings.warn(
+                "Only some adata objects have `.raw` attribute, "
+                "not concatenating `.raw` attributes.",
+                UserWarning,
+            )
+
         if not obs.index.is_unique:
             logger.info("Or pass `index_unique!=None` to `.concatenate`.")
         return new_adata
