@@ -418,7 +418,7 @@ def read_h5ad(
             )
 
     rdasp = partial(
-        read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size
+        read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size,
     )
 
     with h5py.File(filename, "r") as f:
