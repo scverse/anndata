@@ -1041,56 +1041,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
                 uns[color_key] = np.array(color_vec)[(idx,)]
 
-    def rename_categories(self, key: str, categories: Sequence[Any]):
-        """\
-        Rename categories of annotation `key` in :attr:`obs`, :attr:`var`,
-        and :attr:`uns`.
-
-        Only supports passing a list/array-like `categories` argument.
-
-        Besides calling `self.obs[key].cat.categories = categories` –
-        similar for :attr:`var` - this also renames categories in unstructured
-        annotation that uses the categorical annotation `key`.
-
-        Parameters
-        ----------
-        key
-             Key for observations or variables annotation.
-        categories
-             New categories, the same number as the old categories.
-        """
-        if isinstance(categories, Mapping):
-            raise ValueError("Only list-like `categories` is supported.")
-        if key in self.obs:
-            old_categories = self.obs[key].cat.categories.tolist()
-            self.obs[key].cat.rename_categories(categories, inplace=True)
-        elif key in self.var:
-            old_categories = self.var[key].cat.categories.tolist()
-            self.var[key].cat.rename_categories(categories, inplace=True)
-        else:
-            raise ValueError(f"{key} is neither in `.obs` nor in `.var`.")
-        # this is not a good solution
-        # but depends on the scanpy conventions for storing the categorical key
-        # as `groupby` in the `params` slot
-        for k1, v1 in self.uns.items():
-            if not (
-                isinstance(v1, Mapping)
-                and "params" in v1
-                and "groupby" in v1["params"]
-                and v1["params"]["groupby"] == key
-            ):
-                continue
-            for k2, v2 in v1.items():
-                # picks out the recarrays that are named according to the old
-                # categories
-                if isinstance(v2, np.ndarray) and v2.dtype.names is not None:
-                    if list(v2.dtype.names) == old_categories:
-                        self.uns[k1][k2].dtype.names = categories
-                    else:
-                        logger.warning(
-                            f"Omitting {k1}/{k2} as old categories do not match."
-                        )
-
     def strings_to_categoricals(self, df: Optional[pd.DataFrame] = None):
         """\
         Transform string annotations to categoricals.
@@ -2122,6 +2072,40 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @utils.deprecated("is_view")
     def isview(self):
         return self.is_view
+
+    @utils.deprecated("self.obs[key].cat.categories = categories")
+    def rename_categories(self, key: str, categories: Sequence[Any]):
+        if isinstance(categories, Mapping):
+            raise ValueError("Only list-like `categories` is supported.")
+        if key in self.obs:
+            old_categories = self.obs[key].cat.categories.tolist()
+            self.obs[key].cat.rename_categories(categories, inplace=True)
+        elif key in self.var:
+            old_categories = self.var[key].cat.categories.tolist()
+            self.var[key].cat.rename_categories(categories, inplace=True)
+        else:
+            raise ValueError(f"{key} is neither in `.obs` nor in `.var`.")
+        # this is not a good solution
+        # but depends on the scanpy conventions for storing the categorical key
+        # as `groupby` in the `params` slot
+        for k1, v1 in self.uns.items():
+            if not (
+                isinstance(v1, Mapping)
+                and "params" in v1
+                and "groupby" in v1["params"]
+                and v1["params"]["groupby"] == key
+            ):
+                continue
+            for k2, v2 in v1.items():
+                # picks out the recarrays that are named according to the old categories
+                if not isinstance(v2, np.ndarray) or v2.dtype.names is None:
+                    continue
+                if list(v2.dtype.names) == old_categories:
+                    self.uns[k1][k2].dtype.names = categories
+                else:
+                    logger.warning(
+                        f"Omitting {k1}/{k2} as old categories do not match."
+                    )
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
