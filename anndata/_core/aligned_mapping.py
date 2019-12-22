@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections import abc as cabc
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
-from typing import Hashable, Iterator, Mapping, Sequence  # ABCs
+from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
 
 import numpy as np
@@ -40,10 +40,10 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def __repr__(self):
         return f"{type(self).__name__} with keys: {', '.join(self.keys())}"
 
-    def _ipython_key_completions_(self) -> List[Hashable]:
+    def _ipython_key_completions_(self) -> List[str]:
         return list(self.keys())
 
-    def _validate_value(self, val: V, key: Hashable) -> V:
+    def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] != val.shape[i]:
@@ -102,35 +102,35 @@ class AlignedViewMixin:
     attrname: str
     """What attribute in the parent is this?"""
 
-    parent_mapping: Mapping[Hashable, V]
+    parent_mapping: Mapping[str, V]
     """The object this is a view of."""
 
     is_view = True
 
-    def __getitem__(self, key: Hashable) -> V:
+    def __getitem__(self, key: str) -> V:
         return as_view(
             _subset(self.parent_mapping[key], self.subset_idx),
             ViewArgs(self.parent, self.attrname, (key,)),
         )
 
-    def __setitem__(self, key: Hashable, value: V):
+    def __setitem__(self, key: str, value: V):
         value = self._validate_value(value, key)  # Validate before mutating
         adata = self.parent.copy()
         new_mapping = getattr(adata, self.attrname)
         new_mapping[key] = value
         self.parent._init_as_actual(adata)
 
-    def __delitem__(self, key: Hashable):
+    def __delitem__(self, key: str):
         self[key]  # Make sure it exists before bothering with a copy
         adata = self.parent.copy()
         new_mapping = getattr(adata, self.attrname)
         del new_mapping[key]
         self.parent._init_as_actual(adata)
 
-    def __contains__(self, key: Hashable) -> bool:
+    def __contains__(self, key: str) -> bool:
         return key in self.parent_mapping
 
-    def __iter__(self) -> Iterator[Hashable]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self.parent_mapping)
 
     def __len__(self) -> int:
@@ -138,25 +138,25 @@ class AlignedViewMixin:
 
 
 class AlignedActualMixin:
-    _data: Dict[Hashable, V]
+    _data: Dict[str, V]
     """Underlying mapping to the data"""
 
     is_view = False
 
-    def __getitem__(self, key: Hashable) -> V:
+    def __getitem__(self, key: str) -> V:
         return self._data[key]
 
-    def __setitem__(self, key: Hashable, value: V):
+    def __setitem__(self, key: str, value: V):
         value = self._validate_value(value, key)
         self._data[key] = value
 
-    def __contains__(self, key: Hashable) -> bool:
+    def __contains__(self, key: str) -> bool:
         return key in self._data
 
-    def __delitem__(self, key: Hashable):
+    def __delitem__(self, key: str):
         del self._data[key]
 
-    def __iter__(self) -> Iterator[Hashable]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self._data)
 
     def __len__(self) -> int:
@@ -201,7 +201,7 @@ class AxisArraysBase(AlignedMapping):
                 df[f"{key}{icolumn + 1}"] = column
         return df
 
-    def _validate_value(self, val: V, key: Hashable) -> V:
+    def _validate_value(self, val: V, key: str) -> V:
         if (
             hasattr(val, "index")
             and isinstance(val.index, cabc.Collection)
