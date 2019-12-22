@@ -30,7 +30,7 @@ The central class:
 Reading
 -------
 
-Reading anndata's native file format ``.h5ad``.
+Reading anndata’s native file format `.h5ad`.
 
 .. autosummary::
    :toctree: .
@@ -55,7 +55,7 @@ Reading other file formats.
 Writing
 -------
 
-Writing to anndata's native file format ``.h5ad``.
+Writing to anndata’s native file format `.h5ad`.
 
 .. autosummary::
    :toctree: .

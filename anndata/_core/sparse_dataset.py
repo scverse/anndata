@@ -1,9 +1,11 @@
-"""This module implements on disk sparse datasets.
+"""\
+This module implements on disk sparse datasets.
 
-This code was originally based on and uses the conventions of
-`h5sparse <https://github.com/appier/h5sparse>`_ by
-`Appier Inc. <https://www.appier.com/>`_.
+This code is based on and uses the conventions of h5sparse_ by `Appier Inc.`_.
 See the copyright and license note in this directory source code.
+
+.. _h5sparse: https://github.com/appier/h5sparse
+.. _Appier Inc.: https://www.appier.com/
 """
 
 # TODO:
@@ -37,8 +39,8 @@ class BackedSparseMatrix(_cs_matrix):
     """\
     Mixin class for backed sparse matrices.
 
-    Largely needed for the case `backed_sparse_csr(...)[:]`, since that calls
-    copy on `.data`, `.indices`, and `.indptr`.
+    Largely needed for the case `backed_sparse_csr(...)[:]`,
+    since that calls copy on `.data`, `.indices`, and `.indptr`.
     """
 
     def copy(self) -> ss.spmatrix:
@@ -51,8 +53,8 @@ class BackedSparseMatrix(_cs_matrix):
         """\
         Sets value at each (i, j) to x
 
-        Here (i,j) index major and minor respectively, and must not contain
-        duplicate entries.
+        Here (i,j) index major and minor respectively,
+        and must not contain duplicate entries.
         """
         # Scipy 1.3+ compat
         n_samples = 1 if np.isscalar(x) else len(x)
@@ -176,7 +178,7 @@ def slice_len(s: slice, l: int) -> int:
 
 
 def slice_as_int(s: slice, l: int) -> int:
-    """Converts slices of length 1 to the integer index they'll access."""
+    """Converts slices of length 1 to the integer index they’ll access."""
     out = list(range(*s.indices(l)))
     assert len(out) == 1
     return out[0]
@@ -224,9 +226,7 @@ def get_backed_class(format_str: str) -> Type[BackedSparseMatrix]:
 
 
 class SparseDataset:
-    """\
-    Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices.
-    """
+    """Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices."""
 
     def __init__(self, group: h5py.Group):
         self.group = group
@@ -316,7 +316,7 @@ class SparseDataset:
         if self.format_str != get_format_str(sparse_matrix):
             raise ValueError(
                 f"Matrices must have same format. Currently are "
-                f"'{self.format_str}' and '{get_format_str(sparse_matrix)}'"
+                f"{self.format_str!r} and {get_format_str(sparse_matrix)!r}"
             )
 
         # shape

@@ -91,11 +91,12 @@ def gen_adata(
     varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
 ) -> AnnData:
-    """Helper function to generate a random anndata for testing purposes.
+    """\
+    Helper function to generate a random AnnData for testing purposes.
 
     Note: For `obsm_types`, `varm_types`, and `layers_types` these currently
-    just filter already created objects. In future, these should choose which
-    objects are created.
+    just filter already created objects.
+    In future, these should choose which objects are created.
 
     Params
     ------
@@ -229,7 +230,7 @@ def subset_func(request):
 
 def format_msg(elem_name):
     if elem_name is not None:
-        return f"Error raised from element '{elem_name}'."
+        return f"Error raised from element {elem_name!r}."
     else:
         return ""
 
@@ -352,9 +353,9 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AnnData)
 def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
-    """
+    """\
     Check whether two AnnData objects are equivalent,
-    raising an AssertionError if they aren't.
+    raising an AssertionError if they aren’t.
 
     Params
     ------
@@ -371,7 +372,7 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
     if not exact:
         # Reorder all elements if neccesary
         idx = [slice(None), slice(None)]
-        # Since it's a pain to compare a list of pandas objects
+        # Since it’s a pain to compare a list of pandas objects
         change_flag = False
         if not np.all(a.obs_names == b.obs_names):
             idx[0] = a.obs_names

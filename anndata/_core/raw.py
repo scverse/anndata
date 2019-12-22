@@ -149,23 +149,7 @@ class Raw:
         return obs, var
 
     def var_vector(self, k: str) -> np.ndarray:
-        """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from `.X` or `.var`.
-
-        Made for convenience, not performance. Intentionally permissive about
-        arguments, for easy iterative use.
-
-        Params
-        ------
-        k
-            Key to use. Should be in `.obs_names` or `.var.columns`.
-
-        Returns
-        -------
-        A one dimensional nd array, with values for each var in the same order
-        as `.var_names`.
-        """
+        # TODO decorator to copy AnnData.var_vector docstring
         if k in self.var:
             return self.var[k].values
         else:
@@ -176,24 +160,7 @@ class Raw:
         return np.ravel(a)
 
     def obs_vector(self, k: str) -> np.ndarray:
-        """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`.
-
-        Made for convenience, not performance. Intentionally permissive about
-        arguments, for easy iterative use.
-
-        Params
-        ------
-        k
-            Key to use. Should be in `.var_names` or `.obs.columns`. If `use_raw`,
-            value should be in `.raw.var_names` instead of `.var_names`.
-
-        Returns
-        -------
-        A one dimensional nd array, with values for each obs in the same order
-        as `.obs_names`.
-        """
+        # TODO decorator to copy AnnData.obs_vector docstring
         idx = self._normalize_indices((slice(None), k))
         a = self.X[idx]
         if issparse(a):

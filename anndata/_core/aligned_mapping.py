@@ -35,7 +35,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     """The view class for this aligned mapping."""
 
     _actual_class: ClassVar[Type["AlignedActualMixin"]]
-    """The actual class (which has it's own data) for this aligned mapping."""
+    """The actual class (which has it’s own data) for this aligned mapping."""
 
     def __repr__(self):
         return f"{type(self).__name__} with keys: {', '.join(self.keys())}"
@@ -49,7 +49,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
             if self.parent.shape[axis] != val.shape[i]:
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
                 raise ValueError(
-                    f"Value passed for key '{key}' is of incorrect shape. "
+                    f"Value passed for key {key!r} is of incorrect shape. "
                     f"Values of {self.attrname} must match dimensions "
                     f"{self.axes} of parent. Value had shape {val.shape} while "
                     f"it should have had {right_shape}."
@@ -164,7 +164,7 @@ class AlignedActualMixin:
 
 
 class AxisArraysBase(AlignedMapping):
-    """
+    """\
     Mapping of key→array-like,
     where array-like is aligned to an axis of parent AnnData.
     """
@@ -207,7 +207,7 @@ class AxisArraysBase(AlignedMapping):
             and isinstance(val.index, cabc.Collection)
             and not (val.index == self.dim_names).all()
         ):
-            # Could probably also re-order index if it's contained
+            # Could probably also re-order index if it’s contained
             raise ValueError(
                 f"value.index does not match parent’s axis {self.axes[0]} names"
             )
@@ -250,7 +250,7 @@ AxisArraysBase._actual_class = AxisArrays
 
 
 class LayersBase(AlignedMapping):
-    """
+    """\
     Mapping of key: array-like, where array-like is aligned to both axes of the
     parent anndata.
     """
@@ -292,7 +292,7 @@ LayersBase._actual_class = Layers
 
 
 class PairwiseArraysBase(AlignedMapping):
-    """
+    """\
     Mapping of key: array-like, where both axes of array-like are aligned to
     one axis of the parent anndata.
     """

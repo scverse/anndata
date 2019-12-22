@@ -42,12 +42,12 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
-    # 'plot_generator',
-    # 'plot_directive',
+    # "plot_generator",
+    # "plot_directive",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
-    # 'ipython_directive',
-    # 'ipython_console_highlighting',
+    # "ipython_directive",
+    # "ipython_console_highlighting",
     "scanpydoc",
 ]
 

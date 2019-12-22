@@ -171,7 +171,7 @@ def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
     backed_v.write_h5ad(final_pth)
 
     final_adata = ad.read_h5ad(final_pth)
-    # TODO: Figure out why this doesn't work if I don't copy
+    # TODO: Figure out why this doesn’t work if I don’t copy
     assert_equal(final_adata, mem_v.copy())
 
 
@@ -195,7 +195,7 @@ def test_return_to_memory_mode(adata, backing_h5ad):
 
     # make sure the previous file had been properly closed
     # when setting `adata.filename = None`
-    # if it hadn't the following line would throw an error
+    # if it hadn’t the following line would throw an error
     bdata.filename = backing_h5ad
     # close the file
     bdata.filename = None
@@ -206,7 +206,7 @@ def test_backed_modification(adata, backing_h5ad):
     adata.X = sparse.csr_matrix(adata.X)
     assert not adata.isbacked
 
-    # While this currently makes the file backed, it doesn't write it as sparse
+    # While this currently makes the file backed, it doesn’t write it as sparse
     adata.filename = backing_h5ad
     adata.write()
     assert not adata.file.is_open

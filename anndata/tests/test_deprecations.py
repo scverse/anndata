@@ -1,4 +1,5 @@
-"""This file contains tests for deprecated functions.
+"""\
+This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
@@ -34,7 +35,7 @@ def test_get_obsvar_array_warn(adata):
         adata._get_var_array("s1")
 
 
-# TODO: Why doesn't this mark work?
+# TODO: Why doesn’t this mark work?
 # @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_get_obsvar_array(adata):
     with pytest.warns(DeprecationWarning):  # Just to hide warnings
@@ -68,7 +69,7 @@ def test_obsvar_vector_Xlayer(adata):
         adata.obs_vector("a", layer="X")
 
     for r in records:
-        # This time it shouldn't throw a warning
+        # This time it shouldn’t throw a warning
         if "anndata" in r.filename:
             assert r.category is not FutureWarning
 

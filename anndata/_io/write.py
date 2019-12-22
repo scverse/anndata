@@ -28,12 +28,11 @@ logger = get_logger(__name__)
 def write_csvs(
     dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ","
 ):
-    """See :meth:`~anndata.AnnData.write_csvs`.
-    """
+    """See :meth:`~anndata.AnnData.write_csvs`."""
     dirname = Path(dirname)
     if dirname.suffix == ".csv":
         dirname = dirname.with_suffix("")
-    logger.info("writing '.csv' files to %s", dirname)
+    logger.info(f"writing .csv files to {dirname}")
     if not dirname.is_dir():
         dirname.mkdir(parents=True, exist_ok=True)
     dir_uns = dirname / "uns"
@@ -114,8 +113,9 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
 
 def _get_chunk_indices(za):
     # TODO: does zarr provide code for this?
-    """
-    Return all the indices (coordinates) for the chunks in a zarr array, even empty ones.
+    """\
+    Return all the indices (coordinates) for the chunks in a zarr array,
+    even empty ones.
     """
     return [
         (i, j)
@@ -126,7 +126,7 @@ def _get_chunk_indices(za):
 
 def _write_in_zarr_chunks(za, key, value):
     if key != "X":
-        za[:] = value  # don't chunk metadata
+        za[:] = value  # don’t chunk metadata
     else:
         for ci in _get_chunk_indices(za):
             s0, e0 = za.chunks[0] * ci[0], za.chunks[0] * (ci[0] + 1)

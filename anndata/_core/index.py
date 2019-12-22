@@ -79,7 +79,7 @@ def _normalize_index(
         elif issubclass(indexer.dtype.type, np.bool_):
             if indexer.shape != index.shape:
                 raise IndexError(
-                    f"Boolean index does not match AnnData's shape along this "
+                    f"Boolean index does not match AnnData’s shape along this "
                     f"dimension. Boolean index has shape {indexer.shape} while "
                     f"AnnData index has shape {index.shape}."
                 )

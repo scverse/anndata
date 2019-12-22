@@ -1,4 +1,4 @@
-"""
+"""\
 This file contains tests for conversion made during io.
 """
 import h5py

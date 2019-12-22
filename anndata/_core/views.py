@@ -20,7 +20,7 @@ class ViewArgs(NamedTuple):
 
 class _SetItemMixin:
     """\
-    Class which (when values are being set) lets their parent anndata view know,
+    Class which (when values are being set) lets their parent AnnData view know,
     so it can make a copy of itself.
     This implements copy-on-modify semantics for views of AnnData objects.
     """
@@ -72,7 +72,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
             self._view_args = getattr(obj, "_view_args", None)
 
     def keys(self) -> KeysView[str]:
-        # it's a structured array
+        # it’s a structured array
         return self.dtype.names
 
     def copy(self, order: str = "C") -> np.ndarray:
@@ -134,7 +134,7 @@ def as_view_dict(d, view_args):
 @as_view.register(ZappyArray)
 def as_view_zappy(z, view_args):
     # Previous code says ZappyArray works as view,
-    # but as far as I can tell they're immutable.
+    # but as far as I can tell they’re immutable.
     return z
 
 

@@ -37,9 +37,9 @@ def read_csv(
     filename
         Data file.
     delimiter
-        Delimiter that separates data within text file. If `None`, will split at
-        arbitrary number of white spaces, which is different from enforcing
-        splitting at single white space `' '`.
+        Delimiter that separates data within text file.
+        If `None`, will split at arbitrary number of white spaces,
+        which is different from enforcing splitting at single white space `' '`.
     first_column_names
         Assume the first column stores row names.
     dtype
@@ -167,9 +167,10 @@ def read_loom(
     sparse
         Whether to read the data matrix as sparse.
     cleanup
-        Whether to collapse all obs/var fields that only store one unique value into `.uns['loom-.']`.
+        Whether to collapse all obs/var fields that only store
+        one unique value into `.uns['loom-.']`.
     X_name
-        Loompy key with which the data matrix `.X` is initialized.
+        Loompy key with which the data matrix :attr:`~anndata.AnnData.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
     obsm_names
@@ -348,12 +349,12 @@ def _read_text(
                 comments.append(comment)
         else:
             if delimiter is not None and delimiter not in line:
-                raise ValueError(f'Did not find delimiter "{delimiter}" in first line.')
+                raise ValueError(f"Did not find delimiter {delimiter!r} in first line.")
             line_list = line.split(delimiter)
             # the first column might be row names, so check the last
             if not is_float(line_list[-1]):
                 col_names = line_list
-                # logg.msg('    assuming first line in file stores column names', v=4)
+                # logg.msg("    assuming first line in file stores column names", v=4)
             else:
                 if not is_float(line_list[0]) or first_column_names:
                     first_column_names = True
@@ -365,11 +366,11 @@ def _read_text(
     if not col_names:
         # try reading col_names from the last comment line
         if len(comments) > 0:
-            # logg.msg('    assuming last comment line stores variable names', v=4)
+            # logg.msg("    assuming last comment line stores variable names", v=4)
             col_names = np.array(comments[-1].split())
         # just numbers as col_names
         else:
-            # logg.msg('    did not find column names in file', v=4)
+            # logg.msg("    did not find column names in file", v=4)
             col_names = np.arange(len(data[0])).astype(str)
     col_names = np.array(col_names, dtype=str)
     # read another line to check if first column contains row names or not
@@ -378,7 +379,7 @@ def _read_text(
     for line in lines:
         line_list = line.split(delimiter)
         if first_column_names or not is_float(line_list[0]):
-            # logg.msg('    assuming first column in file stores row names', v=4)
+            # logg.msg("    assuming first column in file stores row names", v=4)
             first_column_names = True
             row_names.append(line_list[0])
             data.append(np.array(line_list[1:], dtype=dtype))
@@ -387,8 +388,10 @@ def _read_text(
         break
     # if row names are just integers
     if len(data) > 1 and data[0].size != data[1].size:
-        # logg.msg('    assuming first row stores column names and '
-        #          'first column row names', v=4)
+        # logg.msg(
+        #     "    assuming first row stores column names and first column row names",
+        #     v=4,
+        # )
         first_column_names = True
         col_names = np.array(data[0]).astype(int).astype(str)
         row_names.append(data[1][0].astype(int).astype(str))
@@ -401,10 +404,10 @@ def _read_text(
             data.append(np.array(line_list[1:], dtype=dtype))
         else:
             data.append(np.array(line_list, dtype=dtype))
-    # logg.msg('    read data into list of lists', t=True, v=4)
+    # logg.msg("    read data into list of lists", t=True, v=4)
     # transfrom to array, this takes a long time and a lot of memory
-    # but it's actually the same thing as np.genfromtxt does
-    # - we don't use the latter as it would involve another slicing step
+    # but it’s actually the same thing as np.genfromtxt does
+    # - we don’t use the latter as it would involve another slicing step
     #   in the end, to separate row_names from float data, slicing takes
     #   a lot of memory and CPU time
     if data[0].size != data[-1].size:
@@ -413,11 +416,11 @@ def _read_text(
             f"from length of last line ({data[-1].size})."
         )
     data = np.array(data, dtype=dtype)
-    # logg.msg('    constructed array from list of list', t=True, v=4)
+    # logg.msg("    constructed array from list of list", t=True, v=4)
     # transform row_names
     if not row_names:
         row_names = np.arange(len(data)).astype(str)
-        # logg.msg('    did not find row names in file', v=4)
+        # logg.msg("    did not find row names in file", v=4)
     else:
         row_names = np.array(row_names)
         for iname, name in enumerate(row_names):

@@ -9,19 +9,19 @@ On Master :small:`July 29, 2019`
 .. warning::
    Breaking changes on master include:
 
-   - Elements of :class:`~anndata.AnnData` objects don't have their dimensionality reduced when the main object is subset. This is to maintain consistency when subsetting. See discussion in :issue:`145`.
+   - Elements of :class:`~anndata.AnnData` objects don’t have their dimensionality reduced when the main object is subset. This is to maintain consistency when subsetting. See discussion in :issue:`145`.
    - Internal modules like `anndata.core` are private and their contents are not stable: See :issue:`174`.
 
    Currently broken features
 
-   - `sc.pp.normalize_per_cell` doesn't work on dask arrays. It just doesn't modify the matrix.
+   - `sc.pp.normalize_per_cell` doesn’t work on dask arrays. It just doesn’t modify the matrix.
 
 
 View overhaul – PR :pr:`164`
   - Indexing into a view no longer keeps a reference to intermediate view, see :issue:`62`.
-  - Views are now lazy. Elements of view of AnnData are not indexed until they're accessed.
+  - Views are now lazy. Elements of view of AnnData are not indexed until they’re accessed.
   - Indexing with scalars no longer reduces dimensionality of contained arrays, see :issue:`145`.
-  - All elements of AnnData should now follow the same rules about how they're subset, see :issue:`145`.
+  - All elements of AnnData should now follow the same rules about how they’re subset, see :issue:`145`.
   - Can now index by observations and variables at the same time.
 
 
@@ -83,7 +83,7 @@ Version 0.6 :small:`May 1, 2018`
 - tremendous speedup for :func:`~anndata.AnnData.concatenate`
 - bug fix for deep copy of unstructured annotation after slicing
 - bug fix for reading HDF5 stored single-category annotations
-- 'outer join' concatenation: adds zeros for concatenation of sparse data and nans for dense data
+- “outer join” concatenation: adds zeros for concatenation of sparse data and nans for dense data
 - better memory efficiency in loom exports
 
 

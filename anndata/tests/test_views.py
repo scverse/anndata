@@ -225,7 +225,7 @@ def test_set_varm(adata):
 
 
 # TODO: Determine if this is the intended behavior,
-#       or just the behaviour we've had for a while
+#       or just the behaviour we’ve had for a while
 def test_not_set_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
@@ -320,7 +320,7 @@ def test_view_failed_delitem(attr):
 def test_view_delitem(attr):
     adata = gen_adata((10, 10))
     getattr(adata, attr)["to_delete"] = np.ones((10, 10))
-    # Shouldn't be a subclass, should be an ndarray
+    # Shouldn’t be a subclass, should be an ndarray
     assert type(getattr(adata, attr)["to_delete"]) is np.ndarray
     view = adata[5:7, :][:, :5]
     adata_hash = joblib.hash(adata)

@@ -70,18 +70,12 @@ class AnnDataFileManager:
         self._file = h5py.File(self.filename, self._filemode)
 
     def close(self):
-        """\
-        Close the backing file, remember filename,
-        do *not* change to memory mode.
-        """
+        """Close the backing file, remember filename, do *not* change to memory mode."""
         if self._file is not None:
             self._file.close()
 
     def _to_memory_mode(self):
-        """\
-        Close the backing file, forget filename,
-        *do* change to memory mode.
-        """
+        """Close the backing file, forget filename, *do* change to memory mode."""
         self._adata.__X = self._adata.X[()]
         self._file.close()
         self._file = None

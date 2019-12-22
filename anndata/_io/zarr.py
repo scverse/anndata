@@ -85,7 +85,7 @@ def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
-            raise ValueError(f"'{reserved}' is a reserved name for dataframe columns.")
+            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
     group = z.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
     group.attrs["encoding-version"] = "0.1.0"
@@ -132,8 +132,9 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
 
 @report_write_key_on_error
 def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
-    # If it's not an array, try and make it an array. If that fails, pickle it.
-    # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
+    # If it’s not an array, try and make it an array. If that fails, pickle it.
+    # Maybe rethink that, maybe this should just pickle,
+    # and have explicit implementations for everything else
     raise NotImplementedError(
         f"Failed to write value for {key}, since a writer for type {type(value)}"
         f" has not been implemented yet."
@@ -231,7 +232,8 @@ ZARR_WRITE_REGISTRY = {
 
 
 def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
-    """Read from a hierarchical Zarr array store.
+    """\
+    Read from a hierarchical Zarr array store.
 
     Parameters
     ----------
@@ -314,9 +316,7 @@ def read_csc(group: zarr.Group) -> sparse.csc_matrix:
 
 @report_read_key_on_error
 def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
-    """
-    Reads old format of dataframes
-    """
+    """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
@@ -354,7 +354,7 @@ def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
             # TODO: remove this code at some point post 0.7
             # TODO: Add tests for this
             warn(
-                f"Your file '{dataset.file.name}' has invalid categorical "
+                f"Your file {str(dataset.file.name)!r} has invalid categorical "
                 "encodings due to being written from a development version of "
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,

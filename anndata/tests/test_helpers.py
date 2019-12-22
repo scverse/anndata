@@ -36,7 +36,7 @@ from anndata.tests.helpers import assert_equal, report_name, gen_adata
 
 @pytest.fixture(scope="function")
 def reusable_adata():
-    """Reusable anndata for when tests shouldn't mutate it"""
+    """Reusable anndata for when tests shouldn’t mutate it"""
     return gen_adata((10, 10))
 
 
@@ -70,7 +70,7 @@ def test_assert_equal():
     adata = gen_adata((10, 10))
     adata.raw = adata.copy()
     assert_equal(adata, adata.copy(), exact=True)
-    # TODO: I'm not sure this is good behaviour, I've disabled in for now.
+    # TODO: I’m not sure this is good behaviour, I’ve disabled in for now.
     # assert_equal(
     #     adata,
     #     adata[

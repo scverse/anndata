@@ -14,7 +14,7 @@ https://github.com/Koncopd/anndata-scanpy-benchmarks/blob/master/chunk_X.ipynb
 
 It should compare the results with loom.
 
-We don't need images here, at this stage.
+We don’t need images here, at this stage.
 
 
 File sizes

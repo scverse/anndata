@@ -24,8 +24,8 @@ def convert_to_dict_dict(obj: dict):
 def convert_to_dict_ndarray(obj: np.ndarray):
     if obj.dtype.fields is None:
         raise TypeError(
-            "Can only convert np.ndarray with compound dtypes to dict, passed "
-            f"array had '{obj.dtype}'."
+            "Can only convert np.ndarray with compound dtypes to dict, "
+            f"passed array had “{obj.dtype}”."
         )
     return {k: obj[k] for k in obj.dtype.fields.keys()}
 
@@ -36,7 +36,8 @@ def convert_to_dict_nonetype(obj: None):
 
 
 def make_index_unique(index: pd.Index, join: str = "-"):
-    """Makes the index unique by appending '1', '2', etc.
+    """\
+    Makes the index unique by appending '1', '2', etc.
 
     The first occurance of a non-unique value is ignored.
 
@@ -47,8 +48,9 @@ def make_index_unique(index: pd.Index, join: str = "-"):
 
     Examples
     --------
-    >>> adata1 = sc.AnnData(np.ones((3, 2)), {'obs_names': ['a', 'b', 'c']})
-    >>> adata2 = sc.AnnData(np.zeros((3, 2)), {'obs_names': ['d', 'b', 'b']})
+    >>> from anndata import AnnData
+    >>> adata1 = AnnData(np.ones((3, 2)), dict(obs_names=['a', 'b', 'c']))
+    >>> adata2 = AnnData(np.zeros((3, 2)), dict(obs_names=['d', 'b', 'b']))
     >>> adata = adata1.concatenate(adata2)
     >>> adata.obs_names
     Index(['a', 'b', 'c', 'd', 'b', 'b'], dtype='object')
@@ -107,15 +109,15 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     except UnicodeEncodeError:
         raise ValueError(
             "Currently only support ascii strings. "
-            'Don’t use "ö" etc. for sample annotation.'
+            "Don’t use “ö” etc. for sample annotation."
         )
 
     # if old_index_key not in source:
     #     names.append(new_index_key)
-    #     cols.append(np.arange(len(cols[0]) if cols else n_row).astype('U'))
+    #     cols.append(np.arange(len(cols[0]) if cols else n_row).astype("U"))
     # else:
     #     names[names.index(old_index_key)] = new_index_key
-    #     cols[names.index(old_index_key)] = cols[names.index(old_index_key)].astype('U')
+    #     cols[names.index(old_index_key)] = cols[names.index(old_index_key)].astype("U")
     dtype_list = list(
         zip(names, [str(c.dtype) for c in cols], [(c.shape[1],) for c in cols])
     )
@@ -133,7 +135,7 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
 
 
 def deprecated(new_name: str):
-    """
+    """\
     This is a decorator which can be used to mark functions
     as deprecated. It will result in a warning being emitted
     when the function is used.
@@ -160,7 +162,7 @@ def deprecated(new_name: str):
 
 
 class DeprecationMixinMeta(type):
-    """
+    """\
     Use this as superclass so deprecated methods and properties
     do not appear in vars(MyClass)/dir(MyClass)
     """

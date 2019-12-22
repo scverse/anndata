@@ -6,9 +6,9 @@ from .._core.sparse_dataset import SparseDataset
 # -------------------------------------------------------------------------------
 
 
-# Could be numba'd if it returned tuples instead of slices
+# Could be numba’d if it returned tuples instead of slices
 def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
-    """
+    """\
     Gives indexer tuples chunked along an axis.
 
     Params
@@ -36,7 +36,8 @@ def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
 
 
 def is_float(string):
-    """Check whether string is float.
+    """\
+    Check whether string is float.
 
     See also
     --------
@@ -50,8 +51,7 @@ def is_float(string):
 
 
 def is_int(string):
-    """Check whether string is integer.
-    """
+    """Check whether string is integer."""
     try:
         int(string)
         return True
@@ -60,8 +60,7 @@ def is_int(string):
 
 
 def convert_bool(string):
-    """Check whether string is boolean.
-    """
+    """Check whether string is boolean."""
     if string == "True":
         return True, True
     elif string == "False":
@@ -71,8 +70,7 @@ def convert_bool(string):
 
 
 def convert_string(string):
-    """Convert string to int, float or bool.
-    """
+    """Convert string to int, float or bool."""
     if is_int(string):
         return int(string)
     elif is_float(string):
@@ -133,7 +131,7 @@ def _get_parent(elem):
 
 
 def report_read_key_on_error(func):
-    """
+    """\
     A decorator for zarr element reading which makes keys involved in errors get reported.
 
     Example
@@ -157,7 +155,7 @@ def report_read_key_on_error(func):
             else:
                 parent = _get_parent(elem)
                 raise AnnDataReadError(
-                    f"Above error raised while reading key '{elem.name}' of "
+                    f"Above error raised while reading key {elem.name!r} of "
                     f"type {type(elem)} from {parent}."
                 )
 
@@ -165,7 +163,7 @@ def report_read_key_on_error(func):
 
 
 def report_write_key_on_error(func):
-    """
+    """\
     A decorator for zarr element reading which makes keys involved in errors get reported.
 
     Example
@@ -187,7 +185,7 @@ def report_write_key_on_error(func):
             parent = _get_parent(elem)
             raise type(e)(
                 f"{e}\n\n"
-                f"Above error raised while writing key '{key}' of {type(elem)}"
+                f"Above error raised while writing key {key!r} of {type(elem)}"
                 f" from {parent}."
             ) from e
 

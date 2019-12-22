@@ -453,7 +453,7 @@ def test_zarr_chunk_X(tmp_path):
     adata = gen_adata((100, 100), X_type=np.array)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
 
-    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won't take a Path
+    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
     assert z["X"].chunks == (10, 10)
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
@@ -494,7 +494,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
     import scanpy as sc
 
     orig = sc.datasets.krumsiek11()
-    del orig.uns["highlights"]  # Can't write int keys
+    del orig.uns["highlights"]  # Can’t write int keys
     getattr(orig, f"write_{diskfmt}")(filepth)
     read = getattr(ad, f"read_{diskfmt}")(filepth)
 
@@ -513,7 +513,7 @@ def test_backwards_compat_zarr():
     import zarr
 
     pbmc_orig = sc.datasets.pbmc68k_reduced()
-    # Old zarr writer couldn't do sparse arrays
+    # Old zarr writer couldn’t do sparse arrays
     pbmc_orig.raw._X = pbmc_orig.raw.X.toarray()
     del pbmc_orig.uns["neighbors"]
 

@@ -124,15 +124,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     An annotated data matrix.
 
     :class:`~anndata.AnnData` stores a data matrix :attr:`X` together with annotations
-    of observations :attr:`obs`, variables :attr:`var` and unstructured annotations :attr:`uns`.
+    of observations :attr:`obs` (:attr:`obsm`, :attr:`obsp`),
+    variables :attr:`var` (:attr:`varm`, :attr:`varp`),
+    and unstructured annotations :attr:`uns`.
 
     .. figure:: https://falexwolf.de/img/scanpy/anndata.svg
        :width: 350px
 
-    An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
-    dataframe, for instance, ``adata_subset = adata[:, list_of_variable_names]``.
-    :class:`~anndata.AnnData`'s basic structure is similar to R's ExpressionSet
-    [Huber15]_. If setting an ``.h5ad``-formatted HDF5 backing file ``.filename``,
+    An :class:`~anndata.AnnData` object `adata` can be sliced like a
+    :class:`~pandas.DataFrame`,
+    for instance `adata_subset = adata[:, list_of_variable_names]`.
+    :class:`~anndata.AnnData`’s basic structure is similar to R’s ExpressionSet
+    [Huber15]_. If setting an `.h5ad`-formatted HDF5 backing file `.filename`,
     data remains on the disk but is automatically loaded into memory if needed.
     See this `blog post`_ for more details.
 
@@ -160,7 +163,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     dtype
         Data type used for storage.
     shape
-        Shape tuple (#observations, #variables). Can only be provided if ``X`` is ``None``.
+        Shape tuple (#observations, #variables). Can only be provided if `X` is `None`.
     filename
         Name of backing file. See :class:`File`.
     filemode
@@ -180,51 +183,55 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     Notes
     -----
-    :class:`~anndata.AnnData` stores observations (samples) of variables
-    (features) in the rows of a matrix. This is the convention of the modern
-    classics of statistics [Hastie09]_ and machine learning [Murphy12]_, the
-    convention of dataframes both in R and Python and the established statistics
+    :class:`~anndata.AnnData` stores observations (samples) of variables/features
+    in the rows of a matrix.
+    This is the convention of the modern classics of statistics [Hastie09]_
+    and machine learning [Murphy12]_,
+    the convention of dataframes both in R and Python and the established statistics
     and machine learning packages in Python (statsmodels_, scikit-learn_).
 
-    Single dimensional annotations of the observation and variables are stored in the :attr:`obs`
-    and :attr:`var` attributes as :class:`~pandas.DataFrame` s. This is intended for metrics
-    calculated over their axes. Multi-dimensional annotations are stored in :attr:`obsm` and
-    :attr:`varm`, which are aligned to the objects observation and variable dimensions
-    respectively. Additional measurements across both observations and variables are stored in
+    Single dimensional annotations of the observation and variables are stored
+    in the :attr:`obs` and :attr:`var` attributes as :class:`~pandas.DataFrame`\\ s.
+    This is intended for metrics calculated over their axes.
+    Multi-dimensional annotations are stored in :attr:`obsm` and :attr:`varm`,
+    which are aligned to the objects observation and variable dimensions respectively.
+    Square matrices representing graphs are stored in :attr:`obsp` and :attr:`varp`,
+    with both of their own dimensions aligned to their associated axis.
+    Additional measurements across both observations and variables are stored in
     :attr:`layers`.
 
-    Indexing into an AnnData object can be performed by relative position with numeric indices
-    (like pandas' :attr:`~pandas.DataFrame.iloc`), or by labels (like :attr:`~pandas.DataFrame.loc`).
-    To avoid ambiguity, indexes of the AnnData object are converted to strings by the constructor.
+    Indexing into an AnnData object can be performed by relative position
+    with numeric indices (like pandas’ :attr:`~pandas.DataFrame.iloc`),
+    or by labels (like :attr:`~pandas.DataFrame.loc`).
+    To avoid ambiguity with numeric indexing into observations or variables,
+    indexes of the AnnData object are converted to strings by the constructor.
 
-    Subsetting an AnnData object by indexing into it will also subset it's elements according to
-    the dimensions they were aligned to. This means an operation like `adata[list_of_obs, :]` will
-    also subset (albeit lazily) :attr:`obs`, :attr:`obsm`, and :attr:`layers`.
+    Subsetting an AnnData object by indexing into it will also subset its elements
+    according to the dimensions they were aligned to.
+    This means an operation like `adata[list_of_obs, :]` will also subset :attr:`obs`,
+    :attr:`obsm`, and :attr:`layers`.
 
-    .. TODO: This will be deprecated as of v0.7 and introduction of obsp, varp
-
-    If the unstructured annotations :attr:`uns` contain a sparse matrix of shape
-    :attr:`n_obs` × :attr:`n_obs`, these are subset with the observation dimension.
-
-    Subsetting an AnnData object returns a view into the original object, meaning very little
-    additional memory is used upon subsetting. This is achieved through laziness, meaning
-    subsetting the constituent arrays is deferred until they are accessed. Copying a view causes
-    an equivalent "real" AnnData object to be generated. Attempting to modify a view (at any attribute
-    except X) is handled in a copy-on-modify manner, meaning the object is initialized in place.
-    Here's an example::
+    Subsetting an AnnData object returns a view into the original object,
+    meaning very little additional memory is used upon subsetting.
+    This is achieved lazily, meaning that the constituent arrays are subset on access.
+    Copying a view causes an equivalent “real” AnnData object to be generated.
+    Attempting to modify a view (at any attribute except X) is handled
+    in a copy-on-modify manner, meaning the object is initialized in place.
+    Here’s an example::
 
         batch1 = adata[adata.obs["batch"] == "batch1", :]
-        batch1.obs["value"] = 0  # This makes batch1 a "real" anndata object, with it's own data
+        batch1.obs["value"] = 0  # This makes batch1 a “real” AnnData object
 
-    At the end of this snippet: `adata` was not modified, and `batch1` is it's own AnnData object
-    with it's own data.
+    At the end of this snippet: `adata` was not modified,
+    and `batch1` is its own AnnData object with its own data.
 
-    Similar to Bioconductor's `ExpressionSet`, subsetting an AnnData object doesn't reduce the
-    dimensions of it's constituent arrays. This differs from behaviour of libraries like `pandas`,
-    `numpy`, and `xarray`. However, unlike the classes exposed by those libraries, there is no
-    concept of a one dimensional AnnData object. They have two inherent dimensions, :attr:`obs` and
-    :attr:`var`. Additionally, maintaining the dimensionality of the AnnData object allows for
-    consistent handling of :mod:`scipy.sparse` sparse matrices and :mod:`numpy` arrays.
+    Similar to Bioconductor’s `ExpressionSet` and :mod:`scipy.sparse` matrices,
+    subsetting an AnnData object retains the dimensionality of its constituent arrays.
+    Therefore, unlike with the classes exposed by :mod:`pandas`, :mod:`numpy`,
+    and `xarray`, there is no concept of a one dimensional AnnData object.
+    AnnDatas always have two inherent dimensions, :attr:`obs` and :attr:`var`.
+    Additionally, maintaining the dimensionality of the AnnData object allows for
+    consistent handling of :mod:`scipy.sparse` matrices and :mod:`numpy` arrays.
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
@@ -338,7 +345,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             self._X = None
 
-        # set raw, easy, as it's immutable anyways...
+        # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
             self._raw = adata_ref.raw[oidx]
@@ -427,7 +434,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
-            # if type doesn't match, a copy is made, otherwise, use a view
+            # if type doesn’t match, a copy is made, otherwise, use a view
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
@@ -504,7 +511,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         if self.isbacked:
-            backed_at = f"backed at '{self.filename}'"
+            backed_at = f"backed at {str(self.filename)!r}"
         else:
             backed_at = ""
         descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars} {backed_at}"
@@ -552,7 +559,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 X = SparseDataset(X)
             # TODO: This should get replaced/ handled elsewhere
             # This is so that we can index into a backed dense dataset with
-            # indices that aren't strictly increasing
+            # indices that aren’t strictly increasing
             if self.is_view and isinstance(X, h5py.Dataset):
                 ordered = [self._oidx, self._vidx]  # this will be mutated
                 rev_order = [slice(None), slice(None)]
@@ -646,21 +653,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """\
         Dictionary-like object with values of the same dimensions as :attr:`X`.
 
-        Layers in AnnData are inspired by loompy's :ref:`loomlayers`.
+        Layers in AnnData are inspired by loompy’s :ref:`loomlayers`.
 
-        Return the layer named ``"unspliced"``::
+        Return the layer named `"unspliced"`::
 
             adata.layers["unspliced"]
 
-        Create or replace the ``"spliced"`` layer::
+        Create or replace the `"spliced"` layer::
 
             adata.layers["spliced"] = ...
 
-        Assign the 10th column of layer ``"spliced"`` to the variable a::
+        Assign the 10th column of layer `"spliced"` to the variable a::
 
             a = adata.layers["spliced"][:, 10]
 
-        Delete the ``"spliced"`` layer::
+        Delete the `"spliced"` layer::
 
             del adata.layers["spliced"]
 
@@ -684,17 +691,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def raw(self) -> Raw:
         """\
-        Store raw version of :attr:`X` and :attr:`var`
-        as ``.raw.X`` and ``.raw.var``.
+        Store raw version of :attr:`X` and :attr:`var` as `.raw.X` and `.raw.var`.
 
         The :attr:`raw` attribute is initialized with the current content
         of an object by setting::
 
             adata.raw = adata
 
-        Its content can be deleted by setting it back to ``None``::
+        Its content can be deleted::
 
             adata.raw = None
+            # or
+            del adata.raw
 
         Upon slicing an AnnData object along the obs (row) axis, :attr:`raw`
         is also sliced. Slicing an AnnData object along the vars (columns) axis
@@ -756,9 +764,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @property
     def var(self) -> pd.DataFrame:
-        """\
-        One-dimensional annotation of variables/ features (`pd.DataFrame`).
-        """
+        """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
         return self._var
 
     @var.setter
@@ -801,10 +807,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Multi-dimensional annotation of observations
         (mutable structured :class:`~numpy.ndarray`).
 
-        Stores for each key, a two or higher-dimensional :class:`numpy.ndarray`
-        of length ``n_obs``.
-        Is sliced with ``data`` and ``obs`` but behaves otherwise like a
-        :term:`mapping`.
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        of length `n_obs`.
+        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
         """
         return self._obsm
 
@@ -822,13 +827,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def varm(self) -> Union[AxisArrays, AxisArraysView]:
         """\
-        Multi-dimensional annotation of variables/ features
+        Multi-dimensional annotation of variables/features
         (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-        of length ``n_vars``.
-        Is sliced with ``data`` and ``var`` but behaves otherwise like a
-        :term:`mapping`.
+        of length `n_vars`.
+        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
         """
         return self._varm
 
@@ -850,9 +854,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         a mutable mapping with array-like values.
 
         Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-        whose first two dimensions are of length ``n_obs``.
-        Is sliced with ``data`` and ``obs`` but behaves otherwise like a
-        :term:`mapping`.
+        whose first two dimensions are of length `n_obs`.
+        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
         """
         return self._obsp
 
@@ -873,10 +876,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
 
-        Stores for each key, a two or higher-dimensional :class:`~numpy.ndarray`
-        whose first two dimensions are of length ``n_var``.
-        Is sliced with ``data`` and ``var`` but behaves otherwise like a
-        :term:`mapping`.
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        whose first two dimensions are of length `n_var`.
+        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
         """
         return self._varp
 
@@ -893,7 +895,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @property
     def obs_names(self) -> pd.Index:
-        """Names of observations (alias for ``.obs.index``)."""
+        """Names of observations (alias for `.obs.index`)."""
         return self.obs.index
 
     @obs_names.setter
@@ -905,7 +907,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @property
     def var_names(self) -> pd.Index:
-        """Names of variables (alias for ``.var.index``)."""
+        """Names of variables (alias for `.var.index`)."""
         return self._var.index
 
     @var_names.setter
@@ -937,26 +939,23 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @property
     def isbacked(self) -> bool:
-        """``True`` if object is backed on disk, ``False`` otherwise."""
+        """`True` if object is backed on disk, `False` otherwise."""
         return self.filename is not None
 
     @property
     def is_view(self) -> bool:
-        """\
-        `True` if object is view of another AnnData object,
-        `False` otherwise.
-        """
+        """`True` if object is view of another AnnData object, `False` otherwise."""
         return self._is_view
 
     @property
     def filename(self) -> Optional[Path]:
         """\
-        Change to backing mode by setting the filename of a ``.h5ad`` file.
+        Change to backing mode by setting the filename of a `.h5ad` file.
 
         - Setting the filename writes the stored data to disk.
         - Setting the filename when the filename was previously another name
-          moves the backing file from the previous file to the new file. If you
-          want to copy the previous file, use ``copy(filename='new_filename')``.
+          moves the backing file from the previous file to the new file.
+          If you want to copy the previous file, use `copy(filename='new_filename')`.
         """
         return self.file.filename
 
@@ -1044,14 +1043,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\
-        Rename categories of annotation ``key`` in :attr:`obs`, :attr:`var`,
+        Rename categories of annotation `key` in :attr:`obs`, :attr:`var`,
         and :attr:`uns`.
 
-        Only supports passing a list/array-like ``categories`` argument.
+        Only supports passing a list/array-like `categories` argument.
 
-        Besides calling ``self.obs[key].cat.categories = categories`` -
+        Besides calling `self.obs[key].cat.categories = categories` –
         similar for :attr:`var` - this also renames categories in unstructured
-        annotation that uses the categorical annotation ``key``.
+        annotation that uses the categorical annotation `key`.
 
         Parameters
         ----------
@@ -1130,8 +1129,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if is_string_dtype(df[key]) and not is_categorical(df[key])
             ]
             for key in string_cols:
-                # make sure we only have strings (could be that there are
-                # np.nans (float), -666, '-666', for instance)
+                # make sure we only have strings
+                # (could be that there are np.nans (float), -666, "-666", for instance)
                 c = df[key].astype("U")
                 # make a categorical
                 c = pd.Categorical(c, categories=natsorted(np.unique(c)))
@@ -1170,7 +1169,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """\
         Inplace subsetting along variables dimension.
 
-        Same as ``adata = adata[:, index]``, but inplace.
+        Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
         self._init_as_actual(adata_subset, dtype=self._X.dtype)
@@ -1179,7 +1178,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """\
         Inplace subsetting along variables dimension.
 
-        Same as ``adata = adata[index, :]``, but inplace.
+        Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
         self._init_as_actual(adata_subset, dtype=self._X.dtype)
@@ -1213,7 +1212,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.file["X"]
         if self.is_view:
             raise ValueError(
-                "You're trying to transpose a view of an `AnnData`, "
+                "You’re trying to transpose a view of an `AnnData`, "
                 "which is currently not implemented. Call `.copy()` before transposing."
             )
 
@@ -1260,36 +1259,36 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if use_raw and is_layer:
             raise ValueError(
                 "Cannot use expression from both layer and raw. You provided:"
-                f"'use_raw={use_raw}' and 'layer={layer}'"
+                f"`use_raw={use_raw}` and `layer={layer}`"
             )
         if is_layer:
             return self.layers[layer]
         elif use_raw:
             if self.raw is None:
-                raise ValueError("This AnnData doesn't have a value in `.raw`.")
+                raise ValueError("This AnnData doesn’t have a value in `.raw`.")
             return self.raw.X
         else:
             return self.X
 
     def obs_vector(self, k: str, *, layer: Optional[str] = None) -> np.ndarray:
-        """
+        """\
         Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`, `.layers[k]`, or `.obs`.
+        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
-        Made for convenience, not performance. Intentionally permissive about
-        arguments, for easy iterative use.
+        Made for convenience, not performance.
+        Intentionally permissive about arguments, for easy iterative use.
 
         Params
         ------
         k
-            Key to use. Should be in `.var_names` or `.obs.columns`.
+            Key to use. Should be in :attr:`var_names` or :attr:`obs`\\ `.columns`.
         layer
-            What layer values should be returned from. If `None`, `.X` is used.
+            What layer values should be returned from. If `None`, :attr:`X` is used.
 
         Returns
         -------
         A one dimensional nd array, with values for each obs in the same order
-        as `.obs_names`.
+        as :attr:`obs_names`.
         """
         if layer == "X":
             if "X" in self.layers:
@@ -1312,9 +1311,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return np.ravel(a)
 
     def var_vector(self, k, *, layer: Optional[str] = None) -> np.ndarray:
-        """
+        """\
         Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`, `.layers[k]`, or `.obs`.
+        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
         Made for convenience, not performance. Intentionally permissive about
         arguments, for easy iterative use.
@@ -1322,14 +1321,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Params
         ------
         k
-            Key to use. Should be in `.obs_names` or `.var.columns`.
+            Key to use. Should be in :attr:`obs_names` or :attr:`var`\\ `.columns`.
         layer
-            What layer values should be returned from. If `None`, `.X` is used.
+            What layer values should be returned from. If `None`, :attr:`X` is used.
 
         Returns
         -------
         A one dimensional nd array, with values for each var in the same order
-        as `.var_names`.
+        as :attr:`var_names`.
         """
         if layer == "X":
             if "X" in self.layers:
@@ -1354,8 +1353,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):
         """\
-        Get an array from the layer (default layer='X') along the obs
-        dimension by first looking up ``obs.keys`` and then ``var.index``.
+        Get an array from the layer (default layer='X') along the :attr:`obs`
+        dimension by first looking up `obs.keys` and then :attr:`obs_names`.
         """
         if not use_raw or k in self.obs.columns:
             return self.obs_vector(k=k, layer=layer)
@@ -1365,8 +1364,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @utils.deprecated("var_vector")
     def _get_var_array(self, k, use_raw=False, layer=None):
         """\
-        Get an array from the layer (default layer='X') along the var
-        dimension by first looking up ``var.keys`` and then ``obs.index``.
+        Get an array from the layer (default layer='X') along the :attr:`var`
+        dimension by first looking up `var.keys` and then :attr:`var_names`.
         """
         if not use_raw or k in self.var.columns:
             return self.var_vector(k=k, layer=layer)
@@ -1378,7 +1377,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if not self.isbacked:
             if self.is_view:
                 # TODO: How do I unambiguously check if this is a copy?
-                # Subsetting this way means we don't have to have a view type
+                # Subsetting this way means we don’t have to have a view type
                 # defined for the matrix, which is needed for some of the
                 # current distributed backend.
                 X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
@@ -1433,7 +1432,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         The :attr:`uns`, :attr:`varm` and :attr:`obsm` attributes are ignored.
 
-        Currently, this works only in ``'memory'`` mode.
+        Currently, this works only in `'memory'` mode.
 
         Parameters
         ----------
@@ -1441,20 +1440,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             AnnData matrices to concatenate with. Each matrix is referred to as
             a “batch”.
         join
-            Use intersection (``'inner'``) or union (``'outer'``) of variables.
+            Use intersection (`'inner'`) or union (`'outer'`) of variables.
         batch_key
             Add the batch annotation to :attr:`obs` using this key.
         batch_categories
             Use these as categories for the batch annotation. By default, use increasing numbers.
         index_unique
             Make the index unique by joining the existing index names with the
-            batch category, using ``index_unique='-'``, for instance. Provide
-            ``None`` to keep existing indices.
+            batch category, using `index_unique='-'`, for instance. Provide
+            `None` to keep existing indices.
 
         Returns
         -------
         :class:`~anndata.AnnData`
-            The concatenated :class:`~anndata.AnnData`, where ``adata.obs[batch_key]``
+            The concatenated :class:`~anndata.AnnData`, where `adata.obs[batch_key]`
             stores a categorical variable labeling the batch.
 
         Notes
@@ -1462,9 +1461,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         .. warning::
 
-           If you use ``join='outer'`` this fills 0s for sparse data when
+           If you use `join='outer'` this fills 0s for sparse data when
            variables are absent in a batch. Use this with care. Dense data is
-           filled with ``NaN``. See the examples.
+           filled with `NaN`. See the examples.
 
         Examples
         --------
@@ -1586,8 +1585,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [nan,  3.,  2.,  1.],
                [nan,  6.,  5.,  4.]], dtype=float32)
 
-        For sparse data, everything behaves similarly, except that for
-        ``join='outer'``, zeros are added.
+        For sparse data, everything behaves similarly,
+        except that for `join='outer'`, zeros are added.
 
         >>> from scipy.sparse import csr_matrix
         >>> adata1 = AnnData(
@@ -1617,7 +1616,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 6., 5., 0.]], dtype=float32)
         """
         if self.isbacked:
-            raise ValueError("Currently, concatenate does only work in 'memory' mode.")
+            raise ValueError("Currently, concatenate does only work in memory mode.")
 
         if len(adatas) == 0:
             return self
@@ -1686,7 +1685,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         for key in shared_layers:
             layers[key] = []
 
-        # check whether tries to do 'outer' join and layers is non_empty.
+        # check whether tries to do “outer join” and layers is non_empty.
         if join == "outer" and len(shared_layers) > 0:
             logger.info(
                 "layers concatenation is not yet available for 'outer' "
@@ -1727,7 +1726,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # X
             if join == "outer":
-                # this is pretty slow, I guess sparse matrices shouldn't be
+                # this is pretty slow, I guess sparse matrices shouldn’t be
                 # constructed like that
                 idx_obs = slice(obs_i, obs_i + ad.n_obs)
                 idx_var = var_names.isin(vars_intersect)
@@ -1886,16 +1885,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         as_dense: Sequence[str] = (),
     ):
         """\
-        Write ``.h5ad``-formatted hdf5 file.
+        Write `.h5ad`-formatted hdf5 file.
 
         .. note::
-           Setting compression to ``'gzip'`` can save disk space but
-           will slow down writing and subsequent reading. Prior to
-           v0.6.16, this was the default for parameter ``compression``.
+           Setting compression to `'gzip'` can save disk space
+           but will slow down writing and subsequent reading.
+           Prior to v0.6.16, this was the default for parameter `compression`.
 
-        Generally, if you have sparse data that are stored as a dense
-        matrix, you can dramatically improve performance and reduce
-        disk space by converting to a :class:`~scipy.sparse.csr_matrix`::
+        Generally, if you have sparse data that are stored as a dense matrix,
+        you can dramatically improve performance and reduce disk space
+        by converting to a :class:`~scipy.sparse.csr_matrix`::
 
             from scipy.sparse import csr_matrix
             adata.X = csr_matrix(adata.X)
@@ -1913,7 +1912,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             supports `X` and `raw/X`.
         force_dense
             Write sparse data as a dense matrix.
-            Defaults to ``True`` if object is backed, otherwise to ``False``.
+            Defaults to `True` if object is backed, otherwise to `False`.
         """
         from .._io.write import _write_h5ad
 
@@ -1938,10 +1937,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ","):
         """\
-        Write annotation to ``.csv`` files.
+        Write annotation to `.csv` files.
 
         It is not possible to recover the full :class:`~anndata.AnnData` from
-        these files. Use :meth:`~anndata.AnnData.write` for this.
+        these files. Use :meth:`write` for this.
 
         Parameters
         ----------
@@ -1958,7 +1957,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
         """\
-        Write ``.loom``-formatted hdf5 file.
+        Write `.loom`-formatted hdf5 file.
 
         Parameters
         ----------
@@ -1980,8 +1979,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Parameters
         ----------
         store
-            The filename, a :class:`~typing.MutableMapping`,
-            or a Zarr storage class.
+            The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
         chunks
             Chunk shape.
         """
@@ -2016,8 +2014,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         replace: bool = True,
     ):
         """\
-        Return a chunk of the data matrix :attr:`X`
-        with random or specified indices.
+        Return a chunk of the data matrix :attr:`X` with random or specified indices.
 
         Parameters
         ----------
@@ -2025,13 +2022,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Depending on the type:
 
             :class:`int`
-                A random chunk with ``select`` rows will be returned.
+                A random chunk with `select` rows will be returned.
             :term:`sequence` (e.g. a list, tuple or numpy array) of :class:`int`
                 A chunk with these indices will be returned.
 
         replace
-            If ``select`` is an integer then ``True`` means random sampling of
-            indices with replacement, ``False`` without replacement.
+            If `select` is an integer then `True` means random sampling of
+            indices with replacement, `False` without replacement.
         """
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs

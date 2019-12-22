@@ -83,7 +83,7 @@ def test_readwrite_loom(tmp_path):
 
 
 def test_backed():
-    # backed mode for layers isn't implemented, layers stay in memory
+    # backed mode for layers isn’t implemented, layers stay in memory
     pass
 
 

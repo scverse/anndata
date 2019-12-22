@@ -59,7 +59,8 @@ def version(package):
 
 
 def _from_fixed_length_strings(value):
-    """Convert from fixed length strings to unicode.
+    """\
+    Convert from fixed length strings to unicode.
 
     For backwards compatability with older h5ad and zarr files.
     """
@@ -76,13 +77,13 @@ def _from_fixed_length_strings(value):
         if issubclass(np.dtype(dt_type).type, np.string_):
             dt_list[1] = f"U{int(dt_type[2:])}"
         elif is_annotated or np.issubdtype(np.dtype(dt_type), np.str_):
-            dt_list[1] = "O"  # Assumption that it's a vlen str
+            dt_list[1] = "O"  # Assumption that it’s a vlen str
         new_dtype.append(tuple(dt_list))
     return value.astype(new_dtype)
 
 
 def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
-    """
+    """\
     Convert variable length strings to fixed length.
 
     Currently a workaround for
