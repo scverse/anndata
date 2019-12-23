@@ -3,14 +3,25 @@
 .. role:: noteversion
 
 
-On Master :small:`July 29, 2019`
---------------------------------
+.. note::
+   Upcoming changes:
+
+   - :attr:`~anndata.AnnData.layers` and :attr:`~anndata.AnnData.X` will be unified.
+   - :attr:`~anndata.AnnData.filename` and :attr:`~anndata.AnnData.isbacked` will be unified under a new name.
+   - The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
+     :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
+
+
+0.7rc1 :small:`December 23, 2019`
+---------------------------------
 
 .. warning::
-   Breaking changes on master include:
+   Breaking changes introduced between 0.6.22.post1 and 0.7rc1:
 
-   - Elements of :class:`~anndata.AnnData` objects don’t have their dimensionality reduced when the main object is subset. This is to maintain consistency when subsetting. See discussion in :issue:`145`.
+   - Elements of :class:`~anndata.AnnData`\ s don’t have their dimensionality reduced when the main object is subset.
+     This is to maintain consistency when subsetting. See discussion in :issue:`145`.
    - Internal modules like `anndata.core` are private and their contents are not stable: See :issue:`174`.
+   - The old deprecated attributes `.smp*`. `.add` and `.data` have been removed.
 
    Currently broken features
 

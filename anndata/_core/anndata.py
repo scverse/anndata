@@ -2006,69 +2006,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     # --------------------------------------------------------------------------
 
     @property
-    @utils.deprecated("X")
-    def data(self):
-        return self.X
-
-    @data.setter
-    @utils.deprecated("X")
-    def data(self, value):
-        self.X = value
-
-    @property
-    @utils.deprecated("n_obs")
-    def n_smps(self):
-        return self.n_obs
-
-    @property
-    @utils.deprecated("obs")
-    def smp(self):
-        return self.obs
-
-    @smp.setter
-    @utils.deprecated("obs")
-    def smp(self, value):
-        self.obs = value
-
-    @property
-    @utils.deprecated("uns")
-    def add(self):
-        return self.uns
-
-    @add.setter
-    @utils.deprecated("uns")
-    def add(self, value):
-        self.uns = value
-
-    @property
-    @utils.deprecated("obsm")
-    def smpm(self):
-        return self.obsm
-
-    @smpm.setter
-    @utils.deprecated("obsm")
-    def smpm(self, value):
-        self.obsm = value
-
-    @property
-    @utils.deprecated("obs_names")
-    def smp_names(self):
-        return self.obs_names
-
-    @smp_names.setter
-    @utils.deprecated("obs_names")
-    def smp_names(self, names):
-        self.obs_names = names
-
-    @utils.deprecated("obs_keys")
-    def smp_keys(self):
-        return self.obs_keys()
-
-    @utils.deprecated("obsm_keys")
-    def smpm_keys(self):
-        return self.obsm_keys()
-
-    @property
     @utils.deprecated("is_view")
     def isview(self):
         return self.is_view
