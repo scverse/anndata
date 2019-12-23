@@ -1097,7 +1097,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     _sanitize = strings_to_categoricals  # backwards compat
 
-    def _slice_uns_sparse_matrices_inplace(self, uns: MutableMapping, oidx: Index1D):
+    def _slice_uns_sparse_matrices_inplace(
+        self, uns: MutableMapping, oidx: Index1D, keys: Tuple[str, ...] = ()
+    ):
+        # TODO: remove
         # slice sparse spatrices of n_obs × n_obs in self.uns
         if not (
             isinstance(oidx, slice)
@@ -1108,11 +1111,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             for k, v in uns.items():
                 # treat nested dicts
                 if isinstance(v, Mapping):
-                    self._slice_uns_sparse_matrices_inplace(v, oidx)
+                    self._slice_uns_sparse_matrices_inplace(v, oidx, (*keys, k))
                 if isinstance(v, sparse.spmatrix) and v.shape == (
                     self.n_obs,
                     self.n_obs,
                 ):
+                    path = "".join(f"['{key}']" for key in (*keys, k))
+                    warnings.warn(
+                        f"During AnnData slicing, found matrix at .obs{path} "
+                        "that happens to be dimensioned at n_obs×n_obs "
+                        f"({self.n_obs}×{self.n_obs}). "
+                        "This slicing behavior will soon go away.",
+                        DeprecationWarning,
+                    )
                     uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index: Index1D):
