@@ -1752,11 +1752,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 else:
                     layers[key] = np.concatenate(layers[key])
 
-            for key in shared_obsm_keys:
-                if any(issparse(a.obsm[key]) for a in all_adatas):
-                    obsm[key] = vstack(obsm[key])
-                else:
-                    obsm[key] = np.concatenate(obsm[key])
+        # obsm
+        for key in shared_obsm_keys:
+            if any(issparse(a.obsm[key]) for a in all_adatas):
+                obsm[key] = vstack(obsm[key])
+            else:
+                obsm[key] = np.concatenate(obsm[key])
 
         obs = pd.concat(out_obss, sort=True)
 
