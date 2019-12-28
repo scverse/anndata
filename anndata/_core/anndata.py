@@ -1632,11 +1632,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if len(adatas) == 0:
             return self
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
-            warnings.warn(
-                "Trying to treat first argument of `concatenate` as sequence "
-                "of AnnDatas. Do `AnnData.concatenate(*adata_list)` instead of "
-                "`adata_list[0].concatenate(adata_list[1:])`."
-            )
+            # wait with raising this warning until numpy starts raising a similar warning, too
+            # warnings.warn(
+            #     "Trying to treat first argument of `concatenate` as sequence "
+            #     "of AnnDatas. Do `AnnData.concatenate(*adata_list)` instead of "
+            #     "`adata_list[0].concatenate(adata_list[1:])`."
+            # )
             adatas = adatas[0]  # backwards compatibility
         all_adatas = (self,) + tuple(adatas)
 
