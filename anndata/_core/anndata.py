@@ -1166,14 +1166,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self.n_obs,
                     self.n_obs,
                 ):
-                    path = "".join(f"['{key}']" for key in (*keys, k))
-                    warnings.warn(
-                        f"During AnnData slicing, found matrix at .obs{path} "
-                        "that happens to be dimensioned at n_obs×n_obs "
-                        f"({self.n_obs}×{self.n_obs}). "
-                        "This slicing behavior will soon go away.",
-                        DeprecationWarning,
-                    )
+                    # path = "".join(f"['{key}']" for key in (*keys, k))
+                    # warnings.warn(
+                    #     f"During AnnData slicing, found matrix at .obs{path} "
+                    #     "that happens to be dimensioned at n_obs×n_obs "
+                    #     f"({self.n_obs}×{self.n_obs}). "
+                    #     "This slicing behavior will soon go away.",
+                    #     DeprecationWarning,
+                    # )
                     uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index: Index1D):
