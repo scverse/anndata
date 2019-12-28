@@ -404,8 +404,8 @@ def test_concatenate_dense():
     assert adata.obs_keys() == ["anno1", "anno2", "batch"]
     assert adata.var_keys() == ["annoA-0", "annoA-1", "annoB-2"]
     assert adata.var.values.tolist() == [[1, 2, 2], [2, 1, 1]]
-    assert adata.obsm_keys() == ['X_1', 'X_2']
-    assert adata.obsm['X_1'].tolist() == np.concatenate([X1, X1, X1]).tolist()
+    assert adata.obsm_keys() == ["X_1", "X_2"]
+    assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
 
     # with batch_key and batch_categories
     adata = adata1.concatenate(adata2, adata3, batch_key="batch1")
