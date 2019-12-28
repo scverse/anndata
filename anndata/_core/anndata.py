@@ -1646,6 +1646,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         for key in shared_layers:
             layers[key] = []
 
+        # create obsm dict that contains obsm keys shared among all AnnDatas
+        obsm = OrderedDict()
+        shared_obsm_keys = [
+            key
+            for key in all_adatas[0].obsm
+            if all([key in ad.obsm for ad in all_adatas])
+        ]
+        for key in shared_obsm_keys:
+            obsm[key] = []
+
         # check whether tries to do “outer join” and layers is non_empty.
         if join == "outer" and len(shared_layers) > 0:
             logger.info(
@@ -1701,6 +1711,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 for key in shared_layers:
                     layers[key].append(ad[:, vars_intersect].layers[key])
 
+            # obsm
+            if join == "inner":
+                for key in shared_obsm_keys:
+                    obsm[key].append(ad[:, vars_intersect].obsm[key])
+
             # obs
             obs = ad.obs.copy()
             obs[batch_key] = pd.Categorical(ad.n_obs * [categories[i]], categories)
@@ -1738,6 +1753,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 else:
                     layers[key] = np.concatenate(layers[key])
 
+            for key in shared_obsm_keys:
+                if any(issparse(a.obsm[key]) for a in all_adatas):
+                    obsm[key] = vstack(obsm[key])
+                else:
+                    obsm[key] = np.concatenate(obsm[key])
+
         obs = pd.concat(out_obss, sort=True)
 
         if sparse_Xs:
@@ -1753,7 +1774,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     layers[key] = layers[key].asformat(sparse_format_l)
 
         new_adata = (
-            AnnData(X, obs, var, layers=layers)
+            AnnData(X, obs, var, obsm=obsm, layers=layers)
             if join == "inner"
             else AnnData(X, obs, var)
         )
