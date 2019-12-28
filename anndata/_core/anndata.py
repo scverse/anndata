@@ -1712,9 +1712,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     layers[key].append(ad[:, vars_intersect].layers[key])
 
             # obsm
-            if join == "inner":
-                for key in shared_obsm_keys:
-                    obsm[key].append(ad[:, vars_intersect].obsm[key])
+            for key in shared_obsm_keys:
+                obsm[key].append(ad.obsm[key])
 
             # obs
             obs = ad.obs.copy()
@@ -1776,7 +1775,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         new_adata = (
             AnnData(X, obs, var, obsm=obsm, layers=layers)
             if join == "inner"
-            else AnnData(X, obs, var)
+            else AnnData(X, obs, var, obsm=obsm)
         )
 
         # raw

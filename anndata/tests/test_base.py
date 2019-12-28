@@ -378,18 +378,21 @@ def test_concatenate_dense():
         X1,
         dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         dict(var_names=["a", "b", "c"], annoA=[0, 1, 2]),
+        obsm=dict(X_1=X1, X_2=X2, X_3=X3),
         layers=dict(Xs=X1),
     )
     adata2 = AnnData(
         X2,
         dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
+        obsm=dict(X_1=X1, X_2=X2, X_3=X3),
         layers={"Xs": X2},
     )
     adata3 = AnnData(
         X3,
         dict(obs_names=["s1", "s2"], anno2=["d3", "d4"]),
         dict(var_names=["d", "c", "b"], annoB=[0, 1, 2]),
+        obsm=dict(X_1=X1, X_2=X2),
         layers=dict(Xs=X3),
     )
 
@@ -401,6 +404,10 @@ def test_concatenate_dense():
     assert adata.obs_keys() == ["anno1", "anno2", "batch"]
     assert adata.var_keys() == ["annoA-0", "annoA-1", "annoB-2"]
     assert adata.var.values.tolist() == [[1, 2, 2], [2, 1, 1]]
+    assert adata.obsm_keys() == ['X_1', 'X_2']
+    assert adata.obsm['X_1'].tolist() == np.concatenate([X1, X1, X1]).tolist()
+
+    # with batch_key and batch_categories
     adata = adata1.concatenate(adata2, adata3, batch_key="batch1")
     assert adata.obs_keys() == ["anno1", "anno2", "batch1"]
     adata = adata1.concatenate(adata2, adata3, batch_categories=["a1", "a2", "a3"])
