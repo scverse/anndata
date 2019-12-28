@@ -1629,6 +1629,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             raise ValueError("Currently, concatenate does only work in memory mode.")
 
+        from scipy.sparse import vstack
+
         if len(adatas) == 0:
             return self
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
@@ -1793,7 +1795,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 var.loc[vars_intersect, new_c] = ad.var.loc[vars_intersect, c]
 
         if join == "inner":
-            from scipy.sparse import vstack
 
             X = vstack(Xs) if sparse_Xs else np.concatenate(Xs)
 
