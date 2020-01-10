@@ -114,6 +114,15 @@ def test_names():
     assert adata.var_names.tolist() == ["a", "b"]
 
 
+def test_index_names():
+    adata = adata_dense.copy()
+    assert adata.obs_names.name is None
+    adata.obs_names = pd.Series(["AAD", "CCA"], name="barcodes")
+    assert adata.obs_names.name == "barcodes"
+    adata.obs_names = pd.Series(["x", "y"], name=0)  # happens, but we strip it
+    assert adata.obs_names.name is None
+
+
 def test_indices_dtypes():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
