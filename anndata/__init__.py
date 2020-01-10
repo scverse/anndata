@@ -90,7 +90,7 @@ try:
     __version__ = get_version(root="..", relative_to=__file__)
     del get_version
 except (LookupError, ImportError):
-    from .compat import version
+    from .compat import pkg_version
 
-    __version__ = version(__name__)
-    del version
+    __version__ = pkg_version(__name__)
+    del pkg_version

@@ -3,6 +3,8 @@ import pandas as pd
 
 
 # try importing zarr, dask, and zappy
+from packaging import version
+
 try:
     from zarr.core import Array as ZarrArray
 except ImportError:
@@ -50,12 +52,12 @@ except ImportError:
             pass
 
 
-def version(package):
+def pkg_version(package):
     try:
-        from importlib.metadata import version
+        from importlib.metadata import version as v
     except ImportError:
-        from importlib_metadata import version
-    return version(package)
+        from importlib_metadata import version as v
+    return version.parse(v(package))
 
 
 def _from_fixed_length_strings(value):

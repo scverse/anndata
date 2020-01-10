@@ -24,6 +24,7 @@ from .utils import (
     report_write_key_on_error,
     write_attribute,
     _read_legacy_raw,
+    EncodingVersions,
 )
 from . import WriteWarning
 
@@ -88,7 +89,7 @@ def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
     group = z.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
     group.attrs["column-order"] = list(df.columns)
 
     if df.index.name is not None:
@@ -180,7 +181,7 @@ def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
 def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csr_matrix"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.csr_matrix.value
     group.attrs["shape"] = value.shape
     group["data"] = value.data
     group["indices"] = value.indices
@@ -191,7 +192,7 @@ def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
 def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csc_matrix"
-    group.attrs["enocding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.csc_matrix.value
     group.attrs["shape"] = value.shape
     group["data"] = value.data
     group["indices"] = value.indices
@@ -201,7 +202,7 @@ def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
 def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.raw.value
     group.attrs["shape"] = value.shape
     write_attribute(group, "X", value.X, dataset_kwargs)
     write_attribute(group, "var", value.var, dataset_kwargs)
@@ -268,7 +269,7 @@ def read_attribute(value):
 
 @read_attribute.register(zarr.Array)
 @report_read_key_on_error
-def read_dataset(dataset):
+def read_dataset(dataset: zarr.Array):
     value = dataset[...]
     if not hasattr(value, "dtype"):
         return value
@@ -288,15 +289,17 @@ def read_dataset(dataset):
 
 @read_attribute.register(zarr.Group)
 @report_read_key_on_error
-def read_group(group):
+def read_group(group: zarr.Group):
     if "encoding-type" in group.attrs:
         enctype = group.attrs["encoding-type"]
+        EncodingVersions[enctype].check(group.name, group.attrs["encoding-version"])
         if enctype == "dataframe":
             return read_dataframe(group)
         elif enctype == "csr_matrix":
             return read_csr(group)
         elif enctype == "csc_matrix":
             return read_csc(group)
+        # At the moment, just treat raw as normal group
     return {k: read_attribute(group[k]) for k in group.keys()}
 
 
