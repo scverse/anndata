@@ -749,13 +749,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.setter
     def obs(self, value: pd.DataFrame):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError("Can only assign pd.DataFrame.")
-        if len(value) != self.n_obs:
-            raise ValueError("Length does not match.")
-        utils.warn_no_string_index(value.index)
-        if self.is_view:
-            self._init_as_actual(self.copy())
+        self._check_dim_df_and_actualize(value, self.n_obs)
         self._obs = value
 
     @obs.deleter
@@ -769,18 +763,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.setter
     def var(self, value: pd.DataFrame):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError("Can only assign pd.DataFrame.")
-        if len(value) != self.n_vars:
-            raise ValueError("Length does not match.")
-        utils.warn_no_string_index(value.index)
-        if self.is_view:
-            self._init_as_actual(self.copy())
+        self._check_dim_df_and_actualize(value, self.n_vars)
         self._var = value
 
     @var.deleter
     def var(self):
         self.var = pd.DataFrame(index=self.var_names)
+
+    def _check_dim_df_and_actualize(self, value: pd.DataFrame, n: int):
+        if not isinstance(value, pd.DataFrame):
+            raise ValueError("Can only assign pd.DataFrame.")
+        if len(value) != n:
+            raise ValueError("Length does not match.")
+        utils.warn_no_string_index(value.index)
+        if self.is_view:
+            self._init_as_actual(self.copy())
 
     @property
     def uns(self) -> MutableMapping:
@@ -902,8 +899,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def obs_names(self, names: Sequence[str]):
         utils.warn_no_string_index(names)
         self._obs.index = names
-        if not self._obs.index.is_unique:
-            utils.warn_names_duplicates("obs")
+        self._normalize_index(self._obs.index, "obs")
 
     @property
     def var_names(self) -> pd.Index:
@@ -914,8 +910,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def var_names(self, names: Sequence[str]):
         utils.warn_no_string_index(names)
         self._var.index = names
-        if not self._var.index.is_unique:
-            utils.warn_names_duplicates("var")
+        self._normalize_index(self._var.index, "var")
+
+    @staticmethod
+    def _normalize_index(idx: pd.Index, idx_name: str):
+        if isinstance(idx.name, (int, np.integer)):
+            idx.name = None
+        if not idx.is_unique:
+            utils.warn_names_duplicates(idx_name)
 
     def obs_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obs`."""
