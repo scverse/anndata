@@ -192,7 +192,7 @@ def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
 def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csc_matrix"
-    group.attrs["enocding-version"] = EncodingVersions.csc_matrix.value
+    group.attrs["encoding-version"] = EncodingVersions.csc_matrix.value
     group.attrs["shape"] = value.shape
     group["data"] = value.data
     group["indices"] = value.indices
@@ -269,7 +269,7 @@ def read_attribute(value):
 
 @read_attribute.register(zarr.Array)
 @report_read_key_on_error
-def read_dataset(dataset):
+def read_dataset(dataset: zarr.Array):
     value = dataset[...]
     if not hasattr(value, "dtype"):
         return value
