@@ -25,6 +25,7 @@ from .utils import (
     write_attribute,
     read_attribute,
     _read_legacy_raw,
+    EncodingVersions,
 )
 
 
@@ -128,7 +129,7 @@ def write_attribute_h5ad(f: H5Group, key: str, value, *args, **kwargs):
 def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.raw.value
     group.attrs["shape"] = value.shape
     write_attribute(f, "raw/X", value.X, dataset_kwargs=dataset_kwargs)
     write_attribute(f, "raw/var", value.var, dataset_kwargs=dataset_kwargs)
@@ -182,11 +183,11 @@ def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 @report_write_key_on_error
 def write_sparse_compressed(
-    f, key, value, fmt: str, dataset_kwargs=MappingProxyType({})
+    f, key, value, fmt: Literal["csr", "csc"], dataset_kwargs=MappingProxyType({})
 ):
     g = f.create_group(key)
     g.attrs["encoding-type"] = f"{fmt}_matrix"
-    g.attrs["encoding-version"] = "0.1.0"
+    g.attrs["encoding-version"] = EncodingVersions[f"{fmt}_matrix"].value
     g.attrs["shape"] = value.shape
 
     # Allow resizing
@@ -240,7 +241,7 @@ def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
     group = f.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
     group.attrs["column-order"] = list(df.columns)
 
     if df.index.name is not None:
@@ -504,8 +505,12 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     if "h5sparse_format" in group.attrs:  # Backwards compat
         return SparseDataset(group).to_memory()
 
-    encoding_type = group.attrs.get("encoding-type", "")
-    if encoding_type in {"", "raw"}:
+    encoding_type = group.attrs.get("encoding-type")
+    if encoding_type:
+        EncodingVersions[encoding_type].check(
+            group.name, group.attrs["encoding-version"]
+        )
+    if encoding_type in {None, "raw"}:
         pass
     elif encoding_type == "dataframe":
         return read_dataframe(group)
