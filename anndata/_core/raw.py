@@ -1,4 +1,4 @@
-from typing import Union, Mapping, Sequence
+from typing import Union, Mapping, Sequence, Tuple
 
 import h5py
 import numpy as np
@@ -110,8 +110,16 @@ class Raw:
         new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
             # Since there is no view of raws
-            new._varm = self._varm._view(self, (vidx,)).copy()
+            new._varm = self._varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
         return new
+
+    def __str__(self):
+        descr = f"Raw AnnData with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
+        for attr in ["var", "varm"]:
+            keys = getattr(self, attr).keys()
+            if len(keys) > 0:
+                descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
+        return descr
 
     def copy(self):
         return Raw(
@@ -166,6 +174,26 @@ class Raw:
         if issparse(a):
             a = a.toarray()
         return np.ravel(a)
+
+
+# This exists to accommodate AlignedMappings,
+# until we implement a proper RawView or get rid of Raw in favor of modes.
+class _RawViewHack:
+    def __init__(self, raw: Raw, vidx: Union[slice, np.ndarray]):
+        self.parent_raw = raw
+        self.vidx = vidx
+
+    @property
+    def shape(self) -> Tuple[int, int]:
+        return self.parent_raw.n_obs, len(self.var_names)
+
+    @property
+    def obs_names(self) -> pd.Index:
+        return self.parent_raw.obs_names
+
+    @property
+    def var_names(self) -> pd.Index:
+        return self.parent_raw.var_names[self.vidx]
 
 
 class IndexDimError(IndexError):
