@@ -87,3 +87,14 @@ def test_raw_backed(adata_raw, backing_h5ad):
     if adata_raw.raw[:, 0].X.shape[1] != 1:
         pytest.xfail("Raw is broken for backed slices")
     assert adata_raw.raw[:, 0].X[:].tolist() == [[1], [4], [7]]
+
+
+def test_raw_as_parent_view():
+    # https://github.com/theislab/anndata/issues/288
+    a = ad.AnnData(np.ones((4, 3)))
+    a.varm["PCs"] = np.ones((3, 3))
+    a.raw = a
+    # create a Raw containing views. This used to trigger #288.
+    b = a.raw[:, "0"]
+    # actualize
+    b.varm["PCs"] = np.array([[1, 2, 3]])
