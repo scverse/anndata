@@ -114,13 +114,22 @@ def test_names():
     assert adata.var_names.tolist() == ["a", "b"]
 
 
-def test_index_names():
+@pytest.mark.parametrize(
+    "names,after",
+    [
+        (["a", "b"], None),
+        (pd.Series(["AAD", "CCA"], name="barcodes"), "barcodes"),
+        (pd.Series(["x", "y"], name=0), None),
+        (pd.Index(["x", "y"], name=0), None),
+    ],
+)
+def test_index_names(names, after):
     adata = adata_dense.copy()
     assert adata.obs_names.name is None
-    adata.obs_names = pd.Series(["AAD", "CCA"], name="barcodes")
-    assert adata.obs_names.name == "barcodes"
-    adata.obs_names = pd.Series(["x", "y"], name=0)  # happens, but we strip it
-    assert adata.obs_names.name is None
+    adata.obs_names = names
+    assert adata.obs_names.name == after
+    if hasattr(names, "name"):
+        assert names.name is not None
 
 
 def test_indices_dtypes():

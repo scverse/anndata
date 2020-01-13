@@ -898,7 +898,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @obs_names.setter
     def obs_names(self, names: Sequence[str]):
         utils.warn_no_string_index(names)
-        self._obs.index = names
+        self._obs.index = names.copy() if isinstance(names, pd.Index) else names
         self._normalize_index(self._obs.index, "obs")
 
     @property
@@ -909,7 +909,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @var_names.setter
     def var_names(self, names: Sequence[str]):
         utils.warn_no_string_index(names)
-        self._var.index = names
+        self._var.index = names.copy() if isinstance(names, pd.Index) else names
         self._normalize_index(self._var.index, "var")
 
     @staticmethod
