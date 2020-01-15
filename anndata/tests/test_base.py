@@ -85,7 +85,7 @@ def test_create_from_df_with_obs_and_var():
 def test_create_from_df_with_obs_and_var_series():
     df = pd.DataFrame(np.ones((3, 2)), index=["a", "b", "c"], columns=["A", "B"])
     obs = pd.DataFrame(np.ones((3, 1)), index=df.index, columns=["C"])
-    var = pd.Series(np.ones((2, 1)), index=df.columns, name="D")
+    var = pd.Series(np.ones(2), index=df.columns, name="D")
     ad = AnnData(df, obs=obs, var=var)
 
     assert var.tolist() == ad.var.D.tolist()
