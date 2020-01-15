@@ -91,11 +91,13 @@ def _check_2d_shape(X):
 
 
 def _gen_dataframe(anno, length, index_names):
-    if isinstance(anno, pd.DataFrame):
+    if isinstance(anno, pd.DataFrame) or isinstance(anno, pd.Series):
         anno = anno.copy()
         if not is_string_dtype(anno.index):
             logger.warning("Transforming to str index.")
             anno.index = anno.index.astype(str)
+        if isinstance(anno, pd.Series):
+            anno = pd.DataFrame(anno)
         return anno
     if anno is None or len(anno) == 0:
         _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
