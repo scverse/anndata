@@ -1114,14 +1114,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         dont_modify = False  # only necessary for backed views
         if df is None:
             dfs = [self.obs, self.var]
-            if self.is_view:
-                if not self.isbacked:
-                    warnings.warn(
-                        "Initializing view as actual.", ImplicitModificationWarning,
-                    )
-                    self._init_as_actual(self.copy())
-                else:
-                    dont_modify = True
+            if self.is_view and self.isbacked:
+                dont_modify = True
         else:
             dfs = [df]
         for df in dfs:
