@@ -88,7 +88,7 @@ def check_index_is_strings(names: Sequence[Any], attr: str):
             f"AnnData expects .{attr}.index.name to be a string or None, "
             f"but you passed a name of type {type(names.name).__name__!r}"
         )
-    if not isinstance(names[0], str):
+    if not isinstance(names, pd.RangeIndex) and not isinstance(names[0], str):
         logger.warning(
             f"AnnData expects .{attr}.index to contain strings, "
             f"but your first indices are: {names[:2]}, …"
