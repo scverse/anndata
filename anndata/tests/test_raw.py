@@ -3,6 +3,7 @@ import pytest
 
 import anndata as ad
 from anndata._core.anndata import ImplicitModificationWarning
+from anndata.tests.helpers import assert_equal
 
 
 # -------------------------------------------------------------------------------
@@ -37,7 +38,9 @@ def adata_raw():
         np.array(data), obs=obs_dict, var=var_dict, uns=uns_dict, dtype="int32"
     )
     adata.raw = adata
-    return adata[:, [0, 1]]
+    # Make them different shapes
+    adata = adata[:, [0, 1]].copy()
+    return adata
 
 
 # -------------------------------------------------------------------------------
@@ -65,11 +68,24 @@ def test_raw_of_view(adata_raw):
 
 
 def test_raw_rw(adata_raw, backing_h5ad):
-    with pytest.warns(
-        ImplicitModificationWarning, match="Initializing view as actual"
-    ):  # TODO: don’t modify adata just to write it
-        adata_raw.write(backing_h5ad)
-    adata_raw = ad.read(backing_h5ad)
+    adata_raw.write(backing_h5ad)
+    adata_read = ad.read(backing_h5ad)
+
+    assert_equal(adata_read, adata_raw, exact=True)
+
+    assert adata_raw.var_names.tolist() == ["var1", "var2"]
+    assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
+    assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
+
+
+def test_raw_view_rw(adata_raw, backing_h5ad):
+    # Make sure it still writes correctly if the object is a view
+    adata_raw_view = adata_raw[:, adata_raw.var_names]
+    assert_equal(adata_raw_view, adata_raw)
+    adata_raw_view.write(backing_h5ad)
+    adata_read = ad.read(backing_h5ad)
+
+    assert_equal(adata_read, adata_raw_view, exact=True)
 
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
@@ -77,10 +93,17 @@ def test_raw_rw(adata_raw, backing_h5ad):
 
 
 def test_raw_backed(adata_raw, backing_h5ad):
-    with pytest.warns(
-        ImplicitModificationWarning, match="Initializing view as actual"
-    ):  # TODO: don’t modify adata just to write it
-        adata_raw.filename = backing_h5ad
+    adata_raw.filename = backing_h5ad
+
+    assert adata_raw.var_names.tolist() == ["var1", "var2"]
+    assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
+    if adata_raw.raw[:, 0].X.shape[1] != 1:
+        pytest.xfail("Raw is broken for backed slices")
+    assert adata_raw.raw[:, 0].X[:].tolist() == [[1], [4], [7]]
+
+
+def test_raw_view_backed(adata_raw, backing_h5ad):
+    adata_raw.filename = backing_h5ad
 
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
