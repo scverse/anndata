@@ -114,13 +114,34 @@ def test_names():
     assert adata.var_names.tolist() == ["a", "b"]
 
 
-def test_index_names():
+@pytest.mark.parametrize(
+    "names,after",
+    [
+        pytest.param(["a", "b"], None, id="list"),
+        pytest.param(
+            pd.Series(["AAD", "CCA"], name="barcodes"), "barcodes", id="Series-str"
+        ),
+        pytest.param(pd.Series(["x", "y"], name=0), None, id="Series-int"),
+    ],
+)
+@pytest.mark.parametrize("attr", ["obs_names", "var_names"])
+def test_index_names(names, after, attr):
     adata = adata_dense.copy()
-    assert adata.obs_names.name is None
-    adata.obs_names = pd.Series(["AAD", "CCA"], name="barcodes")
-    assert adata.obs_names.name == "barcodes"
-    adata.obs_names = pd.Series(["x", "y"], name=0)  # happens, but we strip it
-    assert adata.obs_names.name is None
+    assert getattr(adata, attr).name is None
+    setattr(adata, attr, names)
+    assert getattr(adata, attr).name == after
+    if hasattr(names, "name"):
+        assert names.name is not None
+
+
+@pytest.mark.parametrize("attr", ["obs_names", "var_names"])
+def test_index_names_error(attr):
+    adata = adata_dense.copy()
+    assert getattr(adata, attr).name is None
+    with pytest.raises(ValueError, match=fr"AnnData expects \.{attr[:3]}\.index\.name"):
+        setattr(adata, attr, pd.Index(["x", "y"], name=0))
+    assert getattr(adata, attr).tolist() != ["x", "y"]
+    assert getattr(adata, attr).tolist() == getattr(adata_dense, attr).tolist()
 
 
 def test_indices_dtypes():

@@ -82,11 +82,16 @@ def warn_names_duplicates(attr: str):
     )
 
 
-def warn_no_string_index(names: Sequence[Any]):
-    if not isinstance(names[0], str):
+def check_index_is_strings(names: Sequence[Any], attr: str):
+    if isinstance(names, pd.Index) and not isinstance(names.name, (str, type(None))):
+        raise ValueError(
+            f"AnnData expects .{attr}.index.name to be a string or None, "
+            f"but you passed a name of type {type(names.name).__name__!r}"
+        )
+    if not isinstance(names, pd.RangeIndex) and not isinstance(names[0], str):
         logger.warning(
-            f"AnnData expects string indices for some functionality, "
-            f"but your first two indices are: {names[:2]}. "
+            f"AnnData expects .{attr}.index to contain strings, "
+            f"but your first indices are: {names[:2]}, …"
         )
 
 

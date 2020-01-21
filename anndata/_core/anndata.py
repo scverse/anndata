@@ -749,7 +749,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.setter
     def obs(self, value: pd.DataFrame):
-        self._check_dim_df_and_actualize(value, self.n_obs)
+        self._check_dim_df_and_actualize(value, self.n_obs, "obs")
         self._obs = value
 
     @obs.deleter
@@ -763,19 +763,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.setter
     def var(self, value: pd.DataFrame):
-        self._check_dim_df_and_actualize(value, self.n_vars)
+        self._check_dim_df_and_actualize(value, self.n_vars, "var")
         self._var = value
 
     @var.deleter
     def var(self):
         self.var = pd.DataFrame(index=self.var_names)
 
-    def _check_dim_df_and_actualize(self, value: pd.DataFrame, n: int):
+    def _check_dim_df_and_actualize(self, value: pd.DataFrame, n: int, attr: str):
         if not isinstance(value, pd.DataFrame):
             raise ValueError("Can only assign pd.DataFrame.")
         if len(value) != n:
             raise ValueError("Length does not match.")
-        utils.warn_no_string_index(value.index)
+        utils.check_index_is_strings(value.index, attr)
         if self.is_view:
             self._init_as_actual(self.copy())
 
@@ -897,8 +897,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs_names.setter
     def obs_names(self, names: Sequence[str]):
-        utils.warn_no_string_index(names)
-        self._obs.index = names
+        utils.check_index_is_strings(names, "obs")
+        self.obs.index = names
         self._normalize_index(self._obs.index, "obs")
 
     @property
@@ -908,8 +908,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var_names.setter
     def var_names(self, names: Sequence[str]):
-        utils.warn_no_string_index(names)
-        self._var.index = names
+        utils.check_index_is_strings(names, "var")
+        self.var.index = names
         self._normalize_index(self._var.index, "var")
 
     @staticmethod
