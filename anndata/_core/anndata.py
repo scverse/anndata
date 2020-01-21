@@ -742,6 +742,51 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Number of variables/features."""
         return self._n_vars
 
+    def _set_dim_df(self, value: pd.DataFrame, attr: str):
+        if not isinstance(value, pd.DataFrame):
+            raise ValueError(f"Can only assign pd.DataFrame to {attr}.")
+        value_idx = self._prep_dim_index(value.index, attr)
+        if self.is_view:
+            self._init_as_actual(self.copy())
+        setattr(self, f"_{attr}", value)
+        self._set_dim_index(value_idx, attr)
+
+    def _prep_dim_index(self, value, attr: str) -> pd.Index:
+        """Prepares index to be uses as obs_names or var_names for AnnData object.AssertionError
+
+        If a pd.Index is passed, this will use a reference, otherwise a new index object is created.
+        """
+        if self.shape[attr == "var"] != len(value):
+            raise ValueError(
+                f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
+            )
+        if isinstance(value, pd.Index) and not isinstance(
+            value.name, (str, type(None))
+        ):
+            raise ValueError(
+                f"AnnData expects .{attr}.index.name to be a string or None, "
+                f"but you passed a name of type {type(value.name).__name__!r}"
+            )
+        else:
+            value = pd.Index(value)
+            if not isinstance(value.name, (str, type(None))):
+                value.name = None
+        if not isinstance(value, pd.RangeIndex) and not isinstance(
+            value[0], (str, bytes)
+        ):
+            logger.warning(
+                f"AnnData expects .{attr}.index to contain strings, "
+                f"but your first indices are: {value[:2]}, …"
+            )
+        return value
+
+    def _set_dim_index(self, value: pd.Index, attr: str):
+        # Assumes _prep_dim_index has been run
+        getattr(self, attr).index = value
+        for v in getattr(self, f"{attr}m").values():
+            if isinstance(v, pd.DataFrame):
+                v.index = value.copy()
+
     @property
     def obs(self) -> pd.DataFrame:
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
@@ -749,12 +794,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.setter
     def obs(self, value: pd.DataFrame):
-        self._check_dim_df_and_actualize(value, self.n_obs, "obs")
-        self._obs = value
+        self._set_dim_df(value, "obs")
 
     @obs.deleter
     def obs(self):
         self.obs = pd.DataFrame(index=self.obs_names)
+
+    @property
+    def obs_names(self) -> pd.Index:
+        """Names of observations (alias for `.obs.index`)."""
+        return self.obs.index
+
+    @obs_names.setter
+    def obs_names(self, names: Sequence[str]):
+        names = self._prep_dim_index(names, "obs")
+        self._set_dim_index(names, "obs")
 
     @property
     def var(self) -> pd.DataFrame:
@@ -763,21 +817,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.setter
     def var(self, value: pd.DataFrame):
-        self._check_dim_df_and_actualize(value, self.n_vars, "var")
-        self._var = value
+        self._set_dim_df(value, "var")
 
     @var.deleter
     def var(self):
         self.var = pd.DataFrame(index=self.var_names)
 
-    def _check_dim_df_and_actualize(self, value: pd.DataFrame, n: int, attr: str):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError("Can only assign pd.DataFrame.")
-        if len(value) != n:
-            raise ValueError("Length does not match.")
-        utils.check_index_is_strings(value.index, attr)
-        if self.is_view:
-            self._init_as_actual(self.copy())
+    @property
+    def var_names(self) -> pd.Index:
+        """Names of variables (alias for `.var.index`)."""
+        return self.var.index
+
+    @var_names.setter
+    def var_names(self, names: Sequence[str]):
+        names = self._prep_dim_index(names, "var")
+        self._set_dim_index(names, "var")
 
     @property
     def uns(self) -> MutableMapping:
@@ -889,35 +943,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @varp.deleter
     def varp(self):
         self.varp = dict()
-
-    @property
-    def obs_names(self) -> pd.Index:
-        """Names of observations (alias for `.obs.index`)."""
-        return self.obs.index
-
-    @obs_names.setter
-    def obs_names(self, names: Sequence[str]):
-        utils.check_index_is_strings(names, "obs")
-        self.obs.index = names
-        self._normalize_index(self._obs.index, "obs")
-
-    @property
-    def var_names(self) -> pd.Index:
-        """Names of variables (alias for `.var.index`)."""
-        return self._var.index
-
-    @var_names.setter
-    def var_names(self, names: Sequence[str]):
-        utils.check_index_is_strings(names, "var")
-        self.var.index = names
-        self._normalize_index(self._var.index, "var")
-
-    @staticmethod
-    def _normalize_index(idx: pd.Index, idx_name: str):
-        if isinstance(idx.name, (int, np.integer)):
-            idx.name = None
-        if not idx.is_unique:
-            utils.warn_names_duplicates(idx_name)
 
     def obs_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obs`."""

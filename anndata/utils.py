@@ -82,19 +82,6 @@ def warn_names_duplicates(attr: str):
     )
 
 
-def check_index_is_strings(names: Sequence[Any], attr: str):
-    if isinstance(names, pd.Index) and not isinstance(names.name, (str, type(None))):
-        raise ValueError(
-            f"AnnData expects .{attr}.index.name to be a string or None, "
-            f"but you passed a name of type {type(names.name).__name__!r}"
-        )
-    if not isinstance(names, pd.RangeIndex) and not isinstance(names[0], str):
-        logger.warning(
-            f"AnnData expects .{attr}.index to contain strings, "
-            f"but your first indices are: {names[:2]}, …"
-        )
-
-
 def ensure_df_homogeneous(df: pd.DataFrame, name: str) -> np.ndarray:
     arr = df.to_numpy()
     if df.dtypes.nunique() != 1:
