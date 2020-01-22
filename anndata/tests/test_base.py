@@ -125,7 +125,7 @@ def test_names():
     ],
 )
 @pytest.mark.parametrize("attr", ["obs_names", "var_names"])
-def test_index_names(names, after, attr):
+def test_setting_index_names(names, after, attr):
     adata = adata_dense.copy()
     assert getattr(adata, attr).name is None
     setattr(adata, attr, names)
@@ -133,15 +133,53 @@ def test_index_names(names, after, attr):
     if hasattr(names, "name"):
         assert names.name is not None
 
+    # Testing for views
+    new = adata[:, :]
+    assert new.is_view
+    setattr(new, attr, names)
+    assert_equal(new, adata, exact=True)
+    assert not new.is_view
+
 
 @pytest.mark.parametrize("attr", ["obs_names", "var_names"])
-def test_index_names_error(attr):
-    adata = adata_dense.copy()
+def test_setting_index_names_error(attr):
+    orig = adata_sparse[:2, :2]
+    adata = adata_sparse[:2, :2]
     assert getattr(adata, attr).name is None
     with pytest.raises(ValueError, match=fr"AnnData expects \.{attr[:3]}\.index\.name"):
         setattr(adata, attr, pd.Index(["x", "y"], name=0))
+    assert adata.is_view
     assert getattr(adata, attr).tolist() != ["x", "y"]
-    assert getattr(adata, attr).tolist() == getattr(adata_dense, attr).tolist()
+    assert getattr(adata, attr).tolist() == getattr(orig, attr).tolist()
+    assert_equal(orig, adata, exact=True)
+
+
+@pytest.mark.parametrize("dim", ["obs", "var"])
+def test_setting_dim_index(dim):
+    index_attr = f"{dim}_names"
+    mapping_attr = f"{dim}m"
+
+    orig = gen_adata((5, 5))
+    orig.raw = orig
+    curr = orig.copy()
+    view = orig[:, :]
+    new_idx = pd.Index(list("abcde"), name="letters")
+
+    setattr(curr, index_attr, new_idx)
+    pd.testing.assert_index_equal(getattr(curr, index_attr), new_idx)
+    pd.testing.assert_index_equal(getattr(curr, mapping_attr)["df"].index, new_idx)
+    pd.testing.assert_index_equal(curr.obs_names, curr.raw.obs_names)
+
+    # Testing view behaviour
+    setattr(view, index_attr, new_idx)
+    assert not view.is_view
+    pd.testing.assert_index_equal(getattr(view, index_attr), new_idx)
+    pd.testing.assert_index_equal(getattr(view, mapping_attr)["df"].index, new_idx)
+    with pytest.raises(AssertionError):
+        pd.testing.assert_index_equal(
+            getattr(view, index_attr), getattr(orig, index_attr)
+        )
+    assert_equal(view, curr, exact=True)
 
 
 def test_indices_dtypes():

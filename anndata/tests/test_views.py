@@ -349,6 +349,19 @@ def test_view_delattr(attr):
     assert_equal(getattr(subset, attr), getattr(empty, attr))
 
 
+@pytest.mark.parametrize(
+    "attr", ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]
+)
+def test_view_setattr_machinery(attr, subset_func, subset_func2):
+    # Tests that setting attributes on a view doesn't mess anything up too bad
+    adata = gen_adata((10, 10))
+    view = adata[subset_func(adata.obs_names), subset_func2(adata.var_names)]
+
+    actual = view.copy()
+    setattr(view, attr, getattr(actual, attr))
+    assert_equal(actual, view, exact=True)
+
+
 def test_layers_view():
     X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
