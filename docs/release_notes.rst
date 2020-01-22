@@ -13,11 +13,11 @@
    - Square matrices in :attr:`~anndata.AnnData.uns` will no longer be sliced (use `.{obs,var}p` instead).
 
 
-0.7rc1 :small:`December 23, 2019`
----------------------------------
+0.7 :small:`January 22, 2020`
+-----------------------------
 
 .. warning::
-   Breaking changes introduced between 0.6.22.post1 and 0.7rc1:
+   Breaking changes introduced between 0.6.22.post1 and 0.7:
 
    - Elements of :class:`~anndata.AnnData`\ s don’t have their dimensionality reduced when the main object is subset.
      This is to maintain consistency when subsetting. See discussion in :issue:`145`.
