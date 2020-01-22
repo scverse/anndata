@@ -1138,6 +1138,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         "AnnData, not on this view. You might encounter this"
                         "error message while copying or writing to disk."
                     )
+                if self.is_view:
+                    warnings.warn(
+                        "Initializing view as actual.", ImplicitModificationWarning
+                    )
+                # If `self` is a view, it will be actualized in the next line,
+                # therefore the previous warning
                 df[key] = c
                 logger.info(f"... storing {key!r} as categorical")
 

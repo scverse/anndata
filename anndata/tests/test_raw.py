@@ -82,7 +82,8 @@ def test_raw_view_rw(adata_raw, backing_h5ad):
     # Make sure it still writes correctly if the object is a view
     adata_raw_view = adata_raw[:, adata_raw.var_names]
     assert_equal(adata_raw_view, adata_raw)
-    adata_raw_view.write(backing_h5ad)
+    with pytest.warns(ImplicitModificationWarning, match="Initializing view as actual"):
+        adata_raw_view.write(backing_h5ad)
     adata_read = ad.read(backing_h5ad)
 
     assert_equal(adata_read, adata_raw_view, exact=True)
