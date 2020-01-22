@@ -1143,14 +1143,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         dont_modify = False  # only necessary for backed views
         if df is None:
             dfs = [self.obs, self.var]
-            if self.is_view:
-                if not self.isbacked:
-                    warnings.warn(
-                        "Initializing view as actual.", ImplicitModificationWarning,
-                    )
-                    self._init_as_actual(self.copy())
-                else:
-                    dont_modify = True
+            if self.is_view and self.isbacked:
+                dont_modify = True
         else:
             dfs = [df]
         for df in dfs:
@@ -1173,6 +1167,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         "AnnData, not on this view. You might encounter this"
                         "error message while copying or writing to disk."
                     )
+                if self.is_view:
+                    warnings.warn(
+                        "Initializing view as actual.", ImplicitModificationWarning
+                    )
+                # If `self` is a view, it will be actualized in the next line,
+                # therefore the previous warning
                 df[key] = c
                 logger.info(f"... storing {key!r} as categorical")
 
