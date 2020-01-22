@@ -388,17 +388,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # init from AnnData
             if isinstance(X, AnnData):
-                if any((obs, var, uns, obsm, varm)):
+                if any((obs, var, uns, obsm, varm, obsp, varp)):
                     raise ValueError(
                         "If `X` is a dict no further arguments must be provided."
                     )
-                X, obs, var, uns, obsm, varm, layers, raw = (
+                X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                     X._X,
                     X.obs,
                     X.var,
                     X.uns,
                     X.obsm,
                     X.varm,
+                    X.obsp,
+                    X.varp,
                     X.layers,
                     X.raw,
                 )
