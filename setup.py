@@ -26,6 +26,7 @@ setup(
     ],
     python_requires=">=3.6",
     packages=find_namespace_packages(include=["anndata", "anndata.*"]),
+    include_package_data=True,
     zip_safe=False,
     classifiers=[
         "Environment :: Console",
