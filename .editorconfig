@@ -10,3 +10,4 @@ max_line_length = 88
 [*.py]
 indent_size = 4
 indent_style = space
+
