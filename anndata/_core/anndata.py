@@ -782,6 +782,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _set_dim_index(self, value: pd.Index, attr: str):
         # Assumes _prep_dim_index has been run
+        if self.is_view:
+            self._init_as_actual(self.copy())
         getattr(self, attr).index = value
         for v in getattr(self, f"{attr}m").values():
             if isinstance(v, pd.DataFrame):
