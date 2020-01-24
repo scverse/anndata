@@ -114,13 +114,13 @@ def _clean_uns(
     """
     k_to_delete = set()
     for cats_name, cats in d.get("uns", {}).items():
-        if not cats_name.endswith('_categories'):
+        if not cats_name.endswith("_categories"):
             continue
-        name = cats_name.replace('_categories', '')
+        name = cats_name.replace("_categories", "")
         # fix categories with a single category
         if isinstance(cats, (str, int)):
             cats = [cats]
-        for ann in ['obs', 'var']:
+        for ann in ["obs", "var"]:
             if name not in d[ann]:
                 continue
             codes: np.ndarray = d[ann][name].values
