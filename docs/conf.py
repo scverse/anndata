@@ -66,9 +66,19 @@ nitpicky = True  # Report broken links
 suppress_warnings = ["ref.citation"]
 
 
+def work_around_issue_6785():
+    """See https://github.com/sphinx-doc/sphinx/issues/6785"""
+    from sphinx.ext import autodoc
+
+    # check if the code changes on the sphinx side and we can remove this
+    assert autodoc.PropertyDocumenter.priority > autodoc.AttributeDocumenter.priority
+    autodoc.PropertyDocumenter.priority = -100
+
+
 def setup(app):
-    # Don’t allow broken links
-    # app.warningiserror = True
+    work_around_issue_6785()
+    # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
+    app.warningiserror = True
     app.add_stylesheet("css/custom.css")
 
 
