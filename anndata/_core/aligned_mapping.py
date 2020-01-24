@@ -22,6 +22,9 @@ I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
 # TODO: pd.DataFrame only allowed in AxisArrays?
 V = Union[pd.DataFrame, spmatrix, np.ndarray]
 
+_ActualType = ClassVar[Type["AlignedActual"]]
+_ViewType = ClassVar[Type["AlignedView"]]
+
 
 class AlignedMapping(cabc.MutableMapping, ABC):
     """\
@@ -35,11 +38,11 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     _allow_df: ClassVar[bool]
     """If this mapping supports heterogeneous DataFrames"""
 
-    _View: ClassVar[Type["AlignedView"]]
+    _View: _ViewType
     """The view class for this aligned mapping."""
 
-    _Actual: ClassVar[Type["AlignedActual"]]
-    """The actual class (which has it’s own data) for this aligned mapping."""
+    _Actual: _ActualType
+    """The actual class (which has its own data) for this aligned mapping."""
 
     def __new__(
         cls,
@@ -98,13 +101,13 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def parent(self) -> Union["anndata.AnnData", "raw.Raw"]:
         return self._parent
 
-    def copy(self) -> "_Actual":
+    def copy(self) -> "_ActualType":
         d = self._Actual(self.parent, getattr(self, "_axis", None))
         for k, v in self.items():
             d[k] = v.copy()
         return d
 
-    def _view(self, parent: "anndata.AnnData", subset_idx: I) -> "_View":
+    def _view(self, parent: "anndata.AnnData", subset_idx: I) -> "_ViewType":
         """Returns a subset copy-on-write view of the object."""
         return self._View(parent, self, subset_idx=subset_idx)
 
@@ -114,6 +117,10 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
 
 class AlignedView(AlignedMapping, ABC):
+    """\
+    Aligned Mapping of an AnnData object where :attr:`~Anndata.is_view` is `True`.
+    """
+
     parent: "anndata.AnnData"
     """Reference to parent AnnData view"""
 
@@ -165,6 +172,10 @@ class AlignedView(AlignedMapping, ABC):
 
 
 class AlignedActual(AlignedMapping, ABC):
+    """\
+    Aligned Mapping of an AnnData object where :attr:`~Anndata.is_view` is `False`.
+    """
+
     _data: Dict[str, V]
     """Underlying mapping to the data"""
 
@@ -219,8 +230,8 @@ def _set_qualname(cls: Type):
 
 class AxisArrays(AlignedMapping, ABC):
     """\
-    Mapping of key→array-like,
-    where array-like is aligned to an axis of parent AnnData.
+    Mapping of :class:`str` → :attr:`~AnnData.n_obs`\\ ×? or
+    :attr:`~AnnData.n_var`\\ ×?
     """
 
     _axis: int
@@ -306,8 +317,7 @@ AxisArrays._Actual = _set_qualname(_AxisArraysActual)
 
 class Layers(AlignedMapping, ABC):
     """\
-    Mapping of key: array-like, where array-like is aligned to both axes of the
-    parent anndata.
+    Mapping of :class:`str` → :attr:`~AnnData.n_obs`\\ ×:attr:`~AnnData.n_var`
     """
 
     _allow_df = False
@@ -346,8 +356,8 @@ Layers._Actual = _set_qualname(_LayersActual)
 
 class PairwiseArrays(AlignedMapping, ABC):
     """\
-    Mapping of key: array-like, where both axes of array-like are aligned to
-    one axis of the parent anndata.
+    Mapping of :class:`str` → :attr:`~AnnData.n_obs`\\ ×:attr:`~AnnData.n_obs` or
+    :attr:`~AnnData.n_var`\\ ×:attr:`~AnnData.n_var`
     """
 
     _axis: int

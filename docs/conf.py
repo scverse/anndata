@@ -88,9 +88,11 @@ qualname_overrides = {
     "anndata._core.raw.Raw": "anndata.AnnData",
     "anndata._core.views.ArrayView": "numpy.ndarray",
     **{
-        f"anndata._core.aligned_mapping.{cls}{kind}": "typing.Mapping"
-        for cls in "Layers AxisArrays PairwiseArrays".split()
-        for kind in ["", "View"]
+        f"anndata._core.aligned_mapping.{cls}": f"anndata.{cls}"
+        for cls in (
+            *("AlignedMapping", "AlignedActual", "AlignedView"),
+            *("AxisArrays", "Layers", "PairwiseArrays"),
+        )
     },
 }
 
