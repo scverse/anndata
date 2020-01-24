@@ -10,10 +10,10 @@ from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
-from anndata.core.sparsedataset import SparseDataset
 from anndata import AnnData
-from anndata.core.views import ArrayView
-from anndata.core.alignedmapping import AlignedMapping
+from anndata._core.views import ArrayView
+from anndata._core.sparse_dataset import SparseDataset
+from anndata._core.aligned_mapping import AlignedMapping
 
 
 @singledispatch
@@ -43,9 +43,9 @@ def gen_vstr_recarray(m, n, dtype=None):
     letters = np.array(list(ascii_letters))
     gen_word = lambda l: "".join(np.random.choice(letters, l))
     arr = np.array([gen_word(l) for l in lengths]).reshape(m, n)
-    return pd.DataFrame(
-        arr, columns=[gen_word(5) for i in range(n)]
-    ).to_records(index=False, column_dtypes=dtype)
+    return pd.DataFrame(arr, columns=[gen_word(5) for i in range(n)]).to_records(
+        index=False, column_dtypes=dtype
+    )
 
 
 def gen_typed_df(n, index=None):
@@ -56,9 +56,7 @@ def gen_typed_df(n, index=None):
     return pd.DataFrame(
         dict(
             cat=pd.Categorical(np.random.choice(letters, n)),
-            cat_ordered=pd.Categorical(
-                np.random.choice(letters, n), ordered=True
-            ),
+            cat_ordered=pd.Categorical(np.random.choice(letters, n), ordered=True),
             int64=np.random.randint(-50, 50, n),
             float64=np.random.random(n),
             uint8=np.random.randint(255, size=n, dtype="uint8"),
@@ -89,27 +87,16 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-    ),
-    varm_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-    ),
-    layers_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-    ),
+    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
+    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
+    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
 ) -> AnnData:
-    """Helper function to generate a random anndata for testing purposes.
+    """\
+    Helper function to generate a random AnnData for testing purposes.
 
     Note: For `obsm_types`, `varm_types`, and `layers_types` these currently
-    just filter already created objects. In future, these should choose which
-    objects are created.
+    just filter already created objects.
+    In future, these should choose which objects are created.
 
     Params
     ------
@@ -133,8 +120,8 @@ def gen_adata(
     obs = gen_typed_df(M, obs_names)
     var = gen_typed_df(N, var_names)
     # For #147
-    obs.rename(columns={"cat": "obs_cat"}, inplace=True)
-    var.rename(columns={"cat": "var_cat"}, inplace=True)
+    obs.rename(columns=dict(cat="obs_cat"), inplace=True)
+    var.rename(columns=dict(cat="var_cat"), inplace=True)
 
     obsm = dict(
         array=np.random.random((M, 50)),
@@ -212,9 +199,7 @@ def array_int_subset(index, min_size=2):
 
 def slice_subset(index, min_size=2):
     while True:
-        points = np.random.choice(
-            np.arange(len(index) + 1), size=2, replace=False
-        )
+        points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
         s = slice(*sorted(points))
         if len(range(*s.indices(len(index)))) >= min_size:
             break
@@ -245,7 +230,7 @@ def subset_func(request):
 
 def format_msg(elem_name):
     if elem_name is not None:
-        return f"Error raised from element '{elem_name}'."
+        return f"Error raised from element {elem_name!r}."
     else:
         return ""
 
@@ -345,15 +330,12 @@ def assert_equal_mapping(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(AlignedMapping)
-def assert_equal_alignedmapping(a, b, exact=False, elem_name=None):
+def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
     a_indices = (a.parent.obs_names, a.parent.var_names)
     b_indices = (b.parent.obs_names, b.parent.var_names)
     for axis_idx in a.axes:
         assert_equal(
-            a_indices[axis_idx],
-            b_indices[axis_idx],
-            exact=exact,
-            elem_name=axis_idx,
+            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx,
         )
     assert a.attrname == b.attrname, format_msg(elem_name)
     assert_equal_mapping(a, b, exact=exact, elem_name=elem_name)
@@ -363,11 +345,7 @@ def assert_equal_alignedmapping(a, b, exact=False, elem_name=None):
 def assert_equal_index(a, b, exact=False, elem_name=None):
     if not exact:
         report_name(pd.testing.assert_index_equal)(
-            a,
-            b,
-            check_names=False,
-            check_categorical=False,
-            _elem_name=elem_name,
+            a, b, check_names=False, check_categorical=False, _elem_name=elem_name,
         )
     else:
         report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
@@ -375,9 +353,9 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AnnData)
 def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
-    """
+    """\
     Check whether two AnnData objects are equivalent,
-    raising an AssertionError if they aren't.
+    raising an AssertionError if they aren’t.
 
     Params
     ------
@@ -394,7 +372,7 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
     if not exact:
         # Reorder all elements if neccesary
         idx = [slice(None), slice(None)]
-        # Since it's a pain to compare a list of pandas objects
+        # Since it’s a pain to compare a list of pandas objects
         change_flag = False
         if not np.all(a.obs_names == b.obs_names):
             idx[0] = a.obs_names

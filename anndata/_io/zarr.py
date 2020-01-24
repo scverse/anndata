@@ -12,7 +12,8 @@ from pandas.api.types import is_categorical_dtype
 import numcodecs
 import zarr
 
-from ..core.anndata import AnnData, Raw
+from .._core.anndata import AnnData
+from .._core.raw import Raw
 from ..compat import (
     _from_fixed_length_strings,
     _to_fixed_length_strings,
@@ -22,6 +23,8 @@ from .utils import (
     report_read_key_on_error,
     report_write_key_on_error,
     write_attribute,
+    _read_legacy_raw,
+    EncodingVersions,
 )
 from . import WriteWarning
 
@@ -42,7 +45,7 @@ def write_zarr(
         adata.strings_to_categoricals(adata.raw.var)
     f = zarr.open(store, mode="w")
     if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
-        write_attribute(f, "X", adata.X, {"chunks": chunks, **dataset_kwargs})
+        write_attribute(f, "X", adata.X, dict(chunks=chunks, **dataset_kwargs))
     else:
         write_attribute(f, "X", adata.X, dataset_kwargs)
     write_attribute(f, "obs", adata.obs, dataset_kwargs)
@@ -83,12 +86,10 @@ def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
-            raise ValueError(
-                f"'{reserved}' is a reserved name for dataframe columns."
-            )
+            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
     group = z.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
     group.attrs["column-order"] = list(df.columns)
 
     if df.index.name is not None:
@@ -120,9 +121,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         codes: np.ndarray = categorical.codes
         category_key = f"__categories/{key}"
 
-        write_array(
-            group, category_key, categories, dataset_kwargs=dataset_kwargs
-        )
+        write_array(group, category_key, categories, dataset_kwargs=dataset_kwargs)
         write_array(group, key, codes, dataset_kwargs=dataset_kwargs)
 
         group[key].attrs["categories"] = category_key
@@ -134,8 +133,9 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
 
 @report_write_key_on_error
 def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
-    # If it's not an array, try and make it an array. If that fails, pickle it.
-    # Maybe rethink that, maybe this should just pickle, and have explicit implementations for everything else
+    # If it’s not an array, try and make it an array. If that fails, pickle it.
+    # Maybe rethink that, maybe this should just pickle,
+    # and have explicit implementations for everything else
     raise NotImplementedError(
         f"Failed to write value for {key}, since a writer for type {type(value)}"
         f" has not been implemented yet."
@@ -160,9 +160,7 @@ def write_array(g, key, value, dataset_kwargs=MappingProxyType({})):
         g[key][:] = value
     elif value.dtype.kind == "V":
         # Structured dtype
-        g.create_dataset(
-            key, data=_to_fixed_length_strings(value), **dataset_kwargs
-        )
+        g.create_dataset(key, data=_to_fixed_length_strings(value), **dataset_kwargs)
     else:
         g.create_dataset(key, data=value, **dataset_kwargs)
 
@@ -183,7 +181,7 @@ def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
 def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csr_matrix"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.csr_matrix.value
     group.attrs["shape"] = value.shape
     group["data"] = value.data
     group["indices"] = value.indices
@@ -194,7 +192,7 @@ def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
 def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csc_matrix"
-    group.attrs["enocding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.csc_matrix.value
     group.attrs["shape"] = value.shape
     group["data"] = value.data
     group["indices"] = value.indices
@@ -204,7 +202,7 @@ def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
 def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.raw.value
     group.attrs["shape"] = value.shape
     write_attribute(group, "X", value.X, dataset_kwargs)
     write_attribute(group, "var", value.var, dataset_kwargs)
@@ -235,7 +233,8 @@ ZARR_WRITE_REGISTRY = {
 
 
 def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
-    """Read from a hierarchical Zarr array store.
+    """\
+    Read from a hierarchical Zarr array store.
 
     Parameters
     ----------
@@ -256,17 +255,7 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         else:  # Base case
             d[k] = read_attribute(f[k])
 
-    # Backwards compat
-    raw = {}
-    if "raw.var" in f:
-        raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-    if "raw.varm" in f:
-        raw["varm"] = read_attribute(f["raw.varm"])
-    if "raw.X" in f:
-        raw["X"] = read_attribute(f["raw.X"])
-    if len(raw) > 0:
-        assert "raw" not in d
-        d["raw"] = raw
+    d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_attribute)
 
     _clean_uns(d)
 
@@ -280,7 +269,7 @@ def read_attribute(value):
 
 @read_attribute.register(zarr.Array)
 @report_read_key_on_error
-def read_dataset(dataset):
+def read_dataset(dataset: zarr.Array):
     value = dataset[...]
     if not hasattr(value, "dtype"):
         return value
@@ -300,39 +289,37 @@ def read_dataset(dataset):
 
 @read_attribute.register(zarr.Group)
 @report_read_key_on_error
-def read_group(group):
+def read_group(group: zarr.Group):
     if "encoding-type" in group.attrs:
         enctype = group.attrs["encoding-type"]
+        EncodingVersions[enctype].check(group.name, group.attrs["encoding-version"])
         if enctype == "dataframe":
             return read_dataframe(group)
         elif enctype == "csr_matrix":
             return read_csr(group)
         elif enctype == "csc_matrix":
             return read_csc(group)
+        # At the moment, just treat raw as normal group
     return {k: read_attribute(group[k]) for k in group.keys()}
 
 
 @report_read_key_on_error
 def read_csr(group: zarr.Group) -> sparse.csr_matrix:
     return sparse.csr_matrix(
-        (group["data"], group["indices"], group["indptr"]),
-        shape=group.attrs["shape"],
+        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"],
     )
 
 
 @report_read_key_on_error
 def read_csc(group: zarr.Group) -> sparse.csc_matrix:
     return sparse.csc_matrix(
-        (group["data"], group["indices"], group["indptr"]),
-        shape=group.attrs["shape"],
+        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"],
     )
 
 
 @report_read_key_on_error
 def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
-    """
-    Reads old format of dataframes
-    """
+    """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
@@ -370,13 +357,11 @@ def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
             # TODO: remove this code at some point post 0.7
             # TODO: Add tests for this
             warn(
-                f"Your file '{dataset.file.name}' has invalid categorical "
+                f"Your file {str(dataset.file.name)!r} has invalid categorical "
                 "encodings due to being written from a development version of "
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,
             )
-        return pd.Categorical.from_codes(
-            dataset[...], categories, ordered=ordered
-        )
+        return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
     else:
         return dataset[...]

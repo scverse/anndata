@@ -1,4 +1,4 @@
-"""
+"""\
 This file contains tests for conversion made during io.
 """
 import h5py
@@ -19,8 +19,7 @@ def mtx_format(request):
 
 
 @pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix],
-    ids=["scipy-csr", "scipy-csc"],
+    params=[sparse.csr_matrix, sparse.csc_matrix], ids=["scipy-csr", "scipy-csc"],
 )
 def spmtx_format(request):
     return request.param
@@ -98,9 +97,7 @@ def test_dense_to_sparse_memory(tmp_path, spmtx_format, to_convert):
     assert not isinstance(orig.X, sparse.spmatrix)
     assert not isinstance(orig.raw.X, sparse.spmatrix)
 
-    curr = ad.read_h5ad(
-        dense_path, as_sparse=to_convert, as_sparse_fmt=spmtx_format
-    )
+    curr = ad.read_h5ad(dense_path, as_sparse=to_convert, as_sparse_fmt=spmtx_format)
 
     if "X" in to_convert:
         assert isinstance(curr.X, spmtx_format)
@@ -117,8 +114,6 @@ def test_dense_to_sparse_errors(tmp_path):
     adata.write(dense_pth)
 
     with pytest.raises(NotImplementedError):
-        ad.read_h5ad(
-            dense_pth, as_sparse=("X",), as_sparse_fmt=sparse.coo_matrix
-        )
+        ad.read_h5ad(dense_pth, as_sparse=("X",), as_sparse_fmt=sparse.coo_matrix)
     with pytest.raises(NotImplementedError):
         ad.read_h5ad(dense_pth, as_sparse=("layers/like_X",))

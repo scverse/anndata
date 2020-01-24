@@ -23,32 +23,28 @@ from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
 
-from .alignedmapping import (
+from .raw import Raw
+from .index import _normalize_indices, _subset, Index, Index1D
+from .file_backing import AnnDataFileManager
+from .aligned_mapping import (
     AxisArrays,
     AxisArraysView,
     PairwiseArrays,
     PairwiseArraysView,
     Layers,
     LayersView,
-    _subset,
 )
 from .views import (
     ArrayView,
     DictView,
     DataFrameView,
     ViewArgs,
-    asview,
+    as_view,
     _resolve_idxs,
 )
-from .sparsedataset import SparseDataset
+from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import (
-    Index1D,
-    Index,
-    convert_to_dict,
-    unpack_index,
-    ensure_df_homogeneous,
-)
+from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
 from ..compat import ZarrArray, ZappyArray, DaskArray, Literal
 
@@ -70,7 +66,7 @@ class StorageType(Enum):
 def _find_corresponding_multicol_key(key, keys_multicol):
     """Find the corresponding multicolumn key."""
     for mk in keys_multicol:
-        if key.startswith(mk) and 'of' in key:
+        if key.startswith(mk) and "of" in key:
             return mk
     return None
 
@@ -78,7 +74,7 @@ def _find_corresponding_multicol_key(key, keys_multicol):
 # for backwards compat
 def _gen_keys_from_multicol_key(key_multicol, n_keys):
     """Generates single-column keys from multicolumn key."""
-    keys = [f'{key_multicol}{i + 1:03}of{n_keys:03}' for i in range(n_keys)]
+    keys = [f"{key_multicol}{i + 1:03}of{n_keys:03}" for i in range(n_keys)]
     return keys
 
 
@@ -90,68 +86,15 @@ def _check_2d_shape(X):
     """
     if X.dtype.names is None and len(X.shape) != 2:
         raise ValueError(
-            'X needs to be 2-dimensional, not ' f'{len(X.shape)}-dimensional.'
+            f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
         )
-
-
-def _normalize_index(
-    indexer, index: pd.Index
-) -> Union[slice, int, "np.ndarray[int]"]:
-    if not isinstance(index, RangeIndex):
-        assert (
-            index.dtype != float and index.dtype != int
-        ), 'Don’t call _normalize_index with non-categorical/string names'
-
-    # the following is insanely slow for sequences, we replaced it using pandas below
-    def name_idx(i):
-        if isinstance(i, str):
-            i = index.get_loc(i)
-        return i
-
-    if isinstance(indexer, slice):
-        start = name_idx(indexer.start)
-        stop = name_idx(indexer.stop)
-        # string slices can only be inclusive, so +1 in that case
-        if isinstance(indexer.stop, str):
-            stop = None if stop is None else stop + 1
-        step = indexer.step
-        return slice(start, stop, step)
-    elif isinstance(indexer, (np.integer, int)):
-        return indexer
-    elif isinstance(indexer, str):
-        return index.get_loc(indexer)  # int
-    elif isinstance(indexer, (Sequence, np.ndarray, pd.Index)):
-        if not isinstance(indexer, (np.ndarray, pd.Index)):
-            indexer = np.array(indexer)
-        if issubclass(indexer.dtype.type, (np.integer, np.floating)):
-            return indexer  # Might not work for range indexes
-        elif issubclass(indexer.dtype.type, np.bool_):
-            if indexer.shape != index.shape:
-                raise IndexError(
-                    f"Boolean index does not match AnnData's shape along this "
-                    f"dimension. Boolean index has shape {indexer.shape} while "
-                    f"AnnData index has shape {index.shape}."
-                )
-            positions = np.where(indexer)[0]
-            return positions  # np.ndarray[int]
-        else:  # indexer should be string array
-            positions = index.get_indexer(indexer)
-            if np.any(positions < 0):
-                not_found = indexer[positions < 0]
-                raise KeyError(
-                    f"Values {list(not_found)}, from {list(indexer)}, "
-                    "are not valid obs/ var names or indices."
-                )
-            return positions  # np.ndarray[int]
-    else:
-        raise IndexError(f'Unknown indexer {indexer!r} of type {type(indexer)}')
 
 
 def _gen_dataframe(anno, length, index_names):
     if isinstance(anno, pd.DataFrame):
         anno = anno.copy()
         if not is_string_dtype(anno.index):
-            logger.warning('Transforming to str index.')
+            logger.warning("Transforming to str index.")
             anno.index = anno.index.astype(str)
         return anno
     if anno is None or len(anno) == 0:
@@ -172,293 +115,6 @@ def _gen_dataframe(anno, length, index_names):
     return _anno
 
 
-class AnnDataFileManager:
-    """Backing file manager for AnnData."""
-
-    def __init__(
-        self,
-        adata: 'AnnData',
-        filename: Optional[PathLike] = None,
-        filemode: Optional[Literal['r', 'r+']] = None,
-    ):
-        self._adata = adata
-        self.filename = filename
-        self._filemode = filemode
-        self._file = None
-        if filename:
-            self.open()
-
-    def __repr__(self) -> str:
-        if self.filename is None:
-            return 'Backing file manager: no file is set.'
-        else:
-            return f'Backing file manager of file {self.filename}.'
-
-    def __contains__(self, x) -> bool:
-        return x in self._file
-
-    def __getitem__(
-        self, key: str
-    ) -> Union[h5py.Group, h5py.Dataset, SparseDataset]:
-        return self._file[key]
-
-    def __setitem__(
-        self, key: str, value: Union[h5py.Group, h5py.Dataset, SparseDataset]
-    ):
-        self._file[key] = value
-
-    def __delitem__(self, key: str):
-        del self._file[key]
-
-    @property
-    def filename(self) -> Path:
-        return self._filename
-
-    @filename.setter
-    def filename(self, filename: Optional[PathLike]):
-        self._filename = None if filename is None else Path(filename)
-
-    def open(
-        self,
-        filename: Optional[PathLike] = None,
-        filemode: Optional[Literal['r', 'r+']] = None,
-    ):
-        if filename is not None:
-            self.filename = filename
-        if filemode is not None:
-            self._filemode = filemode
-        if self.filename is None:
-            raise ValueError(
-                'Cannot open backing file if backing not initialized.'
-            )
-        self._file = h5py.File(self.filename, self._filemode)
-
-    def close(self):
-        """Close the backing file, remember filename, do *not* change to memory mode."""
-        if self._file is not None:
-            self._file.close()
-
-    def _to_memory_mode(self):
-        """Close the backing file, forget filename, *do* change to memory mode."""
-        self._adata.__X = self._adata.X[()]
-        self._file.close()
-        self._file = None
-        self._filename = None
-
-    @property
-    def isopen(self) -> bool:
-        """State of backing file."""
-        if self._file is None:
-            return False
-        # try accessing the id attribute to see if the file is open
-        return bool(self._file.id)
-
-
-# TODO: Implement views for Raw
-class Raw:
-    def __init__(
-        self,
-        adata: Optional['AnnData'] = None,
-        X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Union[AxisArrays, AxisArraysView, None] = None,
-        varm: Union[AxisArrays, AxisArraysView, None] = None,
-    ):
-        self._adata = adata
-        self._n_obs = adata.n_obs
-        if X is not None:
-            self._X = X
-            self._var = var
-            self._varm = AxisArrays(self, 1, varm)
-        else:
-            self._X = None if adata.isbacked else adata.X.copy()
-            self._var = adata.var.copy()
-            self._varm = AxisArrays(self, 1, adata.varm.copy())
-
-    @property
-    def X(self):
-        # TODO: Handle unsorted array of integer indices for h5py.Datasets
-        if self._adata.isbacked:
-            if not self._adata.file.isopen:
-                self._adata.file.open()
-            # Handle legacy file formats:
-            if "raw/X" in self._adata.file:
-                X = self._adata.file["raw/X"]
-            elif "raw.X" in self._adata.file:
-                X = self._adata.file['raw.X']  # Backwards compat
-            else:
-                raise AttributeError(
-                    f"Could not find dataset for raw X in file: "
-                    f"{self._adata.file.filename}."
-                )
-            if isinstance(X, h5py.Group):
-                X = SparseDataset(X)
-            # Check if we need to subset
-            if self._adata.isview:
-                # TODO: As noted above, implement views of raw
-                #       so we can know if we need to subset by var
-                return X[self._adata._oidx, slice(None)]
-            else:
-                return X
-        else:
-            return self._X
-
-    @property
-    def shape(self):
-        return self.n_obs, self.n_vars
-
-    @property
-    def var(self):
-        return self._var
-
-    @property
-    def n_vars(self):
-        return self._var.shape[0]
-
-    @property
-    def n_obs(self):
-        return self._n_obs
-
-    @property
-    def varm(self):
-        return self._varm
-
-    @property
-    def var_names(self):
-        return self.var.index
-
-    @property
-    def obs_names(self):
-        return self._adata.obs_names
-
-    def __getitem__(self, index):
-        oidx, vidx = self._normalize_indices(index)
-
-        # To preserve two dimensional shape
-        if isinstance(vidx, (int, np.integer)):
-            vidx = slice(vidx, vidx + 1, 1)
-        if isinstance(oidx, (int, np.integer)):
-            oidx = slice(oidx, oidx + 1, 1)
-
-        if not self._adata.isbacked:
-            X = _subset(self.X, (oidx, vidx))
-        else:
-            X = None
-
-        var = self._var.iloc[vidx]
-        new = Raw(self._adata, X=X, var=var)
-        if self._varm is not None:
-            new._varm = self._varm._view(
-                self, (vidx,)
-            ).copy()  # Since there is no view of raws
-        return new
-
-    def copy(self):
-        return Raw(
-            self._adata,
-            X=self._X.copy(),
-            var=self._var.copy(),
-            varm=None if self._varm is None else self._varm.copy(),
-        )
-
-    def to_adata(self):
-        """Create full AnnData object.
-        """
-        return AnnData(
-            X=self._X.copy(),
-            var=self._var.copy(),
-            varm=None if self._varm is None else self._varm.copy(),
-            obs=self._adata.obs.copy(),
-            obsm=self._adata.obsm.copy(),
-            uns=self._adata.uns.copy(),
-        )
-
-    def _normalize_indices(self, packed_index):
-        # deal with slicing with pd.Series
-        if isinstance(packed_index, pd.Series):
-            packed_index = packed_index.values
-        if isinstance(packed_index, tuple):
-            if len(packed_index) != 2:
-                raise IndexDimError(len(packed_index))
-            if isinstance(packed_index[1], pd.Series):
-                packed_index = packed_index[0], packed_index[1].values
-            if isinstance(packed_index[0], pd.Series):
-                packed_index = packed_index[0].values, packed_index[1]
-        obs, var = unpack_index(packed_index)
-        obs = _normalize_index(obs, self._adata.obs_names)
-        var = _normalize_index(var, self.var_names)
-        return obs, var
-
-    def var_vector(self, k: str) -> np.ndarray:
-        """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from `.X` or `.var`.
-
-        Made for convenience, not performance. Intentionally permissive about
-        arguments, for easy iterative use.
-
-        Params
-        ------
-        k
-            Key to use. Should be in `.obs_names` or `.var.columns`.
-
-        Returns
-        -------
-        A one dimensional nd array, with values for each var in the same order
-        as `.var_names`.
-        """
-        if k in self.var:
-            return self.var[k].values
-        else:
-            idx = self._normalize_indices((k, slice(None)))
-            a = self.X[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
-
-    def obs_vector(self, k: str) -> np.ndarray:
-        """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`.
-
-        Made for convenience, not performance. Intentionally permissive about
-        arguments, for easy iterative use.
-
-        Params
-        ------
-        k
-            Key to use. Should be in `.var_names` or `.obs.columns`. If `use_raw`,
-            value should be in `.raw.var_names` instead of `.var_names`.
-
-        Returns
-        -------
-        A one dimensional nd array, with values for each obs in the same order
-        as `.obs_names`.
-        """
-        idx = self._normalize_indices((slice(None), k))
-        a = self.X[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
-
-
-INDEX_DIM_ERROR_MSG = (
-    'You tried to slice an AnnData(View) object with an'
-    '{}-dimensional index, but only 2 dimensions exist in such an object.'
-)
-INDEX_DIM_ERROR_MSG_1D = (
-    '\nIf you tried to slice cells using adata[cells, ], '
-    'be aware that Python (unlike R) uses adata[cells, :] as slicing syntax.'
-)
-
-
-class IndexDimError(IndexError):
-    def __init__(self, n_dims):
-        msg = INDEX_DIM_ERROR_MSG.format(n_dims)
-        if n_dims == 1:
-            msg += INDEX_DIM_ERROR_MSG_1D
-        super().__init__(msg)
-
-
 class ImplicitModificationWarning(UserWarning):
     pass
 
@@ -468,15 +124,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     An annotated data matrix.
 
     :class:`~anndata.AnnData` stores a data matrix :attr:`X` together with annotations
-    of observations :attr:`obs`, variables :attr:`var` and unstructured annotations :attr:`uns`.
+    of observations :attr:`obs` (:attr:`obsm`, :attr:`obsp`),
+    variables :attr:`var` (:attr:`varm`, :attr:`varp`),
+    and unstructured annotations :attr:`uns`.
 
     .. figure:: https://falexwolf.de/img/scanpy/anndata.svg
        :width: 350px
 
-    An :class:`~anndata.AnnData` object ``adata`` can be sliced like a pandas
-    dataframe, for instance, ``adata_subset = adata[:, list_of_variable_names]``.
-    :class:`~anndata.AnnData`'s basic structure is similar to R's ExpressionSet
-    [Huber15]_. If setting an ``.h5ad``-formatted HDF5 backing file ``.filename``,
+    An :class:`~anndata.AnnData` object `adata` can be sliced like a
+    :class:`~pandas.DataFrame`,
+    for instance `adata_subset = adata[:, list_of_variable_names]`.
+    :class:`~anndata.AnnData`’s basic structure is similar to R’s ExpressionSet
+    [Huber15]_. If setting an `.h5ad`-formatted HDF5 backing file `.filename`,
     data remains on the disk but is automatically loaded into memory if needed.
     See this `blog post`_ for more details.
 
@@ -504,11 +163,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     dtype
         Data type used for storage.
     shape
-        Shape tuple (#observations, #variables). Can only be provided if ``X`` is ``None``.
+        Shape tuple (#observations, #variables). Can only be provided if `X` is `None`.
     filename
-        Name of backing file. See :class:`anndata.h5py.File`.
+        Name of backing file. See :class:`File`.
     filemode
-        Open mode of backing file. See :class:`anndata.h5py.File`.
+        Open mode of backing file. See :class:`File`.
 
     See Also
     --------
@@ -524,73 +183,77 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     Notes
     -----
-    :class:`~anndata.AnnData` stores observations (samples) of variables
-    (features) in the rows of a matrix. This is the convention of the modern
-    classics of statistics [Hastie09]_ and machine learning [Murphy12]_, the
-    convention of dataframes both in R and Python and the established statistics
+    :class:`~anndata.AnnData` stores observations (samples) of variables/features
+    in the rows of a matrix.
+    This is the convention of the modern classics of statistics [Hastie09]_
+    and machine learning [Murphy12]_,
+    the convention of dataframes both in R and Python and the established statistics
     and machine learning packages in Python (statsmodels_, scikit-learn_).
 
-    Single dimensional annotations of the observation and variables are stored in the :attr:`obs`
-    and :attr:`var` attributes as :class:`~pandas.DataFrame` s. This is intended for metrics
-    calculated over their axes. Multi-dimensional annotations are stored in :attr:`obsm` and
-    :attr:`varm`, which are aligned to the objects observation and variable dimensions
-    respectively. Additional measurements across both observations and variables are stored in
+    Single dimensional annotations of the observation and variables are stored
+    in the :attr:`obs` and :attr:`var` attributes as :class:`~pandas.DataFrame`\\ s.
+    This is intended for metrics calculated over their axes.
+    Multi-dimensional annotations are stored in :attr:`obsm` and :attr:`varm`,
+    which are aligned to the objects observation and variable dimensions respectively.
+    Square matrices representing graphs are stored in :attr:`obsp` and :attr:`varp`,
+    with both of their own dimensions aligned to their associated axis.
+    Additional measurements across both observations and variables are stored in
     :attr:`layers`.
 
-    Indexing into an AnnData object can be performed by relative position with numeric indices
-    (like pandas' :attr:`~pandas.DataFrame.iloc`), or by labels (like :attr:`~pandas.DataFrame.loc`).
-    To avoid ambiguity, indexes of the AnnData object are converted to strings by the constructor.
+    Indexing into an AnnData object can be performed by relative position
+    with numeric indices (like pandas’ :attr:`~pandas.DataFrame.iloc`),
+    or by labels (like :attr:`~pandas.DataFrame.loc`).
+    To avoid ambiguity with numeric indexing into observations or variables,
+    indexes of the AnnData object are converted to strings by the constructor.
 
-    Subsetting an AnnData object by indexing into it will also subset it's elements according to
-    the dimensions they were aligned to. This means an operation like `adata[list_of_obs, :]` will
-    also subset (albeit lazily) :attr:`obs`, :attr:`obsm`, and :attr:`layers`.
+    Subsetting an AnnData object by indexing into it will also subset its elements
+    according to the dimensions they were aligned to.
+    This means an operation like `adata[list_of_obs, :]` will also subset :attr:`obs`,
+    :attr:`obsm`, and :attr:`layers`.
 
-    .. TODO: This will be deprecated as of v0.7 and introduction of obsp, varp
-
-    If the unstructured annotations :attr:`uns` contain a sparse matrix of shape
-    :attr:`n_obs` × :attr:`n_obs`, these are subset with the observation dimension.
-
-    Subsetting an AnnData object returns a view into the original object, meaning very little
-    additional memory is used upon subsetting. This is achieved through laziness, meaning
-    subsetting the constituent arrays is deferred until they are accessed. Copying a view causes
-    an equivalent "real" AnnData object to be generated. Attempting to modify a view (at any attribute
-    except X) is handled in a copy-on-modify manner, meaning the object is initialized in place.
-    Here's an example::
+    Subsetting an AnnData object returns a view into the original object,
+    meaning very little additional memory is used upon subsetting.
+    This is achieved lazily, meaning that the constituent arrays are subset on access.
+    Copying a view causes an equivalent “real” AnnData object to be generated.
+    Attempting to modify a view (at any attribute except X) is handled
+    in a copy-on-modify manner, meaning the object is initialized in place.
+    Here’s an example::
 
         batch1 = adata[adata.obs["batch"] == "batch1", :]
-        batch1.obs["value"] = 0  # This makes batch1 a "real" anndata object, with it's own data
+        batch1.obs["value"] = 0  # This makes batch1 a “real” AnnData object
 
-    At the end of this snippet: `adata` was not modified, and `batch1` is it's own AnnData object
-    with it's own data.
+    At the end of this snippet: `adata` was not modified,
+    and `batch1` is its own AnnData object with its own data.
 
-    Similar to Bioconductor's `ExpressionSet`, subsetting an AnnData object doesn't reduce the
-    dimensions of it's constituent arrays. This differs from behaviour of libraries like `pandas`,
-    `numpy`, and `xarray`. However, unlike the classes exposed by those libraries, there is no
-    concept of a one dimensional AnnData object. They have two inherent dimensions, :attr:`obs` and
-    :attr:`var`. Additionally, maintaining the dimensionality of the AnnData object allows for
-    consistent handling of :mod:`scipy.sparse` sparse matrices and :mod:`numpy` arrays.
+    Similar to Bioconductor’s `ExpressionSet` and :mod:`scipy.sparse` matrices,
+    subsetting an AnnData object retains the dimensionality of its constituent arrays.
+    Therefore, unlike with the classes exposed by :mod:`pandas`, :mod:`numpy`,
+    and `xarray`, there is no concept of a one dimensional AnnData object.
+    AnnDatas always have two inherent dimensions, :attr:`obs` and :attr:`var`.
+    Additionally, maintaining the dimensionality of the AnnData object allows for
+    consistent handling of :mod:`scipy.sparse` matrices and :mod:`numpy` arrays.
 
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
     """
 
-    _BACKED_ATTRS = ['X', 'raw.X']
+    _BACKED_ATTRS = ["X", "raw.X"]
 
     # backwards compat
-    _H5_ALIASES = {
-        'X': {'X', '_X', 'data', '_data'},
-        'obs': {'obs', '_obs', 'smp', '_smp'},
-        'var': {'var', '_var'},
-        'uns': {'uns'},
-        'obsm': {'obsm', '_obsm', 'smpm', '_smpm'},
-        'varm': {'varm', '_varm'},
-        'layers': {'layers', '_layers'},
-    }
+    _H5_ALIASES = dict(
+        X={"X", "_X", "data", "_data"},
+        obs={"obs", "_obs", "smp", "_smp"},
+        var={"var", "_var"},
+        uns={"uns"},
+        obsm={"obsm", "_obsm", "smpm", "_smpm"},
+        varm={"varm", "_varm"},
+        layers={"layers", "_layers"},
+    )
 
-    _H5_ALIASES_NAMES = {
-        'obs': {'obs_names', 'smp_names', 'row_names', 'index'},
-        'var': {'var_names', 'col_names', 'index'},
-    }
+    _H5_ALIASES_NAMES = dict(
+        obs={"obs_names", "smp_names", "row_names", "index"},
+        var={"var_names", "col_names", "index"},
+    )
 
     def __init__(
         self,
@@ -600,14 +263,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         uns: Optional[Mapping[str, Any]] = None,
         obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        layers: Optional[
-            Mapping[str, Union[np.ndarray, sparse.spmatrix]]
-        ] = None,
-        raw: Optional[Raw] = None,
-        dtype: Union[np.dtype, str] = 'float32',
+        layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
+        raw: Optional[Mapping[str, Any]] = None,
+        dtype: Union[np.dtype, str] = "float32",
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
-        filemode: Optional[Literal['r', 'r+']] = None,
+        filemode: Optional[Literal["r", "r+"]] = None,
         asview: bool = False,
         *,
         obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
@@ -617,7 +278,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     ):
         if asview:
             if not isinstance(X, AnnData):
-                raise ValueError('`X` has to be an AnnData object.')
+                raise ValueError("`X` has to be an AnnData object.")
             self._init_as_view(X, oidx, vidx)
         else:
             self._init_as_actual(
@@ -637,23 +298,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 filemode=filemode,
             )
 
-    def _init_as_view(self, adata_ref: 'AnnData', oidx: Index, vidx: Index):
-        if adata_ref.isbacked and adata_ref.isview:
+    def _init_as_view(self, adata_ref: "AnnData", oidx: Index, vidx: Index):
+        if adata_ref.isbacked and adata_ref.is_view:
             raise ValueError(
-                'Currently, you cannot index repeatedly into a backed AnnData, '
-                'that is, you cannot make a view of a view.'
+                "Currently, you cannot index repeatedly into a backed AnnData, "
+                "that is, you cannot make a view of a view."
             )
-        self._isview = True
+        self._is_view = True
         if isinstance(oidx, (int, np.integer)):
             oidx = slice(oidx, oidx + 1, 1)
         if isinstance(vidx, (int, np.integer)):
             vidx = slice(vidx, vidx + 1, 1)
-        if adata_ref.isview:
+        if adata_ref.is_view:
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
-            oidx, vidx = _resolve_idxs(
-                (prev_oidx, prev_vidx), (oidx, vidx), adata_ref
-            )
+            oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
         self._adata_ref = adata_ref
         self._oidx = oidx
         self._vidx = vidx
@@ -676,9 +335,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
         self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
         # set attributes
-        self._obs = DataFrameView(obs_sub, view_args=(self, 'obs'))
-        self._var = DataFrameView(var_sub, view_args=(self, 'var'))
-        self._uns = DictView(uns_new, view_args=(self, 'uns'))
+        self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
+        self._var = DataFrameView(var_sub, view_args=(self, "var"))
+        self._uns = DictView(uns_new, view_args=(self, "uns"))
         self._n_obs = len(self.obs)
         self._n_vars = len(self.var)
 
@@ -686,7 +345,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             self._X = None
 
-        # set raw, easy, as it's immutable anyways...
+        # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
             self._raw = adata_ref.raw[oidx]
@@ -706,13 +365,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp=None,
         raw=None,
         layers=None,
-        dtype='float32',
+        dtype="float32",
         shape=None,
         filename=None,
         filemode=None,
     ):
         # view attributes
-        self._isview = False
+        self._is_view = False
         self._adata_ref = None
         self._oidx = None
         self._vidx = None
@@ -729,17 +388,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # init from AnnData
             if isinstance(X, AnnData):
-                if any((obs, var, uns, obsm, varm)):
+                if any((obs, var, uns, obsm, varm, obsp, varp)):
                     raise ValueError(
-                        'If `X` is a dict no further arguments must be provided.'
+                        "If `X` is a dict no further arguments must be provided."
                     )
-                X, obs, var, uns, obsm, varm, layers, raw = (
+                X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                     X._X,
                     X.obs,
                     X.var,
                     X.uns,
                     X.obsm,
                     X.varm,
+                    X.obsp,
+                    X.varp,
                     X.layers,
                     X.raw,
                 )
@@ -750,15 +411,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     obs = pd.DataFrame(index=X.index)
                 else:
                     if not X.index.equals(obs.index):
-                        raise ValueError('Index of obs must match index of X.')
+                        raise ValueError("Index of obs must match index of X.")
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 else:
                     if not X.columns.equals(var.index):
-                        raise ValueError(
-                            'Index of var must match columns of X.'
-                        )
-                X = ensure_df_homogeneous(X, 'X')
+                        raise ValueError("Index of var must match columns of X.")
+                X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
         # actually process the data
@@ -770,18 +429,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if isinstance(X, s_type.value):
                     break
             else:
-                class_names = ', '.join(
-                    c.__name__ for c in StorageType.classes()
-                )
+                class_names = ", ".join(c.__name__ for c in StorageType.classes())
                 raise ValueError(
-                    f'`X` needs to be of one of {class_names}, not {type(X)}.'
+                    f"`X` needs to be of one of {class_names}, not {type(X)}."
                 )
             if shape is not None:
-                raise ValueError(
-                    '`shape` needs to be `None` if `X` is not `None`.'
-                )
+                raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
-            # if type doesn't match, a copy is made, otherwise, use a view
+            # if type doesn’t match, a copy is made, otherwise, use a view
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
@@ -804,20 +459,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self._n_obs = shape[0]
                 else:
                     if self._n_obs != shape[0]:
-                        raise ValueError('`shape` is inconsistent with `obs`')
+                        raise ValueError("`shape` is inconsistent with `obs`")
                 if self._n_vars == 0:
                     self._n_vars = shape[1]
                 else:
                     if self._n_vars != shape[1]:
-                        raise ValueError('`shape` is inconsistent with `var`')
+                        raise ValueError("`shape` is inconsistent with `var`")
 
         # annotations
         self._obs = _gen_dataframe(
-            obs, self._n_obs, ['obs_names', 'row_names', 'smp_names']
+            obs, self._n_obs, ["obs_names", "row_names", "smp_names"]
         )
-        self._var = _gen_dataframe(
-            var, self._n_vars, ['var_names', 'col_names']
-        )
+        self._var = _gen_dataframe(var, self._n_vars, ["var_names", "col_names"])
 
         # unstructured annotations
         self._uns = uns or OrderedDict()
@@ -832,34 +485,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._check_dimensions()
         self._check_uniqueness()
 
-        # raw
-        if raw is None:
+        if self.filename:
+            assert not isinstance(
+                raw, Raw
+            ), "got raw from other adata but also filename?"
+            if {"raw", "raw.X"} & set(self.file):
+                raw = dict(X=None, **raw)
+        if not raw:
             self._raw = None
-        elif isinstance(raw, Raw):
-            self._raw = raw
-        else:
-            # is dictionary from reading the file, nothing that is meant for a user
-            if self.isbacked:
-                raw_key = "raw/X" if "raw/X" in self.file else "raw.X"
-                if raw_key not in self.file:
-                    raise KeyError(
-                        f"Tried to check shape of raw from {self.file.filename}, but there was no entry for 'raw/X'."
-                    )
-                if isinstance(self.file[raw_key], h5py.Group):
-                    shape = self.file[raw_key].attrs["shape"]
-                else:
-                    shape = self.file[raw_key].shape
-            else:
-                shape = raw["X"].shape
-
-            self._raw = Raw(
-                self,
-                X=raw.get("X", None),
-                var=_gen_dataframe(
-                    raw['var'], shape[1], ['var_names', 'col_names']
-                ),
-                varm=raw['varm'] if 'varm' in raw else None,
-            )
+        elif isinstance(raw, cabc.Mapping):
+            self._raw = Raw(self, **raw)
+        else:  # is a Raw from another AnnData
+            self._raw = Raw(self, raw._X, raw.var, raw.varm)
 
         # clean up old formats
         self._clean_up_old_format(uns)
@@ -869,40 +506,44 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __sizeof__(self) -> int:
         size = 0
-        for attr in ['_X', '_obs', '_var', '_uns', '_obsm', '_varm']:
+        for attr in ["_X", "_obs", "_var", "_uns", "_obsm", "_varm"]:
             s = getattr(self, attr).__sizeof__()
             size += s
         return size
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         if self.isbacked:
-            backed_at = f"backed at '{self.filename}'"
+            backed_at = f"backed at {str(self.filename)!r}"
         else:
-            backed_at = ''
-        descr = (
-            'AnnData object with n_obs × n_vars = '
-            f'{n_obs} × {n_vars} {backed_at}'
-        )
+            backed_at = ""
+        descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars} {backed_at}"
         for attr in [
-            'obs',
-            'var',
-            'uns',
-            'obsm',
-            'varm',
-            'layers',
-            'obsp',
-            'varp',
+            "obs",
+            "var",
+            "uns",
+            "obsm",
+            "varm",
+            "layers",
+            "obsp",
+            "varp",
         ]:
             keys = getattr(self, attr).keys()
             if len(keys) > 0:
-                descr += f'\n    {attr}: {str(list(keys))[1:-1]}'
+                descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
         return descr
 
     def __repr__(self) -> str:
-        if self.isview:
-            return 'View of ' + self._gen_repr(self.n_obs, self.n_vars)
+        if self.is_view:
+            return "View of " + self._gen_repr(self.n_obs, self.n_vars)
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
+
+    def __eq__(self, other):
+        """Equality testing"""
+        raise NotImplementedError(
+            "Equality comparisons are not supported for AnnData objects, "
+            "instead compare the desired attributes."
+        )
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -913,31 +554,28 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self) -> Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]]:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
-            if not self.file.isopen:
+            if not self.file.is_open:
                 self.file.open()
-            X = self.file['X']
+            X = self.file["X"]
             if isinstance(X, h5py.Group):
                 X = SparseDataset(X)
             # TODO: This should get replaced/ handled elsewhere
             # This is so that we can index into a backed dense dataset with
-            # indices that aren't strictly increasing
-            if self.isview and isinstance(X, h5py.Dataset):
+            # indices that aren’t strictly increasing
+            if self.is_view and isinstance(X, h5py.Dataset):
                 ordered = [self._oidx, self._vidx]  # this will be mutated
                 rev_order = [slice(None), slice(None)]
                 for axis, axis_idx in enumerate(ordered.copy()):
-                    if (
-                        isinstance(axis_idx, np.ndarray)
-                        and axis_idx.dtype.type != bool
-                    ):
+                    if isinstance(axis_idx, np.ndarray) and axis_idx.dtype.type != bool:
                         order = np.argsort(axis_idx)
                         ordered[axis] = axis_idx[order]
                         rev_order[axis] = np.argsort(order)
                 # from hdf5, then to real order
                 X = X[tuple(ordered)][tuple(rev_order)]
-            elif self.isview:
+            elif self.is_view:
                 X = X[self._oidx, self._vidx]
-        elif self.isview:
-            X = asview(
+        elif self.is_view:
+            X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
                 ViewArgs(self, "X"),
             )
@@ -954,26 +592,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @X.setter
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
-        if not isinstance(value, StorageType.classes()) and not np.isscalar(
-            value
-        ):
+        if not isinstance(value, StorageType.classes()) and not np.isscalar(value):
             if hasattr(value, "to_numpy") and hasattr(value, "dtypes"):
                 value = ensure_df_homogeneous(value, "X")
             else:  # TODO: asarray? asanyarray?
                 value = np.array(value)
         if value is None:
-            if self.isview:
+            if self.is_view:
                 raise ValueError(
-                    'Copy the view before setting the data matrix to `None`.'
+                    "Copy the view before setting the data matrix to `None`."
                 )
             if self.isbacked:
-                raise ValueError('Not implemented.')
+                raise ValueError("Not implemented.")
             self._X = None
             return
-        # If indices are both arrays, we need to modify them so we don't set values like coordinates
+        # If indices are both arrays, we need to modify them
+        # so we don’t set values like coordinates
         # This can occur if there are succesive views
         if (
-            self.isview
+            self.is_view
             and isinstance(self._oidx, np.ndarray)
             and isinstance(self._vidx, np.ndarray)
         ):
@@ -991,15 +628,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Not neccesary for row of 2d array
                 value = value.reshape(self.shape)
             if self.isbacked:
-                if self.isview:
-                    X = self.file['X']
+                if self.is_view:
+                    X = self.file["X"]
                     if isinstance(X, h5py.Group):
                         X = SparseDataset(X)
                     X[oidx, vidx] = value
                 else:
-                    self._set_backed('X', value)
+                    self._set_backed("X", value)
             else:
-                if self.isview:
+                if self.is_view:
                     if sparse.issparse(self._adata_ref._X) and isinstance(
                         value, np.ndarray
                     ):
@@ -1009,7 +646,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self._X = value
         else:
             raise ValueError(
-                f'Data matrix has wrong shape {value.shape}, need to be {self.shape}.'
+                f"Data matrix has wrong shape {value.shape}, "
+                f"need to be {self.shape}."
             )
 
     @property
@@ -1017,21 +655,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """\
         Dictionary-like object with values of the same dimensions as :attr:`X`.
 
-        Layers in AnnData are inspired by loompy's :ref:`loomlayers`.
+        Layers in AnnData are inspired by loompy’s :ref:`loomlayers`.
 
-        Return the layer named ``"unspliced"``::
+        Return the layer named `"unspliced"`::
 
             adata.layers["unspliced"]
 
-        Create or replace the ``"spliced"`` layer::
+        Create or replace the `"spliced"` layer::
 
             adata.layers["spliced"] = ...
 
-        Assign the 10th column of layer ``"spliced"`` to the variable a::
+        Assign the 10th column of layer `"spliced"` to the variable a::
 
             a = adata.layers["spliced"][:, 10]
 
-        Delete the ``"spliced"`` layer::
+        Delete the `"spliced"` layer::
 
             del adata.layers["spliced"]
 
@@ -1044,7 +682,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @layers.setter
     def layers(self, value):
         layers = Layers(self, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._layers = layers
 
@@ -1055,17 +693,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def raw(self) -> Raw:
         """\
-        Store raw version of :attr:`X` and :attr:`var`
-        as ``.raw.X`` and ``.raw.var``.
+        Store raw version of :attr:`X` and :attr:`var` as `.raw.X` and `.raw.var`.
 
         The :attr:`raw` attribute is initialized with the current content
         of an object by setting::
 
             adata.raw = adata
 
-        Its content can be deleted by setting it back to ``None``::
+        Its content can be deleted::
 
             adata.raw = None
+            # or
+            del adata.raw
 
         Upon slicing an AnnData object along the obs (row) axis, :attr:`raw`
         is also sliced. Slicing an AnnData object along the vars (columns) axis
@@ -1079,19 +718,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self._raw
 
     @raw.setter
-    def raw(self, value: 'AnnData'):
+    def raw(self, value: "AnnData"):
         if not isinstance(value, AnnData):
             raise ValueError(
-                'Can only init raw attribute with an AnnData object. '
-                'Do `del adata.raw` to delete it'
+                "Can only init raw attribute with an AnnData object. "
+                "Do `del adata.raw` to delete it"
             )
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._raw = Raw(value)
 
     @raw.deleter
     def raw(self):
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._raw = None
 
@@ -1105,6 +744,53 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Number of variables/features."""
         return self._n_vars
 
+    def _set_dim_df(self, value: pd.DataFrame, attr: str):
+        if not isinstance(value, pd.DataFrame):
+            raise ValueError(f"Can only assign pd.DataFrame to {attr}.")
+        value_idx = self._prep_dim_index(value.index, attr)
+        if self.is_view:
+            self._init_as_actual(self.copy())
+        setattr(self, f"_{attr}", value)
+        self._set_dim_index(value_idx, attr)
+
+    def _prep_dim_index(self, value, attr: str) -> pd.Index:
+        """Prepares index to be uses as obs_names or var_names for AnnData object.AssertionError
+
+        If a pd.Index is passed, this will use a reference, otherwise a new index object is created.
+        """
+        if self.shape[attr == "var"] != len(value):
+            raise ValueError(
+                f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
+            )
+        if isinstance(value, pd.Index) and not isinstance(
+            value.name, (str, type(None))
+        ):
+            raise ValueError(
+                f"AnnData expects .{attr}.index.name to be a string or None, "
+                f"but you passed a name of type {type(value.name).__name__!r}"
+            )
+        else:
+            value = pd.Index(value)
+            if not isinstance(value.name, (str, type(None))):
+                value.name = None
+        if not isinstance(value, pd.RangeIndex) and not isinstance(
+            value[0], (str, bytes)
+        ):
+            logger.warning(
+                f"AnnData expects .{attr}.index to contain strings, "
+                f"but your first indices are: {value[:2]}, …"
+            )
+        return value
+
+    def _set_dim_index(self, value: pd.Index, attr: str):
+        # Assumes _prep_dim_index has been run
+        if self.is_view:
+            self._init_as_actual(self.copy())
+        getattr(self, attr).index = value
+        for v in getattr(self, f"{attr}m").values():
+            if isinstance(v, pd.DataFrame):
+                v.index = value.copy()
+
     @property
     def obs(self) -> pd.DataFrame:
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
@@ -1112,40 +798,44 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.setter
     def obs(self, value: pd.DataFrame):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError('Can only assign pd.DataFrame.')
-        if len(value) != self.n_obs:
-            raise ValueError('Length does not match.')
-        utils.warn_no_string_index(value.index)
-        if self.isview:
-            self._init_as_actual(self.copy())
-        self._obs = value
+        self._set_dim_df(value, "obs")
 
     @obs.deleter
     def obs(self):
         self.obs = pd.DataFrame(index=self.obs_names)
 
     @property
+    def obs_names(self) -> pd.Index:
+        """Names of observations (alias for `.obs.index`)."""
+        return self.obs.index
+
+    @obs_names.setter
+    def obs_names(self, names: Sequence[str]):
+        names = self._prep_dim_index(names, "obs")
+        self._set_dim_index(names, "obs")
+
+    @property
     def var(self) -> pd.DataFrame:
-        """\
-        One-dimensional annotation of variables/ features (`pd.DataFrame`).
-        """
+        """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
         return self._var
 
     @var.setter
     def var(self, value: pd.DataFrame):
-        if not isinstance(value, pd.DataFrame):
-            raise ValueError('Can only assign pd.DataFrame.')
-        if len(value) != self.n_vars:
-            raise ValueError('Length does not match.')
-        utils.warn_no_string_index(value.index)
-        if self.isview:
-            self._init_as_actual(self.copy())
-        self._var = value
+        self._set_dim_df(value, "var")
 
     @var.deleter
     def var(self):
         self.var = pd.DataFrame(index=self.var_names)
+
+    @property
+    def var_names(self) -> pd.Index:
+        """Names of variables (alias for `.var.index`)."""
+        return self.var.index
+
+    @var_names.setter
+    def var_names(self, names: Sequence[str]):
+        names = self._prep_dim_index(names, "var")
+        self._set_dim_index(names, "var")
 
     @property
     def uns(self) -> MutableMapping:
@@ -1156,9 +846,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def uns(self, value: MutableMapping):
         if not isinstance(value, MutableMapping):
             raise ValueError(
-                'Only mutable mapping types (e.g. dict) are allowed for `.uns`.'
+                "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
             )
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._uns = value
 
@@ -1172,17 +862,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Multi-dimensional annotation of observations
         (mutable structured :class:`~numpy.ndarray`).
 
-        Stores for each key, a two or higher-dimensional :class:`numpy.ndarray`
-        of length ``n_obs``.
-        Is sliced with ``data`` and ``obs`` but behaves otherwise like a
-        :term:`mapping`.
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        of length `n_obs`.
+        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
         """
         return self._obsm
 
     @obsm.setter
     def obsm(self, value):
         obsm = AxisArrays(self, 0, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._obsm = obsm
 
@@ -1193,20 +882,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def varm(self) -> Union[AxisArrays, AxisArraysView]:
         """\
-        Multi-dimensional annotation of variables/ features
+        Multi-dimensional annotation of variables/features
         (mutable structured :class:`~numpy.ndarray`).
 
         Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-        of length ``n_vars``.
-        Is sliced with ``data`` and ``var`` but behaves otherwise like a
-        :term:`mapping`.
+        of length `n_vars`.
+        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
         """
         return self._varm
 
     @varm.setter
     def varm(self, value):
         varm = AxisArrays(self, 1, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._varm = varm
 
@@ -1220,17 +908,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
 
-        Stores for each key a two or higher-dimensional :class:`np.ndarray`
-        whose first two dimensions are of length ``n_obs``.
-        Is sliced with ``data`` and ``obs`` but behaves otherwise like a
-        :term:`mapping`.
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        whose first two dimensions are of length `n_obs`.
+        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
         """
         return self._obsp
 
     @obsp.setter
     def obsp(self, value):
         obsp = PairwiseArrays(self, 0, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._obsp = obsp
 
@@ -1244,47 +931,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Pairwise annotation of observations,
         a mutable mapping with array-like values.
 
-        Stores for each key, a two or higher-dimensional :class:`np.ndarray`
-        whose first two dimensions are of length ``n_var``.
-        Is sliced with ``data`` and ``var`` but behaves otherwise like a
-        :term:`mapping`.
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        whose first two dimensions are of length `n_var`.
+        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
         """
         return self._varp
 
     @varp.setter
     def varp(self, value):
         varp = PairwiseArrays(self, 1, vals=convert_to_dict(value))
-        if self.isview:
+        if self.is_view:
             self._init_as_actual(self.copy())
         self._varp = varp
 
     @varp.deleter
     def varp(self):
         self.varp = dict()
-
-    @property
-    def obs_names(self) -> pd.Index:
-        """Names of observations (alias for ``.obs.index``)."""
-        return self.obs.index
-
-    @obs_names.setter
-    def obs_names(self, names: Sequence[str]):
-        utils.warn_no_string_index(names)
-        self._obs.index = names
-        if not self._obs.index.is_unique:
-            utils.warn_names_duplicates('obs')
-
-    @property
-    def var_names(self) -> pd.Index:
-        """Names of variables (alias for ``.var.index``)."""
-        return self._var.index
-
-    @var_names.setter
-    def var_names(self, names: Sequence[str]):
-        utils.warn_no_string_index(names)
-        self._var.index = names
-        if not self._var.index.is_unique:
-            utils.warn_names_duplicates('var')
 
     def obs_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obs`."""
@@ -1308,23 +970,23 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @property
     def isbacked(self) -> bool:
-        """``True`` if object is backed on disk, ``False`` otherwise."""
+        """`True` if object is backed on disk, `False` otherwise."""
         return self.filename is not None
 
     @property
-    def isview(self) -> bool:
-        """``True`` if object is view of another AnnData object, ``False`` otherwise."""
-        return self._isview
+    def is_view(self) -> bool:
+        """`True` if object is view of another AnnData object, `False` otherwise."""
+        return self._is_view
 
     @property
-    def filename(self) -> Optional[PathLike]:
+    def filename(self) -> Optional[Path]:
         """\
-        Change to backing mode by setting the filename of a ``.h5ad`` file.
+        Change to backing mode by setting the filename of a `.h5ad` file.
 
         - Setting the filename writes the stored data to disk.
         - Setting the filename when the filename was previously another name
-          moves the backing file from the previous file to the new file. If you
-          want to copy the previous file, use ``copy(filename='new_filename')``.
+          moves the backing file from the previous file to the new file.
+          If you want to copy the previous file, use `copy(filename='new_filename')`.
         """
         return self.file.filename
 
@@ -1355,37 +1017,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # write the content of self to disk
                 self.write(filename, force_dense=True)
             # open new file for accessing
-            self.file.open(filename, 'r+')
+            self.file.open(filename, "r+")
             # as the data is stored on disk, we can safely set self._X to None
             self._X = None
 
     def _set_backed(self, attr, value):
-        from ..readwrite.utils import write_attribute
+        from .._io.utils import write_attribute
 
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
-        # deal with tuples of length 1
-        if isinstance(index, tuple) and len(index) == 1:
-            index = index[0]
-        # deal with pd.Series
-        if isinstance(index, pd.Series):
-            index: Index = index.values
-        if isinstance(index, tuple):
-            if len(index) > 2:
-                raise ValueError(
-                    'AnnData can only be sliced in rows and columns.'
-                )
-            # deal with pd.Series
-            # TODO: The series should probably be aligned first
-            if isinstance(index[1], pd.Series):
-                index = index[0], index[1].values
-            if isinstance(index[0], pd.Series):
-                index = index[0].values, index[1]
-        obs, var = unpack_index(index)
-        obs = _normalize_index(obs, self.obs_names)
-        var = _normalize_index(var, self.var_names)
-        return obs, var
+        return _normalize_indices(index, self.obs_names, self.var_names)
 
     # TODO: this is not quite complete...
     def __delitem__(self, index: Index):
@@ -1394,15 +1036,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if not self.isbacked:
             del self._X[obs, var]
         else:
-            X = self.file['X']
+            X = self.file["X"]
             del X[obs, var]
-            self._set_backed('X', X)
+            self._set_backed("X", X)
         if var == slice(None):
             del self._obs.iloc[obs, :]
         if obs == slice(None):
             del self._var.iloc[var, :]
 
-    def __getitem__(self, index: Index) -> 'AnnData':
+    def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
@@ -1427,21 +1069,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Reset colors
                 del uns[color_key]
             else:
-                idx = np.where(
-                    np.in1d(all_categories, df_sub[k].cat.categories)
-                )[0]
+                idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
                 uns[color_key] = np.array(color_vec)[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\
-        Rename categories of annotation ``key`` in :attr:`obs`, :attr:`var`,
+        Rename categories of annotation `key` in :attr:`obs`, :attr:`var`,
         and :attr:`uns`.
 
-        Only supports passing a list/array-like ``categories`` argument.
+        Only supports passing a list/array-like `categories` argument.
 
-        Besides calling ``self.obs[key].cat.categories = categories`` -
+        Besides calling `self.obs[key].cat.categories = categories` –
         similar for :attr:`var` - this also renames categories in unstructured
-        annotation that uses the categorical annotation ``key``.
+        annotation that uses the categorical annotation `key`.
 
         Parameters
         ----------
@@ -1451,7 +1091,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
              New categories, the same number as the old categories.
         """
         if isinstance(categories, Mapping):
-            raise ValueError('Only list-like `categories` is supported.')
+            raise ValueError("Only list-like `categories` is supported.")
         if key in self.obs:
             old_categories = self.obs[key].cat.categories.tolist()
             self.obs[key].cat.rename_categories(categories, inplace=True)
@@ -1459,16 +1099,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             old_categories = self.var[key].cat.categories.tolist()
             self.var[key].cat.rename_categories(categories, inplace=True)
         else:
-            raise ValueError(f'{key} is neither in `.obs` nor in `.var`.')
+            raise ValueError(f"{key} is neither in `.obs` nor in `.var`.")
         # this is not a good solution
         # but depends on the scanpy conventions for storing the categorical key
         # as `groupby` in the `params` slot
         for k1, v1 in self.uns.items():
             if not (
                 isinstance(v1, Mapping)
-                and 'params' in v1
-                and 'groupby' in v1['params']
-                and v1['params']['groupby'] == key
+                and "params" in v1
+                and "groupby" in v1["params"]
+                and v1["params"]["groupby"] == key
             ):
                 continue
             for k2, v2 in v1.items():
@@ -1479,7 +1119,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         self.uns[k1][k2].dtype.names = categories
                     else:
                         logger.warning(
-                            f'Omitting {k1}/{k2} as old categories do not match.'
+                            f"Omitting {k1}/{k2} as old categories do not match."
                         )
 
     def strings_to_categoricals(self, df: Optional[pd.DataFrame] = None):
@@ -1503,15 +1143,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         dont_modify = False  # only necessary for backed views
         if df is None:
             dfs = [self.obs, self.var]
-            if self.isview:
-                if not self.isbacked:
-                    warnings.warn(
-                        "Initializing view as actual.",
-                        ImplicitModificationWarning,
-                    )
-                    self._init_as_actual(self.copy())
-                else:
-                    dont_modify = True
+            if self.is_view and self.isbacked:
+                dont_modify = True
         else:
             dfs = [df]
         for df in dfs:
@@ -1521,27 +1154,34 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if is_string_dtype(df[key]) and not is_categorical(df[key])
             ]
             for key in string_cols:
-                # make sure we only have strings (could be that there are
-                # np.nans (float), -666, '-666', for instance)
-                c = df[key].astype('U')
+                # make sure we only have strings
+                # (could be that there are np.nans (float), -666, "-666", for instance)
+                c = df[key].astype("U")
                 # make a categorical
                 c = pd.Categorical(c, categories=natsorted(np.unique(c)))
                 if len(c.categories) >= len(c):
                     continue
                 if dont_modify:
                     raise RuntimeError(
-                        'Please call `.strings_to_categoricals()` on full '
-                        'AnnData, not on this view. You might encounter this'
-                        'error message while copying or writing to disk.'
+                        "Please call `.strings_to_categoricals()` on full "
+                        "AnnData, not on this view. You might encounter this"
+                        "error message while copying or writing to disk."
                     )
+                if self.is_view:
+                    warnings.warn(
+                        "Initializing view as actual.", ImplicitModificationWarning
+                    )
+                # If `self` is a view, it will be actualized in the next line,
+                # therefore the previous warning
                 df[key] = c
-                logger.info(f'... storing {key!r} as categorical')
+                logger.info(f"... storing {key!r} as categorical")
 
     _sanitize = strings_to_categoricals  # backwards compat
 
     def _slice_uns_sparse_matrices_inplace(
-        self, uns: MutableMapping, oidx: Index1D
+        self, uns: MutableMapping, oidx: Index1D, keys: Tuple[str, ...] = ()
     ):
+        # TODO: remove
         # slice sparse spatrices of n_obs × n_obs in self.uns
         if not (
             isinstance(oidx, slice)
@@ -1552,18 +1192,26 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             for k, v in uns.items():
                 # treat nested dicts
                 if isinstance(v, Mapping):
-                    self._slice_uns_sparse_matrices_inplace(v, oidx)
+                    self._slice_uns_sparse_matrices_inplace(v, oidx, (*keys, k))
                 if isinstance(v, sparse.spmatrix) and v.shape == (
                     self.n_obs,
                     self.n_obs,
                 ):
+                    # path = "".join(f"['{key}']" for key in (*keys, k))
+                    # warnings.warn(
+                    #     f"During AnnData slicing, found matrix at .obs{path} "
+                    #     "that happens to be dimensioned at n_obs×n_obs "
+                    #     f"({self.n_obs}×{self.n_obs}). "
+                    #     "This slicing behavior will soon go away.",
+                    #     DeprecationWarning,
+                    # )
                     uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
 
     def _inplace_subset_var(self, index: Index1D):
         """\
         Inplace subsetting along variables dimension.
 
-        Same as ``adata = adata[:, index]``, but inplace.
+        Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
         self._init_as_actual(adata_subset, dtype=self._X.dtype)
@@ -1572,29 +1220,29 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """\
         Inplace subsetting along variables dimension.
 
-        Same as ``adata = adata[index, :]``, but inplace.
+        Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
-        self._init_as_actual(adata_subset, dtype=self._X.dtype)
+        self._init_as_actual(adata_subset, dtype=self.X.dtype)
 
     # TODO: Update, possibly remove
     def __setitem__(
         self, index: Index, val: Union[int, float, np.ndarray, sparse.spmatrix]
     ):
-        if self.isview:
-            raise ValueError('Object is view and cannot be accessed with `[]`.')
+        if self.is_view:
+            raise ValueError("Object is view and cannot be accessed with `[]`.")
         obs, var = self._normalize_indices(index)
         if not self.isbacked:
             self._X[obs, var] = val
         else:
-            X = self.file['X']
+            X = self.file["X"]
             X[obs, var] = val
-            self._set_backed('X', X)
+            self._set_backed("X", X)
 
     def __len__(self) -> int:
         return self.shape[0]
 
-    def transpose(self) -> 'AnnData':
+    def transpose(self) -> "AnnData":
         """\
         Transpose whole object.
 
@@ -1603,11 +1251,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if not self.isbacked:
             X = self.X
         else:
-            X = self.file['X']
-        if self.isview:
+            X = self.file["X"]
+        if self.is_view:
             raise ValueError(
-                'You\'re trying to transpose a view of an `AnnData`, which is currently not implemented. '
-                'Call `.copy()` before transposing.'
+                "You’re trying to transpose a view of an `AnnData`, "
+                "which is currently not implemented. Call `.copy()` before transposing."
             )
 
         def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
@@ -1645,43 +1293,44 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
     def _get_X(self, use_raw=False, layer=None):
-        """
-        Convenience method for getting expression values with common arguments and error handling.
+        """\
+        Convenience method for getting expression values
+        with common arguments and error handling.
         """
         is_layer = layer is not None
         if use_raw and is_layer:
             raise ValueError(
                 "Cannot use expression from both layer and raw. You provided:"
-                f"'use_raw={use_raw}' and 'layer={layer}'"
+                f"`use_raw={use_raw}` and `layer={layer}`"
             )
         if is_layer:
             return self.layers[layer]
         elif use_raw:
             if self.raw is None:
-                raise ValueError("This AnnData doesn't have a value in `.raw`.")
+                raise ValueError("This AnnData doesn’t have a value in `.raw`.")
             return self.raw.X
         else:
             return self.X
 
     def obs_vector(self, k: str, *, layer: Optional[str] = None) -> np.ndarray:
-        """
+        """\
         Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`, `.layers[k]`, or `.obs`.
+        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
-        Made for convenience, not performance. Intentionally permissive about
-        arguments, for easy iterative use.
+        Made for convenience, not performance.
+        Intentionally permissive about arguments, for easy iterative use.
 
         Params
         ------
         k
-            Key to use. Should be in `.var_names` or `.obs.columns`.
+            Key to use. Should be in :attr:`var_names` or :attr:`obs`\\ `.columns`.
         layer
-            What layer values should be returned from. If `None`, `.X` is used.
+            What layer values should be returned from. If `None`, :attr:`X` is used.
 
         Returns
         -------
         A one dimensional nd array, with values for each obs in the same order
-        as `.obs_names`.
+        as :attr:`obs_names`.
         """
         if layer == "X":
             if "X" in self.layers:
@@ -1704,9 +1353,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return np.ravel(a)
 
     def var_vector(self, k, *, layer: Optional[str] = None) -> np.ndarray:
-        """
+        """\
         Convenience function for returning a 1 dimensional ndarray of values
-        from `.X`, `.layers[k]`, or `.obs`.
+        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
         Made for convenience, not performance. Intentionally permissive about
         arguments, for easy iterative use.
@@ -1714,22 +1363,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Params
         ------
         k
-            Key to use. Should be in `.obs_names` or `.var.columns`.
+            Key to use. Should be in :attr:`obs_names` or :attr:`var`\\ `.columns`.
         layer
-            What layer values should be returned from. If `None`, `.X` is used.
+            What layer values should be returned from. If `None`, :attr:`X` is used.
 
         Returns
         -------
         A one dimensional nd array, with values for each var in the same order
-        as `.var_names`.
+        as :attr:`var_names`.
         """
         if layer == "X":
             if "X" in self.layers:
                 pass
             else:
                 warnings.warn(
-                    "In a future version of AnnData, access to `.X` by passing"
-                    " `layer='X'` will be removed. Instead pass `layer=None`.",
+                    "In a future version of AnnData, access to `.X` by passing "
+                    "`layer='X'` will be removed. Instead pass `layer=None`.",
                     FutureWarning,
                 )
                 layer = None
@@ -1746,8 +1395,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):
         """\
-        Get an array from the layer (default layer='X') along the obs
-        dimension by first looking up ``obs.keys`` and then ``var.index``.
+        Get an array from the layer (default layer='X') along the :attr:`obs`
+        dimension by first looking up `obs.keys` and then :attr:`obs_names`.
         """
         if not use_raw or k in self.obs.columns:
             return self.obs_vector(k=k, layer=layer)
@@ -1757,20 +1406,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @utils.deprecated("var_vector")
     def _get_var_array(self, k, use_raw=False, layer=None):
         """\
-        Get an array from the layer (default layer='X') along the var
-        dimension by first looking up ``var.keys`` and then ``obs.index``.
+        Get an array from the layer (default layer='X') along the :attr:`var`
+        dimension by first looking up `var.keys` and then :attr:`var_names`.
         """
         if not use_raw or k in self.var.columns:
             return self.var_vector(k=k, layer=layer)
         else:
             return self.raw.var_vector(k)
 
-    def copy(self, filename: Optional[PathLike] = None) -> 'AnnData':
+    def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.isview:
+            if self.is_view:
                 # TODO: How do I unambiguously check if this is a copy?
-                # Subsetting this way means we don't have to have a view type
+                # Subsetting this way means we don’t have to have a view type
                 # defined for the matrix, which is needed for some of the
                 # current distributed backend.
                 X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
@@ -1796,17 +1445,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varm=self.varm.copy(),
                 obsp=self.obsp.copy(),
                 varp=self.varp.copy(),
-                raw=None if self._raw is None else self._raw.copy(),
+                raw=self.raw.copy() if self.raw is not None else None,
                 layers=self.layers.copy(),
                 dtype=dtype,
             )
         else:
-            from ..readwrite import read_h5ad
+            from .._io import read_h5ad
 
             if filename is None:
                 raise ValueError(
-                    'To copy an AnnData object in backed mode, '
-                    'pass a filename: `.copy(filename=\'myfilename.h5ad\')`.'
+                    "To copy an AnnData object in backed mode, "
+                    "pass a filename: `.copy(filename='myfilename.h5ad')`."
                 )
             mode = self.file._filemode
             self.write(filename)
@@ -1814,18 +1463,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def concatenate(
         self,
-        *adatas: 'AnnData',
-        join: str = 'inner',
-        batch_key: str = 'batch',
+        *adatas: "AnnData",
+        join: str = "inner",
+        batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
-        index_unique: Optional[str] = '-',
-    ) -> 'AnnData':
+        index_unique: Optional[str] = "-",
+    ) -> "AnnData":
         """\
         Concatenate along the observations axis.
 
         The :attr:`uns`, :attr:`varm` and :attr:`obsm` attributes are ignored.
 
-        Currently, this works only in ``'memory'`` mode.
+        Currently, this works only in `'memory'` mode.
 
         Parameters
         ----------
@@ -1833,20 +1482,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             AnnData matrices to concatenate with. Each matrix is referred to as
             a “batch”.
         join
-            Use intersection (``'inner'``) or union (``'outer'``) of variables.
+            Use intersection (`'inner'`) or union (`'outer'`) of variables.
         batch_key
             Add the batch annotation to :attr:`obs` using this key.
         batch_categories
             Use these as categories for the batch annotation. By default, use increasing numbers.
         index_unique
             Make the index unique by joining the existing index names with the
-            batch category, using ``index_unique='-'``, for instance. Provide
-            ``None`` to keep existing indices.
+            batch category, using `index_unique='-'`, for instance. Provide
+            `None` to keep existing indices.
 
         Returns
         -------
         :class:`~anndata.AnnData`
-            The concatenated :class:`~anndata.AnnData`, where ``adata.obs[batch_key]``
+            The concatenated :class:`~anndata.AnnData`, where `adata.obs[batch_key]`
             stores a categorical variable labeling the batch.
 
         Notes
@@ -1854,9 +1503,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         .. warning::
 
-           If you use ``join='outer'`` this fills 0s for sparse data when
+           If you use `join='outer'` this fills 0s for sparse data when
            variables are absent in a batch. Use this with care. Dense data is
-           filled with ``NaN``. See the examples.
+           filled with `NaN`. See the examples.
 
         Examples
         --------
@@ -1978,8 +1627,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [nan,  3.,  2.,  1.],
                [nan,  6.,  5.,  4.]], dtype=float32)
 
-        For sparse data, everything behaves similarly, except that for
-        ``join='outer'``, zeros are added.
+        For sparse data, everything behaves similarly,
+        except that for `join='outer'`, zeros are added.
 
         >>> from scipy.sparse import csr_matrix
         >>> adata1 = AnnData(
@@ -2009,18 +1658,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 6., 5., 0.]], dtype=float32)
         """
         if self.isbacked:
-            raise ValueError(
-                'Currently, concatenate does only work in \'memory\' mode.'
-            )
+            raise ValueError("Currently, concatenate does only work in memory mode.")
+
+        from scipy.sparse import vstack
 
         if len(adatas) == 0:
             return self
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
-            warnings.warn(
-                'Trying to treat first argument of `concatenate` as sequence '
-                'of AnnDatas. Do `AnnData.concatenate(*adata_list)` instead of '
-                '`adata_list[0].concatenate(adata_list[1:])`.'
-            )
+            # wait with raising this warning until numpy starts raising a similar warning, too
+            # warnings.warn(
+            #     "Trying to treat first argument of `concatenate` as sequence "
+            #     "of AnnDatas. Do `AnnData.concatenate(*adata_list)` instead of "
+            #     "`adata_list[0].concatenate(adata_list[1:])`."
+            # )
             adatas = adatas[0]  # backwards compatibility
         all_adatas = (self,) + tuple(adatas)
 
@@ -2032,7 +1682,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             ad.var_names = utils.make_index_unique(ad.var_names)
             if not printed_info:
                 logger.info(
-                    'Making variable names unique for controlled concatenation.'
+                    "Making variable names unique for controlled concatenation."
                 )
                 printed_info = True
 
@@ -2056,15 +1706,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         elif len(batch_categories) == len(all_adatas):
             categories = batch_categories
         else:
-            raise ValueError('Provide as many `batch_categories` as `adatas`.')
+            raise ValueError("Provide as many `batch_categories` as `adatas`.")
 
         out_shape = (sum(a.n_obs for a in all_adatas), len(var_names))
 
         sparse_Xs = [a.X for a in all_adatas if issparse(a.X)]
-        if join == 'outer':
-            if (
-                sparse_Xs
-            ):  # not sure whether the lil_matrix is really the best option
+        if join == "outer":
+            if sparse_Xs:  # not sure whether the lil_matrix is really the best option
                 X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
             else:
                 X = np.empty(out_shape, dtype=self.X.dtype)
@@ -2082,8 +1730,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         for key in shared_layers:
             layers[key] = []
 
-        # check whether tries to do 'outer' join and layers is non_empty.
-        if join == 'outer' and len(shared_layers) > 0:
+        # create obsm dict that contains obsm keys shared among all AnnDatas
+        obsm = OrderedDict()
+        shared_obsm_keys = [
+            key
+            for key in all_adatas[0].obsm
+            if all([key in ad.obsm for ad in all_adatas])
+        ]
+        for key in shared_obsm_keys:
+            obsm[key] = []
+
+        # check whether tries to do “outer join” and layers is non_empty.
+        if join == "outer" and len(shared_layers) > 0:
             logger.info(
                 "layers concatenation is not yet available for 'outer' "
                 "intersection and will be ignored."
@@ -2091,15 +1749,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # check whether layers are not consistently set in all AnnData objects.
         n_layers = np.array([len(ad.layers.keys()) for ad in all_adatas])
-        if join == 'inner' and not all(len(shared_layers) == n_layers):
+        if join == "inner" and not all(len(shared_layers) == n_layers):
             logger.info(
-                'layers are inconsistent - only layers that are shared among '
-                'all AnnData objects are included.'
+                "layers are inconsistent - only layers that are shared among "
+                "all AnnData objects are included."
             )
 
         var = pd.DataFrame(index=var_names)
 
-        if join == 'inner':
+        if join == "inner":
             ad_ref = all_adatas[0]
             cols_intersect = set(ad_ref.var.columns)
             for ad in all_adatas[1:]:
@@ -2107,9 +1765,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 cols_intersect = {
                     col
                     for col in cols_intersect
-                    if ad_ref.var.loc[var_names, col].equals(
-                        ad.var.loc[var_names, col]
-                    )
+                    if ad_ref.var.loc[var_names, col].equals(ad.var.loc[var_names, col])
                 }
                 if not cols_intersect:
                     break
@@ -2117,33 +1773,35 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs_i = 0  # start of next adata’s observations in X
         out_obss = []
         for i, ad in enumerate(all_adatas):
-            if join == 'outer':
+            if join == "outer":
                 # only names that are actually present in the current AnnData
                 vars_intersect = [v for v in var_names if v in ad.var_names]
             else:
                 vars_intersect = var_names
 
             # X
-            if join == 'outer':
-                # this is pretty slow, I guess sparse matrices shouldn't be
+            if join == "outer":
+                # this is pretty slow, I guess sparse matrices shouldn’t be
                 # constructed like that
-                X[
-                    obs_i : obs_i + ad.n_obs, var_names.isin(vars_intersect)
-                ] = ad[:, vars_intersect].X
+                idx_obs = slice(obs_i, obs_i + ad.n_obs)
+                idx_var = var_names.isin(vars_intersect)
+                X[idx_obs, idx_var] = ad[:, vars_intersect].X
             else:
                 Xs.append(ad[:, vars_intersect].X)
             obs_i += ad.n_obs
 
             # layers
-            if join == 'inner':
+            if join == "inner":
                 for key in shared_layers:
                     layers[key].append(ad[:, vars_intersect].layers[key])
 
+            # obsm
+            for key in shared_obsm_keys:
+                obsm[key].append(ad.obsm[key])
+
             # obs
             obs = ad.obs.copy()
-            obs[batch_key] = pd.Categorical(
-                ad.n_obs * [categories[i]], categories
-            )
+            obs[batch_key] = pd.Categorical(ad.n_obs * [categories[i]], categories)
             if is_string_dtype(all_adatas[0].obs.index) and not is_string_dtype(
                 ad.obs.index
             ):
@@ -2156,21 +1814,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # var
             for c in ad.var.columns:
-                if join == 'inner' and c in cols_intersect:
+                if join == "inner" and c in cols_intersect:
                     if c not in var.columns:
-                        var.loc[vars_intersect, c] = ad.var.loc[
-                            vars_intersect, c
-                        ]
+                        var.loc[vars_intersect, c] = ad.var.loc[vars_intersect, c]
                     continue
                 new_c = (
                     c
-                    + (index_unique if index_unique is not None else '-')
+                    + (index_unique if index_unique is not None else "-")
                     + categories[i]
                 )
                 var.loc[vars_intersect, new_c] = ad.var.loc[vars_intersect, c]
 
-        if join == 'inner':
-            from scipy.sparse import vstack
+        if join == "inner":
 
             X = vstack(Xs) if sparse_Xs else np.concatenate(Xs)
 
@@ -2180,12 +1835,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 else:
                     layers[key] = np.concatenate(layers[key])
 
+        # obsm
+        for key in shared_obsm_keys:
+            if any(issparse(a.obsm[key]) for a in all_adatas):
+                obsm[key] = vstack(obsm[key])
+            else:
+                obsm[key] = np.concatenate(obsm[key])
+
         obs = pd.concat(out_obss, sort=True)
 
         if sparse_Xs:
             sparse_format = sparse_Xs[0].getformat()
             X = X.asformat(sparse_format)
-        if join == 'inner':
+        if join == "inner":
             for key in shared_layers:
                 sparse_layers = [
                     a.layers[key] for a in all_adatas if issparse(a.layers[key])
@@ -2195,90 +1857,109 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     layers[key] = layers[key].asformat(sparse_format_l)
 
         new_adata = (
-            AnnData(X, obs, var, layers=layers)
-            if join == 'inner'
-            else AnnData(X, obs, var)
+            AnnData(X, obs, var, obsm=obsm, layers=layers)
+            if join == "inner"
+            else AnnData(X, obs, var, obsm=obsm)
         )
+
+        # raw
+        have_raw = [_adata.raw is not None for _adata in all_adatas]
+        if all(have_raw):
+            new_adata_raw = AnnData.concatenate(
+                *[_adata.raw.to_adata() for _adata in all_adatas],
+                join=join,
+                batch_key=batch_key,
+                batch_categories=batch_categories,
+                index_unique=index_unique,
+            )
+            new_adata.raw = new_adata_raw
+        elif any(have_raw):
+            warnings.warn(
+                "Only some adata objects have `.raw` attribute, "
+                "not concatenating `.raw` attributes.",
+                UserWarning,
+            )
+
         if not obs.index.is_unique:
-            logger.info('Or pass `index_unique!=None` to `.concatenate`.')
+            logger.info("Or pass `index_unique!=None` to `.concatenate`.")
         return new_adata
 
-    def var_names_make_unique(self, join: str = '-'):
+    def var_names_make_unique(self, join: str = "-"):
         self.var.index = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def obs_names_make_unique(self, join: str = '-'):
+    def obs_names_make_unique(self, join: str = "-"):
         self.obs.index = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def _check_uniqueness(self):
         if not self.obs.index.is_unique:
-            utils.warn_names_duplicates('obs')
+            utils.warn_names_duplicates("obs")
         if not self.var.index.is_unique:
-            utils.warn_names_duplicates('var')
+            utils.warn_names_duplicates("var")
 
     def __contains__(self, key: Any):
         raise AttributeError(
-            'AnnData has no attribute __contains__, don’t check `in adata`.'
+            "AnnData has no attribute __contains__, don’t check `in adata`."
         )
 
     def _check_dimensions(self, key=None):
         if key is None:
-            key = {'obs', 'var', 'obsm', 'varm'}
+            key = {"obs", "var", "obsm", "varm"}
         else:
             key = {key}
-        if 'obs' in key and len(self._obs) != self._n_obs:
+        if "obs" in key and len(self._obs) != self._n_obs:
             raise ValueError(
-                'Observations annot. `obs` must have number of rows of `X`'
-                f' ({self._n_obs}), but has {self._obs.shape[0]} rows.'
+                "Observations annot. `obs` must have number of rows of `X`"
+                f" ({self._n_obs}), but has {self._obs.shape[0]} rows."
             )
-        if 'var' in key and len(self._var) != self._n_vars:
+        if "var" in key and len(self._var) != self._n_vars:
             raise ValueError(
-                'Variables annot. `var` must have number of columns of `X`'
-                f' ({self._n_vars}), but has {self._var.shape[0]} rows.'
+                "Variables annot. `var` must have number of columns of `X`"
+                f" ({self._n_vars}), but has {self._var.shape[0]} rows."
             )
-        if 'obsm' in key:
+        if "obsm" in key:
             obsm = self._obsm
             if (
                 not all([o.shape[0] == self._n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self._n_obs
             ):
                 raise ValueError(
-                    'Observations annot. `obsm` must have number of rows of `X`'
-                    f' ({self._n_obs}), but has {len(obsm)} rows.'
+                    "Observations annot. `obsm` must have number of rows of `X`"
+                    f" ({self._n_obs}), but has {len(obsm)} rows."
                 )
-        if 'varm' in key:
+        if "varm" in key:
             varm = self._varm
             if (
                 not all([v.shape[0] == self._n_vars for v in varm.values()])
                 and len(varm.dim_names) != self._n_vars
             ):
                 raise ValueError(
-                    'Variables annot. `varm` must have number of columns of `X`'
-                    f' ({self._n_vars}), but has {len(varm)} rows.'
+                    "Variables annot. `varm` must have number of columns of `X`"
+                    f" ({self._n_vars}), but has {len(varm)} rows."
                 )
 
     def write_h5ad(
         self,
         filename: Optional[PathLike] = None,
-        compression: Optional[Literal['gzip', 'lzf']] = None,
+        compression: Optional[Literal["gzip", "lzf"]] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None,
         as_dense: Sequence[str] = (),
     ):
         """\
-        Write ``.h5ad``-formatted hdf5 file.
+        Write `.h5ad`-formatted hdf5 file.
 
         .. note::
-           Setting compression to ``'gzip'`` can save disk space but
-           will slow down writing and subsequent reading. Prior to
-           v0.6.16, this was the default for parameter ``compression``.
+           Setting compression to `'gzip'` can save disk space
+           but will slow down writing and subsequent reading.
+           Prior to v0.6.16, this was the default for parameter `compression`.
 
-        Generally, if you have sparse data that are stored as a dense
-        matrix, you can dramatically improve performance and reduce
-        disk space by converting to a :class:`~scipy.sparse.csr_matrix`::
+        Generally, if you have sparse data that are stored as a dense matrix,
+        you can dramatically improve performance and reduce disk space
+        by converting to a :class:`~scipy.sparse.csr_matrix`::
 
             from scipy.sparse import csr_matrix
             adata.X = csr_matrix(adata.X)
@@ -2296,12 +1977,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             supports `X` and `raw/X`.
         force_dense
             Write sparse data as a dense matrix.
-            Defaults to ``True`` if object is backed, otherwise to ``False``.
+            Defaults to `True` if object is backed, otherwise to `False`.
         """
-        from ..readwrite.write import _write_h5ad
+        from .._io.write import _write_h5ad
 
         if filename is None and not self.isbacked:
-            raise ValueError('Provide a filename!')
+            raise ValueError("Provide a filename!")
         if filename is None:
             filename = self.filename
 
@@ -2319,14 +2000,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     write = write_h5ad  # a shortcut and backwards compat
 
-    def write_csvs(
-        self, dirname: PathLike, skip_data: bool = True, sep: str = ','
-    ):
+    def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ","):
         """\
-        Write annotation to ``.csv`` files.
+        Write annotation to `.csv` files.
 
         It is not possible to recover the full :class:`~anndata.AnnData` from
-        these files. Use :meth:`~anndata.AnnData.write` for this.
+        these files. Use :meth:`write` for this.
 
         Parameters
         ----------
@@ -2337,20 +2016,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         sep
              Separator for the data.
         """
-        from ..readwrite.write import write_csvs
+        from .._io.write import write_csvs
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
         """\
-        Write ``.loom``-formatted hdf5 file.
+        Write `.loom`-formatted hdf5 file.
 
         Parameters
         ----------
         filename
             The filename.
         """
-        from ..readwrite.write import write_loom
+        from .._io.write import write_loom
 
         write_loom(filename, self, write_obsm_varm=write_obsm_varm)
 
@@ -2365,12 +2044,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Parameters
         ----------
         store
-            The filename, a :class:`~typing.MutableMapping`,
-            or a Zarr storage class.
+            The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
         chunks
             Chunk shape.
         """
-        from ..readwrite.write import write_zarr
+        from .._io.write import write_zarr
 
         write_zarr(store, self, chunks=chunks)
 
@@ -2401,8 +2079,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         replace: bool = True,
     ):
         """\
-        Return a chunk of the data matrix :attr:`X`
-        with random or specified indices.
+        Return a chunk of the data matrix :attr:`X` with random or specified indices.
 
         Parameters
         ----------
@@ -2410,13 +2087,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Depending on the type:
 
             :class:`int`
-                A random chunk with ``select`` rows will be returned.
+                A random chunk with `select` rows will be returned.
             :term:`sequence` (e.g. a list, tuple or numpy array) of :class:`int`
                 A chunk with these indices will be returned.
 
         replace
-            If ``select`` is an integer then ``True`` means random sampling of
-            indices with replacement, ``False`` without replacement.
+            If `select` is an integer then `True` means random sampling of
+            indices with replacement, `False` without replacement.
         """
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs
@@ -2424,7 +2101,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         elif isinstance(select, (np.ndarray, cabc.Sequence)):
             choice = np.asarray(select)
         else:
-            raise ValueError('select should be int or array')
+            raise ValueError("select should be int or array")
 
         reverse = None
         if self.isbacked:
@@ -2444,106 +2121,27 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     # --------------------------------------------------------------------------
 
     @property
-    @utils.deprecated('X')
-    def data(self):
-        return self.X
-
-    @data.setter
-    @utils.deprecated('X')
-    def data(self, value):
-        self.X = value
-
-    @property
-    @utils.deprecated('n_obs')
-    def n_smps(self):
-        return self.n_obs
-
-    @property
-    @utils.deprecated('obs')
-    def smp(self):
-        return self.obs
-
-    @smp.setter
-    @utils.deprecated('obs')
-    def smp(self, value):
-        self.obs = value
-
-    @property
-    @utils.deprecated('uns')
-    def add(self):
-        return self.uns
-
-    @add.setter
-    @utils.deprecated('uns')
-    def add(self, value):
-        self.uns = value
-
-    @property
-    @utils.deprecated('obsm')
-    def smpm(self):
-        return self.obsm
-
-    @smpm.setter
-    @utils.deprecated('obsm')
-    def smpm(self, value):
-        self.obsm = value
-
-    @property
-    @utils.deprecated('obs_names')
-    def smp_names(self):
-        return self.obs_names
-
-    @smp_names.setter
-    @utils.deprecated('obs_names')
-    def smp_names(self, names):
-        self.obs_names = names
-
-    @utils.deprecated('obs_keys')
-    def smp_keys(self):
-        return self.obs_keys()
-
-    @utils.deprecated('obsm_keys')
-    def smpm_keys(self):
-        return self.obsm_keys()
+    # @utils.deprecated("is_view")  # only deprecate ones Scanpy is adapted
+    def isview(self):
+        return self.is_view
 
     def _clean_up_old_format(self, uns):
         # multicolumn keys
         # all of the rest is only for backwards compat
-        if uns and '_obs_keys_multicol' in uns:
-            _keys_multicol_obs = list(uns['_obs_keys_multicol'])
-            del uns['_obs_keys_multicol']
-        elif uns and 'obs_keys_multicol' in uns:
-            _keys_multicol_obs = list(uns['obs_keys_multicol'])
-            del uns['obs_keys_multicol']
-        elif uns and '_smp_keys_multicol' in uns:
-            _keys_multicol_obs = list(uns['_smp_keys_multicol'])
-            del uns['_smp_keys_multicol']
-        elif uns and 'smp_keys_multicol' in uns:
-            _keys_multicol_obs = list(uns['smp_keys_multicol'])
-            del uns['smp_keys_multicol']
-        else:
-            _keys_multicol_obs = []
-        if uns and '_var_keys_multicol' in uns:
-            _keys_multicol_var = list(uns['_var_keys_multicol'])
-            del uns['_var_keys_multicol']
-        elif uns and 'var_keys_multicol' in uns:
-            _keys_multicol_var = list(uns['var_keys_multicol'])
-            del uns['var_keys_multicol']
-        else:
-            _keys_multicol_var = []
-
-        # now, for compat, fill the old multicolumn entries into obsm and varm
-        # and remove them from obs and var
-        for key in _keys_multicol_obs:
-            self._obsm[key] = self._get_multicol_field_obs(key)
-        for key in _keys_multicol_var:
-            self._varm[key] = self._get_multicol_field_var(key)
-
-    def _get_multicol_field_obs(self, key_multicol):
-        return self._get_and_delete_multicol_field('obs', key_multicol)
-
-    def _get_multicol_field_var(self, key_multicol):
-        return self._get_and_delete_multicol_field('var', key_multicol)
+        for bases in [["obs", "smp"], ["var"]]:
+            axis = bases[0]
+            for k in [f"{p}{base}_keys_multicol" for p in ["", "_"] for base in bases]:
+                if uns and k in uns:
+                    keys = list(uns[k])
+                    del uns[k]
+                    break
+            else:
+                keys = []
+            # now, for compat, fill the old multicolumn entries into obsm and varm
+            # and remove them from obs and var
+            m_attr = getattr(self, f"_{axis}m")
+            for key in keys:
+                m_attr[key] = self._get_and_delete_multicol_field(axis, key)
 
     def _get_and_delete_multicol_field(self, a, key_multicol):
         keys = []

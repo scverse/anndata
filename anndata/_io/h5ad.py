@@ -1,10 +1,11 @@
-from collections.abc import Mapping
-from functools import _find_impl, partial
-from pathlib import Path
 import re
-from types import MappingProxyType
-from typing import Callable, Sequence, Type, TypeVar, Union
+import collections.abc as cabc
+from functools import _find_impl, partial
 from warnings import warn
+from pathlib import Path
+from types import MappingProxyType
+from typing import Callable, Type, TypeVar, Union
+from typing import Collection, Sequence, Mapping
 
 import h5py
 import numpy as np
@@ -12,8 +13,10 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
-from ..core.sparsedataset import SparseDataset
-from ..core.anndata import AnnData, Raw
+from .._core.sparse_dataset import SparseDataset
+from .._core.file_backing import AnnDataFileManager
+from .._core.anndata import AnnData
+from .._core.raw import Raw
 from ..compat import _from_fixed_length_strings, _clean_uns, Literal
 from .utils import (
     report_read_key_on_error,
@@ -21,6 +24,8 @@ from .utils import (
     idx_chunks_along_axis,
     write_attribute,
     read_attribute,
+    _read_legacy_raw,
+    EncodingVersions,
 )
 
 
@@ -30,9 +35,7 @@ T = TypeVar("T")
 
 
 def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
-    """\
-    This corrects compound dtypes to work with hdf5 files.
-    """
+    """This corrects compound dtypes to work with hdf5 files."""
     new_dtype = []
     for dt_name, (dt_type, _) in value.dtype.fields.items():
         if dt_type.kind in ("U", "O"):
@@ -53,9 +56,8 @@ def write_h5ad(
 ) -> None:
     if force_dense is not None:
         warn(
-            FutureWarning(
-                "The 'force_dense' argument is deprecated. Use `as_dense` instead."
-            )
+            "The `force_dense` argument is deprecated. Use `as_dense` instead.",
+            FutureWarning,
         )
     if force_dense is True:
         if adata.raw is not None:
@@ -72,9 +74,7 @@ def write_h5ad(
             "Currently, only `X` and `raw/X` are supported values in `as_dense`"
         )
     if "raw/X" in as_dense and adata.raw is None:
-        raise ValueError(
-            "Cannot specify writing `raw/X` to dense if it doesn't exist."
-        )
+        raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
 
     adata.strings_to_categoricals()
     if adata.raw is not None:
@@ -85,12 +85,8 @@ def write_h5ad(
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
     with h5py.File(filepath, mode) as f:
-        if "X" in as_dense and isinstance(
-            adata.X, (sparse.spmatrix, SparseDataset)
-        ):
-            write_sparse_as_dense(
-                f, "X", adata.X, dataset_kwargs=dataset_kwargs
-            )
+        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
+            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
             write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
@@ -100,9 +96,7 @@ def write_h5ad(
             write_sparse_as_dense(
                 f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
             )
-            write_attribute(
-                f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs
-            )
+            write_attribute(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
             write_attribute(
                 f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs
             )
@@ -114,12 +108,10 @@ def write_h5ad(
         write_attribute(f, "varm", adata.varm, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "obsp", adata.obsp, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
-        write_attribute(
-            f, "layers", adata.layers, dataset_kwargs=dataset_kwargs
-        )
+        write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
     if adata.isbacked:
-        adata.file.open(filepath, 'r+')
+        adata.file.open(filepath, "r+")
 
 
 def _write_method(cls: Type[T]) -> Callable[[H5Group, str, T], None]:
@@ -137,7 +129,7 @@ def write_attribute_h5ad(f: H5Group, key: str, value, *args, **kwargs):
 def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "raw"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.raw.value
     group.attrs["shape"] = value.shape
     write_attribute(f, "raw/X", value.X, dataset_kwargs=dataset_kwargs)
     write_attribute(f, "raw/var", value.var, dataset_kwargs=dataset_kwargs)
@@ -146,7 +138,7 @@ def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 @report_write_key_on_error
 def write_not_implemented(f, key, value, dataset_kwargs=MappingProxyType({})):
-    # If it's not an array, try and make it an array. If that fails, pickle it.
+    # If it’s not an array, try and make it an array. If that fails, pickle it.
     # Maybe rethink that, maybe this should just pickle,
     # and have explicit implementations for everything else
     raise NotImplementedError(
@@ -172,7 +164,7 @@ def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 @report_write_key_on_error
 def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
-    # Can't compress scalars, error is thrown
+    # Can’t compress scalars, error is thrown
     if "compression" in dataset_kwargs:
         dataset_kwargs = dict(dataset_kwargs)
         dataset_kwargs.pop("compression")
@@ -182,7 +174,7 @@ def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
 @report_write_key_on_error
 def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
     # Convert unicode to fixed length strings
-    if value.dtype.kind in {'U', 'O'}:
+    if value.dtype.kind in {"U", "O"}:
         value = value.astype(h5py.special_dtype(vlen=str))
     elif value.dtype.names is not None:
         value = _to_hdf5_vlen_strings(value)
@@ -191,16 +183,16 @@ def write_array(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 @report_write_key_on_error
 def write_sparse_compressed(
-    f, key, value, fmt: str, dataset_kwargs=MappingProxyType({})
+    f, key, value, fmt: Literal["csr", "csc"], dataset_kwargs=MappingProxyType({})
 ):
     g = f.create_group(key)
     g.attrs["encoding-type"] = f"{fmt}_matrix"
-    g.attrs["encoding-version"] = "0.1.0"
+    g.attrs["encoding-version"] = EncodingVersions[f"{fmt}_matrix"].value
     g.attrs["shape"] = value.shape
 
     # Allow resizing
     if "maxshape" not in dataset_kwargs:
-        dataset_kwargs = {"maxshape": (None,), **dataset_kwargs}
+        dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
 
     g.create_dataset("data", data=value.data, **dataset_kwargs)
     g.create_dataset("indices", data=value.indices, **dataset_kwargs)
@@ -214,11 +206,7 @@ write_csc = partial(write_sparse_compressed, fmt="csc")
 @report_write_key_on_error
 def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
-        f,
-        key,
-        value.tobacked(),
-        fmt=value.format_str,
-        dataset_kwargs=dataset_kwargs,
+        f, key, value.to_backed(), fmt=value.format_str, dataset_kwargs=dataset_kwargs,
     )
 
 
@@ -235,9 +223,7 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
             key = re.sub(r"(.*)(\w(?!.*/))", r"\1_\2", key.rstrip("/"))
         else:
             del f[key]  # Wipe before write
-    dset = f.create_dataset(
-        key, shape=value.shape, dtype=value.dtype, **dataset_kwargs
-    )
+    dset = f.create_dataset(key, shape=value.shape, dtype=value.dtype, **dataset_kwargs)
     compressed_axis = int(isinstance(value, sparse.csc_matrix))
     for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):
         dset[idx] = value[idx].toarray()
@@ -252,12 +238,10 @@ def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
-            raise ValueError(
-                f"'{reserved}' is a reserved name for dataframe columns."
-            )
+            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
     group = f.create_group(key)
     group.attrs["encoding-type"] = "dataframe"
-    group.attrs["encoding-version"] = "0.1.0"
+    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
     group.attrs["column-order"] = list(df.columns)
 
     if df.index.name is not None:
@@ -273,8 +257,8 @@ def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
 
 @report_write_key_on_error
 def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
-    # group here is an h5py type, otherwise categoricals won't write
-    if series.dtype == object:  # Assuming it's string
+    # group here is an h5py type, otherwise categoricals won’t write
+    if series.dtype == object:  # Assuming it’s string
         group.create_dataset(
             key,
             data=series.values,
@@ -288,9 +272,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         codes: np.ndarray = categorical.codes
         category_key = f"__categories/{key}"
 
-        write_array(
-            group, category_key, categories, dataset_kwargs=dataset_kwargs
-        )
+        write_array(group, category_key, categories, dataset_kwargs=dataset_kwargs)
         write_array(group, key, codes, dataset_kwargs=dataset_kwargs)
 
         group[key].attrs["categories"] = group[category_key].ref
@@ -301,9 +283,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
 
 def write_mapping(f, key, value, dataset_kwargs=MappingProxyType({})):
     for sub_key, sub_value in value.items():
-        write_attribute(
-            f, f"{key}/{sub_key}", sub_value, dataset_kwargs=dataset_kwargs
-        )
+        write_attribute(f, f"{key}/{sub_key}", sub_value, dataset_kwargs=dataset_kwargs)
 
 
 H5AD_WRITE_REGISTRY = {
@@ -324,15 +304,12 @@ H5AD_WRITE_REGISTRY = {
     sparse.csc_matrix: write_csc,
     SparseDataset: write_sparse_dataset,
     pd.DataFrame: write_dataframe,
-    Mapping: write_mapping,
+    cabc.Mapping: write_mapping,
 }
 
 
-def read_h5ad_backed(
-    filename: Union[str, Path], mode: Literal['r', 'r+']
-) -> AnnData:
+def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> AnnData:
     d = dict(filename=filename, filemode=mode)
-    raw = {}
 
     f = h5py.File(filename, mode)
 
@@ -344,19 +321,8 @@ def read_h5ad_backed(
         if k in f:  # Backwards compat
             d[k] = read_dataframe(f[k])
 
-    if "raw" in f:
-        if "raw/var" in f:
-            raw["var"] = read_attribute(f["raw/var"])
-        if "raw/varm" in f:
-            raw["varm"] = read_attribute(f["raw/varm"])
-    else:  # Legacy case
-        if "raw.var" in f:
-            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-        if "raw.varm" in f:
-            raw["varm"] = read_attribute(f["raw.varm"])
+    d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
-    if len(raw) > 0:
-        d["raw"] = raw
     X_dset = f.get("X", None)
     if X_dset is None:
         pass
@@ -374,28 +340,29 @@ def read_h5ad_backed(
 
 def read_h5ad(
     filename: Union[str, Path],
-    backed: Union[Literal['r', 'r+'], bool, None] = None,
+    backed: Union[Literal["r", "r+"], bool, None] = None,
     *,
     as_sparse: Sequence[str] = (),
     as_sparse_fmt: Type[sparse.spmatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
     """\
-    Read ``.h5ad``-formatted hdf5 file.
+    Read `.h5ad`-formatted hdf5 file.
 
     Parameters
     ----------
     filename
         File name of data file.
     backed
-        If ``'r'``, load :class:`~anndata.AnnData` in ``backed`` mode instead
-        of fully loading it into memory (`memory` mode). If you want to modify
-        backed attributes of the AnnData object, you need to choose ``'r+'``.
+        If `'r'`, load :class:`~anndata.AnnData` in `backed` mode
+        instead of fully loading it into memory (`memory` mode).
+        If you want to modify backed attributes of the AnnData object,
+        you need to choose `'r+'`.
     as_sparse
-        If an array was saved as dense, passing it's name here will read it as
+        If an array was saved as dense, passing its name here will read it as
         a sparse_matrix, by chunk of size `chunk_size`.
     as_sparse_fmt
-        Sparse format to read elements from `as_sparse` in as.
+        Sparse format class to read elements from `as_sparse` in as.
     chunk_size
         Used only when loading sparse dataset that is stored as dense.
         Loading iterates through chunks of the dataset of this row size
@@ -426,28 +393,26 @@ def read_h5ad(
                 "Currently only `X` and `raw/X` can be read as sparse."
             )
 
+    rdasp = partial(
+        read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size,
+    )
+
     with h5py.File(filename, "r") as f:
         d = {}
         for k in f.keys():
             # Backwards compat for old raw
-            if k.startswith("raw."):
+            if k == "raw" or k.startswith("raw."):
                 continue
             if k == "X" and "X" in as_sparse:
-                d[k] = read_dense_as_sparse(
-                    f[k], as_sparse_fmt, axis_chunk=chunk_size
-                )
-            elif k == "raw" and "raw/X" in as_sparse:
-                d[k] = {
-                    "X": read_dense_as_sparse(
-                        f[f"{k}/X"], as_sparse_fmt, axis_chunk=chunk_size
-                    ),
-                    "var": read_dataframe(f[f"{k}/var"]),
-                    "varm": read_attribute(f[f"{k}/varm"]),
-                }
+                d[k] = rdasp(f[k])
+            elif k == "raw":
+                assert False, "unexpected raw format"
             elif k in {"obs", "var"}:
                 d[k] = read_dataframe(f[k])
             else:  # Base case
                 d[k] = read_attribute(f[k])
+
+        d["raw"] = _read_raw(f, as_sparse, rdasp)
 
         X_dset = f.get("X", None)
         if X_dset is None:
@@ -459,30 +424,33 @@ def read_h5ad(
         else:
             raise ValueError()
 
-        # Backwards compat for reading legacy raw
-        raw = {}
-        if "raw.var" in f:
-            raw["var"] = read_dataframe(f["raw.var"])  # Backwards compat
-        if "raw.varm" in f:
-            raw["varm"] = read_attribute(f["raw.varm"])
-        if "raw.X" in f:
-            raw["X"] = read_attribute(f["raw.X"])
-        if len(raw) > 0:
-            assert (
-                "raw" not in d
-            ), f"File {filename} has both legacy and current raw formats."
-            d["raw"] = raw
-
     _clean_uns(d)  # backwards compat
 
     return AnnData(**d)
 
 
+def _read_raw(
+    f: Union[h5py.File, AnnDataFileManager],
+    as_sparse: Collection[str] = (),
+    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] = None,
+    *,
+    attrs: Collection[str] = ("X", "var", "varm"),
+):
+    if as_sparse:
+        assert rdasp is not None, "must supply rdasp if as_sparse is supplied"
+    raw = {}
+    if "X" in attrs and "raw/X" in f:
+        read_x = rdasp if "raw/X" in as_sparse else read_attribute
+        raw["X"] = read_x(f["raw/X"])
+    for v in ("var", "varm"):
+        if v in attrs and f"raw/{v}" in f:
+            raw[v] = read_attribute(f[f"raw/{v}"])
+    return _read_legacy_raw(f, raw, read_dataframe, read_attribute, attrs=attrs)
+
+
 @report_read_key_on_error
 def read_dataframe_legacy(dataset) -> pd.DataFrame:
-    """
-    Read pre-anndata 0.7 dataframes.
-    """
+    """Read pre-anndata 0.7 dataframes."""
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df
@@ -516,14 +484,12 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
             # TODO: remove this code at some point post 0.7
             # TODO: Add tests for this
             warn(
-                f"Your file '{dataset.file.name}' has invalid categorical "
+                f"Your file {str(dataset.file.name)!r} has invalid categorical "
                 "encodings due to being written from a development version of "
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,
             )
-        return pd.Categorical.from_codes(
-            dataset[...], categories, ordered=ordered
-        )
+        return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
     else:
         return dataset[...]
 
@@ -537,17 +503,21 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
 @report_read_key_on_error
 def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     if "h5sparse_format" in group.attrs:  # Backwards compat
-        return SparseDataset(group).tomemory()
+        return SparseDataset(group).to_memory()
 
-    encoding_type = group.attrs.get("encoding-type", "")
-    if encoding_type in {"", "raw"}:
+    encoding_type = group.attrs.get("encoding-type")
+    if encoding_type:
+        EncodingVersions[encoding_type].check(
+            group.name, group.attrs["encoding-version"]
+        )
+    if encoding_type in {None, "raw"}:
         pass
     elif encoding_type == "dataframe":
         return read_dataframe(group)
     elif encoding_type in {"csr_matrix", "csc_matrix"}:
-        return SparseDataset(group).tomemory()
+        return SparseDataset(group).to_memory()
     else:
-        raise ValueError(f"Unfamiliar 'encoding-type': {encoding_type}.")
+        raise ValueError(f"Unfamiliar `encoding-type`: {encoding_type}.")
     d = dict()
     for sub_key, sub_value in group.items():
         d[sub_key] = read_attribute(sub_value)

@@ -25,15 +25,15 @@ from anndata.tests.helpers import (
 X_list = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
 # annotation of observations / rows
 obs_dict = dict(
-    row_names=['name1', 'name2', 'name3'],  # row annotation
-    oanno1=['cat1', 'cat2', 'cat2'],  # categorical annotation
-    oanno2=['o1', 'o2', 'o3'],  # string annotation
+    row_names=["name1", "name2", "name3"],  # row annotation
+    oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
+    oanno2=["o1", "o2", "o3"],  # string annotation
     oanno3=[2.1, 2.2, 2.3],  # float annotation
 )
 # annotation of variables / columns
 var_dict = dict(vanno1=[3.1, 3.2, 3.3])
 # unstructured annotation
-uns_dict = dict(oanno1_colors=['#000000', '#FFFFFF'], uns2=['some annotation'])
+uns_dict = dict(oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"])
 
 
 subset_func2 = subset_func
@@ -42,8 +42,8 @@ subset_func2 = subset_func
 @pytest.fixture
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
-    adata.obsm['o'] = np.zeros((100, 50))
-    adata.varm['o'] = np.zeros((100, 50))
+    adata.obsm["o"] = np.zeros((100, 50))
+    adata.varm["o"] = np.zeros((100, 50))
     return adata
 
 
@@ -72,11 +72,9 @@ def mapping_name(request):
 
 def test_views():
     X = np.array(X_list)
-    adata = ad.AnnData(
-        X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype='int32'
-    )
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype="int32")
 
-    assert adata[:, 0].isview
+    assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
     adata[:2, 0].X = [0, 0]
@@ -85,12 +83,12 @@ def test_views():
 
     adata_subset = adata[:2, [0, 1]]
 
-    assert adata_subset.isview
+    assert adata_subset.is_view
     # now transition to actual object
-    adata_subset.obs['foo'] = range(2)
-    assert not adata_subset.isview
+    adata_subset.obs["foo"] = range(2)
+    assert not adata_subset.is_view
 
-    assert adata_subset.obs['foo'].tolist() == list(range(2))
+    assert adata_subset.obs["foo"].tolist() == list(range(2))
 
 
 def test_modify_view_component(matrix_type, mapping_name):
@@ -101,10 +99,10 @@ def test_modify_view_component(matrix_type, mapping_name):
     init_hash = joblib.hash(adata)
 
     subset = adata[:5, :][:, :5]
-    assert subset.isview
+    assert subset.is_view
     m = getattr(subset, mapping_name)["m"]
     m[0, 0] = 100
-    assert not subset.isview
+    assert not subset.is_view
     assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
     assert init_hash == joblib.hash(adata)
@@ -115,11 +113,11 @@ def test_modify_view_component(matrix_type, mapping_name):
 def test_set_obsm_key(adata):
     init_hash = joblib.hash(adata)
 
-    orig_obsm_val = adata.obsm['o'].copy()
+    orig_obsm_val = adata.obsm["o"].copy()
     subset_obsm = adata[:50]
-    assert subset_obsm.isview
-    subset_obsm.obsm['o'] = np.ones((50, 20))
-    assert not subset_obsm.isview
+    assert subset_obsm.is_view
+    subset_obsm.obsm["o"] = np.ones((50, 20))
+    assert not subset_obsm.is_view
     assert np.all(adata.obsm["o"] == orig_obsm_val)
 
     assert init_hash == joblib.hash(adata)
@@ -128,11 +126,11 @@ def test_set_obsm_key(adata):
 def test_set_varm_key(adata):
     init_hash = joblib.hash(adata)
 
-    orig_varm_val = adata.varm['o'].copy()
+    orig_varm_val = adata.varm["o"].copy()
     subset_varm = adata[:, :50]
-    assert subset_varm.isview
-    subset_varm.varm['o'] = np.ones((50, 20))
-    assert not subset_varm.isview
+    assert subset_varm.is_view
+    subset_varm.varm["o"] = np.ones((50, 20))
+    assert not subset_varm.is_view
     assert np.all(adata.varm["o"] == orig_varm_val)
 
     assert init_hash == joblib.hash(adata)
@@ -144,13 +142,12 @@ def test_set_obs(adata, subset_func):
     subset = adata[subset_func(adata.obs_names), :]
 
     new_obs = pd.DataFrame(
-        dict(a=np.ones(subset.n_obs), b=np.ones(subset.n_obs)),
-        index=subset.obs_names,
+        dict(a=np.ones(subset.n_obs), b=np.ones(subset.n_obs)), index=subset.obs_names,
     )
 
-    assert subset.isview
+    assert subset.is_view
     subset.obs = new_obs
-    assert not subset.isview
+    assert not subset.is_view
     assert np.all(subset.obs == new_obs)
 
     assert joblib.hash(adata) == init_hash
@@ -166,9 +163,9 @@ def test_set_var(adata, subset_func):
         index=subset.var_names,
     )
 
-    assert subset.isview
+    assert subset.is_view
     subset.var = new_var
-    assert not subset.isview
+    assert not subset.is_view
     assert np.all(subset.var == new_var)
 
     assert joblib.hash(adata) == init_hash
@@ -183,9 +180,9 @@ def test_set_obsm(adata):
     subset_idx = np.random.choice(adata.obs_names, dim0_size, replace=False)
 
     subset = adata[subset_idx, :]
-    assert subset.isview
+    assert subset.is_view
     subset.obsm = dict(o=np.ones((dim0_size, dim1_size)))
-    assert not subset.isview
+    assert not subset.is_view
     assert np.all(orig_obsm_val == adata.obsm["o"])  # Checking for mutation
     assert np.all(subset.obsm["o"] == np.ones((dim0_size, dim1_size)))
 
@@ -210,9 +207,9 @@ def test_set_varm(adata):
     subset_idx = np.random.choice(adata.var_names, dim0_size, replace=False)
 
     subset = adata[:, subset_idx]
-    assert subset.isview
+    assert subset.is_view
     subset.varm = dict(o=np.ones((dim0_size, dim1_size)))
-    assert not subset.isview
+    assert not subset.is_view
     assert np.all(orig_varm_val == adata.varm["o"])  # Checking for mutation
     assert np.all(subset.varm["o"] == np.ones((dim0_size, dim1_size)))
 
@@ -228,7 +225,7 @@ def test_set_varm(adata):
 
 
 # TODO: Determine if this is the intended behavior,
-#       or just the behaviour we've had for a while
+#       or just the behaviour we’ve had for a while
 def test_not_set_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
@@ -242,9 +239,9 @@ def test_not_set_subset_X(matrix_type, subset_func):
     subset = adata[:, subset_idx]
 
     internal_idx = subset_func(np.arange(subset.X.shape[1]))
-    assert subset.isview
+    assert subset.is_view
     subset.X[:, internal_idx] = 1
-    assert not subset.isview
+    assert not subset.is_view
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == joblib.hash(adata)
@@ -259,7 +256,7 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     adata_subset.X = 1
 
-    assert adata_subset.isview
+    assert adata_subset.is_view
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
 
     assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
@@ -277,9 +274,9 @@ def test_set_subset_obsm(adata, subset_func):
     subset = adata[subset_idx, :]
 
     internal_idx = subset_func(np.arange(subset.obsm["o"].shape[0]))
-    assert subset.isview
+    assert subset.is_view
     subset.obsm["o"][internal_idx] = 1
-    assert not subset.isview
+    assert not subset.is_view
     assert np.all(adata.obsm["o"] == orig_obsm_val)
 
     assert init_hash == joblib.hash(adata)
@@ -296,15 +293,15 @@ def test_set_subset_varm(adata, subset_func):
     subset = adata[:, subset_idx]
 
     internal_idx = subset_func(np.arange(subset.varm["o"].shape[0]))
-    assert subset.isview
+    assert subset.is_view
     subset.varm["o"][internal_idx] = 1
-    assert not subset.isview
+    assert not subset.is_view
     assert np.all(adata.varm["o"] == orig_varm_val)
 
     assert init_hash == joblib.hash(adata)
 
 
-@pytest.mark.parametrize('attr', ["obsm", "varm", "obsp", "varp", "layers"])
+@pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_failed_delitem(attr):
     adata = gen_adata((10, 10))
     view = adata[5:7, :][:, :5]
@@ -314,16 +311,16 @@ def test_view_failed_delitem(attr):
     with pytest.raises(KeyError):
         getattr(view, attr).__delitem__("not a key")
 
-    assert view.isview
+    assert view.is_view
     assert adata_hash == joblib.hash(adata)
     assert view_hash == joblib.hash(view)
 
 
-@pytest.mark.parametrize('attr', ["obsm", "varm", "obsp", "varp", "layers"])
+@pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_delitem(attr):
     adata = gen_adata((10, 10))
     getattr(adata, attr)["to_delete"] = np.ones((10, 10))
-    # Shouldn't be a subclass, should be an ndarray
+    # Shouldn’t be a subclass, should be an ndarray
     assert type(getattr(adata, attr)["to_delete"]) is np.ndarray
     view = adata[5:7, :][:, :5]
     adata_hash = joblib.hash(adata)
@@ -331,7 +328,7 @@ def test_view_delitem(attr):
 
     getattr(view, attr).__delitem__("to_delete")
 
-    assert not view.isview
+    assert not view.is_view
     assert "to_delete" not in getattr(view, attr)
     assert "to_delete" in getattr(adata, attr)
     assert adata_hash == joblib.hash(adata)
@@ -339,7 +336,7 @@ def test_view_delitem(attr):
 
 
 @pytest.mark.parametrize(
-    'attr', ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]
+    "attr", ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]
 )
 def test_view_delattr(attr):
     base = gen_adata((10, 10))
@@ -347,9 +344,22 @@ def test_view_delattr(attr):
     subset = base[5:7, :5]
     empty = ad.AnnData(subset.X, obs=subset.obs[[]], var=subset.var[[]])
     delattr(subset, attr)
-    assert not subset.isview
+    assert not subset.is_view
     # Should now have same value as default
     assert_equal(getattr(subset, attr), getattr(empty, attr))
+
+
+@pytest.mark.parametrize(
+    "attr", ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]
+)
+def test_view_setattr_machinery(attr, subset_func, subset_func2):
+    # Tests that setting attributes on a view doesn't mess anything up too bad
+    adata = gen_adata((10, 10))
+    view = adata[subset_func(adata.obs_names), subset_func2(adata.var_names)]
+
+    actual = view.copy()
+    setattr(view, attr, getattr(actual, attr))
+    assert_equal(actual, view, exact=True)
 
 
 def test_layers_view():
@@ -361,18 +371,18 @@ def test_layers_view():
     real_hash = joblib.hash(real_adata)
     view_hash = joblib.hash(view_adata)
 
-    assert view_adata.isview
+    assert view_adata.is_view
 
     with pytest.raises(ValueError):
         view_adata.layers["L2"] = L + 2
 
-    assert view_adata.isview  # Failing to set layer item makes adata not view
+    assert view_adata.is_view  # Failing to set layer item makes adata not view
     assert real_hash == joblib.hash(real_adata)
     assert view_hash == joblib.hash(view_adata)
 
     view_adata.layers["L2"] = L[1:, 1:] + 2
 
-    assert not view_adata.isview
+    assert not view_adata.is_view
     assert real_hash == joblib.hash(real_adata)
     assert view_hash != joblib.hash(view_adata)
 
@@ -393,9 +403,8 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
     obs_s2 = subset_func2(obs_view1.obs_names)
     assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
 
-    view_of_actual_copy = (
-        adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
-    )
+    view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
+
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 
     assert_equal(view_of_actual_copy, view_of_view_copy, exact=True)

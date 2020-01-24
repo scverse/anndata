@@ -1,5 +1,6 @@
-from .core.anndata import AnnData, Raw
-from .readwrite import (
+from ._core.anndata import AnnData
+from ._core.raw import Raw
+from ._io import (
     read_h5ad,
     read_loom,
     read_hdf,
@@ -10,9 +11,9 @@ from .readwrite import (
     read_mtx,
     read_zarr,
 )
-from .readwrite import (
-    read_h5ad as read,
-)  # backwards compat / shortcut for default format
+
+# backwards compat / shortcut for default format
+from ._io import read_h5ad as read
 
 __doc__ = """\
 API
@@ -29,7 +30,7 @@ The central class:
 Reading
 -------
 
-Reading anndata's native file format ``.h5ad``.
+Reading anndata’s native file format `.h5ad`.
 
 .. autosummary::
    :toctree: .
@@ -54,7 +55,7 @@ Reading other file formats.
 Writing
 -------
 
-Writing to anndata's native file format ``.h5ad``.
+Writing to anndata’s native file format `.h5ad`.
 
 .. autosummary::
    :toctree: .
@@ -70,27 +71,15 @@ Writing to other formats.
    AnnData.write_loom
    AnnData.write_zarr
 
-h5py
-----
-
-Independent of :class:`~anndata.AnnData`, the submodule :class:`anndata.h5py`
-provides a thin wrapper of `h5py <http://www.h5py.org/>`_ that is able to handle
-sparse matrices in addition to the standard functionality.
-
-.. autosummary::
-   :toctree: .
-
-   h5py
-
 """
 
-__author__ = ', '.join(
-    ['Philipp Angerer*', 'Alex Wolf*', 'Isaac Virshup', 'Sergei Rybakov']
+__author__ = ", ".join(
+    ["Philipp Angerer*", "Alex Wolf*", "Isaac Virshup", "Sergei Rybakov"]
 )
-__email__ = ', '.join(
+__email__ = ", ".join(
     [
-        'philipp.angerer@helmholtz-muenchen.de',
-        'f.alex.wolf@gmx.de',
+        "philipp.angerer@helmholtz-muenchen.de",
+        "f.alex.wolf@gmx.de",
         # We don’t need all, the main authors are sufficient.
     ]
 )
@@ -98,10 +87,10 @@ __email__ = ', '.join(
 try:
     from setuptools_scm import get_version
 
-    __version__ = get_version(root='..', relative_to=__file__)
+    __version__ = get_version(root="..", relative_to=__file__)
     del get_version
 except (LookupError, ImportError):
-    from .compat import version
+    from .compat import pkg_version
 
-    __version__ = version(__name__)
-    del version
+    __version__ = pkg_version(__name__)
+    del pkg_version

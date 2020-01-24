@@ -3,7 +3,6 @@ requires = ['setuptools', 'setuptools_scm', 'wheel']
 build-backend = 'setuptools.build_meta'
 
 [tool.black]
-line-length = 80
+line-length = 88
 target-version = ['py36']
-skip-string-normalization = true
 exclude = '^/build/.*$'

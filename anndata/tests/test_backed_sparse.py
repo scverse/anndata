@@ -4,7 +4,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.core.sparsedataset import SparseDataset
+from anndata._core.sparse_dataset import SparseDataset
 from anndata.tests.helpers import assert_equal, subset_func
 
 subset_func2 = subset_func
@@ -43,23 +43,23 @@ def test_backed_indexing(ondisk_equivalent_adata, subset_func, subset_func2):
 
 
 @pytest.mark.parametrize(
-    ['sparse_format', 'append_method'],
+    ["sparse_format", "append_method"],
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
 def test_dataset_append_memory(tmp_path, sparse_format, append_method):
-    h5_path = tmp_path / 'test.h5'
+    h5_path = tmp_path / "test.h5"
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
 
     with h5py.File(h5_path, "a") as f:
-        ad.readwrite.h5ad.write_attribute(f, "mtx", a)
+        ad._io.h5ad.write_attribute(f, "mtx", a)
         diskmtx = SparseDataset(f["mtx"])
 
         diskmtx.append(b)
-        fromdisk = diskmtx.tomemory()
+        fromdisk = diskmtx.to_memory()
 
     frommem = append_method([a, b])
 
@@ -67,25 +67,25 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method):
 
 
 @pytest.mark.parametrize(
-    ['sparse_format', 'append_method'],
+    ["sparse_format", "append_method"],
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
 def test_dataset_append_disk(tmp_path, sparse_format, append_method):
-    h5_path = tmp_path / 'test.h5'
+    h5_path = tmp_path / "test.h5"
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
     with h5py.File(h5_path, "a") as f:
-        ad.readwrite.h5ad.write_attribute(f, "a", a)
-        ad.readwrite.h5ad.write_attribute(f, "b", b)
+        ad._io.h5ad.write_attribute(f, "a", a)
+        ad._io.h5ad.write_attribute(f, "b", b)
         a_disk = SparseDataset(f["a"])
         b_disk = SparseDataset(f["b"])
 
         a_disk.append(b_disk)
-        fromdisk = a_disk.tomemory()
+        fromdisk = a_disk.to_memory()
 
     frommem = append_method([a, b])
 
@@ -105,8 +105,8 @@ def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape):
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
     with h5py.File(h5_path, "a") as f:
-        ad.readwrite.h5ad.write_attribute(f, "a", a_mem)
-        ad.readwrite.h5ad.write_attribute(f, "b", b_mem)
+        ad._io.h5ad.write_attribute(f, "a", a_mem)
+        ad._io.h5ad.write_attribute(f, "b", b_mem)
         a_disk = SparseDataset(f["a"])
         b_disk = SparseDataset(f["b"])
 
@@ -119,9 +119,9 @@ def test_wrong_formats(tmp_path):
     base = sparse.random(100, 100, format="csr")
 
     with h5py.File(h5_path, "a") as f:
-        ad.readwrite.h5ad.write_attribute(f, "base", base)
+        ad._io.h5ad.write_attribute(f, "base", base)
         disk_mtx = SparseDataset(f["base"])
-        pre_checks = disk_mtx.tomemory()
+        pre_checks = disk_mtx.to_memory()
 
         with pytest.raises(ValueError):
             disk_mtx.append(sparse.random(100, 100, format="csc"))
@@ -129,13 +129,11 @@ def test_wrong_formats(tmp_path):
             disk_mtx.append(sparse.random(100, 100, format="coo"))
         with pytest.raises(NotImplementedError):
             disk_mtx.append(np.random.random((100, 100)))
-        disk_dense = f.create_dataset(
-            "dense", data=np.random.random((100, 100))
-        )
+        disk_dense = f.create_dataset("dense", data=np.random.random((100, 100)))
         with pytest.raises(NotImplementedError):
             disk_mtx.append(disk_dense)
 
-        post_checks = disk_mtx.tomemory()
+        post_checks = disk_mtx.to_memory()
 
     # Check nothing changed
     assert not np.any((pre_checks != post_checks).toarray())

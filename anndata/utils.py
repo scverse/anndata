@@ -1,10 +1,9 @@
 import warnings
 from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union, Tuple
+from typing import Mapping, Any, Sequence
 
 import pandas as pd
 import numpy as np
-from scipy.sparse import spmatrix
 
 from .logging import get_logger
 
@@ -25,8 +24,8 @@ def convert_to_dict_dict(obj: dict):
 def convert_to_dict_ndarray(obj: np.ndarray):
     if obj.dtype.fields is None:
         raise TypeError(
-            "Can only convert np.ndarray with compound dtypes to dict, passed "
-            f"array had '{obj.dtype}'."
+            "Can only convert np.ndarray with compound dtypes to dict, "
+            f"passed array had “{obj.dtype}”."
         )
     return {k: obj[k] for k in obj.dtype.fields.keys()}
 
@@ -36,8 +35,9 @@ def convert_to_dict_nonetype(obj: None):
     return dict()
 
 
-def make_index_unique(index: pd.Index, join: str = '-'):
-    """Makes the index unique by appending '1', '2', etc.
+def make_index_unique(index: pd.Index, join: str = "-"):
+    """\
+    Makes the index unique by appending '1', '2', etc.
 
     The first occurance of a non-unique value is ignored.
 
@@ -48,8 +48,9 @@ def make_index_unique(index: pd.Index, join: str = '-'):
 
     Examples
     --------
-    >>> adata1 = sc.AnnData(np.ones((3, 2)), {'obs_names': ['a', 'b', 'c']})
-    >>> adata2 = sc.AnnData(np.zeros((3, 2)), {'obs_names': ['d', 'b', 'b']})
+    >>> from anndata import AnnData
+    >>> adata1 = AnnData(np.ones((3, 2)), dict(obs_names=['a', 'b', 'c']))
+    >>> adata2 = AnnData(np.zeros((3, 2)), dict(obs_names=['d', 'b', 'b']))
     >>> adata = adata1.concatenate(adata2)
     >>> adata.obs_names
     Index(['a', 'b', 'c', 'd', 'b', 'b'], dtype='object')
@@ -62,7 +63,7 @@ def make_index_unique(index: pd.Index, join: str = '-'):
     from collections import defaultdict
 
     values = index.values
-    indices_dup = index.duplicated(keep='first')
+    indices_dup = index.duplicated(keep="first")
     values_dup = values[indices_dup]
     counter = defaultdict(lambda: 0)
     for i, v in enumerate(values_dup):
@@ -74,25 +75,17 @@ def make_index_unique(index: pd.Index, join: str = '-'):
 
 
 def warn_names_duplicates(attr: str):
-    names = 'Observation' if attr == 'obs' else 'Variable'
+    names = "Observation" if attr == "obs" else "Variable"
     logger.info(
-        f'{names} names are not unique. '
-        f'To make them unique, call `.{attr}_names_make_unique`.'
+        f"{names} names are not unique. "
+        f"To make them unique, call `.{attr}_names_make_unique`."
     )
-
-
-def warn_no_string_index(names: Sequence[Any]):
-    if not isinstance(names[0], str):
-        logger.warning(
-            f'AnnData expects string indices for some functionality, '
-            f'but your first two indices are: {names[:2]}. '
-        )
 
 
 def ensure_df_homogeneous(df: pd.DataFrame, name: str) -> np.ndarray:
     arr = df.to_numpy()
     if df.dtypes.nunique() != 1:
-        warnings.warn(f'{name} converted to numpy array with dtype {arr.dtype}')
+        warnings.warn(f"{name} converted to numpy array with dtype {arr.dtype}")
     return arr
 
 
@@ -101,22 +94,22 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     try:  # transform to byte-strings
         cols = [
             np.asarray(col)
-            if np.array(col[0]).dtype.char not in {'U', 'S'}
-            else np.asarray(col).astype('U')
+            if np.array(col[0]).dtype.char not in {"U", "S"}
+            else np.asarray(col).astype("U")
             for col in source.values()
         ]
     except UnicodeEncodeError:
         raise ValueError(
-            'Currently only support ascii strings. '
-            'Don’t use "ö" etc. for sample annotation.'
+            "Currently only support ascii strings. "
+            "Don’t use “ö” etc. for sample annotation."
         )
 
     # if old_index_key not in source:
     #     names.append(new_index_key)
-    #     cols.append(np.arange(len(cols[0]) if cols else n_row).astype('U'))
+    #     cols.append(np.arange(len(cols[0]) if cols else n_row).astype("U"))
     # else:
     #     names[names.index(old_index_key)] = new_index_key
-    #     cols[names.index(old_index_key)] = cols[names.index(old_index_key)].astype('U')
+    #     cols[names.index(old_index_key)] = cols[names.index(old_index_key)].astype("U")
     dtype_list = list(
         zip(names, [str(c.dtype) for c in cols], [(c.shape[1],) for c in cols])
     )
@@ -134,7 +127,7 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
 
 
 def deprecated(new_name: str):
-    """
+    """\
     This is a decorator which can be used to mark functions
     as deprecated. It will result in a warning being emitted
     when the function is used.
@@ -144,24 +137,24 @@ def deprecated(new_name: str):
         @wraps(func)
         def new_func(*args, **kwargs):
             # turn off filter
-            warnings.simplefilter('always', DeprecationWarning)
+            warnings.simplefilter("always", DeprecationWarning)
             warnings.warn(
-                f'Use {new_name} instead of {func.__name__}, '
-                f'{func.__name__} will be removed in the future.',
+                f"Use {new_name} instead of {func.__name__}, "
+                f"{func.__name__} will be removed in the future.",
                 category=DeprecationWarning,
                 stacklevel=2,
             )
-            warnings.simplefilter('default', DeprecationWarning)  # reset filter
+            warnings.simplefilter("default", DeprecationWarning)  # reset filter
             return func(*args, **kwargs)
 
-        setattr(new_func, '__deprecated', True)
+        setattr(new_func, "__deprecated", True)
         return new_func
 
     return decorator
 
 
 class DeprecationMixinMeta(type):
-    """
+    """\
     Use this as superclass so deprecated methods and properties
     do not appear in vars(MyClass)/dir(MyClass)
     """
@@ -170,47 +163,10 @@ class DeprecationMixinMeta(type):
         def is_deprecated(attr):
             if isinstance(attr, property):
                 attr = attr.fget
-            return getattr(attr, '__deprecated', False)
+            return getattr(attr, "__deprecated", False)
 
         return [
             item
             for item in type.__dir__(cls)
             if not is_deprecated(getattr(cls, item, None))
         ]
-
-
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
-
-
-def get_n_items_idx(idx: Index1D, l: int):
-    if isinstance(idx, np.ndarray) and idx.dtype == bool:
-        return idx.sum()
-    elif isinstance(idx, slice):
-        start = 0 if idx.start is None else idx.start
-        stop = l if idx.stop is None else idx.stop
-        step = 1 if idx.step is None else idx.step
-        return (stop - start) // step
-    elif isinstance(idx, (int, np.int_, np.int64, np.int32)):
-        return 1
-    else:
-        return len(idx)
-
-
-def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
-    # handle indexing with boolean matrices
-    if (
-        isinstance(index, (spmatrix, np.ndarray))
-        and index.ndim == 2
-        and index.dtype.kind == 'b'
-    ):
-        return index.nonzero()
-
-    if not isinstance(index, tuple):
-        return index, slice(None)
-    elif len(index) == 2:
-        return index
-    elif len(index) == 1:
-        return index[0], slice(None)
-    else:
-        raise IndexError('invalid number of indices')

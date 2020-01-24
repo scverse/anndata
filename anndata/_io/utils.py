@@ -1,13 +1,19 @@
+from enum import Enum
 from functools import wraps, singledispatch
-from ..core.sparsedataset import SparseDataset
+from warnings import warn
+
+from packaging import version
+
+from .._core.sparse_dataset import SparseDataset
 
 # -------------------------------------------------------------------------------
 # Type conversion
 # -------------------------------------------------------------------------------
 
-# Could be numba'd if it returned tuples instead of slices
+
+# Could be numba’d if it returned tuples instead of slices
 def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
-    """
+    """\
     Gives indexer tuples chunked along an axis.
 
     Params
@@ -35,7 +41,8 @@ def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
 
 
 def is_float(string):
-    """Check whether string is float.
+    """\
+    Check whether string is float.
 
     See also
     --------
@@ -49,8 +56,7 @@ def is_float(string):
 
 
 def is_int(string):
-    """Check whether string is integer.
-    """
+    """Check whether string is integer."""
     try:
         int(string)
         return True
@@ -59,26 +65,24 @@ def is_int(string):
 
 
 def convert_bool(string):
-    """Check whether string is boolean.
-    """
-    if string == 'True':
+    """Check whether string is boolean."""
+    if string == "True":
         return True, True
-    elif string == 'False':
+    elif string == "False":
         return True, False
     else:
         return False, False
 
 
 def convert_string(string):
-    """Convert string to int, float or bool.
-    """
+    """Convert string to int, float or bool."""
     if is_int(string):
         return int(string)
     elif is_float(string):
         return float(string)
     elif convert_bool(string)[0]:
         return convert_bool(string)[1]
-    elif string == 'None':
+    elif string == "None":
         return None
     else:
         return string
@@ -91,16 +95,12 @@ def convert_string(string):
 
 @singledispatch
 def write_attribute(*args, **kwargs):
-    raise NotImplementedError(
-        "Unrecognized argument types for `write_attribute`."
-    )
+    raise NotImplementedError("Unrecognized argument types for `write_attribute`.")
 
 
 @singledispatch
 def read_attribute(*args, **kwargs):
-    raise NotImplementedError(
-        "Unrecognized argument types for `read_attribute`."
-    )
+    raise NotImplementedError("Unrecognized argument types for `read_attribute`.")
 
 
 @read_attribute.register(type(None))
@@ -136,7 +136,7 @@ def _get_parent(elem):
 
 
 def report_read_key_on_error(func):
-    """
+    """\
     A decorator for zarr element reading which makes keys involved in errors get reported.
 
     Example
@@ -160,7 +160,7 @@ def report_read_key_on_error(func):
             else:
                 parent = _get_parent(elem)
                 raise AnnDataReadError(
-                    f"Above error raised while reading key '{elem.name}' of "
+                    f"Above error raised while reading key {elem.name!r} of "
                     f"type {type(elem)} from {parent}."
                 )
 
@@ -168,7 +168,7 @@ def report_read_key_on_error(func):
 
 
 def report_write_key_on_error(func):
-    """
+    """\
     A decorator for zarr element reading which makes keys involved in errors get reported.
 
     Example
@@ -190,8 +190,49 @@ def report_write_key_on_error(func):
             parent = _get_parent(elem)
             raise type(e)(
                 f"{e}\n\n"
-                f"Above error raised while writing key '{key}' of {type(elem)}"
+                f"Above error raised while writing key {key!r} of {type(elem)}"
                 f" from {parent}."
             ) from e
 
     return func_wrapper
+
+
+# -------------------------------------------------------------------------------
+# Common h5ad/zarr stuff
+# -------------------------------------------------------------------------------
+
+
+def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "varm")):
+    """\
+    Backwards compat for reading legacy raw.
+    Makes sure that no modern raw group coexists with legacy raw.* groups.
+    """
+    if modern_raw:
+        if any(k.startswith("raw.") for k in f):
+            what = f"File {f.filename}" if hasattr(f, "filename") else "Store"
+            raise ValueError(f"{what} has both legacy and current raw formats.")
+        return modern_raw
+
+    raw = {}
+    if "X" in attrs and "raw.X" in f:
+        raw["X"] = read_attr(f["raw.X"])
+    if "var" in attrs and "raw.var" in f:
+        raw["var"] = read_df(f["raw.var"])  # Backwards compat
+    if "varm" in attrs and "raw.varm" in f:
+        raw["varm"] = read_attr(f["raw.varm"])
+    return raw
+
+
+class EncodingVersions(Enum):
+    raw = "0.1.0"
+    csr_matrix = csc_matrix = "0.1.0"
+    dataframe = "0.1.0"
+
+    def check(self, key: str, encoded_version: str):
+        if version.parse(encoded_version) > version.parse(self.value):
+            warn(
+                f"The supported version for decoding {self.name} is {self.value}, "
+                f"but a {self.name} with version {encoded_version} "
+                f"was encountered at {key}.",
+                FutureWarning,
+            )

@@ -7,19 +7,20 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
+from . import anndata
 from ..logging import anndata_logger as logger
 from ..compat import ZappyArray
 
 
 class ViewArgs(NamedTuple):
-    parent: "AnnData"
+    parent: "anndata.AnnData"
     attrname: str
     keys: Tuple[str, ...] = ()
 
 
 class _SetItemMixin:
     """\
-    Class which (when values are being set) lets their parent anndata view know,
+    Class which (when values are being set) lets their parent AnnData view know,
     so it can make a copy of itself.
     This implements copy-on-modify semantics for views of AnnData objects.
     """
@@ -29,9 +30,7 @@ class _SetItemMixin:
             super().__setitem__(idx, value)
         else:
             adata_view, attr_name, keys = self._view_args
-            logger.warning(
-                f'Trying to set attribute `.{attr_name}` of view, copying.'
-            )
+            logger.warning(f"Trying to set attribute `.{attr_name}` of view, copying.")
             new = adata_view.copy()
             attr = getattr(new, attr_name)
             container = reduce(lambda d, k: d[k], keys, attr)
@@ -43,7 +42,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
+        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -60,7 +59,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: Tuple['AnnData', str, Tuple[str, ...]] = None,
+        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
     ):
         arr = np.asarray(input_array).view(cls)
         if view_args is not None:
@@ -70,13 +69,13 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
     def __array_finalize__(self, obj: Optional[np.ndarray]):
         if obj is not None:
-            self._view_args = getattr(obj, '_view_args', None)
+            self._view_args = getattr(obj, "_view_args", None)
 
     def keys(self) -> KeysView[str]:
-        # it's a structured array
+        # it’s a structured array
         return self.dtype.names
 
-    def copy(self, order: str = 'C') -> np.ndarray:
+    def copy(self, order: str = "C") -> np.ndarray:
         # we want a conventional array
         return np.array(self)
 
@@ -84,7 +83,8 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
-# Unlike array views, SparseCSRView and SparseCSCView do not propagate through subsetting
+# Unlike array views, SparseCSRView and SparseCSCView
+# do not propagate through subsetting
 class SparseCSRView(_ViewMixin, sparse.csr_matrix):
     pass
 
@@ -98,44 +98,43 @@ class DictView(_ViewMixin, dict):
 
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ['_view_args']
+    _metadata = ["_view_args"]
 
 
 @singledispatch
-def asview(obj, view_args):
-    raise NotImplementedError(
-        f"No view type has been registered for {type(obj)}"
-    )
+def as_view(obj, view_args):
+    raise NotImplementedError(f"No view type has been registered for {type(obj)}")
 
 
-@asview.register(np.ndarray)
-def asview_array(array, view_args):
+@as_view.register(np.ndarray)
+def as_view_array(array, view_args):
     return ArrayView(array, view_args=view_args)
 
 
-@asview.register(pd.DataFrame)
-def asview_df(df, view_args):
+@as_view.register(pd.DataFrame)
+def as_view_df(df, view_args):
     return DataFrameView(df, view_args=view_args)
 
 
-@asview.register(sparse.csr_matrix)
-def asview_csr(mtx, view_args):
+@as_view.register(sparse.csr_matrix)
+def as_view_csr(mtx, view_args):
     return SparseCSRView(mtx, view_args=view_args)
 
 
-@asview.register(sparse.csc_matrix)
-def asview_csc(mtx, view_args):
+@as_view.register(sparse.csc_matrix)
+def as_view_csc(mtx, view_args):
     return SparseCSCView(mtx, view_args=view_args)
 
 
-@asview.register(dict)
-def asview_dict(d, view_args):
+@as_view.register(dict)
+def as_view_dict(d, view_args):
     return DictView(d, view_args=view_args)
 
 
-@asview.register(ZappyArray)
-def asview_zappy(z, view_args):
-    # Previous code says ZappyArray works as view, but as far as I can tell they're immutable.
+@as_view.register(ZappyArray)
+def as_view_zappy(z, view_args):
+    # Previous code says ZappyArray works as view,
+    # but as far as I can tell they’re immutable.
     return z
 
 

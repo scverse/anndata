@@ -14,9 +14,9 @@
 anndata - Annotated Data
 ========================
 
-Install via ``pip install anndata`` or ``conda install anndata -c bioconda``.
+Install via `pip install anndata` or `conda install anndata -c bioconda`.
 
 Read the `documentation <https://anndata.readthedocs.io>`_.
 
-.. would be nice to have http://falexwolf.de/img/scanpy/anndata.svg also on GitHub, but it's much too wide there;
-.. GitHub doesn't plan to resolve scaling images: https://github.com/github/markup/issues/295
+.. would be nice to have http://falexwolf.de/img/scanpy/anndata.svg also on GitHub, but it’s much too wide there;
+.. GitHub doesn’t plan to resolve scaling images: https://github.com/github/markup/issues/295

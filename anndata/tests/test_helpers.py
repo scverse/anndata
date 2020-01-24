@@ -36,7 +36,7 @@ from anndata.tests.helpers import assert_equal, report_name, gen_adata
 
 @pytest.fixture(scope="function")
 def reusable_adata():
-    """Reusable anndata for when tests shouldn't mutate it"""
+    """Reusable anndata for when tests shouldn’t mutate it"""
     return gen_adata((10, 10))
 
 
@@ -65,14 +65,12 @@ def test_assert_equal():
         np.array(list(ascii_letters)), np.array(list(ascii_letters)), exact=True
     )
     with pytest.raises(AssertionError):
-        assert_equal(
-            np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1]
-        )
+        assert_equal(np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1])
 
     adata = gen_adata((10, 10))
     adata.raw = adata.copy()
     assert_equal(adata, adata.copy(), exact=True)
-    # TODO: I'm not sure this is good behaviour, I've disabled in for now.
+    # TODO: I’m not sure this is good behaviour, I’ve disabled in for now.
     # assert_equal(
     #     adata,
     #     adata[
@@ -126,7 +124,7 @@ def test_assert_equal_raw():
 
 # TODO: Should views be equal to actual?
 # Should they not be if an exact comparison is made?
-def test_assert_equal_alignedmapping():
+def test_assert_equal_aligned_mapping():
     adata1 = gen_adata((10, 10))
     adata2 = adata1.copy()
 
@@ -149,25 +147,17 @@ def test_assert_equal_alignedmapping():
         assert_equal(getattr(adata1, attr), getattr(var_subset, attr))
 
 
-def test_assert_equal_alignedmapping_empty():
+def test_assert_equal_aligned_mapping_empty():
     chars = np.array(list(ascii_letters))
     adata = ad.AnnData(
         X=np.zeros((10, 10)),
-        obs=pd.DataFrame(
-            [], index=np.random.choice(chars[:20], 10, replace=False)
-        ),
-        var=pd.DataFrame(
-            [], index=np.random.choice(chars[:20], 10, replace=False)
-        ),
+        obs=pd.DataFrame([], index=np.random.choice(chars[:20], 10, replace=False)),
+        var=pd.DataFrame([], index=np.random.choice(chars[:20], 10, replace=False)),
     )
     diff_idx = ad.AnnData(
         X=np.zeros((10, 10)),
-        obs=pd.DataFrame(
-            [], index=np.random.choice(chars[20:], 10, replace=False)
-        ),
-        var=pd.DataFrame(
-            [], index=np.random.choice(chars[20:], 10, replace=False)
-        ),
+        obs=pd.DataFrame([], index=np.random.choice(chars[20:], 10, replace=False)),
+        var=pd.DataFrame([], index=np.random.choice(chars[20:], 10, replace=False)),
     )
     same_idx = ad.AnnData(adata.X, obs=adata.obs.copy(), var=adata.var.copy())
 

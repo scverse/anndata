@@ -5,6 +5,8 @@ import pandas as pd
 
 
 # try importing zarr, dask, and zappy
+from packaging import version
+
 try:
     from zarr.core import Array as ZarrArray
 except ImportError:
@@ -12,7 +14,7 @@ except ImportError:
     class ZarrArray:
         @staticmethod
         def __repr__():
-            return 'mock zarr.core.Array'
+            return "mock zarr.core.Array"
 
 
 try:
@@ -22,7 +24,7 @@ except ImportError:
     class ZappyArray:
         @staticmethod
         def __repr__():
-            return 'mock zappy.base.ZappyArray'
+            return "mock zappy.base.ZappyArray"
 
 
 try:
@@ -32,7 +34,7 @@ except ImportError:
     class DaskArray:
         @staticmethod
         def __repr__():
-            return 'mock dask.array.core.Array'
+            return "mock dask.array.core.Array"
 
 
 try:
@@ -46,22 +48,23 @@ except ImportError:
             def __getitem__(cls, values):
                 if not isinstance(values, tuple):
                     values = (values,)
-                return type('Literal_', (Literal,), dict(__args__=values))
+                return type("Literal_", (Literal,), dict(__args__=values))
 
         class Literal(metaclass=LiteralMeta):
             pass
 
 
-def version(package):
+def pkg_version(package):
     try:
-        from importlib.metadata import version
+        from importlib.metadata import version as v
     except ImportError:
-        from importlib_metadata import version
-    return version(package)
+        from importlib_metadata import version as v
+    return version.parse(v(package))
 
 
 def _from_fixed_length_strings(value):
-    """Convert from fixed length strings to unicode.
+    """\
+    Convert from fixed length strings to unicode.
 
     For backwards compatability with older h5ad and zarr files.
     """
@@ -78,13 +81,13 @@ def _from_fixed_length_strings(value):
         if issubclass(np.dtype(dt_type).type, np.string_):
             dt_list[1] = f"U{int(dt_type[2:])}"
         elif is_annotated or np.issubdtype(np.dtype(dt_type), np.str_):
-            dt_list[1] = "O"  # Assumption that it's a vlen str
+            dt_list[1] = "O"  # Assumption that it’s a vlen str
         new_dtype.append(tuple(dt_list))
     return value.astype(new_dtype)
 
 
 def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
-    """
+    """\
     Convert variable length strings to fixed length.
 
     Currently a workaround for

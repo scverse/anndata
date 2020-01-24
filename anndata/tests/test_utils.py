@@ -6,7 +6,7 @@ import h5py
 import pandas as pd
 
 from anndata.compat import _clean_uns
-from anndata.readwrite.utils import report_read_key_on_error, AnnDataReadError
+from anndata._io.utils import report_read_key_on_error, AnnDataReadError
 
 
 @pytest.mark.parametrize(
