@@ -165,9 +165,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     shape
         Shape tuple (#observations, #variables). Can only be provided if `X` is `None`.
     filename
-        Name of backing file. See :class:`File`.
+        Name of backing file. See :class:`h5py.File`.
     filemode
-        Open mode of backing file. See :class:`File`.
+        Open mode of backing file. See :class:`h5py.File`.
 
     See Also
     --------
