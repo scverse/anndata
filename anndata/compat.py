@@ -104,9 +104,7 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-def _clean_uns(
-    d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]]
-):
+def _clean_uns(d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]]):
     """
     Compat function for when categorical keys were stored in uns.
     This used to be buggy because when storing categorical columns in obs and var with
