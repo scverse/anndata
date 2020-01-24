@@ -1,3 +1,5 @@
+from typing import Union, Mapping, MutableMapping
+
 import numpy as np
 import pandas as pd
 
@@ -99,22 +101,30 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-def _clean_uns(d: dict):
-    """Compat function for when categorical keys were stored in uns."""
+def _clean_uns(
+    d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]]
+):
+    """
+    Compat function for when categorical keys were stored in uns.
+    This used to be buggy because when storing categorical columns in obs and var with
+    the same column name, only one `<colname>_categories` is retained.
+    """
     k_to_delete = set()
-    for k, v in d.get("uns", {}).items():
-        if not k.endswith('_categories'):
+    for cats_name, cats in d.get("uns", {}).items():
+        if not cats_name.endswith('_categories'):
             continue
-        k_stripped = k.replace('_categories', '')
+        name = cats_name.replace('_categories', '')
         # fix categories with a single category
-        if isinstance(v, (str, int)):
-            v = [v]
+        if isinstance(cats, (str, int)):
+            cats = [cats]
         for ann in ['obs', 'var']:
-            if k_stripped not in d[ann]:
+            if name not in d[ann]:
                 continue
-            d[ann][k_stripped] = pd.Categorical.from_codes(
-                codes=d[ann][k_stripped].values, categories=v
-            )
-            k_to_delete.add(k)
-    for k in k_to_delete:
-        del d["uns"][k]
+            codes: np.ndarray = d[ann][name].values
+            # hack to maybe find the axis the categories were for
+            if not np.all(codes < len(cats)):
+                continue
+            d[ann][name] = pd.Categorical.from_codes(codes, cats)
+            k_to_delete.add(cats_name)
+    for cats_name in k_to_delete:
+        del d["uns"][cats_name]
