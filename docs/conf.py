@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+from sphinx.application import Sphinx
+
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
 import anndata  # noqa
@@ -68,14 +70,23 @@ suppress_warnings = ["ref.citation"]
 
 def work_around_issue_6785():
     """See https://github.com/sphinx-doc/sphinx/issues/6785"""
+    from docutils.parsers.rst import directives
     from sphinx.ext import autodoc
+    from sphinx.domains.python import PyAttribute
 
     # check if the code changes on the sphinx side and we can remove this
-    assert autodoc.PropertyDocumenter.priority > autodoc.AttributeDocumenter.priority
-    autodoc.PropertyDocumenter.priority = -100
+    assert autodoc.PropertyDocumenter.directivetype == "method"
+    autodoc.PropertyDocumenter.directivetype = "attribute"
+
+    def get_signature_prefix(self, sig: str) -> str:
+        # TODO: abstract attributes
+        return "property " if "property" in self.options else ""
+
+    PyAttribute.option_spec["property"] = directives.flag
+    PyAttribute.get_signature_prefix = get_signature_prefix
 
 
-def setup(app):
+def setup(app: Sphinx):
     work_around_issue_6785()
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
@@ -119,10 +130,6 @@ html_context = dict(
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_static_path = ["_static"]
 html_show_sphinx = False
-
-
-def setup(app):
-    app.add_stylesheet("css/custom.css")
 
 
 # -- Options for other output formats ------------------------------------------
