@@ -1,5 +1,13 @@
 from ._core.anndata import AnnData
 from ._core.raw import Raw
+from ._core.aligned_mapping import (
+    AlignedMapping,
+    AlignedActual,
+    AlignedView,
+    AxisArrays,
+    Layers,
+    PairwiseArrays,
+)
 from ._io import (
     read_h5ad,
     read_loom,
@@ -26,6 +34,27 @@ The central class:
 
    AnnData
 
+
+Aligned Mappings
+----------------
+
+:class:`AnnData`’s attributes are aligned to its dimensions:
+
+.. autosummary::
+   :toctree: .
+
+   AxisArrays
+   Layers
+   PairwiseArrays
+
+The base classes for those :class:`AlignedMapping`\\ s are:
+
+.. autosummary::
+   :toctree: .
+
+   AlignedMapping
+   AlignedActual
+   AlignedView
 
 Reading
 -------

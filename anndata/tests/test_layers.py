@@ -62,6 +62,20 @@ def test_set_dataframe(homogenous, df, dtype):
     assert np.issubdtype(adata.layers["df"].dtype, dtype)
 
 
+def test_pickle():
+    import pickle
+    from anndata._core.aligned_mapping import Layers
+
+    adata = AnnData(X=X, layers=dict(L=L.copy()))
+
+    pickle_data = pickle.dumps(adata.layers)
+    layers: Layers = pickle.loads(pickle_data)
+    assert np.allclose(layers.parent.X, adata.X)
+    assert layers.keys() == adata.layers.keys()
+    for new, old in zip(layers.values(), adata.layers.values()):
+        assert np.allclose(new, old)
+
+
 def test_readwrite(backing_h5ad):
     adata = AnnData(X=X, layers=dict(L=L.copy()))
     adata.write(backing_h5ad)
