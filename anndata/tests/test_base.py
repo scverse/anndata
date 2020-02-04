@@ -98,7 +98,6 @@ def test_create_from_df_with_obs_and_var_series():
         _ = AnnData(df, obs=obs, var=var_noname)
 
 
-
 def test_df_warnings():
     df = pd.DataFrame(dict(A=[1, 2, 3], B=[1.0, 2.0, 3.0]), index=["a", "b", "c"])
     with pytest.warns(UserWarning, match=r"X.*dtype float64"):
