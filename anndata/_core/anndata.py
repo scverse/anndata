@@ -94,8 +94,8 @@ def _gen_dataframe(anno, length, index_names):
     if isinstance(anno, pd.Series):
         if anno.name is None:
             raise ValueError(
-                    "anno needs to be a pd.DataFrame(value) or be a"
-                    "pd.Series(value) with a name"
+                "anno needs to be a pd.DataFrame(value) or be a"
+                "pd.Series(value) with a name"
             )
         anno = pd.DataFrame(anno)
     if isinstance(anno, pd.DataFrame):
