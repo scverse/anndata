@@ -89,6 +89,14 @@ def test_create_from_df_with_obs_and_var_series():
     ad = AnnData(df, obs=obs, var=var)
 
     assert var.tolist() == ad.var.D.tolist()
+    ad.var.loc["A", "D"] = 2
+    assert var["A"] == 1
+    assert ad.var.loc["A", "D"] == 2
+
+    var_noname = pd.Series(np.ones(2), index=df.columns)
+    with pytest.raises(ValueError):
+        _ = AnnData(df, obs=obs, var=var_noname)
+
 
 
 def test_df_warnings():
