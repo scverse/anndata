@@ -6,7 +6,7 @@ import collections.abc as cabc
 from collections import OrderedDict
 from copy import deepcopy
 from enum import Enum
-from functools import reduce
+from functools import reduce, singledispatch
 from pathlib import Path
 from os import PathLike
 from typing import Any, Union, Optional  # Meta
@@ -90,32 +90,47 @@ def _check_2d_shape(X):
         )
 
 
+@singledispatch
 def _gen_dataframe(anno, length, index_names):
-    if isinstance(anno, pd.DataFrame):
-        anno = anno.copy()
-        if not is_string_dtype(anno.index):
-            logger.warning("Transforming to str index.")
-            anno.index = anno.index.astype(str)
-        return anno
     if anno is None or len(anno) == 0:
-        _anno = pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
-    else:
-        for index_name in index_names:
-            if index_name in anno:
-                _anno = pd.DataFrame(
-                    anno,
-                    index=anno[index_name],
-                    columns=[k for k in anno.keys() if k != index_name],
-                )
-                break
-        else:
-            _anno = pd.DataFrame(
-                anno, index=RangeIndex(0, length, name=None).astype(str)
+        return pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
+    for index_name in index_names:
+        if index_name in anno:
+            return pd.DataFrame(
+                anno,
+                index=anno[index_name],
+                columns=[k for k in anno.keys() if k != index_name],
             )
-    return _anno
+    return pd.DataFrame(anno, index=RangeIndex(0, length, name=None).astype(str))
+
+
+@_gen_dataframe.register(pd.DataFrame)
+def _(anno, length, index_names):
+    anno = anno.copy()
+    if not is_string_dtype(anno.index):
+        warnings.warn("Transforming to str index.", ImplicitModificationWarning)
+        anno.index = anno.index.astype(str)
+    return anno
+
+
+@_gen_dataframe.register(pd.Series)
+@_gen_dataframe.register(pd.Index)
+def _(anno, length, index_names):
+    raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
 
 
 class ImplicitModificationWarning(UserWarning):
+    """\
+    Raised whenever initializing an object or assigning a property changes
+    the type of a part of a parameter or the value being assigned.
+
+    Examples
+    ========
+    >>> import pandas as pd
+    >>> adata = AnnData(obs=pd.DataFrame(index=[0, 1, 2]))
+    ImplicitModificationWarning: Transforming to str index.
+    """
+
     pass
 
 
