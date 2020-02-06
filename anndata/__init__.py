@@ -101,5 +101,5 @@ try:
 except (LookupError, ImportError):
     from .compat import pkg_version
 
-    __version__ = pkg_version(__name__)
+    __version__ = str(pkg_version(__name__))
     del pkg_version
