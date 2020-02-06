@@ -434,3 +434,16 @@ def test_double_index(subset_func, subset_func2):
     assert np.all(asarray(v1.X) == asarray(v2.X))
     assert np.all(v1.obs == v2.obs)
     assert np.all(v1.var == v2.var)
+
+
+def test_string_detection():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+
+    a = gen_adata((10, 10))
+    a.obs["foo"] = [Foo(x) for x in list("abcdeabcde")]
+
+    b = a[2:8].copy()
+    b.strings_to_categoricals()
+    assert {type(f) for f in b.obs["foo"]} == {Foo}

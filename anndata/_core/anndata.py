@@ -19,7 +19,7 @@ import numpy as np
 from numpy import ma
 import pandas as pd
 from pandas.core.index import RangeIndex
-from pandas.api.types import is_string_dtype, is_categorical
+from pandas.api.types import is_string_dtype, is_categorical, infer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 
@@ -1163,15 +1163,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             dfs = [df]
         for df in dfs:
-            string_cols = [
-                key
-                for key in df.columns
-                if is_string_dtype(df[key]) and not is_categorical(df[key])
-            ]
-            for key in string_cols:
+            for key in df.columns:
+                dtype = infer_dtype(df[key], skipna=True)
                 # make sure we only have strings
                 # (could be that there are np.nans (float), -666, "-666", for instance)
-                c = df[key].astype("U")
+                if dtype in ["string", "unicode"]:
+                    c = df[key].astype(str)
+                elif dtype == "bytes":
+                    c = df[key].astype(bytes)
+                else:
+                    continue
                 # make a categorical
                 c = pd.Categorical(c, categories=natsorted(np.unique(c)))
                 if len(c.categories) >= len(c):
