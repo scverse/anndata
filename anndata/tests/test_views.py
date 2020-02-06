@@ -171,6 +171,22 @@ def test_set_var(adata, subset_func):
     assert joblib.hash(adata) == init_hash
 
 
+def test_drop_obs_column():
+    adata = ad.AnnData(np.array(X_list), obs=obs_dict, dtype="int32")
+
+    subset = adata[:2]
+    assert subset.is_view
+    # returns a copy of obs
+    assert subset.obs.drop(columns=["oanno1"]).columns.tolist() == ["oanno2", "oanno3"]
+    assert subset.is_view
+    # would modify obs, so it should actualize subset and not modify adata
+    subset.obs.drop(columns=["oanno1"], inplace=True)
+    assert not subset.is_view
+    assert subset.obs.columns.tolist() == ["oanno2", "oanno3"]
+
+    assert adata.obs.columns.tolist() == ["oanno1", "oanno2", "oanno3"]
+
+
 def test_set_obsm(adata):
     init_hash = joblib.hash(adata)
 

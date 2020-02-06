@@ -1,5 +1,6 @@
+from contextlib import contextmanager
 from copy import deepcopy
-from functools import reduce, singledispatch
+from functools import reduce, singledispatch, wraps
 from typing import Any, KeysView, Optional, Sequence, Tuple, NamedTuple
 
 import numpy as np
@@ -29,13 +30,20 @@ class _SetItemMixin:
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
-            adata_view, attr_name, keys = self._view_args
-            logger.warning(f"Trying to set attribute `.{attr_name}` of view, copying.")
-            new = adata_view.copy()
-            attr = getattr(new, attr_name)
-            container = reduce(lambda d, k: d[k], keys, attr)
-            container[idx] = value
-            adata_view._init_as_actual(new)
+            logger.warning(
+                f"Trying to set attribute `.{self._view_args.attrname}` of view, copying."
+            )
+            with self._update() as container:
+                container[idx] = value
+
+    @contextmanager
+    def _update(self):
+        adata_view, attr_name, keys = self._view_args
+        new = adata_view.copy()
+        attr = getattr(new, attr_name)
+        container = reduce(lambda d, k: d[k], keys, attr)
+        yield container
+        adata_view._init_as_actual(new)
 
 
 class _ViewMixin(_SetItemMixin):
@@ -99,6 +107,13 @@ class DictView(_ViewMixin, dict):
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata = ["_view_args"]
+
+    @wraps(pd.DataFrame.drop)
+    def drop(self, *args, inplace: bool = False, **kw):
+        if not inplace:
+            return self.copy().drop(*args, **kw)
+        with self._update() as df:
+            df.drop(*args, inplace=True, **kw)
 
 
 @singledispatch
