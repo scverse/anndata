@@ -484,7 +484,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         raise ValueError("`shape` is inconsistent with `var`")
 
         # annotations
-        self._obs = _gen_dataframe(obs, self._n_obs, ["obs_names", "row_names"],)
+        self._obs = _gen_dataframe(obs, self._n_obs, ["obs_names", "row_names"])
         self._var = _gen_dataframe(var, self._n_vars, ["var_names", "col_names"])
 
         # now we can verify if indices match!
