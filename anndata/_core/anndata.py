@@ -18,7 +18,6 @@ from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.core.index import RangeIndex
 from pandas.api.types import is_string_dtype, is_categorical
 from scipy import sparse
 from scipy.sparse import issparse
@@ -93,7 +92,7 @@ def _check_2d_shape(X):
 @singledispatch
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
-        return pd.DataFrame(index=RangeIndex(0, length, name=None).astype(str))
+        return pd.DataFrame(index=pd.RangeIndex(0, length, name=None).astype(str))
     for index_name in index_names:
         if index_name in anno:
             return pd.DataFrame(
@@ -101,7 +100,7 @@ def _gen_dataframe(anno, length, index_names):
                 index=anno[index_name],
                 columns=[k for k in anno.keys() if k != index_name],
             )
-    return pd.DataFrame(anno, index=RangeIndex(0, length, name=None).astype(str))
+    return pd.DataFrame(anno, index=pd.RangeIndex(0, length, name=None).astype(str))
 
 
 @_gen_dataframe.register(pd.DataFrame)
