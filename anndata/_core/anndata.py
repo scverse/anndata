@@ -2135,7 +2135,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     # --------------------------------------------------------------------------
 
     @property
-    # @utils.deprecated("is_view")  # only deprecate ones Scanpy is adapted
+    @utils.deprecated("is_view")
     def isview(self):
         return self.is_view
 
