@@ -215,8 +215,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     :attr:`layers`.
 
     Indexing into an AnnData object can be performed by relative position
-    with numeric indices (like pandas’ :attr:`~pandas.DataFrame.iloc`),
-    or by labels (like :attr:`~pandas.DataFrame.loc`).
+    with numeric indices (like pandas’ :meth:`~pandas.DataFrame.iloc`),
+    or by labels (like :meth:`~pandas.DataFrame.loc`).
     To avoid ambiguity with numeric indexing into observations or variables,
     indexes of the AnnData object are converted to strings by the constructor.
 
