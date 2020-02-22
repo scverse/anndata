@@ -125,12 +125,12 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
 
     return arr
 
-
+# this decorator is used by external packages - please refrain from simply
+# moving it around and try to ensure backward compat
 def deprecated(new_name: str):
     """\
-    This is a decorator which can be used to mark functions
-    as deprecated. It will result in a warning being emitted
-    when the function is used.
+    This decorator marks functions as deprecated. It will result in a warning
+    being emitted when the function is used.
     """
 
     def decorator(func):
