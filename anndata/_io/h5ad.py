@@ -206,7 +206,7 @@ write_csc = partial(write_sparse_compressed, fmt="csc")
 @report_write_key_on_error
 def write_sparse_dataset(f, key, value, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
-        f, key, value.to_backed(), fmt=value.format_str, dataset_kwargs=dataset_kwargs,
+        f, key, value._to_backed(), fmt=value.format_str, dataset_kwargs=dataset_kwargs,
     )
 
 

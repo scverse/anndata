@@ -1,5 +1,6 @@
 from ._core.anndata import AnnData, ImplicitModificationWarning
 from ._core.raw import Raw
+from ._core.sparse_dataset import SparseDataset
 from ._io import (
     read_h5ad,
     read_loom,

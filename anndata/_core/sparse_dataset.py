@@ -278,12 +278,12 @@ class SparseDataset:
 
     def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
         row, col = self._normalize_index(index)
-        mtx = self.to_backed()
+        mtx = self._to_backed()
         return mtx[row, col]
 
     def __setitem__(self, index: Union[Index, Tuple[()]], value):
         row, col = self._normalize_index(index)
-        mock_matrix = self.to_backed()
+        mock_matrix = self._to_backed()
         mock_matrix[row, col] = value
 
     def _normalize_index(
@@ -300,7 +300,7 @@ class SparseDataset:
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, SparseDataset):
-            sparse_matrix = sparse_matrix.to_backed()
+            sparse_matrix = sparse_matrix._to_backed()
 
         # Check input
         if not ss.isspmatrix(sparse_matrix):
@@ -357,7 +357,7 @@ class SparseDataset:
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
 
-    def to_backed(self) -> BackedSparseMatrix:
+    def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format_str)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
