@@ -1894,6 +1894,76 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 UserWarning,
             )
 
+        # images and scale factors
+        # only check for images since scalefactors would be redundant
+        have_images = [
+            True for _adata in all_adatas for k in _adata.uns.keys() if k == "images"
+        ]
+        # take the intersection of the available images and
+        # scale factors for the concatenated object
+        # also concatenate the X_spatial obsm
+        # and add None if other adatas are not spatial
+        if any(have_images):
+
+            img_keys = []
+            scl_keys = []
+            # this is not a smart way but it works
+            for _adata in all_adatas:
+                if "images" in _adata.uns.keys():
+                    for k in _adata.uns["images"].keys():
+                        img_keys.append(k)
+            for _adata in all_adatas:
+                if "scalefactors" in _adata.uns.keys():
+                    for k in _adata.uns["scalefactors"].keys():
+                        scl_keys.append(k)
+
+            img_keys = set(img_keys)
+            scl_keys = set(scl_keys)
+            # initialize dicts
+            new_adata.uns["images"] = dict().fromkeys(img_keys, list())
+            new_adata.uns["scalefactors"] = dict().fromkeys(scl_keys, list())
+            # loop across adatas to populate dicts
+            for k in img_keys:
+                img_list = []
+                for _adata in all_adatas:
+                    if "images" in _adata.uns.keys():
+                        if k in _adata.uns["images"].keys():
+                            img_list.append(_adata.uns["images"][k])
+                        else:
+                            img_list.append(None)
+                    else:
+                        img_list.append(None)
+                new_adata.uns["images"][k] = img_list
+            for k in scl_keys:
+                scl_list = []
+                for _adata in all_adatas:
+                    if "scalefactors" in _adata.uns.keys():
+                        if k in _adata.uns["scalefactors"].keys():
+                            scl_list.append(_adata.uns["scalefactors"][k])
+                        else:
+                            scl_list.append(None)
+                    else:
+                        scl_list.append(None)
+                new_adata.uns["scalefactors"][k] = scl_list
+
+            # take care of X_spatial
+            if "X_spatial" not in new_adata.obsm.keys():
+                X_spatial = []
+                idxs = [
+                    True if "X_spatial" in adata.obsm.keys() else False
+                    for adata in all_adatas
+                ]
+                for i, adata in zip(idxs, all_adatas):
+                    if i:
+                        X_spatial.append(adata.obsm["X_spatial"])
+                    else:
+                        X_spatial.append(np.zeros((adata.shape[0], 2)))
+                new_adata.obsm["X_spatial"] = np.concatenate(X_spatial, axis=0)
+
+        else:
+            # added this else for adatas without images
+            pass
+
         if not obs.index.is_unique:
             logger.info("Or pass `index_unique!=None` to `.concatenate`.")
         return new_adata
