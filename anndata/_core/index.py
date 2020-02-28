@@ -71,7 +71,14 @@ def _normalize_index(
         return indexer
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
-    elif isinstance(indexer, (Sequence, np.ndarray, pd.Index)):
+    elif isinstance(indexer, (Sequence, np.ndarray, pd.Index, spmatrix, np.matrix)):
+        if (
+            hasattr(indexer, "shape") and
+            ((indexer.shape == (index.shape[0], 1)) or (indexer.shape == (1, index.shape[0])))
+        ):
+            if isinstance(indexer, spmatrix):
+                indexer = indexer.toarray()
+            indexer = np.ravel(indexer)
         if not isinstance(indexer, (np.ndarray, pd.Index)):
             indexer = np.array(indexer)
         if issubclass(indexer.dtype.type, (np.integer, np.floating)):
@@ -99,14 +106,6 @@ def _normalize_index(
 
 
 def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
-    # handle indexing with boolean matrices
-    if (
-        isinstance(index, (spmatrix, np.ndarray))
-        and index.ndim == 2
-        and index.dtype.kind == "b"
-    ):
-        return index.nonzero()
-
     if not isinstance(index, tuple):
         return index, slice(None)
     elif len(index) == 2:
