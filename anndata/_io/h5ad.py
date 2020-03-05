@@ -453,6 +453,15 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
     """Read pre-anndata 0.7 dataframes."""
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
+    # Fix for #331
+    if not isinstance(df.index.name, (str, type(None))):
+        warn(
+            "AnnData expects index names to be a string or None, but a "
+            f"{type(df.index.name).__name__!r} was found in {dataset.name}. Attempting "
+            "to convert to string.",
+            UserWarning,
+        )
+        df.index.rename(str(df.name), inplace=True)
     return df
 
 
