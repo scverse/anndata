@@ -459,9 +459,9 @@ def test_double_index(subset_func, subset_func2):
 
 def test_view_retains_ndarray_subclass():
     adata = ad.AnnData(np.zeros((10, 10)))
-    adata.obsm['foo'] = np.zeros((10, 5)).view(NDArraySubclass)
+    adata.obsm["foo"] = np.zeros((10, 5)).view(NDArraySubclass)
 
     view = adata[:5, :]
 
-    assert isinstance(view.obsm['foo'], NDArraySubclass)
-    assert view.obsm['foo'].shape == (5, 5)
+    assert isinstance(view.obsm["foo"], NDArraySubclass)
+    assert view.obsm["foo"].shape == (5, 5)
