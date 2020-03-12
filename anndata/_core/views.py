@@ -69,9 +69,8 @@ class ArrayView(_SetItemMixin, np.ndarray):
         input_array: Sequence[Any],
         view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
     ):
-        if not isinstance(input_array, np.ndarray):
-            input_array = np.array(input_array)
-        arr = input_array.view(cls)
+        arr = np.asanyarray(input_array).view(cls)
+
         if view_args is not None:
             view_args = ViewArgs(*view_args)
         arr._view_args = view_args
