@@ -39,6 +39,11 @@ uns_dict = dict(oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"])
 subset_func2 = subset_func
 
 
+class NDArraySubclass(np.ndarray):
+    def view(self, type=None, dtype=None):
+        return self
+
+
 @pytest.fixture
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
@@ -450,3 +455,13 @@ def test_double_index(subset_func, subset_func2):
     assert np.all(asarray(v1.X) == asarray(v2.X))
     assert np.all(v1.obs == v2.obs)
     assert np.all(v1.var == v2.var)
+
+
+def test_view_retains_ndarray_subclass():
+    adata = ad.AnnData(np.zeros((10, 10)))
+    adata.obsm['foo'] = np.zeros((10, 5)).view(NDArraySubclass)
+
+    view = adata[:5, :]
+
+    assert isinstance(view.obsm['foo'], NDArraySubclass)
+    assert view.obsm['foo'].shape == (5, 5)
