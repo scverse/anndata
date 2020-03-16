@@ -45,7 +45,14 @@ from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
-from ..compat import ZarrArray, ZappyArray, DaskArray, Literal, DeprecatedDict, DeepChainMap
+from ..compat import (
+    ZarrArray,
+    ZappyArray,
+    DaskArray,
+    Literal,
+    DeprecatedDict,
+    DeepChainMap,
+)
 
 
 class StorageType(Enum):
@@ -860,10 +867,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             uns = self._uns
         if "neighbors" in self._uns:
-            depr_dict = {k: ElementRef(self, "obsp", (k,)) for k in ("connectivities", "distances")}
+            depr_dict = {
+                k: ElementRef(self, "obsp", (k,))
+                for k in ("connectivities", "distances")
+            }
             uns = DeepChainMap(
-                {"neighbors": DeprecatedDict(self._uns["neighbors"], deprecated_items=depr_dict)},
-                uns
+                {
+                    "neighbors": DeprecatedDict(
+                        self._uns["neighbors"], deprecated_items=depr_dict
+                    )
+                },
+                uns,
             )
         if self.is_view:
             uns = DictView(uns, view_args=(self, "uns"))
