@@ -1,3 +1,4 @@
+from collections import ChainMap
 from typing import Union, Mapping, MutableMapping
 
 import numpy as np
@@ -130,3 +131,24 @@ def _clean_uns(d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]])
             k_to_delete.add(cats_name)
     for cats_name in k_to_delete:
         del d["uns"][cats_name]
+
+
+class DeepChainMap(ChainMap):
+    """Variant of ChainMap that allows direct updates to inner scopes
+
+    Copied from https://docs.python.org/3/library/collections.html#collections.ChainMap
+    """
+
+    def __setitem__(self, key, value):
+        for mapping in self.maps:
+            if key in mapping:
+                mapping[key] = value
+                return
+        self.maps[0][key] = value
+
+    def __delitem__(self, key):
+        for mapping in self.maps:
+            if key in mapping:
+                del mapping[key]
+                return
+        raise KeyError(key)

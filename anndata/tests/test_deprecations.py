@@ -90,3 +90,28 @@ def test_force_dense_deprecated(tmp_path):
     assert isinstance(dense.X, np.ndarray)
     assert isinstance(dense.raw.X, np.ndarray)
     assert_equal(adata, dense)
+
+
+def test_get_uns_neighbors_deprecated(adata):
+    n = adata.shape[0]
+    adata.obsp["connectivities"] = sparse.random(n, n, format="csr")
+    adata.uns["neighbors"] = {}
+
+    with pytest.warns(FutureWarning):
+        adata.uns["neighbors"]["connectivities"]
+
+
+def test_set_uns_neighbors_deprecated(adata):
+    n = adata.shape[0]
+    adata.uns["neighbors"] = {}
+
+    with pytest.warns(FutureWarning):
+        adata.uns["neighbors"]["connectivities"] = sparse.random(n, n, format="csr")
+
+
+def test_slice_uns_sparse_deprecated(adata):
+    n = adata.shape[0]
+    adata.uns["sparse_mtx"] = sparse.random(n, n, format="csr")
+
+    with pytest.warns(FutureWarning):
+        adata[: n // 2]
