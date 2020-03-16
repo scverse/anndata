@@ -1,5 +1,4 @@
-from collections.abc import MutableMapping, Mapping
-from itertools import chain
+from collections.abc import MutableMapping
 from warnings import warn
 
 from .._core.access import ElementRef
