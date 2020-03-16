@@ -1,6 +1,8 @@
 from collections import ChainMap
 from typing import Union, Mapping, MutableMapping
+from warnings import warn
 
+from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
@@ -131,6 +133,27 @@ def _clean_uns(d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]])
             k_to_delete.add(cats_name)
     for cats_name in k_to_delete:
         del d["uns"][cats_name]
+
+
+def _move_adj_mtx(d):
+    """
+    Read-time fix for moving adjacency matrices from uns to obsp
+    """
+    n = d.get("uns", {}).get("neighbors", {})
+    obsp = d.setdefault("obsp", {})
+
+    for k in ("distances", "connectivities"):
+        if (
+            (k in n)
+            and isinstance(n[k], (spmatrix, np.ndarray))
+            and len(n[k].shape) == 2
+        ):
+            warn(
+                f"Moving element from .uns['neighbors']['{k}'] to .obsp['{k}'].\n\n"
+                "This is where adjacency matrices should go now.",
+                FutureWarning,
+            )
+            obsp[k] = n.pop(k)
 
 
 class DeepChainMap(ChainMap):

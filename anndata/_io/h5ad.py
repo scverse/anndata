@@ -17,7 +17,7 @@ from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
 from .._core.raw import Raw
-from ..compat import _from_fixed_length_strings, _clean_uns, Literal
+from ..compat import _from_fixed_length_strings, _clean_uns, Literal, _move_adj_mtx
 from .utils import (
     report_read_key_on_error,
     report_write_key_on_error,
@@ -334,6 +334,7 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
         raise ValueError()
 
     _clean_uns(d)
+    _move_adj_mtx(d)
 
     return AnnData(**d)
 
@@ -425,6 +426,7 @@ def read_h5ad(
             raise ValueError()
 
     _clean_uns(d)  # backwards compat
+    _move_adj_mtx(d)
 
     return AnnData(**d)
 
