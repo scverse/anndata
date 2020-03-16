@@ -25,6 +25,7 @@ from scipy.sparse import issparse
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager
+from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
     AxisArraysView,
@@ -37,7 +38,6 @@ from .views import (
     ArrayView,
     DictView,
     DataFrameView,
-    ViewArgs,
     as_view,
     _resolve_idxs,
 )
@@ -599,7 +599,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
-                ViewArgs(self, "X"),
+                ElementRef(self, "X"),
             )
         else:
             X = self._X
