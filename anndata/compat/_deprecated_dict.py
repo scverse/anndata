@@ -43,12 +43,10 @@ class DeprecatedDict(MutableMapping):
             del self.data[key]
 
     def __iter__(self):
-        return chain(iter(self.data), (self.deprecated_items.keys()))
+        return iter(self.data)
 
     def __len__(self):
-        return len(self.data) + len(self.deprecated_items)
+        return len(self.data)
 
     def copy(self) -> dict:
-        ret = self.data.copy()
-        ret.update({k: v.get() for k, v in self.deprecated_items.items()})
-        return ret
+        return self.data.copy()

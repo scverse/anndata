@@ -45,7 +45,7 @@ from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
-from ..compat import ZarrArray, ZappyArray, DaskArray, Literal
+from ..compat import ZarrArray, ZappyArray, DaskArray, Literal, DeprecatedDict, DeepChainMap
 
 
 class StorageType(Enum):
@@ -341,6 +341,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
         # hackish solution here, no copy should be necessary
+        # TODO: Only copy if there is a matrix that would be sliced.
         uns_new = deepcopy(self._adata_ref._uns)
         # need to do the slicing before setting the updated self._n_obs, self._n_vars
         self._n_obs = self._adata_ref.n_obs  # use the original n_obs here
@@ -862,7 +863,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def uns(self) -> MutableMapping:
         """Unstructured annotation (ordered dictionary)."""
-        return self._uns
+        if not self.is_view:
+            uns = self._uns
+        else:
+            uns = self._uns
+        if "neighbors" in self._uns:
+            depr_dict = {k: ElementRef(self, "obsp", (k,)) for k in ("connectivities", "distances")}
+            uns = DeepChainMap(
+                {"neighbors": DeprecatedDict(self._uns["neighbors"], deprecated_items=depr_dict)},
+                uns
+            )
+        if self.is_view:
+            uns = DictView(uns, view_args=(self, "uns"))
+        return uns
 
     @uns.setter
     def uns(self, value: MutableMapping):
@@ -1219,15 +1232,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self.n_obs,
                     self.n_obs,
                 ):
-                    # path = "".join(f"['{key}']" for key in (*keys, k))
-                    # warnings.warn(
-                    #     f"During AnnData slicing, found matrix at .obs{path} "
-                    #     "that happens to be dimensioned at n_obs×n_obs "
-                    #     f"({self.n_obs}×{self.n_obs}). "
-                    #     "This slicing behavior will soon go away.",
-                    #     DeprecationWarning,
-                    # )
-                    uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
+                    path = "".join(f"['{key}']" for key in (*keys, k))
+                    warnings.warn(
+                        f"During AnnData slicing, found matrix at .uns{path} that happens"
+                        f" to be dimensioned at n_obs×n_obs ({self.n_obs}×{self.n_obs})."
+                        " This slicing behavior will be removed in anndata 0.8.",
+                        FutureWarning,
+                    )
+                    uns[k] = _subset(v, (oidx, oidx))
 
     def _inplace_subset_var(self, index: Index1D):
         """\
