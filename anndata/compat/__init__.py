@@ -3,6 +3,7 @@ from typing import Union, Mapping, MutableMapping
 import numpy as np
 import pandas as pd
 
+from ._deprecated_dict import DeprecatedDict
 
 # try importing zarr, dask, and zappy
 from packaging import version
