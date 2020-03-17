@@ -870,11 +870,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def uns(self) -> MutableMapping:
         """Unstructured annotation (ordered dictionary)."""
-        if not self.is_view:
-            uns = self._uns
-        else:
-            uns = self._uns
-        if "neighbors" in self._uns:
+        uns = self._uns
+        # Special case for old behaviour of neighbors
+        if "neighbors" in uns:
             depr_dict = {
                 k: ElementRef(self, "obsp", (k,))
                 for k in ("connectivities", "distances")
@@ -882,7 +880,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             uns = DeepChainMap(
                 {
                     "neighbors": DeprecatedDict(
-                        self._uns["neighbors"], deprecated_items=depr_dict
+                        uns["neighbors"], deprecated_items=depr_dict
                     )
                 },
                 uns,
