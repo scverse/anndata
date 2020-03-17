@@ -130,6 +130,10 @@ def test_set_uns_neighbors_deprecated(adata):
     with pytest.warns(FutureWarning):
         assert_equal(adata.uns["neighbors"]["connectivities"], mtx)
 
+    # Make sure that we can write to uns normally:
+    adata.uns["new_key"] = 100
+    assert adata.uns["new_key"] == 100
+
 
 def test_slice_uns_sparse_deprecated(adata):
     n = adata.shape[0]
