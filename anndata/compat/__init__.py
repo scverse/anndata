@@ -160,6 +160,9 @@ class DeepChainMap(ChainMap):
     """Variant of ChainMap that allows direct updates to inner scopes
 
     Copied from https://docs.python.org/3/library/collections.html#collections.ChainMap
+
+    Modified for deep deletion. I.e. del d[k] means d[k] can't work if the key
+    was stored in multiple levels.
     """
 
     def __setitem__(self, key, value):
@@ -170,8 +173,12 @@ class DeepChainMap(ChainMap):
         self.maps[0][key] = value
 
     def __delitem__(self, key):
+        found = False
         for mapping in self.maps:
             if key in mapping:
+                found = True
                 del mapping[key]
-                return
-        raise KeyError(key)
+        if found:
+            return
+        else:
+            raise KeyError(key)

@@ -516,6 +516,9 @@ def test_backwards_compat_zarr():
     # Old zarr writer couldn’t do sparse arrays
     pbmc_orig.raw._X = pbmc_orig.raw.X.toarray()
     del pbmc_orig.uns["neighbors"]
+    # Since these have moved, see PR #337
+    del pbmc_orig.obsp["distances"]
+    del pbmc_orig.obsp["connectivities"]
 
     # This was written out with anndata=0.6.22.post1
     zarrpth = HERE / "data/pbmc68k_reduced_legacy.zarr.zip"
