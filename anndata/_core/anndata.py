@@ -52,6 +52,7 @@ from ..compat import (
     Literal,
     DeprecatedDict,
     DeepChainMap,
+    _slice_uns_sparse_matrices,
 )
 
 
@@ -347,12 +348,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # hackish solution here, no copy should be necessary
-        # TODO: Only copy if there is a matrix that would be sliced.
-        uns_new = deepcopy(self._adata_ref._uns)
-        # need to do the slicing before setting the updated self._n_obs, self._n_vars
-        self._n_obs = self._adata_ref.n_obs  # use the original n_obs here
-        self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
+        # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
+        uns_new = _slice_uns_sparse_matrices(
+            adata_ref._uns, self._oidx, adata_ref.n_obs
+        )
         # fix categories
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
         self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
@@ -1216,34 +1215,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 logger.info(f"... storing {key!r} as categorical")
 
     _sanitize = strings_to_categoricals  # backwards compat
-
-    def _slice_uns_sparse_matrices_inplace(
-        self, uns: MutableMapping, oidx: Index1D, keys: Tuple[str, ...] = ()
-    ):
-        # TODO: remove
-        # slice sparse spatrices of n_obs × n_obs in self.uns
-        if not (
-            isinstance(oidx, slice)
-            and oidx.start is None
-            and oidx.step is None
-            and oidx.stop is None
-        ):
-            for k, v in uns.items():
-                # treat nested dicts
-                if isinstance(v, Mapping):
-                    self._slice_uns_sparse_matrices_inplace(v, oidx, (*keys, k))
-                if isinstance(v, sparse.spmatrix) and v.shape == (
-                    self.n_obs,
-                    self.n_obs,
-                ):
-                    path = "".join(f"['{key}']" for key in (*keys, k))
-                    warnings.warn(
-                        f"During AnnData slicing, found matrix at .uns{path} that happens"
-                        f" to be dimensioned at n_obs×n_obs ({self.n_obs}×{self.n_obs})."
-                        " This slicing behavior will be removed in anndata 0.8.",
-                        FutureWarning,
-                    )
-                    uns[k] = _subset(v, (oidx, oidx))
 
     def _inplace_subset_var(self, index: Index1D):
         """\

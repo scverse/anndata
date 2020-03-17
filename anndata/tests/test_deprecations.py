@@ -92,29 +92,55 @@ def test_force_dense_deprecated(tmp_path):
     assert_equal(adata, dense)
 
 
+#######################################
+# Dealing with uns adj matrices
+#######################################
+
+
 def test_get_uns_neighbors_deprecated(adata):
     n = adata.shape[0]
-    adata.obsp["connectivities"] = sparse.random(n, n, format="csr")
+    mtx = sparse.random(n, n, density=0.3, format="csr")
+    adata.obsp["connectivities"] = mtx
     adata.uns["neighbors"] = {}
 
     with pytest.warns(FutureWarning):
-        adata.uns["neighbors"]["connectivities"]
+        from_uns = adata.uns["neighbors"]["connectivities"]
+
+    assert_equal(from_uns, mtx)
+
+    with pytest.warns(None) as rec:
+        v = adata[: n // 2]
+        assert not rec
+
+    with pytest.warns(FutureWarning):
+        from_uns_v = v.uns["neighbors"]["connectivities"]
+
+    assert_equal(from_uns_v, v.obsp["connectivities"])
 
 
 def test_set_uns_neighbors_deprecated(adata):
     n = adata.shape[0]
+    mtx = sparse.random(n, n, format="csr")
     adata.uns["neighbors"] = {}
 
     with pytest.warns(FutureWarning):
         adata.uns["neighbors"]["connectivities"] = sparse.random(n, n, format="csr")
 
+    assert_equal(adata.obsp["connectivities"], mtx)
+    with pytest.warns(FutureWarning):
+        assert_equal(adata.uns["neighbors"]["connectivities"], mtx)
+
 
 def test_slice_uns_sparse_deprecated(adata):
     n = adata.shape[0]
-    adata.uns["sparse_mtx"] = sparse.random(n, n, format="csr")
+    mtx = sparse.random(n, n, density=0.2, format="csr")
+    adata.uns["sparse_mtx"] = mtx
 
     with pytest.warns(FutureWarning):
-        adata[: n // 2]
+        v = adata[: n // 2]
+
+    assert_equal(adata.uns["sparse_mtx"], mtx)
+    assert_equal(v.uns["sparse_mtx"], mtx[: n // 2, :][:, n // 2])
 
 
 @pytest.fixture
