@@ -202,10 +202,16 @@ def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs:
 class DeepChainMap(ChainMap):
     """Variant of ChainMap that allows direct updates to inner scopes
 
-    Copied from https://docs.python.org/3/library/collections.html#collections.ChainMap
+    Based on https://docs.python.org/3/library/collections.html#collections.ChainMap
 
-    Modified for deep deletion. I.e. del d[k] means d[k] can't work if the key
+    Modifications
+    -------------
+
+    * Deep deletion. I.e. del d[k] means d[k] can't work if the key
     was stored in multiple levels.
+    * If new item is inserted, it's added to the lowest level. This is because we generally want
+    to be modifying the one uns dict, we just want the deprecation dict to have precidence for
+    retrieval.
     """
 
     def __setitem__(self, key, value):
@@ -213,7 +219,8 @@ class DeepChainMap(ChainMap):
             if key in mapping:
                 mapping[key] = value
                 return
-        self.maps[0][key] = value
+        # If not found it top level, bottom level is updated
+        self.maps[-1][key] = value
 
     def __delitem__(self, key):
         found = False
