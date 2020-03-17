@@ -43,7 +43,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous
+from ..utils import convert_to_dict, ensure_df_homogeneous, concatenate_uns
 from ..logging import anndata_logger as logger
 from ..compat import ZarrArray, ZappyArray, DaskArray, Literal
 
@@ -1482,6 +1482,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
         index_unique: Optional[str] = "-",
+        concat_incomplete: bool = False,
+        merge_uns: Literal[
+            "if_clean",  # the default, throws an error on key collision, else just merges
+            "always",  # ignores key collision, just overwrite earlier with later items
+            "never",  # to avoid unwanted scanpy behavior, just return it empty
+        ] = None,
+        merge_level=1,
     ) -> "AnnData":
         """\
         Concatenate along the observations axis.
@@ -1896,6 +1903,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         if not obs.index.is_unique:
             logger.info("Or pass `index_unique!=None` to `.concatenate`.")
+
+        new_adata.uns = concatenate_uns(all_adatas, merge_uns)
+
         return new_adata
 
     def var_names_make_unique(self, join: str = "-"):

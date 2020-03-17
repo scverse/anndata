@@ -153,6 +153,33 @@ def deprecated(new_name: str):
     return decorator
 
 
+def concatenate_uns(
+    adata_list: list, merge_uns: str,
+):
+
+    uns = dict()
+    if merge_uns != "never" and merge_uns is not None:
+        for adata in adata_list:
+            for k in adata.keys():
+                if k not in uns.keys():
+                    uns[k] = dict()
+                if k in uns.keys() and isinstance(adata[k], dict):
+                    for k1 in adata[k].keys():
+                        if k1 not in uns[k].keys():
+                            uns[k][k1] = adata[k][k1]
+                        elif k1 in uns[k].keys():
+                            if merge_uns == "always":
+                                uns[k][k1] = adata[k][k1]
+                elif k in uns.keys():
+                    if merge_uns == "always":
+                        uns[k] = adata[k]
+
+        if merge_uns == "if_clean":
+            uns = {k: v for k, v in uns.items() if len(v.keys()) >= 2}
+
+    return uns
+
+
 class DeprecationMixinMeta(type):
     """\
     Use this as superclass so deprecated methods and properties
