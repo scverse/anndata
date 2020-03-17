@@ -6,7 +6,7 @@ from .._core.access import ElementRef
 
 class DeprecatedDict(MutableMapping):
     def __init__(self, data, *, deprecated_items: "Mapping[str, ElementRef]"):
-        self.data = dict(data)
+        self.data = data
         self.deprecated_items = deprecated_items
 
     def _access_warn(self, key, cur_loc):

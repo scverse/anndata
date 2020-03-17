@@ -115,3 +115,56 @@ def test_slice_uns_sparse_deprecated(adata):
 
     with pytest.warns(FutureWarning):
         adata[: n // 2]
+
+
+@pytest.fixture
+def adata_neighbors():
+    return ad.AnnData(
+        X=sparse.random(100, 200, format="csr"),
+        obsp=dict(
+            distances=sparse.random(100, 100, format="csr"),
+            connectivities=sparse.random(100, 100, format="csr"),
+        ),
+        uns={"neighbors": {"params": {"method": "umap", "n_neighbors": 10}}},
+    )
+
+
+def test_deprecated_neighbors_get_mtx(adata_neighbors):
+    """Test getting neighbor matrices from adata.uns"""
+    adata = adata_neighbors
+
+    with pytest.warns(FutureWarning):
+        assert_equal(adata.obsp["distances"], adata.uns["neighbors"]["distances"])
+    with pytest.warns(FutureWarning):
+        assert_equal(
+            adata.obsp["connectivities"], adata.uns["neighbors"]["connectivities"]
+        )
+
+
+def test_deprecated_neighbors_get_other(adata_neighbors):
+    """Test getting other fields from adata.uns"""
+    adata = adata_neighbors
+
+    # This shouldn't throw a warning
+    with pytest.warns(None) as rec:
+        assert adata.uns["neighbors"]["params"] == {"method": "umap", "n_neighbors": 10}
+        assert not rec
+
+
+def test_deprecated_neighbors_set_other(adata_neighbors):
+    adata = adata_neighbors
+
+    # This shouldn't throw a warning
+    with pytest.warns(None) as rec:
+        adata.uns["neighbors"]["new_key"] = 10
+        assert adata.uns["neighbors"]["new_key"] == 10
+        # Test nested
+        adata.uns["neighbors"]["params"]["new_param"] = 100
+        assert adata.uns["neighbors"]["params"]["new_param"] == 100
+        assert adata.uns["neighbors"]["params"] == {
+            "method": "umap",
+            "n_neighbors": 10,
+            "new_param": 100,
+        }
+
+        assert not rec
