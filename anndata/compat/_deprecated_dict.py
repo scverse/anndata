@@ -1,11 +1,12 @@
 from collections.abc import MutableMapping
+from typing import Mapping
 from warnings import warn
 
 from .._core.access import ElementRef
 
 
 class DeprecatedDict(MutableMapping):
-    def __init__(self, data, *, deprecated_items: "Mapping[str, ElementRef]"):
+    def __init__(self, data, *, deprecated_items: Mapping[str, ElementRef]):
         self.data = data
         self.deprecated_items = deprecated_items
 

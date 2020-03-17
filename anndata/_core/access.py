@@ -12,19 +12,19 @@ class ElementRef(NamedTuple):
     def __str__(self) -> str:
         return f".{self.attrname}" + "".join(map(lambda x: f"['{x}']", self.keys))
 
+    @property
+    def _parent_el(self):
+        return reduce(
+            lambda d, k: d[k], self.keys[:-1], getattr(self.parent, self.attrname)
+        )
+
     def get(self):
         """Get referenced value in self.parent."""
         return reduce(lambda d, k: d[k], self.keys, getattr(self.parent, self.attrname))
 
     def set(self, val):
         """Set referenced value in self.parent."""
-        m = reduce(
-            lambda d, k: d[k], self.keys[:-1], getattr(self.parent, self.attrname)
-        )
-        m[self.keys[-1]] = val
+        self._parent_el[self.keys[-1]] = val
 
     def delete(self):
-        m = reduce(
-            lambda d, k: d[k], self.keys[:-1], getattr(self.parent, self.attrname)
-        )
-        del m[self.keys[-1]]
+        del self._parent_el[self.keys[-1]]
