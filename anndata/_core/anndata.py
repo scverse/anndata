@@ -1481,6 +1481,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         join: str = "inner",
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
+        merge_obs: Literal["if_clean", "always"] = None,
         index_unique: Optional[str] = "-",
     ) -> "AnnData":
         """\
@@ -1746,11 +1747,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # create obsm dict that contains obsm keys shared among all AnnDatas
         obsm = OrderedDict()
-        shared_obsm_keys = [
-            key
-            for key in all_adatas[0].obsm
-            if all([key in ad.obsm for ad in all_adatas])
-        ]
+        if merge_obs == "if_clean" or merge_obs is None:
+            shared_obsm_keys = [
+                key
+                for key in all_adatas[0].obsm
+                if all([key in ad.obsm for ad in all_adatas])
+            ]
+        elif merge_obs == "always":
+            shared_obsm_keys = [
+                key
+                for key in all_adatas[0].obsm
+                if any([key in ad.obsm for ad in all_adatas])
+            ]
         for key in shared_obsm_keys:
             obsm[key] = []
 
@@ -1811,7 +1819,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # obsm
             for key in shared_obsm_keys:
-                obsm[key].append(ad.obsm[key])
+                if key in ad.obsm:
+                    obsm[key].append(ad.obsm[key])
+                else:
+                    if any(
+                        issparse(a.obsm[key])
+                        for a in all_adatas
+                        if key in a.obsm.keys()
+                    ):
+                        from scipy import csr_matrix
+
+                        # added to append empty sparse instead of dense
+                        obsm[key].append(csr_matrix((ad.shape[0], 2), dtype=int8))
+                    else:
+                        obsm[key].append(np.zeros((ad.shape[0], 2)))
 
             # obs
             obs = ad.obs.copy()
@@ -1851,7 +1872,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # obsm
         for key in shared_obsm_keys:
-            if any(issparse(a.obsm[key]) for a in all_adatas):
+            if any(
+                issparse(a.obsm[key]) if key in a.obsm.keys() else None
+                for a in all_adatas
+            ):
                 obsm[key] = vstack(obsm[key])
             else:
                 obsm[key] = np.concatenate(obsm[key])
