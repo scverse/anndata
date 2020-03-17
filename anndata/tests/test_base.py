@@ -298,6 +298,7 @@ def test_slicing_strings():
         adata[["A", "B", "not_in_obs"], :]
 
 
+# TODO: Decide what this should do
 def test_slicing_graphs():
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6]]),
