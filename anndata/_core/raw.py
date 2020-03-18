@@ -156,7 +156,7 @@ class Raw:
         var = _normalize_index(var, self.var_names)
         return obs, var
 
-    def var_vector(self, k: str) -> np.ndarray:
+    def var_vector(self, k: str, copy: bool = True) -> np.ndarray:
         # TODO decorator to copy AnnData.var_vector docstring
         if k in self.var:
             return self.var[k].values
@@ -165,15 +165,21 @@ class Raw:
             a = self.X[idx]
         if issparse(a):
             a = a.toarray()
-        return np.ravel(a)
+            a = a.reshape(np.multiply.reduce(a.shape))
+        elif copy:
+            a = a.copy()
+        return a
 
-    def obs_vector(self, k: str) -> np.ndarray:
+    def obs_vector(self, k: str, copy: bool = True) -> np.ndarray:
         # TODO decorator to copy AnnData.obs_vector docstring
         idx = self._normalize_indices((slice(None), k))
         a = self.X[idx]
         if issparse(a):
             a = a.toarray()
-        return np.ravel(a)
+            a = a.reshape(np.multiply.reduce(a.shape))
+        elif copy:
+            a = a.copy()
+        return a
 
 
 # This exists to accommodate AlignedMappings,

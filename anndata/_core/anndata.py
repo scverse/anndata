@@ -1326,7 +1326,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.X
 
-    def obs_vector(self, k: str, *, layer: Optional[str] = None) -> np.ndarray:
+    def obs_vector(
+        self, k: str, *, layer: Optional[str] = None, copy: bool = True
+    ) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1340,6 +1342,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Key to use. Should be in :attr:`var_names` or :attr:`obs`\\ `.columns`.
         layer
             What layer values should be returned from. If `None`, :attr:`X` is used.
+        copy
+            If possible, should a copy not be returned? If `True`, a copy will be
+            returned. If `False`, a copy may be returned.
 
         Returns
         -------
@@ -1364,9 +1369,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             a = self._get_X(layer=layer)[idx]
         if issparse(a):
             a = a.toarray()
-        return np.ravel(a)
+            a = a.reshape(np.multiply.reduce(a.shape))
+        elif copy:
+            a = a.copy()
+        return a
 
-    def var_vector(self, k, *, layer: Optional[str] = None) -> np.ndarray:
+    def var_vector(
+        self, k, *, layer: Optional[str] = None, copy: bool = True
+    ) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1380,6 +1390,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Key to use. Should be in :attr:`obs_names` or :attr:`var`\\ `.columns`.
         layer
             What layer values should be returned from. If `None`, :attr:`X` is used.
+        copy
+            If possible, should a copy not be returned? If `True`, a copy will be
+            returned. If `False`, a copy may be returned.
 
         Returns
         -------
@@ -1404,7 +1417,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             a = self._get_X(layer=layer)[idx]
         if issparse(a):
             a = a.toarray()
-        return np.ravel(a)
+            a = a.reshape(np.multiply.reduce(a.shape))
+        elif copy:
+            a = a.copy()
+        return a
 
     @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):
