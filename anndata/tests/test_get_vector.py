@@ -6,24 +6,32 @@ import pytest
 import anndata as ad
 
 
-
 def test_amgibuous_keys():
     """Tests that an error is raised if obs_vector or var_vector is ambiguous."""
     var_keys = ["The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"]
-    obs_keys = ["Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit"]
+    obs_keys = [
+        "Lorem",
+        "ipsum",
+        "dolor",
+        "sit",
+        "amet",
+        "consectetur",
+        "adipiscing",
+        "elit",
+    ]
     adata = ad.AnnData(
         X=sparse.random(len(obs_keys), len(var_keys), format="csr"),
         layers={"layer": sparse.random(len(obs_keys), len(var_keys), format="csr")},
         obs=pd.DataFrame(
             np.random.randn(len(obs_keys), len(obs_keys) + len(var_keys)),
             index=obs_keys,
-            columns=obs_keys + var_keys
+            columns=obs_keys + var_keys,
         ),
         var=pd.DataFrame(
             np.random.randn(len(var_keys), len(obs_keys) + len(var_keys)),
             index=var_keys,
-            columns=var_keys + obs_keys
-        )
+            columns=var_keys + obs_keys,
+        ),
     )
 
     adata.raw = adata
