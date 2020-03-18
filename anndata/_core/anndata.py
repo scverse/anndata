@@ -23,7 +23,7 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from .raw import Raw
-from .index import _normalize_indices, _subset, Index, Index1D
+from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager
 from .aligned_mapping import (
     AxisArrays,
@@ -1356,15 +1356,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-
-        if k in self.obs:
-            return self.obs[k].values
-        else:
-            idx = self._normalize_indices((slice(None), k))
-            a = self._get_X(layer=layer)[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
+        return get_vector(self, k, "obs", "var", layer=layer)
 
     def var_vector(self, k, *, layer: Optional[str] = None) -> np.ndarray:
         """\
@@ -1396,15 +1388,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-
-        if k in self.var:
-            return self.var[k].values
-        else:
-            idx = self._normalize_indices((k, slice(None)))
-            a = self._get_X(layer=layer)[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
+        return get_vector(self, k, "var", "obs", layer=layer)
 
     @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):
