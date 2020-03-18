@@ -1,12 +1,16 @@
 from contextlib import suppress
+from itertools import repeat
 
 import pytest
 import zarr
 import h5py
 import pandas as pd
+from scipy import sparse
 
+import anndata as ad
 from anndata.compat import _clean_uns
 from anndata._io.utils import report_read_key_on_error, AnnDataReadError
+from anndata.tests.helpers import gen_typed_df
 
 
 @pytest.mark.parametrize(
@@ -46,3 +50,40 @@ def test_clean_uns():
     # var’s categories were overwritten by obs’s,
     # which we can detect here because var has too high codes
     assert isinstance(d["var"]["species"], pd.Series)
+
+
+def test_unique_indices():
+    m, n = (10, 20)
+    obs_index = pd.Index(repeat("a", m), name="obs")
+    var_index = pd.Index(repeat("b", n), name="var")
+
+    adata = ad.AnnData(
+        X=sparse.random(m, n, format="csr"),
+        obs=gen_typed_df(m, index=obs_index),
+        var=gen_typed_df(n, index=var_index),
+        obsm={"df": gen_typed_df(m, index=obs_index)},
+        varm={"df": gen_typed_df(n, index=var_index)},
+    )
+
+    adata.var_names_make_unique()
+    adata.obs_names_make_unique()
+
+    assert adata.obs_names.name == "obs"
+    assert adata.var_names.name == "var"
+
+    assert len(pd.unique(adata.obs_names)) == m
+    assert len(pd.unique(adata.var_names)) == n
+
+    assert adata.obsm["df"].index.name == "obs"
+    assert adata.varm["df"].index.name == "var"
+
+    assert len(pd.unique(adata.obsm["df"].index)) == m
+    assert len(pd.unique(adata.varm["df"].index)) == n
+
+    v = adata[:5, :5]
+
+    assert v.obs_names.name == "obs"
+    assert v.var_names.name == "var"
+
+    assert v.obsm["df"].index.name == "obs"
+    assert v.varm["df"].index.name == "var"

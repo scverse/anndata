@@ -60,17 +60,15 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     """
     if index.is_unique:
         return index
-    from collections import defaultdict
+    from collections import Counter
 
     values = index.values
-    indices_dup = index.duplicated(keep="first")
-    values_dup = values[indices_dup]
-    counter = defaultdict(lambda: 0)
-    for i, v in enumerate(values_dup):
+    indices_dup = np.where(index.duplicated(keep="first"))[0]
+    counter = Counter()
+    for i in indices_dup:
+        v = values[i]
         counter[v] += 1
-        values_dup[i] += join + str(counter[v])
-    values[indices_dup] = values_dup
-    index = pd.Index(values)
+        values[i] += join + str(counter[v])
     return index
 
 
