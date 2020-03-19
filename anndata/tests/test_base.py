@@ -82,6 +82,12 @@ def test_create_from_df_with_obs_and_var():
         AnnData(df, var=var.reset_index())
 
 
+def test_from_df_and_dict():
+    df = pd.DataFrame(dict(a=[0.1, 0.2, 0.3], b=[1.1, 1.2, 1.3]))
+    adata = AnnData(df, dict(species=pd.Categorical(["a", "b", "a"])))
+    assert adata.obs["species"].values.tolist() == ["a", "b", "a"]
+
+
 def test_df_warnings():
     df = pd.DataFrame(dict(A=[1, 2, 3], B=[1.0, 2.0, 3.0]), index=["a", "b", "c"])
     with pytest.warns(UserWarning, match=r"X.*dtype float64"):

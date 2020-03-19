@@ -394,6 +394,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # various ways of initializing the data
         # ----------------------------------------------------------------------
 
+        # If X is a data frame, we store its indices for verification
+        x_indices = []
+
         # init from file
         if filename is not None:
             self.file = AnnDataFileManager(self, filename, filemode)
@@ -421,16 +424,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
+                # to verify index matching, we wait until obs and var are DataFrames
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
-                else:
-                    if not X.index.equals(obs.index):
-                        raise ValueError("Index of obs must match index of X.")
+                elif not isinstance(X.index, pd.RangeIndex):
+                    x_indices.append(("obs", "index", X.index))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
-                else:
-                    if not X.columns.equals(var.index):
-                        raise ValueError("Index of var must match columns of X.")
+                elif not isinstance(X.columns, pd.RangeIndex):
+                    x_indices.append(("var", "columns", X.columns))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -481,10 +483,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         raise ValueError("`shape` is inconsistent with `var`")
 
         # annotations
-        self._obs = _gen_dataframe(
-            obs, self._n_obs, ["obs_names", "row_names", "smp_names"]
-        )
+        self._obs = _gen_dataframe(obs, self._n_obs, ["obs_names", "row_names"])
         self._var = _gen_dataframe(var, self._n_vars, ["var_names", "col_names"])
+
+        # now we can verify if indices match!
+        for attr_name, x_name, idx in x_indices:
+            attr = getattr(self, attr_name)
+            if isinstance(attr.index, pd.RangeIndex):
+                attr.index = idx
+            elif not idx.equals(attr.index):
+                raise ValueError(f"Index of {attr_name} must match {x_name} of X.")
 
         # unstructured annotations
         self._uns = uns or OrderedDict()
