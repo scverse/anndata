@@ -42,6 +42,7 @@ from .views import (
     _resolve_idxs,
 )
 from .sparse_dataset import SparseDataset
+from . import ref_path
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
@@ -1347,6 +1348,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return self.raw.X
         else:
             return self.X
+
+    resolve_path = ref_path.resolve_path
+    get_df = ref_path.get_df
+    get_vector = ref_path.get_vector
 
     def obs_vector(self, k: str, *, layer: Optional[str] = None) -> np.ndarray:
         """\

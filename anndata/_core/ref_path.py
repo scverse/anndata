@@ -154,14 +154,11 @@ class RefPath:
             return "-".join(path[-length:])
         return f"{path[:-2]}{self.make_name(length=2)}"
 
-    def get_vector(self, adata: Union["AnnData", Raw], alias_col: Optional[str] = None):
+    def get_vector(self, adata: Union["AnnData", Raw]):
         attr = getattr(adata, self.attr.name)
         if self.attr is Attr.layers:  # X is here after normalizing
             layer_name, dim, key = self.path
             layer_name = None if layer_name == "X" else layer_name
-            if alias_col is not None:
-                idx = getattr(adata, dim)[alias_col]
-                key = idx.index[idx == key]
             return get_x_vector(adata, dim, key, layer_name)
         if self.attr is Attr.obs or self.attr is Attr.var:
             (col,) = self.path
@@ -177,7 +174,7 @@ class RefPath:
             idx = getattr(adata, f"{attr.dim}_names") == key
             return _to_vector(p[:, idx] if orient == 1 else p[idx, :])
         if self.attr is Attr.raw:
-            return self.raw_subpath.get_vector(adata.raw, alias_col)
+            return self.raw_subpath.get_vector(adata.raw)
         else:
             assert False, f"Unhandled attr {self.attr.name!r}"
 
@@ -188,16 +185,63 @@ def _to_vector(v: Union[ssp.spmatrix, np.ndarray, pd.Series]) -> np.ndarray:
     return np.ravel(v)
 
 
+# AnnData methods
+
+
+def resolve_path(
+    adata: "AnnData",
+    *path: Union[str, RefPath, int],
+    alias_col: Optional[str],
+    dim: Optional[Literal["obs", "var"]] = None,
+    use_raw: bool = False,
+    layer: Optional[str] = None,
+) -> RefPath:
+    """\
+    """
+    try:
+        return RefPath.parse(*path)
+    except ValueError:
+        pass
+
+    # TODO
+    raise NotImplementedError()
+
+    if alias_col is not None:
+        idx = getattr(adata, dim)[alias_col]
+        key = idx.index[idx == key]
+
+
+def get_vector(
+    adata: "AnnData",
+    *path: Union[str, RefPath, int],
+    alias_col: Optional[str],
+    dim: Optional[Literal["obs", "var"]] = None,
+    use_raw: bool = False,
+    layer: Optional[str] = None,
+) -> np.ndarray:
+    """\
+    For the syntax see :meth:`AnnData.resolve_path`
+    """
+    return resolve_path(**locals()).get_vector(adata)
+
+
 def get_df(
     adata: "AnnData",
-    paths: Iterable[Union[str, RefPath]] = (),
+    paths: Iterable[Union[str, Tuple[Union[str, int], ...], RefPath]] = (),
     *,
-    gene_symbols: RefPath = None,
-    # no use_raw, no layer.
+    alias_col: Optional[str] = None,
+    dim: Optional[Literal["obs", "var"]] = None,
+    use_raw: bool = False,
+    layer: Optional[str] = None,
 ) -> pd.DataFrame:
-    paths = list(map(RefPath.parse, paths))
+    """\
+    """
+    kwargs = locals()
+    del kwargs["paths"], kwargs["adata"]
+    # TODO: split paths in sequences before resolving: ("X", "var", ["GeneA", "GeneB"])
+    paths = [resolve_path(adata, p, **kwargs) for p in paths]
     names = paths_to_names(paths)
-    columns = {n: p.get_vector(adata, gene_symbols) for n, p in names.items()}
+    columns = {n: p.get_vector(adata) for n, p in names.items()}
     return pd.DataFrame(columns, adata.obs_names)
 
 
