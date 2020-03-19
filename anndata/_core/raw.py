@@ -7,7 +7,7 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from . import anndata
-from .index import _normalize_index, _subset, unpack_index
+from .index import _normalize_index, _subset, unpack_index, get_vector
 from .aligned_mapping import AxisArrays, AxisArraysView
 from .sparse_dataset import SparseDataset
 
@@ -36,6 +36,11 @@ class Raw:
             self._varm = AxisArrays(self, 1, adata.varm.copy())
         elif adata.isbacked:
             raise ValueError("Cannot specify X if adata is backed")
+
+    def _get_X(self, layer=None):
+        if layer is not None:
+            raise ValueError()
+        return self.X
 
     @property
     def X(self) -> Union[SparseDataset, np.ndarray, sparse.spmatrix]:
@@ -158,14 +163,7 @@ class Raw:
 
     def var_vector(self, k: str) -> np.ndarray:
         # TODO decorator to copy AnnData.var_vector docstring
-        if k in self.var:
-            return self.var[k].values
-        else:
-            idx = self._normalize_indices((k, slice(None)))
-            a = self.X[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
+        return get_vector(self, k, "var", "obs")
 
     def obs_vector(self, k: str) -> np.ndarray:
         # TODO decorator to copy AnnData.obs_vector docstring
