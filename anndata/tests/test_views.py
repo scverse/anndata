@@ -40,7 +40,7 @@ subset_func2 = subset_func
 
 
 class NDArraySubclass(np.ndarray):
-    def view(self, type=None, dtype=None):
+    def view(self, dtype=None, type=None):
         return self
 
 
