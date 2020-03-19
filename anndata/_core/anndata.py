@@ -275,8 +275,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         var: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         uns: Optional[Mapping[str, Any]] = None,
-        obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        obsm: Optional[
+            Union[
+                np.ndarray,
+                Mapping[str, Union[np.ndarray, sparse.spmatrix, pd.DataFrame]],
+            ]
+        ] = None,
+        varm: Optional[
+            Union[
+                np.ndarray,
+                Mapping[str, Union[np.ndarray, sparse.spmatrix, pd.DataFrame]],
+            ]
+        ] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Mapping[str, Any]] = None,
         dtype: Union[np.dtype, str] = "float32",
@@ -285,8 +295,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filemode: Optional[Literal["r", "r+"]] = None,
         asview: bool = False,
         *,
-        obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        obsp: Optional[
+            Union[np.ndarray, Mapping[str, Union[np.ndarray, sparse.spmatrix]]]
+        ] = None,
+        varp: Optional[
+            Union[np.ndarray, Mapping[str, Union[np.ndarray, sparse.spmatrix]]]
+        ] = None,
         oidx: Index1D = None,
         vidx: Index1D = None,
     ):

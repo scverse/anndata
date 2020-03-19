@@ -3,6 +3,7 @@ from typing import Iterable, Union, Sequence, Dict, Tuple, Optional, TYPE_CHECKI
 
 import pandas as pd
 import numpy as np
+import scipy.sparse as ssp
 
 from .index import get_x_vector
 from .raw import Raw
@@ -22,7 +23,7 @@ class Attr(Enum):
     var = ((str,), dict(v=()))
     varm = ((str, (int, str)), dict(vm=()))
     varp = ((str, str, (0, 1)), dict(vp=()))
-    raw = ((("X", "obs"), ...), dict(rX=("X",), ro=("obs",)))
+    raw = ((("X", "var", "varm"), ...), dict(rX=("X",), rv=("var",), rvm=("varm",)))
 
     def __repr__(self):
         return f"{self.__class__.__name__}.{self.name}"
@@ -109,36 +110,38 @@ class RefPath:
         return f"{path[:-2]}{self.make_name(length=2)}"
 
     def get_vector(self, adata: Union["AnnData", Raw], alias_col: Optional[str] = None):
-        attr = getattr(adata, self.attr.name, None)
-        if attr is None:
-            raise ValueError(
-                f"Unknown AnnData attribute {self.attr.name!r} (path={self.path!r})"
-            )
-        if attr is adata.layers:  # X is here after normalizing
+        attr = getattr(adata, self.attr.name)
+        if self.attr is Attr.layers:  # X is here after normalizing
             layer_name, dim, key = self.path
             layer_name = None if layer_name == "X" else layer_name
             if alias_col is not None:
                 idx = getattr(adata, dim)[alias_col]
                 key = idx.index[idx == key]
             return get_x_vector(adata, dim, key, layer_name)
-        if attr is adata.obs or attr is adata.var:
+        if self.attr is Attr.obs or self.attr is Attr.var:
             (col,) = self.path
-            return attr[col]
+            return _to_vector(attr[col])
         assert not isinstance(adata, Raw)
-        if attr is adata.obsm or attr is adata.varm:
+        if self.attr is Attr.obsm or self.attr is Attr.varm:
             m_name, col = self.path
             m = attr[m_name]
-            return m[col] if isinstance(m, pd.DataFrame) else m[:, col]
-        if attr is adata.obsp or attr is adata.varp:
-            p_name, obs_name, orient = self.path
+            return _to_vector(m[col] if isinstance(m, pd.DataFrame) else m[:, col])
+        if self.attr is Attr.obsp or self.attr is Attr.varp:
+            p_name, key, orient = self.path
             p = attr[p_name]
-            # TODO: take from index
-            return np.ravel(p[:, obs_name] if orient == 1 else p[obs_name, :])
-        if attr is adata.raw:
+            idx = getattr(adata, f"{attr.dim}_names") == key
+            return _to_vector(p[:, idx] if orient == 1 else p[idx, :])
+        if self.attr is Attr.raw:
             raw_attr, *raw_path = self.path
-            return RefPath(raw_attr, *raw_path).get_vector(adata.raw, alias_col)
+            return RefPath.parse((raw_attr, *raw_path)).get_vector(adata.raw, alias_col)
         else:
             assert False, f"Unhandled attr {self.attr.name!r}"
+
+
+def _to_vector(v: Union[ssp.spmatrix, np.ndarray, pd.Series]) -> np.ndarray:
+    v = v.toarray() if ssp.issparse(v) else v
+    v = v.values if isinstance(v, pd.Series) else v
+    return np.ravel(v)
 
 
 def get_df(

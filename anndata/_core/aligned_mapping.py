@@ -230,6 +230,11 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if vals is not None:
             self.update(vals)
 
+    def __setitem__(self, key: str, value: V):
+        if hasattr(value, "index") and isinstance(value.index, pd.RangeIndex):
+            value.index = self.dim_names
+        super().__setitem__(key, value)
+
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(

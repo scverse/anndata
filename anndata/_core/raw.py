@@ -97,6 +97,10 @@ class Raw:
     def obs_names(self):
         return self._adata.obs_names
 
+    @property
+    def layers(self):
+        return {None: self.X}
+
     def __getitem__(self, index):
         oidx, vidx = self._normalize_indices(index)
 
