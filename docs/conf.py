@@ -105,6 +105,7 @@ intersphinx_mapping = dict(
 )
 qualname_overrides = {
     "anndata._core.anndata.AnnData": "anndata.AnnData",
+    "anndata._core.ref_path.RefPath": "anndata.RefPath",
     # Temporarily
     "anndata._core.raw.Raw": "anndata.AnnData",
     "anndata._core.views.ArrayView": "numpy.ndarray",

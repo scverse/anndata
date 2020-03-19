@@ -210,7 +210,7 @@ def resolve_path(
         This supports subpaths of the :class:`~anndata.RefPath` syntax.
         `str` keys or tuple subpaths (like `'GeneA'` or `('X_pca', 0)`) are resolved
         according to `dim`, `use_raw`, and `alias_col`.
-        As `RefPath`s are always unique, they get passed through.
+        As `RefPath`\\ s are always unique, they get passed through.
     dim
         Dimension to resolve paths in.
         If `dim=None`, both dimensions are tried and an error is thrown for duplicates.
@@ -278,10 +278,10 @@ add_doc = """\
 
     Parameters
     ----------
+    For syntax and other parameters see :meth:`~anndata.AnnData.resolve_path`.
+
     layer
         The layer to get the vector from if the path resolves to a `<dim>_name`.
-
-    For syntax and other parameters see :meth:`~anndata.AnnData.resolve_path`.
 """
 get_vector.__doc__ += add_doc
 get_df.__doc__ += add_doc
