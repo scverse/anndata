@@ -69,8 +69,9 @@ class Attr(Enum):
             return prefix, ()
         for attr in Attr:
             path_prefix = attr.short_codes.get(prefix)
-            if path_prefix:
+            if path_prefix is not None:
                 return attr.name, path_prefix
+        raise ValueError(f"Unknown attr name or short code {prefix!r}.")
 
 
 class RefPath:
@@ -86,12 +87,18 @@ class RefPath:
     def parse(full_path: Union["RefPath", str, Sequence[Union[str, int]]]) -> "RefPath":
         if isinstance(full_path, RefPath):
             return full_path
-        if isinstance(full_path, str):
-            attr_or_code, *path = full_path.split("/")
-        else:
-            attr_or_code, *path = full_path
+        from_str = isinstance(full_path, str)
+        if from_str:
+            # TODO: don’t split off gene names with slashes
+            full_path = full_path.split("/")
+
+        attr_or_code, *path = full_path
         # path can be shorthand: "obs/Foo" and "o/Foo"
         attr, path_prefix = Attr.prefix(attr_or_code)
+        if from_str and attr in {"obsp", "varp"}:
+            if path[-1] not in "01":
+                raise ValueError(f"Invalid last segment of {attr} path: {path[-1]!r}.")
+            path[-1] = int(path[-1])
         return RefPath(attr, *path_prefix, *path)
 
     @property
@@ -121,6 +128,14 @@ class RefPath:
 
     def __repr__(self):
         return f"RefPath({self.attr.name!r}, {', '.join(map(repr, self.path))})"
+
+    def __eq__(self, other: "RefPath"):
+        if not isinstance(other, RefPath):
+            try:
+                return self == RefPath.parse(other)
+            except ValueError:
+                return False
+        return self.attr == other.attr and self.path == other.path
 
     def make_name(self, length: int = 1) -> str:
         path = (self.attr.name, *self.path)

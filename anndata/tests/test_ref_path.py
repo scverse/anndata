@@ -73,7 +73,26 @@ def test_repr(rp_code):
 
 
 @pytest.mark.parametrize(
-    "spec", [(("X", "var", "GeneX"), ("layers", "X", "var", "GeneX")),]
+    "spec, resolved",
+    [
+        (("X", "var", "GeneX"), ("layers", "X", "var", "GeneX")),
+        ("op/foo/bar/0", ("obsp", "foo", "bar", 0)),
+    ],
+    ids=repr,
 )
-def test_parse(spec):
-    raise NotImplementedError()
+def test_parse(spec, resolved):
+    assert RefPath.parse(spec) == RefPath(*resolved)
+
+
+@pytest.mark.parametrize(
+    "spec,err_cls,err_regex",
+    [
+        ("X", ValueError, r".*required .3. ≠ got .1. in path .'X',. for attr layers\."),
+        ("f/XY", ValueError, r"Unknown attr name or short code 'f'\."),
+        ("op/foo/bar/notAnInt", ValueError, r"Invalid.*obsp path: 'notAnInt'\."),
+    ],
+    ids=repr,
+)
+def test_parse_failures(spec, err_cls, err_regex):
+    with pytest.raises(err_cls, match=err_regex):
+        RefPath.parse(spec)
