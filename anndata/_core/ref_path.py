@@ -197,12 +197,33 @@ RefPathLike = Union[str, Tuple[Union[str, int], ...], RefPath]
 def resolve_path(
     adata: "AnnData",
     *path: Union[str, RefPath, int],
-    alias_col: Optional[str],
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
-    layer: Optional[str] = None,
+    alias_col: Optional[str],
 ) -> RefPath:
     """\
+    Resolves a :class:`~anndata.RefPath`-like :class:`tuple` or :class:`str` key.
+
+    Parameters
+    ----------
+    adata
+        Annotated data object.
+    path
+        This supports subpaths of the :class:`~anndata.RefPath` syntax.
+        `str` keys or tuple subpaths (like `'GeneA'` or `('X_pca', 0)`) are resolved
+        according to `dim`, `use_raw`, and `alias_col`.
+        As `RefPath`s are always unique, they get passed through.
+    dim
+        Dimension to resolve paths in.
+        If `dim=None`, both dimensions are tried and an error is thrown for duplicates.
+        If e.g. `dim='obs'`, it would find an unique name in `obs_names`
+        or in :attr:`~anndata.AnnData.obs`\\ `.columns`.
+    use_raw
+        Resolve partial paths for `X`, `var`, or `varm` in `adata.raw`
+        instead of `adata`?
+    alias_col
+        A column in `adata.<dim>` with gene names to use instead of `adata.<dim>_names`
+        (autodetected if `dim=None`)
     """
     try:
         return RefPath.parse(*path)
@@ -220,13 +241,13 @@ def resolve_path(
 def get_vector(
     adata: "AnnData",
     *path: Union[str, RefPath, int],
-    alias_col: Optional[str],
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
+    alias_col: Optional[str],
     layer: Optional[str] = None,
 ) -> np.ndarray:
     """\
-    For the syntax see :meth:`AnnData.resolve_path`
+    Get a single 1D vector using the `path`.
     """
     return resolve_path(**locals()).get_vector(adata)
 
@@ -235,12 +256,17 @@ def get_df(
     adata: "AnnData",
     paths: Iterable[RefPathLike],
     *,
-    alias_col: Optional[str] = None,
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
+    alias_col: Optional[str] = None,
     layer: Optional[str] = None,
 ) -> pd.DataFrame:
     """\
+    Resolves multiple paths, gets vectors via :meth:`~anndata.AnnData.resolve_path` and
+    joins them to a :class:`pandas.DataFrame`.
+
+    So becomes `("obs", ["A", "B"])` the paths `("obs", "A")` and `("obs", "B")`.
+    The data frame column names are unique and as short as possible.
     """
     kwargs = locals()
     del kwargs["paths"], kwargs["adata"]
@@ -248,6 +274,19 @@ def get_df(
     names = paths_to_names(paths)
     columns = {n: p.get_vector(adata) for n, p in names.items()}
     return pd.DataFrame(columns, adata.obs_names)
+
+
+add_doc = """\
+
+    Parameters
+    ----------
+    layer
+        The layer to get the vector from if the path resolves to a `<dim>_name`.
+
+    For syntax and other parameters see :meth:`~anndata.AnnData.resolve_path`.
+"""
+get_vector.__doc__ += add_doc
+get_df.__doc__ += add_doc
 
 
 def split_paths(
