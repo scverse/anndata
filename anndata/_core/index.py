@@ -1,11 +1,14 @@
 import collections.abc as cabc
 from functools import singledispatch
 from itertools import repeat
-from typing import Union, Sequence, Optional, Tuple
+from typing import Union, Sequence, Optional, Tuple, Literal, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
+
+if TYPE_CHECKING:
+    from .anndata import AnnData
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
@@ -138,9 +141,14 @@ def make_slice(idx, dimidx, n=2):
     return tuple(mut)
 
 
-def get_vector(adata, k, coldim, idxdim, layer=None):
+def get_vector(
+    adata: "AnnData",
+    k: str,
+    coldim: Literal["obs", "var"],
+    idxdim: Literal["obs", "var"],
+    layer: Optional[str] = None,
+):
     # adata could be self if Raw and AnnData shared a parent
-    dims = ("obs", "var")
     col = getattr(adata, coldim).columns
     idx = getattr(adata, f"{idxdim}_names")
 
@@ -158,9 +166,11 @@ def get_vector(adata, k, coldim, idxdim, layer=None):
     elif in_col:
         return getattr(adata, coldim)[k].values
     elif in_idx:
-        selected_dim = dims.index(idxdim)
-        idx = adata._normalize_indices(make_slice(k, selected_dim))
-        a = adata._get_X(layer=layer)[idx]
-    if issparse(a):
-        a = a.toarray()
-    return np.ravel(a)
+        return get_x_vector(adata, idxdim, k, layer)
+
+
+def get_x_vector(adata, idxdim: Literal["obs", "var"], k: str, layer: str = None):
+    selected_dim = ("obs", "var").index(idxdim)
+    idx = adata._normalize_indices(make_slice(k, selected_dim))
+    a = adata._get_X(layer=layer)[idx]
+    return np.ravel(a.toarray() if issparse(a) else a)
