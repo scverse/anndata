@@ -1,16 +1,14 @@
 import collections.abc as cabc
 from functools import singledispatch
 from itertools import repeat
-from typing import Union, Sequence, Optional, Tuple, TYPE_CHECKING
+from typing import Union, Sequence, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
 
 from ..compat import Literal
-
-if TYPE_CHECKING:
-    from .anndata import AnnData
+from . import anndata
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
@@ -144,7 +142,7 @@ def make_slice(idx, dimidx, n=2):
 
 
 def get_vector(
-    adata: "AnnData",
+    adata: "anndata.AnnData",
     k: str,
     coldim: Literal["obs", "var"],
     idxdim: Literal["obs", "var"],

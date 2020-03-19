@@ -1,6 +1,6 @@
 from enum import Enum
 from itertools import product
-from typing import Union, Optional, TYPE_CHECKING  # Special
+from typing import Union, Optional  # Special
 from typing import Iterable, Sequence, Generator  # ABCs
 from typing import Dict, Tuple  # Classes
 
@@ -8,12 +8,10 @@ import pandas as pd
 import numpy as np
 import scipy.sparse as ssp
 
+from ..compat import Literal
+from . import anndata
 from .index import get_x_vector
 from .raw import Raw
-from ..compat import Literal
-
-if TYPE_CHECKING:
-    from .anndata import AnnData
 
 
 # TODO: allow sequences: ("obsm", "X_pca", [0, 1])
@@ -157,7 +155,7 @@ class RefPath:
             return "-".join(path[-length:])
         return f"{path[:-2]}{self.make_name(length=2)}"
 
-    def get_vector(self, adata: Union["AnnData", Raw]):
+    def get_vector(self, adata: Union["anndata.AnnData", Raw]):
         attr = getattr(adata, self.attr.name)
         if self.attr is Attr.layers:  # X is here after normalizing
             layer_name, dim, key = self.path
@@ -195,7 +193,7 @@ RefPathLike = Union[str, Tuple[Union[str, int], ...], RefPath]
 
 
 def resolve_path(
-    adata: "AnnData",
+    adata: "anndata.AnnData",
     *path: Union[str, RefPath, int],
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
@@ -239,7 +237,7 @@ def resolve_path(
 
 
 def get_vector(
-    adata: "AnnData",
+    adata: "anndata.AnnData",
     *path: Union[str, RefPath, int],
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
@@ -253,7 +251,7 @@ def get_vector(
 
 
 def get_df(
-    adata: "AnnData",
+    adata: "anndata.AnnData",
     paths: Iterable[RefPathLike],
     *,
     dim: Optional[Literal["obs", "var"]] = None,
