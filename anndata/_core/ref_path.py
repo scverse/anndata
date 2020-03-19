@@ -214,8 +214,8 @@ def resolve_path(
     dim
         Dimension to resolve paths in.
         If `dim=None`, both dimensions are tried and an error is thrown for duplicates.
-        If e.g. `dim='obs'`, it would find an unique name in `obs_names`
-        or in :attr:`~anndata.AnnData.obs`\\ `.columns`.
+        If e.g. `dim='obs'`, it would find an unique name in
+        :attr:`~anndata.AnnData.obs_names` or :attr:`~anndata.AnnData.obs`\\ `.columns`.
     use_raw
         Resolve partial paths for `X`, `var`, or `varm` in `adata.raw`
         instead of `adata`?
