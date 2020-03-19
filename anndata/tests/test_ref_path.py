@@ -4,7 +4,7 @@ import pandas as pd
 import scipy.sparse as ssp
 
 from anndata import AnnData
-from anndata._core.ref_path import RefPath
+from anndata._core.ref_path import RefPath, split_paths
 
 
 @pytest.fixture
@@ -60,10 +60,6 @@ def test_get_vector(args, dim, expected, adata):
     assert vec.tolist() == expected
 
 
-def test_alias():
-    raise NotImplementedError()
-
-
 @pytest.mark.parametrize(
     "rp_code", ["RefPath('obs', 'group')", "RefPath('varp', 'neighbors', 'Cell5', 1)"]
 )
@@ -98,3 +94,31 @@ def test_parse(spec, resolved):
 def test_parse_failures(spec, err_regex):
     with pytest.raises(ValueError, match=err_regex):
         RefPath.parse(spec)
+
+
+# anndata part (resolving paths)
+
+
+def test_alias():
+    pass  # TODO
+
+
+@pytest.mark.parametrize(
+    "multipath,reference",
+    [
+        ([("obs", "A"), ("X", "var", "G1")], [("obs", "A"), ("X", "var", "G1")]),
+        (("obs", ["A", "B"]), [("obs", "A"), ("obs", "B")]),
+        (
+            (["obs", "var"], ["A", "B"]),
+            [("obs", "A"), ("obs", "B"), ("var", "A"), ("var", "B")],
+        ),
+        (
+            ["G1", ("rX", "var", ["G4", "G5"])],
+            ["G1", ("rX", "var", "G4"), ("rX", "var", "G5")],
+        ),
+    ],
+    ids=repr,
+)
+def test_split_paths(multipath, reference):
+    got = list(split_paths(multipath))
+    assert got == reference

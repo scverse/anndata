@@ -1,5 +1,8 @@
 from enum import Enum
-from typing import Iterable, Union, Sequence, Dict, Tuple, Optional, TYPE_CHECKING
+from itertools import product
+from typing import Union, Optional, TYPE_CHECKING  # Special
+from typing import Iterable, Sequence, Generator  # ABCs
+from typing import Dict, Tuple  # Classes
 
 import pandas as pd
 import numpy as np
@@ -188,6 +191,9 @@ def _to_vector(v: Union[ssp.spmatrix, np.ndarray, pd.Series]) -> np.ndarray:
 # AnnData methods
 
 
+RefPathLike = Union[str, Tuple[Union[str, int], ...], RefPath]
+
+
 def resolve_path(
     adata: "AnnData",
     *path: Union[str, RefPath, int],
@@ -227,7 +233,7 @@ def get_vector(
 
 def get_df(
     adata: "AnnData",
-    paths: Iterable[Union[str, Tuple[Union[str, int], ...], RefPath]] = (),
+    paths: Iterable[RefPathLike],
     *,
     alias_col: Optional[str] = None,
     dim: Optional[Literal["obs", "var"]] = None,
@@ -238,11 +244,27 @@ def get_df(
     """
     kwargs = locals()
     del kwargs["paths"], kwargs["adata"]
-    # TODO: split paths in sequences before resolving: ("X", "var", ["GeneA", "GeneB"])
-    paths = [resolve_path(adata, p, **kwargs) for p in paths]
+    paths = [resolve_path(adata, p, **kwargs) for p in split_paths(paths)]
     names = paths_to_names(paths)
     columns = {n: p.get_vector(adata) for n, p in names.items()}
     return pd.DataFrame(columns, adata.obs_names)
+
+
+def split_paths(
+    multipath: Union[RefPathLike, Iterable[RefPathLike]]
+) -> Generator[RefPathLike, None, None]:
+    if isinstance(multipath, RefPath):
+        yield multipath  # validated, so no inner sequence!
+    elif isinstance(multipath, str):
+        # TODO: globs and stuff. probably needs resolving info
+        yield multipath
+    elif isinstance(multipath, tuple):
+        yield from product(
+            *([elem] if isinstance(elem, (str, int)) else elem for elem in multipath)
+        )
+    else:  # iterable
+        for mp in multipath:
+            yield from split_paths(mp)
 
 
 def paths_to_names(paths: Sequence[RefPath], length: int = 1) -> Dict[str, RefPath]:
