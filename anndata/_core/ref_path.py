@@ -43,6 +43,12 @@ class Attr(Enum):
                 f"Path length mismatch: required ({len(self.validation)}) ≠ "
                 f"got ({len(path)}) in path {path!r} for attr {self.name}."
             )
+        elif self is Attr.raw:
+            sub_path = RefPath.parse(path)
+            # layers or obs
+            sub_path.attr.validate(sub_path.path)
+            return
+
         for i, (elem, check) in enumerate(zip(path, self.validation)):
             err_prefix = f"Element path[{i}]={path[i]!r} in path {path!r}"
             if isinstance(check, tuple):
@@ -57,11 +63,7 @@ class Attr(Enum):
                 if not isinstance(elem, check):
                     raise ValueError(f"{err_prefix} is non of type {check}")
             else:
-                assert check is Ellipsis
-                assert self is Attr.raw
-                sub_path = RefPath.parse(path)
-                # layers or obs
-                sub_path.attr.validate(sub_path.path)
+                assert False, f"Unhandled check {check!r} for {self}"
 
     @staticmethod
     def prefix(prefix: str) -> Tuple[str, Tuple[str, ...]]:
@@ -92,6 +94,8 @@ class RefPath:
             # TODO: don’t split off gene names with slashes
             full_path = full_path.split("/")
 
+        if not full_path:
+            raise ValueError(f"No path specified.")
         attr_or_code, *path = full_path
         # path can be shorthand: "obs/Foo" and "o/Foo"
         attr, path_prefix = Attr.prefix(attr_or_code)
