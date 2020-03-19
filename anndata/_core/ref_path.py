@@ -276,10 +276,10 @@ def get_df(
 
 add_doc = """\
 
-    Parameters
-    ----------
     For syntax and other parameters see :meth:`~anndata.AnnData.resolve_path`.
 
+    Parameters
+    ----------
     layer
         The layer to get the vector from if the path resolves to a `<dim>_name`.
 """
