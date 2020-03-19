@@ -1,11 +1,13 @@
 import collections.abc as cabc
 from functools import singledispatch
 from itertools import repeat
-from typing import Union, Sequence, Optional, Tuple, Literal, TYPE_CHECKING
+from typing import Union, Sequence, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
+
+from ..compat import Literal
 
 if TYPE_CHECKING:
     from .anndata import AnnData

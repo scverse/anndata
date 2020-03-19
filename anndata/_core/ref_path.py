@@ -7,6 +7,7 @@ import scipy.sparse as ssp
 
 from .index import get_x_vector
 from .raw import Raw
+from ..compat import Literal
 
 if TYPE_CHECKING:
     from .anndata import AnnData
@@ -93,6 +94,31 @@ class RefPath:
         attr, path_prefix = Attr.prefix(attr_or_code)
         return RefPath(attr, *path_prefix, *path)
 
+    @property
+    def dim(self) -> Literal["obs", "var"]:
+        if self.attr in {Attr.obs, Attr.obsm, Attr.obsp}:
+            return "obs"
+        if self.attr in {Attr.var, Attr.varm, Attr.varp}:
+            return "var"
+        if self.attr is Attr.layers:
+            idx_dim = self.path[1]
+            return "obs" if idx_dim == "var" else "var"
+        if self.attr is Attr.raw:
+            return self.raw_subpath.dim
+        assert False, f"Unimplemented attr {self.attr}"
+
+    @property
+    def raw_subpath(self):
+        try:
+            assert self.attr is Attr.raw
+            raw_attr, *raw_path = self.path
+            return RefPath.parse((raw_attr, *raw_path))
+        except (AssertionError, ValueError):
+            raise AttributeError(
+                f"{self.__class__.__name__} with attr={self.attr.name} "
+                "has no `raw_subpath`"
+            )
+
     def __repr__(self):
         return f"RefPath({self.attr.name!r}, {', '.join(map(repr, self.path))})"
 
@@ -132,8 +158,7 @@ class RefPath:
             idx = getattr(adata, f"{attr.dim}_names") == key
             return _to_vector(p[:, idx] if orient == 1 else p[idx, :])
         if self.attr is Attr.raw:
-            raw_attr, *raw_path = self.path
-            return RefPath.parse((raw_attr, *raw_path)).get_vector(adata.raw, alias_col)
+            return self.raw_subpath.get_vector(adata.raw, alias_col)
         else:
             assert False, f"Unhandled attr {self.attr.name!r}"
 

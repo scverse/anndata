@@ -32,26 +32,27 @@ def adata():
 
 
 paths = [
-    (("layers", "unspliced", "obs", "Cell1"), [0.1, 1.2, 2.3, 3.4]),
-    (("obs", "group"), ["batch1", "batch2"]),
-    (("obsm", "X_pca", 1), [0.4, 0.3]),
-    (("obsm", "protein", "CD14"), [2.1, 3.2]),
-    (("obsp", "neighbors_distances", "Cell2", 0), [0.3, 0]),
-    (("var", "mito"), [0.4, 0.3, 0.2, 0.1]),
-    # (("varm", "", ""), []),
-    (("varp", "cors", "GeneY", 1), [3] * 4),
-    (("raw", "X", "var", "GeneA"), [88, 99]),
-    (("raw", "var", "symbol"), ["Symb1", "Symb2", "Symb3", "Symb4", "Symb5"]),
+    (("layers", "unspliced", "obs", "Cell1"), "var", [0.1, 1.2, 2.3, 3.4]),
+    (("obs", "group"), "obs", ["batch1", "batch2"]),
+    (("obsm", "X_pca", 1), "obs", [0.4, 0.3]),
+    (("obsm", "protein", "CD14"), "obs", [2.1, 3.2]),
+    (("obsp", "neighbors_distances", "Cell2", 0), "obs", [0.3, 0]),
+    (("var", "mito"), "var", [0.4, 0.3, 0.2, 0.1]),
+    # (("varm", "", ""), "var", []),
+    (("varp", "cors", "GeneY", 1), "var", [3] * 4),
+    (("raw", "X", "var", "GeneA"), "obs", [88, 99]),
+    # TODO: is var correct here? It’ll return more variables …
+    (("raw", "var", "symbol"), "var", ["Symb1", "Symb2", "Symb3", "Symb4", "Symb5"]),
 ]
 
 
-@pytest.mark.parametrize("args,expected", paths, ids=repr)
-def test_instantiate(args, expected):
-    RefPath(*args)
+@pytest.mark.parametrize("args,dim,expected", paths, ids=repr)
+def test_dim(args, dim, expected):
+    assert RefPath(*args).dim == dim
 
 
-@pytest.mark.parametrize("args,expected", paths, ids=repr)
-def test_get_vector(args, expected, adata):
+@pytest.mark.parametrize("args,dim,expected", paths, ids=repr)
+def test_get_vector(args, dim, expected, adata):
     rp = RefPath(*args)
     vec = rp.get_vector(adata)
     assert isinstance(vec, np.ndarray)
