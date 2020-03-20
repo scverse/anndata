@@ -154,30 +154,38 @@ def deprecated(new_name: str):
 
 
 def concatenate_uns(
-    adata_list: list, merge_uns: str,
+    uns_list: list, merge_uns: str,
 ):
 
     uns = dict()
-    if merge_uns != "never" and merge_uns is not None:
-        for adata in adata_list:
-            for k in adata.keys():
-                if k not in uns.keys():
-                    uns[k] = dict()
-                if k in uns.keys() and isinstance(adata[k], dict):
-                    for k1 in adata[k].keys():
-                        if k1 not in uns[k].keys():
-                            uns[k][k1] = adata[k][k1]
-                        elif k1 in uns[k].keys():
-                            if merge_uns == "always":
-                                uns[k][k1] = adata[k][k1]
-                elif k in uns.keys():
-                    if merge_uns == "always":
-                        uns[k] = adata[k]
 
-        if merge_uns == "if_clean":
-            uns = {k: v for k, v in uns.items() if len(v.keys()) >= 2}
+    if merge_uns == "never" or merge_uns is None:
+        return uns
+    for u in uns_list:
+        _dict_merge(uns, u)
+
+    if merge_uns == "if_clean":
+        uns = {
+            k: v for k, v in uns.items() if isinstance(v, dict) and len(v.keys()) >= 2
+        }
 
     return uns
+
+
+# modified from https://gist.github.com/angstwad/bf22d1822c38a92ec0a9#file-dict_merge-py
+def _dict_merge(dct, merge_dct):
+    """ Recursive dict merge.
+    :param dct: dict onto which the merge is executed
+    :param merge_dct: dct merged into dct
+    :return: None
+    """
+    from collections import Mapping
+
+    for k, v in merge_dct.items():
+        if k in dct and isinstance(dct[k], dict) and isinstance(merge_dct[k], Mapping):
+            dict_merge(dct[k], merge_dct[k])
+        else:
+            dct[k] = merge_dct[k]
 
 
 class DeprecationMixinMeta(type):
