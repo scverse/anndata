@@ -8,7 +8,7 @@ import pandas as pd
 from scipy.sparse import spmatrix, issparse
 
 from ..compat import Literal
-from . import anndata
+from . import anndata, raw
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
@@ -141,35 +141,46 @@ def make_slice(idx, dimidx, n=2):
     return tuple(mut)
 
 
-def get_vector(
-    adata: "anndata.AnnData",
-    k: str,
-    coldim: Literal["obs", "var"],
-    idxdim: Literal["obs", "var"],
-    layer: Optional[str] = None,
-):
+def find_vector(
+    adata: Union["anndata.AnnData", "raw.Raw"], k: str, idxdim: Literal["obs", "var"]
+) -> bool:
+    coldim = "obs" if idxdim == "var" else "var"
     # adata could be self if Raw and AnnData shared a parent
     col = getattr(adata, coldim).columns
     idx = getattr(adata, f"{idxdim}_names")
-
     in_col = k in col
     in_idx = k in idx
-
-    if (in_col + in_idx) == 2:
+    if in_col and in_idx:
         raise ValueError(
             f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
         )
-    elif (in_col + in_idx) == 0:
+    elif not in_col and not in_idx:
         raise KeyError(
             f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
         )
-    elif in_col:
+    return in_col
+
+
+def get_vector(
+    adata: Union["anndata.AnnData", "raw.Raw"],
+    k: str,
+    idxdim: Literal["obs", "var"],
+    layer: Optional[str] = None,
+):
+    in_col = find_vector(adata, k, idxdim)
+    if in_col:
+        coldim = "obs" if idxdim == "var" else "var"
         return getattr(adata, coldim)[k].values
-    elif in_idx:
+    else:
         return get_x_vector(adata, idxdim, k, layer)
 
 
-def get_x_vector(adata, idxdim: Literal["obs", "var"], k: str, layer: str = None):
+def get_x_vector(
+    adata: Union["anndata.AnnData", "raw.Raw"],
+    idxdim: Literal["obs", "var"],
+    k: str,
+    layer: str = None,
+):
     selected_dim = ("obs", "var").index(idxdim)
     idx = adata._normalize_indices(make_slice(k, selected_dim))
     a = adata._get_X(layer=layer)[idx]

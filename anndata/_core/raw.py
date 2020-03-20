@@ -167,7 +167,7 @@ class Raw:
 
     def var_vector(self, k: str) -> np.ndarray:
         # TODO decorator to copy AnnData.var_vector docstring
-        return get_vector(self, k, "var", "obs")
+        return get_vector(self, k, "obs")
 
     def obs_vector(self, k: str) -> np.ndarray:
         # TODO decorator to copy AnnData.obs_vector docstring

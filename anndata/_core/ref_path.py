@@ -9,8 +9,7 @@ import numpy as np
 import scipy.sparse as ssp
 
 from ..compat import Literal
-from . import anndata
-from .index import get_x_vector
+from . import anndata, index
 from .raw import Raw
 
 
@@ -231,7 +230,7 @@ class RefPath:
         if self._attr is AttrInfo.layers:  # X is here after normalizing
             layer_name, dim, key = self.path
             layer_name = None if layer_name == "X" else layer_name
-            return get_x_vector(adata, dim, key, layer_name)
+            return index.get_x_vector(adata, dim, key, layer_name)
         if self._attr is AttrInfo.obs or self._attr is AttrInfo.var:
             (col,) = self.path
             return _to_vector(attr[col])
@@ -309,12 +308,38 @@ def resolve_path(
         if rp.attr == "layers":
             raise ValueError("Cannot parse layer path containging a dim, use `dim=...`")
         return rp
+    if use_raw:
+        adata = adata.raw
+    key_or_attr, *rest = path[0].split("/", 1) if len(path) == 1 else path
 
-    things_to_search
+    # single string, search in .{obs,var}{_names,.columns}
+    if not rest:
+        dims = ["obs", "var"] if dim is None else [dim]
+        for idxdim in dims:
+            try:
+                in_col = index.find_vector(adata, key_or_attr, idxdim)
+                break
+            except KeyError:
+                pass  # Ignore when not found
+        else:  # Did not find it anywhere
+            dims_str = " or ".join(
+                f"adata.{d}_names/.{'obs' if d == 'var' else 'var'}.columns"
+                for d in dims
+            )
+            raise KeyError(f"Key {key_or_attr} not found in {dims_str}")
+        # TODO
+        # if alias_col is not None:
+        #     idx = getattr(adata, dim)[alias_col]
+        #     key = idx.index[idx == key]
+        if in_col:
+            coldim = "obs" if idxdim == "var" else "var"
+            return RefPath(coldim, key_or_attr)
+        else:
+            layer = "X" if layer is None else layer
+            return RefPath("layers", layer, idxdim, key_or_attr)
 
-    if alias_col is not None:
-        idx = getattr(adata, dim)[alias_col]
-        key = idx.index[idx == key]
+    # search in obsm, varm
+    # TODO
 
 
 @_doc_params(params_resolve=PARAMS_RESOLVE)

@@ -1384,7 +1384,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-        return get_vector(self, k, "obs", "var", layer=layer)
+        return get_vector(self, k, "var", layer=layer)
 
     def var_vector(self, k, *, layer: Optional[str] = None) -> np.ndarray:
         """\
@@ -1416,7 +1416,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-        return get_vector(self, k, "var", "obs", layer=layer)
+        return get_vector(self, k, "obs", layer=layer)
 
     @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):
