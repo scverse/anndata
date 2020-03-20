@@ -53,6 +53,7 @@ from ..compat import (
     DeprecatedDict,
     DeepChainMap,
     _slice_uns_sparse_matrices,
+    _move_adj_mtx,
 )
 
 
@@ -510,6 +511,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
         self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
+
+        # Backwards compat for connectivities matrices in uns["neighbors"]
+        _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
 
         self._check_dimensions()
         self._check_uniqueness()
