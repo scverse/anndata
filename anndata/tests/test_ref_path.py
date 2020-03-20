@@ -4,7 +4,7 @@ import pandas as pd
 import scipy.sparse as ssp
 
 from anndata import AnnData
-from anndata._core.ref_path import RefPath, split_paths
+from anndata._core.ref_path import RefPath, split_paths, resolve_path
 
 
 @pytest.fixture
@@ -85,7 +85,9 @@ def test_parse(spec, resolved):
     "spec,err_regex",
     [
         (("raw",), r"No path specified\."),
-        ("X", r"required .3. ≠ got .1. in path .'X',. for attr layers\."),
+        (("obsm", "X_pca", None), r"None in path \('X_pca', None\).*\{int, str\}\."),
+        (("layers", "X", 1, "G1"), r"path\[1\]=1.*not one of \{'obs', 'var'\}\."),
+        ("X", r"required \(3\) ≠ got \(1\) in path \('X',\) for attr layers\."),
         ("f/XY", r"Unknown attr name or short code 'f'\."),
         ("op/foo/bar/notAnInt", r"Invalid.*obsp path: 'notAnInt'\."),
     ],
@@ -122,3 +124,22 @@ def test_alias():
 def test_split_paths(multipath, reference):
     got = list(split_paths(multipath))
     assert got == reference
+
+
+@pytest.mark.parametrize(
+    "short_path,resolved",
+    [
+        # single strings should be found in {obs,var}{.columns,_names}
+        # but not in {obs,var}m DataFrame columns (too deep and obscure)
+        ("Cell1", ("layers", "X", "obs", "Cell1")),
+        ("group", ("obs", "group")),
+        # keys with subpaths should be found in layers, {obs,var}{p,m}
+        ("X_pca/1", ("obsm", "X_pca", 1)),
+        ("unspliced/GeneY", ("layers", "unspliced", "var", "GeneY")),
+        # {obs,var}p should default to axis 0
+        (("neighbors_distances", "Cell2"), ("obsp", "neighbors_distances", "Cell2", 0)),
+    ],
+    ids=repr,
+)
+def test_resolve(adata, short_path, resolved):
+    assert resolve_path(adata, short_path) == RefPath(*resolved)

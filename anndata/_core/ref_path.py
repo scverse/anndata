@@ -56,16 +56,18 @@ class AttrInfo(Enum):
             if isinstance(check, tuple):
                 if isinstance(check[0], type):
                     if not any(isinstance(elem, c) for c in check):
+                        check_str = ", ".join(typ.__name__ for typ in check)
                         raise ValueError(
-                            f"{err_prefix} is not of one of the types {check!r}"
+                            f"{err_prefix} is not of one of the types {{{check_str}}}."
                         )
                 elif not any(elem == c for c in check):
-                    raise ValueError(f"{err_prefix} is not of one of {check!r}")
+                    check_str = ", ".join(map(repr, check))
+                    raise ValueError(f"{err_prefix} is not one of {{{check_str}}}.")
             elif isinstance(check, type):
                 if not isinstance(elem, check):
-                    raise ValueError(f"{err_prefix} is non of type {check}")
+                    raise ValueError(f"{err_prefix} is not of type {check}.")
             else:
-                assert False, f"Unhandled check {check!r} for {self}"
+                assert False, f"Unhandled check {check!r} for {self}."
 
     @staticmethod
     def prefix(prefix: str) -> Tuple[str, Tuple[str, ...]]:
@@ -289,7 +291,7 @@ def resolve_path(
     *path: Union[str, RefPath, int],
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
-    alias_col: Optional[str],
+    alias_col: Optional[str] = None,
     layer: Optional[str] = None,
 ) -> RefPath:
     """\
@@ -300,12 +302,15 @@ def resolve_path(
     {params_resolve}
     """
     try:
-        return RefPath.parse(*path)
+        rp = RefPath.parse(*path)
     except ValueError:
         pass
+    else:
+        if rp.attr == "layers":
+            raise ValueError("Cannot parse layer path containging a dim, use `dim=...`")
+        return rp
 
-    # TODO
-    raise NotImplementedError()
+    things_to_search
 
     if alias_col is not None:
         idx = getattr(adata, dim)[alias_col]
@@ -318,7 +323,7 @@ def get_vector(
     *path: Union[str, RefPath, int],
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
-    alias_col: Optional[str],
+    alias_col: Optional[str] = None,
     layer: Optional[str] = None,
 ) -> np.ndarray:
     """\
