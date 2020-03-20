@@ -18,7 +18,6 @@ from ..compat import (
     _from_fixed_length_strings,
     _to_fixed_length_strings,
     _clean_uns,
-    _move_adj_mtx,
 )
 from .utils import (
     report_read_key_on_error,
@@ -259,7 +258,6 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_attribute)
 
     _clean_uns(d)
-    _move_adj_mtx(d)
 
     return AnnData(**d)
 
