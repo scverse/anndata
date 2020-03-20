@@ -7,6 +7,7 @@ import pandas as pd
 
 from anndata.compat import _clean_uns
 from anndata._io.utils import report_read_key_on_error, AnnDataReadError
+from anndata.utils import concatenate_uns
 
 
 @pytest.mark.parametrize(
@@ -46,3 +47,35 @@ def test_clean_uns():
     # var’s categories were overwritten by obs’s,
     # which we can detect here because var has too high codes
     assert isinstance(d["var"]["species"], pd.Series)
+
+
+def test_concatenate_uns():
+    visium_1_uns = {
+        "spatial": {
+            "library1": {
+                "images": {"hires": 0, "lowres": 1},
+                "scalefactors": {"hires_scale": 0, "lowres_scale": 1},
+            }
+        },
+        "pca": 0,
+    }
+    visium_2_uns = {
+        "spatial": {
+            "library2": {"images": {"hires": 2}, "scalefactors": {"hires_scale": 2}}
+        },
+        "pca": 2,
+    }
+    chromium_1_uns = {"pca": 3}
+
+    all_adata_uns = [visium_1_uns, visium_2_uns, chromium_1_uns]
+
+    uns = concatenate_uns(all_adata_uns, merge_uns="if_clean")
+    assert "pca" not in uns.keys()
+
+    uns = concatenate_uns(all_adata_uns, merge_uns="always")
+    assert uns["pca"] == 3
+    assert len(uns["spatial"].keys()) == 2
+
+    uns = concatenate_uns(all_adata_uns, merge_uns="never")
+    assert isinstance(uns, dict)
+    assert len(uns) == 0
