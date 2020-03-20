@@ -1349,7 +1349,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.X
 
-    resolve_path = ref_path.resolve_path
+    # TODO: export when exporting RefPath.
+    # resolve_path = ref_path.resolve_path
     get_df = ref_path.get_df
     get_vector = ref_path.get_vector
 

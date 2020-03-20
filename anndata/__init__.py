@@ -72,14 +72,6 @@ Writing to other formats.
    AnnData.write_loom
    AnnData.write_zarr
 
-Helper classes
---------------
-
-.. autosummary::
-   :toctree: .
-
-   RefPath
-
 Errors and warnings
 -------------------
 

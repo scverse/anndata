@@ -86,7 +86,9 @@ SHORTCUTS = ", ".join(
 
 class RefPath:
     """\
-    A path referring to a vector in an AnnData object.
+    A fully resolved path referring to a vector in an :attr:`~anndata.AnnData` object.
+    The vector will have the length of the `AnnData`’s :attr:`dim`,
+    :attr:`~anndata.AnnData.n_obs` or :attr:`~anndata.AnnData.n_vars`.
 
     Depending on :attr:`attr`, :attr:`path` can be:
 
@@ -257,46 +259,45 @@ def _to_vector(v: Union[ssp.spmatrix, np.ndarray, pd.Series]) -> np.ndarray:
 
 
 RefPathLike = Union[str, Tuple[Union[str, int], ...], RefPath]
-GET_ADD_DOC = """\
-For syntax and other parameters see :meth:`~anndata.AnnData.resolve_path`.
-
-Parameters
-----------
+PARAMS_RESOLVE = """\
+adata
+    Annotated data object.
+path
+    This supports subpaths of the :class:`~anndata.RefPath` syntax.
+    `str` keys or tuple subpaths (like `'GeneA'` or `('X_pca', 0)`) are resolved
+    according to `dim`, `use_raw`, and `alias_col`.
+    As `RefPath`\\ s are always unique, they get passed through.
+dim
+    Dimension to resolve paths in.
+    If `dim=None`, both dimensions are tried and an error is thrown for duplicates.
+    If e.g. `dim='obs'`, it would find an unique name in
+    :attr:`~anndata.AnnData.obs_names` or :attr:`~anndata.AnnData.obs`\\ `.columns`.
+use_raw
+    Resolve partial paths for `X`, `var`, or `varm` in `adata.raw`
+    instead of `adata`?
+alias_col
+    A column in `adata.<dim>` with gene names to use instead of `adata.<dim>_names`
+    (autodetected if `dim=None`)
 layer
-    The layer to get the vector from if the path resolves to a `<dim>_name`.
+    The layer to get the vector from if the path resolves to a `<dim>_name`.\
 """
 
 
+@_doc_params(params_resolve=PARAMS_RESOLVE)
 def resolve_path(
     adata: "anndata.AnnData",
     *path: Union[str, RefPath, int],
     dim: Optional[Literal["obs", "var"]] = None,
     use_raw: bool = False,
     alias_col: Optional[str],
+    layer: Optional[str] = None,
 ) -> RefPath:
     """\
     Resolves a :class:`~anndata.RefPath`-like :class:`tuple` or :class:`str` key.
 
     Parameters
     ----------
-    adata
-        Annotated data object.
-    path
-        This supports subpaths of the :class:`~anndata.RefPath` syntax.
-        `str` keys or tuple subpaths (like `'GeneA'` or `('X_pca', 0)`) are resolved
-        according to `dim`, `use_raw`, and `alias_col`.
-        As `RefPath`\\ s are always unique, they get passed through.
-    dim
-        Dimension to resolve paths in.
-        If `dim=None`, both dimensions are tried and an error is thrown for duplicates.
-        If e.g. `dim='obs'`, it would find an unique name in
-        :attr:`~anndata.AnnData.obs_names` or :attr:`~anndata.AnnData.obs`\\ `.columns`.
-    use_raw
-        Resolve partial paths for `X`, `var`, or `varm` in `adata.raw`
-        instead of `adata`?
-    alias_col
-        A column in `adata.<dim>` with gene names to use instead of `adata.<dim>_names`
-        (autodetected if `dim=None`)
+    {params_resolve}
     """
     try:
         return RefPath.parse(*path)
@@ -311,7 +312,7 @@ def resolve_path(
         key = idx.index[idx == key]
 
 
-@_doc_params(add_doc=GET_ADD_DOC)
+@_doc_params(params_resolve=PARAMS_RESOLVE)
 def get_vector(
     adata: "anndata.AnnData",
     *path: Union[str, RefPath, int],
@@ -323,12 +324,14 @@ def get_vector(
     """\
     Get a single 1D vector using the `path`.
 
-    {add_doc}
+    Parameters
+    ----------
+    {params_resolve}
     """
     return resolve_path(**locals()).get_vector(adata)
 
 
-@_doc_params(add_doc=GET_ADD_DOC)
+@_doc_params(params_resolve=PARAMS_RESOLVE)
 def get_df(
     adata: "anndata.AnnData",
     paths: Iterable[RefPathLike],
@@ -339,13 +342,15 @@ def get_df(
     layer: Optional[str] = None,
 ) -> pd.DataFrame:
     """\
-    Resolves multiple paths, gets vectors via :meth:`~anndata.AnnData.resolve_path` and
+    Resolves multiple paths, gets vectors via :meth:`~anndata.AnnData.get_vector` and
     joins them to a :class:`pandas.DataFrame`.
 
     So becomes `("obs", ["A", "B"])` the paths `("obs", "A")` and `("obs", "B")`.
     The data frame column names are unique and as short as possible.
 
-    {add_doc}
+    Parameters
+    ----------
+    {params_resolve}
     """
     kwargs = locals()
     del kwargs["paths"], kwargs["adata"]
