@@ -179,10 +179,10 @@ def _dict_merge(dct, merge_dct):
     :param merge_dct: dct merged into dct
     :return: None
     """
-    from collections import Mapping
+    import collections
 
-    for k, v in merge_dct.items():
-        if k in dct and isinstance(dct[k], dict) and isinstance(merge_dct[k], Mapping):
+    for k in merge_dct.keys():
+        if k in dct and isinstance(dct[k], dict) and isinstance(merge_dct[k], collections.Mapping):
             _dict_merge(dct[k], merge_dct[k])
         else:
             dct[k] = merge_dct[k]
