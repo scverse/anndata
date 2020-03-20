@@ -1451,7 +1451,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 var=self.var.copy(),
                 # deepcopy on DictView does not work and is unnecessary
                 # as uns was copied already before
-                uns=self.uns.copy()
+                uns=self._uns.copy()
                 if isinstance(self.uns, DictView)
                 else deepcopy(self.uns),
                 obsm=self.obsm.copy(),
