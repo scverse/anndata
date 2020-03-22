@@ -36,10 +36,14 @@ def convert_to_dict_nonetype(obj: None):
 
 
 def make_index_unique(index: pd.Index, join: str = "-"):
-    """\
-    Makes the index unique by appending '1', '2', etc.
+    """
+    Makes the index unique by appending a number string to each duplicate index element:
+    '1', '2', etc.
 
-    The first occurance of a non-unique value is ignored.
+    If a tentative name created by the algorithm already exists in the index, it tries
+    the next integer in the sequence.
+
+    The first occurrence of a non-unique value is ignored.
 
     Parameters
     ----------
@@ -63,12 +67,19 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     from collections import defaultdict
 
     values = index.values
+    values_set = set(values)
     indices_dup = index.duplicated(keep="first")
     values_dup = values[indices_dup]
     counter = defaultdict(lambda: 0)
     for i, v in enumerate(values_dup):
-        counter[v] += 1
-        values_dup[i] += join + str(counter[v])
+        while True:
+            counter[v] += 1
+            tentative_new_name = v + join + str(counter[v])
+            if tentative_new_name not in values_set:
+                values_set.add(tentative_new_name)
+                values_dup[i] = tentative_new_name
+                break
+
     values[indices_dup] = values_dup
     index = pd.Index(values)
     return index
