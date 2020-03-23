@@ -4,20 +4,11 @@ from typing import Any, Callable, Mapping, Optional
 from warnings import warn
 
 
-def _access_warn(key, cur_loc):
-    warn(
-        f"This location for '{key}' is deprecated. It has been moved to {cur_loc}, "
-        "and will not be accesible here in a future version of anndata.",
-        FutureWarning,
-        stacklevel=4,
-    )
-
-
 class KeyOverload:
     """
     This class contains the information neccesary to overload a key of a dict.
 
-    It's like a descriptor, but for keys of a dict.
+    It's like a descriptor, but for a key of a dict instead of an attribute.
     """
 
     def __init__(
@@ -104,51 +95,69 @@ class OverloadedDict(MutableMapping):
         return self.data.copy()
 
 
+#######################################
+# Handling .uns["neighbors"]
+#######################################
+
+
+def _access_warn(key, cur_loc):
+    warn(
+        f"This location for '{key}' is deprecated. It has been moved to {cur_loc}, "
+        "and will not be accesible here in a future version of anndata.",
+        FutureWarning,
+        stacklevel=4,
+    )
+
+
+def _adjacency_getter(ovld, key, adata: "AnnData"):
+    """For overloading:
+
+    >>> mtx = adata.uns["neighbors"]["connectivities"]
+    >>> mtx = adata.uns["neighbors"]["distances"]
+    """
+    _access_warn(key, f".obsp[{key}]")
+    return adata.obsp[key]
+
+
+def _adjacency_setter(ovld, key, value, adata: "AnnData"):
+    """For overloading:
+
+    >>> adata.uns["neighbors"]["connectivities"] = mtx
+    >>> adata.uns["neighbors"]["distances"] = mtx
+    """
+    _access_warn(key, f".obsp[{key}]")
+    adata.obsp[key] = value
+
+
+def _neighbors_setter(ovld, key, neighbors: Mapping, adata: "AnnData"):
+    """For overloading: `adata.uns["neighbors"] = d`."""
+    for k in ("distances", "connectivities"):
+        if k in neighbors:
+            _access_warn(k, f".obsp[{k}]")
+            adata.obsp[k] = neighbors.pop(k)
+    ovld.data[key] = neighbors
+
+
+def _neighbors_getter(ovld, key, adata: "AnnData"):
+    """For overloading: `adata.uns["neighbors"]`"""
+    return OverloadedDict(
+        ovld.data[key],
+        overloaded_keys={
+            "connectivities": KeyOverload(
+                "connectivities",
+                get=partial(_adjacency_getter, adata=adata),
+                set=partial(_adjacency_setter, adata=adata),
+            ),
+            "distances": KeyOverload(
+                "distances",
+                get=partial(_adjacency_getter, adata=adata),
+                set=partial(_adjacency_setter, adata=adata),
+            ),
+        },
+    )
+
+
 def _overloaded_uns(adata):
-    def _adjacency_getter(ovld, key, adata: "AnnData"):
-        """For overloading:
-
-        >>> mtx = adata.uns["neighbors"]["connectivities"]
-        >>> mtx = adata.uns["neighbors"]["distances"]
-        """
-        _access_warn(key, f".obsp[{key}]")
-        return adata.obsp[key]
-
-    def _adjacency_setter(ovld, key, value, adata: "AnnData"):
-        """For overloading:
-
-        >>> adata.uns["neighbors"]["connectivities"] = mtx
-        >>> adata.uns["neighbors"]["distances"] = mtx
-        """
-        _access_warn(key, f".obsp[{key}]")
-        adata.obsp[key] = value
-
-    def _neighbors_setter(ovld, key, neighbors: Mapping, adata: "AnnData"):
-        """For overloading: `adata.uns["neighbors"] = d`."""
-        for k in ("distances", "connectivities"):
-            if k in neighbors:
-                _access_warn(k, f".obsp[{k}]")
-                adata.obsp[k] = neighbors.pop(k)
-        ovld.data[key] = neighbors
-
-    def _neighbors_getter(ovld, key, adata: "AnnData"):
-        """For overloading: `adata.uns["neighbors"]`"""
-        return OverloadedDict(
-            ovld.data[key],
-            overloaded_keys={
-                "connectivities": KeyOverload(
-                    "connectivities",
-                    get=partial(_adjacency_getter, adata=adata),
-                    set=partial(_adjacency_setter, adata=adata),
-                ),
-                "distances": KeyOverload(
-                    "distances",
-                    get=partial(_adjacency_getter, adata=adata),
-                    set=partial(_adjacency_setter, adata=adata),
-                ),
-            },
-        )
-
     return OverloadedDict(
         adata._uns,
         overloaded_keys={
