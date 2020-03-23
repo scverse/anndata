@@ -1,4 +1,3 @@
-from collections import ChainMap
 from copy import deepcopy
 from functools import reduce
 from typing import Union, Mapping, MutableMapping
@@ -8,7 +7,7 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
-from ._deprecated_dict import DeprecatedDict
+from ._overloaded_dict import _overloaded_uns, OverloadedDict
 from .._core.index import _subset
 
 # try importing zarr, dask, and zappy
@@ -197,38 +196,3 @@ def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs:
         d = reduce(lambda d, k: d[k], path[:-1], uns)
         d[path[-1]] = _subset(d[path[-1]], (oidx, oidx))
     return uns
-
-
-class DeepChainMap(ChainMap):
-    """Variant of ChainMap that allows direct updates to inner scopes
-
-    Based on https://docs.python.org/3/library/collections.html#collections.ChainMap
-
-    Modifications
-    -------------
-
-    * Deep deletion. I.e. del d[k] means d[k] can't work if the key
-    was stored in multiple levels.
-    * If new item is inserted, it's added to the lowest level. This is because we generally want
-    to be modifying the one uns dict, we just want the deprecation dict to have precidence for
-    retrieval.
-    """
-
-    def __setitem__(self, key, value):
-        for mapping in self.maps:
-            if key in mapping:
-                mapping[key] = value
-                return
-        # If not found it top level, bottom level is updated
-        self.maps[-1][key] = value
-
-    def __delitem__(self, key):
-        found = False
-        for mapping in self.maps:
-            if key in mapping:
-                found = True
-                del mapping[key]
-        if found:
-            return
-        else:
-            raise KeyError(key)
