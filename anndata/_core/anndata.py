@@ -50,10 +50,10 @@ from ..compat import (
     ZappyArray,
     DaskArray,
     Literal,
-    DeprecatedDict,
-    DeepChainMap,
     _slice_uns_sparse_matrices,
     _move_adj_mtx,
+    _overloaded_uns,
+    OverloadedDict,
 )
 
 
@@ -503,7 +503,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError(f"Index of {attr_name} must match {x_name} of X.")
 
         # unstructured annotations
-        self._uns = uns or OrderedDict()
+        self.uns = uns or OrderedDict()
 
         # TODO: Think about consequences of making obsm a group in hdf
         self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
@@ -873,21 +873,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def uns(self) -> MutableMapping:
         """Unstructured annotation (ordered dictionary)."""
-        uns = self._uns
-        # Special case for old behaviour of neighbors
-        if "neighbors" in uns:
-            depr_dict = {
-                k: ElementRef(self, "obsp", (k,))
-                for k in ("connectivities", "distances")
-            }
-            uns = DeepChainMap(
-                {
-                    "neighbors": DeprecatedDict(
-                        uns["neighbors"], deprecated_items=depr_dict
-                    )
-                },
-                uns,
-            )
+        uns = _overloaded_uns(self)
+        # uns = self._uns
+        # # Special case for old behaviour of neighbors
+        # if "neighbors" in uns:
+        #     depr_dict = {
+        #         k: ElementRef(self, "obsp", (k,))
+        #         for k in ("connectivities", "distances")
+        #     }
+        #     uns = DeepChainMap(
+        #         {
+        #             "neighbors": DeprecatedDict(
+        #                 uns["neighbors"], deprecated_items=depr_dict
+        #             )
+        #         },
+        #         uns,
+        #     )
         if self.is_view:
             uns = DictView(uns, view_args=(self, "uns"))
         return uns
@@ -898,6 +899,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
             )
+        if isinstance(value, (OverloadedDict, DictView)):
+            value = value.copy()
         if self.is_view:
             self._init_as_actual(self.copy())
         self._uns = value
