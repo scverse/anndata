@@ -9,6 +9,22 @@ class KeyOverload:
     This class contains the information neccesary to overload a key of a dict.
 
     It's like a descriptor, but for a key of a dict instead of an attribute.
+
+    Register getter, setter, and deleter methods by passing them at instantiation,
+    or assigning them to the `._get`, `._set`, and `._delete` attributes respectivley.
+    These functions will be passed the parent `OverloadedDict` and the key as their first
+    two arguments. The get and delete methods will be called by the parent with no
+    additional arguments, while the setter will be passed the value to set.
+
+    Note that the parent is not set on instantiation. It's currently assumed that's added
+    when the parent is constructed.
+
+    Attrs
+    -----
+    key
+        Key in parent dict to overload
+    parent
+        The parent OverloadedDict this key is attached to.
     """
 
     def __init__(
@@ -53,32 +69,44 @@ class KeyOverload:
 
 
 class OverloadedDict(MutableMapping):
-    """A dict where some of the keys have been overloaded.
+    """A mapping where some of the keys have been overloaded.
 
-    These keys don't show up in iteration and are not copied.
+    Each overloaded key should be defined as an KeyOverload instance, and can have
+    specific getter, settter, and deleter methods. Additionally, overloaded keys don't
+    show up in iteration or from `__contains__` calls unless they exist in `.data`.
+
+    Attrs
+    -----
+    data
+        Wrapped mapping.
+    overloaded
+        Maps from keys to overloaded behaviours.
     """
 
-    def __init__(self, data, *, overloaded_keys: Mapping[Any, KeyOverload]):
+    data: Mapping
+    overloaded: Mapping[Any, KeyOverload]
+
+    def __init__(self, data: Mapping, *, overloaded: Mapping[Any, KeyOverload]):
         self.data = data
-        self.overloaded_keys = overloaded_keys
-        for v in overloaded_keys.values():
+        self.overloaded = overloaded
+        for v in overloaded.values():
             v.parent = self
 
     def __getitem__(self, key):
-        if key in self.overloaded_keys:
-            return self.overloaded_keys[key].get()
+        if key in self.overloaded:
+            return self.overloaded[key].get()
         else:
             return self.data[key]
 
     def __setitem__(self, key, value):
-        if key in self.overloaded_keys:
-            self.overloaded_keys[key].set(value)
+        if key in self.overloaded:
+            self.overloaded[key].set(value)
         else:
             self.data[key] = value
 
     def __delitem__(self, key):
-        if key in self.overloaded_keys:
-            self.overloaded_keys[key].delete()
+        if key in self.overloaded:
+            self.overloaded[key].delete()
         else:
             del self.data[key]
 
@@ -90,6 +118,12 @@ class OverloadedDict(MutableMapping):
 
     def __len__(self):
         return len(self.data)
+
+    def __repr__(self):
+        return (
+            f"OverloadedDict, wrapping:\n\t{self.data!r}\nWith overloaded keys:"
+            f"\n\t{list(self.overloaded.keys())}."
+        )
 
     def copy(self) -> dict:
         return self.data.copy()
@@ -109,7 +143,7 @@ def _access_warn(key, cur_loc):
     )
 
 
-def _adjacency_getter(ovld, key, adata: "AnnData"):
+def _adjacency_getter(ovld: OverloadedDict, key, adata: "AnnData"):
     """For overloading:
 
     >>> mtx = adata.uns["neighbors"]["connectivities"]
@@ -119,7 +153,7 @@ def _adjacency_getter(ovld, key, adata: "AnnData"):
     return adata.obsp[key]
 
 
-def _adjacency_setter(ovld, key, value, adata: "AnnData"):
+def _adjacency_setter(ovld: OverloadedDict, key, value, adata: "AnnData"):
     """For overloading:
 
     >>> adata.uns["neighbors"]["connectivities"] = mtx
@@ -129,7 +163,7 @@ def _adjacency_setter(ovld, key, value, adata: "AnnData"):
     adata.obsp[key] = value
 
 
-def _neighbors_setter(ovld, key, neighbors: Mapping, adata: "AnnData"):
+def _neighbors_setter(ovld: OverloadedDict, key, neighbors: Mapping, adata: "AnnData"):
     """For overloading: `adata.uns["neighbors"] = d`."""
     for k in ("distances", "connectivities"):
         if k in neighbors:
@@ -138,11 +172,11 @@ def _neighbors_setter(ovld, key, neighbors: Mapping, adata: "AnnData"):
     ovld.data[key] = neighbors
 
 
-def _neighbors_getter(ovld, key, adata: "AnnData"):
+def _neighbors_getter(ovld: OverloadedDict, key, adata: "AnnData"):
     """For overloading: `adata.uns["neighbors"]`"""
     return OverloadedDict(
         ovld.data[key],
-        overloaded_keys={
+        overloaded={
             "connectivities": KeyOverload(
                 "connectivities",
                 get=partial(_adjacency_getter, adata=adata),
@@ -157,10 +191,10 @@ def _neighbors_getter(ovld, key, adata: "AnnData"):
     )
 
 
-def _overloaded_uns(adata):
+def _overloaded_uns(adata: "AnnData") -> OverloadedDict:
     return OverloadedDict(
         adata._uns,
-        overloaded_keys={
+        overloaded={
             "neighbors": KeyOverload(
                 "neighbors",
                 get=partial(_neighbors_getter, adata=adata),
