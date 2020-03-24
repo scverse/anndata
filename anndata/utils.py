@@ -67,10 +67,11 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     from collections import defaultdict
 
     values = index.values
-    values_set = set(values)
     indices_dup = index.duplicated(keep="first")
     values_dup = values[indices_dup]
+    values_set = set(values)
     counter = defaultdict(lambda: 0)
+    issue_interpretation_warning = False
     for i, v in enumerate(values_dup):
         while True:
             counter[v] += 1
@@ -79,7 +80,14 @@ def make_index_unique(index: pd.Index, join: str = "-"):
                 values_set.add(tentative_new_name)
                 values_dup[i] = tentative_new_name
                 break
+            issue_interpretation_warning = True
 
+    if issue_interpretation_warning:
+        warnings.warn(
+            f"Suffix used ({join}[0-9]+) to deduplicate index values may make index "
+            + "values difficult to interpret. There values with a similar suffixes in "
+            + "the index. Consider using a different join parameter."
+        )
     values[indices_dup] = values_dup
     index = pd.Index(values)
     return index
