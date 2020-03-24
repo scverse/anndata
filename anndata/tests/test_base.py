@@ -304,19 +304,19 @@ def test_slicing_strings():
         adata[["A", "B", "not_in_obs"], :]
 
 
-# TODO: Decide what this should do
 def test_slicing_graphs():
-    adata = AnnData(
-        np.array([[1, 2], [3, 4], [5, 6]]),
-        uns=dict(neighbors=dict(connectivities=sp.csr_matrix(np.ones((3, 3))))),
-    )
-    # with pytest.warns(
-    #     DeprecationWarning, match=r".obs\['neighbors'\]\['connectivities'\] .*(3×3)"
-    # ):
+    # Testing for deprecated behaviour of connectivity matrices in .uns["neighbors"]
+    with pytest.warns(FutureWarning, match=r".obsp\['connectivities'\]"):
+        adata = AnnData(
+            np.array([[1, 2], [3, 4], [5, 6]]),
+            uns=dict(neighbors=dict(connectivities=sp.csr_matrix(np.ones((3, 3))))),
+        )
+
     adata_sub = adata[[0, 1], :]
-    assert adata_sub.uns["neighbors"]["connectivities"].shape[0] == 2
-    assert adata.uns["neighbors"]["connectivities"].shape[0] == 3
-    assert adata_sub.copy().uns["neighbors"]["connectivities"].shape[0] == 2
+    with pytest.warns(FutureWarning):
+        assert adata_sub.uns["neighbors"]["connectivities"].shape[0] == 2
+        assert adata.uns["neighbors"]["connectivities"].shape[0] == 3
+        assert adata_sub.copy().uns["neighbors"]["connectivities"].shape[0] == 2
 
 
 def test_slicing_series():
