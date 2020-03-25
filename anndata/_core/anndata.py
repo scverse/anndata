@@ -588,6 +588,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
 
+
+    def _ipython_display_(self):
+        from .html_repr import as_tree
+        return as_tree(self, opened=False)._ipython_display_()
+
+
     def __eq__(self, other):
         """Equality testing"""
         raise NotImplementedError(

@@ -73,6 +73,11 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         pass
 
     @property
+    def dims(self) -> Tuple[str, ...]:
+        """Which dimensions of the parent is this aligned to?"""
+        return tuple(("obs", "var")[i] for i in self.axes)
+
+    @property
     @abstractmethod
     def is_view(self) -> bool:
         pass
