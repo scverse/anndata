@@ -822,7 +822,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         getattr(self, attr).index = value
         for v in getattr(self, f"{attr}m").values():
             if isinstance(v, pd.DataFrame):
-                v.index = value.copy()
+                v.index = value
 
     @property
     def obs(self) -> pd.DataFrame:
@@ -1878,12 +1878,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return new_adata
 
     def var_names_make_unique(self, join: str = "-"):
-        self.var.index = utils.make_index_unique(self.var.index, join)
+        # Important to go through the setter so obsm dataframes are updated too
+        self.var_names = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def obs_names_make_unique(self, join: str = "-"):
-        self.obs.index = utils.make_index_unique(self.obs.index, join)
+        # Important to go through the setter so obsm dataframes are updated too
+        self.obs_names = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
