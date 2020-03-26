@@ -73,11 +73,10 @@ def _normalize_index(
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(indexer, (Sequence, np.ndarray, pd.Index, spmatrix, np.matrix)):
-        # fmt: off
-        if (
-            hasattr(indexer, "shape") and
-            ((indexer.shape == (index.shape[0], 1)) or (indexer.shape == (1, index.shape[0])))
-        ):  # fmt: on
+        if hasattr(indexer, "shape") and (
+            (indexer.shape == (index.shape[0], 1))
+            or (indexer.shape == (1, index.shape[0]))
+        ):
             if isinstance(indexer, spmatrix):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
