@@ -22,7 +22,7 @@ def test_adata_unique_indices():
     obs_index = pd.Index(repeat("a", m), name="obs")
     var_index = pd.Index(repeat("b", n), name="var")
 
-<<<<<<< HEAD
+
 from anndata.compat import _clean_uns
 from anndata._io.utils import report_read_key_on_error, AnnDataReadError
 from anndata.utils import concatenate_uns
@@ -97,7 +97,6 @@ def test_concatenate_uns():
     uns = concatenate_uns(all_adata_uns, merge_uns="never")
     assert isinstance(uns, dict)
     assert len(uns) == 0
-=======
     adata = ad.AnnData(
         X=sparse.random(m, n, format="csr"),
         obs=gen_typed_df(m, index=obs_index),
@@ -128,4 +127,3 @@ def test_concatenate_uns():
 
     pd.testing.assert_index_equal(v.obsm["df"].index, v.obs_names)
     pd.testing.assert_index_equal(v.varm["df"].index, v.var_names)
->>>>>>> master
