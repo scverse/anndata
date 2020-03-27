@@ -1,10 +1,11 @@
 import collections.abc as cabc
 from functools import singledispatch
+from itertools import repeat
 from typing import Union, Sequence, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix
+from scipy.sparse import spmatrix, issparse
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
@@ -71,7 +72,14 @@ def _normalize_index(
         return indexer
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
-    elif isinstance(indexer, (Sequence, np.ndarray, pd.Index)):
+    elif isinstance(indexer, (Sequence, np.ndarray, pd.Index, spmatrix, np.matrix)):
+        if hasattr(indexer, "shape") and (
+            (indexer.shape == (index.shape[0], 1))
+            or (indexer.shape == (1, index.shape[0]))
+        ):
+            if isinstance(indexer, spmatrix):
+                indexer = indexer.toarray()
+            indexer = np.ravel(indexer)
         if not isinstance(indexer, (np.ndarray, pd.Index)):
             indexer = np.array(indexer)
         if issubclass(indexer.dtype.type, (np.integer, np.floating)):
@@ -99,14 +107,6 @@ def _normalize_index(
 
 
 def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
-    # handle indexing with boolean matrices
-    if (
-        isinstance(index, (spmatrix, np.ndarray))
-        and index.ndim == 2
-        and index.dtype.kind == "b"
-    ):
-        return index.nonzero()
-
     if not isinstance(index, tuple):
         return index, slice(None)
     elif len(index) == 2:
@@ -129,3 +129,37 @@ def _subset(a: Union[np.ndarray, spmatrix, pd.DataFrame], subset_idx: Index):
 @_subset.register(pd.DataFrame)
 def _subset_df(df: pd.DataFrame, subset_idx: Index):
     return df.iloc[subset_idx]
+
+
+def make_slice(idx, dimidx, n=2):
+    mut = list(repeat(slice(None), n))
+    mut[dimidx] = idx
+    return tuple(mut)
+
+
+def get_vector(adata, k, coldim, idxdim, layer=None):
+    # adata could be self if Raw and AnnData shared a parent
+    dims = ("obs", "var")
+    col = getattr(adata, coldim).columns
+    idx = getattr(adata, f"{idxdim}_names")
+
+    in_col = k in col
+    in_idx = k in idx
+
+    if (in_col + in_idx) == 2:
+        raise ValueError(
+            f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
+        )
+    elif (in_col + in_idx) == 0:
+        raise KeyError(
+            f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
+        )
+    elif in_col:
+        return getattr(adata, coldim)[k].values
+    elif in_idx:
+        selected_dim = dims.index(idxdim)
+        idx = adata._normalize_indices(make_slice(k, selected_dim))
+        a = adata._get_X(layer=layer)[idx]
+    if issparse(a):
+        a = a.toarray()
+    return np.ravel(a)

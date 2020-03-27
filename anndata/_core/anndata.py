@@ -23,8 +23,9 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from .raw import Raw
-from .index import _normalize_indices, _subset, Index, Index1D
+from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager
+from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
     AxisArraysView,
@@ -37,7 +38,6 @@ from .views import (
     ArrayView,
     DictView,
     DataFrameView,
-    ViewArgs,
     as_view,
     _resolve_idxs,
 )
@@ -45,7 +45,16 @@ from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous, concatenate_uns
 from ..logging import anndata_logger as logger
-from ..compat import ZarrArray, ZappyArray, DaskArray, Literal
+from ..compat import (
+    ZarrArray,
+    ZappyArray,
+    DaskArray,
+    Literal,
+    _slice_uns_sparse_matrices,
+    _move_adj_mtx,
+    _overloaded_uns,
+    OverloadedDict,
+)
 
 
 class StorageType(Enum):
@@ -340,11 +349,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # hackish solution here, no copy should be necessary
-        uns_new = deepcopy(self._adata_ref._uns)
-        # need to do the slicing before setting the updated self._n_obs, self._n_vars
-        self._n_obs = self._adata_ref.n_obs  # use the original n_obs here
-        self._slice_uns_sparse_matrices_inplace(uns_new, self._oidx)
+        # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
+        uns_new = _slice_uns_sparse_matrices(
+            adata_ref._uns, self._oidx, adata_ref.n_obs
+        )
         # fix categories
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
         self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
@@ -394,6 +402,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # various ways of initializing the data
         # ----------------------------------------------------------------------
 
+        # If X is a data frame, we store its indices for verification
+        x_indices = []
+
         # init from file
         if filename is not None:
             self.file = AnnDataFileManager(self, filename, filemode)
@@ -421,16 +432,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
+                # to verify index matching, we wait until obs and var are DataFrames
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
-                else:
-                    if not X.index.equals(obs.index):
-                        raise ValueError("Index of obs must match index of X.")
+                elif not isinstance(X.index, pd.RangeIndex):
+                    x_indices.append(("obs", "index", X.index))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
-                else:
-                    if not X.columns.equals(var.index):
-                        raise ValueError("Index of var must match columns of X.")
+                elif not isinstance(X.columns, pd.RangeIndex):
+                    x_indices.append(("var", "columns", X.columns))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -481,13 +491,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         raise ValueError("`shape` is inconsistent with `var`")
 
         # annotations
-        self._obs = _gen_dataframe(
-            obs, self._n_obs, ["obs_names", "row_names", "smp_names"]
-        )
+        self._obs = _gen_dataframe(obs, self._n_obs, ["obs_names", "row_names"])
         self._var = _gen_dataframe(var, self._n_vars, ["var_names", "col_names"])
 
+        # now we can verify if indices match!
+        for attr_name, x_name, idx in x_indices:
+            attr = getattr(self, attr_name)
+            if isinstance(attr.index, pd.RangeIndex):
+                attr.index = idx
+            elif not idx.equals(attr.index):
+                raise ValueError(f"Index of {attr_name} must match {x_name} of X.")
+
         # unstructured annotations
-        self._uns = uns or OrderedDict()
+        self.uns = uns or OrderedDict()
 
         # TODO: Think about consequences of making obsm a group in hdf
         self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
@@ -495,6 +511,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
         self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
+
+        # Backwards compat for connectivities matrices in uns["neighbors"]
+        _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
 
         self._check_dimensions()
         self._check_uniqueness()
@@ -591,7 +610,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
-                ViewArgs(self, "X"),
+                ElementRef(self, "X"),
             )
         else:
             X = self._X
@@ -803,7 +822,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         getattr(self, attr).index = value
         for v in getattr(self, f"{attr}m").values():
             if isinstance(v, pd.DataFrame):
-                v.index = value.copy()
+                v.index = value
 
     @property
     def obs(self) -> pd.DataFrame:
@@ -854,7 +873,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def uns(self) -> MutableMapping:
         """Unstructured annotation (ordered dictionary)."""
-        return self._uns
+        uns = _overloaded_uns(self)
+        if self.is_view:
+            uns = DictView(uns, view_args=(self, "uns"))
+        return uns
 
     @uns.setter
     def uns(self, value: MutableMapping):
@@ -862,6 +884,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
             )
+        if isinstance(value, (OverloadedDict, DictView)):
+            value = value.copy()
         if self.is_view:
             self._init_as_actual(self.copy())
         self._uns = value
@@ -1192,35 +1216,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     _sanitize = strings_to_categoricals  # backwards compat
 
-    def _slice_uns_sparse_matrices_inplace(
-        self, uns: MutableMapping, oidx: Index1D, keys: Tuple[str, ...] = ()
-    ):
-        # TODO: remove
-        # slice sparse spatrices of n_obs × n_obs in self.uns
-        if not (
-            isinstance(oidx, slice)
-            and oidx.start is None
-            and oidx.step is None
-            and oidx.stop is None
-        ):
-            for k, v in uns.items():
-                # treat nested dicts
-                if isinstance(v, Mapping):
-                    self._slice_uns_sparse_matrices_inplace(v, oidx, (*keys, k))
-                if isinstance(v, sparse.spmatrix) and v.shape == (
-                    self.n_obs,
-                    self.n_obs,
-                ):
-                    # path = "".join(f"['{key}']" for key in (*keys, k))
-                    # warnings.warn(
-                    #     f"During AnnData slicing, found matrix at .obs{path} "
-                    #     "that happens to be dimensioned at n_obs×n_obs "
-                    #     f"({self.n_obs}×{self.n_obs}). "
-                    #     "This slicing behavior will soon go away.",
-                    #     DeprecationWarning,
-                    # )
-                    uns[k] = v.tocsc()[:, oidx].tocsr()[oidx, :]
-
     def _inplace_subset_var(self, index: Index1D):
         """\
         Inplace subsetting along variables dimension.
@@ -1356,15 +1351,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-
-        if k in self.obs:
-            return self.obs[k].values
-        else:
-            idx = self._normalize_indices((slice(None), k))
-            a = self._get_X(layer=layer)[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
+        return get_vector(self, k, "obs", "var", layer=layer)
 
     def var_vector(self, k, *, layer: Optional[str] = None) -> np.ndarray:
         """\
@@ -1396,15 +1383,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-
-        if k in self.var:
-            return self.var[k].values
-        else:
-            idx = self._normalize_indices((k, slice(None)))
-            a = self._get_X(layer=layer)[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
+        return get_vector(self, k, "var", "obs", layer=layer)
 
     @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):
@@ -1452,9 +1431,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 var=self.var.copy(),
                 # deepcopy on DictView does not work and is unnecessary
                 # as uns was copied already before
-                uns=self.uns.copy()
+                uns=self._uns.copy()
                 if isinstance(self.uns, DictView)
-                else deepcopy(self.uns),
+                else deepcopy(self._uns),
                 obsm=self.obsm.copy(),
                 varm=self.varm.copy(),
                 obsp=self.obsp.copy(),
@@ -1910,12 +1889,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return new_adata
 
     def var_names_make_unique(self, join: str = "-"):
-        self.var.index = utils.make_index_unique(self.var.index, join)
+        # Important to go through the setter so obsm dataframes are updated too
+        self.var_names = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def obs_names_make_unique(self, join: str = "-"):
-        self.obs.index = utils.make_index_unique(self.obs.index, join)
+        # Important to go through the setter so obsm dataframes are updated too
+        self.obs_names = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 

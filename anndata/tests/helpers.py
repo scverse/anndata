@@ -2,6 +2,7 @@ from functools import singledispatch, wraps
 from string import ascii_letters
 from typing import Tuple
 from collections.abc import Mapping
+import warnings
 
 import h5py
 import numpy as np
@@ -175,6 +176,21 @@ def array_bool_subset(index, min_size=2):
     return b
 
 
+def matrix_bool_subset(index, min_size=2):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", PendingDeprecationWarning)
+        indexer = np.matrix(
+            array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
+        )
+    return indexer
+
+
+def spmatrix_bool_subset(index, min_size=2):
+    return sparse.csr_matrix(
+        array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
+    )
+
+
 def array_subset(index, min_size=2):
     if len(index) < min_size:
         raise ValueError(
@@ -217,6 +233,8 @@ def single_subset(index):
         single_subset,
         array_int_subset,
         array_bool_subset,
+        matrix_bool_subset,
+        spmatrix_bool_subset,
     ]
 )
 def subset_func(request):

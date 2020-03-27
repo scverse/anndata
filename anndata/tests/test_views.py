@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import anndata as ad
+from anndata._core.index import _normalize_index
 
 from anndata.tests.helpers import (
     gen_adata,
@@ -37,6 +38,11 @@ uns_dict = dict(oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"])
 
 
 subset_func2 = subset_func
+
+
+class NDArraySubclass(np.ndarray):
+    def view(self, dtype=None, typ=None):
+        return self
 
 
 @pytest.fixture
@@ -254,7 +260,9 @@ def test_not_set_subset_X(matrix_type, subset_func):
 
     subset = adata[:, subset_idx]
 
-    internal_idx = subset_func(np.arange(subset.X.shape[1]))
+    internal_idx = _normalize_index(
+        subset_func(np.arange(subset.X.shape[1])), subset.var_names
+    )
     assert subset.is_view
     subset.X[:, internal_idx] = 1
     assert not subset.is_view
@@ -289,7 +297,10 @@ def test_set_subset_obsm(adata, subset_func):
             break
     subset = adata[subset_idx, :]
 
-    internal_idx = subset_func(np.arange(subset.obsm["o"].shape[0]))
+    internal_idx = _normalize_index(
+        subset_func(np.arange(subset.obsm["o"].shape[0])), subset.obs_names
+    )
+
     assert subset.is_view
     subset.obsm["o"][internal_idx] = 1
     assert not subset.is_view
@@ -308,7 +319,10 @@ def test_set_subset_varm(adata, subset_func):
             break
     subset = adata[:, subset_idx]
 
-    internal_idx = subset_func(np.arange(subset.varm["o"].shape[0]))
+    internal_idx = _normalize_index(
+        subset_func(np.arange(subset.varm["o"].shape[0])), subset.var_names
+    )
+
     assert subset.is_view
     subset.varm["o"][internal_idx] = 1
     assert not subset.is_view
@@ -450,3 +464,13 @@ def test_double_index(subset_func, subset_func2):
     assert np.all(asarray(v1.X) == asarray(v2.X))
     assert np.all(v1.obs == v2.obs)
     assert np.all(v1.var == v2.var)
+
+
+def test_view_retains_ndarray_subclass():
+    adata = ad.AnnData(np.zeros((10, 10)))
+    adata.obsm["foo"] = np.zeros((10, 5)).view(NDArraySubclass)
+
+    view = adata[:5, :]
+
+    assert isinstance(view.obsm["foo"], NDArraySubclass)
+    assert view.obsm["foo"].shape == (5, 5)

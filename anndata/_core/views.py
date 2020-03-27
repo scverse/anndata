@@ -1,22 +1,16 @@
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import reduce, singledispatch, wraps
-from typing import Any, KeysView, Optional, Sequence, Tuple, NamedTuple
+from typing import Any, KeysView, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
-from . import anndata
+from .access import ElementRef
 from ..logging import anndata_logger as logger
 from ..compat import ZappyArray
-
-
-class ViewArgs(NamedTuple):
-    parent: "anndata.AnnData"
-    attrname: str
-    keys: Tuple[str, ...] = ()
 
 
 class _SetItemMixin:
@@ -54,7 +48,7 @@ class _ViewMixin(_SetItemMixin):
         **kwargs,
     ):
         if view_args is not None:
-            view_args = ViewArgs(*view_args)
+            view_args = ElementRef(*view_args)
         self._view_args = view_args
         super().__init__(*args, **kwargs)
 
@@ -69,9 +63,10 @@ class ArrayView(_SetItemMixin, np.ndarray):
         input_array: Sequence[Any],
         view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
     ):
-        arr = np.asarray(input_array).view(cls)
+        arr = np.asanyarray(input_array).view(cls)
+
         if view_args is not None:
-            view_args = ViewArgs(*view_args)
+            view_args = ElementRef(*view_args)
         arr._view_args = view_args
         return arr
 

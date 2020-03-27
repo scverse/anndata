@@ -1,8 +1,14 @@
+from copy import deepcopy
+from functools import reduce
 from typing import Union, Mapping, MutableMapping
+from warnings import warn
 
+from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
+from ._overloaded_dict import _overloaded_uns, OverloadedDict
+from .._core.index import _subset
 
 # try importing zarr, dask, and zappy
 from packaging import version
@@ -104,6 +110,11 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
+#############################
+# Dealing with uns
+#############################
+
+
 def _clean_uns(d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]]):
     """
     Compat function for when categorical keys were stored in uns.
@@ -129,3 +140,59 @@ def _clean_uns(d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]])
             k_to_delete.add(cats_name)
     for cats_name in k_to_delete:
         del d["uns"][cats_name]
+
+
+def _move_adj_mtx(d):
+    """
+    Read-time fix for moving adjacency matrices from uns to obsp
+    """
+    n = d.get("uns", {}).get("neighbors", {})
+    obsp = d.setdefault("obsp", {})
+
+    for k in ("distances", "connectivities"):
+        if (
+            (k in n)
+            and isinstance(n[k], (spmatrix, np.ndarray))
+            and len(n[k].shape) == 2
+        ):
+            warn(
+                f"Moving element from .uns['neighbors']['{k}'] to .obsp['{k}'].\n\n"
+                "This is where adjacency matrices should go now.",
+                FutureWarning,
+            )
+            obsp[k] = n.pop(k)
+
+
+def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
+    """Find paths to sparse matrices with shape (n, n)."""
+    for k, v in d.items():
+        if isinstance(v, Mapping):
+            _find_sparse_matrices(v, n, (*keys, k), paths)
+        elif isinstance(v, spmatrix) and v.shape == (n, n):
+            paths.append((*keys, k))
+    return paths
+
+
+def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs: int):
+    """slice sparse spatrices of n_obs × n_obs in self.uns"""
+    if isinstance(oidx, slice) and len(range(*oidx.indices(orig_n_obs))) == orig_n_obs:
+        return uns  # slice of entire dimension is a no-op
+
+    paths = _find_sparse_matrices(uns, orig_n_obs, (), [])
+
+    if not paths:
+        return uns
+
+    uns = deepcopy(uns)
+    for path in paths:
+        str_path = "".join(f"['{key}']" for key in path)
+        warn(
+            f"During AnnData slicing, found matrix at .uns{str_path} that happens"
+            f" to be dimensioned at n_obs×n_obs ({orig_n_obs}×{orig_n_obs}).\n\n"
+            "These matrices should now be stored in the .obsp attribute.\n"
+            "This slicing behavior will be removed in anndata 0.8.",
+            FutureWarning,
+        )
+        d = reduce(lambda d, k: d[k], path[:-1], uns)
+        d[path[-1]] = _subset(d[path[-1]], (oidx, oidx))
+    return uns
