@@ -1881,8 +1881,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if not obs.index.is_unique:
             logger.info("Or pass `index_unique!=None` to `.concatenate`.")
 
+        import copy
         # concatenate uns
-        new_adata.uns = concatenate_uns([a.uns for a in all_adatas], merge_uns)
+        new_adata.uns = concatenate_uns([copy.deepcopy(a.uns) for a in all_adatas], merge_uns)
 
         return new_adata
 
