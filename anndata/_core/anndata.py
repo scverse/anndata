@@ -1461,13 +1461,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
         index_unique: Optional[str] = "-",
-        concat_incomplete: bool = False,
         merge_uns: Literal[
             "if_clean",  # the default, throws an error on key collision, else just merges
             "always",  # ignores key collision, just overwrite earlier with later items
             "never",  # to avoid unwanted scanpy behavior, just return it empty
         ] = None,
-        merge_level=1,
     ) -> "AnnData":
         """\
         Concatenate along the observations axis.
