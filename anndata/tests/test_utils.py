@@ -53,6 +53,7 @@ def test_adata_unique_indices():
     pd.testing.assert_index_equal(v.obsm["df"].index, v.obs_names)
     pd.testing.assert_index_equal(v.varm["df"].index, v.var_names)
 
+
 def test_concatenate_uns():
     visium_1_uns = {
         "spatial": {
