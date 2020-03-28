@@ -549,7 +549,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             backed_at = f"backed at {str(self.filename)!r}"
         else:
             backed_at = ""
-        descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars} {backed_at}"
+        if self.raw is not None:
+            n_vars_raw = f"({self.raw.shape[1]})"
+        else:
+            n_vars_raw = ""
+        descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars}{n_vars_raw} {backed_at}"
         for attr in [
             "obs",
             "var",
