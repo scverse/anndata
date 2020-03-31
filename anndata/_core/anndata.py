@@ -41,7 +41,7 @@ from .views import (
     as_view,
     _resolve_idxs,
 )
-from .merge import merge_uns, UNS_STRATEGIES_TYPE
+from .merge import merge_uns
 from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
@@ -1461,7 +1461,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         join: str = "inner",
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
-        uns_compat: Optional[UNS_STRATEGIES_TYPE] = None,
+        uns_compat: Optional[str] = None,
         index_unique: Optional[str] = "-",
     ) -> "AnnData":
         """\

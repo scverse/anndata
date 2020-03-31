@@ -374,3 +374,8 @@ def test_concatenate_uns(uns1, uns2, compat2result):
 
     for compat, result in compat2result.items():
         assert uns_ad(uns1).concatenate([uns_ad(uns2)], uns_compat=compat).uns == result
+
+# Leaving out for now. See definition of these values for explanation
+# def test_concatenate_uns_types():
+#     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE
+#     assert set(UNS_STRATEGIES.keys()) == set(UNS_STRATEGIES_TYPE.__args__)
