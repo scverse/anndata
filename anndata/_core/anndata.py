@@ -41,6 +41,7 @@ from .views import (
     as_view,
     _resolve_idxs,
 )
+from .merge import merge_uns, UNS_STRATEGIES_TYPE
 from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
@@ -1460,6 +1461,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         join: str = "inner",
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
+        uns_compat: Optional[UNS_STRATEGIES_TYPE] = None,
         index_unique: Optional[str] = "-",
     ) -> "AnnData":
         """\
@@ -1480,6 +1482,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Add the batch annotation to :attr:`obs` using this key.
         batch_categories
             Use these as categories for the batch annotation. By default, use increasing numbers.
+        uns_compat
+            Strategy to use for merging entries of uns. These strategies are applied recusivley.
+            Currently implemented strategies include:
+
+            * `None`: The default. The concatenated object will just have an empty dict for `uns`.
+            * `"common"`: Only entries which have the same value in all AnnData objects are kept.
+            * `"unique"`: Only entries which have one unique value in all AnnData objects are kept.
+            * `"first"`: The first non-missing value is used.
         index_unique
             Make the index unique by joining the existing index names with the
             batch category, using `index_unique='-'`, for instance. Provide
@@ -1849,10 +1859,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     sparse_format_l = sparse_layers[0].getformat()
                     layers[key] = layers[key].asformat(sparse_format_l)
 
+        # New uns
+        uns = merge_uns([a.uns for a in all_adatas], uns_compat)
+
         new_adata = (
-            AnnData(X, obs, var, obsm=obsm, layers=layers)
+            AnnData(X, obs, var, obsm=obsm, layers=layers, uns=uns)
             if join == "inner"
-            else AnnData(X, obs, var, obsm=obsm)
+            else AnnData(X, obs, var, obsm=obsm, uns=uns)
         )
 
         # raw

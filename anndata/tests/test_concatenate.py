@@ -293,3 +293,84 @@ def test_concatenate_with_raw():
     assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert adata_all.raw is None
+
+
+def test_merge_unique():
+    from anndata._core.merge import merge_unique
+
+    # Simple cases
+    assert merge_unique([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
+    assert merge_unique([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
+    assert merge_unique([{"a": {"b": "c"}}, {"a": {"b": "d"}}]) == {}
+    assert merge_unique([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {"a": {"b": "c"}}
+
+    assert merge_unique([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": {"b": {"c": {"d": "e"}}}}
+    assert merge_unique([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "f"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {}
+
+    assert merge_unique([{"a": 1}, {"b": 2}]) == {"a": 1, "b": 2}
+    assert merge_unique([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {"a": 1}
+
+    # Test equivalency between arrays and lists
+    assert list(merge_unique([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]) == list(np.ones(5))
+    assert merge_unique([{"a": np.ones(5)}, {"a": list(np.ones(4))}]) == {}
+
+
+def test_merge_common():
+    from anndata._core.merge import merge_common
+    # Same as unique for a number of cases:
+    assert merge_common([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
+    assert merge_common([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
+    assert merge_common([{"a": {"b": "c"}}, {"a": {"b": "d"}}]) == {}
+    assert merge_common([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {"a": {"b": "c"}}
+
+    assert merge_common([{"a": {"b": "c"}, "d": "e"}, {"a": {"b": "c"}, "d": 2}]) == {"a": {"b": "c"}}
+    assert merge_common([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": {"b": {"c": {"d": "e"}}}}
+
+    assert merge_common([{"a": 1}, {"b": 2}]) == {}
+    assert merge_common([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {}
+
+    # Test equivalency between arrays and lists
+    assert list(merge_common([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]) == list(np.ones(5))
+
+
+def test_merge_first():
+    from anndata._core.merge import merge_first
+    assert merge_first([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
+    assert merge_first([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
+    assert merge_first([{"a": 1}, {"a": 2}]) == {"a": 1}
+
+    assert merge_first([{"a": 1}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": 1}
+    assert merge_first([{"a": {"b": {"c": {"d": "e"}}}}, {"a": 1}]) == {"a": {"b": {"c": {"d": "e"}}}}
+
+
+@pytest.mark.parametrize(
+    ["uns1", "uns2", "compat2result"],
+    [
+        pytest.param(
+            {"a": 1},
+            {"a": 2},
+            {None: {}, "first": {"a": 1}, "unique": {}, "common": {}}
+        ),
+        pytest.param(
+            {"a": 1},
+            {"b": 2},
+            {None: {}, "first": {"a": 1, "b": 2}, "unique": {"a": 1, "b": 2}, "common": {}}
+        ),
+        pytest.param(
+            {"a": {"b": 1, "c": {"d": 3}}},
+            {"a": {"b": 1, "c": {"e": 4}}},
+            {
+                None: {},
+                "first": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
+                "unique": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
+                "common": {"a": {"b": 1}}
+            }
+        ),
+    ]
+)
+def test_concatenate_uns(uns1, uns2, compat2result):
+    def uns_ad(uns):
+        return AnnData(np.zeros((10, 10)), uns=uns)
+
+    for compat, result in compat2result.items():
+        assert uns_ad(uns1).concatenate([uns_ad(uns2)], uns_compat=compat).uns == result
