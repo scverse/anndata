@@ -73,81 +73,39 @@ def first(vals):
 # Merging
 ###################
 
-
-def merge_unique(ds):
+def merge_nested(ds, keys_join, value_join):
     out = {}
-    for k in union_keys(ds):
-        v = _merge_unique(ds, k)
+    for k in keys_join(ds):
+        v = _merge_nested(ds, k, keys_join, value_join)
         if not_missing(v):
             out[k] = v
     return out
 
 
-def _merge_unique(ds, k):
-    vals = [d.get(k, MissingVal) for d in ds if k in d if not_missing(d)]
-    vals = list(filter(not_missing, vals))
+def _merge_nested(ds, k, keys_join, value_join):
+    vals = [d[k] for d in ds if k in d]
     if len(vals) == 0:
         return MissingVal
-    elif len(vals) == 1:
-        return vals[0]
     elif all(isinstance(v, Mapping) for v in vals):
-        new_map = merge_unique(vals)
+        new_map = merge_nested(vals, keys_join, value_join)
         if len(new_map) == 0:
             return MissingVal
         else:
             return new_map
     else:
-        return unique_value(vals)
+        return value_join(vals)
+
+
+def merge_unique(ds):
+    return merge_nested(ds, union_keys, unique_value)
 
 
 def merge_common(ds):
-    out = {}
-    for k in intersect_keys(ds):
-        v = _merge_common(ds, k)
-        if not is_missing(v):
-            out[k] = v
-    return out
-
-
-def _merge_common(ds, k):
-    vals = [d[k] for d in ds]
-    if len(vals) == 1:
-        return vals[0]
-    elif all(isinstance(v, Mapping) for v in vals):
-        new_map = merge_common(vals)
-        if len(new_map) == 0:
-            return MissingVal  # Maybe this should return an empty dict?
-        else:
-            return new_map
-    else:
-        return unique_value(vals)
+    return merge_nested(ds, intersect_keys, unique_value)
 
 
 def merge_first(ds):
-    out = {}
-    for k in union_keys(ds):
-        v = _merge_first(ds, k)
-        if not is_missing(v):
-            out[k] = v
-    return out
-
-
-def _merge_first(ds, k):
-    vals = [d.get(k, MissingVal) for d in ds if k in d if not_missing(d)]
-    vals = list(filter(not_missing, vals))
-    if len(vals) == 0:
-        return MissingVal
-    elif len(vals) == 1:
-        return vals[0]
-    elif all(isinstance(v, Mapping) for v in vals):
-        new_map = merge_first(vals)
-        if len(new_map) == 0:
-            return MissingVal
-        else:
-            return new_map
-    else:
-        return first(vals)
-
+    return merge_nested(ds, union_keys, first)
 
 ######################
 # Interface
