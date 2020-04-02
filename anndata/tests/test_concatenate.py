@@ -444,7 +444,7 @@ def gen_concat_params(unss, compat2result):
 
 
 @pytest.mark.parametrize(
-    ["unss", "compat", "result", "value_gen"],
+    ["unss", "merge_strategy", "result", "value_gen"],
     chain(
         gen_concat_params(
             [{"a": 1}, {"a": 2}],
@@ -490,7 +490,7 @@ def gen_concat_params(unss, compat2result):
         ),
     ),
 )
-def test_concatenate_uns(unss, compat, result, value_gen):
+def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     """
     Test that concatenation works out for different strategies and sets of values.
 
@@ -508,11 +508,11 @@ def test_concatenate_uns(unss, compat, result, value_gen):
         to `[{"a": [1, 2, 3]}, {"a": [1, 2, 3]}]`.
     """
     # So we can see what the initial pattern was meant to be
-    print(compat, "\n", unss, "\n", result)
+    print(merge_strategy, "\n", unss, "\n", result)
     result, *unss = permute_nested_values([result] + unss, value_gen)
     adatas = [uns_ad(uns) for uns in unss]
     assert_equal(
-        adatas[0].concatenate(adatas[1:], uns_compat=compat).uns,
+        adatas[0].concatenate(adatas[1:], uns_merge=merge_strategy).uns,
         result,
         elem_name="uns",
     )
