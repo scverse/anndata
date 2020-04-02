@@ -1487,7 +1487,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Currently implemented strategies include:
 
             * `None`: The default. The concatenated object will just have an empty dict for `uns`.
-            * `"common"`: Only entries which have the same value in all AnnData objects are kept.
+            * `"same"`: Only entries which have the same value in all AnnData objects are kept.
             * `"unique"`: Only entries which have one unique value in all AnnData objects are kept.
             * `"first"`: The first non-missing value is used.
         index_unique

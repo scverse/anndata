@@ -113,7 +113,7 @@ def merge_unique(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, union_keys, unique_value)
 
 
-def merge_common(ds: Collection[Mapping]) -> Mapping:
+def merge_same(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, intersect_keys, unique_value)
 
 
@@ -127,10 +127,10 @@ def merge_first(ds: Collection[Mapping]) -> Mapping:
 
 # Leaving out for now, it's ugly in the rendered docs and would be adding a dependency.
 # from typing_extensions import Literal
-# UNS_STRATEGIES_TYPE = Literal[None, "common", "unique", "first"]
+# UNS_STRATEGIES_TYPE = Literal[None, "same", "unique", "first"]
 UNS_STRATEGIES = {
     None: lambda x: {},
-    "common": merge_common,
+    "same": merge_same,
     "unique": merge_unique,
     "first": merge_first,
 }

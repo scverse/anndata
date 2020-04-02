@@ -315,22 +315,22 @@ def test_merge_unique():
     assert merge_unique([{"a": np.ones(5)}, {"a": list(np.ones(4))}]) == {}
 
 
-def test_merge_common():
-    from anndata._core.merge import merge_common
+def test_merge_same():
+    from anndata._core.merge import merge_same
     # Same as unique for a number of cases:
-    assert merge_common([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
-    assert merge_common([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
-    assert merge_common([{"a": {"b": "c"}}, {"a": {"b": "d"}}]) == {}
-    assert merge_common([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {"a": {"b": "c"}}
+    assert merge_same([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
+    assert merge_same([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
+    assert merge_same([{"a": {"b": "c"}}, {"a": {"b": "d"}}]) == {}
+    assert merge_same([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {"a": {"b": "c"}}
 
-    assert merge_common([{"a": {"b": "c"}, "d": "e"}, {"a": {"b": "c"}, "d": 2}]) == {"a": {"b": "c"}}
-    assert merge_common([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": {"b": {"c": {"d": "e"}}}}
+    assert merge_same([{"a": {"b": "c"}, "d": "e"}, {"a": {"b": "c"}, "d": 2}]) == {"a": {"b": "c"}}
+    assert merge_same([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": {"b": {"c": {"d": "e"}}}}
 
-    assert merge_common([{"a": 1}, {"b": 2}]) == {}
-    assert merge_common([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {}
+    assert merge_same([{"a": 1}, {"b": 2}]) == {}
+    assert merge_same([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {}
 
     # Test equivalency between arrays and lists
-    assert list(merge_common([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]) == list(np.ones(5))
+    assert list(merge_same([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]) == list(np.ones(5))
 
 
 def test_merge_first():
@@ -349,12 +349,12 @@ def test_merge_first():
         pytest.param(
             {"a": 1},
             {"a": 2},
-            {None: {}, "first": {"a": 1}, "unique": {}, "common": {}}
+            {None: {}, "first": {"a": 1}, "unique": {}, "same": {}}
         ),
         pytest.param(
             {"a": 1},
             {"b": 2},
-            {None: {}, "first": {"a": 1, "b": 2}, "unique": {"a": 1, "b": 2}, "common": {}}
+            {None: {}, "first": {"a": 1, "b": 2}, "unique": {"a": 1, "b": 2}, "same": {}}
         ),
         pytest.param(
             {"a": {"b": 1, "c": {"d": 3}}},
@@ -363,7 +363,7 @@ def test_merge_first():
                 None: {},
                 "first": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
                 "unique": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
-                "common": {"a": {"b": 1}}
+                "same": {"a": {"b": 1}}
             }
         ),
     ]
