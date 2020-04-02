@@ -2,6 +2,7 @@
 Code for merging/ concatenating AnnData objects.
 """
 from collections.abc import Mapping
+from copy import deepcopy
 from functools import singledispatch, reduce
 from typing import Callable, Collection, TypeVar, Union
 
@@ -37,8 +38,13 @@ def equal(a, b) -> bool:
 
 @equal.register(sparse.spmatrix)
 def equal_sparse(a, b) -> bool:
+    # It's a weird api, don't blame me
     if isinstance(b, sparse.spmatrix):
-        return len((a != b).data) == 0
+        comp = a != b
+        if isinstance(comp, bool):
+            return not comp
+        else:
+            return len((a != b).data) == 0
     else:
         return False
 
@@ -97,7 +103,7 @@ def merge_nested(ds: Collection[Mapping], keys_join: Callable, value_join: Calla
     for k in keys_join(ds):
         v = _merge_nested(ds, k, keys_join, value_join)
         if not_missing(v):
-            out[k] = v
+            out[k] = deepcopy(v)
     return out
 
 
