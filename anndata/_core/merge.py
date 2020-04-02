@@ -19,8 +19,6 @@ T = TypeVar("T")
 class MissingVal:
     """Represents a missing value."""
 
-    pass
-
 
 def is_missing(v) -> bool:
     return v is MissingVal
