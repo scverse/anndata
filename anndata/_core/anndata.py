@@ -1461,7 +1461,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         join: str = "inner",
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
-        uns_compat: Optional[str] = None,
+        uns_merge: Optional[str] = None,
         index_unique: Optional[str] = "-",
     ) -> "AnnData":
         """\
@@ -1482,7 +1482,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Add the batch annotation to :attr:`obs` using this key.
         batch_categories
             Use these as categories for the batch annotation. By default, use increasing numbers.
-        uns_compat
+        uns_merge
             Strategy to use for merging entries of uns. These strategies are applied recusivley.
             Currently implemented strategies include:
 
@@ -1862,7 +1862,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     layers[key] = layers[key].asformat(sparse_format_l)
 
         # New uns
-        uns = merge_uns([a.uns for a in all_adatas], uns_compat)
+        uns = merge_uns([a.uns for a in all_adatas], uns_merge)
 
         new_adata = (
             AnnData(X, obs, var, obsm=obsm, layers=layers, uns=uns)
