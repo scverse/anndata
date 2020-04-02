@@ -1,12 +1,17 @@
-from itertools import chain
+from collections.abc import Hashable
+from copy import deepcopy
+from itertools import chain, product
+from functools import partial
 
 import numpy as np
 from numpy import ma
 import pytest
 from scipy import sparse
+from boltons.iterutils import research, remap, default_exit
 
 
 from anndata import AnnData, Raw
+from anndata.tests import helpers
 from anndata.tests.helpers import assert_equal
 
 
@@ -374,17 +379,72 @@ def test_merge_first():
     }
 
 
+# Helpers for test_concatenate_uns
+
+
 def uns_ad(uns):
     return AnnData(np.zeros((10, 10)), uns=uns)
 
 
+def map_values(mapping, path, key, old_parent, new_parent, new_items):
+    ret = default_exit(path, key, old_parent, new_parent, new_items)
+    for k, v in ret.items():
+        if isinstance(v, Hashable) and v in mapping:
+            ret[k] = mapping[v]
+    return ret
+
+
+def permute_nested_values(dicts: "List[dict]", gen_val: "Callable[[int], Any]"):
+    """
+    This function permutes the values of a nested mapping, for testing that out merge
+    method work regardless of the values types.
+
+    Assumes the intial dictionary had integers for values.
+    """
+    dicts = deepcopy(dicts)
+    initial_values = [
+        x[1] for x in research(dicts, query=lambda p, k, v: isinstance(v, int))
+    ]
+    mapping = {k: gen_val(k) for k in initial_values}
+    return [remap(d, exit=partial(map_values, mapping)) for d in dicts]
+
+
+def gen_df(n):
+    return helpers.gen_typed_df(n)
+
+
+def gen_array(n):
+    return np.random.randn(n)
+
+
+def gen_list(n):
+    return list(gen_array(n))
+
+
+def gen_sparse(n):
+    return sparse.random(np.random.randint(1, 100), np.random.randint(1, 100))
+
+
+def gen_something(n):
+    options = [gen_df, gen_array, gen_list, gen_sparse]
+    return np.random.choice(options)(n)
+
+
 def gen_concat_params(unss, compat2result):
-    for k, v in compat2result.items():
-        yield pytest.param(unss, k, v)
+    value_generators = [
+        lambda x: x,
+        gen_df,
+        gen_array,
+        gen_list,
+        gen_sparse,
+        gen_something,
+    ]
+    for gen, (mode, result) in product(value_generators, compat2result.items()):
+        yield pytest.param(unss, mode, result, gen)
 
 
 @pytest.mark.parametrize(
-    ["unss", "compat", "result"],
+    ["unss", "compat", "result", "value_gen"],
     chain(
         gen_concat_params(
             [{"a": 1}, {"a": 2}],
@@ -420,11 +480,42 @@ def gen_concat_params(unss, compat2result):
                 "only": {"c": 3, "d": 4},
             },
         ),
+        gen_concat_params(
+            [{"a": i} for i in range(15)],
+            {None: {}, "first": {"a": 0}, "unique": {}, "same": {}, "only": {},},
+        ),
+        gen_concat_params(
+            [{"a": 1} for i in range(10)] + [{"a": 2}],
+            {None: {}, "first": {"a": 1}, "unique": {}, "same": {}, "only": {},},
+        ),
     ),
 )
-def test_concatenate_uns(unss, compat, result):
+def test_concatenate_uns(unss, compat, result, value_gen):
+    """
+    Test that concatenation works out for different strategies and sets of values.
+
+    Params
+    ------
+    unss
+        Set of patterns for values in uns.
+    compat
+        Strategy to use for merging uns.
+    result
+        Pattern we expect to see for the given input and strategy.
+    value_gen
+        Maps values in unss and results to another set of values. This is for checking that
+        we're comparing values correctly. For example `[{"a": 1}, {"a": 1}]` may get mapped
+        to `[{"a": [1, 2, 3]}, {"a": [1, 2, 3]}]`.
+    """
+    # So we can see what the initial pattern was meant to be
+    print(compat, "\n", unss, "\n", result)
+    result, *unss = permute_nested_values([result] + unss, value_gen)
     adatas = [uns_ad(uns) for uns in unss]
-    assert adatas[0].concatenate(adatas[1:], uns_compat=compat).uns == result
+    assert_equal(
+        adatas[0].concatenate(adatas[1:], uns_compat=compat).uns,
+        result,
+        elem_name="uns",
+    )
 
 
 # Leaving out for now. See definition of these values for explanation
