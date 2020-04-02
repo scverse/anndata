@@ -1,3 +1,5 @@
+from itertools import chain
+
 import numpy as np
 from numpy import ma
 import pytest
@@ -302,78 +304,128 @@ def test_merge_unique():
     assert merge_unique([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
     assert merge_unique([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
     assert merge_unique([{"a": {"b": "c"}}, {"a": {"b": "d"}}]) == {}
-    assert merge_unique([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {"a": {"b": "c"}}
+    assert merge_unique([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {
+        "a": {"b": "c"}
+    }
 
-    assert merge_unique([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": {"b": {"c": {"d": "e"}}}}
-    assert merge_unique([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "f"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {}
+    assert merge_unique(
+        [{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]
+    ) == {"a": {"b": {"c": {"d": "e"}}}}
+    assert (
+        merge_unique(
+            [
+                {"a": {"b": {"c": {"d": "e"}}}},
+                {"a": {"b": {"c": {"d": "f"}}}},
+                {"a": {"b": {"c": {"d": "e"}}}},
+            ]
+        )
+        == {}
+    )
 
     assert merge_unique([{"a": 1}, {"b": 2}]) == {"a": 1, "b": 2}
-    assert merge_unique([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {"a": 1}
+    assert merge_unique([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {
+        "a": 1
+    }
 
     # Test equivalency between arrays and lists
-    assert list(merge_unique([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]) == list(np.ones(5))
+    assert list(
+        merge_unique([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]
+    ) == list(np.ones(5))
     assert merge_unique([{"a": np.ones(5)}, {"a": list(np.ones(4))}]) == {}
 
 
 def test_merge_same():
     from anndata._core.merge import merge_same
+
     # Same as unique for a number of cases:
     assert merge_same([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
     assert merge_same([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
     assert merge_same([{"a": {"b": "c"}}, {"a": {"b": "d"}}]) == {}
-    assert merge_same([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {"a": {"b": "c"}}
+    assert merge_same([{"a": {"b": "c", "d": "e"}}, {"a": {"b": "c", "d": "f"}}]) == {
+        "a": {"b": "c"}
+    }
 
-    assert merge_same([{"a": {"b": "c"}, "d": "e"}, {"a": {"b": "c"}, "d": 2}]) == {"a": {"b": "c"}}
-    assert merge_same([{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": {"b": {"c": {"d": "e"}}}}
+    assert merge_same([{"a": {"b": "c"}, "d": "e"}, {"a": {"b": "c"}, "d": 2}]) == {
+        "a": {"b": "c"}
+    }
+    assert merge_same(
+        [{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]
+    ) == {"a": {"b": {"c": {"d": "e"}}}}
 
     assert merge_same([{"a": 1}, {"b": 2}]) == {}
     assert merge_same([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {}
 
     # Test equivalency between arrays and lists
-    assert list(merge_same([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]) == list(np.ones(5))
+    assert list(merge_same([{"a": np.ones(5)}, {"a": list(np.ones(5))}])["a"]) == list(
+        np.ones(5)
+    )
 
 
 def test_merge_first():
     from anndata._core.merge import merge_first
+
     assert merge_first([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
     assert merge_first([{"a": {"b": "c"}}, {"a": {"b": "c"}}]) == {"a": {"b": "c"}}
     assert merge_first([{"a": 1}, {"a": 2}]) == {"a": 1}
 
     assert merge_first([{"a": 1}, {"a": {"b": {"c": {"d": "e"}}}}]) == {"a": 1}
-    assert merge_first([{"a": {"b": {"c": {"d": "e"}}}}, {"a": 1}]) == {"a": {"b": {"c": {"d": "e"}}}}
+    assert merge_first([{"a": {"b": {"c": {"d": "e"}}}}, {"a": 1}]) == {
+        "a": {"b": {"c": {"d": "e"}}}
+    }
+
+
+def uns_ad(uns):
+    return AnnData(np.zeros((10, 10)), uns=uns)
+
+
+def gen_concat_params(unss, compat2result):
+    for k, v in compat2result.items():
+        yield pytest.param(unss, k, v)
 
 
 @pytest.mark.parametrize(
-    ["uns1", "uns2", "compat2result"],
-    [
-        pytest.param(
-            {"a": 1},
-            {"a": 2},
-            {None: {}, "first": {"a": 1}, "unique": {}, "same": {}}
+    ["unss", "compat", "result"],
+    chain(
+        gen_concat_params(
+            [{"a": 1}, {"a": 2}],
+            {None: {}, "first": {"a": 1}, "unique": {}, "same": {}, "only": {}},
         ),
-        pytest.param(
-            {"a": 1},
-            {"b": 2},
-            {None: {}, "first": {"a": 1, "b": 2}, "unique": {"a": 1, "b": 2}, "same": {}}
+        gen_concat_params(
+            [{"a": 1}, {"b": 2}],
+            {
+                None: {},
+                "first": {"a": 1, "b": 2},
+                "unique": {"a": 1, "b": 2},
+                "same": {},
+                "only": {"a": 1, "b": 2},
+            },
         ),
-        pytest.param(
-            {"a": {"b": 1, "c": {"d": 3}}},
-            {"a": {"b": 1, "c": {"e": 4}}},
+        gen_concat_params(
+            [{"a": {"b": 1, "c": {"d": 3}}}, {"a": {"b": 1, "c": {"e": 4}}},],
             {
                 None: {},
                 "first": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
                 "unique": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
-                "same": {"a": {"b": 1}}
-            }
+                "same": {"a": {"b": 1}},
+                "only": {"a": {"c": {"d": 3, "e": 4}}},
+            },
         ),
-    ]
+        gen_concat_params(
+            [{"a": 1}, {"a": 1, "b": 2}, {"a": 1, "b": {"b.a": 1}, "c": 3}, {"d": 4},],
+            {
+                None: {},
+                "first": {"a": 1, "b": 2, "c": 3, "d": 4},
+                "unique": {"a": 1, "c": 3, "d": 4},
+                "same": {},
+                "only": {"c": 3, "d": 4},
+            },
+        ),
+    ),
 )
-def test_concatenate_uns(uns1, uns2, compat2result):
-    def uns_ad(uns):
-        return AnnData(np.zeros((10, 10)), uns=uns)
+def test_concatenate_uns(unss, compat, result):
+    adatas = [uns_ad(uns) for uns in unss]
+    assert adatas[0].concatenate(adatas[1:], uns_compat=compat).uns == result
 
-    for compat, result in compat2result.items():
-        assert uns_ad(uns1).concatenate([uns_ad(uns2)], uns_compat=compat).uns == result
 
 # Leaving out for now. See definition of these values for explanation
 # def test_concatenate_uns_types():
