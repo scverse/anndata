@@ -11,13 +11,13 @@ Merging `.uns`
 When concatenating `AnnData` objects there are a number of options available for how the entries of `uns` should be merged.
 These are:
 
-* The default, where no elements from `.uns` are kept.
-* `"same"`: Only elements which are the same in each of the objects are kept.
-* `"unique"`: Only elements for which there is one unique value are kept.
-* `"first"`: The first element seen at each from each position will be kept.
-* `"only"`: Only values which show up in one of the objects are kept.
+* The default, creates a new empty `dict` for `uns`.
+* `"same"`: Elements which are the same in each of the objects.
+* `"unique"`: Elements for which there is only one possible value.
+* `"first"`: The first element seen at each from each position.
+* `"only"`: Elements which show up in only one of the objects.
 
-This is a little abstract, so we'll look at some examples of this.
+This is a little abstract, so we'll look at some examples of this. Here's our setup:
 
     >>> from anndata import AnnData
     >>> import numpy as np
@@ -25,7 +25,7 @@ This is a little abstract, so we'll look at some examples of this.
     >>> b = AnnData(np.zeros((10, 10)), uns={"a": 1, "b": 3, "c": {"c.b": 4}})
     >>> c = AnnData(np.zeros((10, 10)), uns={"a": 1, "b": 4, "c": {"c.a": 3, "c.b": 4, "c.c": 5}})
 
-For quick reference, here are the results from using the different merge strategies.
+For quick reference, these are the results from each of the merge strategies.
 These are discussed in more depth below:
 
 ===========  =======================================================
@@ -73,5 +73,5 @@ An example of this would be a spatial dataset, where the images are stored in `u
 
 `uns["c"]["c.c"]` is the only value that is kept, since it is the only one which was specified in only one `uns`.
 
-    >>> dict(a.concatenate([b, c], uns_merge="only").uns)
-    {"a": 1, "b": 2, "c": {"c.b": 4, "c.c": 5, "c.a": 3}}
+    >>> dict(a.concatenate([b, c], uns_merge="first").uns)
+    {"a": 1, "b": 2, "c": {"c.b": 4, "c.c": 5, "c.
