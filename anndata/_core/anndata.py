@@ -1490,6 +1490,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             * `"same"`: Only entries which have the same value in all AnnData objects are kept.
             * `"unique"`: Only entries which have one unique value in all AnnData objects are kept.
             * `"first"`: The first non-missing value is used.
+            * `"only"`: A value is included if only one of the AnnData objects has a value at this
+              path.
         index_unique
             Make the index unique by joining the existing index names with the
             batch category, using `index_unique='-'`, for instance. Provide
