@@ -8,3 +8,4 @@ sklearn
 xlrd
 joblib
 black
+boltons
