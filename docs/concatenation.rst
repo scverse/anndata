@@ -74,4 +74,6 @@ An example of this would be a spatial dataset, where the images are stored in `u
 `uns["c"]["c.c"]` is the only value that is kept, since it is the only one which was specified in only one `uns`.
 
     >>> dict(a.concatenate([b, c], uns_merge="first").uns)
-    {"a": 1, "b": 2, "c": {"c.b": 4, "c.c": 5, "c.
+    {"a": 1, "b": 2, "c": {"c.b": 4, "c.c": 5, "c.a": 3}}
+ 
+In this case, the resulting dictionary represents a "union" of the original ones, where all key-values are merged. In the case of identical keys, the value of the first dictionary will be assigned.
