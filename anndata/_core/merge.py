@@ -6,6 +6,7 @@ from copy import deepcopy
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from typing import Callable, Collection, Iterable, TypeVar, Union
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -308,4 +309,21 @@ def concat(
     )
     uns = merge_uns([a.uns for a in adatas], strategy=uns_merge)
 
-    return AnnData(X=X, layers=layers, obsm=obsm, obs=obs, var=var, uns=uns)
+    raw = None
+    has_raw = [a.raw is not None for a in adatas]
+    if all(has_raw):
+        raw = concat(
+            [AnnData(X=a.raw.X, obs=pd.DataFrame(index=a.obs_names), var=a.raw.var, varm=a.raw.varm) for a in adatas],
+            join=join,
+            batch_key=batch_key,
+            batch_categories=batch_categories,
+            index_unique=index_unique,
+        )
+    elif any(has_raw):
+        warn(
+            "Only some adata objects have `.raw` attribute, "
+            "not concatenating `.raw` attributes.",
+            UserWarning,
+        )
+
+    return AnnData(X=X, layers=layers, obsm=obsm, obs=obs, var=var, uns=uns, raw=raw)
