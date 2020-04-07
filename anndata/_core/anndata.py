@@ -6,7 +6,7 @@ import collections.abc as cabc
 from collections import OrderedDict
 from copy import deepcopy
 from enum import Enum
-from functools import reduce, singledispatch
+from functools import singledispatch
 from pathlib import Path
 from os import PathLike
 from typing import Any, Union, Optional  # Meta
@@ -1684,7 +1684,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if batch_categories is None:
             batch_categories = np.arange(len(all_adatas)).astype(str)
         pat = rf"-({'|'.join(batch_categories)})$"
-        out.var = out.var.iloc[:, out.var.columns.str.extract(pat, expand=False).fillna("").argsort(kind="stable")]
+        out.var = out.var.iloc[
+            :,
+            (
+                out.var.columns.str.extract(pat, expand=False)
+                .fillna("")
+                .argsort(kind="stable")
+            ),
+        ]
 
         return out
 

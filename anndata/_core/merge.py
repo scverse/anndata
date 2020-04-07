@@ -5,7 +5,7 @@ from collections import OrderedDict
 from collections.abc import Mapping, MutableSet
 from copy import deepcopy
 from functools import partial, reduce, singledispatch
-from itertools import chain, repeat
+from itertools import repeat
 from operator import and_, or_, sub
 from typing import Callable, Collection, Iterable, TypeVar, Union
 from warnings import warn
@@ -21,6 +21,7 @@ T = TypeVar("T")
 ###################
 # Utilities
 ###################
+
 
 class OrderedSet(MutableSet):
     def __init__(self, vals=()):
@@ -347,7 +348,15 @@ def concat(
     has_raw = [a.raw is not None for a in adatas]
     if all(has_raw):
         raw = concat(
-            [AnnData(X=a.raw.X, obs=pd.DataFrame(index=a.obs_names), var=a.raw.var, varm=a.raw.varm) for a in adatas],
+            [
+                AnnData(
+                    X=a.raw.X,
+                    obs=pd.DataFrame(index=a.obs_names),
+                    var=a.raw.var,
+                    varm=a.raw.varm,
+                )
+                for a in adatas
+            ],
             join=join,
             batch_key=batch_key,
             batch_categories=batch_categories,

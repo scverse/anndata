@@ -109,7 +109,7 @@ def test_concatenate_dense():
 
 def test_concatenate_layers(array_type, join_type):
     adatas = []
-    for i in range(5):
+    for _ in range(5):
         a = array_type(sparse.random(100, 200, format="csr"))
         adatas.append(AnnData(X=a, layers={"a": a}))
 
@@ -119,7 +119,7 @@ def test_concatenate_layers(array_type, join_type):
 
 def test_concatenate_layers_misaligned(array_type, join_type):
     adatas = []
-    for i in range(5):
+    for _ in range(5):
         a = array_type(sparse.random(100, 200, format="csr"))
         adata = AnnData(X=a, layers={"a": a})
         adatas.append(
