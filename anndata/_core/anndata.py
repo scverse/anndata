@@ -41,7 +41,6 @@ from .views import (
     as_view,
     _resolve_idxs,
 )
-from .merge import merge_uns
 from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
@@ -1662,235 +1661,24 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 0., 2., 1.],
                [0., 6., 5., 0.]], dtype=float32)
         """
+        from .merge import concat
+
         if self.isbacked:
             raise ValueError("Currently, concatenate does only work in memory mode.")
 
-        from scipy.sparse import vstack
-
         if len(adatas) == 0:
-            return self
+            return self.copy()
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
-            # wait with raising this warning until numpy starts raising a similar warning, too
-            # warnings.warn(
-            #     "Trying to treat first argument of `concatenate` as sequence "
-            #     "of AnnDatas. Do `AnnData.concatenate(*adata_list)` instead of "
-            #     "`adata_list[0].concatenate(adata_list[1:])`."
-            # )
             adatas = adatas[0]  # backwards compatibility
         all_adatas = (self,) + tuple(adatas)
 
-        # for controlled behavior, make all variable names unique
-        printed_info = False
-        for i, ad in enumerate(all_adatas):
-            if ad.var_names.is_unique:
-                continue
-            ad.var_names = utils.make_index_unique(ad.var_names)
-            if not printed_info:
-                logger.info(
-                    "Making variable names unique for controlled concatenation."
-                )
-                printed_info = True
-
-        # define variable names of joint AnnData
-        mergers = dict(inner=set.intersection, outer=set.union)
-        var_names_reduce = reduce(
-            mergers[join], (set(ad.var_names) for ad in all_adatas)
+        return concat(
+            all_adatas,
+            join=join,
+            batch_key=batch_key,
+            batch_categories=batch_categories,
+            uns_merge=uns_merge,
         )
-        # restore order of initial var_names, append non-sortable names at the end
-        # see how this was done in the repo at commit state
-        # 40a24f
-        var_names = []
-        for v in all_adatas[0].var_names:
-            if v in var_names_reduce:
-                var_names.append(v)
-                var_names_reduce.remove(v)  # update the set
-        var_names = pd.Index(var_names + list(var_names_reduce))
-
-        if batch_categories is None:
-            categories = [str(i) for i, _ in enumerate(all_adatas)]
-        elif len(batch_categories) == len(all_adatas):
-            categories = batch_categories
-        else:
-            raise ValueError("Provide as many `batch_categories` as `adatas`.")
-
-        out_shape = (sum(a.n_obs for a in all_adatas), len(var_names))
-
-        sparse_Xs = [a.X for a in all_adatas if issparse(a.X)]
-        if join == "outer":
-            if sparse_Xs:  # not sure whether the lil_matrix is really the best option
-                X = sparse.lil_matrix(out_shape, dtype=self.X.dtype)
-            else:
-                X = np.empty(out_shape, dtype=self.X.dtype)
-                X[:] = np.nan
-        else:
-            Xs = []
-
-        # create layers dict that contains layers shared among all AnnDatas
-        layers = OrderedDict()
-        shared_layers = [
-            key
-            for key in all_adatas[0].layers.keys()
-            if all([key in ad.layers.keys() for ad in all_adatas])
-        ]
-        for key in shared_layers:
-            layers[key] = []
-
-        # create obsm dict that contains obsm keys shared among all AnnDatas
-        obsm = OrderedDict()
-        shared_obsm_keys = [
-            key
-            for key in all_adatas[0].obsm
-            if all([key in ad.obsm for ad in all_adatas])
-        ]
-        for key in shared_obsm_keys:
-            obsm[key] = []
-
-        # check whether tries to do “outer join” and layers is non_empty.
-        if join == "outer" and len(shared_layers) > 0:
-            logger.info(
-                "layers concatenation is not yet available for 'outer' "
-                "intersection and will be ignored."
-            )
-
-        # check whether layers are not consistently set in all AnnData objects.
-        n_layers = np.array([len(ad.layers.keys()) for ad in all_adatas])
-        if join == "inner" and not all(len(shared_layers) == n_layers):
-            logger.info(
-                "layers are inconsistent - only layers that are shared among "
-                "all AnnData objects are included."
-            )
-
-        var = pd.DataFrame(index=var_names)
-
-        if join == "inner":
-            ad_ref = all_adatas[0]
-            cols_intersect = set(ad_ref.var.columns)
-            for ad in all_adatas[1:]:
-                cols_intersect &= set(ad.var.columns)
-                cols_intersect = {
-                    col
-                    for col in cols_intersect
-                    if ad_ref.var.loc[var_names, col].equals(ad.var.loc[var_names, col])
-                }
-                if not cols_intersect:
-                    break
-
-        obs_i = 0  # start of next adata’s observations in X
-        out_obss = []
-        for i, ad in enumerate(all_adatas):
-            if join == "outer":
-                # only names that are actually present in the current AnnData
-                vars_intersect = [v for v in var_names if v in ad.var_names]
-            else:
-                vars_intersect = var_names
-
-            # X
-            if join == "outer":
-                # this is pretty slow, I guess sparse matrices shouldn’t be
-                # constructed like that
-                idx_obs = slice(obs_i, obs_i + ad.n_obs)
-                idx_var = var_names.isin(vars_intersect)
-                X[idx_obs, idx_var] = ad[:, vars_intersect].X
-            else:
-                Xs.append(ad[:, vars_intersect].X)
-            obs_i += ad.n_obs
-
-            # layers
-            if join == "inner":
-                for key in shared_layers:
-                    layers[key].append(ad[:, vars_intersect].layers[key])
-
-            # obsm
-            for key in shared_obsm_keys:
-                obsm[key].append(ad.obsm[key])
-
-            # obs
-            obs = ad.obs.copy()
-            obs[batch_key] = pd.Categorical(ad.n_obs * [categories[i]], categories)
-            if is_string_dtype(all_adatas[0].obs.index) and not is_string_dtype(
-                ad.obs.index
-            ):
-                obs.index = obs.index.astype(str)
-            if index_unique is not None:
-                if not is_string_dtype(ad.obs.index):
-                    obs.index = obs.index.astype(str)
-                obs.index = obs.index.values + index_unique + categories[i]
-            out_obss.append(obs)
-
-            # var
-            for c in ad.var.columns:
-                if join == "inner" and c in cols_intersect:
-                    if c not in var.columns:
-                        var.loc[vars_intersect, c] = ad.var.loc[vars_intersect, c]
-                    continue
-                new_c = (
-                    c
-                    + (index_unique if index_unique is not None else "-")
-                    + categories[i]
-                )
-                var.loc[vars_intersect, new_c] = ad.var.loc[vars_intersect, c]
-
-        if join == "inner":
-
-            X = vstack(Xs) if sparse_Xs else np.concatenate(Xs)
-
-            for key in shared_layers:
-                if any(issparse(a.layers[key]) for a in all_adatas):
-                    layers[key] = vstack(layers[key])
-                else:
-                    layers[key] = np.concatenate(layers[key])
-
-        # obsm
-        for key in shared_obsm_keys:
-            if any(issparse(a.obsm[key]) for a in all_adatas):
-                obsm[key] = vstack(obsm[key])
-            else:
-                obsm[key] = np.concatenate(obsm[key])
-
-        obs = pd.concat(out_obss, sort=True)
-
-        if sparse_Xs:
-            sparse_format = sparse_Xs[0].getformat()
-            X = X.asformat(sparse_format)
-        if join == "inner":
-            for key in shared_layers:
-                sparse_layers = [
-                    a.layers[key] for a in all_adatas if issparse(a.layers[key])
-                ]
-                if sparse_layers:
-                    sparse_format_l = sparse_layers[0].getformat()
-                    layers[key] = layers[key].asformat(sparse_format_l)
-
-        # New uns
-        uns = merge_uns([a.uns for a in all_adatas], uns_merge)
-
-        new_adata = (
-            AnnData(X, obs, var, obsm=obsm, layers=layers, uns=uns)
-            if join == "inner"
-            else AnnData(X, obs, var, obsm=obsm, uns=uns)
-        )
-
-        # raw
-        have_raw = [_adata.raw is not None for _adata in all_adatas]
-        if all(have_raw):
-            new_adata_raw = AnnData.concatenate(
-                *[_adata.raw.to_adata() for _adata in all_adatas],
-                join=join,
-                batch_key=batch_key,
-                batch_categories=batch_categories,
-                index_unique=index_unique,
-            )
-            new_adata.raw = new_adata_raw
-        elif any(have_raw):
-            warnings.warn(
-                "Only some adata objects have `.raw` attribute, "
-                "not concatenating `.raw` attributes.",
-                UserWarning,
-            )
-
-        if not obs.index.is_unique:
-            logger.info("Or pass `index_unique!=None` to `.concatenate`.")
-        return new_adata
 
     def var_names_make_unique(self, join: str = "-"):
         # Important to go through the setter so obsm dataframes are updated too
