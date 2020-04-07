@@ -12,7 +12,20 @@ from boltons.iterutils import research, remap, default_exit
 
 from anndata import AnnData, Raw
 from anndata.tests import helpers
-from anndata.tests.helpers import assert_equal
+from anndata.tests.helpers import asarray, assert_equal
+
+
+@pytest.fixture(
+    params=[asarray, sparse.csr_matrix, sparse.csc_matrix],
+    ids=["np_array", "scipy_csr", "scipy_csc"],
+)
+def array_type(request):
+    return request.param
+
+
+@pytest.fixture(params=["inner", "outer"])
+def join_type(request):
+    return request.param
 
 
 def test_concatenate_dense():
@@ -92,6 +105,29 @@ def test_concatenate_dense():
     )
     assert np.array_equal(var_ma.mask, var_ma_ref.mask)
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
+
+
+def test_concatenate_layers(array_type, join_type):
+    adatas = []
+    for i in range(5):
+        a = array_type(sparse.random(100, 200, format="csr"))
+        adatas.append(AnnData(X=a, layers={"a": a}))
+
+    merged = adatas[0].concatenate(adatas[1:], join=join_type)
+    assert_equal(merged.X, merged.layers["a"])
+
+
+def test_concatenate_layers_misaligned(array_type, join_type):
+    adatas = []
+    for i in range(5):
+        a = array_type(sparse.random(100, 200, format="csr"))
+        adata = AnnData(X=a, layers={"a": a})
+        adatas.append(
+            adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()
+        )
+
+    merged = adatas[0].concatenate(adatas[1:], join=join_type)
+    assert_equal(merged.X, merged.layers["a"])
 
 
 def test_concatenate_dense_duplicates():
