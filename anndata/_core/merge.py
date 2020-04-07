@@ -1,10 +1,12 @@
 """
 Code for merging/ concatenating AnnData objects.
 """
-from collections.abc import Mapping
+from collections import OrderedDict
+from collections.abc import Mapping, MutableSet
 from copy import deepcopy
 from functools import partial, reduce, singledispatch
-from itertools import repeat
+from itertools import chain, repeat
+from operator import and_, or_, sub
 from typing import Callable, Collection, Iterable, TypeVar, Union
 from warnings import warn
 
@@ -19,6 +21,38 @@ T = TypeVar("T")
 ###################
 # Utilities
 ###################
+
+class OrderedSet(MutableSet):
+    def __init__(self, vals=()):
+        self.dict = OrderedDict(zip(vals, repeat(None)))
+
+    def __contains__(self, val):
+        return val in self.dict
+
+    def __iter__(self):
+        return iter(self.dict)
+
+    def __len__(self):
+        return len(self.dict)
+
+    def __repr__(self):
+        return "OrderedSet: {" + ", ".join(map(str, self)) + "}"
+
+    def copy(self):
+        return OrderedSet(self.dict.copy())
+
+    def add(self, val):
+        self.dict[val] = None
+
+    def union(self, *vals):
+        return reduce(or_, (self, *vals))
+
+    def discard(self, val):
+        if val in self:
+            del self.dict[val]
+
+    def difference(self, *vals):
+        return reduce(sub, (self, *vals))
 
 
 class MissingVal:
@@ -53,11 +87,11 @@ def equal_sparse(a, b) -> bool:
 
 
 def union_keys(ds: Collection[Mapping]) -> set:
-    return set().union(*(d.keys() for d in ds))
+    return reduce(or_, (d.keys() for d in ds), OrderedSet())
 
 
 def intersect_keys(ds: Collection[Mapping]) -> set:
-    return reduce(lambda x, y: x.intersection(y), map(set, (d.keys() for d in ds)))
+    return reduce(and_, map(OrderedSet, (d.keys() for d in ds)))
 
 
 ###################
@@ -239,14 +273,14 @@ def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
     return new_df
 
 
-def merge_outer(mappings, batch_keys, *, join_index="-"):
+def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     """
     Concate elements of two mappings, such that non-overlapping entries are added with their batch-key appended.
 
     Note: this currently does NOT work for nested mappings. Additionally, values are not promised to be unique, and may be overwritten.
     """
     all_keys = union_keys(mappings)
-    out = merge_unique(mappings)
+    out = merge(mappings)
     for key in all_keys.difference(out.keys()):
         for b, m in zip(batch_keys, mappings):
             val = m.get(key, None)
@@ -296,7 +330,7 @@ def concat(
         var_names,
         # TODO: Allow use of other strategies, like passing merge_unique here.
         # Current behaviour is mostly for backwards compat
-        partial(merge_outer, batch_keys=batch_categories),
+        partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
     )
     # The current behaviour for making column names unique is like make_index_unique, but unfortunatley does it's own thing.
 
