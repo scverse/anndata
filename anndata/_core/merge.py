@@ -3,11 +3,15 @@ Code for merging/ concatenating AnnData objects.
 """
 from collections.abc import Mapping
 from copy import deepcopy
-from functools import singledispatch, reduce
-from typing import Callable, Collection, TypeVar, Union
+from functools import partial, reduce, singledispatch
+from itertools import repeat
+from typing import Callable, Collection, Iterable, TypeVar, Union
 
 import numpy as np
+import pandas as pd
 from scipy import sparse
+
+from .anndata import AnnData
 
 T = TypeVar("T")
 
@@ -156,3 +160,152 @@ UNS_STRATEGIES = {
 # TODO: Should I throw a warning about sparse arrays in uns?
 def merge_uns(unss, strategy):
     return UNS_STRATEGIES[strategy](unss)
+
+
+def as_sparse(x):
+    if not isinstance(x, sparse.spmatrix):
+        return sparse.csr_matrix(x)
+    else:
+        return x
+
+
+def resolve_index(inds: Iterable[pd.Index], join):
+    if join == "inner":
+        return reduce(lambda x, y: x.intersection(y), inds)
+    elif join == "outer":
+        return reduce(lambda x, y: x.union(y), inds)
+    else:
+        raise ValueError()
+
+
+def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
+    """
+    Given a new set of var_names, and a current set, generates a function which will reindex
+    a matrix to be aligned with the new set.
+
+    Usage
+    -----
+
+    >>> reindexer = gen_reindexer(a.var_names, b.var_names)
+    >>> sparse.vstack([a.X, reindexer(b.X)])
+    """
+    new_size = len(new_var)
+    old_size = len(cur_var)
+    new_pts = new_var.get_indexer(cur_var)
+    cur_pts = np.arange(len(new_pts))
+
+    mask = new_pts != -1
+
+    new_pts = new_pts[mask]
+    cur_pts = cur_pts[mask]
+
+    def reindexer(X):
+        idxmtx = sparse.coo_matrix(
+            (np.ones(len(new_pts), dtype=int), (cur_pts, new_pts)),
+            shape=(old_size, new_size),
+        )
+        return X @ idxmtx
+
+    return reindexer
+
+
+def concat_arrays(arrays, reindexers, index=None):
+    arrays = list(arrays)
+    if any(isinstance(a, pd.DataFrame) for a in arrays):
+        if not all(isinstance(a, pd.DataFrame) for a in arrays):
+            return MissingVal
+        # TODO: behaviour here should be chosen through a merge strategy
+        df = pd.concat([f(x) for f, x in zip(reindexers, arrays)], ignore_index=True)
+        df.index = index
+        return df
+    elif any(isinstance(a, sparse.spmatrix) for a in arrays):
+        return sparse.vstack([f(as_sparse(a)) for f, a in zip(reindexers, arrays)])
+    else:
+        return np.vstack([f(x) for f, x in zip(reindexers, arrays)])
+
+
+def concat_aligned_mapping(mappings, reindexers, index=None):
+    return {
+        k: concat_arrays([m[k] for m in mappings], reindexers, index=index)
+        for k in intersect_keys(mappings)
+    }
+
+
+def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
+    dfs = [df.reindex(index=new_index) for df in dfs]
+    # New dataframe with all shared data
+    new_df = pd.DataFrame(merge_strategy(dfs), index=new_index)
+    return new_df
+
+
+def merge_outer(mappings, batch_keys, *, join_index="-"):
+    """
+    Concate elements of two mappings, such that non-overlapping entries are added with their batch-key appended.
+
+    Note: this currently does NOT work for nested mappings. Additionally, values are not promised to be unique, and may be overwritten.
+    """
+    all_keys = union_keys(mappings)
+    out = merge_unique(mappings)
+    for key in all_keys.difference(out.keys()):
+        for b, m in zip(batch_keys, mappings):
+            val = m.get(key, None)
+            if val is not None:
+                out[f"{key}{join_index}{b}"] = val
+    return out
+
+
+def concat(
+    adatas,
+    *,
+    join="inner",
+    batch_key="batch",
+    batch_categories=None,
+    uns_merge=None,
+    index_unique="-",
+):
+    """Re-implementation of `AnnData.concatenate`, but better."""
+    # Argument normalization
+    adatas = list(adatas)
+    if batch_categories is None:
+        batch_categories = np.arange(len(adatas)).astype(str)
+
+    # Combining indexes
+    obs_names = pd.Index(
+        np.concatenate(
+            [
+                pd.Series(a.obs_names) + f"{index_unique}{batch}"
+                for batch, a in zip(batch_categories, adatas)
+            ]
+        )
+    )
+    var_names = resolve_index([a.var_names for a in adatas], join=join)
+    reindexers = [gen_reindexer(var_names, a.var_names) for a in adatas]
+
+    # Obs
+    batch = pd.Series(
+        np.repeat(np.arange(len(adatas)), [a.n_obs for a in adatas]), dtype="category"
+    ).map(dict(zip(np.arange(len(adatas)), batch_categories)))
+    obs = pd.concat([a.obs for a in adatas], ignore_index=True)
+    obs.index = obs_names
+    obs[batch_key] = batch.values
+
+    # Var
+    var = merge_dataframes(
+        [a.var for a in adatas],
+        var_names,
+        # TODO: Allow use of other strategies, like passing merge_unique here.
+        # Current behaviour is mostly for backwards compat
+        partial(merge_outer, batch_keys=batch_categories),
+    )
+    # The current behaviour for making column names unique is like make_index_unique, but unfortunatley does it's own thing.
+
+    # Everything else
+    X = concat_arrays([a.X for a in adatas], reindexers)
+    layers = concat_aligned_mapping([a.layers for a in adatas], reindexers)
+    # TODO: allow computing how to merge for each array seperately
+    obsm = concat_aligned_mapping(
+        [a.obsm for a in adatas], repeat(lambda x: x), index=obs_names
+    )
+    uns = merge_uns([a.uns for a in adatas], strategy=uns_merge)
+
+    return AnnData(X=X, layers=layers, obsm=obsm, obs=obs, var=var, uns=uns)
