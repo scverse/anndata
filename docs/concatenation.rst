@@ -76,4 +76,5 @@ An example of this would be a spatial dataset, where the images are stored in `u
     >>> dict(a.concatenate([b, c], uns_merge="first").uns)
     {"a": 1, "b": 2, "c": {"c.b": 4, "c.c": 5, "c.a": 3}}
  
-In this case, the resulting dictionary represents a "union" of the original ones, where all key-values are merged. In the case of identical keys, the value of the first dictionary will be assigned.
+In this case, the result has the union of the keys from all the starting dictionaries.
+The value is taken from the first object to have a value at this key.
