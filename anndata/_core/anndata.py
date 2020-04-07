@@ -1672,13 +1672,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             adatas = adatas[0]  # backwards compatibility
         all_adatas = (self,) + tuple(adatas)
 
-        return concat(
+        out = concat(
             all_adatas,
             join=join,
             batch_key=batch_key,
             batch_categories=batch_categories,
             uns_merge=uns_merge,
         )
+
+        # Backwards compat, ordering columns:
+        if batch_categories is None:
+            batch_categories = np.arange(len(all_adatas)).astype(str)
+        pat = rf"-({'|'.join(batch_categories)})$"
+        out.var = out.var.iloc[:, out.var.columns.str.extract(pat, expand=False).fillna("").argsort(kind="stable")]
+
+        return out
 
     def var_names_make_unique(self, join: str = "-"):
         # Important to go through the setter so obsm dataframes are updated too
