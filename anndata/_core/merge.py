@@ -23,6 +23,7 @@ T = TypeVar("T")
 ###################
 
 
+# Pretty much just for maintaining order of keys
 class OrderedSet(MutableSet):
     def __init__(self, vals=()):
         self.dict = OrderedDict(zip(vals, repeat(None)))
@@ -46,14 +47,22 @@ class OrderedSet(MutableSet):
         self.dict[val] = None
 
     def union(self, *vals):
-        return reduce(or_, (self, *vals))
+        return reduce(or_, vals, self)
 
     def discard(self, val):
         if val in self:
             del self.dict[val]
 
     def difference(self, *vals):
-        return reduce(sub, (self, *vals))
+        return reduce(sub, vals, self)
+
+
+def union_keys(ds: Collection[Mapping]) -> OrderedSet:
+    return reduce(or_, ds, OrderedSet())
+
+
+def intersect_keys(ds: Collection[Mapping]) -> OrderedSet:
+    return reduce(and_, map(OrderedSet, ds))
 
 
 class MissingVal:
@@ -87,12 +96,11 @@ def equal_sparse(a, b) -> bool:
         return False
 
 
-def union_keys(ds: Collection[Mapping]) -> set:
-    return reduce(or_, (d.keys() for d in ds), OrderedSet())
-
-
-def intersect_keys(ds: Collection[Mapping]) -> set:
-    return reduce(and_, map(OrderedSet, (d.keys() for d in ds)))
+def as_sparse(x):
+    if not isinstance(x, sparse.spmatrix):
+        return sparse.csr_matrix(x)
+    else:
+        return x
 
 
 ###################
@@ -198,13 +206,6 @@ def merge_uns(unss, strategy):
     return UNS_STRATEGIES[strategy](unss)
 
 
-def as_sparse(x):
-    if not isinstance(x, sparse.spmatrix):
-        return sparse.csr_matrix(x)
-    else:
-        return x
-
-
 def resolve_index(inds: Iterable[pd.Index], join):
     if join == "inner":
         return reduce(lambda x, y: x.intersection(y), inds)
@@ -276,7 +277,7 @@ def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
 
 def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     """
-    Concate elements of two mappings, such that non-overlapping entries are added with their batch-key appended.
+    Combine elements of two mappings, such that non-overlapping entries are added with their batch-key appended.
 
     Note: this currently does NOT work for nested mappings. Additionally, values are not promised to be unique, and may be overwritten.
     """
@@ -369,4 +370,4 @@ def concat(
             UserWarning,
         )
 
-    return AnnData(X=X, layers=layers, obsm=obsm, obs=obs, var=var, uns=uns, raw=raw)
+    return AnnData(X=X, layers=layers, obs=obs, var=var, obsm=obsm, uns=uns, raw=raw)
