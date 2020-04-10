@@ -57,11 +57,11 @@ class OrderedSet(MutableSet):
         return reduce(sub, vals, self)
 
 
-def union_keys(ds: Collection[Mapping]) -> OrderedSet:
+def union_keys(ds: Collection) -> OrderedSet:
     return reduce(or_, ds, OrderedSet())
 
 
-def intersect_keys(ds: Collection[Mapping]) -> OrderedSet:
+def intersect_keys(ds: Collection) -> OrderedSet:
     return reduce(and_, map(OrderedSet, ds))
 
 
@@ -256,7 +256,9 @@ def concat_arrays(arrays, reindexers, index=None):
         df.index = index
         return df
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
-        return sparse.vstack([f(as_sparse(a)) for f, a in zip(reindexers, arrays)])
+        return sparse.vstack(
+            [f(as_sparse(a)) for f, a in zip(reindexers, arrays)], format="csr"
+        )
     else:
         return np.vstack([f(x) for f, x in zip(reindexers, arrays)])
 
@@ -266,6 +268,97 @@ def concat_aligned_mapping(mappings, reindexers, index=None):
         k: concat_arrays([m[k] for m in mappings], reindexers, index=index)
         for k in intersect_keys(mappings)
     }
+
+
+def outer_concat(els, new_index: pd.Index, shapes: Collection[int]):
+    """Given elements of a mapping to arrays, fill the missing values for an outer join.
+
+    Params
+    ------
+    els
+        Array likes to concatenate
+    new_index
+        Resulting index for this dimension
+    shapes
+        column size of the arrays in the new dimension
+    """
+    new_els = []
+    indices = np.split(new_index, np.cumsum(shapes)[:-1])
+    real = list(filter(not_missing, els))
+    max_cols = reduce(max, map(lambda x: x.shape[1], real))
+
+    # Dataframes
+    # Don't need to do much with columns shape since pd.concat will handle it
+    if all(isinstance(el, pd.DataFrame) for el in real):
+        for el, index in zip(els, indices):
+            if is_missing(el):
+                new_els.append(pd.DataFrame(index=index))
+            else:
+                new_els.append(el)
+        out = pd.concat(new_els, join="outer")
+        out.index = new_index
+        return out
+    elif any(isinstance(el, pd.DataFrame) for el in real):
+        raise NotImplementedError(
+            "Cannot concatenate a dataframe with other array types."
+        )
+
+    # Sparse arrays
+    elif any(isinstance(el, sparse.spmatrix) for el in real):
+        for el, index in zip(els, indices):
+            result_shape = (len(index), max_cols)
+            if is_missing(el):
+                new_el = sparse.csr_matrix(result_shape, dtype=np.float32)
+            elif el.shape != result_shape:
+                new_el = sparse.csr_matrix(el, shape=result_shape)
+            else:
+                new_el = el
+            new_els.append(new_el)
+        return sparse.vstack(new_els, format="csr")
+
+    # np.ndarrays/ everything else
+    else:
+        for el, index in zip(els, indices):
+            result_shape = (len(index), max_cols)
+            if is_missing(el):
+                new_el = np.zeros(result_shape)
+            elif el.shape != result_shape:
+                new_el = np.zeros(result_shape)
+                new_el[:, : el.shape[1]] = el
+            else:
+                new_el = el
+            new_els.append(new_el)
+        return np.concatenate(new_els)
+
+
+def inner_concat(els, new_index, shapes: Collection[int]):
+    """Inner concatenation for obsm"""
+    indices = np.split(new_index, np.cumsum(shapes)[:-1])
+    real = list(filter(not_missing, els))
+    min_cols = reduce(min, map(lambda x: x.shape[1], real))
+
+    if all(isinstance(el, pd.DataFrame) for el in real):
+        out = pd.concat(els, join="inner")
+        out.index = new_index
+        return out
+    elif any(isinstance(el, pd.DataFrame) for el in real):
+        raise NotImplementedError(
+            "Cannot concatenate a dataframe with other array types."
+        )
+    # Sparse arrays
+    elif any(isinstance(el, sparse.spmatrix) for el in real):
+        new_els = []
+        for el, index in zip(els, indices):
+            result_shape = (len(index), min_cols)
+            if el.shape != result_shape:
+                new_el = sparse.csr_matrix(el, shape=result_shape)
+            else:
+                new_el = el
+            new_els.append(new_el)
+        return sparse.vstack(new_els, format="csr")
+    # np.ndarrays/ everything else
+    else:
+        return np.concatenate([el[:, :min_cols] for el in els])
 
 
 def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
@@ -319,9 +412,12 @@ def concat(
     reindexers = [gen_reindexer(var_names, a.var_names) for a in adatas]
 
     # Obs
-    batch = pd.Series(
-        np.repeat(np.arange(len(adatas)), [a.n_obs for a in adatas]), dtype="category"
-    ).map(dict(zip(np.arange(len(adatas)), batch_categories)))
+    batch = (
+        pd.Series(
+            np.repeat(np.arange(len(adatas)), [a.n_obs for a in adatas]), dtype="category"
+        )
+        .map(dict(zip(np.arange(len(adatas)), batch_categories)))
+    )
     obs = pd.concat([a.obs for a in adatas], ignore_index=True)
     obs.index = obs_names
     obs[batch_key] = batch.values
@@ -331,18 +427,30 @@ def concat(
         [a.var for a in adatas],
         var_names,
         # TODO: Allow use of other strategies, like passing merge_unique here.
-        # Current behaviour is mostly for backwards compat
+        # Current behaviour is mostly for backwards compat. It's like make_names_unique, but
+        # unfortunately the behaviour is different.
         partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
     )
-    # The current behaviour for making column names unique is like make_index_unique, but unfortunatley does it's own thing.
 
     # Everything else
     X = concat_arrays([a.X for a in adatas], reindexers)
     layers = concat_aligned_mapping([a.layers for a in adatas], reindexers)
-    # TODO: allow computing how to merge for each array seperately
-    obsm = concat_aligned_mapping(
-        [a.obsm for a in adatas], repeat(lambda x: x), index=obs_names
-    )
+    if join == "inner":
+        obsm = {
+            k: inner_concat(
+                [a.obsm[k] for a in adatas], obs_names, [a.shape[0] for a in adatas],
+            )
+            for k in intersect_keys(a.obsm for a in adatas)
+        }
+    elif join == "outer":
+        obsm = {
+            k: outer_concat(
+                [a.obsm.get(k, MissingVal) for a in adatas],
+                obs_names,
+                [a.shape[0] for a in adatas],
+            )
+            for k in union_keys(a.obsm for a in adatas)
+        }
     uns = merge_uns([a.uns for a in adatas], strategy=uns_merge)
 
     raw = None

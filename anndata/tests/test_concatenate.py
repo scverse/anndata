@@ -5,12 +5,14 @@ from functools import partial
 
 import numpy as np
 from numpy import ma
+import pandas as pd
 import pytest
 from scipy import sparse
 from boltons.iterutils import research, remap, default_exit
 
 
 from anndata import AnnData, Raw
+from anndata._core.index import _subset
 from anndata.tests import helpers
 from anndata.tests.helpers import asarray, assert_equal
 
@@ -111,6 +113,117 @@ def test_concatenate_layers(array_type, join_type):
 
     merged = adatas[0].concatenate(adatas[1:], join=join_type)
     assert_equal(merged.X, merged.layers["a"])
+
+
+@pytest.fixture
+def obsm_adatas():
+    def gen_index(n):
+        return [f"cell{i}" for i in range(n)]
+
+    return [
+        AnnData(
+            X=sparse.csr_matrix((3, 5)),
+            obs=pd.DataFrame(index=gen_index(3)),
+            obsm={
+                "dense": np.arange(6).reshape(3, 2),
+                "sparse": sparse.csr_matrix(np.arange(6).reshape(3, 2)),
+                "df": pd.DataFrame(
+                    {
+                        "a": np.arange(3),
+                        "b": list("abc"),
+                        "c": pd.Categorical(list("aab")),
+                    },
+                    index=gen_index(3),
+                ),
+            },
+        ),
+        AnnData(
+            X=sparse.csr_matrix((4, 10)),
+            obs=pd.DataFrame(index=gen_index(4)),
+            obsm={
+                "dense": np.arange(12).reshape(4, 3),
+                "df": pd.DataFrame({"a": np.arange(3, 7),}, index=gen_index(4),),
+            },
+        ),
+        AnnData(
+            X=sparse.csr_matrix((2, 100)),
+            obs=pd.DataFrame(index=gen_index(2)),
+            obsm={
+                "sparse": np.arange(8).reshape(2, 4),
+                "dense": np.arange(4, 8).reshape(2, 2),
+                "df": pd.DataFrame(
+                    {
+                        "a": np.arange(7, 9),
+                        "b": list("cd"),
+                        "c": pd.Categorical(list("ab")),
+                    },
+                    index=gen_index(2),
+                ),
+            },
+        ),
+    ]
+
+
+def test_concatenate_obsm_inner(obsm_adatas):
+    adata = obsm_adatas[0].concatenate(obsm_adatas[1:], join="inner")
+
+    assert set(adata.obsm.keys()) == {"dense", "df"}
+    assert adata.obsm["dense"].shape == (9, 2)
+    assert adata.obsm["dense"].tolist() == [
+        [0, 1],
+        [2, 3],
+        [4, 5],
+        [0, 1],
+        [3, 4],
+        [6, 7],
+        [9, 10],
+        [4, 5],
+        [6, 7],
+    ]
+
+    assert adata.obsm["df"].columns == ["a"]
+    assert adata.obsm["df"]["a"].tolist() == list(range(9))
+    true_df = (
+        pd.concat([a.obsm["df"] for a in obsm_adatas], join="inner")
+        .reset_index(drop=True)
+    )
+    cur_df = adata.obsm["df"].reset_index(drop=True)
+    pd.testing.assert_frame_equal(true_df, cur_df)
+
+
+def test_concatenate_obsm_outer(obsm_adatas):
+    adata = obsm_adatas[0].concatenate(obsm_adatas[1:], join="outer")
+
+    inner = obsm_adatas[0].concatenate(obsm_adatas[1:], join="inner")
+    for k, inner_v in inner.obsm.items():
+        assert np.array_equal(
+            _subset(adata.obsm[k], (slice(None), slice(None, inner_v.shape[1]))),
+            inner_v,
+        )
+
+    assert set(adata.obsm.keys()) == {"dense", "df", "sparse"}
+    assert adata.obsm["dense"].shape == (9, 3)
+
+    assert adata.obsm["sparse"].shape == (9, 4)
+    assert isinstance(adata.obsm["sparse"], sparse.spmatrix)
+    assert adata.obsm["sparse"].toarray().tolist() == [
+        [0, 1, 0, 0],
+        [2, 3, 0, 0],
+        [4, 5, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+    ]
+
+    true_df = (
+        pd.concat([a.obsm["df"] for a in obsm_adatas], join="outer")
+        .reset_index(drop=True)
+    )
+    cur_df = adata.obsm["df"].reset_index(drop=True)
+    pd.testing.assert_frame_equal(true_df, cur_df)
 
 
 def test_concatenate_layers_misaligned(array_type, join_type):
