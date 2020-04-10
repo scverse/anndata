@@ -183,10 +183,12 @@ def test_concatenate_obsm_inner(obsm_adatas):
 
     assert adata.obsm["df"].columns == ["a"]
     assert adata.obsm["df"]["a"].tolist() == list(range(9))
+    # fmt: off
     true_df = (
         pd.concat([a.obsm["df"] for a in obsm_adatas], join="inner")
         .reset_index(drop=True)
     )
+    # fmt: on
     cur_df = adata.obsm["df"].reset_index(drop=True)
     pd.testing.assert_frame_equal(true_df, cur_df)
 
@@ -218,10 +220,12 @@ def test_concatenate_obsm_outer(obsm_adatas):
         [4, 5, 6, 7],
     ]
 
+    # fmt: off
     true_df = (
         pd.concat([a.obsm["df"] for a in obsm_adatas], join="outer")
         .reset_index(drop=True)
     )
+    # fmt: on
     cur_df = adata.obsm["df"].reset_index(drop=True)
     pd.testing.assert_frame_equal(true_df, cur_df)
 
@@ -433,7 +437,7 @@ def test_concatenate_with_raw():
     with pytest.warns(
         UserWarning,
         match=(
-            "Only some adata objects have `.raw` attribute, "
+            "Only some AnnData objects have `.raw` attribute, "
             "not concatenating `.raw` attributes."
         ),
     ):

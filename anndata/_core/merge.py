@@ -412,12 +412,14 @@ def concat(
     reindexers = [gen_reindexer(var_names, a.var_names) for a in adatas]
 
     # Obs
+    # fmt: off
     batch = (
         pd.Series(
             np.repeat(np.arange(len(adatas)), [a.n_obs for a in adatas]), dtype="category"
         )
         .map(dict(zip(np.arange(len(adatas)), batch_categories)))
     )
+    # fmt: on
     obs = pd.concat([a.obs for a in adatas], ignore_index=True)
     obs.index = obs_names
     obs[batch_key] = batch.values
@@ -432,13 +434,14 @@ def concat(
         partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
     )
 
-    # Everything else
     X = concat_arrays([a.X for a in adatas], reindexers)
+
     layers = concat_aligned_mapping([a.layers for a in adatas], reindexers)
+
     if join == "inner":
         obsm = {
             k: inner_concat(
-                [a.obsm[k] for a in adatas], obs_names, [a.shape[0] for a in adatas],
+                [a.obsm[k] for a in adatas], obs_names, [a.n_obs for a in adatas],
             )
             for k in intersect_keys(a.obsm for a in adatas)
         }
@@ -447,10 +450,11 @@ def concat(
             k: outer_concat(
                 [a.obsm.get(k, MissingVal) for a in adatas],
                 obs_names,
-                [a.shape[0] for a in adatas],
+                [a.n_obs for a in adatas],
             )
             for k in union_keys(a.obsm for a in adatas)
         }
+
     uns = merge_uns([a.uns for a in adatas], strategy=uns_merge)
 
     raw = None
@@ -473,7 +477,7 @@ def concat(
         )
     elif any(has_raw):
         warn(
-            "Only some adata objects have `.raw` attribute, "
+            "Only some AnnData objects have `.raw` attribute, "
             "not concatenating `.raw` attributes.",
             UserWarning,
         )
