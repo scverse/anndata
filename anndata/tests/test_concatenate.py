@@ -77,21 +77,17 @@ def test_concatenate_dense():
     # outer join
     adata = adata1.concatenate(adata2, adata3, join="outer")
 
-    Xma = ma.masked_invalid(adata.X)
-    Xma_ref = ma.masked_invalid(
-        np.array(
-            [
-                [1.0, 2.0, 3.0, np.nan],
-                [4.0, 5.0, 6.0, np.nan],
-                [np.nan, 3.0, 2.0, 1.0],
-                [np.nan, 6.0, 5.0, 4.0],
-                [np.nan, 3.0, 2.0, 1.0],
-                [np.nan, 6.0, 5.0, 4.0],
-            ]
-        )
+    X_ref = np.array(
+        [
+            [1.0, 2.0, 3.0, 0.0],
+            [4.0, 5.0, 6.0, 0.0],
+            [0.0, 3.0, 2.0, 1.0],
+            [0.0, 6.0, 5.0, 4.0],
+            [0.0, 3.0, 2.0, 1.0],
+            [0.0, 6.0, 5.0, 4.0],
+        ]
     )
-    assert np.array_equal(Xma.mask, Xma_ref.mask)
-    assert np.allclose(Xma.compressed(), Xma_ref.compressed())
+    assert np.array_equal(adata.X, X_ref)
     var_ma = ma.masked_invalid(adata.var.values.tolist())
     var_ma_ref = ma.masked_invalid(
         np.array(
