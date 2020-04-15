@@ -135,7 +135,7 @@ class ImplicitModificationWarning(UserWarning):
     Examples
     ========
     >>> import pandas as pd
-    >>> adata = AnnData(obs=pd.DataFrame(index=[0, 1, 2]))
+    >>> adata = AnnData(obs=pd.DataFrame(index=[0, 1, 2]))  # doctest: +SKIP
     ImplicitModificationWarning: Transforming to str index.
     """
 
@@ -546,10 +546,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         if self.isbacked:
-            backed_at = f"backed at {str(self.filename)!r}"
+            backed_at = f" backed at {str(self.filename)!r}"
         else:
             backed_at = ""
-        descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars} {backed_at}"
+        descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars}{backed_at}"
         for attr in [
             "obs",
             "var",
@@ -1533,8 +1533,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         >>> adata = adata1.concatenate(adata2, adata3)
         >>> adata
         AnnData object with n_obs × n_vars = 6 × 2
-            obs_keys = ['anno1', 'anno2', 'batch']
-            var_keys = ['annoA-0', 'annoA-1', 'annoB-2', 'annoA-2']
+            obs: 'anno1', 'anno2', 'batch'
+            var: 'annoA-0', 'annoA-1', 'annoA-2', 'annoB-2'
         >>> adata.X
         array([[2., 3.],
                [5., 6.],
@@ -1554,82 +1554,49 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                  b  c
         annoA-0  1  2
         annoA-1  2  1
-        annoB-2  2  1
         annoA-2  3  2
+        annoB-2  2  1
 
         Joining on the union of variables.
 
-        >>> adata = adata1.concatenate(adata2, adata3, join='outer')
-        >>> adata
+        >>> outer = adata1.concatenate(adata2, adata3, join='outer')
+        >>> outer
         AnnData object with n_obs × n_vars = 6 × 4
-            obs_keys = ['anno1', 'anno2', 'batch']
-            var_keys = ['annoA-0', 'annoA-1', 'annoB-2', 'annoA-2']
-        >>> adata.var.T
-        index      a    b    c    d
+            obs: 'anno1', 'anno2', 'batch'
+            var: 'annoA-0', 'annoA-1', 'annoA-2', 'annoB-2'
+        >>> outer.var.T
+                   a    b    c    d
         annoA-0  0.0  1.0  2.0  NaN
         annoA-1  NaN  2.0  1.0  0.0
-        annoB-2  NaN  2.0  1.0  0.0
         annoA-2  NaN  3.0  2.0  0.0
-        >>> adata.var_names
+        annoB-2  NaN  2.0  1.0  0.0
+        >>> outer.var_names
         Index(['a', 'b', 'c', 'd'], dtype='object')
-        >>> adata.X
-        array([[ 1.,  2.,  3., nan],
-               [ 4.,  5.,  6., nan],
-               [nan,  3.,  2.,  1.],
-               [nan,  6.,  5.,  4.],
-               [nan,  3.,  2.,  1.],
-               [nan,  6.,  5.,  4.]], dtype=float32)
-        >>> adata.X.sum(axis=0)
-        array([nan, 25., 23., nan], dtype=float32)
+        >>> outer.X
+        array([[1., 2., 3., 0.],
+               [4., 5., 6., 0.],
+               [0., 3., 2., 1.],
+               [0., 6., 5., 4.],
+               [0., 3., 2., 1.],
+               [0., 6., 5., 4.]], dtype=float32)
+        >>> outer.X.sum(axis=0)
+        array([ 5., 25., 23., 10.], dtype=float32)
         >>> import pandas as pd
-        >>> Xdf = pd.DataFrame(adata.X, columns=adata.var_names)
-        index    a    b    c    d
-        0      1.0  2.0  3.0  NaN
-        1      4.0  5.0  6.0  NaN
-        2      NaN  3.0  2.0  1.0
-        3      NaN  6.0  5.0  4.0
-        4      NaN  3.0  2.0  1.0
-        5      NaN  6.0  5.0  4.0
+        >>> Xdf = pd.DataFrame(outer.X, columns=outer.var_names)
+        >>> Xdf
+             a    b    c    d
+        0  1.0  2.0  3.0  0.0
+        1  4.0  5.0  6.0  0.0
+        2  0.0  3.0  2.0  1.0
+        3  0.0  6.0  5.0  4.0
+        4  0.0  3.0  2.0  1.0
+        5  0.0  6.0  5.0  4.0
         >>> Xdf.sum()
-        index
         a     5.0
         b    25.0
         c    23.0
         d    10.0
         dtype: float32
-        >>> from numpy import ma
-        >>> adata.X = ma.masked_invalid(adata.X)
-        >>> adata.X
-        masked_array(
-          data=[[1.0, 2.0, 3.0, --],
-                [4.0, 5.0, 6.0, --],
-                [--, 3.0, 2.0, 1.0],
-                [--, 6.0, 5.0, 4.0],
-                [--, 3.0, 2.0, 1.0],
-                [--, 6.0, 5.0, 4.0]],
-          mask=[[False, False, False,  True],
-                [False, False, False,  True],
-                [ True, False, False, False],
-                [ True, False, False, False],
-                [ True, False, False, False],
-                [ True, False, False, False]],
-          fill_value=1e+20,
-          dtype=float32)
-        >>> adata.X.sum(axis=0).data
-        array([ 5., 25., 23., 10.], dtype=float32)
-
-        The masked array is not saved but has to be reinstantiated after saving.
-
-        >>> adata.write('./test.h5ad')
-        >>> from anndata import read_h5ad
-        >>> adata = read_h5ad('./test.h5ad')
-        >>> adata.X
-        array([[ 1.,  2.,  3., nan],
-               [ 4.,  5.,  6., nan],
-               [nan,  3.,  2.,  1.],
-               [nan,  6.,  5.,  4.],
-               [nan,  3.,  2.,  1.],
-               [nan,  6.,  5.,  4.]], dtype=float32)
 
         For sparse data, everything behaves similarly,
         except that for `join='outer'`, zeros are added.
