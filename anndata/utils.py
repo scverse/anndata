@@ -53,14 +53,12 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     Examples
     --------
     >>> from anndata import AnnData
-    >>> adata1 = AnnData(np.ones((3, 2)), dict(obs_names=['a', 'b', 'c']))
-    >>> adata2 = AnnData(np.zeros((3, 2)), dict(obs_names=['d', 'b', 'b']))
-    >>> adata = adata1.concatenate(adata2)
-    >>> adata.obs_names
-    Index(['a', 'b', 'c', 'd', 'b', 'b'], dtype='object')
-    >>> adata.obs_names_make_unique()
-    >>> adata.obs_names
-    Index(['a', 'b', 'c', 'd', 'b-1', 'b-2'], dtype='object')
+    >>> adata = AnnData(np.ones((2, 3)), var=pd.DataFrame(index=["a", "a", "b"]))
+    >>> adata.var_names
+    Index(['a', 'a', 'b'], dtype='object')
+    >>> adata.var_names_make_unique()
+    >>> adata.var_names
+    Index(['a', 'a-1', 'b'], dtype='object')
     """
     if index.is_unique:
         return index

@@ -223,8 +223,15 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
     Usage
     -----
 
+    >>> a = AnnData(sparse.eye(3), var=pd.DataFrame(index=list("abc")))
+    >>> b = AnnData(sparse.eye(2), var=pd.DataFrame(index=list("ba")))
     >>> reindexer = gen_reindexer(a.var_names, b.var_names)
-    >>> sparse.vstack([a.X, reindexer(b.X)])
+    >>> sparse.vstack([a.X, reindexer(b.X)]).toarray()
+    array([[1., 0., 0.],
+           [0., 1., 0.],
+           [0., 0., 1.],
+           [0., 1., 0.],
+           [1., 0., 0.]])
     """
     new_size = len(new_var)
     old_size = len(cur_var)

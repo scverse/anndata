@@ -146,8 +146,8 @@ def _access_warn(key, cur_loc):
 def _adjacency_getter(ovld: OverloadedDict, key, adata: "AnnData"):
     """For overloading:
 
-    >>> mtx = adata.uns["neighbors"]["connectivities"]
-    >>> mtx = adata.uns["neighbors"]["distances"]
+    >>> mtx = adata.uns["neighbors"]["connectivities"]  # doctest: +SKIP
+    >>> mtx = adata.uns["neighbors"]["distances"]  # doctest: +SKIP
     """
     _access_warn(key, f".obsp[{key}]")
     return adata.obsp[key]
@@ -156,8 +156,8 @@ def _adjacency_getter(ovld: OverloadedDict, key, adata: "AnnData"):
 def _adjacency_setter(ovld: OverloadedDict, key, value, adata: "AnnData"):
     """For overloading:
 
-    >>> adata.uns["neighbors"]["connectivities"] = mtx
-    >>> adata.uns["neighbors"]["distances"] = mtx
+    >>> adata.uns["neighbors"]["connectivities"] = mtx  # doctest: +SKIP
+    >>> adata.uns["neighbors"]["distances"] = mtx  # doctest: +SKIP
     """
     _access_warn(key, f".obsp[{key}]")
     adata.obsp[key] = value
