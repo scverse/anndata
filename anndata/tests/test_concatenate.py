@@ -6,6 +6,7 @@ from functools import partial
 import numpy as np
 from numpy import ma
 import pandas as pd
+from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy import sparse
 from boltons.iterutils import research, remap, default_exit
@@ -14,7 +15,7 @@ from boltons.iterutils import research, remap, default_exit
 from anndata import AnnData, Raw
 from anndata._core.index import _subset
 from anndata.tests import helpers
-from anndata.tests.helpers import asarray, assert_equal
+from anndata.tests.helpers import asarray, assert_equal, gen_adata
 
 
 @pytest.fixture(
@@ -28,6 +29,54 @@ def array_type(request):
 @pytest.fixture(params=["inner", "outer"])
 def join_type(request):
     return request.param
+
+
+def fix_known_differences(orig, result):
+    """
+    Helper function for reducing anndata's to only the elements we expect to be
+    equivalent after concatenation.
+
+    Only for the case where orig is the ground truth result of what concatenation should be.
+    """
+    orig = orig.copy()
+    result = result.copy()
+
+    result.obs_names = result.obs_names.str.extract(r"^(.*)-\d+$", expand=False)
+    result.obs.drop(columns=["batch"], inplace=True)
+    result.strings_to_categoricals()  # Should this be implicit in concatenation?
+
+    # TODO
+    # * merge varm, varp similar to uns
+    # * merge obsp, but some information should be lost
+    del orig.varm
+    del orig.varp
+    del orig.obsp  # TODO
+
+    # Possibly need to fix this, ordered categoricals lose orderedness
+    for k, dtype in orig.obs.dtypes.items():
+        if is_categorical_dtype(dtype) and dtype.ordered:
+            result.obs[k] = result.obs[k].astype(dtype)
+
+    return orig, result
+
+
+def test_concatenate_roundtrip(join_type, array_type):
+    adata = gen_adata((100, 10), X_type=array_type)
+
+    remaining = adata.obs_names
+    subsets = []
+    while len(remaining) > 0:
+        n = min(len(remaining), np.random.choice(50))
+        subset_idx = np.random.choice(remaining, n, replace=False)
+        subsets.append(adata[subset_idx])
+        remaining = remaining.difference(subset_idx)
+
+    result = subsets[0].concatenate(subsets[1:], join=join_type, uns_merge="same")
+
+    # Correcting for known differences
+    orig, result = fix_known_differences(adata, result)
+
+    assert_equal(result[orig.obs_names].copy(), orig)
 
 
 def test_concatenate_dense():
