@@ -31,6 +31,11 @@ def join_type(request):
     return request.param
 
 
+@pytest.fixture(params=[0, np.nan, np.pi])
+def fill_val(request):
+    return request.param
+
+
 def fix_known_differences(orig, result):
     """
     Helper function for reducing anndata's to only the elements we expect to be
@@ -242,32 +247,54 @@ def test_concatenate_obsm_inner(obsm_adatas):
     pd.testing.assert_frame_equal(true_df, cur_df)
 
 
-def test_concatenate_obsm_outer(obsm_adatas):
-    adata = obsm_adatas[0].concatenate(obsm_adatas[1:], join="outer")
+def test_concatenate_obsm_outer(obsm_adatas, fill_val):
+    outer = obsm_adatas[0].concatenate(
+        obsm_adatas[1:], join="outer", fill_value=fill_val
+    )
 
     inner = obsm_adatas[0].concatenate(obsm_adatas[1:], join="inner")
     for k, inner_v in inner.obsm.items():
         assert np.array_equal(
-            _subset(adata.obsm[k], (slice(None), slice(None, inner_v.shape[1]))),
+            _subset(outer.obsm[k], (slice(None), slice(None, inner_v.shape[1]))),
             inner_v,
         )
 
-    assert set(adata.obsm.keys()) == {"dense", "df", "sparse"}
-    assert adata.obsm["dense"].shape == (9, 3)
+    assert set(outer.obsm.keys()) == {"dense", "df", "sparse"}
+    assert isinstance(outer.obsm["dense"], np.ndarray)
+    np.testing.assert_equal(
+        outer.obsm["dense"],
+        np.array(
+            [
+                [0, 1, fill_val],
+                [2, 3, fill_val],
+                [4, 5, fill_val],
+                [0, 1, 2],
+                [3, 4, 5],
+                [6, 7, 8],
+                [9, 10, 11],
+                [4, 5, fill_val],
+                [6, 7, fill_val],
+            ]
+        ),
+    )
 
-    assert adata.obsm["sparse"].shape == (9, 4)
-    assert isinstance(adata.obsm["sparse"], sparse.spmatrix)
-    assert adata.obsm["sparse"].toarray().tolist() == [
-        [0, 1, 0, 0],
-        [2, 3, 0, 0],
-        [4, 5, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 1, 2, 3],
-        [4, 5, 6, 7],
-    ]
+    assert isinstance(outer.obsm["sparse"], sparse.spmatrix)
+    np.testing.assert_equal(
+        outer.obsm["sparse"].toarray(),
+        np.array(
+            [
+                [0, 1, fill_val, fill_val],
+                [2, 3, fill_val, fill_val],
+                [4, 5, fill_val, fill_val],
+                [fill_val, fill_val, fill_val, fill_val],
+                [fill_val, fill_val, fill_val, fill_val],
+                [fill_val, fill_val, fill_val, fill_val],
+                [fill_val, fill_val, fill_val, fill_val],
+                [0, 1, 2, 3],
+                [4, 5, 6, 7],
+            ]
+        ),
+    )
 
     # fmt: off
     true_df = (
@@ -275,7 +302,7 @@ def test_concatenate_obsm_outer(obsm_adatas):
         .reset_index(drop=True)
     )
     # fmt: on
-    cur_df = adata.obsm["df"].reset_index(drop=True)
+    cur_df = outer.obsm["df"].reset_index(drop=True)
     pd.testing.assert_frame_equal(true_df, cur_df)
 
 
