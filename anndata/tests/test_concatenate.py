@@ -319,6 +319,44 @@ def test_concatenate_layers_misaligned(array_type, join_type):
     assert_equal(merged.X, merged.layers["a"])
 
 
+def test_concatenate_fill_value(fill_val):
+    def get_obs_els(adata):
+        return {
+            "X": adata.X,
+            **{f"layer_{k}": adata.layers[k] for k in adata.layers},
+            **{f"obsm_{k}": adata.obsm[k] for k in adata.obsm},
+        }
+
+    adata1 = gen_adata((10, 10))
+    adata1.obsm = {
+        k: v for k, v in adata1.obsm.items() if not isinstance(v, pd.DataFrame)
+    }
+    adata2 = gen_adata((10, 5))
+    adata2.obsm = {
+        k: v[:, : v.shape[1] // 2]
+        for k, v in adata2.obsm.items()
+        if not isinstance(v, pd.DataFrame)
+    }
+    adata3 = gen_adata((7, 3))
+    adata3.obsm = {
+        k: v[:, : v.shape[1] // 3]
+        for k, v in adata3.obsm.items()
+        if not isinstance(v, pd.DataFrame)
+    }
+    joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
+
+    ptr = 0
+    for orig in [adata1, adata2, adata3]:
+        cur = joined[ptr : ptr + orig.n_obs]
+        cur_els = get_obs_els(cur)
+        orig_els = get_obs_els(orig)
+        for k, cur_v in cur_els.items():
+            orig_v = orig_els.get(k, sparse.csr_matrix((orig.n_obs, 0)))
+            assert_equal(cur_v[:, : orig_v.shape[1]], orig_v)
+            np.testing.assert_equal(asarray(cur_v[:, orig_v.shape[1] :]), fill_val)
+        ptr += orig.n_obs
+
+
 def test_concatenate_dense_duplicates():
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
     X2 = np.array([[1, 2, 3], [4, 5, 6]])
