@@ -232,14 +232,14 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index, *, fill_value=0):
            [0., 1., 0.],
            [0., 0., 1.],
            [0., 1., 0.],
-           [1., 0., 0.]])
+           [1., 0., 0.]], dtype=float32)
     >>> reindexer_nan = gen_reindexer(a.var_names, b.var_names, fill_value=np.nan)
-    >>> sparse.vstack([a.X, reindexer(b.X)]).toarray()
+    >>> sparse.vstack([a.X, reindexer_nan(b.X)]).toarray()
     array([[ 1.,  0.,  0.],
            [ 0.,  1.,  0.],
            [ 0.,  0.,  1.],
            [ 0.,  1., nan],
-           [ 1.,  0., nan]])
+           [ 1.,  0., nan]], dtype=float32)
     """
     new_size = len(new_var)
     old_size = len(cur_var)
