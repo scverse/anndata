@@ -1462,6 +1462,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         batch_categories: Sequence[Any] = None,
         uns_merge: Optional[str] = None,
         index_unique: Optional[str] = "-",
+        fill_value=0,
     ) -> "AnnData":
         """\
         Concatenate along the observations axis.
@@ -1495,6 +1496,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Make the index unique by joining the existing index names with the
             batch category, using `index_unique='-'`, for instance. Provide
             `None` to keep existing indices.
+        fill_value
+            Scalar value to fill newly missing values in arrays with. Note: only applies to arrays
+            and sparse matrices (not dataframes) and will only be used if `join="outer"`.
 
         Returns
         -------
@@ -1645,6 +1649,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             batch_key=batch_key,
             batch_categories=batch_categories,
             uns_merge=uns_merge,
+            fill_value=fill_value,
         )
 
         # Backwards compat, ordering columns:

@@ -8,6 +8,7 @@ from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
 from typing import Callable, Collection, Iterable, TypeVar, Union
+import warnings
 from warnings import warn
 
 import numpy as np
@@ -215,7 +216,7 @@ def resolve_index(inds: Iterable[pd.Index], join):
         raise ValueError()
 
 
-def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
+def gen_reindexer(new_var: pd.Index, cur_var: pd.Index, *, fill_value=0):
     """
     Given a new set of var_names, and a current set, generates a function which will reindex
     a matrix to be aligned with the new set.
@@ -232,6 +233,13 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
            [0., 0., 1.],
            [0., 1., 0.],
            [1., 0., 0.]])
+    >>> reindexer_nan = gen_reindexer(a.var_names, b.var_names, fill_value=np.nan)
+    >>> sparse.vstack([a.X, reindexer(b.X)]).toarray()
+    array([[ 1.,  0.,  0.],
+           [ 0.,  1.,  0.],
+           [ 0.,  0.,  1.],
+           [ 0.,  1., nan],
+           [ 1.,  0., nan]])
     """
     new_size = len(new_var)
     old_size = len(cur_var)
@@ -244,11 +252,29 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
     cur_pts = cur_pts[mask]
 
     def reindexer(X):
+        if not np.can_cast(fill_value, X.dtype):
+            out_dtype = np.promote_types(np.array(fill_value).dtype, X.dtype)
+        else:
+            out_dtype = X.dtype
+
         idxmtx = sparse.coo_matrix(
             (np.ones(len(new_pts), dtype=int), (cur_pts, new_pts)),
             shape=(old_size, new_size),
+            dtype=out_dtype,
         )
-        return X @ idxmtx
+        out = X @ idxmtx
+
+        if fill_value != 0:
+            to_fill = new_var.get_indexer(new_var.difference(cur_var))
+            if len(to_fill) > 0:
+                # More efficient to set columns on csc
+                if sparse.issparse(out):
+                    out = sparse.csc_matrix(out)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", sparse.SparseEfficiencyWarning)
+                    out[:, to_fill] = fill_value
+
+        return out
 
     return reindexer
 
@@ -277,7 +303,7 @@ def concat_aligned_mapping(mappings, reindexers, index=None):
     }
 
 
-def outer_concat(els, new_index: pd.Index, shapes: Collection[int]):
+def outer_concat(els, new_index: pd.Index, shapes: Collection[int], fill_value=0.0):
     """Given elements of a mapping to arrays, fill the missing values for an outer join.
 
     Params
@@ -288,6 +314,8 @@ def outer_concat(els, new_index: pd.Index, shapes: Collection[int]):
         Resulting index for this dimension
     shapes
         column size of the arrays in the new dimension
+    fill_value
+        What to fill newly missing values in arrays with
     """
     new_els = []
     indices = np.split(new_index, np.cumsum(shapes)[:-1])
@@ -315,9 +343,13 @@ def outer_concat(els, new_index: pd.Index, shapes: Collection[int]):
         for el, index in zip(els, indices):
             result_shape = (len(index), max_cols)
             if is_missing(el):
-                new_el = sparse.csr_matrix(result_shape, dtype=np.float32)
-            elif el.shape != result_shape:
-                new_el = sparse.csr_matrix(el, shape=result_shape)
+                el = sparse.csc_matrix((len(index), 0), dtype=np.int16)
+            if el.shape != result_shape:
+                new_el = gen_reindexer(
+                    pd.RangeIndex(max_cols),
+                    pd.RangeIndex(el.shape[1]),
+                    fill_value=fill_value,
+                )(el)
             else:
                 new_el = el
             new_els.append(new_el)
@@ -328,10 +360,13 @@ def outer_concat(els, new_index: pd.Index, shapes: Collection[int]):
         for el, index in zip(els, indices):
             result_shape = (len(index), max_cols)
             if is_missing(el):
-                new_el = np.zeros(result_shape)
-            elif el.shape != result_shape:
-                new_el = np.zeros(result_shape)
-                new_el[:, : el.shape[1]] = el
+                el = np.zeros(result_shape, dtype=np.int16)
+            if el.shape != result_shape:
+                new_el = gen_reindexer(
+                    pd.RangeIndex(max_cols),
+                    pd.RangeIndex(el.shape[1]),
+                    fill_value=fill_value,
+                )(el)
             else:
                 new_el = el
             new_els.append(new_el)
@@ -399,6 +434,7 @@ def concat(
     batch_categories=None,
     uns_merge=None,
     index_unique="-",
+    fill_value=0,
 ):
     """Re-implementation of `AnnData.concatenate`, but better."""
     # Argument normalization
@@ -416,7 +452,9 @@ def concat(
         )
     )
     var_names = resolve_index([a.var_names for a in adatas], join=join)
-    reindexers = [gen_reindexer(var_names, a.var_names) for a in adatas]
+    reindexers = [
+        gen_reindexer(var_names, a.var_names, fill_value=fill_value) for a in adatas
+    ]
 
     # Obs
     # fmt: off
@@ -458,6 +496,7 @@ def concat(
                 [a.obsm.get(k, MissingVal) for a in adatas],
                 obs_names,
                 [a.n_obs for a in adatas],
+                fill_value=fill_value,
             )
             for k in union_keys(a.obsm for a in adatas)
         }
@@ -481,6 +520,7 @@ def concat(
             batch_key=batch_key,
             batch_categories=batch_categories,
             index_unique=index_unique,
+            fill_value=fill_value,
         )
     elif any(has_raw):
         warn(
