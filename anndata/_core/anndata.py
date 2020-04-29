@@ -1462,7 +1462,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         batch_categories: Sequence[Any] = None,
         uns_merge: Optional[str] = None,
         index_unique: Optional[str] = "-",
-        fill_value=0,
+        fill_value=None,
     ) -> "AnnData":
         """\
         Concatenate along the observations axis.
@@ -1498,7 +1498,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             `None` to keep existing indices.
         fill_value
             Scalar value to fill newly missing values in arrays with. Note: only applies to arrays
-            and sparse matrices (not dataframes) and will only be used if `join="outer"`.
+            and sparse matrices (not dataframes) and will only be used if `join="outer"`. If not
+            provided, the default value is `0` for sparse matrices and `np.nan` for numpy arrays.
 
         Returns
         -------
