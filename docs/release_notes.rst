@@ -13,6 +13,17 @@
    - Square matrices in :attr:`~anndata.AnnData.uns` will no longer be sliced (use `.{obs,var}p` instead).
 
 
+On Master
+---------
+
+  - Concatenation has been overhauled for greater performance and more features
+
+    - Elements of `uns` can now be merged, see :pr:`350`.
+    - Outer joins now work for `layers` and `obsm`, see :pr:`352`.
+    - Fill value for outer joins can now be specified.
+    - For some cases, there is as much as a 100x increase in performance, see :issue:`303`.
+
+
 0.7 :small:`January 22, 2020`
 -----------------------------
 
