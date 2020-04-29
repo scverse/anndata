@@ -306,10 +306,16 @@ def concat_arrays(arrays, reindexers, index=None, fill_value=None):
         return df
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         return sparse.vstack(
-            [f(as_sparse(a), fill_value=fill_value) for f, a in zip(reindexers, arrays)], format="csr"
+            [
+                f(as_sparse(a), fill_value=fill_value)
+                for f, a in zip(reindexers, arrays)
+            ],
+            format="csr",
         )
     else:
-        return np.vstack([f(x, fill_value=fill_value) for f, x in zip(reindexers, arrays)])
+        return np.vstack(
+            [f(x, fill_value=fill_value) for f, x in zip(reindexers, arrays)]
+        )
 
 
 def concat_aligned_mapping(mappings, reindexers, index=None):
@@ -476,7 +482,9 @@ def concat(
         layers = inner_concat_aligned_mapping([a.layers for a in adatas], reindexers)
         obsm = inner_concat_aligned_mapping([a.obsm for a in adatas], index=obs_names)
     elif join == "outer":
-        layers = outer_concat_aligned_mapping([a.layers for a in adatas], reindexers, fill_value=fill_value)
+        layers = outer_concat_aligned_mapping(
+            [a.layers for a in adatas], reindexers, fill_value=fill_value
+        )
         obsm = outer_concat_aligned_mapping(
             [a.obsm for a in adatas], index=obs_names, fill_value=fill_value
         )
