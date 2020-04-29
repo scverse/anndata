@@ -376,19 +376,18 @@ def outer_concat(els, new_index: pd.Index, shapes: Collection[int], fill_value=0
 def inner_concat(els, new_index, shapes: Collection[int]):
     """Inner concatenation for obsm"""
     indices = np.split(new_index, np.cumsum(shapes)[:-1])
-    real = list(filter(not_missing, els))
-    min_cols = reduce(min, map(lambda x: x.shape[1], real))
+    min_cols = reduce(min, map(lambda x: x.shape[1], els))
 
-    if all(isinstance(el, pd.DataFrame) for el in real):
+    if all(isinstance(el, pd.DataFrame) for el in els):
         out = pd.concat(els, join="inner")
         out.index = new_index
         return out
-    elif any(isinstance(el, pd.DataFrame) for el in real):
+    elif any(isinstance(el, pd.DataFrame) for el in els):
         raise NotImplementedError(
             "Cannot concatenate a dataframe with other array types."
         )
     # Sparse arrays
-    elif any(isinstance(el, sparse.spmatrix) for el in real):
+    elif any(isinstance(el, sparse.spmatrix) for el in els):
         new_els = []
         for el, index in zip(els, indices):
             result_shape = (len(index), min_cols)
