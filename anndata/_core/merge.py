@@ -318,13 +318,6 @@ def concat_arrays(arrays, reindexers, index=None, fill_value=None):
         )
 
 
-def concat_aligned_mapping(mappings, reindexers, index=None):
-    return {
-        k: concat_arrays([m[k] for m in mappings], reindexers, index=index)
-        for k in intersect_keys(mappings)
-    }
-
-
 def inner_concat_aligned_mapping(mappings, reindexers=None, index=None):
     result = {}
 
