@@ -1498,8 +1498,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             `None` to keep existing indices.
         fill_value
             Scalar value to fill newly missing values in arrays with. Note: only applies to arrays
-            and sparse matrices (not dataframes) and will only be used if `join="outer"`. If not
-            provided, the default value is `0` for sparse matrices and `np.nan` for numpy arrays.
+            and sparse matrices (not dataframes) and will only be used if `join="outer"`.
+
+            .. note::
+                If not provided, the default value is `0` for sparse matrices and `np.nan`
+                for numpy arrays. See the examples below for more information.
 
         Returns
         -------
@@ -1578,30 +1581,66 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         >>> outer.var_names
         Index(['a', 'b', 'c', 'd'], dtype='object')
         >>> outer.X
-        array([[1., 2., 3., 0.],
-               [4., 5., 6., 0.],
-               [0., 3., 2., 1.],
-               [0., 6., 5., 4.],
-               [0., 3., 2., 1.],
-               [0., 6., 5., 4.]], dtype=float32)
+        array([[ 1.,  2.,  3., nan],
+               [ 4.,  5.,  6., nan],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.]], dtype=float32)
         >>> outer.X.sum(axis=0)
-        array([ 5., 25., 23., 10.], dtype=float32)
+        array([nan, 25., 23., nan], dtype=float32)
         >>> import pandas as pd
         >>> Xdf = pd.DataFrame(outer.X, columns=outer.var_names)
         >>> Xdf
              a    b    c    d
-        0  1.0  2.0  3.0  0.0
-        1  4.0  5.0  6.0  0.0
-        2  0.0  3.0  2.0  1.0
-        3  0.0  6.0  5.0  4.0
-        4  0.0  3.0  2.0  1.0
-        5  0.0  6.0  5.0  4.0
+        0  1.0  2.0  3.0  NaN
+        1  4.0  5.0  6.0  NaN
+        2  NaN  3.0  2.0  1.0
+        3  NaN  6.0  5.0  4.0
+        4  NaN  3.0  2.0  1.0
+        5  NaN  6.0  5.0  4.0
         >>> Xdf.sum()
         a     5.0
         b    25.0
         c    23.0
         d    10.0
         dtype: float32
+
+        One way to deal with missing values is to use masked arrays:
+
+        >>> from numpy import ma
+        >>> outer.X = ma.masked_invalid(outer.X)
+        >>> outer.X
+        masked_array(
+          data=[[1.0, 2.0, 3.0, --],
+                [4.0, 5.0, 6.0, --],
+                [--, 3.0, 2.0, 1.0],
+                [--, 6.0, 5.0, 4.0],
+                [--, 3.0, 2.0, 1.0],
+                [--, 6.0, 5.0, 4.0]],
+          mask=[[False, False, False,  True],
+                [False, False, False,  True],
+                [ True, False, False, False],
+                [ True, False, False, False],
+                [ True, False, False, False],
+                [ True, False, False, False]],
+          fill_value=1e+20,
+          dtype=float32)
+        >>> outer.X.sum(axis=0).data
+        array([ 5., 25., 23., 10.], dtype=float32)
+
+        The masked array is not saved but has to be reinstantiated after saving.
+
+        >>> outer.write('./test.h5ad')
+        >>> from anndata import read_h5ad
+        >>> outer = read_h5ad('./test.h5ad')
+        >>> outer.X
+        array([[ 1.,  2.,  3., nan],
+               [ 4.,  5.,  6., nan],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.],
+               [nan,  3.,  2.,  1.],
+               [nan,  6.,  5.,  4.]], dtype=float32)
 
         For sparse data, everything behaves similarly,
         except that for `join='outer'`, zeros are added.
