@@ -216,6 +216,17 @@ def resolve_index(inds: Iterable[pd.Index], join):
         raise ValueError()
 
 
+def default_fill_value(els):
+    """Given some arrays, returns what the default fill value should be.
+
+    This is largely due to backwards compat, and might not be the ideal solution.
+    """
+    if any(isinstance(el, sparse.spmatrix) for el in els):
+        return 0
+    else:
+        return np.nan
+
+
 def gen_reindexer(new_var: pd.Index, cur_var: pd.Index, *, fill_value=0):
     """
     Given a new set of var_names, and a current set, generates a function which will reindex
@@ -251,7 +262,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index, *, fill_value=0):
     new_pts = new_pts[mask]
     cur_pts = cur_pts[mask]
 
-    def reindexer(X):
+    def reindexer(X, fill_value=fill_value):
         if not np.can_cast(fill_value, X.dtype):
             out_dtype = np.promote_types(np.array(fill_value).dtype, X.dtype)
         else:
@@ -279,8 +290,11 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index, *, fill_value=0):
     return reindexer
 
 
-def concat_arrays(arrays, reindexers, index=None):
+def concat_arrays(arrays, reindexers, index=None, fill_value=None):
     arrays = list(arrays)
+    if fill_value is None:
+        fill_value = default_fill_value(arrays)
+
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         if not all(isinstance(a, pd.DataFrame) for a in arrays):
             raise NotImplementedError(
@@ -292,10 +306,10 @@ def concat_arrays(arrays, reindexers, index=None):
         return df
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         return sparse.vstack(
-            [f(as_sparse(a)) for f, a in zip(reindexers, arrays)], format="csr"
+            [f(as_sparse(a), fill_value=fill_value) for f, a in zip(reindexers, arrays)], format="csr"
         )
     else:
-        return np.vstack([f(x) for f, x in zip(reindexers, arrays)])
+        return np.vstack([f(x, fill_value=fill_value) for f, x in zip(reindexers, arrays)])
 
 
 def concat_aligned_mapping(mappings, reindexers, index=None):
@@ -339,12 +353,9 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, fill_value=None):
             for el, shape in zip(els, shapes)
         ]
     else:
-        if fill_value is not None:
-            pass
-        elif any(isinstance(el, sparse.spmatrix) for el in els):
-            fill_value = 0
-        else:
-            fill_value = np.nan
+        if fill_value is None:
+            fill_value = default_fill_value(els)
+
         max_col = max(el.shape[1] for el in els if not_missing(el))
         orig_cols = [el.shape[1] if not_missing(el) else 0 for el in els]
         reindexers = [
@@ -378,6 +389,7 @@ def outer_concat_aligned_mapping(
             ],
             cur_reindexers,
             index=index,
+            fill_value=fill_value,
         )
     return result
 
@@ -413,7 +425,7 @@ def concat(
     batch_categories=None,
     uns_merge=None,
     index_unique="-",
-    fill_value=0,
+    fill_value=None,
 ):
     """Re-implementation of `AnnData.concatenate`, but better."""
     # Argument normalization
@@ -458,13 +470,13 @@ def concat(
         partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
     )
 
-    X = concat_arrays([a.X for a in adatas], reindexers)
+    X = concat_arrays([a.X for a in adatas], reindexers, fill_value=fill_value)
 
     if join == "inner":
         layers = inner_concat_aligned_mapping([a.layers for a in adatas], reindexers)
         obsm = inner_concat_aligned_mapping([a.obsm for a in adatas], index=obs_names)
     elif join == "outer":
-        layers = outer_concat_aligned_mapping([a.layers for a in adatas], reindexers)
+        layers = outer_concat_aligned_mapping([a.layers for a in adatas], reindexers, fill_value=fill_value)
         obsm = outer_concat_aligned_mapping(
             [a.obsm for a in adatas], index=obs_names, fill_value=fill_value
         )
