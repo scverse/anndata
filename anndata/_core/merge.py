@@ -283,7 +283,9 @@ def concat_arrays(arrays, reindexers, index=None):
     arrays = list(arrays)
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         if not all(isinstance(a, pd.DataFrame) for a in arrays):
-            return MissingVal
+            raise NotImplementedError(
+                "Cannot concatenate a dataframe with other array types."
+            )
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat([f(x) for f, x in zip(reindexers, arrays)], ignore_index=True)
         df.index = index
@@ -303,103 +305,81 @@ def concat_aligned_mapping(mappings, reindexers, index=None):
     }
 
 
-def outer_concat(els, new_index: pd.Index, shapes: Collection[int], fill_value=0.0):
-    """Given elements of a mapping to arrays, fill the missing values for an outer join.
+def inner_concat_aligned_mapping(mappings, reindexers=None, index=None):
+    result = {}
 
-    Params
-    ------
-    els
-        Array likes to concatenate
-    new_index
-        Resulting index for this dimension
-    shapes
-        column size of the arrays in the new dimension
-    fill_value
-        What to fill newly missing values in arrays with
-    """
-    new_els = []
-    indices = np.split(new_index, np.cumsum(shapes)[:-1])
-    real = list(filter(not_missing, els))
-    max_cols = reduce(max, map(lambda x: x.shape[1], real))
+    for k in intersect_keys(mappings):
+        els = [m[k] for m in mappings]
+        if reindexers is None:
+            cur_reindexers = gen_inner_reindexers(els, new_index=index)
+        else:
+            cur_reindexers = reindexers
 
-    # Dataframes
-    # Don't need to do much with columns shape since pd.concat will handle it
-    if all(isinstance(el, pd.DataFrame) for el in real):
-        for el, index in zip(els, indices):
-            if is_missing(el):
-                new_els.append(pd.DataFrame(index=index))
-            else:
-                new_els.append(el)
-        out = pd.concat(new_els, join="outer")
-        out.index = new_index
-        return out
-    elif any(isinstance(el, pd.DataFrame) for el in real):
-        raise NotImplementedError(
-            "Cannot concatenate a dataframe with other array types."
-        )
+        result[k] = concat_arrays(els, cur_reindexers, index=index)
+    return result
 
-    # Sparse arrays
-    elif any(isinstance(el, sparse.spmatrix) for el in real):
-        for el, index in zip(els, indices):
-            result_shape = (len(index), max_cols)
-            if is_missing(el):
-                el = sparse.csc_matrix((len(index), 0), dtype=np.int16)
-            if el.shape != result_shape:
-                new_el = gen_reindexer(
-                    pd.RangeIndex(max_cols),
-                    pd.RangeIndex(el.shape[1]),
-                    fill_value=fill_value,
-                )(el)
-            else:
-                new_el = el
-            new_els.append(new_el)
-        return sparse.vstack(new_els, format="csr")
 
-    # np.ndarrays/ everything else
+def gen_inner_reindexers(els, new_index):
+    if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
+        common_cols = reduce(lambda x, y: x.intersection(y), (el.columns for el in els))
+        reindexers = repeat(lambda x: x[common_cols])
     else:
-        for el, index in zip(els, indices):
-            result_shape = (len(index), max_cols)
-            if is_missing(el):
-                el = np.zeros(result_shape, dtype=np.int16)
-            if el.shape != result_shape:
-                new_el = gen_reindexer(
-                    pd.RangeIndex(max_cols),
-                    pd.RangeIndex(el.shape[1]),
-                    fill_value=fill_value,
-                )(el)
-            else:
-                new_el = el
-            new_els.append(new_el)
-        return np.concatenate(new_els)
+        min_col = min(el.shape[1] for el in els)
+        reindexers = [
+            gen_reindexer(pd.RangeIndex(min_col), pd.RangeIndex(el.shape[1]))
+            for el in els
+        ]
+    return reindexers
 
 
-def inner_concat(els, new_index, shapes: Collection[int]):
-    """Inner concatenation for obsm"""
-    indices = np.split(new_index, np.cumsum(shapes)[:-1])
-    min_cols = reduce(min, map(lambda x: x.shape[1], els))
-
-    if all(isinstance(el, pd.DataFrame) for el in els):
-        out = pd.concat(els, join="inner")
-        out.index = new_index
-        return out
-    elif any(isinstance(el, pd.DataFrame) for el in els):
-        raise NotImplementedError(
-            "Cannot concatenate a dataframe with other array types."
-        )
-    # Sparse arrays
-    elif any(isinstance(el, sparse.spmatrix) for el in els):
-        new_els = []
-        for el, index in zip(els, indices):
-            result_shape = (len(index), min_cols)
-            if el.shape != result_shape:
-                new_el = sparse.csr_matrix(el, shape=result_shape)
-            else:
-                new_el = el
-            new_els.append(new_el)
-        return sparse.vstack(new_els, format="csr")
-    # np.ndarrays/ everything else
+def gen_outer_reindexers(els, shapes, new_index: pd.Index, fill_value=None):
+    if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
+        reindexers = [
+            lambda x: x if not_missing(el) else pd.DataFrame(index=range(shape))
+            for el, shape in zip(els, shapes)
+        ]
     else:
-        return np.concatenate([el[:, :min_cols] for el in els])
+        if fill_value is not None:
+            pass
+        elif any(isinstance(el, sparse.spmatrix) for el in els):
+            fill_value = 0
+        else:
+            fill_value = np.nan
+        max_col = max(el.shape[1] for el in els if not_missing(el))
+        orig_cols = [el.shape[1] if not_missing(el) else 0 for el in els]
+        reindexers = [
+            gen_reindexer(
+                pd.RangeIndex(max_col), pd.RangeIndex(n), fill_value=fill_value,
+            )
+            for n in orig_cols
+        ]
+    return reindexers
+
+
+def outer_concat_aligned_mapping(
+    mappings, reindexers=None, index=None, fill_value=None
+):
+    result = {}
+    ns = [m.parent.n_obs for m in mappings]
+
+    for k in union_keys(mappings):
+        els = [m.get(k, MissingVal) for m in mappings]
+        if reindexers is None:
+            cur_reindexers = gen_outer_reindexers(
+                els, ns, new_index=index, fill_value=fill_value
+            )
+        else:
+            cur_reindexers = reindexers
+
+        result[k] = concat_arrays(
+            [
+                el if not_missing(el) else np.zeros((n, 0), dtype=bool)
+                for el, n in zip(els, ns)
+            ],
+            cur_reindexers,
+            index=index,
+        )
+    return result
 
 
 def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
@@ -480,25 +460,14 @@ def concat(
 
     X = concat_arrays([a.X for a in adatas], reindexers)
 
-    layers = concat_aligned_mapping([a.layers for a in adatas], reindexers)
-
     if join == "inner":
-        obsm = {
-            k: inner_concat(
-                [a.obsm[k] for a in adatas], obs_names, [a.n_obs for a in adatas],
-            )
-            for k in intersect_keys(a.obsm for a in adatas)
-        }
+        layers = inner_concat_aligned_mapping([a.layers for a in adatas], reindexers)
+        obsm = inner_concat_aligned_mapping([a.obsm for a in adatas], index=obs_names)
     elif join == "outer":
-        obsm = {
-            k: outer_concat(
-                [a.obsm.get(k, MissingVal) for a in adatas],
-                obs_names,
-                [a.n_obs for a in adatas],
-                fill_value=fill_value,
-            )
-            for k in union_keys(a.obsm for a in adatas)
-        }
+        layers = outer_concat_aligned_mapping([a.layers for a in adatas], reindexers)
+        obsm = outer_concat_aligned_mapping(
+            [a.obsm for a in adatas], index=obs_names, fill_value=fill_value
+        )
 
     uns = merge_uns([a.uns for a in adatas], strategy=uns_merge)
 
