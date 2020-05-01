@@ -142,4 +142,6 @@ def test_split_paths(multipath, reference):
     ids=repr,
 )
 def test_resolve(adata, short_path, resolved):
-    assert resolve_path(adata, short_path) == RefPath(*resolved)
+    if isinstance(short_path, str):
+        short_path = (short_path,)
+    assert resolve_path(adata, *short_path) == RefPath(*resolved)

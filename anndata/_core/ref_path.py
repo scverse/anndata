@@ -301,23 +301,27 @@ def resolve_path(
     {params_resolve}
     """
     try:
-        rp = RefPath.parse(*path)
+        rp = RefPath.parse(path)
     except ValueError:
         pass
     else:
         if rp.attr == "layers":
-            raise ValueError("Cannot parse layer path containging a dim, use `dim=...`")
+            raise ValueError("Cannot parse layer path containing a dim, use `dim=...`")
         return rp
     if use_raw:
         adata = adata.raw
-    key_or_attr, *rest = path[0].split("/", 1) if len(path) == 1 else path
+    if dim not in ["obs", "var", None]:
+        raise ValueError(f"`dim` needs to be 'obs' or 'var', not {dim!r}.")
+    dims = ["obs", "var"] if dim is None else [dim]
+    key, *rest = path[0].split("/", 1) if len(path) == 1 else path
+    if rest and layer is None and key in adata.layers:
+        layer, key, *rest = key, *rest
 
-    # single string, search in .{obs,var}{_names,.columns}
+    # single string or layer, search in .{obs,var}{_names,.columns}
     if not rest:
-        dims = ["obs", "var"] if dim is None else [dim]
         for idxdim in dims:
             try:
-                in_col = index.find_vector(adata, key_or_attr, idxdim)
+                in_col = index.find_vector(adata, key, idxdim)
                 break
             except KeyError:
                 pass  # Ignore when not found
@@ -326,20 +330,52 @@ def resolve_path(
                 f"adata.{d}_names/.{'obs' if d == 'var' else 'var'}.columns"
                 for d in dims
             )
-            raise KeyError(f"Key {key_or_attr} not found in {dims_str}")
+            raise KeyError(f"Key {key} not found in {dims_str}")
         # TODO
         # if alias_col is not None:
         #     idx = getattr(adata, dim)[alias_col]
         #     key = idx.index[idx == key]
         if in_col:
             coldim = "obs" if idxdim == "var" else "var"
-            return RefPath(coldim, key_or_attr)
+            return RefPath(coldim, key)
         else:
             layer = "X" if layer is None else layer
-            return RefPath("layers", layer, idxdim, key_or_attr)
+            return RefPath("layers", layer, idxdim, key)
 
     # search in obsm, varm
-    # TODO
+    if len(rest) == 1:
+        sub_key = rest[0]
+        for idxdim in dims:
+            m = getattr(adata, f"{idxdim}m")
+            if key in m:
+                arr_df = m[key]
+                break
+        else:
+            raise KeyError(f"Path {key!r}/{sub_key!r} not found in `adata`")
+        sub_key = _normalize_arr_df_column(
+            arr_df,
+            f"Column {sub_key!r} not found in adata.{idxdim}m[{key!r}]",
+            sub_key,
+            len(path) == 1 and "/" in path[0],
+        )
+        return RefPath(f"{idxdim}m", key, sub_key)
+
+    raise KeyError(f"Path {path!r} not found in `adata`")
+
+
+def _normalize_arr_df_column(arr_df, err_str: str, sub_key: str, is_str_path: bool):
+    if hasattr(arr_df, "columns") and sub_key in arr_df.columns:
+        return sub_key
+    if not is_str_path:
+        raise KeyError(err_str)
+    try:
+        col_idx = int(sub_key)
+    except ValueError:
+        raise KeyError(err_str)
+    if col_idx < arr_df.shape[1]:
+        return col_idx
+    else:
+        raise IndexError(f"{err_str}, it has only {arr_df.shape[1]} columns")
 
 
 @_doc_params(params_resolve=PARAMS_RESOLVE)
