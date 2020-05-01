@@ -432,32 +432,27 @@ def concat(
     if batch_categories is None:
         batch_categories = np.arange(len(adatas)).astype(str)
 
-    # Combining indexes
-    obs_names = pd.Index(
-        np.concatenate(
-            [
-                pd.Series(a.obs_names) + f"{index_unique}{batch}"
-                for batch, a in zip(batch_categories, adatas)
-            ]
-        )
+    # Batch column
+    batch = pd.Categorical.from_codes(
+        np.repeat(np.arange(len(adatas)), [a.n_obs for a in adatas]),
+        categories=batch_categories,
     )
+
+    # Combining indexes
+    obs_names = pd.concat([pd.Series(a.obs_names) for a in adatas], ignore_index=True)
+    if index_unique is not None:
+        obs_names = obs_names.str.cat(batch.map(str), sep=index_unique)
+    obs_names = pd.Index(obs_names)
+
     var_names = resolve_index([a.var_names for a in adatas], join=join)
     reindexers = [
         gen_reindexer(var_names, a.var_names, fill_value=fill_value) for a in adatas
     ]
 
     # Obs
-    # fmt: off
-    batch = (
-        pd.Series(
-            np.repeat(np.arange(len(adatas)), [a.n_obs for a in adatas]), dtype="category"
-        )
-        .map(dict(zip(np.arange(len(adatas)), batch_categories)))
-    )
-    # fmt: on
     obs = pd.concat([a.obs for a in adatas], ignore_index=True)
     obs.index = obs_names
-    obs[batch_key] = batch.values
+    obs[batch_key] = batch
 
     # Var
     var = merge_dataframes(
