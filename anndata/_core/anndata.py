@@ -1690,6 +1690,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             batch_categories=batch_categories,
             uns_merge=uns_merge,
             fill_value=fill_value,
+            index_unique=index_unique,
         )
 
         # Backwards compat, ordering columns:

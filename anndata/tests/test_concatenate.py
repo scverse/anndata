@@ -46,7 +46,6 @@ def fix_known_differences(orig, result):
     orig = orig.copy()
     result = result.copy()
 
-    result.obs_names = result.obs_names.str.extract(r"^(.*)-\d+$", expand=False)
     result.obs.drop(columns=["batch"], inplace=True)
     result.strings_to_categoricals()  # Should this be implicit in concatenation?
 
@@ -76,7 +75,9 @@ def test_concatenate_roundtrip(join_type, array_type):
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
 
-    result = subsets[0].concatenate(subsets[1:], join=join_type, uns_merge="same")
+    result = subsets[0].concatenate(
+        subsets[1:], join=join_type, uns_merge="same", index_unique=None
+    )
 
     # Correcting for known differences
     orig, result = fix_known_differences(adata, result)
