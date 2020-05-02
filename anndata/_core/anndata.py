@@ -1960,7 +1960,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             selection = selection if reverse is None else selection[reverse]
 
         if obs is not None:
-            selection = (selection, self.obs[obs])
+            selection = (selection, self.obs[obs][choice])
         return selection
 
     # --------------------------------------------------------------------------
