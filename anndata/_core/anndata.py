@@ -1910,6 +1910,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """\
         Return a chunk of the data matrix :attr:`X`, a key from :attr:`obsm` or
         a key from :attr:`layers` with random or specified indices.
+
         If both obsm and layer are not specified, returns the selection
         from the data matrix :attr:`X`.
 
@@ -1917,6 +1918,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ----------
         select
             Depending on the type:
+
             :class:`int`
                 A random chunk with `select` rows will be returned.
             :term:`sequence` (e.g. a list, tuple or numpy array) of :class:`int`
