@@ -1469,6 +1469,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def concatenate(
         self,
         *adatas: "AnnData",
+        axis=0,
         join: str = "inner",
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
@@ -1697,6 +1698,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         out = concat(
             all_adatas,
+            axis=axis,
             join=join,
             batch_key=batch_key,
             batch_categories=batch_categories,
@@ -1709,14 +1711,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if batch_categories is None:
             batch_categories = np.arange(len(all_adatas)).astype(str)
         pat = rf"-({'|'.join(batch_categories)})$"
-        out.var = out.var.iloc[
-            :,
-            (
-                out.var.columns.str.extract(pat, expand=False)
-                .fillna("")
-                .argsort(kind="stable")
-            ),
-        ]
+        if axis == 0:
+            out.var = out.var.iloc[
+                :,
+                (
+                    out.var.columns.str.extract(pat, expand=False)
+                    .fillna("")
+                    .argsort(kind="stable")
+                ),
+            ]
 
         return out
 
