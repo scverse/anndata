@@ -609,7 +609,10 @@ def test_memory_usage():
         return total
 
     total = np.zeros(RUNS)
+    # Intantiate the anndata object first before memory calculation to
+    # only look at memory changes due to deletion of such a object.
     adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
+    adata.X[0, 0] = 1.0  # Disable Codacy issue
     tracemalloc.start()
     for i in range(RUNS):
         adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
