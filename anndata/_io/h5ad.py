@@ -84,6 +84,10 @@ def write_h5ad(
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
+    # create directory if it doesn't exist
+    dirname = filepath.parent
+    if not dirname.is_dir():
+        dirname.mkdir(parents=True, exist_ok=True)
     with h5py.File(filepath, mode) as f:
         if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
