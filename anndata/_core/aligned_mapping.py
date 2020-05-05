@@ -3,6 +3,7 @@ from collections import abc as cabc
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
+import weakref
 
 import numpy as np
 import pandas as pd
@@ -222,7 +223,12 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         axis: int,
         vals: Union[Mapping, AxisArraysBase, None] = None,
     ):
-        self._parent = parent
+        if isinstance(parent, anndata.AnnData):
+            self._parent_ref = weakref.ref(parent)
+            self._is_weak = True
+        else:
+            self._parent_ref = parent
+            self._is_weak = False
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
@@ -230,6 +236,23 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self._data = dict()
         if vals is not None:
             self.update(vals)
+
+    @property
+    def _parent(self):
+        if self._is_weak:
+            return self._parent_ref()
+        return self._parent_ref
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if self._is_weak:
+            state["_parent_ref"] = state["_parent_ref"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        if self._is_weak:
+            self.__dict__["_parent_ref"] = weakref.ref(state["_parent_ref"])
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
@@ -270,10 +293,23 @@ class LayersBase(AlignedMapping):
 
 class Layers(AlignedActualMixin, LayersBase):
     def __init__(self, parent: "anndata.AnnData", vals: Optional[Mapping] = None):
-        self._parent = parent
+        self._parent_ref = weakref.ref(parent)
         self._data = dict()
         if vals is not None:
             self.update(vals)
+
+    @property
+    def _parent(self):
+        return self._parent_ref()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_parent_ref"] = state["_parent_ref"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        self.__dict__["_parent_ref"] = weakref.ref(state["_parent_ref"])
 
 
 class LayersView(AlignedViewMixin, LayersBase):
@@ -320,13 +356,26 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(
         self, parent: "anndata.AnnData", axis: int, vals: Optional[Mapping] = None,
     ):
-        self._parent = parent
+        self._parent_ref = weakref.ref(parent)
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
         self._data = dict()
         if vals is not None:
             self.update(vals)
+
+    @property
+    def _parent(self):
+        return self._parent_ref()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_parent_ref"] = state["_parent_ref"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        self.__dict__["_parent_ref"] = weakref.ref(state["_parent_ref"])
 
 
 class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
