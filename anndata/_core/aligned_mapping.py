@@ -48,8 +48,8 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] != val.shape[i]:
-                right_shape = tuple(self.parent.shape[a] for a in self.axes)
+            if self.parent_shape[axis] != val.shape[i]:
+                right_shape = tuple(self.parent_shape[a] for a in self.axes)
                 raise ValueError(
                     f"Value passed for key {key!r} is of incorrect shape. "
                     f"Values of {self.attrname} must match dimensions "
@@ -81,6 +81,10 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     @property
     def parent(self) -> Union["anndata.AnnData", "raw.Raw"]:
         return self._parent
+
+    @property
+    def parent_shape(self) -> Tuple[int, int]:
+        return self._parent.shape
 
     def copy(self):
         d = self._actual_class(self.parent, self._axis)
@@ -232,16 +236,27 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
+        self._parent_shape = parent.shape
         self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
         if vals is not None:
             self.update(vals)
 
     @property
-    def _parent(self):
+    def _parent(self) -> Union["anndata.AnnData", "raw.Raw"]:
         if self._is_weak:
             return self._parent_ref()
         return self._parent_ref
+
+    @property
+    def parent_shape(self) -> Tuple[int, int]:
+        if self._parent:
+            self._parent_shape = self._parent.shape
+        return self._parent_shape
+
+    @parent_shape.setter
+    def parent_shape(self, shape: Tuple[int, int]):
+        self._parent_shape = shape
 
     def __getstate__(self):
         state = self.__dict__.copy()
