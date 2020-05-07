@@ -2,6 +2,7 @@ from collections.abc import MutableMapping
 from functools import partial
 from typing import Any, Callable, Mapping, Optional
 from warnings import warn
+from weakref import proxy
 
 
 class KeyOverload:
@@ -90,7 +91,7 @@ class OverloadedDict(MutableMapping):
         self.data = data
         self.overloaded = overloaded
         for v in overloaded.values():
-            v.parent = self
+            v.parent = proxy(self)
 
     def __getitem__(self, key):
         if key in self.overloaded:
