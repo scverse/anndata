@@ -149,6 +149,7 @@ def read_loom(
     obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
     var_names: str = "Gene",
     varm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    layers_names: Optional[Mapping[str, Iterable[str]]] = None,
     dtype: str = "float32",
     **kwargs,
 ) -> AnnData:
@@ -177,8 +178,10 @@ def read_loom(
         Loompy keys which will be constructed into observation matrices
     var_names
         Loompy key where the variable/gene names are stored.
-    obsm_names
+    varm_names
         Loompy keys which will be constructed into variable matrices
+    layers_names
+        Loompy keys of where data layers are stored.
     **kwargs:
         Arguments to loompy.connect
     """
@@ -198,7 +201,13 @@ def read_loom(
             layers["matrix"] = (
                 lc.layers[""].sparse().T.tocsr() if sparse else lc.layers[""][()].T
             )
-        for key in lc.layers.keys():
+        if isinstance(layers_names, str):
+            layers_names = [layers_names]
+        elif layers_names is None:
+            layers_names = lc.layers.keys()
+        else:
+            layers_names = set(layers_names).intersection(lc.layers.keys())
+        for key in layers_names:
             if key != "":
                 layers[key] = (
                     lc.layers[key].sparse().T.tocsr()
