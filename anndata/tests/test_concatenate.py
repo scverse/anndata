@@ -320,6 +320,21 @@ def test_concatenate_layers_misaligned(array_type, join_type):
     assert_equal(merged.X, merged.layers["a"])
 
 
+def test_concatenate_layers_outer(array_type, fill_val):
+    # Testing that issue #368 is fixed
+    a = AnnData(
+        X=np.ones((10, 20)),
+        layers={"a": array_type(sparse.random(10, 20, format="csr"))},
+    )
+    b = AnnData(X=np.ones((10, 20)))
+
+    c = a.concatenate(b, join="outer", fill_value=fill_val, batch_categories=["a", "b"])
+
+    np.testing.assert_array_equal(
+        asarray(c[c.obs["batch"] == "b"].layers["a"]), fill_val
+    )
+
+
 def test_concatenate_fill_value(fill_val):
     def get_obs_els(adata):
         return {
