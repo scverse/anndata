@@ -1277,6 +1277,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._uns,
             self._varm.flipped(),
             self._obsm.flipped(),
+            obsp=self.varp,
+            varp=self.obsp,
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
             dtype=self.X.dtype.name,
