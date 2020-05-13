@@ -268,11 +268,14 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index, *, fill_value=0):
         else:
             out_dtype = X.dtype
 
-        idxmtx = sparse.coo_matrix(
-            (np.ones(len(new_pts), dtype=int), (cur_pts, new_pts)),
-            shape=(old_size, new_size),
-            dtype=out_dtype,
-        )
+        if X.shape[1] != 0:
+            idxmtx = sparse.coo_matrix(
+                (np.ones(len(new_pts), dtype=int), (cur_pts, new_pts)),
+                shape=(old_size, new_size),
+                dtype=out_dtype,
+            )
+        else:
+            idxmtx = sparse.coo_matrix((0, new_size))
         out = X @ idxmtx
 
         if fill_value != 0:
