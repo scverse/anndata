@@ -42,6 +42,7 @@ from .views import (
     _resolve_idxs,
 )
 from .sparse_dataset import SparseDataset
+from . import ref_path
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
@@ -284,8 +285,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         var: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         uns: Optional[Mapping[str, Any]] = None,
-        obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        obsm: Optional[
+            Union[
+                np.ndarray,
+                Mapping[str, Union[np.ndarray, sparse.spmatrix, pd.DataFrame]],
+            ]
+        ] = None,
+        varm: Optional[
+            Union[
+                np.ndarray,
+                Mapping[str, Union[np.ndarray, sparse.spmatrix, pd.DataFrame]],
+            ]
+        ] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Mapping[str, Any]] = None,
         dtype: Union[np.dtype, str] = "float32",
@@ -294,8 +305,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filemode: Optional[Literal["r", "r+"]] = None,
         asview: bool = False,
         *,
-        obsp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        obsp: Optional[
+            Union[np.ndarray, Mapping[str, Union[np.ndarray, sparse.spmatrix]]]
+        ] = None,
+        varp: Optional[
+            Union[np.ndarray, Mapping[str, Union[np.ndarray, sparse.spmatrix]]]
+        ] = None,
         oidx: Index1D = None,
         vidx: Index1D = None,
     ):
@@ -1321,6 +1336,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.X
 
+    # TODO: export when exporting RefPath.
+    # resolve_path = ref_path.resolve_path
+    get_df = ref_path.get_df
+    get_vector = ref_path.get_vector
+
     def obs_vector(self, k: str, *, layer: Optional[str] = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
@@ -1351,7 +1371,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-        return get_vector(self, k, "obs", "var", layer=layer)
+        return get_vector(self, k, "var", layer=layer)
 
     def var_vector(self, k, *, layer: Optional[str] = None) -> np.ndarray:
         """\
@@ -1383,7 +1403,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     FutureWarning,
                 )
                 layer = None
-        return get_vector(self, k, "var", "obs", layer=layer)
+        return get_vector(self, k, "obs", layer=layer)
 
     @utils.deprecated("obs_vector")
     def _get_obs_array(self, k, use_raw=False, layer=None):

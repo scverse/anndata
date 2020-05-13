@@ -1,5 +1,6 @@
 from ._core.anndata import AnnData, ImplicitModificationWarning
 from ._core.raw import Raw
+from ._core.ref_path import RefPath
 from ._io import (
     read_h5ad,
     read_loom,
@@ -70,7 +71,6 @@ Writing to other formats.
    AnnData.write_csvs
    AnnData.write_loom
    AnnData.write_zarr
-
 
 Errors and warnings
 -------------------
