@@ -1276,7 +1276,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             t_csr(X),
             obs=self.var,
             var=self.obs,
-            uns=self.uns,
+            # we're taking a private attributes here to be able to modify uns of the original object
+            uns=self._uns,
             obsm=self.varm.flipped(),
             varm=self.obsm.flipped(),
             obsp=self.varp.copy(),

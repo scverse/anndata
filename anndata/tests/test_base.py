@@ -363,6 +363,8 @@ def test_transpose():
     adata = gen_adata((5, 3))
     adata.varp = {f"varp_{k}": v for k, v in adata.varp.items()}
     adata1 = adata.T
+    adata1.uns['test123'] = 1
+    assert 'test123' in adata.uns
     assert_equal(adata1.X.shape, (3, 5))
     assert_equal(adata1.obsp.keys(), adata.varp.keys())
 
