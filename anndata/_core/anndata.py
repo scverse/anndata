@@ -1977,9 +1977,3 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
-
-    def __del__(self):
-        if isinstance(self._obsm, AxisArrays):
-            self._obsm.parent_shape = self.shape
-        if isinstance(self._varm, AxisArrays):
-            self._varm.parent_shape = self.shape

@@ -84,6 +84,8 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
     @property
     def parent_shape(self) -> Tuple[int, int]:
+        if hasattr(self, "_parent_shape"):
+            return self._parent_shape
         return self._parent.shape
 
     def copy(self):
@@ -247,16 +249,6 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if self._is_weak:
             return self._parent_ref()
         return self._parent_ref
-
-    @property
-    def parent_shape(self) -> Tuple[int, int]:
-        if self._parent:
-            self._parent_shape = self._parent.shape
-        return self._parent_shape
-
-    @parent_shape.setter
-    def parent_shape(self, shape: Tuple[int, int]):
-        self._parent_shape = shape
 
     def __getstate__(self):
         state = self.__dict__.copy()
