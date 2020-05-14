@@ -360,26 +360,11 @@ def test_get_subset_annotation():
 
 
 def test_transpose():
-    adata = AnnData(
-        np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(obs_names=["A", "B"]),
-        dict(var_names=["a", "b", "c"]),
-    )
-
+    adata = gen_adata((5, 3))
+    adata.varp = {f'varp_{k}': v for k, v in adata.varp.items()}
     adata1 = adata.T
-
-    # make sure to not modify the original!
-    assert adata.obs_names.tolist() == ["A", "B"]
-    assert adata.var_names.tolist() == ["a", "b", "c"]
-
-    assert adata1.obs_names.tolist() == ["a", "b", "c"]
-    assert adata1.var_names.tolist() == ["A", "B"]
-    assert adata1.X.shape == adata.X.T.shape
-
-    adata2 = adata.transpose()
-    assert np.array_equal(adata1.X, adata2.X)
-    assert np.array_equal(adata1.obs, adata2.obs)
-    assert np.array_equal(adata1.var, adata2.var)
+    assert_equal(adata1.X.shape, (3, 5))
+    assert_equal(adata1.obsp.keys(), adata.varp.keys())
 
 
 def test_append_col():
