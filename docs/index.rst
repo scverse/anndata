@@ -11,7 +11,10 @@ of data and learned annotations. It was initially built for
 `Scanpy <https://github.com/theislab/scanpy>`__
 `(Genome Biology, 2018) <https://doi.org/10.1186/s13059-017-1382-0>`__.
 
-.. include:: release_notes.rst
+Latest release
+--------------
+
+.. include:: release-latest.rst
 
 .. toctree::
    :maxdepth: 1
@@ -21,4 +24,5 @@ of data and learned annotations. It was initially built for
    concatenation
    fileformat-prose
    benchmarks
+   release-notes
    references
