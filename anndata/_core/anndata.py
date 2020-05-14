@@ -1256,6 +1256,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Transpose whole object.
 
         Data matrix is transposed, observations and variables are interchanged.
+
+        Ignores `.raw`.
         """
         if not self.isbacked:
             X = self.X
