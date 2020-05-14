@@ -1274,11 +1274,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         return AnnData(
             t_csr(X),
-            var=self.var,
-            obs=self.obs,
+            obs=self.var,
+            var=self.obs,
             uns=self.uns,
-            varm=self.varm.flipped(),
-            obsm=self.obsm.flipped(),
+            obsm=self.varm.flipped(),
+            varm=self.obsm.flipped(),
             obsp=self.varp.copy(),
             varp=self.obsp.copy(),
             filename=self.filename,

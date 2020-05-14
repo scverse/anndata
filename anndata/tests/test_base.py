@@ -361,7 +361,7 @@ def test_get_subset_annotation():
 
 def test_transpose():
     adata = gen_adata((5, 3))
-    adata.varp = {f'varp_{k}': v for k, v in adata.varp.items()}
+    adata.varp = {f"varp_{k}": v for k, v in adata.varp.items()}
     adata1 = adata.T
     assert_equal(adata1.X.shape, (3, 5))
     assert_equal(adata1.obsp.keys(), adata.varp.keys())
