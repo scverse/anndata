@@ -1289,7 +1289,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     T = property(transpose)
 
-    def to_df(self) -> pd.DataFrame:
+    def to_df(self, layer=None) -> pd.DataFrame:
         """\
         Generate shallow :class:`~pandas.DataFrame`.
 
@@ -1299,11 +1299,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         * No annotations are maintained in the returned object.
         * The data matrix is densified in case it is sparse.
+
+        Params
+        ------
+        layer : str
+            Key for `.layers`.
         """
-        if issparse(self.X):
-            X = self.X.toarray()
+        if layer is not None:
+            X = self.layers[layer]
         else:
             X = self.X
+        if issparse(X):
+            X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
     def _get_X(self, use_raw=False, layer=None):
