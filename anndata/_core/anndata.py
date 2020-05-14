@@ -1459,7 +1459,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self.write(filename)
             return read_h5ad(filename, backed=mode)
 
-    def concatenate(
+    def concat(
         self,
         *adatas: "AnnData",
         join: str = "inner",
@@ -1712,6 +1712,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ]
 
         return out
+
+    @utils.deprecated("concat")
+    def concatenate(self, *args, **kwargs):
+        return self.concat(*args, **kwargs)
 
     def var_names_make_unique(self, join: str = "-"):
         # Important to go through the setter so obsm dataframes are updated too
