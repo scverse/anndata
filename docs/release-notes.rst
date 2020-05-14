@@ -1,31 +1,20 @@
+Release Notes
+=============
+
 .. role:: small
 .. role:: smaller
 .. role:: noteversion
 
+.. include:: _key_contributors.rst
 
-.. note::
-   Upcoming changes:
+Version 0.7
+-----------
 
-   - :attr:`~anndata.AnnData.layers` and :attr:`~anndata.AnnData.X` will be unified.
-   - :attr:`~anndata.AnnData.filename` and :attr:`~anndata.AnnData.isbacked` will be unified under a new name.
-   - The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
-     :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
-   - Square matrices in :attr:`~anndata.AnnData.uns` will no longer be sliced (use `.{obs,var}p` instead).
+.. include:: release-latest.rst
 
 
-On Master
----------
-
-  - Concatenation has been overhauled for greater performance and more features
-
-    - Elements of `uns` can now be merged, see :pr:`350`.
-    - Outer joins now work for `layers` and `obsm`, see :pr:`352`.
-    - Fill value for outer joins can now be specified.
-    - For some cases, there is as much as a 100x increase in performance, see :issue:`303`.
-
-
-0.7 :small:`January 22, 2020`
------------------------------
+0.7.0 :small:`2020-01-22`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
    Breaking changes introduced between 0.6.22.post1 and 0.7:
@@ -35,48 +24,42 @@ On Master
    - Internal modules like `anndata.core` are private and their contents are not stable: See :issue:`174`.
    - The old deprecated attributes `.smp*`. `.add` and `.data` have been removed.
 
-   Currently broken features
+.. rubric:: View overhaul :pr:`164`
 
-   - `sc.pp.normalize_per_cell` doesn’t work on dask arrays. It just doesn’t modify the matrix.
+- Indexing into a view no longer keeps a reference to intermediate view, see :issue:`62`.
+- Views are now lazy. Elements of view of AnnData are not indexed until they’re accessed.
+- Indexing with scalars no longer reduces dimensionality of contained arrays, see :issue:`145`.
+- All elements of AnnData should now follow the same rules about how they’re subset, see :issue:`145`.
+- Can now index by observations and variables at the same time.
 
+.. rubric:: IO overhaul :pr:`167`
 
-View overhaul – PR :pr:`164`
-  - Indexing into a view no longer keeps a reference to intermediate view, see :issue:`62`.
-  - Views are now lazy. Elements of view of AnnData are not indexed until they’re accessed.
-  - Indexing with scalars no longer reduces dimensionality of contained arrays, see :issue:`145`.
-  - All elements of AnnData should now follow the same rules about how they’re subset, see :issue:`145`.
-  - Can now index by observations and variables at the same time.
+- Reading and writing has been overhauled for simplification and speed.
+- Time and memory usage can be half of previous in typical use cases
+- Zarr backend now supports sparse arrays, and generally is closer to having the same features as HDF5.
+- Backed mode should see significant speed and memory improvements for access along compressed dimensions and IO. PR :pr:`241`.
+- :class:`~pandas.Categorical`\ s can now be ordered (PR :pr:`230`) and written to disk with a large number of categories (PR :pr:`217`).
 
+.. rubric:: Mapping attributes overhaul :smaller:`(obsm, varm, layers, ...)`
 
-IO overhaul – PR :pr:`167`
-  - Reading and writing has been overhauled for simplification and speed.
+- New attributes :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` have been added for two dimensional arrays where each axis corresponds to a single axis of the AnnData object. PR :pr:`207`.
+- These are intended to store values like cell-by-cell graphs, which are currently stored in :attr:`~anndata.AnnData.uns`.
+- Sparse arrays are now allowed as values in all mapping attributes.
+- DataFrames are now allowed as values in :attr:`~anndata.AnnData.obsm` and :attr:`~anndata.AnnData.varm`.
+- All mapping attributes now share an implementation and will have the same behaviour. PR :pr:`164`.
 
-    - Time and memory usage can be half of previous in typical use cases
+.. rubric:: Miscellaneous improvements
 
-  - Zarr backend now supports sparse arrays, and generally is closer to having the same features as HDF5.
-  - Backed mode should see significant speed and memory improvements for access along compressed dimensions and IO. PR :pr:`241`.
-  - :class:`~pandas.Categorical`\ s can now be ordered (PR :pr:`230`) and written to disk with a large number of categories (PR :pr:`217`).
-
-
-Mapping attributes overhaul :smaller:`(obsm, varm, layers, …)`
-  - New attributes :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` have been added for two dimensional arrays where each axis corresponds to a single axis of the AnnData object. PR :pr:`207`.
-
-    - These are intended to store values like cell-by-cell graphs, which are currently stored in :attr:`~anndata.AnnData.uns`.
-
-  - Sparse arrays are now allowed as values in all mapping attributes.
-  - DataFrames are now allowed as values in :attr:`~anndata.AnnData.obsm` and :attr:`~anndata.AnnData.varm`.
-  - All mapping attributes now share an implementation and will have the same behaviour. PR :pr:`164`.
+- Mapping attributes now have ipython tab completion (e.g. `adata.obsm["\\t` can provide suggestions) PR :pr:`183`.
+- :class:`~anndata.AnnData` attributes are now delete-able (e.g. `del adata.raw`) PR :pr:`242`.
+- Many many bug fixes
 
 
-Miscellaneous improvements
-  - Mapping attributes now have ipython tab completion (e.g. `adata.obsm["\\t` can provide suggestions) PR :pr:`183`.
-  - :class:`~anndata.AnnData` attributes are now delete-able (e.g. `del adata.raw`) PR :pr:`242`.
-  - Many many bug fixes
+Version 0.6
+-----------
 
-
-Versions 0.6.*
---------------
-
+0.6.* :small:`2019-*-*`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 - better support for aligned mappings (obsm, varm, layers)
   :noteversion:`0.6.22` :pr:`155` :smaller:`thanks to I Virshup`
 - convenience accesors :func:`~anndata.AnnData.obs_vector`, :func:`~anndata.AnnData.var_vector` for 1d arrays.
@@ -100,18 +83,21 @@ Versions 0.6.*
 - iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
   :noteversion:`0.6.1` :pr:`20` :smaller:`thanks to S Rybakov`
 
-Version 0.6 :small:`May 1, 2018`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0.6.0 :small:`2018-05-01`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 - compatibility with Seurat converter
 - tremendous speedup for :func:`~anndata.AnnData.concatenate`
 - bug fix for deep copy of unstructured annotation after slicing
 - bug fix for reading HDF5 stored single-category annotations
-- “outer join” concatenation: adds zeros for concatenation of sparse data and nans for dense data
+- `'outer join'` concatenation: adds zeros for concatenation of sparse data and nans for dense data
 - better memory efficiency in loom exports
 
 
-Version 0.5 :small:`February 9, 2018`
--------------------------------------
+Version 0.5
+-----------
+
+0.5.0 :small:`2018-02-09`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - inform about duplicates in :class:`~anndata.AnnData.var_names` and resolve them using :func:`~anndata.AnnData.var_names_make_unique`
 - automatically remove unused categories after slicing
@@ -122,8 +108,11 @@ Version 0.5 :small:`February 9, 2018`
 .. _UMI tools: https://github.com/CGATOxford/UMI-tools
 
 
-Version 0.4 :small:`December 23, 2017`
---------------------------------------
+Version 0.4
+-----------
+
+0.4.0 :small:`2017-12-23`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - read/write `.loom`_ files
 - scalability beyond dataset sizes that fit into memory: see this `blog post`_
