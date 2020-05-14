@@ -1256,6 +1256,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Transpose whole object.
 
         Data matrix is transposed, observations and variables are interchanged.
+
+        Ignores `.raw`.
         """
         if not self.isbacked:
             X = self.X
@@ -1272,11 +1274,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         return AnnData(
             t_csr(X),
-            self._var,
-            self._obs,
-            self._uns,
-            self._varm.flipped(),
-            self._obsm.flipped(),
+            obs=self.var,
+            var=self.obs,
+            # we're taking a private attributes here to be able to modify uns of the original object
+            uns=self._uns,
+            obsm=self.varm.flipped(),
+            varm=self.obsm.flipped(),
+            obsp=self.varp.copy(),
+            varp=self.obsp.copy(),
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
             dtype=self.X.dtype.name,
