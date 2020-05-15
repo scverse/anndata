@@ -459,7 +459,7 @@ def test_pickle():
 
 def test_to_df_dense():
     df = adata_dense.to_df()
-    df = adata_dense.to_df(layer='test')
+    df = adata_dense.to_df(layer="test")
 
 
 def test_convenience():
