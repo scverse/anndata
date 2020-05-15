@@ -13,7 +13,7 @@ from anndata.tests.helpers import assert_equal, gen_adata
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
-adata_dense.layers['test'] = adata_dense.X
+adata_dense.layers["test"] = adata_dense.X
 adata_sparse = AnnData(
     csr_matrix([[0, 2, 3], [0, 5, 6]]),
     dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
