@@ -14,14 +14,14 @@ On master
 0.7.2 :small:`2020-05-15`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- Concatenation has been overhauled for greater performance and more features :smaller:`I Virshup`
+.. rubric:: Concatenation overhaul :smaller:`I Virshup`
 
-    - Elements of `uns` can now be merged, see :pr:`350`
-    - Outer joins now work for `layers` and `obsm`, see :pr:`352`.
-    - Fill value for outer joins can now be specified.
-    - Expect improvments in performance, see :issue:`303`.
+- Elements of `uns` can now be merged, see :pr:`350`
+- Outer joins now work for `layers` and `obsm`, see :pr:`352`
+- Fill value for outer joins can now be specified
+- Expect improvments in performance, see :issue:`303`
 
-.. rubric:: New features
+.. rubric:: Functionality
 
 - :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` can now be transposed :pr:`370` :smaller:`A Wolf`
 - :meth:`~anndata.AnnData.obs_names_make_unique` is now better at making values unique, and will warn if ambiguities arise :pr:`345` :smaller:`M Weiden`
