@@ -12,6 +12,7 @@ from scipy import sparse
 from boltons.iterutils import research, remap, default_exit
 
 
+import anndata
 from anndata import AnnData, Raw
 from anndata._core.index import _subset
 from anndata.tests import helpers
@@ -33,6 +34,16 @@ def join_type(request):
 
 @pytest.fixture(params=[0, np.nan, np.pi])
 def fill_val(request):
+    return request.param
+
+
+@pytest.fixture(params=[0, 1])
+def axis(request):
+    return request.param
+
+
+@pytest.fixture(params=list(anndata._core.merge.UNS_STRATEGIES.keys()))
+def merge_strategy(request):
     return request.param
 
 
@@ -795,6 +806,20 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
         result,
         elem_name="uns",
     )
+
+
+def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
+    from anndata._core.merge import concat
+
+    lhs = gen_adata((10, 10), X_type=array_type)
+    rhs = gen_adata((10, 12), X_type=array_type)
+
+    a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
+    b = concat(
+        [lhs.T, rhs.T], axis=abs(axis - 1), join=join_type, merge=merge_strategy
+    ).T
+
+    assert_equal(a, b)
 
 
 # Leaving out for now. See definition of these values for explanation
