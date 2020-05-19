@@ -7,7 +7,7 @@ from copy import deepcopy
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Callable, Collection, Iterable, Tuple, TypeVar, Union
+from typing import Callable, Collection, Iterable, Optional, Tuple, TypeVar, Union
 import warnings
 from warnings import warn
 
@@ -16,6 +16,7 @@ import pandas as pd
 from scipy import sparse
 
 from .anndata import AnnData
+from ..compat import Literal
 
 T = TypeVar("T")
 
@@ -200,6 +201,8 @@ UNS_STRATEGIES = {
     "first": merge_first,
     "only": merge_only,
 }
+
+StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 # TODO: I should be making copies of all sub-elements
 # TODO: Should I throw a warning about sparse arrays in uns?
@@ -530,18 +533,47 @@ def dim_size(adata, *, axis=None, dim=None):
 
 
 def concat(
-    adatas,
+    adatas: Collection[AnnData],
     *,
-    axis=0,
-    join="inner",
-    batch_key="batch",
-    batch_categories=None,
-    uns_merge=None,
-    merge=None,
-    index_unique="-",
-    fill_value=None,
-):
-    """Re-implementation of `AnnData.concatenate`, but better."""
+    axis: Literal[0, 1] = 0,
+    join: Literal["inner", "outer"] = "inner",
+    merge: Optional[StrategiesLiteral] = None,
+    uns_merge: Optional[StrategiesLiteral] = None,
+    batch_key: Optional[str] = "batch",
+    batch_categories: Optional[Collection] = None,
+    index_unique: Optional[str] = "-",
+    fill_value: Optional = None,
+) -> AnnData:
+    """Concatenates AnnData objects.
+
+    Params
+    ------
+    adatas
+        The objects to be concatenated.
+    axis
+        Which axis to concatenate along.
+    join
+        How to align values when concatenating. If "outer", the union of the other axis
+        is taken. If "inner", the intersection. See :ref:`Concatenation` for more.
+    merge
+        How elements not aligned to the axis being concatenated along are selected.
+    uns_merge
+        How the elements of `.uns` are selected. Uses the same set of strategies as
+        the `merge` argument, except applied recursivley.
+    batch_key
+        Key in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
+    batch_categories
+        Label for each object being added. Will be the values in the column labeled by
+        `batch_key`. Defaults to incrementing integer labels.
+    index_unique
+        Whether to make the index unique by using the batch_categories. If provided, this
+        is the delimeter between "{orig_idx}{index_unique}{batch_category}". When `None`,
+        the original indices are kept.
+    fill_value
+        When `join="outer"`, this is the value that will be used to fill the introduced
+        indices. By default, sparse arrays are padded with zeros, while dense arrays and
+        DataFrames are padded with missing values.
+    """
     # Argument normalization
     adatas = list(adatas)
     if batch_categories is None:
