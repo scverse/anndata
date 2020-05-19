@@ -5,8 +5,85 @@ Concatenation
 
     This section is currently under construction. There will be more here in the future.
 
+`AnnData` objects can be combined via a composition of two operations: concatenation and merging.
+Concatenation is when we will keep all sub elements of each object to be combined, and stack these elements in an ordered way.
+Merging is combining a set of collections into one resulting collection which contains elements from the inputs.
+
+AnnData objects are combined using the function `ad.concat`. Here we'll look at how this function combines anndata objects using concatenation and merging.
+
+Concatenation
+-------------
+
+This is essentially stacking anndata objects. Let's start off with an example:
+
+    >>> import scanpy as sc, anndata as ad, numpy as np, pandas as pd
+    >>> from anndata._core.merge import concat
+    >>> from anndata import AnnData
+    >>> pbmc = sc.datasets.pbmc68k_reduced()
+    >>> pbmc
+    AnnData object with n_obs × n_vars = 700 × 765
+        obs: 'bulk_labels', 'n_genes', 'percent_mito', 'n_counts', 'S_score', 'G2M_score', 'phase', 'louvain'
+        var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
+        uns: 'louvain', 'neighbors', 'pca', 'rank_genes_groups'
+        obsm: 'X_pca', 'X_umap'
+        varm: 'PCs'
+        obsp: 'distances', 'connectivities'
+
+We can split this object up by the clusters of it's observations, then stack it again and we should the same values, just ordered differently.
+
+    >>> groups = pbmc.obs.groupby("louvain").indices
+    >>> pbmc_concat = ad.concat([pbmc[inds] for inds in groups.values()], index_unique=None)
+    >>> assert np.array_equal(pbmc.X, pbmc_concat[pbmc.obs_names].X)  # TODO: Make obs names not get renamed by default
+    >>> pbmc_concat
+    AnnData object with n_obs × n_vars = 700 × 765
+        obs: 'bulk_labels', 'n_genes', 'percent_mito', 'n_counts', 'S_score', 'G2M_score', 'phase', 'louvain', 'batch'
+        var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
+        obsm: 'X_pca', 'X_umap'
+
+Note that we concatenated along the observations by default, and that all elements aligned to the observations were concatenated as well.
+
+Inner and outer joins
+~~~~~~~~~~~~~~~~~~~~~
+
+When the variables present in the objects to be concatnated aren't exactly the same, you can choose to take either the intersection or union of these variable.
+This is otherwise called taking the `"inner"` (intersection) or `"outer"` (union) join.
+For example, given two anndata objects with differing variables:
+
+    >>> a = AnnData(sparse.eye(3), var=pd.DataFrame(index=list("abc")))
+    >>> b = AnnData(sparse.eye(2), var=pd.DataFrame(index=list("ba")))
+    >>> concat([a, b], join="inner").X.toarray()
+    array([[1., 0.],
+           [0., 1.],
+           [0., 0.],
+           [0., 1.],
+           [1., 0.]], dtype=float32)
+    >>> concat([a, b], join="outer").X.toarray()
+    array([[1., 0., 0.],
+           [0., 1., 0.],
+           [0., 0., 1.],
+           [0., 1., 0.],
+           [1., 0., 0.]], dtype=float32)
+
+The join argument is used for any element which has both (1) an axis being concatenated and (2) has an axis not being concatenated.
+When concatenating along the `obs` dimension, this means elements of `.X`, `obs`, `.layers`, and `.obsm` will be affected by the choice of `join`.
+
+To demonstrate this, let's say we're trying to combine a droplet based experiment with a spatial one.
+When building a joint anndata object, we would still like to store the coordinates for the spatial samples.
+
+    >>> coords = np.hstack([np.repeat(np.arange(10), 10), np.tile(np.arange(10), 10)]).T
+    >>> spatial = AnnData(
+            sparse.random(5000, 10000, format="csr"), 
+            obsm={"coords": np.random.randn(5000, 2)}
+        )
+    >>> droplet = AnnData(sparse.random(5000, 10000, format="csr"))
+    >>> combined = concat([spatial, droplet], join="outer")
+    >>> sc.pl.embedding(combined, "coords")  # How to get this plot into the docs?
+
+Merging
+-------
+
 Merging `.uns`
---------------
+~~~~~~~~~~~~~~
 
 When concatenating `AnnData` objects there are a number of options available for how the entries of `uns` should be merged.
 These are:
