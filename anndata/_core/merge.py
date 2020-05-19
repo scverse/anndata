@@ -228,6 +228,7 @@ class Reindexer(object):
         Indices of new index which data from old_pos will be placed in.
         Together with `old_pos` this forms a mapping.
     """
+
     def __init__(self, old_idx, new_idx):
         self.old_idx = old_idx
         self.new_idx = new_idx
@@ -266,11 +267,7 @@ class Reindexer(object):
 
         # Indexes real fast, and does outer indexing
         return pd.api.extensions.take(
-            el,
-            indexer,
-            axis=axis,
-            allow_fill=True,
-            fill_value=fill_value,
+            el, indexer, axis=axis, allow_fill=True, fill_value=fill_value,
         )
 
     def _apply_to_sparse(self, el, *, axis, fill_value=None):
@@ -374,21 +371,27 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
                 "Cannot concatenate a dataframe with other array types."
             )
         # TODO: behaviour here should be chosen through a merge strategy
-        df = pd.concat([f(x) for f, x in zip(reindexers, arrays)], ignore_index=True, axis=axis)
+        df = pd.concat(
+            [f(x) for f, x in zip(reindexers, arrays)], ignore_index=True, axis=axis
+        )
         df.index = index
         return df
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
             [
-                f(as_sparse(a), axis=1-axis, fill_value=fill_value)
+                f(as_sparse(a), axis=1 - axis, fill_value=fill_value)
                 for f, a in zip(reindexers, arrays)
             ],
             format="csr",
         )
     else:
         return np.concatenate(
-            [f(x, fill_value=fill_value, axis=1-axis) for f, x in zip(reindexers, arrays)], axis=axis
+            [
+                f(x, fill_value=fill_value, axis=1 - axis)
+                for f, x in zip(reindexers, arrays)
+            ],
+            axis=axis,
         )
 
 
@@ -414,7 +417,9 @@ def gen_inner_reindexers(els, new_index, axis=0):
         df_indices = lambda x: x.indices
 
     if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
-        common_ind = reduce(lambda x, y: x.intersection(y), (df_indices(el) for el in els))
+        common_ind = reduce(
+            lambda x, y: x.intersection(y), (df_indices(el) for el in els)
+        )
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
@@ -433,15 +438,12 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         ]
     else:
         # if fill_value is None:
-            # fill_value = default_fill_value(els)
+        # fill_value = default_fill_value(els)
 
         max_col = max(el.shape[1] for el in els if not_missing(el))
         orig_cols = [el.shape[1] if not_missing(el) else 0 for el in els]
         reindexers = [
-            gen_reindexer(
-                pd.RangeIndex(max_col), pd.RangeIndex(n),
-            )
-            for n in orig_cols
+            gen_reindexer(pd.RangeIndex(max_col), pd.RangeIndex(n),) for n in orig_cols
         ]
     return reindexers
 
@@ -455,9 +457,7 @@ def outer_concat_aligned_mapping(
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
         if reindexers is None:
-            cur_reindexers = gen_outer_reindexers(
-                els, ns, new_index=index, axis=axis,
-            )
+            cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=axis,)
         else:
             cur_reindexers = reindexers
 
@@ -496,6 +496,7 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
                 out[f"{key}{join_index}{b}"] = val
     return out
 
+
 def _resolve_dim(*, dim: str = None, axis: int = None) -> Tuple[int, str]:
     _dims = ("obs", "var")
     if (dim is None and axis is None) or (dim is not None and axis is not None):
@@ -521,6 +522,7 @@ def dim_size(adata, *, axis=None, dim=None):
     ax, _ = _resolve_dim(axis, dim)
     return adata.shape[ax]
 
+
 def concat(
     adatas,
     *,
@@ -541,9 +543,9 @@ def concat(
     if axis == 0:
         dim = "obs"
     elif axis == 1:
-        dim= "var"
+        dim = "var"
 
-    alt_axis, alt_dim = _resolve_dim(axis=1-axis)
+    alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
     # Batch column
     batch = pd.Categorical.from_codes(
@@ -552,14 +554,18 @@ def concat(
     )
 
     # Combining indexes
-    concat_indices = pd.concat([pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True)
+    concat_indices = pd.concat(
+        [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
+    )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(batch.map(str), sep=index_unique)
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = resolve_index([dim_indices(a, axis=1-axis) for a in adatas], join=join)
+    alt_indices = resolve_index(
+        [dim_indices(a, axis=1 - axis) for a in adatas], join=join
+    )
     reindexers = [
-        gen_reindexer(alt_indices, dim_indices(a, axis=1-axis)) for a in adatas
+        gen_reindexer(alt_indices, dim_indices(a, axis=1 - axis)) for a in adatas
     ]
 
     # Annotation for concatenation axis
@@ -577,23 +583,34 @@ def concat(
         partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
     )
 
-    X = concat_arrays([a.X for a in adatas], reindexers, axis=axis, fill_value=fill_value)
+    X = concat_arrays(
+        [a.X for a in adatas], reindexers, axis=axis, fill_value=fill_value
+    )
 
     if join == "inner":
-        layers = inner_concat_aligned_mapping([a.layers for a in adatas], axis=axis, reindexers=reindexers)
-        concat_mapping = inner_concat_aligned_mapping([getattr(a, f"{dim}m") for a in adatas], index=concat_indices)
+        layers = inner_concat_aligned_mapping(
+            [a.layers for a in adatas], axis=axis, reindexers=reindexers
+        )
+        concat_mapping = inner_concat_aligned_mapping(
+            [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
+        )
         # obsm = inner_concat_aligned_mapping([a.obsm for a in adatas], index=obs_names)
     elif join == "outer":
         layers = outer_concat_aligned_mapping(
             [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
         )
         concat_mapping = outer_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas], index=concat_indices, fill_value=fill_value
+            [getattr(a, f"{dim}m") for a in adatas],
+            index=concat_indices,
+            fill_value=fill_value,
         )
 
     # Need to do reindexing along other axis, make reindexer work for dataframes
     alt_mapping = merge_uns(
-        [{k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()} for r, a in zip(reindexers, adatas)],
+        [
+            {k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()}
+            for r, a in zip(reindexers, adatas)
+        ],
         strategy=merge,
     )
     # varm = merge_uns([a.varm for a in adatas], strategy=merge)
@@ -625,13 +642,15 @@ def concat(
             "not concatenating `.raw` attributes.",
             UserWarning,
         )
-    return AnnData(**{
-        "X": X,
-        "layers": layers,
-        dim: concat_annot,
-        alt_dim: alt_annot,
-        f"{dim}m": concat_mapping,
-        f"{alt_dim}m": alt_mapping,
-        "uns": uns,
-        "raw": raw,
-    })
+    return AnnData(
+        **{
+            "X": X,
+            "layers": layers,
+            dim: concat_annot,
+            alt_dim: alt_annot,
+            f"{dim}m": concat_mapping,
+            f"{alt_dim}m": alt_mapping,
+            "uns": uns,
+            "raw": raw,
+        }
+    )
