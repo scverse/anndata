@@ -246,6 +246,8 @@ class Reindexer(object):
     def apply(self, el, *, axis, fill_value=None):
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, sparse.spmatrix):
+            return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -257,6 +259,23 @@ class Reindexer(object):
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
+        if 0 in el.shape:
+            return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
+
+        indexer = self.old_idx.get_indexer(self.new_idx)
+
+        # Indexes real fast, and does outer indexing
+        return pd.api.extensions.take(
+            el,
+            indexer,
+            axis=axis,
+            allow_fill=True,
+            fill_value=fill_value,
+        )
+
+    def _apply_to_sparse(self, el, *, axis, fill_value=None):
+        if fill_value is None:
+            fill_value = default_fill_value([el])
         if fill_value != 0:
             to_fill = self.new_idx.get_indexer(self.new_idx.difference(self.old_idx))
         else:
@@ -265,11 +284,7 @@ class Reindexer(object):
         # Fixing outer indexing for missing values
         if el.shape[1] == 0:
             to_fill = range(0, len(self.new_idx))
-            el_shape = (el.shape[0], len(self.old_pos))
-            if isinstance(el, sparse.spmatrix):
-                el = sparse.coo_matrix(el_shape)
-            else:
-                el = np.broadcast_to(np.zeros(()), el_shape)
+            el = sparse.coo_matrix((el.shape[0], len(self.old_pos)))
 
         fill_idxer = None
 
@@ -287,8 +302,7 @@ class Reindexer(object):
             out = el @ idxmtx
 
             if len(to_fill) > 0:
-                if sparse.issparse(out):
-                    out = out.tocsc()
+                out = out.tocsc()
                 fill_idxer = (slice(None), to_fill)
         elif axis == 0:
             idxmtx = sparse.coo_matrix(
@@ -299,8 +313,7 @@ class Reindexer(object):
             out = idxmtx @ el
 
             if len(to_fill) > 0:
-                if sparse.issparse(out):
-                    out = out.tocsr()
+                out = out.tocsr()
                 fill_idxer = (to_fill, slice(None))
 
         if fill_idxer is not None:
