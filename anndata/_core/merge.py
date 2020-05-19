@@ -233,6 +233,8 @@ class Reindexer(object):
         self.old_idx = old_idx
         self.new_idx = new_idx
 
+        self.no_change = new_idx.equals(old_idx)
+
         new_pos = new_idx.get_indexer(old_idx)
         old_pos = np.arange(len(new_pos))
 
@@ -245,6 +247,8 @@ class Reindexer(object):
         return self.apply(el, axis=axis, fill_value=fill_value)
 
     def apply(self, el, *, axis, fill_value=None):
+        if self.no_change and (el.shape[axis] == len(self.old_idx)):
+            return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
@@ -280,8 +284,10 @@ class Reindexer(object):
 
         # Fixing outer indexing for missing values
         if el.shape[1] == 0:
-            to_fill = range(0, len(self.new_idx))
-            el = sparse.coo_matrix((el.shape[0], len(self.old_pos)))
+            if fill_value == 0:
+                return sparse.coo_matrix((el.shape[0], len(self.new_idx)))
+            else:
+                return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
 
         fill_idxer = None
 
