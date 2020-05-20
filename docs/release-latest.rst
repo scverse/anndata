@@ -11,6 +11,13 @@ On master
 - The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
   :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
 
+0.7.3 :small:`2020-05-20`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Fixed bug where graphs used too much memory when copying :pr:`381` :smaller:`I Virshup`
+
 0.7.2 :small:`2020-05-15`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
