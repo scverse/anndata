@@ -42,7 +42,7 @@ def axis(request):
     return request.param
 
 
-@pytest.fixture(params=list(anndata._core.merge.UNS_STRATEGIES.keys()))
+@pytest.fixture(params=list(anndata._core.merge.MERGE_STRATEGIES.keys()))
 def merge_strategy(request):
     return request.param
 
@@ -820,6 +820,48 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
     ).T
 
     assert_equal(a, b)
+
+
+def test_batch_key(axis):
+    """Test that concat only adds a batch_key if the key is provided"""
+    from anndata._core.merge import concat
+
+    def get_annot(adata):
+        return getattr(adata, ("obs", "var")[axis])
+
+    lhs = gen_adata((10, 10))
+    rhs = gen_adata((10, 12))
+
+    # There is probably a prettier way to do this
+    annot = get_annot(concat([lhs, rhs], axis=axis))
+    assert (
+        list(
+            annot.columns.difference(
+                get_annot(lhs).columns.union(get_annot(rhs).columns)
+            )
+        )
+        == []
+    )
+
+    batch_annot = get_annot(concat([lhs, rhs], axis=axis, batch_key="batch"))
+    assert list(
+        batch_annot.columns.difference(
+            get_annot(lhs).columns.union(get_annot(rhs).columns)
+        )
+    ) == ["batch"]
+
+
+def test_concat_names(axis):
+    from anndata._core.merge import concat
+
+    def get_annot(adata):
+        return getattr(adata, ("obs", "var")[axis])
+
+    lhs = gen_adata((10, 10))
+    rhs = gen_adata((10, 10))
+
+    assert not get_annot(concat([lhs, rhs], axis=axis)).index.is_unique
+    assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
 
 
 # Leaving out for now. See definition of these values for explanation
