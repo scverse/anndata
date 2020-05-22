@@ -6,7 +6,7 @@ import collections.abc as cabc
 from collections import OrderedDict
 from copy import copy, deepcopy
 from enum import Enum
-from functools import singledispatch
+from functools import partial, singledispatch
 from pathlib import Path
 from os import PathLike
 from typing import Any, Union, Optional  # Meta
@@ -1469,7 +1469,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def concatenate(
         self,
         *adatas: "AnnData",
-        axis=0,
         join: str = "inner",
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
@@ -1685,7 +1684,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 0., 2., 1.],
                [0., 6., 5., 0.]], dtype=float32)
         """
-        from .merge import concat
+        from .merge import concat, merge_outer, merge_dataframes, merge_same
 
         if self.isbacked:
             raise ValueError("Currently, concatenate does only work in memory mode.")
@@ -1698,7 +1697,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         out = concat(
             all_adatas,
-            axis=axis,
+            axis=0,
             join=join,
             batch_key=batch_key,
             batch_categories=batch_categories,
@@ -1711,15 +1710,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if batch_categories is None:
             batch_categories = np.arange(len(all_adatas)).astype(str)
         pat = rf"-({'|'.join(batch_categories)})$"
-        if axis == 0:
-            out.var = out.var.iloc[
-                :,
-                (
-                    out.var.columns.str.extract(pat, expand=False)
-                    .fillna("")
-                    .argsort(kind="stable")
-                ),
-            ]
+        out.var = merge_dataframes(
+            [a.var for a in all_adatas],
+            out.var_names,
+            # TODO: Allow use of other strategies, like passing merge_unique here.
+            # Current behaviour is mostly for backwards compat. It's like make_names_unique, but
+            # unfortunately the behaviour is different.
+            partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
+        )
+        out.var = out.var.iloc[
+            :,
+            (
+                out.var.columns.str.extract(pat, expand=False)
+                .fillna("")
+                .argsort(kind="stable")
+            ),
+        ]
 
         return out
 

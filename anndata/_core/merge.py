@@ -194,7 +194,7 @@ def merge_only(ds: Collection[Mapping]) -> Mapping:
 # Leaving out for now, it's ugly in the rendered docs and would be adding a dependency.
 # from typing_extensions import Literal
 # UNS_STRATEGIES_TYPE = Literal[None, "same", "unique", "first", "only"]
-UNS_STRATEGIES = {
+MERGE_STRATEGIES = {
     None: lambda x: {},
     "same": merge_same,
     "unique": merge_unique,
@@ -204,10 +204,13 @@ UNS_STRATEGIES = {
 
 StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
-# TODO: I should be making copies of all sub-elements
-# TODO: Should I throw a warning about sparse arrays in uns?
-def merge_uns(unss, strategy):
-    return UNS_STRATEGIES[strategy](unss)
+
+def resolve_merge_strategy(
+    strategy: Union[str, Callable, None]
+) -> Callable[[Collection[Mapping]], Mapping]:
+    if not isinstance(strategy, Callable):
+        strategy = MERGE_STRATEGIES[strategy]
+    return strategy
 
 
 #####################
@@ -537,11 +540,11 @@ def concat(
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Optional[StrategiesLiteral] = None,
-    uns_merge: Optional[StrategiesLiteral] = None,
-    batch_key: Optional[str] = "batch",
+    merge: Union[StrategiesLiteral, Callable, None] = None,
+    uns_merge: Union[StrategiesLiteral, Callable, None] = None,
+    batch_key: Optional[str] = None,
     batch_categories: Optional[Collection] = None,
-    index_unique: Optional[str] = "-",
+    index_unique: Optional[str] = None,
     fill_value: Optional = None,
 ) -> AnnData:
     """Concatenates AnnData objects.
@@ -559,9 +562,10 @@ def concat(
         How elements not aligned to the axis being concatenated along are selected.
     uns_merge
         How the elements of `.uns` are selected. Uses the same set of strategies as
-        the `merge` argument, except applied recursivley.
+        the `merge` argument, except applied recursively.
     batch_key
         Key in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
+        If it's None, no column is added.
     batch_categories
         Label for each object being added. Will be the values in the column labeled by
         `batch_key`. Defaults to incrementing integer labels.
@@ -575,6 +579,9 @@ def concat(
         DataFrames are padded with missing values.
     """
     # Argument normalization
+    merge = resolve_merge_strategy(merge)
+    uns_merge = resolve_merge_strategy(uns_merge)
+
     adatas = list(adatas)
     if batch_categories is None:
         batch_categories = np.arange(len(adatas)).astype(str)
@@ -609,16 +616,12 @@ def concat(
     # Annotation for concatenation axis
     concat_annot = pd.concat([getattr(a, dim) for a in adatas], ignore_index=True)
     concat_annot.index = concat_indices
-    concat_annot[batch_key] = batch
+    if batch_key is not None:
+        concat_annot[batch_key] = batch
 
     # Annotation for other axis
     alt_annot = merge_dataframes(
-        [getattr(a, alt_dim) for a in adatas],
-        alt_indices,
-        # TODO: Allow use of other strategies, like passing merge_unique here.
-        # Current behaviour is mostly for backwards compat. It's like make_names_unique, but
-        # unfortunately the behaviour is different.
-        partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
+        [getattr(a, alt_dim) for a in adatas], alt_indices, merge
     )
 
     X = concat_arrays(
@@ -644,15 +647,13 @@ def concat(
         )
 
     # Need to do reindexing along other axis, make reindexer work for dataframes
-    alt_mapping = merge_uns(
+    alt_mapping = merge(
         [
             {k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()}
             for r, a in zip(reindexers, adatas)
         ],
-        strategy=merge,
     )
-    # varm = merge_uns([a.varm for a in adatas], strategy=merge)
-    uns = merge_uns([a.uns for a in adatas], strategy=uns_merge)
+    uns = uns_merge([a.uns for a in adatas])
 
     raw = None
     has_raw = [a.raw is not None for a in adatas]
