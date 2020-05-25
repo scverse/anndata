@@ -11,6 +11,10 @@ On master
 - The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
   :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
 
+.. rubric:: Bug fixes
+
+- Fixed error from `AnnData.concatenate` by bumping minimum versions of numpy and pandas :issue:`385`
+
 0.7.3 :small:`2020-05-20`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
