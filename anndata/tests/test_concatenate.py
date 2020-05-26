@@ -15,6 +15,7 @@ from boltons.iterutils import research, remap, default_exit
 import anndata
 from anndata import AnnData, Raw
 from anndata._core.index import _subset
+from anndata._core import merge
 from anndata.tests import helpers
 from anndata.tests.helpers import asarray, assert_equal, gen_adata
 
@@ -42,30 +43,37 @@ def axis(request):
     return request.param
 
 
-@pytest.fixture(params=list(anndata._core.merge.MERGE_STRATEGIES.keys()))
+@pytest.fixture(params=list(merge.MERGE_STRATEGIES.keys()))
 def merge_strategy(request):
     return request.param
 
 
-def fix_known_differences(orig, result):
+def fix_known_differences(orig, result, backwards_compat=True):
     """
     Helper function for reducing anndata's to only the elements we expect to be
     equivalent after concatenation.
 
     Only for the case where orig is the ground truth result of what concatenation should be.
+
+    If backwards_compat, checks against what `AnnData.concatenate` could do. Otherwise checks for `concat`.
     """
     orig = orig.copy()
     result = result.copy()
 
-    result.obs.drop(columns=["batch"], inplace=True)
     result.strings_to_categoricals()  # Should this be implicit in concatenation?
 
     # TODO
     # * merge varm, varp similar to uns
     # * merge obsp, but some information should be lost
-    del orig.varm
-    del orig.varp
     del orig.obsp  # TODO
+
+    if backwards_compat:
+        del orig.varm
+        del orig.varp
+        result.obs.drop(columns=["batch"], inplace=True)
+    else:
+        # TODO: Handle this better
+        del result.obsp
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for k, dtype in orig.obs.dtypes.items():
@@ -75,7 +83,14 @@ def fix_known_differences(orig, result):
     return orig, result
 
 
-def test_concatenate_roundtrip(join_type, array_type):
+@pytest.mark.parametrize(
+    ["concat_func", "backwards_compat"],
+    [
+        (partial(merge.concat, merge="unique"), False),
+        (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
+    ],
+)
+def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_compat):
     adata = gen_adata((100, 10), X_type=array_type)
 
     remaining = adata.obs_names
@@ -86,12 +101,12 @@ def test_concatenate_roundtrip(join_type, array_type):
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
 
-    result = subsets[0].concatenate(
-        subsets[1:], join=join_type, uns_merge="same", index_unique=None
-    )
+    result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
 
     # Correcting for known differences
-    orig, result = fix_known_differences(adata, result)
+    orig, result = fix_known_differences(
+        adata, result, backwards_compat=backwards_compat
+    )
 
     assert_equal(result[orig.obs_names].copy(), orig)
 

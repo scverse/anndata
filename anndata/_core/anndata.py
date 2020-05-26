@@ -1705,6 +1705,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             fill_value=fill_value,
             index_unique=index_unique,
         )
+        # TODO: Just don't concatenate it in the first place.
+        del out.obsp
+        del out.varm
 
         # Backwards compat, ordering columns:
         if batch_categories is None:
