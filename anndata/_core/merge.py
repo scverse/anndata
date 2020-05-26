@@ -151,7 +151,7 @@ def merge_nested(ds: Collection[Mapping], keys_join: Callable, value_join: Calla
     for k in keys_join(ds):
         v = _merge_nested(ds, k, keys_join, value_join)
         if not_missing(v):
-            out[k] = deepcopy(v)
+            out[k] = v
     return out
 
 
@@ -486,6 +486,19 @@ def outer_concat_aligned_mapping(
     return result
 
 
+def concat_pairwise_mapping(
+    mappings: Collection[Mapping], shapes: Collection[int], join_keys=intersect_keys
+):
+    result = {}
+    for k in join_keys(mappings):
+        els = [
+            m.get(k, sparse.csr_matrix((s, s), dtype=bool))
+            for m, s in zip(mappings, shapes)
+        ]
+        result[k] = sparse.block_diag(els, format="csr")
+    return result
+
+
 def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
     dfs = [df.reindex(index=new_index) for df in dfs]
     # New dataframe with all shared data
@@ -635,7 +648,11 @@ def concat(
         concat_mapping = inner_concat_aligned_mapping(
             [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
         )
-        # obsm = inner_concat_aligned_mapping([a.obsm for a in adatas], index=obs_names)
+        concat_pairwise = concat_pairwise_mapping(
+            mappings=[getattr(a, f"{dim}p") for a in adatas],
+            shapes=[a.shape[axis] for a in adatas],
+            join_keys=intersect_keys,
+        )
     elif join == "outer":
         layers = outer_concat_aligned_mapping(
             [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
@@ -645,13 +662,24 @@ def concat(
             index=concat_indices,
             fill_value=fill_value,
         )
+        concat_pairwise = concat_pairwise_mapping(
+            mappings=[getattr(a, f"{dim}p") for a in adatas],
+            shapes=[a.shape[axis] for a in adatas],
+            join_keys=union_keys,
+        )
 
-    # Need to do reindexing along other axis, make reindexer work for dataframes
+    # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
     alt_mapping = merge(
         [
             {k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()}
             for r, a in zip(reindexers, adatas)
         ],
+    )
+    alt_pairwise = merge(
+        [
+            {k: r(r(v, axis=0), axis=1) for k, v in getattr(a, f"{alt_dim}p").items()}
+            for r, a in zip(reindexers, adatas)
+        ]
     )
     uns = uns_merge([a.uns for a in adatas])
 
@@ -689,6 +717,8 @@ def concat(
             alt_dim: alt_annot,
             f"{dim}m": concat_mapping,
             f"{alt_dim}m": alt_mapping,
+            f"{dim}p": concat_pairwise,
+            f"{alt_dim}p": alt_pairwise,
             "uns": uns,
             "raw": raw,
         }

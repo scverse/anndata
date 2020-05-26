@@ -52,6 +52,7 @@ class _ViewMixin(_SetItemMixin):
         self._view_args = view_args
         super().__init__(*args, **kwargs)
 
+    # TODO: This makes `deepcopy(obj)` return `obj._view_args.parent._adata_ref`, fix it
     def __deepcopy__(self, memo):
         parent, attrname, keys = self._view_args
         return deepcopy(getattr(parent._adata_ref, attrname))
