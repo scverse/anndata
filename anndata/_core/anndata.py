@@ -4,7 +4,7 @@ Main class and helper functions.
 import warnings
 import collections.abc as cabc
 from collections import OrderedDict
-from copy import deepcopy
+from copy import copy, deepcopy
 from enum import Enum
 from functools import singledispatch
 from pathlib import Path
@@ -351,7 +351,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
         uns_new = _slice_uns_sparse_matrices(
-            adata_ref._uns, self._oidx, adata_ref.n_obs
+            copy(adata_ref._uns), self._oidx, adata_ref.n_obs
         )
         # fix categories
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
