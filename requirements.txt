@@ -1,5 +1,5 @@
-pandas>=0.23.0
-numpy~=1.14
+pandas>=1.0
+numpy>=1.15
 scipy~=1.0
 h5py
 natsort

@@ -268,15 +268,23 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index, *, fill_value=0):
         else:
             out_dtype = X.dtype
 
-        idxmtx = sparse.coo_matrix(
-            (np.ones(len(new_pts), dtype=int), (cur_pts, new_pts)),
-            shape=(old_size, new_size),
-            dtype=out_dtype,
-        )
+        # Case where layer was empty
+        # TODO: This could be done more elegantly
+        if X.shape[1] != 0:
+            idxmtx = sparse.coo_matrix(
+                (np.ones(len(new_pts), dtype=int), (cur_pts, new_pts)),
+                shape=(old_size, new_size),
+                dtype=out_dtype,
+            )
+        else:
+            idxmtx = sparse.coo_matrix((0, new_size))
         out = X @ idxmtx
 
         if fill_value != 0:
-            to_fill = new_var.get_indexer(new_var.difference(cur_var))
+            if X.shape[1] != 0:
+                to_fill = new_var.get_indexer(new_var.difference(cur_var))
+            else:
+                to_fill = range(0, len(new_var))
             if len(to_fill) > 0:
                 # More efficient to set columns on csc
                 if sparse.issparse(out):

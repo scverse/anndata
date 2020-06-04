@@ -4,7 +4,7 @@ Main class and helper functions.
 import warnings
 import collections.abc as cabc
 from collections import OrderedDict
-from copy import deepcopy
+from copy import copy, deepcopy
 from enum import Enum
 from functools import singledispatch
 from pathlib import Path
@@ -351,7 +351,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
         uns_new = _slice_uns_sparse_matrices(
-            adata_ref._uns, self._oidx, adata_ref.n_obs
+            copy(adata_ref._uns), self._oidx, adata_ref.n_obs
         )
         # fix categories
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
@@ -1256,6 +1256,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Transpose whole object.
 
         Data matrix is transposed, observations and variables are interchanged.
+
+        Ignores `.raw`.
         """
         if not self.isbacked:
             X = self.X
@@ -1272,11 +1274,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         return AnnData(
             t_csr(X),
-            self._var,
-            self._obs,
-            self._uns,
-            self._varm.flipped(),
-            self._obsm.flipped(),
+            obs=self.var,
+            var=self.obs,
+            # we're taking a private attributes here to be able to modify uns of the original object
+            uns=self._uns,
+            obsm=self.varm.flipped(),
+            varm=self.obsm.flipped(),
+            obsp=self.varp.copy(),
+            varp=self.obsp.copy(),
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
             dtype=self.X.dtype.name,
@@ -1284,7 +1289,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     T = property(transpose)
 
-    def to_df(self) -> pd.DataFrame:
+    def to_df(self, layer=None) -> pd.DataFrame:
         """\
         Generate shallow :class:`~pandas.DataFrame`.
 
@@ -1294,11 +1299,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         * No annotations are maintained in the returned object.
         * The data matrix is densified in case it is sparse.
+
+        Params
+        ------
+        layer : str
+            Key for `.layers`.
         """
-        if issparse(self.X):
-            X = self.X.toarray()
+        if layer is not None:
+            X = self.layers[layer]
         else:
             X = self.X
+        if issparse(X):
+            X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
     def _get_X(self, use_raw=False, layer=None):

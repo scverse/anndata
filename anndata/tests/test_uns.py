@@ -22,7 +22,10 @@ def test_uns_color_subset():
     assert "cat2_colors" not in v.uns
 
     # Otherwise the colors should still match after reseting
-    adata.uns["cat1_colors"] = ["red", "green", "blue", "yellow"]
+    cat1_colors = ["red", "green", "blue", "yellow"]
+    adata.uns["cat1_colors"] = cat1_colors.copy()
     v = adata[[0, 1], :]
     assert len(v.uns["cat1_colors"]) == 1
     assert v.uns["cat1_colors"][0] == "red"
+    # But original object should not change
+    assert list(adata.uns["cat1_colors"]) == cat1_colors

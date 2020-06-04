@@ -3,6 +3,9 @@
 
 .wy-side-nav-search,
 .wy-nav-top { background-color: #f07e44 }
+.wy-nav-content {
+    max-width: 1200px;
+}
 .wy-side-nav-search input[type="text"] { border-width: 0 }
 
 
