@@ -3,18 +3,17 @@ Concatenation
 
 .. note::
 
-    This section is currently under construction. There will be more here in the future.
+    This section is currently a draft.
 
-`AnnData` objects can be combined via a composition of two operations: concatenation and merging.
-Concatenation is when we will keep all sub elements of each object to be combined, and stack these elements in an ordered way.
-Merging is combining a set of collections into one resulting collection which contains elements from the inputs.
+With function :func:`~anndata.concat`, `AnnData` objects can be combined via a composition of two operations: concatenation and merging.
 
-AnnData objects are combined using the function `ad.concat`. Here we'll look at how this function combines anndata objects using concatenation and merging.
+* Concatenation is when we keep all sub elements of each object, and stack these elements in an ordered way.
+* Merging is combining a set of collections into one resulting collection which contains elements from the objects.
 
 Concatenation
 -------------
 
-This is essentially stacking anndata objects. Let's start off with an example:
+Let's start off with an example:
 
     >>> import scanpy as sc, anndata as ad, numpy as np, pandas as pd
     >>> from anndata._core.merge import concat
@@ -29,7 +28,7 @@ This is essentially stacking anndata objects. Let's start off with an example:
         varm: 'PCs'
         obsp: 'distances', 'connectivities'
 
-We can split this object up by the clusters of it's observations, then stack it again and we should the same values, just ordered differently.
+We can split this object up by the clusters of it's observations, then stack it again and we should obtain the same values, just ordered differently.
 
     >>> groups = pbmc.obs.groupby("louvain").indices
     >>> pbmc_concat = concat([pbmc[inds] for inds in groups.values()], merge="same")
@@ -46,7 +45,7 @@ Note that we concatenated along the observations by default, and that all elemen
 Inner and outer joins
 ~~~~~~~~~~~~~~~~~~~~~
 
-When the variables present in the objects to be concatenated aren't exactly the same, you can choose to take either the intersection or union of these variable.
+When the variables present in the objects to be concatenated aren't exactly the same, you can choose to take either the intersection or union of these variables.
 This is otherwise called taking the `"inner"` (intersection) or `"outer"` (union) join.
 For example, given two anndata objects with differing variables:
 
