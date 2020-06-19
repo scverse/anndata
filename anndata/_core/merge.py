@@ -108,8 +108,15 @@ def equal_sparse(a, b) -> bool:
         comp = a != b
         if isinstance(comp, bool):
             return not comp
-        else:
-            return len((a != b).data) == 0
+        # fmt: off
+        return (
+            (len(comp.data) == 0)
+            or (
+                np.isnan(a[comp]).all()
+                and np.isnan(b[comp]).all()
+            )
+        )
+        # fmt: on
     else:
         return False
 

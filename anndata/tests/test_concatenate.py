@@ -2,6 +2,7 @@ from collections.abc import Hashable
 from copy import deepcopy
 from itertools import chain, product
 from functools import partial
+import warnings
 
 import numpy as np
 from numpy import ma
@@ -605,6 +606,32 @@ def test_concatenate_with_raw():
     assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert adata_all.raw is None
+
+
+def test_nan_merge(axis, join_type, array_type):
+    # concat_dim = ("obs", "var")[axis]
+    alt_dim = ("var", "obs")[axis]
+    mapping_attr = f"{alt_dim}m"
+    adata_shape = (20, 10)
+
+    arr = array_type(sparse.random(adata_shape[1-axis], 10, density=0.1, format="csr"))
+    arr_nan = arr.copy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=sparse.SparseEfficiencyWarning)
+        for _ in range(10):
+            arr_nan[np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])] = np.nan
+
+    _data ={"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
+    orig1 = AnnData(**_data)
+    orig2 = AnnData(**_data)
+    result = merge.concat([orig1, orig2], axis=axis, merge="same")
+
+    assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
+
+    orig_nonan = AnnData(**{"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr}})
+    result_nonan = merge.concat([orig1, orig_nonan], axis=axis, merge="same")
+
+    assert len(getattr(result_nonan, mapping_attr)) == 0
 
 
 def test_merge_unique():
