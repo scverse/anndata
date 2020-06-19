@@ -16,6 +16,7 @@ Concatenation
 Let's start off with an example:
 
     >>> import scanpy as sc, anndata as ad, numpy as np, pandas as pd
+    >>> from scipy import sparse
     >>> from anndata._core.merge import concat
     >>> from anndata import AnnData
     >>> pbmc = sc.datasets.pbmc68k_reduced()
@@ -28,7 +29,7 @@ Let's start off with an example:
         varm: 'PCs'
         obsp: 'distances', 'connectivities'
 
-We can split this object up by the clusters of it's observations, then stack it again and we should obtain the same values, just ordered differently.
+If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 
     >>> groups = pbmc.obs.groupby("louvain").indices
     >>> pbmc_concat = concat([pbmc[inds] for inds in groups.values()], merge="same")
@@ -39,6 +40,7 @@ We can split this object up by the clusters of it's observations, then stack it 
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
+        obsp: 'distances', 'connectivities'
 
 Note that we concatenated along the observations by default, and that all elements aligned to the observations were concatenated as well.
 
@@ -72,9 +74,9 @@ When building a joint anndata object, we would still like to store the coordinat
 
     >>> coords = np.hstack([np.repeat(np.arange(10), 10), np.tile(np.arange(10), 10)]).T
     >>> spatial = AnnData(
-            sparse.random(5000, 10000, format="csr"), 
-            obsm={"coords": np.random.randn(5000, 2)}
-        )
+    ...     sparse.random(5000, 10000, format="csr"), 
+    ...     obsm={"coords": np.random.randn(5000, 2)}
+    ... )
     >>> droplet = AnnData(sparse.random(5000, 10000, format="csr"))
     >>> combined = concat([spatial, droplet], join="outer")
     >>> sc.pl.embedding(combined, "coords")  # How to get this plot into the docs?

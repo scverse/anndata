@@ -79,10 +79,26 @@ def not_missing(v) -> bool:
     return v is not MissingVal
 
 
-# Since it's difficult to check equality of sparse arrays
+# We need to be able to check for equality of arrays to know which are the same.
+# Unfortunatley equality of arrays is poorly defined.
+# * `np.array_equal` does not work for sparse arrays
+# * `np.array_equal(..., equal_nan=True)` does not work for null values at the moment
+#   (see https://github.com/numpy/numpy/issues/16377)
+# So we have to define it ourselves with these two issues in mind.
+# TODO: Hopefully this will stop being an issue in the future and this code can be removed.
 @singledispatch
 def equal(a, b) -> bool:
     return np.array_equal(a, b)
+
+
+@equal.register(pd.DataFrame)
+def equal_dataframe(a, b) -> bool:
+    return a.equals(b)
+
+
+@equal.register(np.ndarray)
+def equal_array(a, b) -> bool:
+    return equal(pd.DataFrame(a), pd.DataFrame(b))
 
 
 @equal.register(sparse.spmatrix)
