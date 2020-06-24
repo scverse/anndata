@@ -197,7 +197,7 @@ The default returns a fairly obvious result:
 But let's take a look at the others in a bit more depth. Here, we'll be wrapping the output data in a `dict` for simplicity of the return value.
 
     >>> dict(a.concatenate([b, c], uns_merge="same").uns)
-    {"a": 1, "c": {"c.b": 4}}
+    {'a': 1, 'c': {'c.b': 4}}
 
 Here only the values for `uns["a"]` and `uns["c"]["c.b"]` were exactly the same, so only they were kept.
 `uns["b"]` has a number of values and neither `uns["c"]["c.a"]` or `uns["c"]["c.b"]` appears in each `uns`.
@@ -211,7 +211,7 @@ For example, if each was put through the same pipeline with the same parameters,
 Now let's look at the behaviour of `unique`:
 
     >>> dict(a.concatenate([b, c], uns_merge="unique").uns)
-    {"a": 1, "c": {"c.a": 3, "c.b": 4, "c.c": 5}}
+    {'a': 1, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
 
 The results here are a super-set of those from `"same"`. Note that there was only one possible value at each position in the resulting mapping.
 That is, there were not alternative values present for `uns["c"]["c.c"]` even though it appeared only once.
@@ -220,12 +220,12 @@ This can be useful when the object's were both run through the same pipeline but
 An example of this would be a spatial dataset, where the images are stored in `uns`.
 
     >>> dict(a.concatenate([b, c], uns_merge="only").uns)
-    {"c": {"c.c": 5}}
+    {'c': {'c.c': 5}}
 
 `uns["c"]["c.c"]` is the only value that is kept, since it is the only one which was specified in only one `uns`.
 
     >>> dict(a.concatenate([b, c], uns_merge="first").uns)
-    {"a": 1, "b": 2, "c": {"c.b": 4, "c.c": 5, "c.a": 3}}
+    {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
  
 In this case, the result has the union of the keys from all the starting dictionaries.
 The value is taken from the first object to have a value at this key.
