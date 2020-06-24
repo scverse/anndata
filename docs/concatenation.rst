@@ -5,7 +5,7 @@ Concatenation
 
     This section is currently a draft.
 
-With function :func:`~anndata.concat`, `AnnData` objects can be combined via a composition of two operations: concatenation and merging.
+With function `anndata.concat`, `AnnData` objects can be combined via a composition of two operations: concatenation and merging.
 
 * Concatenation is when we keep all sub elements of each object, and stack these elements in an ordered way.
 * Merging is combining a set of collections into one resulting collection which contains elements from the objects.
@@ -79,23 +79,95 @@ When building a joint anndata object, we would still like to store the coordinat
     ... )
     >>> droplet = AnnData(sparse.random(5000, 10000, format="csr"))
     >>> combined = concat([spatial, droplet], join="outer")
-    >>> sc.pl.embedding(combined, "coords")  # How to get this plot into the docs?
+    >>> sc.pl.embedding(combined, "coords")  # doctest: +SKIP
+
+.. TODO: Get the above plot to show up
 
 Merging
 -------
 
-Merging `.uns`
-~~~~~~~~~~~~~~
+We also provide control over how elements which aren't aligned to the axis being concatenated are combined.
+We'll refer to these other axis as the alternative axes here.
+Selecting the elements aligned to alternative axes is done through merging, which we provide a few strategies for:
 
-When concatenating `AnnData` objects there are a number of options available for how the entries of `uns` should be merged.
-These are:
-
-* The default, creates a new empty `dict` for `uns`.
+* The default, where no elements aligned to alternative axes are present in the result object
 * `"same"`: Elements which are the same in each of the objects.
 * `"unique"`: Elements for which there is only one possible value.
 * `"first"`: The first element seen at each from each position.
 * `"only"`: Elements which show up in only one of the objects.
 
+These are similar to `xarray`'s compat_ argument.
+
+.. _compat: http://xarray.pydata.org/en/stable/generated/xarray.merge.html#xarray.merge
+
+We'll show how this works with a few examples for alternative axes, and then discuss how they work for `.uns` in more detail.
+
+    >>> import scanpy as sc
+    >>> blobs = sc.datasets.blobs(n_variables=30, n_centers=5)
+    >>> sc.pp.pca(blobs)
+    >>> blobs
+    AnnData object with n_obs × n_vars = 640 × 30
+        obs: 'blobs'
+        uns: 'pca'
+        obsm: 'X_pca'
+        varm: 'PCs'
+
+Now we will split this object by the present categories and recombine it to illustrate different merge strategies.
+
+    >>> adatas = []
+    >>> for group, idx in blobs.obs.groupby("blobs").indices.items():
+    ...     sub_adata = blobs[idx].copy()
+    ...     sub_adata.obsm["qc"], sub_adata.varm[f"{group}_qc"] = sc.pp.calculate_qc_metrics(
+    ...         sub_adata, percent_top=(), inplace=False, log1p=False
+    ...     )
+    ...     adatas.append(sub_adata)
+    >>> adatas[0]
+    AnnData object with n_obs × n_vars = 128 × 30
+        obs: 'blobs'
+        uns: 'pca'
+        obsm: 'X_pca', 'qc'
+        varm: 'PCs', '0_qc'
+
+`adatas` is now a list of datasets with disjoint sets of observations and a common set of variables.
+Each object has had QC metrics computed, with observation-wise metrics stored under `"qc"` in `.obsm`, and variable-wise metrics stored with a unique key for each subset.
+Taking a look at how this effects concatenation:
+
+    >>> concat(adatas)
+    AnnData object with n_obs × n_vars = 640 × 30
+        obs: 'blobs'
+        obsm: 'X_pca', 'qc'
+    >>> concat(adatas, merge="same")
+    AnnData object with n_obs × n_vars = 640 × 30
+        obs: 'blobs'
+        obsm: 'X_pca', 'qc'
+        varm: 'PCs'
+    >>> concat(adatas, merge="unique")
+    AnnData object with n_obs × n_vars = 640 × 30
+        obs: 'blobs'
+        obsm: 'X_pca', 'qc'
+        varm: 'PCs', '0_qc', '1_qc', '2_qc', '3_qc', '4_qc'
+
+Note that comparisons are made after indices are aligned.
+That is, if the objects only share a subset of indices on the alternative axis, it's only required that values for those indices match when using a strategy like `"same"`.
+
+    >>> a = AnnData(
+    ...     sparse.eye(3),
+    ...     var=pd.DataFrame({"nums": [1, 2, 3]}, index=list("abc"))
+    ... )
+    >>> b = AnnData(
+    ...     sparse.eye(2),
+    ...     var=pd.DataFrame({"nums": [2, 1]}, index=list("ba"))
+    ... )
+    >>> concat([a, b], merge="same").var
+       nums
+    a     1
+    b     2
+
+
+Merging `.uns`
+~~~~~~~~~~~~~~
+
+We use the same set of strategies for merging `uns` as we do for entries aligned to an axis, but these strategies are applied recursively.
 This is a little abstract, so we'll look at some examples of this. Here's our setup:
 
     >>> from anndata import AnnData
