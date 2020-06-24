@@ -3,12 +3,10 @@ Code for merging/ concatenating AnnData objects.
 """
 from collections import OrderedDict
 from collections.abc import Mapping, MutableSet
-from copy import deepcopy
-from functools import partial, reduce, singledispatch
+from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
 from typing import Callable, Collection, Iterable, Optional, Tuple, TypeVar, Union
-import warnings
 from warnings import warn
 
 import numpy as np
