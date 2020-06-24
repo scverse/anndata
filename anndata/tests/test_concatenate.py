@@ -18,7 +18,8 @@ from anndata import AnnData, Raw
 from anndata._core.index import _subset
 from anndata._core import merge
 from anndata.tests import helpers
-from anndata.tests.helpers import asarray, assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.utils import asarray
 
 
 @pytest.fixture(
