@@ -17,7 +17,6 @@ Let's start off with an example:
 
     >>> import scanpy as sc, anndata as ad, numpy as np, pandas as pd
     >>> from scipy import sparse
-    >>> from anndata._core.merge import concat
     >>> from anndata import AnnData
     >>> pbmc = sc.datasets.pbmc68k_reduced()
     >>> pbmc
@@ -32,7 +31,7 @@ Let's start off with an example:
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 
     >>> groups = pbmc.obs.groupby("louvain").indices
-    >>> pbmc_concat = concat([pbmc[inds] for inds in groups.values()], merge="same")
+    >>> pbmc_concat = ad.concat([pbmc[inds] for inds in groups.values()], merge="same")
     >>> assert np.array_equal(pbmc.X, pbmc_concat[pbmc.obs_names].X)  # TODO: Make obs names not get renamed by default
     >>> pbmc_concat
     AnnData object with n_obs × n_vars = 700 × 765
@@ -53,13 +52,13 @@ For example, given two anndata objects with differing variables:
 
     >>> a = AnnData(sparse.eye(3), var=pd.DataFrame(index=list("abc")))
     >>> b = AnnData(sparse.eye(2), var=pd.DataFrame(index=list("ba")))
-    >>> concat([a, b], join="inner").X.toarray()
+    >>> ad.concat([a, b], join="inner").X.toarray()
     array([[1., 0.],
            [0., 1.],
            [0., 0.],
            [0., 1.],
            [1., 0.]], dtype=float32)
-    >>> concat([a, b], join="outer").X.toarray()
+    >>> ad.concat([a, b], join="outer").X.toarray()
     array([[1., 0., 0.],
            [0., 1., 0.],
            [0., 0., 1.],
@@ -78,7 +77,7 @@ When building a joint anndata object, we would still like to store the coordinat
     ...     obsm={"coords": np.random.randn(5000, 2)}
     ... )
     >>> droplet = AnnData(sparse.random(5000, 10000, format="csr"))
-    >>> combined = concat([spatial, droplet], join="outer")
+    >>> combined = ad.concat([spatial, droplet], join="outer")
     >>> sc.pl.embedding(combined, "coords")  # doctest: +SKIP
 
 .. TODO: Get the above plot to show up
@@ -132,16 +131,16 @@ Now we will split this object by the present categories and recombine it to illu
 Each object has had QC metrics computed, with observation-wise metrics stored under `"qc"` in `.obsm`, and variable-wise metrics stored with a unique key for each subset.
 Taking a look at how this effects concatenation:
 
-    >>> concat(adatas)
+    >>> ad.concat(adatas)
     AnnData object with n_obs × n_vars = 640 × 30
         obs: 'blobs'
         obsm: 'X_pca', 'qc'
-    >>> concat(adatas, merge="same")
+    >>> ad.concat(adatas, merge="same")
     AnnData object with n_obs × n_vars = 640 × 30
         obs: 'blobs'
         obsm: 'X_pca', 'qc'
         varm: 'PCs'
-    >>> concat(adatas, merge="unique")
+    >>> ad.concat(adatas, merge="unique")
     AnnData object with n_obs × n_vars = 640 × 30
         obs: 'blobs'
         obsm: 'X_pca', 'qc'
@@ -158,7 +157,7 @@ That is, if the objects only share a subset of indices on the alternative axis, 
     ...     sparse.eye(2),
     ...     var=pd.DataFrame({"nums": [2, 1]}, index=list("ba"))
     ... )
-    >>> concat([a, b], merge="same").var
+    >>> ad.concat([a, b], merge="same").var
        nums
     a     1
     b     2
@@ -191,12 +190,12 @@ These are discussed in more depth below:
 
 The default returns a fairly obvious result:
 
-    >>> a.concatenate([b, c]).uns == {}
+    >>> ad.concat([a, b, c]).uns == {}
     True
 
 But let's take a look at the others in a bit more depth. Here, we'll be wrapping the output data in a `dict` for simplicity of the return value.
 
-    >>> dict(a.concatenate([b, c], uns_merge="same").uns)
+    >>> dict(ad.concat([a, b, c], uns_merge="same").uns)
     {'a': 1, 'c': {'c.b': 4}}
 
 Here only the values for `uns["a"]` and `uns["c"]["c.b"]` were exactly the same, so only they were kept.
@@ -210,7 +209,7 @@ For example, if each was put through the same pipeline with the same parameters,
 
 Now let's look at the behaviour of `unique`:
 
-    >>> dict(a.concatenate([b, c], uns_merge="unique").uns)
+    >>> dict(ad.concat([a, b, c], uns_merge="unique").uns)
     {'a': 1, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
 
 The results here are a super-set of those from `"same"`. Note that there was only one possible value at each position in the resulting mapping.
@@ -219,12 +218,12 @@ That is, there were not alternative values present for `uns["c"]["c.c"]` even th
 This can be useful when the object's were both run through the same pipeline but contain specific metadata per object.
 An example of this would be a spatial dataset, where the images are stored in `uns`.
 
-    >>> dict(a.concatenate([b, c], uns_merge="only").uns)
+    >>> dict(ad.concat([a, b, c], uns_merge="only").uns)
     {'c': {'c.c': 5}}
 
 `uns["c"]["c.c"]` is the only value that is kept, since it is the only one which was specified in only one `uns`.
 
-    >>> dict(a.concatenate([b, c], uns_merge="first").uns)
+    >>> dict(ad.concat([a, b, c], uns_merge="first").uns)
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
  
 In this case, the result has the union of the keys from all the starting dictionaries.

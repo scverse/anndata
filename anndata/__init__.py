@@ -1,4 +1,5 @@
 from ._core.anndata import AnnData, ImplicitModificationWarning
+from ._core.merge import concat
 from ._core.raw import Raw
 from ._io import (
     read_h5ad,
