@@ -3,7 +3,8 @@ import pytest
 from sklearn.utils.testing import assert_array_equal
 from scipy import sparse
 
-from anndata.tests.helpers import gen_adata, subset_func, asarray
+from anndata.tests.helpers import gen_adata, subset_func
+from anndata.utils import asarray
 
 
 @pytest.fixture(

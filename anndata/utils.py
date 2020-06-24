@@ -2,13 +2,36 @@ import warnings
 from functools import wraps, singledispatch
 from typing import Mapping, Any, Sequence, Union
 
+import h5py
 import pandas as pd
 import numpy as np
 from scipy import sparse
 
 from .logging import get_logger
+from ._core.sparse_dataset import SparseDataset
 
 logger = get_logger(__name__)
+
+
+@singledispatch
+def asarray(x):
+    """Convert x to a numpy array"""
+    return np.asarray(x)
+
+
+@asarray.register(sparse.spmatrix)
+def asarray_sparse(x):
+    return x.toarray()
+
+
+@asarray.register(SparseDataset)
+def asarray_sparse_dataset(x):
+    return asarray(x.value)
+
+
+@asarray.register(h5py.Dataset)
+def asarray_h5py_dataset(x):
+    return x[...]
 
 
 @singledispatch

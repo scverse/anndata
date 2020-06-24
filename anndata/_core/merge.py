@@ -17,6 +17,7 @@ from scipy import sparse
 
 from .anndata import AnnData
 from ..compat import Literal
+from ..utils import asarray
 
 T = TypeVar("T")
 
@@ -88,7 +89,7 @@ def not_missing(v) -> bool:
 # TODO: Hopefully this will stop being an issue in the future and this code can be removed.
 @singledispatch
 def equal(a, b) -> bool:
-    return np.array_equal(a, b)
+    return np.array_equal(a, asarray(b))
 
 
 @equal.register(pd.DataFrame)
@@ -98,7 +99,7 @@ def equal_dataframe(a, b) -> bool:
 
 @equal.register(np.ndarray)
 def equal_array(a, b) -> bool:
-    return equal(pd.DataFrame(a), pd.DataFrame(b))
+    return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
 
 
 @equal.register(sparse.spmatrix)
