@@ -13,7 +13,7 @@ from scipy import sparse
 from boltons.iterutils import research, remap, default_exit
 
 
-from anndata import AnnData, Raw
+from anndata import AnnData, Raw, concat
 from anndata._core.index import _subset
 from anndata._core import merge
 from anndata.tests import helpers
@@ -87,7 +87,7 @@ def fix_known_differences(orig, result, backwards_compat=True):
 @pytest.mark.parametrize(
     ["concat_func", "backwards_compat"],
     [
-        (partial(merge.concat, merge="unique"), False),
+        (partial(concat, merge="unique"), False),
         (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
     ],
 )
@@ -628,14 +628,14 @@ def test_nan_merge(axis, join_type, array_type):
     _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)
     orig2 = AnnData(**_data)
-    result = merge.concat([orig1, orig2], axis=axis, merge="same")
+    result = concat([orig1, orig2], axis=axis, merge="same")
 
     assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
 
     orig_nonan = AnnData(
         **{"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr}}
     )
-    result_nonan = merge.concat([orig1, orig_nonan], axis=axis, merge="same")
+    result_nonan = concat([orig1, orig_nonan], axis=axis, merge="same")
 
     assert len(getattr(result_nonan, mapping_attr)) == 0
 
@@ -857,8 +857,6 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
 
 
 def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
-    from anndata._core.merge import concat
-
     lhs = gen_adata((10, 10), X_type=array_type)
     rhs = gen_adata((10, 12), X_type=array_type)
 
@@ -872,7 +870,6 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
 
 def test_batch_key(axis):
     """Test that concat only adds a batch_key if the key is provided"""
-    from anndata._core.merge import concat
 
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
@@ -900,8 +897,6 @@ def test_batch_key(axis):
 
 
 def test_concat_names(axis):
-    from anndata._core.merge import concat
-
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
 
