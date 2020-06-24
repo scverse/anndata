@@ -9,3 +9,4 @@ xlrd
 joblib
 black
 boltons
+scanpy
