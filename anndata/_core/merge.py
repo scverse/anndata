@@ -571,7 +571,7 @@ def dim_size(adata, *, axis=None, dim=None):
 
 
 def concat(
-    adatas: Collection[AnnData],
+    adatas: Union[Collection[AnnData], "Mapping[str, AnnData]"],
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
@@ -587,7 +587,8 @@ def concat(
     Params
     ------
     adatas
-        The objects to be concatenated.
+        The objects to be concatenated. If a Mapping is passed, the keys are used as values
+        for batch_categories and values are concatenated.
     axis
         Which axis to concatenate along.
     join
@@ -602,8 +603,9 @@ def concat(
         Key in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
         If it's None, no column is added.
     batch_categories
-        Label for each object being added. Will be the values in the column labeled by
-        `batch_key`. Defaults to incrementing integer labels.
+        Names for each object being added. These values are used for column values for
+        `batch_key`, or appended to the index if `index_unique` is not `None`. Defaults
+        to incrementing integer labels.
     index_unique
         Whether to make the index unique by using the batch_categories. If provided, this
         is the delimeter between "{orig_idx}{index_unique}{batch_category}". When `None`,
@@ -617,7 +619,16 @@ def concat(
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
-    adatas = list(adatas)
+    if isinstance(adatas, Mapping):
+        if batch_categories is not None:
+            raise TypeError(
+                "Cannot specify categories in both mapping keys and using `batch_categories`. "
+                "Only specify this once."
+            )
+        batch_categories, adatas = list(adatas.keys()), list(adatas.values())
+    else:
+        adatas = list(adatas)
+
     if batch_categories is None:
         batch_categories = np.arange(len(adatas)).astype(str)
     if axis == 0:

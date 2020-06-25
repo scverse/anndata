@@ -896,6 +896,26 @@ def test_batch_key(axis):
     ) == ["batch"]
 
 
+def test_concat_categories_from_mapping():
+    mapping = {
+        "a": gen_adata((10, 10)),
+        "b": gen_adata((10, 10)),
+    }
+    keys = list(mapping.keys())
+    adatas = list(mapping.values())
+
+    mapping_call = partial(concat, mapping)
+    iter_call = partial(concat, adatas, batch_categories=keys)
+
+    assert_equal(mapping_call(), iter_call())
+    assert_equal(mapping_call(batch_key="batch"), iter_call(batch_key="batch"))
+    assert_equal(mapping_call(index_unique="-"), iter_call(index_unique="-"))
+    assert_equal(
+        mapping_call(batch_key="group", index_unique="+"),
+        iter_call(batch_key="group", index_unique="+"),
+    )
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
