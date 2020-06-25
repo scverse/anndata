@@ -869,7 +869,7 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
 
 
 def test_batch_key(axis):
-    """Test that concat only adds a batch_key if the key is provided"""
+    """Test that concat only adds a label if the key is provided"""
 
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
@@ -888,7 +888,7 @@ def test_batch_key(axis):
         == []
     )
 
-    batch_annot = get_annot(concat([lhs, rhs], axis=axis, batch_key="batch"))
+    batch_annot = get_annot(concat([lhs, rhs], axis=axis, label="batch"))
     assert list(
         batch_annot.columns.difference(
             get_annot(lhs).columns.union(get_annot(rhs).columns)
@@ -905,14 +905,14 @@ def test_concat_categories_from_mapping():
     adatas = list(mapping.values())
 
     mapping_call = partial(concat, mapping)
-    iter_call = partial(concat, adatas, batch_categories=keys)
+    iter_call = partial(concat, adatas, keys=keys)
 
     assert_equal(mapping_call(), iter_call())
-    assert_equal(mapping_call(batch_key="batch"), iter_call(batch_key="batch"))
+    assert_equal(mapping_call(label="batch"), iter_call(label="batch"))
     assert_equal(mapping_call(index_unique="-"), iter_call(index_unique="-"))
     assert_equal(
-        mapping_call(batch_key="group", index_unique="+"),
-        iter_call(batch_key="group", index_unique="+"),
+        mapping_call(label="group", index_unique="+"),
+        iter_call(label="group", index_unique="+"),
     )
 
 
