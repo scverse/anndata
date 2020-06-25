@@ -5,7 +5,7 @@ Concatenation
 
     This section is currently a draft.
 
-With function `anndata.concat`, `AnnData` objects can be combined via a composition of two operations: concatenation and merging.
+With function :func:`~anndata.concat`, `AnnData` objects can be combined via a composition of two operations: concatenation and merging.
 
 * Concatenation is when we keep all sub elements of each object, and stack these elements in an ordered way.
 * Merging is combining a set of collections into one resulting collection which contains elements from the objects.

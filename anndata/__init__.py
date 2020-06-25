@@ -27,6 +27,15 @@ The central class:
 
    AnnData
 
+Combining
+---------
+
+Combining AnnData objects. See also the section on concatenation.
+
+.. autosummary::
+   :toctree: .
+
+   concat
 
 Reading
 -------

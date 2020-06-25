@@ -593,7 +593,7 @@ def concat(
         Which axis to concatenate along.
     join
         How to align values when concatenating. If "outer", the union of the other axis
-        is taken. If "inner", the intersection. See :ref:`Concatenation` for more.
+        is taken. If "inner", the intersection. See :doc:`concatenation` for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.
     uns_merge
