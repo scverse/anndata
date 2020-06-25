@@ -89,11 +89,11 @@ We also provide control over how elements which aren't aligned to the axis being
 We'll refer to these other axis as the alternative axes here.
 Selecting the elements aligned to alternative axes is done through merging, which we provide a few strategies for:
 
-* The default, where no elements aligned to alternative axes are present in the result object
-* `"same"`: Elements which are the same in each of the objects.
+* `None`: No elements aligned to alternative axes are present in the result object.
+* `"same"`: Elements that are the same in each of the objects.
 * `"unique"`: Elements for which there is only one possible value.
 * `"first"`: The first element seen at each from each position.
-* `"only"`: Elements which show up in only one of the objects.
+* `"only"`: Elements that show up in only one of the objects.
 
 These are similar to `xarray`'s compat_ argument.
 
@@ -111,7 +111,7 @@ We'll show how this works with a few examples for alternative axes, and then dis
         obsm: 'X_pca'
         varm: 'PCs'
 
-Now we will split this object by the present categories and recombine it to illustrate different merge strategies.
+Now we will split this object by the categorical `"blobs"` and recombine it to illustrate different merge strategies.
 
     >>> adatas = []
     >>> for group, idx in blobs.obs.groupby("blobs").indices.items():
