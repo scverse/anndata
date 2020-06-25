@@ -581,6 +581,7 @@ def concat(
     keys: Optional[Collection] = None,
     index_unique: Optional[str] = None,
     fill_value: Optional = None,
+    pairwise: bool = False,
 ) -> AnnData:
     """Concatenates AnnData objects.
 
@@ -616,6 +617,9 @@ def concat(
         When `join="outer"`, this is the value that will be used to fill the introduced
         indices. By default, sparse arrays are padded with zeros, while dense arrays and
         DataFrames are padded with missing values.
+    pairwise
+        Whether pairwise elements along the concatenated dimension should be included.
+        This is False by default, since the resulting arrays are often not meaningful.
     """
     # Argument normalization
     merge = resolve_merge_strategy(merge)
@@ -683,11 +687,14 @@ def concat(
         concat_mapping = inner_concat_aligned_mapping(
             [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
         )
-        concat_pairwise = concat_pairwise_mapping(
-            mappings=[getattr(a, f"{dim}p") for a in adatas],
-            shapes=[a.shape[axis] for a in adatas],
-            join_keys=intersect_keys,
-        )
+        if pairwise:
+            concat_pairwise = concat_pairwise_mapping(
+                mappings=[getattr(a, f"{dim}p") for a in adatas],
+                shapes=[a.shape[axis] for a in adatas],
+                join_keys=intersect_keys,
+            )
+        else:
+            concat_pairwise = {}
     elif join == "outer":
         layers = outer_concat_aligned_mapping(
             [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
@@ -697,11 +704,14 @@ def concat(
             index=concat_indices,
             fill_value=fill_value,
         )
-        concat_pairwise = concat_pairwise_mapping(
-            mappings=[getattr(a, f"{dim}p") for a in adatas],
-            shapes=[a.shape[axis] for a in adatas],
-            join_keys=union_keys,
-        )
+        if pairwise:
+            concat_pairwise = concat_pairwise_mapping(
+                mappings=[getattr(a, f"{dim}p") for a in adatas],
+                shapes=[a.shape[axis] for a in adatas],
+                join_keys=union_keys,
+            )
+        else:
+            concat_pairwise = {}
 
     # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
     alt_mapping = merge(

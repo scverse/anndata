@@ -72,9 +72,6 @@ def fix_known_differences(orig, result, backwards_compat=True):
         del orig.varm
         del orig.varp
         result.obs.drop(columns=["batch"], inplace=True)
-    else:
-        # TODO: Handle this better
-        del result.obsp
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for k, dtype in orig.obs.dtypes.items():
@@ -606,6 +603,62 @@ def test_concatenate_with_raw():
     assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert adata_all.raw is None
+
+
+def test_pairwise_concat(axis, array_type):
+    dim_sizes = [[100, 200, 50], [50, 50, 50]]
+    if axis:
+        dim_sizes.reverse()
+    Ms, Ns = dim_sizes
+    dim = ("obs", "var")[axis]
+    alt = ("var", "obs")[axis]
+    dim_attr = f"{dim}p"
+    alt_attr = f"{alt}p"
+
+    def gen_dim_array(m):
+        return array_type(sparse.random(m, m, format="csr", density=0.1))
+
+    adatas = {
+        k: AnnData(
+            **{
+                "X": sparse.csr_matrix((m, n)),
+                "obsp": {"arr": gen_dim_array(m)},
+                "varp": {"arr": gen_dim_array(n)},
+            }
+        )
+        for k, m, n in zip("abc", Ms, Ns)
+    }
+
+    w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)
+    wo_pairwise = concat(adatas, axis=axis, label="orig", pairwise=False)
+
+    # Check that argument controls whether elements are included
+    assert getattr(wo_pairwise, dim_attr) == {}
+    assert getattr(w_pairwise, dim_attr) != {}
+
+    # Check values of included elements
+    full_inds = np.arange(w_pairwise.shape[axis])
+    groups = getattr(w_pairwise, dim).groupby("orig").indices
+    for k, inds in groups.items():
+        orig_arr = getattr(adatas[k], dim_attr)["arr"]
+        full_arr = getattr(w_pairwise, dim_attr)["arr"]
+
+        # Check original values are intact
+        assert_equal(orig_arr, _subset(full_arr, (inds, inds)))
+        # Check that entries are filled with zeroes
+        assert_equal(
+            sparse.csr_matrix((len(inds), len(full_inds) - len(inds))),
+            _subset(full_arr, (inds, np.setdiff1d(full_inds, inds))),
+        )
+        assert_equal(
+            sparse.csr_matrix((len(full_inds) - len(inds), len(inds))),
+            _subset(full_arr, (np.setdiff1d(full_inds, inds), inds)),
+        )
+
+    # Check that argument does not affect alternative axis
+    assert "arr" in getattr(
+        concat(adatas, axis=axis, pairwise=False, merge="first"), alt_attr
+    )
 
 
 def test_nan_merge(axis, join_type, array_type):
