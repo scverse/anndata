@@ -577,18 +577,20 @@ def concat(
     join: Literal["inner", "outer"] = "inner",
     merge: Union[StrategiesLiteral, Callable, None] = None,
     uns_merge: Union[StrategiesLiteral, Callable, None] = None,
-    batch_key: Optional[str] = None,
-    batch_categories: Optional[Collection] = None,
+    label: Optional[str] = None,
+    keys: Optional[Collection] = None,
     index_unique: Optional[str] = None,
     fill_value: Optional = None,
 ) -> AnnData:
     """Concatenates AnnData objects.
 
+    See :doc:`concatenation` for a more in-depth description.
+
     Params
     ------
     adatas
         The objects to be concatenated. If a Mapping is passed, the keys are used as values
-        for batch_categories and values are concatenated.
+        for `keys` and values are concatenated.
     axis
         Which axis to concatenate along.
     join
@@ -599,16 +601,16 @@ def concat(
     uns_merge
         How the elements of `.uns` are selected. Uses the same set of strategies as
         the `merge` argument, except applied recursively.
-    batch_key
-        Key in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
+    label
+        Column in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
         If it's None, no column is added.
-    batch_categories
+    keys
         Names for each object being added. These values are used for column values for
-        `batch_key`, or appended to the index if `index_unique` is not `None`. Defaults
-        to incrementing integer labels.
+        `label` or appended to the index if `index_unique` is not `None`. Defaults to
+        incrementing integer labels.
     index_unique
-        Whether to make the index unique by using the batch_categories. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{batch_category}". When `None`,
+        Whether to make the index unique by using the keys. If provided, this
+        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
         the original indices are kept.
     fill_value
         When `join="outer"`, this is the value that will be used to fill the introduced
@@ -620,17 +622,17 @@ def concat(
     uns_merge = resolve_merge_strategy(uns_merge)
 
     if isinstance(adatas, Mapping):
-        if batch_categories is not None:
+        if keys is not None:
             raise TypeError(
-                "Cannot specify categories in both mapping keys and using `batch_categories`. "
+                "Cannot specify categories in both mapping keys and using `keys`. "
                 "Only specify this once."
             )
-        batch_categories, adatas = list(adatas.keys()), list(adatas.values())
+        keys, adatas = list(adatas.keys()), list(adatas.values())
     else:
         adatas = list(adatas)
 
-    if batch_categories is None:
-        batch_categories = np.arange(len(adatas)).astype(str)
+    if keys is None:
+        keys = np.arange(len(adatas)).astype(str)
     if axis == 0:
         dim = "obs"
     elif axis == 1:
@@ -638,10 +640,10 @@ def concat(
 
     alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
-    # Batch column
-    batch = pd.Categorical.from_codes(
+    # Label column
+    label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(adatas)), [a.shape[axis] for a in adatas]),
-        categories=batch_categories,
+        categories=keys,
     )
 
     # Combining indexes
@@ -649,7 +651,7 @@ def concat(
         [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(batch.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = resolve_index(
@@ -662,8 +664,8 @@ def concat(
     # Annotation for concatenation axis
     concat_annot = pd.concat([getattr(a, dim) for a in adatas], ignore_index=True)
     concat_annot.index = concat_indices
-    if batch_key is not None:
-        concat_annot[batch_key] = batch
+    if label is not None:
+        concat_annot[label] = label_col
 
     # Annotation for other axis
     alt_annot = merge_dataframes(
@@ -730,8 +732,8 @@ def concat(
                 for a in adatas
             ],
             join=join,
-            batch_key=batch_key,
-            batch_categories=batch_categories,
+            label=label,
+            keys=keys,
             index_unique=index_unique,
             fill_value=fill_value,
             axis=axis,
