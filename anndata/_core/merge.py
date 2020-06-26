@@ -583,15 +583,15 @@ def concat(
     fill_value: Optional = None,
     pairwise: bool = False,
 ) -> AnnData:
-    """Concatenates AnnData objects.
+    """Concatenates AnnData objects along an axis.
 
-    See :doc:`concatenation` for a more in-depth description.
+    See the :doc:`concatenation` section in the docs for a more in-depth description.
 
     Params
     ------
     adatas
-        The objects to be concatenated. If a Mapping is passed, the keys are used as values
-        for `keys` and values are concatenated.
+        The objects to be concatenated. If a Mapping is passed, keys are used for the `keys`
+        argument and values are concatenated.
     axis
         Which axis to concatenate along.
     join
@@ -599,6 +599,13 @@ def concat(
         is taken. If "inner", the intersection. See :doc:`concatenation` for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.
+        Currently implemented strategies include:
+
+        * `None`: No elements are kept.
+        * `"same"`: Elements that are the same in each of the objects.
+        * `"unique"`: Elements for which there is only one possible value.
+        * `"first"`: The first element seen at each from each position.
+        * `"only"`: Elements that show up in only one of the objects.
     uns_merge
         How the elements of `.uns` are selected. Uses the same set of strategies as
         the `merge` argument, except applied recursively.
@@ -620,6 +627,129 @@ def concat(
     pairwise
         Whether pairwise elements along the concatenated dimension should be included.
         This is False by default, since the resulting arrays are often not meaningful.
+
+    Notes
+    -----
+
+    .. warning::
+
+        If you use `join='outer'` this fills 0s for sparse data when
+        variables are absent in a batch. Use this with care. Dense data is
+        filled with `NaN`.
+
+    Examples
+    --------
+
+    Preparing example objects
+
+    >>> import anndata as ad, pandas as pd, numpy as np
+    >>> from scipy import sparse
+    >>> a = ad.AnnData(
+    ...     X=sparse.csr_matrix(np.array([[0, 1], [2, 3]])),
+    ...     obs=pd.DataFrame({"group": ["a", "b"]}, index=["s1", "s2"]),
+    ...     var=pd.DataFrame(index=["var1", "var2"]),
+    ...     varm={"ones": np.ones((2, 5)), "rand": np.random.randn(2, 3), "zeros": np.zeros((2, 5))},
+    ...     uns={"a": 1, "b": 2, "c": {"c.a": 3, "c.b": 4}},
+    ... )
+    >>> b = ad.AnnData(
+    ...     X=sparse.csr_matrix(np.array([[4, 5, 6], [7, 8, 9]])),
+    ...     obs=pd.DataFrame({"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]),
+    ...     var=pd.DataFrame(index=["var1", "var2", "var3"]),
+    ...     varm={"ones": np.ones((3, 5)), "rand": np.random.randn(3, 5)},
+    ...     uns={"a": 1, "b": 3, "c": {"c.b": 4}},
+    ... )
+    >>> c = ad.AnnData(
+    ...     X=sparse.csr_matrix(np.array([[10, 11], [12, 13]])),
+    ...     obs=pd.DataFrame({"group": ["a", "b"]}, index=["s1", "s2"]),
+    ...     var=pd.DataFrame(index=["var3", "var4"]),
+    ...     uns={"a": 1, "b": 4, "c": {"c.a": 3, "c.b": 4, "c.c": 5}},
+    ... )
+
+    Concatenating along different axes
+
+    >>> ad.concat([a, b]).to_df()
+        var1  var2
+    s1   0.0   1.0
+    s2   2.0   3.0
+    s3   4.0   5.0
+    s4   7.0   8.0
+    >>> ad.concat([a, c], axis=1).to_df()
+        var1  var2  var3  var4
+    s1   0.0   1.0  10.0  11.0
+    s2   2.0   3.0  12.0  13.0
+
+    Inner and outer joins
+
+    >>> inner = ad.concat([a, b])  # Joining on intersection of variables
+    >>> inner
+    AnnData object with n_obs × n_vars = 4 × 2
+        obs: 'group'
+    >>> (inner.obs_names, inner.var_names)  # doctest: +NORMALIZE_WHITESPACE
+    (Index(['s1', 's2', 's3', 's4'], dtype='object'),
+    Index(['var1', 'var2'], dtype='object'))
+    >>> outer = ad.concat([a, b], join="outer") # Joining on union of variables
+    >>> outer
+    AnnData object with n_obs × n_vars = 4 × 3
+        obs: 'group', 'measure'
+    >>> outer.var_names
+    Index(['var1', 'var2', 'var3'], dtype='object')
+    >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
+        var1  var2  var3
+    s1   0.0   1.0   0.0
+    s2   2.0   3.0   0.0
+    s3   4.0   5.0   6.0
+    s4   7.0   8.0   9.0
+
+    Keeping track of source objects
+
+    >>> ad.concat({"a": a, "b": b}, label="batch").obs
+       group batch
+    s1     a     a
+    s2     b     a
+    s3     b     b
+    s4     c     b
+    >>> ad.concat([a, b], label="batch", keys=["a", "b"]).obs  # Equivalent to previous
+       group batch
+    s1     a     a
+    s2     b     a
+    s3     b     b
+    s4     c     b
+    >>> ad.concat({"a": a, "b": b}, index_unique="-").obs
+         group
+    s1-a     a
+    s2-a     b
+    s3-b     b
+    s4-b     c
+
+    Combining values not aligned to axis of concatenation
+
+    >>> ad.concat([a, b], merge="same")
+    AnnData object with n_obs × n_vars = 4 × 2
+        obs: 'group'
+        varm: 'ones'
+    >>> ad.concat([a, b], merge="unique")
+    AnnData object with n_obs × n_vars = 4 × 2
+        obs: 'group'
+        varm: 'ones', 'zeros'
+    >>> ad.concat([a, b], merge="first")
+    AnnData object with n_obs × n_vars = 4 × 2
+        obs: 'group'
+        varm: 'ones', 'rand', 'zeros'
+    >>> ad.concat([a, b], merge="only")
+    AnnData object with n_obs × n_vars = 4 × 2
+        obs: 'group'
+        varm: 'zeros'
+
+    The same merge strategies can be used for elements in `.uns`
+
+    >>> dict(ad.concat([a, b, c], uns_merge="same").uns)
+    {'a': 1, 'c': {'c.b': 4}}
+    >>> dict(ad.concat([a, b, c], uns_merge="unique").uns)
+    {'a': 1, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
+    >>> dict(ad.concat([a, b, c], uns_merge="only").uns)
+    {'c': {'c.c': 5}}
+    >>> dict(ad.concat([a, b, c], uns_merge="first").uns)
+    {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
     # Argument normalization
     merge = resolve_merge_strategy(merge)
