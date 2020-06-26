@@ -666,7 +666,9 @@ def concat(
     ]
 
     # Annotation for concatenation axis
-    concat_annot = pd.concat([getattr(a, dim) for a in adatas], ignore_index=True)
+    concat_annot = pd.concat(
+        [getattr(a, dim) for a in adatas], join=join, ignore_index=True
+    )
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
