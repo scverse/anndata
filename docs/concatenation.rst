@@ -3,7 +3,7 @@ Concatenation
 
 .. note::
 
-    This section is currently a draft.
+    The :func:`~anndata.concat` function is marked as experimental for the `0.7` release series, and will supercede the :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` method in future releases. While the current API is not likely to change much, this gives us a bit of freedom to make sure we've got the arguments and feature set right.
 
 With function :func:`~anndata.concat`, `AnnData` objects can be combined via a composition of two operations: concatenation and merging.
 
@@ -39,9 +39,10 @@ If we split this object up by clusters of observations, then stack those subsets
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
-        obsp: 'distances', 'connectivities'
 
-Note that we concatenated along the observations by default, and that all elements aligned to the observations were concatenated as well.
+Note that we concatenated along the observations by default, and that most elements aligned to the observations were concatenated as well.
+A notable exception is :attr:`~anndata.AnnData.obsp`, which can be re-enabled with the `pairwise` keyword argument.
+This is because it's not obvious that combining graphs or distance matrices padded with 0s is particularly useful, and may be unintuitive.
 
 Inner and outer joins
 ~~~~~~~~~~~~~~~~~~~~~
@@ -225,6 +226,6 @@ An example of this would be a spatial dataset, where the images are stored in `u
 
     >>> dict(ad.concat([a, b, c], uns_merge="first").uns)
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
- 
+
 In this case, the result has the union of the keys from all the starting dictionaries.
 The value is taken from the first object to have a value at this key.
