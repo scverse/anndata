@@ -112,7 +112,7 @@ For an example, we'll show how you can keep track of the original dataset by pas
     b-3       b
     b-4       b
 
-Here, a column (with the name specified by `label`) was added to the result.
+Here, a categorical column (with the name specified by `label`) was added to the result.
 As an alternative to passing a `Mapping`, you can also specify dataset names with the `keys` argument.
 
 In some cases, your objects may share names along the axes being concatenated.
@@ -144,9 +144,8 @@ These values can be made unique by appending the relevant key using the `index_u
 Merging
 -------
 
-We also provide control over how elements which aren't aligned to the axis being concatenated are combined.
-We'll refer to these other axis as the alternative axes here.
-Selecting the elements aligned to alternative axes is done through merging, which we provide a few strategies for:
+Combining elements not aligned to the axis of concatenation is controlled through the `merge` arguments.
+We provide a few strategies for merging elements aligned to the alternative axes:
 
 * `None`: No elements aligned to alternative axes are present in the result object.
 * `"same"`: Elements that are the same in each of the objects.
@@ -154,11 +153,14 @@ Selecting the elements aligned to alternative axes is done through merging, whic
 * `"first"`: The first element seen at each from each position.
 * `"only"`: Elements that show up in only one of the objects.
 
-These are similar to `xarray`'s compat_ argument.
+.. note::
+
+    These strategies are inspired by `xarray`'s compat_ argument.
 
 .. _compat: http://xarray.pydata.org/en/stable/generated/xarray.merge.html#xarray.merge
 
-We'll show how this works with a few examples for alternative axes, and then discuss how they work for `.uns` in more detail.
+We'll show how this works with elements aligned to the alternative axis, and then how merging works with `.uns`.
+First, our example case:
 
     >>> import scanpy as sc
     >>> blobs = sc.datasets.blobs(n_variables=30, n_centers=5)
@@ -242,9 +244,9 @@ These are discussed in more depth below:
 ===========  =======================================================
 `None`       `{}`
 `"same"`     `{"a": 1, "c": {"c.b": 4}}`
-`"unique"`   `{"a": 1, "c": {"c.b": 4, "c.c": 5, "c.a": 3}}`
+`"unique"`   `{"a": 1, "c": {"c.a": 3, "c.b": 4, "c.c": 5}}`
 `"only"`     `{"c": {"c.c": 5}}`
-`"first"`    `{"a": 1, "b": 2, "c": {"c.b": 4, "c.c": 5, "c.a": 3}}`
+`"first"`    `{"a": 1, "b": 2, "c": {"c.a": 3, "c.b": 4, "c.c": 5}}`
 ===========  =======================================================
 
 The default returns a fairly obvious result:
