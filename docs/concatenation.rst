@@ -32,7 +32,7 @@ If we split this object up by clusters of observations, then stack those subsets
 
     >>> groups = pbmc.obs.groupby("louvain").indices
     >>> pbmc_concat = ad.concat([pbmc[inds] for inds in groups.values()], merge="same")
-    >>> assert np.array_equal(pbmc.X, pbmc_concat[pbmc.obs_names].X)  # TODO: Make obs names not get renamed by default
+    >>> assert np.array_equal(pbmc.X, pbmc_concat[pbmc.obs_names].X)
     >>> pbmc_concat
     AnnData object with n_obs × n_vars = 700 × 765
         obs: 'bulk_labels', 'n_genes', 'percent_mito', 'n_counts', 'S_score', 'G2M_score', 'phase', 'louvain'
@@ -82,6 +82,64 @@ When building a joint anndata object, we would still like to store the coordinat
     >>> sc.pl.embedding(combined, "coords")  # doctest: +SKIP
 
 .. TODO: Get the above plot to show up
+
+Annotating data source (`label`, `keys`, and `index_unique`)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Often, you'd like to be able to tell which values came from which object.
+This can be accomplished with the `label`, `keys`, and `index_unique` keyword arguments.
+
+For an example, we'll show how you can keep track of the original dataset by passing a `Mapping` of dataset names to `AnnData` objects to `concat`:
+
+    >>> adatas = {
+    ...     "a": ad.AnnData(
+    ...         sparse.random(3, 50, format="csr", density=0.1),
+    ...         obs=pd.DataFrame(index=[f"a-{i}" for i in range(3)])
+    ...     ),
+    ...     "b": ad.AnnData(
+    ...         sparse.random(5, 50, format="csr", density=0.1),
+    ...         obs=pd.DataFrame(index=[f"b-{i}" for i in range(5)])
+    ...     ),
+    ... }
+    >>> ad.concat(adatas, label="dataset").obs
+        dataset
+    a-0       a
+    a-1       a
+    a-2       a
+    b-0       b
+    b-1       b
+    b-2       b
+    b-3       b
+    b-4       b
+
+Here, a column (with the name specified by `label`) was added to the result.
+As an alternative to passing a `Mapping`, you can also specify dataset names with the `keys` argument.
+
+In some cases, your objects may share names along the axes being concatenated.
+These values can be made unique by appending the relevant key using the `index_unique` argument:
+
+    .. TODO: skipping example since doctest does not capture stderr, but it's relevant to show the unique message
+
+    >>> adatas = {
+    ...     "a": ad.AnnData(
+    ...         sparse.random(3, 10, format="csr", density=0.1),
+    ...         obs=pd.DataFrame(index=[f"cell-{i}" for i in range(3)])
+    ...     ),
+    ...     "b": ad.AnnData(
+    ...         sparse.random(5, 10, format="csr", density=0.1),
+    ...         obs=pd.DataFrame(index=[f"cell-{i}" for i in range(5)])
+    ...     ),
+    ... }
+    >>> ad.concat(adatas).obs  # doctest: +SKIP
+    Observation names are not unique. To make them unique, call `.obs_names_make_unique`.
+    Empty DataFrame
+    Columns: []
+    Index: [cell-0, cell-1, cell-2, cell-0, cell-1, cell-2, cell-3, cell-4]
+    >>> ad.concat(adatas, index_unique="_").obs
+    Empty DataFrame
+    Columns: []
+    Index: [cell-0_a, cell-1_a, cell-2_a, cell-0_b, cell-1_b, cell-2_b, cell-3_b, cell-4_b]
+
 
 Merging
 -------
