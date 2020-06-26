@@ -331,6 +331,17 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
     pd.testing.assert_frame_equal(true_df, cur_df)
 
 
+def test_concat_annot_join(obsm_adatas, join_type):
+    adatas = [
+        AnnData(sparse.csr_matrix(a.shape), obs=a.obsm["df"], var=a.var)
+        for a in obsm_adatas
+    ]
+    pd.testing.assert_frame_equal(
+        concat(adatas, join=join_type).obs,
+        pd.concat([a.obs for a in adatas], join=join_type),
+    )
+
+
 def test_concatenate_layers_misaligned(array_type, join_type):
     adatas = []
     for _ in range(5):
