@@ -66,6 +66,17 @@ def test_create_from_df():
     assert df.index.tolist() == ad.obs_names.tolist()
 
 
+def test_create_from_sparse_df():
+    s = sp.random(20, 30, density=0.2)
+    obs_names = [f"obs{i}" for i in range(20)]
+    var_names = [f"var{i}" for i in range(30)]
+    df = pd.DataFrame.sparse.from_spmatrix(s, index=obs_names, columns=var_names)
+    a = AnnData(df)
+    b = AnnData(s, obs=pd.DataFrame(index=obs_names), var=pd.DataFrame(index=var_names))
+    assert_equal(a, b)
+    assert issparse(a.X)
+
+
 def test_create_from_df_with_obs_and_var():
     df = pd.DataFrame(np.ones((3, 2)), index=["a", "b", "c"], columns=["A", "B"])
     obs = pd.DataFrame(np.ones((3, 1)), index=df.index, columns=["C"])

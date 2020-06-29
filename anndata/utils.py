@@ -1,9 +1,10 @@
 import warnings
 from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence
+from typing import Mapping, Any, Sequence, Union
 
 import pandas as pd
 import numpy as np
+from scipy import sparse
 
 from .logging import get_logger
 
@@ -105,8 +106,14 @@ def warn_names_duplicates(attr: str):
     )
 
 
-def ensure_df_homogeneous(df: pd.DataFrame, name: str) -> np.ndarray:
-    arr = df.to_numpy()
+def ensure_df_homogeneous(
+    df: pd.DataFrame, name: str
+) -> Union[np.ndarray, sparse.csr_matrix]:
+    # TODO: rename this function, I would not expect this to return a non-dataframe
+    if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
+        arr = df.sparse.to_coo().tocsr()
+    else:
+        arr = df.to_numpy()
     if df.dtypes.nunique() != 1:
         warnings.warn(f"{name} converted to numpy array with dtype {arr.dtype}")
     return arr
