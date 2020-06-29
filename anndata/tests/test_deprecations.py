@@ -135,7 +135,8 @@ def test_set_uns_neighbors_deprecated(adata):
     assert adata.uns["new_key"] == 100
 
 
-def test_slice_uns_sparse_deprecated(adata):
+def test_slice_uns_sparse_deprecated():
+    adata = AnnData(sparse.csr_matrix((500, 10)))
     n = adata.shape[0]
     mtx = sparse.random(n, n, density=0.2, format="csr")
     adata.uns["sparse_mtx"] = mtx
@@ -144,7 +145,7 @@ def test_slice_uns_sparse_deprecated(adata):
         v = adata[: n // 2]
 
     assert_equal(adata.uns["sparse_mtx"], mtx)
-    assert_equal(v.uns["sparse_mtx"], mtx[: n // 2, :][:, n // 2])
+    assert_equal(v.uns["sparse_mtx"], mtx[: n // 2, : n // 2])
 
 
 @pytest.fixture
