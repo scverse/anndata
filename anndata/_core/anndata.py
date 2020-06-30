@@ -904,11 +904,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         of length `n_obs`.
         Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
         """
-        return self._obsm
+        if self.is_view:
+            obsm = AxisArrays(self._adata_ref, 0, self._obsm)
+            return obsm._view(self, self.obs_names)
+        else:
+            return AxisArrays(self, 0, self._obsm)
 
     @obsm.setter
     def obsm(self, value):
-        obsm = AxisArrays(self, 0, vals=convert_to_dict(value))
+        obsm = convert_to_dict(value)
         if self.is_view:
             self._init_as_actual(self.copy())
         self._obsm = obsm
