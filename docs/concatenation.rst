@@ -1,14 +1,21 @@
 Concatenation
 =============
 
-.. note::
+.. warning::
 
     The :func:`~anndata.concat` function is marked as experimental for the `0.7` release series, and will supercede the :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` method in future releases. While the current API is not likely to change much, this gives us a bit of freedom to make sure we've got the arguments and feature set right.
 
-With function :func:`~anndata.concat`, `AnnData` objects can be combined via a composition of two operations: concatenation and merging.
+With :func:`~anndata.concat`, :class:`~anndata.AnnData` objects can be combined via a composition of two operations: concatenation and merging.
 
 * Concatenation is when we keep all sub elements of each object, and stack these elements in an ordered way.
 * Merging is combining a set of collections into one resulting collection which contains elements from the objects.
+
+.. note::
+
+    This function borrows from similar functions in pandas_ and xarray_. Argument which are used to control concatenation are modeled after :func:`pandas.concat` while strategies for merging are inspired by :func:`xarray.merge`'s `compat` argument.
+
+.. _pandas: https://pandas.pydata.org
+.. _xarray: http://xarray.pydata.org
 
 Concatenation
 -------------
@@ -152,12 +159,6 @@ We provide a few strategies for merging elements aligned to the alternative axes
 * `"unique"`: Elements for which there is only one possible value.
 * `"first"`: The first element seen at each from each position.
 * `"only"`: Elements that show up in only one of the objects.
-
-.. note::
-
-    These strategies are inspired by `xarray`'s compat_ argument.
-
-.. _compat: http://xarray.pydata.org/en/stable/generated/xarray.merge.html#xarray.merge
 
 We'll show how this works with elements aligned to the alternative axis, and then how merging works with `.uns`.
 First, our example case:
