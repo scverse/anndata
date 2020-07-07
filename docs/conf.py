@@ -102,6 +102,7 @@ intersphinx_mapping = dict(
     scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
+    xarray=("http://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
     "anndata._core.anndata.AnnData": "anndata.AnnData",
