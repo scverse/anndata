@@ -11,6 +11,11 @@ On master
 - The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
   :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
 
+.. rubric:: Concatenation overhaul :pr:`378` :smaller:`I Virshup`
+
+- New function :func:`anndata.concat` used for concatenating `AnnData` objects along either observations or variables
+- New documentation section: :doc:`concatenation`
+
 .. rubric:: Functionality
 
 - AnnData object created from dataframes with sparse values will have sparse `.X` :pr:`395` :smaller:`I Virshup`
