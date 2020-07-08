@@ -506,7 +506,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self.uns = uns or OrderedDict()
 
         # TODO: Think about consequences of making obsm a group in hdf
-        self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
+        self._obsm = convert_to_dict(obsm)
         self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
 
         self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
