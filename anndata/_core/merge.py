@@ -6,7 +6,8 @@ from collections.abc import Mapping, MutableSet
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Callable, Collection, Iterable, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Collection, Iterable, Optional, Tuple, TypeVar, Union
+import typing
 from warnings import warn
 
 import numpy as np
@@ -571,7 +572,7 @@ def dim_size(adata, *, axis=None, dim=None):
 
 
 def concat(
-    adatas: Union[Collection[AnnData], "Mapping[str, AnnData]"],
+    adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
@@ -580,7 +581,7 @@ def concat(
     label: Optional[str] = None,
     keys: Optional[Collection] = None,
     index_unique: Optional[str] = None,
-    fill_value: Optional = None,
+    fill_value: Optional[Any] = None,
     pairwise: bool = False,
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
