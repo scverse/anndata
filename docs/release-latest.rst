@@ -1,15 +1,8 @@
 .. role:: small
 .. role:: smaller
 
-On master
-~~~~~~~~~
-
-.. rubric:: Upcoming changes
-
-- :attr:`~anndata.AnnData.layers` and :attr:`~anndata.AnnData.X` will be unified.
-- :attr:`~anndata.AnnData.filename` and :attr:`~anndata.AnnData.isbacked` will be unified under a new name.
-- The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
-  :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
+0.7.4 :small:`2020-07-10`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Concatenation overhaul :pr:`378` :smaller:`I Virshup`
 
