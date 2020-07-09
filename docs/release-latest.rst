@@ -16,6 +16,7 @@
 .. rubric:: Bug fixes
 
 - Fixed error from `AnnData.concatenate` by bumping minimum versions of numpy and pandas :issue:`385`
+- Fixed colors being incorrectly changed when `AnnData` object was subset :pr:`388`
 
 0.7.3 :small:`2020-05-20`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
