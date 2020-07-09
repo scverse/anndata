@@ -6,6 +6,6 @@ setuptools_scm
 typing_extensions; python_version < '3.8'
 # Sphinx 2 has nicer looking sections
 sphinx>=2.0.1
-sphinx-autodoc-typehints
+sphinx-autodoc-typehints>=1.11.0
 scanpydoc>=0.4.2
 sphinx_issues
