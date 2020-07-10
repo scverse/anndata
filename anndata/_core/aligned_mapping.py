@@ -231,6 +231,11 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if vals is not None:
             self.update(vals)
 
+    def __setitem__(self, key: str, value: V):
+        if self._axis == 0:
+            self.parent._obsm[key] = value#.copy()
+        super(AxisArrays, self).__setitem__(key, value)
+
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(

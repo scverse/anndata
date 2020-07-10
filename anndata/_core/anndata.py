@@ -820,7 +820,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.is_view:
             self._init_as_actual(self.copy())
         getattr(self, attr).index = value
-        for v in getattr(self, f"{attr}m").values():
+        for v in getattr(self, f"_{attr}m").values():
             if isinstance(v, pd.DataFrame):
                 v.index = value
 
@@ -906,7 +906,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         if self.is_view:
             obsm = AxisArrays(self._adata_ref, 0, self._obsm)
-            return obsm._view(self, self.obs_names)
+            idx = self._oidx
+            if isinstance(idx, slice):
+                idx = self.obs_names.isin(self.obs_names[idx])
+            return obsm._view(self, idx)
         else:
             return AxisArrays(self, 0, self._obsm)
 
