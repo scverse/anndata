@@ -15,27 +15,7 @@ from anndata import AnnData
 from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
-
-
-@singledispatch
-def asarray(x):
-    """Convert x to a numpy array"""
-    return np.asarray(x)
-
-
-@asarray.register(sparse.spmatrix)
-def asarray_sparse(x):
-    return x.toarray()
-
-
-@asarray.register(SparseDataset)
-def asarray_sparse_dataset(x):
-    return asarray(x.value)
-
-
-@asarray.register(h5py.Dataset)
-def asarray_h5py_dataset(x):
-    return x[...]
+from anndata.utils import asarray
 
 
 def gen_vstr_recarray(m, n, dtype=None):

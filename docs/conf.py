@@ -102,6 +102,7 @@ intersphinx_mapping = dict(
     scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
+    xarray=("http://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
     "anndata._core.anndata.AnnData": "anndata.AnnData",
@@ -119,7 +120,7 @@ qualname_overrides = {
 
 
 html_theme = "sphinx_rtd_theme"
-html_theme_options = dict(navigation_depth=2)
+html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
     github_user="theislab",  # Username

@@ -1,4 +1,5 @@
 from ._core.anndata import AnnData, ImplicitModificationWarning
+from ._core.merge import concat
 from ._core.raw import Raw
 from ._io import (
     read_h5ad,
@@ -26,6 +27,15 @@ The central class:
 
    AnnData
 
+Combining
+---------
+
+Combining AnnData objects. See also the section on concatenation.
+
+.. autosummary::
+   :toctree: .
+
+   concat
 
 Reading
 -------

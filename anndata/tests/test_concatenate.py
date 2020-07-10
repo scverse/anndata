@@ -2,6 +2,7 @@ from collections.abc import Hashable
 from copy import deepcopy
 from itertools import chain, product
 from functools import partial
+import warnings
 
 import numpy as np
 from numpy import ma
@@ -12,10 +13,12 @@ from scipy import sparse
 from boltons.iterutils import research, remap, default_exit
 
 
-from anndata import AnnData, Raw
+from anndata import AnnData, Raw, concat
 from anndata._core.index import _subset
+from anndata._core import merge
 from anndata.tests import helpers
-from anndata.tests.helpers import asarray, assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.utils import asarray
 
 
 @pytest.fixture(
@@ -36,25 +39,39 @@ def fill_val(request):
     return request.param
 
 
-def fix_known_differences(orig, result):
+@pytest.fixture(params=[0, 1])
+def axis(request):
+    return request.param
+
+
+@pytest.fixture(params=list(merge.MERGE_STRATEGIES.keys()))
+def merge_strategy(request):
+    return request.param
+
+
+def fix_known_differences(orig, result, backwards_compat=True):
     """
     Helper function for reducing anndata's to only the elements we expect to be
     equivalent after concatenation.
 
     Only for the case where orig is the ground truth result of what concatenation should be.
+
+    If backwards_compat, checks against what `AnnData.concatenate` could do. Otherwise checks for `concat`.
     """
     orig = orig.copy()
     result = result.copy()
 
-    result.obs.drop(columns=["batch"], inplace=True)
     result.strings_to_categoricals()  # Should this be implicit in concatenation?
 
     # TODO
     # * merge varm, varp similar to uns
     # * merge obsp, but some information should be lost
-    del orig.varm
-    del orig.varp
     del orig.obsp  # TODO
+
+    if backwards_compat:
+        del orig.varm
+        del orig.varp
+        result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for k, dtype in orig.obs.dtypes.items():
@@ -64,7 +81,14 @@ def fix_known_differences(orig, result):
     return orig, result
 
 
-def test_concatenate_roundtrip(join_type, array_type):
+@pytest.mark.parametrize(
+    ["concat_func", "backwards_compat"],
+    [
+        (partial(concat, merge="unique"), False),
+        (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
+    ],
+)
+def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_compat):
     adata = gen_adata((100, 10), X_type=array_type)
 
     remaining = adata.obs_names
@@ -75,12 +99,12 @@ def test_concatenate_roundtrip(join_type, array_type):
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
 
-    result = subsets[0].concatenate(
-        subsets[1:], join=join_type, uns_merge="same", index_unique=None
-    )
+    result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
 
     # Correcting for known differences
-    orig, result = fix_known_differences(adata, result)
+    orig, result = fix_known_differences(
+        adata, result, backwards_compat=backwards_compat
+    )
 
     assert_equal(result[orig.obs_names].copy(), orig)
 
@@ -305,6 +329,17 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
     # fmt: on
     cur_df = outer.obsm["df"].reset_index(drop=True)
     pd.testing.assert_frame_equal(true_df, cur_df)
+
+
+def test_concat_annot_join(obsm_adatas, join_type):
+    adatas = [
+        AnnData(sparse.csr_matrix(a.shape), obs=a.obsm["df"], var=a.var)
+        for a in obsm_adatas
+    ]
+    pd.testing.assert_frame_equal(
+        concat(adatas, join=join_type).obs,
+        pd.concat([a.obs for a in adatas], join=join_type),
+    )
 
 
 def test_concatenate_layers_misaligned(array_type, join_type):
@@ -581,6 +616,94 @@ def test_concatenate_with_raw():
     assert adata_all.raw is None
 
 
+def test_pairwise_concat(axis, array_type):
+    dim_sizes = [[100, 200, 50], [50, 50, 50]]
+    if axis:
+        dim_sizes.reverse()
+    Ms, Ns = dim_sizes
+    dim = ("obs", "var")[axis]
+    alt = ("var", "obs")[axis]
+    dim_attr = f"{dim}p"
+    alt_attr = f"{alt}p"
+
+    def gen_dim_array(m):
+        return array_type(sparse.random(m, m, format="csr", density=0.1))
+
+    adatas = {
+        k: AnnData(
+            **{
+                "X": sparse.csr_matrix((m, n)),
+                "obsp": {"arr": gen_dim_array(m)},
+                "varp": {"arr": gen_dim_array(n)},
+            }
+        )
+        for k, m, n in zip("abc", Ms, Ns)
+    }
+
+    w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)
+    wo_pairwise = concat(adatas, axis=axis, label="orig", pairwise=False)
+
+    # Check that argument controls whether elements are included
+    assert getattr(wo_pairwise, dim_attr) == {}
+    assert getattr(w_pairwise, dim_attr) != {}
+
+    # Check values of included elements
+    full_inds = np.arange(w_pairwise.shape[axis])
+    groups = getattr(w_pairwise, dim).groupby("orig").indices
+    for k, inds in groups.items():
+        orig_arr = getattr(adatas[k], dim_attr)["arr"]
+        full_arr = getattr(w_pairwise, dim_attr)["arr"]
+
+        # Check original values are intact
+        assert_equal(orig_arr, _subset(full_arr, (inds, inds)))
+        # Check that entries are filled with zeroes
+        assert_equal(
+            sparse.csr_matrix((len(inds), len(full_inds) - len(inds))),
+            _subset(full_arr, (inds, np.setdiff1d(full_inds, inds))),
+        )
+        assert_equal(
+            sparse.csr_matrix((len(full_inds) - len(inds), len(inds))),
+            _subset(full_arr, (np.setdiff1d(full_inds, inds), inds)),
+        )
+
+    # Check that argument does not affect alternative axis
+    assert "arr" in getattr(
+        concat(adatas, axis=axis, pairwise=False, merge="first"), alt_attr
+    )
+
+
+def test_nan_merge(axis, join_type, array_type):
+    # concat_dim = ("obs", "var")[axis]
+    alt_dim = ("var", "obs")[axis]
+    mapping_attr = f"{alt_dim}m"
+    adata_shape = (20, 10)
+
+    arr = array_type(
+        sparse.random(adata_shape[1 - axis], 10, density=0.1, format="csr")
+    )
+    arr_nan = arr.copy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=sparse.SparseEfficiencyWarning)
+        for _ in range(10):
+            arr_nan[
+                np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])
+            ] = np.nan
+
+    _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
+    orig1 = AnnData(**_data)
+    orig2 = AnnData(**_data)
+    result = concat([orig1, orig2], axis=axis, merge="same")
+
+    assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
+
+    orig_nonan = AnnData(
+        **{"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr}}
+    )
+    result_nonan = concat([orig1, orig_nonan], axis=axis, merge="same")
+
+    assert len(getattr(result_nonan, mapping_attr)) == 0
+
+
 def test_merge_unique():
     from anndata._core.merge import merge_unique
 
@@ -795,6 +918,77 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
         result,
         elem_name="uns",
     )
+
+
+def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
+    lhs = gen_adata((10, 10), X_type=array_type)
+    rhs = gen_adata((10, 12), X_type=array_type)
+
+    a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
+    b = concat(
+        [lhs.T, rhs.T], axis=abs(axis - 1), join=join_type, merge=merge_strategy
+    ).T
+
+    assert_equal(a, b)
+
+
+def test_batch_key(axis):
+    """Test that concat only adds a label if the key is provided"""
+
+    def get_annot(adata):
+        return getattr(adata, ("obs", "var")[axis])
+
+    lhs = gen_adata((10, 10))
+    rhs = gen_adata((10, 12))
+
+    # There is probably a prettier way to do this
+    annot = get_annot(concat([lhs, rhs], axis=axis))
+    assert (
+        list(
+            annot.columns.difference(
+                get_annot(lhs).columns.union(get_annot(rhs).columns)
+            )
+        )
+        == []
+    )
+
+    batch_annot = get_annot(concat([lhs, rhs], axis=axis, label="batch"))
+    assert list(
+        batch_annot.columns.difference(
+            get_annot(lhs).columns.union(get_annot(rhs).columns)
+        )
+    ) == ["batch"]
+
+
+def test_concat_categories_from_mapping():
+    mapping = {
+        "a": gen_adata((10, 10)),
+        "b": gen_adata((10, 10)),
+    }
+    keys = list(mapping.keys())
+    adatas = list(mapping.values())
+
+    mapping_call = partial(concat, mapping)
+    iter_call = partial(concat, adatas, keys=keys)
+
+    assert_equal(mapping_call(), iter_call())
+    assert_equal(mapping_call(label="batch"), iter_call(label="batch"))
+    assert_equal(mapping_call(index_unique="-"), iter_call(index_unique="-"))
+    assert_equal(
+        mapping_call(label="group", index_unique="+"),
+        iter_call(label="group", index_unique="+"),
+    )
+
+
+def test_concat_names(axis):
+    def get_annot(adata):
+        return getattr(adata, ("obs", "var")[axis])
+
+    lhs = gen_adata((10, 10))
+    rhs = gen_adata((10, 10))
+
+    assert not get_annot(concat([lhs, rhs], axis=axis)).index.is_unique
+    assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
 
 
 # Leaving out for now. See definition of these values for explanation

@@ -1,6 +1,6 @@
 loompy>=3.0.5
-pytest>=3.9
-pytest-cov
+pytest>=4.6
+pytest-cov>=2.10
 codacy-coverage
 zarr
 matplotlib
@@ -9,3 +9,4 @@ xlrd
 joblib
 black
 boltons
+scanpy

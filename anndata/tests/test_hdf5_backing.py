@@ -6,7 +6,8 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import asarray, gen_adata, assert_equal, subset_func
+from anndata.tests.helpers import gen_adata, assert_equal, subset_func
+from anndata.utils import asarray
 
 subset_func2 = subset_func
 # -------------------------------------------------------------------------------
