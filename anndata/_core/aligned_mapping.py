@@ -232,8 +232,8 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
             self.update(vals)
 
     def __setitem__(self, key: str, value: V):
-        if self._axis == 0:
-            self.parent._obsm[key] = value#.copy()
+        if self._axis == 0 and isinstance(self.parent, anndata.AnnData):
+            self.parent._obsm[key] = value
         super(AxisArrays, self).__setitem__(key, value)
 
 

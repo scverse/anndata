@@ -1453,7 +1453,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 uns=self._uns.copy()
                 if isinstance(self.uns, DictView)
                 else deepcopy(self._uns),
-                obsm=self.obsm.copy(),
+                obsm={k: v.copy() for k, v in self._obsm.items()},
                 varm=self.varm.copy(),
                 obsp=self.obsp.copy(),
                 varp=self.varp.copy(),
