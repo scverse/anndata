@@ -4,6 +4,8 @@
 0.7.4 :small:`2020-07-10`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Testing a small change.
+
 .. rubric:: Concatenation overhaul :pr:`378` :smaller:`I Virshup`
 
 - New function :func:`anndata.concat` used for concatenating `AnnData` objects along either observations or variables
