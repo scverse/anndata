@@ -484,10 +484,13 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
 
 
 def outer_concat_aligned_mapping(
-    mappings, reindexers=None, index=None, fill_value=None, axis=0
+    mappings, reindexers=None, index=None, fill_value=None, axis=0, shapes=None,
 ):
     result = {}
-    ns = [m.parent.shape[axis] for m in mappings]
+
+    ns = shapes
+    if not ns:
+        ns = [m.parent.shape[axis] for m in mappings]
 
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
@@ -824,7 +827,7 @@ def concat(
             [a.layers for a in adatas], axis=axis, reindexers=reindexers
         )
         concat_mapping = inner_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
+            [getattr(a, f"_{dim}m") for a in adatas], index=concat_indices
         )
         if pairwise:
             concat_pairwise = concat_pairwise_mapping(
@@ -839,8 +842,9 @@ def concat(
             [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
         )
         concat_mapping = outer_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas],
+            [getattr(a, f"_{dim}m") for a in adatas],
             index=concat_indices,
+            shapes=[a.shape[axis] for a in adatas],
             fill_value=fill_value,
         )
         if pairwise:

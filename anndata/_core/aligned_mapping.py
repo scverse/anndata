@@ -223,6 +223,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         vals: Union[Mapping, AxisArraysBase, None] = None,
     ):
         self._parent = parent
+        self._parent_needs_update = False
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
@@ -230,9 +231,15 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self._data = dict()
         if vals is not None:
             self.update(vals)
+        self._parent_needs_update = True
 
     def __setitem__(self, key: str, value: V):
-        if self._axis == 0 and isinstance(self.parent, anndata.AnnData):
+        parent_needs_update = (
+            self._axis == 0
+            and isinstance(self.parent, anndata.AnnData)
+            and self._parent_needs_update
+        )
+        if parent_needs_update:
             self.parent._obsm[key] = value
         super(AxisArrays, self).__setitem__(key, value)
 

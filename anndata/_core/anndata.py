@@ -905,10 +905,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
         """
         if self.is_view:
-            obsm = AxisArrays(self._adata_ref, 0, self._obsm)
+            obsm = AxisArrays(self._adata_ref, 0, self._adata_ref._obsm)
             idx = self._oidx
             if isinstance(idx, slice):
-                idx = self.obs_names.isin(self.obs_names[idx])
+                idx = self._adata_ref.obs_names[idx]
+                idx = self._adata_ref.obs_names.isin(idx)
             return obsm._view(self, idx)
         else:
             return AxisArrays(self, 0, self._obsm)
