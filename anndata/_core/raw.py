@@ -142,6 +142,7 @@ class Raw:
             varm=None if self._varm is None else self._varm.copy(),
             obs=self._adata.obs.copy(),
             obsm=self._adata.obsm.copy(),
+            obsp=self._adata.obsp.copy(),
             uns=self._adata.uns.copy(),
         )
 
