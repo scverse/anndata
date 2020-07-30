@@ -1,5 +1,4 @@
 .. sidebar:: Key Contributors
-   :subtitle: `contributions graph`_
 
    * `Isaac Virshup`_: anndata >= 0.7, diverse contributions
    * Sergei Rybakov: diverse contributions

@@ -1,7 +1,11 @@
-|PyPI| |Conda| |Docs| |Build Status| |Coverage|
+|Stars| |PyPI| |PyPIDownloads| |Conda| |Docs| |Build Status| |Coverage|
 
+.. |Stars| image:: https://img.shields.io/github/stars/theislab/anndata?logo=GitHub&color=yellow
+   :target: https://github.com/theislab/anndata/stargazers
 .. |PyPI| image:: https://img.shields.io/pypi/v/anndata.svg
    :target: https://pypi.org/project/anndata
+.. |PyPIDownloads| image:: https://pepy.tech/badge/anndata
+   :target: https://pepy.tech/project/anndata
 .. |Conda| image:: https://img.shields.io/conda/vn/conda-forge/anndata.svg
    :target: https://anaconda.org/conda-forge/anndata
 .. |Docs| image:: https://readthedocs.com/projects/icb-anndata/badge/?version=latest
