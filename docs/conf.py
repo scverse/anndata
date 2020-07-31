@@ -124,7 +124,6 @@ html_context = dict(
     conf_py_path="/docs/",  # Path in the checkout to the docs root
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
-html_static_path = ["_static"]
 html_show_sphinx = False
 
 
