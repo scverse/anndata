@@ -114,7 +114,7 @@ qualname_overrides = {
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "scanpydoc"
 html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
