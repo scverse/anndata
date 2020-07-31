@@ -86,7 +86,6 @@ def setup(app: Sphinx):
     work_around_issue_6785()
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
-    app.add_stylesheet("css/custom.css")
 
 
 intersphinx_mapping = dict(
@@ -115,7 +114,7 @@ qualname_overrides = {
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "scanpydoc"
 html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
@@ -125,7 +124,6 @@ html_context = dict(
     conf_py_path="/docs/",  # Path in the checkout to the docs root
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
-html_static_path = ["_static"]
 html_show_sphinx = False
 
 
