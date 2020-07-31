@@ -11,8 +11,8 @@ from sphinx.config import Config
 class AutoLink(NamedTuple):
     class_name: str
     url_template: str
-    title_template: str = '{}'
-    options: Mapping[str, Any] = MappingProxyType({'class': class_option})
+    title_template: str = "{}"
+    options: Mapping[str, Any] = MappingProxyType({"class": class_option})
 
     def __call__(
         self,
@@ -32,19 +32,19 @@ class AutoLink(NamedTuple):
 
 
 def register_links(app: Sphinx, config: Config):
-    gh_url = 'https://github.com/{github_user}/{github_repo}'.format_map(
+    gh_url = "https://github.com/{github_user}/{github_repo}".format_map(
         config.html_context
     )
-    app.add_role('pr', AutoLink('pr', f'{gh_url}/pull/{{}}', 'PR {}'))
-    app.add_role('issue', AutoLink('issue', f'{gh_url}/issues/{{}}', 'issue {}'))
-    app.add_role('noteversion', AutoLink('noteversion', f'{gh_url}/releases/tag/{{}}'))
+    app.add_role("pr", AutoLink("pr", f"{gh_url}/pull/{{}}", "PR {}"))
+    app.add_role("issue", AutoLink("issue", f"{gh_url}/issues/{{}}", "issue {}"))
+    app.add_role("noteversion", AutoLink("noteversion", f"{gh_url}/releases/tag/{{}}"))
     # tutorial links
-    scanpy_tutorials_url = 'https://scanpy-tutorials.readthedocs.io/en/latest/'
+    scanpy_tutorials_url = "https://scanpy-tutorials.readthedocs.io/en/latest/"
     app.add_role(
-        'tutorial',
-        AutoLink('tutorial', f'{scanpy_tutorials_url}{{}}.html', '→ tutorial: {}'),
+        "tutorial",
+        AutoLink("tutorial", f"{scanpy_tutorials_url}{{}}.html", "→ tutorial: {}"),
     )
 
 
 def setup(app: Sphinx):
-    app.connect('config-inited', register_links)
+    app.connect("config-inited", register_links)

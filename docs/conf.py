@@ -6,7 +6,7 @@ from datetime import datetime
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE.parent), str(HERE / 'extensions')]
+sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
 import anndata  # noqa
 
 
@@ -46,10 +46,8 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
-    *[p.stem for p in (HERE / 'extensions').glob('*.py')],
+    *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
-
-print(*[p.stem for p in (HERE / 'extensions').glob('*.py')])
 
 # Generate the API documentation when building
 autosummary_generate = True
