@@ -86,7 +86,6 @@ def setup(app: Sphinx):
     work_around_issue_6785()
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
-    app.add_stylesheet("css/custom.css")
 
 
 intersphinx_mapping = dict(
