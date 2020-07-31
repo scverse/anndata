@@ -43,7 +43,6 @@
     margin-bottom: 6px;
     font-weight: normal;
 }
-.rst-content p.rubric::after { content: ":" }
 
 /* sidebar */
 .rst-content .sidebar {

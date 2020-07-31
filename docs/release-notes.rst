@@ -24,7 +24,7 @@ Version 0.7
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
-   Breaking changes introduced between 0.6.22.post1 and 0.7:
+   Breaking changes introduced between `0.6.22.post1` and `0.7`:
 
    - Elements of :class:`~anndata.AnnData`\ s don’t have their dimensionality reduced when the main object is subset.
      This is to maintain consistency when subsetting. See discussion in :issue:`145`.
@@ -67,31 +67,33 @@ Version 0.6
 
 0.6.* :small:`2019-*-*`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
+
 - better support for aligned mappings (obsm, varm, layers)
-  :noteversion:`0.6.22` :pr:`155` :smaller:`thanks to I Virshup`
+  :noteversion:`0.6.22` :pr:`155` :smaller:`I Virshup`
 - convenience accesors :func:`~anndata.AnnData.obs_vector`, :func:`~anndata.AnnData.var_vector` for 1d arrays.
-  :noteversion:`0.6.21` :pr:`144` :smaller:`thanks to I Virshup`
+  :noteversion:`0.6.21` :pr:`144` :smaller:`I Virshup`
 - compatibility with Scipy >=1.3 by removing `IndexMixin` dependency.
-  :noteversion:`0.6.20` :pr:`151` :smaller:`thanks to P Angerer`
+  :noteversion:`0.6.20` :pr:`151` :smaller:`P Angerer`
 - bug fix for second-indexing into views.
-  :noteversion:`0.6.19` :commit:`0ab553f368a93c52923f8cc700a066440824e8d8` :smaller:`thanks to P Angerer`
+  :noteversion:`0.6.19` :smaller:`P Angerer`
 - bug fix for reading excel files.
-  :noteversion:`0.6.19` :commit:`90bea2c1721d5dbfad20975b14809c63cc126ae8` :smaller:`thanks to A Wolf`
+  :noteversion:`0.6.19` :smaller:`A Wolf`
 - changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical.
-  :noteversion:`0.6.16` :commit:`21d8033dc560794b8eb8b58a693e30f4d154554e` :smaller:`thanks to A Wolf`
+  :noteversion:`0.6.16` :smaller:`A Wolf`
 - maintain dtype upon copy.
-  :noteversion:`0.6.13` :commit:`534bea4b04a542d33743050a63c8b7dbff8b4d9a` :smaller:`thanks to A Wolf`
+  :noteversion:`0.6.13` :smaller:`A Wolf`
 - :attr:`~anndata.AnnData.layers` inspired by `.loom`_ files allows their information lossless reading via :func:`~anndata.read_loom`.
-  :noteversion:`0.6.7`–:noteversion:`0.6.9` :pr:`46` & :pr:`48` :smaller:`thanks to S Rybakov`
+  :noteversion:`0.6.7`–:noteversion:`0.6.9` :pr:`46` & :pr:`48` :smaller:`S Rybakov`
 - support for reading zarr files: :func:`~anndata.read_zarr`
-  :noteversion:`0.6.7` :pr:`38` :smaller:`thanks to T White`
+  :noteversion:`0.6.7` :pr:`38` :smaller:`T White`
 - initialization from pandas DataFrames
-  :noteversion:`0.6.` :commit:`648bcc8a33f645de1e483bd6f9f5a3cb34ff43a3` :smaller:`thanks to A Wolf`
+  :noteversion:`0.6.` :smaller:`A Wolf`
 - iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
-  :noteversion:`0.6.1` :pr:`20` :smaller:`thanks to S Rybakov`
+  :noteversion:`0.6.1` :pr:`20` :smaller:`S Rybakov`
 
 0.6.0 :small:`2018-05-01`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
+
 - compatibility with Seurat converter
 - tremendous speedup for :func:`~anndata.AnnData.concatenate`
 - bug fix for deep copy of unstructured annotation after slicing

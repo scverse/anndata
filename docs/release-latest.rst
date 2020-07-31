@@ -6,7 +6,7 @@
 
 .. rubric:: Concatenation overhaul :pr:`378` :smaller:`I Virshup`
 
-- New function :func:`anndata.concat` used for concatenating `AnnData` objects along either observations or variables
+- New function :func:`anndata.concat` for concatenating `AnnData` objects along either observations or variables
 - New documentation section: :doc:`concatenation`
 
 .. rubric:: Functionality
