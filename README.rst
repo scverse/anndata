@@ -23,7 +23,7 @@ anndata - Annotated Data
 ``AnnData`` provides a scalable way of keeping track of data and learned annotations.
 
 * Read the `documentation <https://anndata.readthedocs.io>`_.
-* Install via ``pip install anndata`` or ``conda install anndata -c bioconda``.
+* Install via ``pip install anndata`` or ``conda install anndata -c conda-forge``.
 
 .. would be nice to have http://falexwolf.de/img/scanpy/anndata.svg also on GitHub, but it’s much too wide there;
 .. GitHub doesn’t plan to resolve scaling images: https://github.com/github/markup/issues/295
