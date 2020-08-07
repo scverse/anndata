@@ -41,8 +41,8 @@ def write_csvs(
     d = dict(
         obs=adata._obs,
         var=adata._var,
-        obsm=adata._obsm.to_df(),
-        varm=adata._varm.to_df(),
+        obsm=adata.obsm.to_df(),
+        varm=adata.varm.to_df(),
     )
     if not skip_data:
         d["X"] = pd.DataFrame(adata._X.toarray() if issparse(adata._X) else adata._X)
