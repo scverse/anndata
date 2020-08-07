@@ -243,6 +243,17 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if parent_needs_update:
             self.parent._obsm[key] = value
 
+    def __delitem__(self, key: str):
+        parent_needs_update = (
+            self._axis == 0
+            and isinstance(self.parent, anndata.AnnData)
+            and self._parent_needs_update
+        )
+        super(AxisArrays, self).__delitem__(key)
+        if parent_needs_update:
+            self.parent._obsm.pop(key)
+
+
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(

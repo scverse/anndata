@@ -917,6 +917,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @obsm.setter
     def obsm(self, value):
         obsm = convert_to_dict(value)
+        obsm = convert_to_dict(AxisArrays(self, 0, obsm))
         if self.is_view:
             self._init_as_actual(self.copy())
         self._obsm = obsm
