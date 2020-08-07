@@ -254,7 +254,6 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
             self.parent._obsm.pop(key)
 
 
-
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(
         self,
