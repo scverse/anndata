@@ -239,9 +239,9 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
             and isinstance(self.parent, anndata.AnnData)
             and self._parent_needs_update
         )
+        super(AxisArrays, self).__setitem__(key, value)
         if parent_needs_update:
             self.parent._obsm[key] = value
-        super(AxisArrays, self).__setitem__(key, value)
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
