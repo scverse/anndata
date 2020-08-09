@@ -7,7 +7,7 @@ try:
     import torch
     from torch.utils.data import Sampler, Dataset, DataLoader
 except ImportError:
-    warnings.warn('Сould not load pytorch.')
+    warnings.warn("Сould not load pytorch.")
     Sampler, Dataset, DataLoader = object, object, object
 
 
