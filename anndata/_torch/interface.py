@@ -1,12 +1,15 @@
 from sklearn.preprocessing import LabelEncoder
 from scipy.sparse import issparse
 from .._core.anndata import AnnData
+import warnings
 
 try:
     import torch
     from torch.utils.data import Sampler, Dataset, DataLoader
 except ImportError:
-    raise ImportError("Please install pytorch")
+    warnings.warn('Сould not load pytorch.')
+    Sampler, Dataset, DataLoader = object, object, object
+
 
 # Custom sampler to get proper batches instead of joined separate indices
 class BatchIndexSampler(Sampler):
