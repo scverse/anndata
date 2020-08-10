@@ -1,6 +1,13 @@
 .. role:: small
 .. role:: smaller
 
+On master
+~~~~~~~~~
+
+.. rubric:: Functionality
+
+- Added ipython tab completion and a useful return from `.keys` to `adata.uns` :pr:`415` :smaller:`I Virshup`
+
 0.7.4 :small:`2020-07-10`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
