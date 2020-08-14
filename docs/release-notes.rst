@@ -14,11 +14,14 @@ Release Notes
 - The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
   :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
 
+.. _v0.7:
+
 Version 0.7
 -----------
 
 .. include:: release-latest.rst
 
+.. _v0.7.0:
 
 0.7.0 :small:`2020-01-22`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -61,6 +64,7 @@ Version 0.7
 - :class:`~anndata.AnnData` attributes are now delete-able (e.g. `del adata.raw`) PR :pr:`242`.
 - Many many bug fixes
 
+.. _v0.6:
 
 Version 0.6
 -----------
@@ -91,6 +95,8 @@ Version 0.6
 - iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
   :noteversion:`0.6.1` :pr:`20` :smaller:`S Rybakov`
 
+.. _v0.6.0:
+
 0.6.0 :small:`2018-05-01`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -101,9 +107,12 @@ Version 0.6
 - `'outer join'` concatenation: adds zeros for concatenation of sparse data and nans for dense data
 - better memory efficiency in loom exports
 
+.. _v0.5:
 
 Version 0.5
 -----------
+
+.. _v0.5.0:
 
 0.5.0 :small:`2018-02-09`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -116,9 +125,12 @@ Version 0.5
 
 .. _UMI tools: https://github.com/CGATOxford/UMI-tools
 
+.. _v0.4:
 
 Version 0.4
 -----------
+
+.. _v0.4.0:
 
 0.4.0 :small:`2017-12-23`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
