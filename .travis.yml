@@ -14,7 +14,7 @@ python:
   - '3.6'
   - '3.7'
 install:
-  - 'pip install .[all]'
+  - 'pip install .[doc,test]'
 script:
   - pytest --cov=. --cov-report=xml
 after_success:
