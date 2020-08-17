@@ -1,24 +1,6 @@
-from ._core.anndata import AnnData, ImplicitModificationWarning
-from ._core.merge import concat
-from ._core.raw import Raw
-from ._io import (
-    read_h5ad,
-    read_loom,
-    read_hdf,
-    read_excel,
-    read_umi_tools,
-    read_csv,
-    read_text,
-    read_mtx,
-    read_zarr,
-)
-
-# backwards compat / shortcut for default format
-from ._io import read_h5ad as read
-
-__doc__ = """\
-API
-===
+"""\
+Annotated Data
+==============
 
 The central class:
 
@@ -92,24 +74,24 @@ Errors and warnings
 
 """
 
-__author__ = ", ".join(
-    ["Philipp Angerer*", "Alex Wolf*", "Isaac Virshup", "Sergei Rybakov"]
-)
-__email__ = ", ".join(
-    [
-        "philipp.angerer@helmholtz-muenchen.de",
-        "f.alex.wolf@gmx.de",
-        # We don’t need all, the main authors are sufficient.
-    ]
-)
+from ._metadata import __version__, __author__, __email__, within_flit
 
-try:
-    from setuptools_scm import get_version
+if not within_flit():
+    del within_flit
+    from ._core.anndata import AnnData, ImplicitModificationWarning
+    from ._core.merge import concat
+    from ._core.raw import Raw
+    from ._io import (
+        read_h5ad,
+        read_loom,
+        read_hdf,
+        read_excel,
+        read_umi_tools,
+        read_csv,
+        read_text,
+        read_mtx,
+        read_zarr,
+    )
 
-    __version__ = get_version(root="..", relative_to=__file__)
-    del get_version
-except (LookupError, ImportError):
-    from .compat import pkg_version
-
-    __version__ = str(pkg_version(__name__))
-    del pkg_version
+    # backwards compat / shortcut for default format
+    from ._io import read_h5ad as read
