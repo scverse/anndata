@@ -11,7 +11,6 @@ from ._overloaded_dict import _overloaded_uns, OverloadedDict
 from .._core.index import _subset
 
 # try importing zarr, dask, and zappy
-from packaging import version
 
 try:
     from zarr.core import Array as ZarrArray

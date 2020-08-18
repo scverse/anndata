@@ -13,7 +13,7 @@ try:
     __version__ = get_version(root="..", relative_to=__file__)
     __author__ = metadata["author"]
     __email__ = metadata["author-email"]
-except LookupError:
+except (LookupError, FileNotFoundError):
     try:
         from importlib.metadata import metadata
     except ImportError:

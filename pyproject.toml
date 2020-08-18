@@ -39,8 +39,10 @@ requires = [
     'h5py',
     'natsort',
     'packaging',
+    # for getting the dev version
     'setuptools_scm',
     'pytoml',
+    # for getting the stable version
     'importlib_metadata>=0.7; python_version < "3.8"',
 ]
 
