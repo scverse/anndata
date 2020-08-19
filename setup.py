@@ -28,6 +28,7 @@ setup(
         l.strip() for l in Path("requirements.txt").read_text("utf-8").splitlines()
     ],
     extras_require=dict(
+        dev=["setuptools_scm", "pytoml", "black"],
         doc=[
             # Sphinx 2 has nicer looking sections
             "sphinx>=2.0.1",
@@ -48,7 +49,6 @@ setup(
             "sklearn",
             "xlrd",
             "joblib",
-            "black",
             "boltons",
             "scanpy",
         ],
