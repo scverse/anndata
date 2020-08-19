@@ -9,7 +9,7 @@ from setuptools import setup, find_namespace_packages
 try:
     import pytoml
 except ImportError:
-    sys.exit("")
+    sys.exit("Please use `pip install .` or install pytoml first.")
 
 proj = pytoml.loads(Path("pyproject.toml").read_text())
 metadata = proj["tool"]["flit"]["metadata"]
