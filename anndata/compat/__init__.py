@@ -60,14 +60,6 @@ except ImportError:
             pass
 
 
-def pkg_version(package):
-    try:
-        from importlib.metadata import version as v
-    except ImportError:
-        from importlib_metadata import version as v
-    return version.parse(v(package))
-
-
 def _from_fixed_length_strings(value):
     """\
     Convert from fixed length strings to unicode.
