@@ -1,0 +1,2 @@
+exclude .coveragerc .gitattributes .gitignore .readthedocs.yml .travis.yml
+prune docs
