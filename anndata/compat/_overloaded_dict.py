@@ -1,6 +1,6 @@
 from collections.abc import MutableMapping
 from functools import partial
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, List, Mapping, Optional
 from warnings import warn
 from weakref import proxy
 
@@ -128,6 +128,12 @@ class OverloadedDict(MutableMapping):
 
     def copy(self) -> dict:
         return self.data.copy()
+
+    def keys(self):
+        return self.data.keys()
+
+    def _ipython_key_completions_(self) -> List[str]:
+        return list(self.keys())
 
 
 #######################################

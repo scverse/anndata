@@ -6,7 +6,7 @@ import collections.abc as cabc
 from collections import OrderedDict
 from copy import copy, deepcopy
 from enum import Enum
-from functools import singledispatch
+from functools import partial, singledispatch
 from pathlib import Path
 from os import PathLike
 from typing import Any, Union, Optional  # Meta
@@ -1684,7 +1684,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 0., 2., 1.],
                [0., 6., 5., 0.]], dtype=float32)
         """
-        from .merge import concat
+        from .merge import concat, merge_outer, merge_dataframes, merge_same
 
         if self.isbacked:
             raise ValueError("Currently, concatenate does only work in memory mode.")
@@ -1697,18 +1697,37 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         out = concat(
             all_adatas,
+            axis=0,
             join=join,
-            batch_key=batch_key,
-            batch_categories=batch_categories,
+            label=batch_key,
+            keys=batch_categories,
             uns_merge=uns_merge,
             fill_value=fill_value,
             index_unique=index_unique,
+            pairwise=False,
         )
 
-        # Backwards compat, ordering columns:
+        ### Backwards compat (some of this could be more efficient)
+        # obs used to always be an outer join
+        out.obs = concat(
+            [AnnData(sparse.csr_matrix(a.shape), obs=a.obs) for a in all_adatas],
+            axis=0,
+            join="outer",
+            label=batch_key,
+            keys=batch_categories,
+            index_unique=index_unique,
+        ).obs
+        # Removing varm
+        del out.varm
+        # Implementing old-style merging of var
         if batch_categories is None:
             batch_categories = np.arange(len(all_adatas)).astype(str)
         pat = rf"-({'|'.join(batch_categories)})$"
+        out.var = merge_dataframes(
+            [a.var for a in all_adatas],
+            out.var_names,
+            partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
+        )
         out.var = out.var.iloc[
             :,
             (

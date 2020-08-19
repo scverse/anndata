@@ -6,7 +6,7 @@ from datetime import datetime
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE.parent))
+sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
 import anndata  # noqa
 
 
@@ -44,13 +44,9 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
-    # "plot_generator",
-    # "plot_directive",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
-    "sphinx_issues",
-    # "ipython_directive",
-    # "ipython_console_highlighting",
     "scanpydoc",
+    *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
 # Generate the API documentation when building
@@ -90,7 +86,6 @@ def setup(app: Sphinx):
     work_around_issue_6785()
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
-    app.add_stylesheet("css/custom.css")
 
 
 intersphinx_mapping = dict(
@@ -102,6 +97,7 @@ intersphinx_mapping = dict(
     scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
+    xarray=("http://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
     "anndata._core.anndata.AnnData": "anndata.AnnData",
@@ -118,8 +114,8 @@ qualname_overrides = {
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "sphinx_rtd_theme"
-html_theme_options = dict(navigation_depth=2)
+html_theme = "scanpydoc"
+html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
     github_user="theislab",  # Username
@@ -128,7 +124,6 @@ html_context = dict(
     conf_py_path="/docs/",  # Path in the checkout to the docs root
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
-html_static_path = ["_static"]
 html_show_sphinx = False
 
 

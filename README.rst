@@ -1,6 +1,12 @@
-|PyPI| |Conda| |Docs| |Build Status| |Coverage|
+|Stars| |PyPI| |PyPIDownloadsTotal| |PyPIDownloadsMonth| |Conda| |Docs| |Build Status| |Coverage|
 
+.. |Stars| image:: https://img.shields.io/github/stars/theislab/anndata?logo=GitHub&color=yellow
+   :target: https://github.com/theislab/anndata/stargazers
 .. |PyPI| image:: https://img.shields.io/pypi/v/anndata.svg
+   :target: https://pypi.org/project/anndata
+.. |PyPIDownloadsTotal| image:: https://pepy.tech/badge/anndata
+   :target: https://pepy.tech/project/anndata
+.. |PyPIDownloadsMonth| image:: https://img.shields.io/pypi/dm/scanpy?logo=PyPI&color=blue
    :target: https://pypi.org/project/anndata
 .. |Conda| image:: https://img.shields.io/conda/vn/conda-forge/anndata.svg
    :target: https://anaconda.org/conda-forge/anndata
@@ -14,9 +20,10 @@
 anndata - Annotated Data
 ========================
 
-Install via `pip install anndata` or `conda install anndata -c bioconda`.
+``AnnData`` provides a scalable way of keeping track of data and learned annotations.
 
-Read the `documentation <https://anndata.readthedocs.io>`_.
+* Read the `documentation <https://anndata.readthedocs.io>`_.
+* Install via ``pip install anndata`` or ``conda install anndata -c conda-forge``.
 
 .. would be nice to have http://falexwolf.de/img/scanpy/anndata.svg also on GitHub, but it’s much too wide there;
 .. GitHub doesn’t plan to resolve scaling images: https://github.com/github/markup/issues/295

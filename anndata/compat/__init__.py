@@ -11,7 +11,6 @@ from ._overloaded_dict import _overloaded_uns, OverloadedDict
 from .._core.index import _subset
 
 # try importing zarr, dask, and zappy
-from packaging import version
 
 try:
     from zarr.core import Array as ZarrArray
@@ -58,14 +57,6 @@ except ImportError:
 
         class Literal(metaclass=LiteralMeta):
             pass
-
-
-def pkg_version(package):
-    try:
-        from importlib.metadata import version as v
-    except ImportError:
-        from importlib_metadata import version as v
-    return version.parse(v(package))
 
 
 def _from_fixed_length_strings(value):
