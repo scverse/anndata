@@ -18,7 +18,7 @@ from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.api.types import is_string_dtype, is_categorical
+from pandas.api.types import is_string_dtype, is_categorical_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 
@@ -1088,10 +1088,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
     def _remove_unused_categories(self, df_full, df_sub, uns):
-        from pandas.api.types import is_categorical
-
         for k in df_full:
-            if not is_categorical(df_full[k]):
+            if not is_categorical_dtype(df_full[k]):
                 continue
             all_categories = df_full[k].cat.categories
             df_sub[k].cat.remove_unused_categories(inplace=True)
@@ -1189,7 +1187,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             string_cols = [
                 key
                 for key in df.columns
-                if is_string_dtype(df[key]) and not is_categorical(df[key])
+                if is_string_dtype(df[key]) and not is_categorical_dtype(df[key])
             ]
             for key in string_cols:
                 # make sure we only have strings

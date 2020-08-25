@@ -5,7 +5,7 @@ import tempfile
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical
+from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy.sparse import csr_matrix, csc_matrix
 
@@ -115,7 +115,7 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
 
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert not is_categorical(adata_src.obs["oanno1"])
+    assert not is_categorical_dtype(adata_src.obs["oanno1"])
     adata_src.raw = adata_src
     adata_src.write(backing_h5ad, **dataset_kwargs)
 
@@ -123,11 +123,11 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     adata_mid.write(mid_pth, **dataset_kwargs)
 
     adata = ad.read_h5ad(mid_pth)
-    assert is_categorical(adata.obs["oanno1"])
-    assert not is_categorical(adata.obs["oanno2"])
+    assert is_categorical_dtype(adata.obs["oanno1"])
+    assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
-    assert is_categorical(adata.raw.var["vanno2"])
+    assert is_categorical_dtype(adata.raw.var["vanno2"])
     assert np.all(adata.obs == adata_src.obs)
     assert np.all(adata.var == adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
@@ -148,15 +148,15 @@ def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.raw = adata_src
-    assert not is_categorical(adata_src.obs["oanno1"])
+    assert not is_categorical_dtype(adata_src.obs["oanno1"])
     adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
 
     adata = ad.read_zarr(tmp_path / "test_zarr_dir")
-    assert is_categorical(adata.obs["oanno1"])
-    assert not is_categorical(adata.obs["oanno2"])
+    assert is_categorical_dtype(adata.obs["oanno1"])
+    assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
-    assert is_categorical(adata.raw.var["vanno2"])
+    assert is_categorical_dtype(adata.raw.var["vanno2"])
     assert np.all(adata.obs == adata_src.obs)
     assert np.all(adata.var == adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
@@ -222,8 +222,8 @@ def test_readwrite_backed(typ, backing_h5ad):
     adata_src.write()
 
     adata = ad.read(backing_h5ad)
-    assert is_categorical(adata.obs["oanno1"])
-    assert not is_categorical(adata.obs["oanno2"])
+    assert is_categorical_dtype(adata.obs["oanno1"])
+    assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
     assert_equal(adata, adata_src)
