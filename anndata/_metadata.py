@@ -1,3 +1,4 @@
+import traceback
 from pathlib import Path
 
 here = Path(__file__).parent
@@ -22,3 +23,10 @@ except (ImportError, LookupError, FileNotFoundError):
     __version__ = meta["Version"]
     __author__ = meta["Author"]
     __email__ = meta["Author-email"]
+
+
+def within_flit():
+    for frame in traceback.extract_stack():
+        if frame.name == "get_docstring_and_version_via_import":
+            return True
+    return False
