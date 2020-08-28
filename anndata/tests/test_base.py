@@ -364,7 +364,9 @@ def test_slicing_remove_unused_categories():
 
 def test_get_subset_annotation():
     adata = AnnData(
-        np.array([[1, 2, 3], [4, 5, 6]]), dict(S=["A", "B"]), dict(F=["a", "b", "c"]),
+        np.array([[1, 2, 3], [4, 5, 6]]),
+        dict(S=["A", "B"]),
+        dict(F=["a", "b", "c"]),
     )
 
     assert adata[0, 0].obs["S"].tolist() == ["A"]

@@ -103,7 +103,10 @@ def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
     df = DataFrame.from_dict(dod, orient="index")  # build the matrix
     df.fillna(value=0.0, inplace=True)  # many NaN, replace with zeros
     return AnnData(
-        np.array(df), dict(obs_names=df.index), dict(var_names=df.columns), dtype=dtype,
+        np.array(df),
+        dict(obs_names=df.index),
+        dict(var_names=df.columns),
+        dtype=dtype,
     )
 
 
@@ -431,7 +434,10 @@ def _read_text(
     for iname, name in enumerate(col_names):
         col_names[iname] = name.strip('"')
     return AnnData(
-        data, obs=dict(obs_names=row_names), var=dict(var_names=col_names), dtype=dtype,
+        data,
+        obs=dict(obs_names=row_names),
+        var=dict(var_names=col_names),
+        dtype=dtype,
     )
 
 

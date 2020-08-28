@@ -68,9 +68,9 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
+    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -333,7 +333,7 @@ def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
     b_indices = (b.parent.obs_names, b.parent.var_names)
     for axis_idx in a.axes:
         assert_equal(
-            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx,
+            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx
         )
     assert a.attrname == b.attrname, format_msg(elem_name)
     assert_equal_mapping(a, b, exact=exact, elem_name=elem_name)
@@ -343,7 +343,7 @@ def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
 def assert_equal_index(a, b, exact=False, elem_name=None):
     if not exact:
         report_name(pd.testing.assert_index_equal)(
-            a, b, check_names=False, check_categorical=False, _elem_name=elem_name,
+            a, b, check_names=False, check_categorical=False, _elem_name=elem_name
         )
     else:
         report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)

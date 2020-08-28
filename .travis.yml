@@ -1,6 +1,9 @@
 dist: xenial
 language: python
 cache: pip
+branches:
+  only:
+  - master  # All other branches should become (draft) PRs and be build that way
 matrix:
   include:
   - name: static analysis
