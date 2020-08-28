@@ -306,14 +306,16 @@ def read_group(group: zarr.Group):
 @report_read_key_on_error
 def read_csr(group: zarr.Group) -> sparse.csr_matrix:
     return sparse.csr_matrix(
-        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"],
+        (group["data"], group["indices"], group["indptr"]),
+        shape=group.attrs["shape"],
     )
 
 
 @report_read_key_on_error
 def read_csc(group: zarr.Group) -> sparse.csc_matrix:
     return sparse.csc_matrix(
-        (group["data"], group["indices"], group["indptr"]), shape=group.attrs["shape"],
+        (group["data"], group["indices"], group["indptr"]),
+        shape=group.attrs["shape"],
     )
 
 

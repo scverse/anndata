@@ -318,7 +318,10 @@ class PairwiseArraysBase(AlignedMapping):
 
 class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(
-        self, parent: "anndata.AnnData", axis: int, vals: Optional[Mapping] = None,
+        self,
+        parent: "anndata.AnnData",
+        axis: int,
+        vals: Optional[Mapping] = None,
     ):
         self._parent = parent
         if axis not in (0, 1):

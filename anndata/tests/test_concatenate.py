@@ -219,10 +219,10 @@ def obsm_adatas():
         AnnData(
             X=sparse.csr_matrix((4, 10)),
             obs=pd.DataFrame(index=gen_index(4)),
-            obsm={
-                "dense": np.arange(12).reshape(4, 3),
-                "df": pd.DataFrame({"a": np.arange(3, 7),}, index=gen_index(4),),
-            },
+            obsm=dict(
+                dense=np.arange(12).reshape(4, 3),
+                df=pd.DataFrame(dict(a=np.arange(3, 7)), index=gen_index(4)),
+            ),
         ),
         AnnData(
             X=sparse.csr_matrix((2, 100)),
@@ -863,7 +863,10 @@ def gen_concat_params(unss, compat2result):
             },
         ),
         gen_concat_params(
-            [{"a": {"b": 1, "c": {"d": 3}}}, {"a": {"b": 1, "c": {"e": 4}}},],
+            [
+                {"a": {"b": 1, "c": {"d": 3}}},
+                {"a": {"b": 1, "c": {"e": 4}}},
+            ],
             {
                 None: {},
                 "first": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
@@ -873,7 +876,12 @@ def gen_concat_params(unss, compat2result):
             },
         ),
         gen_concat_params(
-            [{"a": 1}, {"a": 1, "b": 2}, {"a": 1, "b": {"b.a": 1}, "c": 3}, {"d": 4},],
+            [
+                {"a": 1},
+                {"a": 1, "b": 2},
+                {"a": 1, "b": {"b.a": 1}, "c": 3},
+                {"d": 4},
+            ],
             {
                 None: {},
                 "first": {"a": 1, "b": 2, "c": 3, "d": 4},
@@ -884,11 +892,11 @@ def gen_concat_params(unss, compat2result):
         ),
         gen_concat_params(
             [{"a": i} for i in range(15)],
-            {None: {}, "first": {"a": 0}, "unique": {}, "same": {}, "only": {},},
+            {None: {}, "first": {"a": 0}, "unique": {}, "same": {}, "only": {}},
         ),
         gen_concat_params(
             [{"a": 1} for i in range(10)] + [{"a": 2}],
-            {None: {}, "first": {"a": 1}, "unique": {}, "same": {}, "only": {},},
+            {None: {}, "first": {"a": 1}, "unique": {}, "same": {}, "only": {}},
         ),
     ),
 )

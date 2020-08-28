@@ -148,7 +148,8 @@ def test_set_obs(adata, subset_func):
     subset = adata[subset_func(adata.obs_names), :]
 
     new_obs = pd.DataFrame(
-        dict(a=np.ones(subset.n_obs), b=np.ones(subset.n_obs)), index=subset.obs_names,
+        dict(a=np.ones(subset.n_obs), b=np.ones(subset.n_obs)),
+        index=subset.obs_names,
     )
 
     assert subset.is_view

@@ -67,7 +67,8 @@ def write_csvs(
                 df = pd.DataFrame(value)
             except Exception as e:
                 warnings.warn(
-                    f"Omitting to write {key!r} of type {type(e)}.", WriteWarning,
+                    f"Omitting to write {key!r} of type {type(e)}.",
+                    WriteWarning,
                 )
                 continue
         df.to_csv(

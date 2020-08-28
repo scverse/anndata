@@ -300,7 +300,7 @@ class Reindexer(object):
 
         # Indexes real fast, and does outer indexing
         return pd.api.extensions.take(
-            el, indexer, axis=axis, allow_fill=True, fill_value=fill_value,
+            el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
     def _apply_to_sparse(self, el, *, axis, fill_value=None):
@@ -478,7 +478,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         max_col = max(el.shape[1] for el in els if not_missing(el))
         orig_cols = [el.shape[1] if not_missing(el) else 0 for el in els]
         reindexers = [
-            gen_reindexer(pd.RangeIndex(max_col), pd.RangeIndex(n),) for n in orig_cols
+            gen_reindexer(pd.RangeIndex(max_col), pd.RangeIndex(n)) for n in orig_cols
         ]
     return reindexers
 
@@ -492,7 +492,7 @@ def outer_concat_aligned_mapping(
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
         if reindexers is None:
-            cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=axis,)
+            cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=axis)
         else:
             cur_reindexers = reindexers
 
