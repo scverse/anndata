@@ -1,7 +1,0 @@
-pandas>=1.0,!=1.1  # pandas 1.1 breaks tests, https://github.com/pandas-dev/pandas/issues/35446
-numpy>=1.15
-scipy~=1.0
-h5py
-natsort
-importlib_metadata>=0.7; python_version < '3.8'
-packaging>=20

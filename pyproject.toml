@@ -39,7 +39,7 @@ requires = [
     'scipy~=1.0',
     'h5py',
     'natsort',
-    'packaging',
+    'packaging>=20',
     # for getting the stable version
     'importlib_metadata>=0.7; python_version < "3.8"',
 ]
