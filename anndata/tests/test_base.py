@@ -1,4 +1,5 @@
 from itertools import product
+import tracemalloc
 
 import numpy as np
 from numpy import ma
@@ -573,3 +574,50 @@ def test_copy():
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
         for key in map_sprs.keys():
             assert_eq_not_id(map_sprs[key], map_copy[key])
+
+
+@pytest.mark.xfail(reason="Increased memory consumption still needs to be fixed")
+def test_memory_usage():
+    N, M = 100, 200
+    RUNS = 10
+    obs_df = pd.DataFrame(
+        dict(
+            cat=pd.Categorical(np.arange(N, dtype=int)),
+            int=np.arange(N, dtype=int),
+            float=np.arange(N, dtype=float),
+            obj=[str(i) for i in np.arange(N, dtype=int)],
+        ),
+        index=[f"cell{i}" for i in np.arange(N, dtype=int)],
+    )
+    var_df = pd.DataFrame(
+        dict(
+            cat=pd.Categorical(np.arange(M, dtype=int)),
+            int=np.arange(M, dtype=int),
+            float=np.arange(M, dtype=float),
+            obj=[str(i) for i in np.arange(M, dtype=int)],
+        ),
+        index=[f"gene{i}" for i in np.arange(M, dtype=int)],
+    )
+
+    def get_memory(snapshot, key_type="lineno"):
+        snapshot = snapshot.filter_traces(
+            (
+                tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+                tracemalloc.Filter(False, "<unknown>"),
+            )
+        )
+        total = sum(stat.size for stat in snapshot.statistics(key_type))
+        return total
+
+    total = np.zeros(RUNS)
+    # Intantiate the anndata object first before memory calculation to
+    # only look at memory changes due to deletion of such a object.
+    adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
+    adata.X[0, 0] = 1.0  # Disable Codacy issue
+    tracemalloc.start()
+    for i in range(RUNS):
+        adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
+        total[i] = get_memory(tracemalloc.take_snapshot())
+    tracemalloc.stop()
+    relative_increase = total[:-1] / total[1:]
+    np.testing.assert_allclose(relative_increase, 1.0, atol=0.2)
