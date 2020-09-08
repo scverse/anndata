@@ -29,11 +29,11 @@ class Raw:
         if adata.isbacked == (X is None):
             self._X = X
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
-            self._varm = AxisArrays(self, 1, varm)
+            self._varm = varm
         elif X is None:  # construct from adata
             self._X = adata.X.copy()
             self._var = adata.var.copy()
-            self._varm = AxisArrays(self, 1, adata.varm.copy())
+            self._varm = adata._varm.copy()
         elif adata.isbacked:
             raise ValueError("Cannot specify X if adata is backed")
 
@@ -87,7 +87,7 @@ class Raw:
 
     @property
     def varm(self):
-        return self._varm
+        return AxisArrays(self, 1, self._varm)
 
     @property
     def var_names(self):
@@ -115,7 +115,7 @@ class Raw:
         new = Raw(self._adata, X=X, var=var)
         if self._varm is not None:
             # Since there is no view of raws
-            new._varm = self._varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
+            new._varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
         return new
 
     def __str__(self):

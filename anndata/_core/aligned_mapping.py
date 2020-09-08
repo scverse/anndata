@@ -231,27 +231,23 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self._data = dict()
         if vals is not None:
             self.update(vals)
-        self._parent_needs_update = True
+        self._parent_needs_update = isinstance(self.parent, anndata.AnnData)
+
+    @property
+    def _parent_data(self):
+        if self._axis == 0:
+            return self._parent._obsm
+        return self._parent._varm
 
     def __setitem__(self, key: str, value: V):
-        parent_needs_update = (
-            self._axis == 0
-            and isinstance(self.parent, anndata.AnnData)
-            and self._parent_needs_update
-        )
         super(AxisArrays, self).__setitem__(key, value)
-        if parent_needs_update:
-            self.parent._obsm[key] = value
+        if self._parent_needs_update:
+            self._parent_data[key] = value
 
     def __delitem__(self, key: str):
-        parent_needs_update = (
-            self._axis == 0
-            and isinstance(self.parent, anndata.AnnData)
-            and self._parent_needs_update
-        )
         super(AxisArrays, self).__delitem__(key)
-        if parent_needs_update:
-            self.parent._obsm.pop(key)
+        if self._parent_needs_update:
+            self._parent_data.pop(key)
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):

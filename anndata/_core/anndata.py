@@ -507,7 +507,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # TODO: Think about consequences of making obsm a group in hdf
         self._obsm = convert_to_dict(obsm)
-        self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
+        self._varm = convert_to_dict(varm)
 
         self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
         self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
@@ -936,11 +936,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         of length `n_vars`.
         Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
         """
-        return self._varm
+        if self.is_view:
+            varm = AxisArrays(self._adata_ref, 1, self._adata_ref._varm)
+            idx = self._vidx
+            if isinstance(idx, slice):
+                idx = self._adata_ref.var_names[idx]
+                idx = self._adata_ref.var_names.isin(idx)
+            return varm._view(self, idx)
+        else:
+            return AxisArrays(self, 1, self._varm)
 
     @varm.setter
     def varm(self, value):
-        varm = AxisArrays(self, 1, vals=convert_to_dict(value))
+        varm = convert_to_dict(value)
+        varm = convert_to_dict(AxisArrays(self, 1, varm))
         if self.is_view:
             self._init_as_actual(self.copy())
         self._varm = varm
@@ -1456,7 +1465,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if isinstance(self.uns, DictView)
                 else deepcopy(self._uns),
                 obsm={k: v.copy() for k, v in self._obsm.items()},
-                varm=self.varm.copy(),
+                varm={k: v.copy() for k, v in self._varm.items()},
                 obsp=self.obsp.copy(),
                 varp=self.varp.copy(),
                 raw=self.raw.copy() if self.raw is not None else None,
