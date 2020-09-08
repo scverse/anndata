@@ -1,6 +1,7 @@
 from os import PathLike
 from pathlib import Path
 from typing import Optional, Union, Iterator
+import weakref
 
 import h5py
 
@@ -18,12 +19,21 @@ class AnnDataFileManager:
         filename: Optional[PathLike] = None,
         filemode: Optional[Literal["r", "r+"]] = None,
     ):
-        self._adata = adata
+        self._adata = weakref.ref(adata)
         self.filename = filename
         self._filemode = filemode
         self._file = None
         if filename:
             self.open()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_adata"] = state["_adata"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        self.__dict__["_adata"] = weakref.ref(state["_adata"])
 
     def __repr__(self) -> str:
         if self.filename is None:
@@ -76,7 +86,7 @@ class AnnDataFileManager:
 
     def _to_memory_mode(self):
         """Close the backing file, forget filename, *do* change to memory mode."""
-        self._adata.__X = self._adata.X[()]
+        self._adata().__X = self._adata().X[()]
         self._file.close()
         self._file = None
         self._filename = None
