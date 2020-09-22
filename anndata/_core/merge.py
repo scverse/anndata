@@ -390,7 +390,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
            [0., 1., 0.],
            [0., 0., 1.],
            [0., 1., 0.],
-           [1., 0., 0.]], dtype=float32)
+           [1., 0., 0.]])
     """
     return Reindexer(cur_var, new_var)
 
@@ -652,21 +652,21 @@ def concat(
     >>> import anndata as ad, pandas as pd, numpy as np
     >>> from scipy import sparse
     >>> a = ad.AnnData(
-    ...     X=sparse.csr_matrix(np.array([[0, 1], [2, 3]])),
+    ...     X=sparse.csr_matrix(np.array([[0, 1], [2, 3]]), dtype=float),
     ...     obs=pd.DataFrame({"group": ["a", "b"]}, index=["s1", "s2"]),
     ...     var=pd.DataFrame(index=["var1", "var2"]),
     ...     varm={"ones": np.ones((2, 5)), "rand": np.random.randn(2, 3), "zeros": np.zeros((2, 5))},
     ...     uns={"a": 1, "b": 2, "c": {"c.a": 3, "c.b": 4}},
     ... )
     >>> b = ad.AnnData(
-    ...     X=sparse.csr_matrix(np.array([[4, 5, 6], [7, 8, 9]])),
+    ...     X=sparse.csr_matrix(np.array([[4, 5, 6], [7, 8, 9]]), dtype=float),
     ...     obs=pd.DataFrame({"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]),
     ...     var=pd.DataFrame(index=["var1", "var2", "var3"]),
     ...     varm={"ones": np.ones((3, 5)), "rand": np.random.randn(3, 5)},
     ...     uns={"a": 1, "b": 3, "c": {"c.b": 4}},
     ... )
     >>> c = ad.AnnData(
-    ...     X=sparse.csr_matrix(np.array([[10, 11], [12, 13]])),
+    ...     X=sparse.csr_matrix(np.array([[10, 11], [12, 13]]), dtype=float),
     ...     obs=pd.DataFrame({"group": ["a", "b"]}, index=["s1", "s2"]),
     ...     var=pd.DataFrame(index=["var3", "var4"]),
     ...     uns={"a": 1, "b": 4, "c": {"c.a": 3, "c.b": 4, "c.c": 5}},

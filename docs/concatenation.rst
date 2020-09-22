@@ -65,13 +65,13 @@ For example, given two anndata objects with differing variables:
            [0., 1.],
            [0., 0.],
            [0., 1.],
-           [1., 0.]], dtype=float32)
+           [1., 0.]])
     >>> ad.concat([a, b], join="outer").X.toarray()
     array([[1., 0., 0.],
            [0., 1., 0.],
            [0., 0., 1.],
            [0., 1., 0.],
-           [1., 0., 0.]], dtype=float32)
+           [1., 0., 0.]])
 
 The join argument is used for any element which has both (1) an axis being concatenated and (2) has an axis not being concatenated.
 When concatenating along the `obs` dimension, this means elements of `.X`, `obs`, `.layers`, and `.obsm` will be affected by the choice of `join`.
