@@ -1231,7 +1231,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
-        self._init_as_actual(adata_subset, dtype=self._X.dtype)
+        self._init_as_actual(adata_subset)
 
     def _inplace_subset_obs(self, index: Index1D):
         """\
@@ -1240,7 +1240,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
-        self._init_as_actual(adata_subset, dtype=self.X.dtype)
+        self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
     def __setitem__(
@@ -1292,7 +1292,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             varp=self.obsp.copy(),
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
-            dtype=self.X.dtype.name,
         )
 
     T = property(transpose)
@@ -1438,13 +1437,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
             else:
                 X = self.X.copy()
-            # TODO: Figure out what case this is:
-            if X is not None:
-                dtype = X.dtype
-                if X.shape != self.shape:
-                    X = X.reshape(self.shape)
-            else:
-                dtype = "float32"
             return AnnData(
                 X=X,
                 obs=self.obs.copy(),
@@ -1460,7 +1452,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varp=self.varp.copy(),
                 raw=self.raw.copy() if self.raw is not None else None,
                 layers=self.layers.copy(),
-                dtype=dtype,
             )
         else:
             from .._io import read_h5ad

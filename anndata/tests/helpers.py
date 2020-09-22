@@ -139,7 +139,6 @@ def gen_adata(
         layers=layers,
         obsp=obsp,
         varp=varp,
-        dtype=X_dtype,
         uns=uns,
     )
     return adata

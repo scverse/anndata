@@ -22,7 +22,7 @@ def adata():
         [4, 5, 6],
         [7, 8, 9],
     ]  # data matrix of shape n_obs x n_vars
-    X = np.array(X_list)
+    X = np.array(X_list, dtype="int32")
     obs_dict = dict(  # annotation of observations / rows
         row_names=["name1", "name2", "name3"],  # row annotation
         oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
@@ -41,7 +41,6 @@ def adata():
         obsm=dict(o1=np.zeros((X.shape[0], 10))),
         varm=dict(v1=np.ones((X.shape[1], 20))),
         layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
-        dtype="int32",
     )
 
 

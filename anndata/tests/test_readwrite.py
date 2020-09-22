@@ -172,8 +172,8 @@ def test_readwrite_zarr(typ, tmp_path):
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, dtype="int8")
+    X = typ(X_list, dtype="int8")
+    adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read(backing_h5ad)

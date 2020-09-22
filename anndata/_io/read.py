@@ -68,10 +68,10 @@ def read_excel(
     from pandas import read_excel
 
     df = read_excel(fspath(filename), sheet)
-    X = df.values[:, 1:]
+    X = df.values[:, 1:].astype(dtype, copy=False)
     row = dict(row_names=df.iloc[:, 0].values.astype(str))
     col = dict(col_names=np.array(df.columns[1:], dtype=str))
-    return AnnData(X, row, col, dtype=dtype)
+    return AnnData(X, row, col)
 
 
 def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
@@ -103,10 +103,9 @@ def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
     df = DataFrame.from_dict(dod, orient="index")  # build the matrix
     df.fillna(value=0.0, inplace=True)  # many NaN, replace with zeros
     return AnnData(
-        np.array(df),
+        np.array(df, dtype=dtype),
         dict(obs_names=df.index),
         dict(var_names=df.columns),
-        dtype=dtype,
     )
 
 
@@ -139,7 +138,7 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
         for iname, name in enumerate(["row_names", "col_names"]):
             if name in keys:
                 rows_cols[iname][name] = f[name][()]
-    adata = AnnData(X, rows_cols[0], rows_cols[1], dtype=X.dtype.name)
+    adata = AnnData(X, rows_cols[0], rows_cols[1])
     return adata
 
 
@@ -253,14 +252,13 @@ def read_loom(
                 uns["loom-var"] = uns_var
 
         adata = AnnData(
-            X,
+            X.astype(dtype, copy=False),
             obs=obs,
             var=var,
             layers=layers,
             obsm=obsm if obsm else None,
             varm=varm if varm else None,
             uns=uns,
-            dtype=dtype,
         )
     return adata
 
@@ -279,11 +277,11 @@ def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
     from scipy.io import mmread
 
     # could be rewritten accounting for dtype to be more performant
-    X = mmread(fspath(filename)).astype(dtype)
+    X = mmread(fspath(filename)).astype(dtype, copy=False)
     from scipy.sparse import csr_matrix
 
     X = csr_matrix(X)
-    return AnnData(X, dtype=dtype)
+    return AnnData(X)
 
 
 def read_text(
@@ -437,7 +435,6 @@ def _read_text(
         data,
         obs=dict(obs_names=row_names),
         var=dict(var_names=col_names),
-        dtype=dtype,
     )
 
 

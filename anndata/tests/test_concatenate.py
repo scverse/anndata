@@ -855,7 +855,10 @@ def gen_concat_params(unss, compat2result):
             },
         ),
         gen_concat_params(
-            [{"a": {"b": 1, "c": {"d": 3}}}, {"a": {"b": 1, "c": {"e": 4}}},],
+            [
+                {"a": {"b": 1, "c": {"d": 3}}},
+                {"a": {"b": 1, "c": {"e": 4}}},
+            ],
             {
                 None: {},
                 "first": {"a": {"b": 1, "c": {"d": 3, "e": 4}}},
@@ -865,7 +868,12 @@ def gen_concat_params(unss, compat2result):
             },
         ),
         gen_concat_params(
-            [{"a": 1}, {"a": 1, "b": 2}, {"a": 1, "b": {"b.a": 1}, "c": 3}, {"d": 4},],
+            [
+                {"a": 1},
+                {"a": 1, "b": 2},
+                {"a": 1, "b": {"b.a": 1}, "c": 3},
+                {"d": 4},
+            ],
             {
                 None: {},
                 "first": {"a": 1, "b": 2, "c": 3, "d": 4},

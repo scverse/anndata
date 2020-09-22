@@ -35,7 +35,10 @@ uns_dict = dict(  # unstructured annotation
 @pytest.fixture
 def adata_raw():
     adata = ad.AnnData(
-        np.array(data), obs=obs_dict, var=var_dict, uns=uns_dict, dtype="int32"
+        np.array(data, dtype="int32"),
+        obs=obs_dict,
+        var=var_dict,
+        uns=uns_dict,
     )
     adata.raw = adata
     # Make them different shapes

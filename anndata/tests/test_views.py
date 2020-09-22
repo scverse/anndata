@@ -77,8 +77,8 @@ def mapping_name(request):
 
 
 def test_views():
-    X = np.array(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype="int32")
+    X = np.array(X_list, dtype="int32")
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
@@ -179,7 +179,7 @@ def test_set_var(adata, subset_func):
 
 
 def test_drop_obs_column():
-    adata = ad.AnnData(np.array(X_list), obs=obs_dict, dtype="int32")
+    adata = ad.AnnData(np.array(X_list, dtype="int32"), obs=obs_dict)
 
     subset = adata[:2]
     assert subset.is_view
