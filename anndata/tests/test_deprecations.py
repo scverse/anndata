@@ -41,16 +41,14 @@ def test_get_obsvar_array(adata):
     with pytest.warns(DeprecationWarning):  # Just to hide warnings
         assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
         assert np.allclose(
-            adata._get_obs_array("a", layer="x2"),
-            adata.obs_vector("a", layer="x2"),
+            adata._get_obs_array("a", layer="x2"), adata.obs_vector("a", layer="x2"),
         )
         assert np.allclose(
             adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
         )
         assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
         assert np.allclose(
-            adata._get_var_array("s1", layer="x2"),
-            adata.var_vector("s1", layer="x2"),
+            adata._get_var_array("s1", layer="x2"), adata.var_vector("s1", layer="x2"),
         )
         assert np.allclose(
             adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
@@ -92,6 +90,13 @@ def test_force_dense_deprecated(tmp_path):
     assert isinstance(dense.X, np.ndarray)
     assert isinstance(dense.raw.X, np.ndarray)
     assert_equal(adata, dense)
+
+
+def test_dtype_deprecated():
+    X = np.arange(16).reshape(4, 4)
+    with pytest.warns(FutureWarning):
+        a = AnnData(np.arange(16).reshape(4, 4), dtype="float32")
+    assert a.X is not X
 
 
 #######################################

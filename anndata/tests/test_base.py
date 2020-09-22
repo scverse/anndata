@@ -8,7 +8,7 @@ from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata, array_type, numeric_dtype
 
 
 # some test objects that we use below
@@ -47,6 +47,11 @@ def test_creation():
     assert adata.X is None
     assert adata.shape == shape
     assert "test" in adata.uns
+
+
+def test_X_reference(array_type, numeric_dtype):
+    X = array_type(np.arange(16, dtype=numeric_dtype).reshape(4, 4))
+    assert AnnData(X).X is X
 
 
 def test_create_with_dfs():
@@ -364,9 +369,7 @@ def test_slicing_remove_unused_categories():
 
 def test_get_subset_annotation():
     adata = AnnData(
-        np.array([[1, 2, 3], [4, 5, 6]]),
-        dict(S=["A", "B"]),
-        dict(F=["a", "b", "c"]),
+        np.array([[1, 2, 3], [4, 5, 6]]), dict(S=["A", "B"]), dict(F=["a", "b", "c"]),
     )
 
     assert adata[0, 0].obs["S"].tolist() == ["A"]

@@ -394,3 +394,19 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
         assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw/X")
         assert_equal(a.raw.var, b.raw.var, exact, elem_name="raw/var")
         assert_equal(a.raw.varm, b.raw.varm, exact, elem_name="raw/varm")
+
+
+# Common test fixtures
+
+
+@pytest.fixture(
+    params=[asarray, sparse.csr_matrix, sparse.csc_matrix],
+    ids=["np_array", "scipy_csr", "scipy_csc"],
+)
+def array_type(request):
+    return request.param
+
+
+@pytest.fixture(params=[np.int64, np.float64, np.float32])
+def numeric_dtype(request):
+    return request.param
