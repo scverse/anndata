@@ -8,6 +8,8 @@ On master
 
 - Added ipython tab completion and a useful return from `.keys` to `adata.uns` :pr:`415` :smaller:`I Virshup`
 
+.. _v0.7.4:
+
 0.7.4 :small:`2020-07-10`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -25,12 +27,16 @@ On master
 - Fixed error from `AnnData.concatenate` by bumping minimum versions of numpy and pandas :issue:`385`
 - Fixed colors being incorrectly changed when `AnnData` object was subset :pr:`388`
 
+.. _v0.7.3:
+
 0.7.3 :small:`2020-05-20`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Bug fixes
 
 - Fixed bug where graphs used too much memory when copying :pr:`381` :smaller:`I Virshup`
+
+.. _v0.7.2:
 
 0.7.2 :small:`2020-05-15`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
