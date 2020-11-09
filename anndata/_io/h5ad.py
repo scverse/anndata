@@ -7,6 +7,11 @@ from types import MappingProxyType
 from typing import Callable, Type, TypeVar, Union
 from typing import Collection, Sequence, Mapping
 
+try:
+    from importlib.metadata import version
+except ImportError:
+    from importlib_metadata import version
+
 import h5py
 import numpy as np
 import pandas as pd
@@ -478,7 +483,7 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
         categories = dataset.attrs["categories"]
         if isinstance(categories, h5py.Reference):
             categories_dset = dataset.parent[dataset.attrs["categories"]]
-            categories = categories_dset[...]
+            categories = read_dataset(categories_dset)
             ordered = bool(categories_dset.attrs.get("ordered", False))
         else:
             # TODO: remove this code at some point post 0.7
@@ -489,9 +494,11 @@ def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
                 "AnnData. Rewrite the file ensure you can read it in the future.",
                 FutureWarning,
             )
-        return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
+        return pd.Categorical.from_codes(
+            read_dataset(dataset), categories, ordered=ordered
+        )
     else:
-        return dataset[...]
+        return read_dataset(dataset)
 
 
 # @report_read_key_on_error
@@ -527,6 +534,10 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
 @read_attribute.register(h5py.Dataset)
 @report_read_key_on_error
 def read_dataset(dataset: h5py.Dataset):
+    if h5py.check_string_dtype(dataset.dtype):
+        string_dtype = h5py.check_string_dtype(dataset.dtype)
+        if version("h5py") >= "3" and string_dtype.encoding == "utf-8":
+            dataset = dataset.asstr()
     value = dataset[()]
     if not hasattr(value, "dtype"):
         return value
