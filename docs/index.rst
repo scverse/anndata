@@ -33,4 +33,5 @@ Latest additions
    fileformat-prose
    benchmarks
    release-notes
+   roadmap
    references
