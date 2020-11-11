@@ -22,7 +22,12 @@ from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
 from .._core.raw import Raw
-from ..compat import _from_fixed_length_strings, _clean_uns, Literal
+from ..compat import (
+    _from_fixed_length_strings,
+    _decode_structured_array,
+    _clean_uns,
+    Literal,
+)
 from .utils import (
     report_read_key_on_error,
     report_write_key_on_error,
@@ -33,6 +38,9 @@ from .utils import (
     EncodingVersions,
 )
 
+# For allowing h5py v3
+# https://github.com/theislab/anndata/issues/442
+H5PY_V3 = version("h5py") >= "3"
 
 H5Group = Union[h5py.Group, h5py.File]
 H5Dataset = Union[h5py.Dataset]
@@ -456,7 +464,14 @@ def _read_raw(
 @report_read_key_on_error
 def read_dataframe_legacy(dataset) -> pd.DataFrame:
     """Read pre-anndata 0.7 dataframes."""
-    df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
+    if H5PY_V3:
+        df = pd.DataFrame(
+            _decode_structured_array(
+                _from_fixed_length_strings(dataset[()]), dtype=dataset.dtype
+            )
+        )
+    else:
+        df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df
 
@@ -536,7 +551,7 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
 def read_dataset(dataset: h5py.Dataset):
     if h5py.check_string_dtype(dataset.dtype):
         string_dtype = h5py.check_string_dtype(dataset.dtype)
-        if version("h5py") >= "3" and string_dtype.encoding == "utf-8":
+        if H5PY_V3 and string_dtype.encoding == "utf-8":
             dataset = dataset.asstr()
     value = dataset[()]
     if not hasattr(value, "dtype"):
@@ -550,7 +565,10 @@ def read_dataset(dataset: h5py.Dataset):
             return value[0]
     elif len(value.dtype.descr) > 1:  # Compound dtype
         # For backwards compat, now strings are written as variable length
+        dtype = value.dtype
         value = _from_fixed_length_strings(value)
+        if H5PY_V3:
+            value = _decode_structured_array(value, dtype=dtype)
     if value.shape == ():
         value = value[()]
     return value
