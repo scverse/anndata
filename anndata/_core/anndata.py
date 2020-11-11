@@ -752,14 +752,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @raw.setter
     def raw(self, value: "AnnData"):
-        if not isinstance(value, AnnData):
-            raise ValueError(
-                "Can only init raw attribute with an AnnData object. "
-                "Do `del adata.raw` to delete it"
-            )
-        if self.is_view:
-            self._init_as_actual(self.copy())
-        self._raw = Raw(value)
+        if value is None:
+            del self.raw
+        elif not isinstance(value, AnnData):
+            raise ValueError("Can only init raw attribute with an AnnData object.")
+        else:
+            if self.is_view:
+                self._init_as_actual(self.copy())
+            self._raw = Raw(value)
 
     @raw.deleter
     def raw(self):
