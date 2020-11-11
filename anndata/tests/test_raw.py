@@ -59,6 +59,17 @@ def test_raw_del(adata_raw):
     assert adata_raw.raw is None
 
 
+def test_raw_set_as_none(adata_raw):
+    # Test for theislab/anndata#445
+    a = adata_raw
+    b = adata_raw.copy()
+
+    del a.raw
+    b.raw = None
+
+    assert_equal(a, b)
+
+
 def test_raw_of_view(adata_raw):
     adata_view = adata_raw[adata_raw.obs["oanno1"] == "cat2"]
     assert adata_view.raw.X.tolist() == [

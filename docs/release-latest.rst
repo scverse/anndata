@@ -11,6 +11,7 @@ On master
 .. rubric:: Bug fixes
 
 - Compatibility with `h5py>=3` strings :pr:`444` :smaller:`I Virshup`
+- Allow `adata.raw = None`, as is documented :pr:`447` :smaller:`I Virshup`
 
 0.7.4 :small:`2020-07-10`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
