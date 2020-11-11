@@ -1,8 +1,9 @@
 from copy import deepcopy
 from functools import reduce
-from typing import Union, Mapping, MutableMapping
+from typing import Union, Mapping, MutableMapping, Optional
 from warnings import warn
 
+import h5py
 from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
@@ -82,6 +83,34 @@ def _from_fixed_length_strings(value):
             dt_list[1] = "O"  # Assumption that it’s a vlen str
         new_dtype.append(tuple(dt_list))
     return value.astype(new_dtype)
+
+
+def _decode_structured_array(
+    arr: np.ndarray, dtype: Optional[np.dtype] = None, copy: bool = False
+) -> np.ndarray:
+    """
+    h5py 3.0 now reads all strings as bytes. There is a helper method which can convert these to strings,
+    but there isn't anything for fields of structured dtypes.
+
+    Params
+    ------
+    arr
+        An array with structured dtype
+    dtype
+        dtype of the array. This is checked for h5py string data types.
+        Passing this is allowed for cases where array may have been processed by another function before hand.
+    """
+    if copy:
+        arr = arr.copy()
+    if dtype is None:
+        dtype = arr.dtype
+    # codecs.decode is 2x slower than this lambda, go figure
+    decode = np.frompyfunc(lambda x: x.decode("utf-8"), 1, 1)
+    for k, (dt, _) in dtype.fields.items():
+        check = h5py.check_string_dtype(dt)
+        if check is not None and check.encoding == "utf-8":
+            decode(arr[k], out=arr[k])
+    return arr
 
 
 def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
