@@ -1,8 +1,8 @@
 .. role:: small
 .. role:: smaller
 
-On master
-~~~~~~~~~
+0.7.5 :small:`2020-11-12`
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Functionality
 
@@ -12,6 +12,7 @@ On master
 
 - Compatibility with `h5py>=3` strings :pr:`444` :smaller:`I Virshup`
 - Allow `adata.raw = None`, as is documented :pr:`447` :smaller:`I Virshup`
+- Fix warnings from pandas 1.1 :pr:`425` :smaller:`I Virshup`
 
 0.7.4 :small:`2020-07-10`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
