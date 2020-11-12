@@ -19,7 +19,7 @@ try:
 except ImportError as e:
 
     def write_zarr(*_, **__):
-        raise e
+        raise ImportError("Couldn't import 'zarr' module (not installed?)")
 
 
 logger = get_logger(__name__)
