@@ -8,6 +8,10 @@ On master
 
 - Added ipython tab completion and a useful return from `.keys` to `adata.uns` :pr:`415` :smaller:`I Virshup`
 
+.. rubric:: Bug fixes
+
+- Compatibility with `h5py>=3` strings :pr:`444` :smaller:`I Virshup`
+
 0.7.4 :small:`2020-07-10`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
