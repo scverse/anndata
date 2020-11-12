@@ -549,9 +549,9 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
 @read_attribute.register(h5py.Dataset)
 @report_read_key_on_error
 def read_dataset(dataset: h5py.Dataset):
-    if h5py.check_string_dtype(dataset.dtype):
+    if H5PY_V3:
         string_dtype = h5py.check_string_dtype(dataset.dtype)
-        if H5PY_V3 and string_dtype.encoding == "utf-8":
+        if (string_dtype is not None) and (string_dtype.encoding == "utf-8"):
             dataset = dataset.asstr()
     value = dataset[()]
     if not hasattr(value, "dtype"):
