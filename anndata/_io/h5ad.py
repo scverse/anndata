@@ -7,11 +7,6 @@ from types import MappingProxyType
 from typing import Callable, Type, TypeVar, Union
 from typing import Collection, Sequence, Mapping
 
-try:
-    from importlib.metadata import version
-except ImportError:
-    from importlib_metadata import version
-
 import h5py
 import numpy as np
 import pandas as pd
@@ -29,6 +24,8 @@ from ..compat import (
     Literal,
 )
 from .utils import (
+    H5PY_V3,
+    check_key,
     report_read_key_on_error,
     report_write_key_on_error,
     idx_chunks_along_axis,
@@ -37,10 +34,6 @@ from .utils import (
     _read_legacy_raw,
     EncodingVersions,
 )
-
-# For allowing h5py v3
-# https://github.com/theislab/anndata/issues/442
-H5PY_V3 = version("h5py") >= "3"
 
 H5Group = Union[h5py.Group, h5py.File]
 H5Dataset = Union[h5py.Dataset]
@@ -252,20 +245,24 @@ def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
-    group = f.create_group(key)
-    group.attrs["encoding-type"] = "dataframe"
-    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
-    group.attrs["column-order"] = list(df.columns)
+
+    col_names = [check_key(c) for c in df.columns]
 
     if df.index.name is not None:
         index_name = df.index.name
     else:
         index_name = "_index"
+    index_name = check_key(index_name)
+
+    group = f.create_group(key)
+    group.attrs["encoding-type"] = "dataframe"
+    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
+    group.attrs["column-order"] = col_names
     group.attrs["_index"] = index_name
 
     write_series(group, index_name, df.index, dataset_kwargs=dataset_kwargs)
-    for colname, series in df.items():
-        write_series(group, colname, series, dataset_kwargs=dataset_kwargs)
+    for col_name, (_, series) in zip(col_names, df.items()):
+        write_series(group, col_name, series, dataset_kwargs=dataset_kwargs)
 
 
 @report_write_key_on_error

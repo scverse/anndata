@@ -447,6 +447,27 @@ def test_write_large_categorical(tmp_path, diskfmt):
     assert_equal(orig, curr)
 
 
+def test_write_string_types(tmp_path, diskfmt):
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+
+    adata = ad.AnnData(
+        np.ones((3, 3)),
+        obs=pd.DataFrame(
+            np.ones((3, 2)),
+            columns=["a", np.str_("b")],
+            index=["a", "b", "c"],
+        ),
+    )
+
+    write = getattr(adata, f"write_{diskfmt}")
+    read = getattr(ad, f"read_{diskfmt}")
+
+    write(adata_pth)
+    from_disk = read(adata_pth)
+
+    assert_equal(adata, from_disk)
+
+
 def test_zarr_chunk_X(tmp_path):
     import zarr
 

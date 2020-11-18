@@ -3,8 +3,13 @@ from functools import wraps, singledispatch
 from warnings import warn
 
 from packaging import version
+import h5py
 
 from .._core.sparse_dataset import SparseDataset
+
+# For allowing h5py v3
+# https://github.com/theislab/anndata/issues/442
+H5PY_V3 = version.parse(h5py.__version__).major >= 3
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -86,6 +91,22 @@ def convert_string(string):
         return None
     else:
         return string
+
+
+def check_key(key):
+    """Checks that passed value is a valid h5py key.
+
+    Should convert it if there is an obvious conversion path, error otherwise.
+    """
+    typ = type(key)
+    if issubclass(typ, str):
+        return str(key)
+    # TODO: Should I try to decode bytes? It's what h5py would do,
+    # but it will be read out as a str.
+    # elif issubclass(typ, bytes):
+    # return key
+    else:
+        raise TypeError(f"{key} of type {typ} is an invalid key. Should be str.")
 
 
 # -------------------------------------------------------------------------------
