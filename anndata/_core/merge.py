@@ -13,6 +13,7 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from scipy.sparse.base import spmatrix
 
 from .anndata import AnnData
 from ..compat import Literal
@@ -48,14 +49,14 @@ class OrderedSet(MutableSet):
     def add(self, val):
         self.dict[val] = None
 
-    def union(self, *vals):
+    def union(self, *vals) -> "OrderedSet":
         return reduce(or_, vals, self)
 
     def discard(self, val):
         if val in self:
             del self.dict[val]
 
-    def difference(self, *vals):
+    def difference(self, *vals) -> "OrderedSet":
         return reduce(sub, vals, self)
 
 
@@ -285,7 +286,7 @@ class Reindexer(object):
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
-    def _apply_to_df(self, el, *, axis, fill_value=None):
+    def _apply_to_df(self, el: pd.DataFrame, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = np.NaN
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
@@ -303,7 +304,7 @@ class Reindexer(object):
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
-    def _apply_to_sparse(self, el, *, axis, fill_value=None):
+    def _apply_to_sparse(self, el: spmatrix, *, axis, fill_value=None) -> spmatrix:
         if fill_value is None:
             fill_value = default_fill_value([el])
         if fill_value != 0:
@@ -354,7 +355,9 @@ class Reindexer(object):
         return out
 
 
-def resolve_index(inds: Iterable[pd.Index], join):
+def merge_indices(
+    inds: Iterable[pd.Index], join: Literal["inner", "outer"]
+) -> pd.Index:
     if join == "inner":
         return reduce(lambda x, y: x.intersection(y), inds)
     elif join == "outer":
@@ -444,7 +447,7 @@ def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
     return result
 
 
-def gen_inner_reindexers(els, new_index, axis=0):
+def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
     alt_axis = 1 - axis
     if axis == 0:
         df_indices = lambda x: x.columns
@@ -522,7 +525,9 @@ def concat_pairwise_mapping(
     return result
 
 
-def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
+def merge_dataframes(
+    dfs: Iterable[pd.DataFrame], new_index, merge_strategy=merge_unique
+) -> pd.DataFrame:
     dfs = [df.reindex(index=new_index) for df in dfs]
     # New dataframe with all shared data
     new_df = pd.DataFrame(merge_strategy(dfs), index=new_index)
@@ -561,12 +566,14 @@ def _resolve_dim(*, dim: str = None, axis: int = None) -> Tuple[int, str]:
         return axis, _dims[axis]
 
 
-def dim_indices(adata, *, axis=None, dim=None):
+def dim_indices(adata, *, axis=None, dim=None) -> pd.Index:
+    """Helper function to get adata.{dim}_names."""
     _, dim = _resolve_dim(axis=axis, dim=dim)
     return getattr(adata, f"{dim}_names")
 
 
-def dim_size(adata, *, axis=None, dim=None):
+def dim_size(adata, *, axis=None, dim=None) -> int:
+    """Helper function to get adata.shape[dim]."""
     ax, _ = _resolve_dim(axis, dim)
     return adata.shape[ax]
 
@@ -774,11 +781,8 @@ def concat(
 
     if keys is None:
         keys = np.arange(len(adatas)).astype(str)
-    if axis == 0:
-        dim = "obs"
-    elif axis == 1:
-        dim = "var"
 
+    axis, dim = _resolve_dim(axis=axis)
     alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
     # Label column
@@ -795,11 +799,11 @@ def concat(
         concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = resolve_index(
-        [dim_indices(a, axis=1 - axis) for a in adatas], join=join
+    alt_indices = merge_indices(
+        [dim_indices(a, axis=alt_axis) for a in adatas], join=join
     )
     reindexers = [
-        gen_reindexer(alt_indices, dim_indices(a, axis=1 - axis)) for a in adatas
+        gen_reindexer(alt_indices, dim_indices(a, axis=alt_axis)) for a in adatas
     ]
 
     # Annotation for concatenation axis
