@@ -226,10 +226,13 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
-        self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
         if vals is not None:
             self.update(vals)
+
+    @property
+    def dim_names(self):
+        return (self._parent.obs_names, self._parent.var_names)[self._axis]
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
@@ -243,7 +246,10 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self._parent = parent_view
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
-        self.dim_names = parent_mapping.dim_names[subset_idx]
+
+    @property
+    def dim_names(self):
+        return self.parent_mapping.dim_names[self.subset_idx]
 
 
 AxisArraysBase._view_class = AxisArraysView
