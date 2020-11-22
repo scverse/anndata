@@ -186,6 +186,7 @@ def test_setting_dim_index(dim):
     setattr(curr, index_attr, new_idx)
     pd.testing.assert_index_equal(getattr(curr, index_attr), new_idx)
     pd.testing.assert_index_equal(getattr(curr, mapping_attr)["df"].index, new_idx)
+    pd.testing.assert_index_equal(getattr(curr, mapping_attr).dim_names, new_idx)
     pd.testing.assert_index_equal(curr.obs_names, curr.raw.obs_names)
 
     # Testing view behaviour
