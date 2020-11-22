@@ -231,7 +231,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
             self.update(vals)
 
     @property
-    def dim_names(self):
+    def dim_names(self) -> pd.Index:
         return (self._parent.obs_names, self._parent.var_names)[self._axis]
 
 
@@ -248,7 +248,7 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self._axis = parent_mapping._axis
 
     @property
-    def dim_names(self):
+    def dim_names(self) -> pd.Index:
         return self.parent_mapping.dim_names[self.subset_idx]
 
 
