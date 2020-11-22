@@ -194,6 +194,7 @@ def test_setting_dim_index(dim):
     assert not view.is_view
     pd.testing.assert_index_equal(getattr(view, index_attr), new_idx)
     pd.testing.assert_index_equal(getattr(view, mapping_attr)["df"].index, new_idx)
+    pd.testing.assert_index_equal(getattr(view, mapping_attr).dim_names, new_idx)
     with pytest.raises(AssertionError):
         pd.testing.assert_index_equal(
             getattr(view, index_attr), getattr(orig, index_attr)
