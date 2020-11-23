@@ -247,10 +247,6 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
 
-    @property
-    def dim_names(self) -> pd.Index:
-        return super().dim_names[self.subset_idx]
-
 
 AxisArraysBase._view_class = AxisArraysView
 AxisArraysBase._actual_class = AxisArrays
