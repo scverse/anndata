@@ -1,4 +1,5 @@
 from importlib.util import find_spec
+from os import PathLike
 from pathlib import Path
 from string import ascii_letters
 import tempfile
@@ -331,6 +332,38 @@ def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
+
+
+@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+def test_write_csv_view(typ, tmp_path):
+    # https://github.com/theislab/anndata/issues/401
+    import hashlib
+
+    def md5_path(pth: PathLike) -> bytes:
+        checksum = hashlib.md5()
+        with open(pth, "rb") as f:
+            while True:
+                buf = f.read(checksum.block_size * 100)
+                if not buf:
+                    break
+                checksum.update(buf)
+        return checksum.digest()
+
+    def hash_dir_contents(dir: Path) -> "dict[str, bytes]":
+        root_pth = str(dir)
+        return {
+            str(k)[len(root_pth) :]: md5_path(k) for k in dir.rglob("*") if k.is_file()
+        }
+
+    adata = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
+
+    # Test writing a view
+    view_pth = tmp_path / "test_view_csv_dir"
+    copy_pth = tmp_path / "test_copy_csv_dir"
+    adata[::2].write_csvs(view_pth, skip_data=False)
+    adata[::2].copy().write_csvs(copy_pth, skip_data=False)
+
+    assert hash_dir_contents(view_pth) == hash_dir_contents(copy_pth)
 
 
 @pytest.mark.parametrize(
