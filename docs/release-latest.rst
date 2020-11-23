@@ -7,6 +7,7 @@ On master
 .. rubric:: Bug fixes
 
 - Fixed bug where `np.str_` column names errored at write time :pr:`457` :smaller:`I Virshup`
+- Fixed "value.index does not match parent’s axis 0/1 names" error triggered when a data frame is stored in obms/varm after obs_names/var_names is updated :pr:`461` :smaller:`G Eraslan`
 
 0.7.5 :small:`2020-11-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
