@@ -1,6 +1,13 @@
 .. role:: small
 .. role:: smaller
 
+On master
+~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Fixed bug where `np.str_` column names errored at write time :pr:`457` :smaller:`I Virshup`
+
 0.7.5 :small:`2020-11-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
