@@ -572,8 +572,8 @@ def test_copy():
         for key in map_sprs.keys():
             assert_eq_not_id(map_sprs[key], map_copy[key])
 
+
 def test_delete_X():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
     adata.X = None
     assert adata.X is None
-    
