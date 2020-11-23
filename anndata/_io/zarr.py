@@ -25,6 +25,7 @@ from .utils import (
     write_attribute,
     _read_legacy_raw,
     EncodingVersions,
+    check_key,
 )
 from . import WriteWarning
 
@@ -87,20 +88,24 @@ def write_dataframe(z, key, df, dataset_kwargs=MappingProxyType({})):
     for reserved in ("__categories", "_index"):
         if reserved in df.columns:
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
-    group = z.create_group(key)
-    group.attrs["encoding-type"] = "dataframe"
-    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
-    group.attrs["column-order"] = list(df.columns)
+
+    col_names = [check_key(c) for c in df.columns]
 
     if df.index.name is not None:
         index_name = df.index.name
     else:
         index_name = "_index"
+    index_name = check_key(index_name)
+
+    group = z.create_group(key)
+    group.attrs["encoding-type"] = "dataframe"
+    group.attrs["encoding-version"] = EncodingVersions.dataframe.value
+    group.attrs["column-order"] = col_names
     group.attrs["_index"] = index_name
 
     write_series(group, index_name, df.index, dataset_kwargs)
-    for colname, series in df.items():
-        write_series(group, colname, series, dataset_kwargs)
+    for col_name, (_, series) in zip(col_names, df.items()):
+        write_series(group, col_name, series, dataset_kwargs)
 
 
 @report_write_key_on_error

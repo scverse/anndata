@@ -448,6 +448,7 @@ def test_write_large_categorical(tmp_path, diskfmt):
 
 
 def test_write_string_types(tmp_path, diskfmt):
+    # https://github.com/theislab/anndata/issues/456
     adata_pth = tmp_path / f"adata.{diskfmt}"
 
     adata = ad.AnnData(
@@ -466,6 +467,11 @@ def test_write_string_types(tmp_path, diskfmt):
     from_disk = read(adata_pth)
 
     assert_equal(adata, from_disk)
+
+    adata.obs[b"c"] = np.zeros(3)
+    # This should error, and tell you which key is at fault
+    with pytest.raises(TypeError, match=str(b"c")):
+        write(adata_pth)
 
 
 def test_zarr_chunk_X(tmp_path):
