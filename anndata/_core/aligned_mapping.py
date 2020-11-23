@@ -214,6 +214,10 @@ class AxisArraysBase(AlignedMapping):
             )
         return super()._validate_value(val, key)
 
+    @property
+    def dim_names(self) -> pd.Index:
+        return (self.parent.obs_names, self.parent.var_names)[self._axis]
+
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
     def __init__(
@@ -230,10 +234,6 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if vals is not None:
             self.update(vals)
 
-    @property
-    def dim_names(self) -> pd.Index:
-        return (self._parent.obs_names, self._parent.var_names)[self._axis]
-
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
     def __init__(
@@ -249,7 +249,7 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
 
     @property
     def dim_names(self) -> pd.Index:
-        return self.parent_mapping.dim_names[self.subset_idx]
+        return super().dim_names[self.subset_idx]
 
 
 AxisArraysBase._view_class = AxisArraysView
