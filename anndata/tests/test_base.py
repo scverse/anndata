@@ -201,6 +201,10 @@ def test_setting_dim_index(dim):
         )
     assert_equal(view, curr, exact=True)
 
+    # test case in #459
+    fake_m = pd.DataFrame(curr.X.T, index=getattr(curr, index_attr))
+    getattr(curr, mapping_attr)["df2"] = fake_m
+
 
 def test_indices_dtypes():
     adata = AnnData(
