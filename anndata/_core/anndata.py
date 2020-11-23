@@ -625,11 +625,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @X.setter
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
-        if not isinstance(value, StorageType.classes()) and not np.isscalar(value):
-            if hasattr(value, "to_numpy") and hasattr(value, "dtypes"):
-                value = ensure_df_homogeneous(value, "X")
-            else:  # TODO: asarray? asanyarray?
-                value = np.array(value)
         if value is None:
             if self.is_view:
                 raise ValueError(
@@ -639,6 +634,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError("Not implemented.")
             self._X = None
             return
+        if not isinstance(value, StorageType.classes()) and not np.isscalar(value):
+            if hasattr(value, "to_numpy") and hasattr(value, "dtypes"):
+                value = ensure_df_homogeneous(value, "X")
+            else:  # TODO: asarray? asanyarray?
+                value = np.array(value)
+
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
         # This can occur if there are succesive views
