@@ -13,7 +13,7 @@ def _merge(arrs):
     return concat_arrays(arrs, rxers)
 
 
-class _IndxViewMixin:
+class _ConcatViewMixin:
     def _resolve_idx(self, oidx, vidx):
         reverse = None
         adatas_oidx = []
@@ -63,7 +63,7 @@ class MapObsView:
         return _arr[self.reverse] if self.reverse is not None else _arr
 
 
-class AnnDataConcatView(_IndxViewMixin):
+class AnnDataConcatView(_ConcatViewMixin):
     def __init__(self, adatas, limits, resolved_idx, obs_names, var_names):
         self.adatas = adatas
         self.limits = limits
@@ -118,7 +118,7 @@ class AnnDataConcatView(_IndxViewMixin):
         )
 
 
-class AnnDataConcatObs(_IndxViewMixin):
+class AnnDataConcatObs(_ConcatViewMixin):
     def __init__(self, adatas, keys=None, index_unique=None):
         if isinstance(adatas, Mapping):
             if keys is not None:
