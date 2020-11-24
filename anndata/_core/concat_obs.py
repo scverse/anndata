@@ -12,7 +12,7 @@ def merge(arrs):
     return concat_arrays(arrs, rxers)
 
 
-class ObsMapView:
+class MapObsView:
     def __init__(self, attr, adatas, adatas_oidx, reverse, vidx):
         self.adatas = adatas
         self.adatas_oidx = adatas_oidx
@@ -20,11 +20,19 @@ class ObsMapView:
         self.vidx = vidx
         self.attr = attr
 
+    def set_index(adatas_oidx, reverse, vidx):
+        self.adatas_oidx = adatas_oidx
+        self.reverse = reverse
+        self.vidx = vidx
+
     def __getitem__(self, key):
+        print(self.vidx)
         arrs = []
         for i, oidx in enumerate(self.adatas_oidx):
             if oidx is not None:
-                arrs.append(getattr(self.adatas[i], self.attr)[key][oidx])
+                arr = getattr(self.adatas[i], self.attr)[key]
+                idx = (oidx, self.vidx) if len(arr.shape) > 1 else oidx
+                arrs.append(arr[idx])
 
         _arr = merge(arrs)
 
@@ -38,8 +46,9 @@ class AnnDataConcatView:
         self.reverse = reverse
         self.vidx = vidx
 
-        self.obsm_view = ObsMapView("obsm", adatas, adatas_oidx, reverse, vidx)
-        self.obs_view = ObsMapView("obs", adatas, adatas_oidx, reverse, vidx)
+        self.obsm_view = MapObsView("obsm", adatas, adatas_oidx, reverse, vidx)
+        self.obs_view = MapObsView("obs", adatas, adatas_oidx, reverse, vidx)
+        self.layers_view = MapObsView("layers", adatas, adatas_oidx, reverse, vidx)
 
     @property
     def X(self):
@@ -53,12 +62,25 @@ class AnnDataConcatView:
         return _X[self.reverse] if self.reverse is not None else _X
 
     @property
+    def layers(self):
+        return self.layers_view
+
+    @property
     def obsm(self):
         return self.obsm_view
 
     @property
     def obs(self):
         return self.obs_view
+
+    def set_index(self, adatas_oidx, reverse, vidx):
+        self.adatas_oidx = adatas_oidx
+        self.reverse = reverse
+        self.vidx = vidx
+
+        self.obs_view.set_index(adatas_oidx, reverse, vidx)
+        self.obsm_view.set_index(adatas_oidx, reverse, vidx)
+        self.layers_view.set_index(adatas_oidx, reverse, vidx)
 
 
 class AnnDataConcatObs:
@@ -103,6 +125,8 @@ class AnnDataConcatObs:
         for i in range(len(adatas) - 1):
             self.limits.append(self.limits[i] + adatas[i + 1].n_obs)
 
+        self.concat_view = None
+
     def __getitem__(self, index: Index):
         reverse = None
         adatas_oidx = []
@@ -120,4 +144,11 @@ class AnnDataConcatObs:
             mask = (u_oidx >= lower) & (u_oidx < upper)
             adatas_oidx.append(u_oidx[mask] - lower if mask.any() else None)
 
-        return AnnDataConcatView(self.adatas, adatas_oidx, reverse, vidx)
+        if self.concat_view is None:
+            self.concat_view = AnnDataConcatView(
+                self.adatas, adatas_oidx, reverse, vidx
+            )
+        else:
+            self.concat_view.set_index(adatas_oidx, reverse, vidx)
+
+        return self.concat_view
