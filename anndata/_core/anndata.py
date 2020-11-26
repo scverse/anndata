@@ -1273,7 +1273,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
 
         def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
-            return m.T.tocsr() if sparse.isspmatrix_csr(m) else m.T
+            if m is None:
+                return None
+            elif sparse.isspmatrix_csr(m):
+                return m.T.tocsr()
+            else:
+                return m.T
 
         return AnnData(
             t_csr(X),
@@ -1287,7 +1292,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             varp=self.obsp.copy(),
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
-            dtype=self.X.dtype.name,
+            dtype=self.X.dtype.name # problem: X might be none so dtype might not be available
         )
 
     T = property(transpose)
