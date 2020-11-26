@@ -1280,6 +1280,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 return m.T
 
+        if X is not None:
+            dtype = X.dtype
+        else:
+            dtype = "float32"
+
         return AnnData(
             t_csr(X),
             obs=self.var,
@@ -1292,7 +1297,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             varp=self.obsp.copy(),
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
-            dtype=self.X.dtype.name # problem: X might be none so dtype might not be available
+            dtype=dtype,
         )
 
     T = property(transpose)
