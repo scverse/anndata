@@ -65,6 +65,16 @@ Writing to other formats.
    AnnData.write_zarr
 
 
+Experimental development API
+----------------------------
+
+.. autosummary::
+   :toctree: .
+
+   dev.multi_files.AnnDataSet
+   dev.multi_files.AnnDataLoader
+
+
 Errors and warnings
 -------------------
 
