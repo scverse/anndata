@@ -111,8 +111,8 @@ def test_df_warnings():
 def test_attr_deletion():
     full = gen_adata((30, 30))
     # Empty has just X, obs_names, var_names
-    empty = AnnData(full.X, obs=full.obs[[]], var=full.var[[]])
-    for attr in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]:
+    empty = AnnData(None, obs=full.obs[[]], var=full.var[[]])
+    for attr in ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]:
         delattr(full, attr)
         assert_equal(getattr(full, attr), getattr(empty, attr))
     assert_equal(full, empty, exact=True)
@@ -576,4 +576,10 @@ def test_copy():
 def test_delete_X():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
     adata.X = None
+    assert adata.X is None
+
+    adata.X = np.array([[4, 5, 6], [1, 2, 3]])
+    assert adata.X is not None
+
+    del adata.X
     assert adata.X is None
