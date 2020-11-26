@@ -684,6 +684,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 f"need to be {self.shape}."
             )
 
+    @X.deleter
+    def X(self):
+        self.X = None
+
     @property
     def layers(self) -> Union[Layers, LayersView]:
         """\
