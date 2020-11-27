@@ -104,6 +104,10 @@ def gen_adata(
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    if X_type is None:
+        X = None
+    else:
+        X = X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype))
     obsm = dict(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
@@ -131,7 +135,7 @@ def gen_adata(
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     adata = AnnData(
-        X=X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype)),
+        X=X,
         obs=obs,
         var=var,
         obsm=obsm,
