@@ -1419,7 +1419,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
-        if not self.isbacked:
+        if not self.isbacked or filename is None:
             if self.is_view:
                 # TODO: How do I unambiguously check if this is a copy?
                 # Subsetting this way means we don’t have to have a view type
@@ -1435,6 +1435,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X = X.reshape(self.shape)
             else:
                 dtype = "float32"
+            raw = None
+            if self.raw is not None:
+                if self.isbacked:
+                    warnings.warn(
+                        "Dropping .raw attribute when copying from backed mode."
+                    )
+                else:
+                    raw = self.raw.copy()
             return AnnData(
                 X=X,
                 obs=self.obs.copy(),
@@ -1448,7 +1456,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varm=self.varm.copy(),
                 obsp=self.obsp.copy(),
                 varp=self.varp.copy(),
-                raw=self.raw.copy() if self.raw is not None else None,
+                raw=raw,
                 layers=self.layers.copy(),
                 dtype=dtype,
             )
