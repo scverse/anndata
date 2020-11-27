@@ -1273,20 +1273,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
 
         def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
-            if m is None:
-                return None
-            elif sparse.isspmatrix_csr(m):
-                return m.T.tocsr()
-            else:
-                return m.T
-
-        if X is not None:
-            dtype = X.dtype
-        else:
-            dtype = "float32"
+            return m.T.tocsr() if sparse.isspmatrix_csr(m) else m.T
 
         return AnnData(
-            t_csr(X),
+            X=t_csr(X) if X is not None else None,
             obs=self.var,
             var=self.obs,
             # we're taking a private attributes here to be able to modify uns of the original object
@@ -1297,7 +1287,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             varp=self.obsp.copy(),
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
-            dtype=dtype,
+            dtype=self.X.dtype.name if X is not None else "float32",
         )
 
     T = property(transpose)
