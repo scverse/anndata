@@ -379,16 +379,6 @@ def test_get_subset_annotation():
     assert adata[0, 0].var["F"].tolist() == ["a"]
 
 
-def test_transpose():
-    adata = gen_adata((5, 3))
-    adata.varp = {f"varp_{k}": v for k, v in adata.varp.items()}
-    adata1 = adata.T
-    adata1.uns["test123"] = 1
-    assert "test123" in adata.uns
-    assert_equal(adata1.X.shape, (3, 5))
-    assert_equal(adata1.obsp.keys(), adata.varp.keys())
-
-
 def test_append_col():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
