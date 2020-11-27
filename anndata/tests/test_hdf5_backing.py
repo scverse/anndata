@@ -174,7 +174,10 @@ def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
     final_adata = ad.read_h5ad(final_pth)
     # TODO: Figure out why this doesn’t work if I don’t copy
     assert_equal(final_adata, mem_v.copy())
-    assert_equal(final_adata, backed_v.copy())  # assert after loading into memory
+
+    final_adata_no_raw = final_adata.copy()
+    del final_adata_no_raw.raw  # .raw is dropped when loading backed into memory.
+    assert_equal(final_adata_no_raw, backed_v.copy())  # assert loading into memory
 
 
 def test_double_index(adata, backing_h5ad):
