@@ -475,3 +475,14 @@ def test_view_retains_ndarray_subclass():
 
     assert isinstance(view.obsm["foo"], NDArraySubclass)
     assert view.obsm["foo"].shape == (5, 5)
+
+
+@pytest.mark.parametrize(
+    "attr", ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]
+)
+def test_view_after_deletion(attr):
+    full = gen_adata((30, 30))
+    view = full[:, :20]
+    assert view.is_view
+    delattr(view, attr)
+    assert not view.is_view
