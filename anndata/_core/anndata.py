@@ -627,9 +627,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
         if value is None:
             if self.is_view:
-                raise ValueError(
-                    "Copy the view before setting the data matrix to `None`."
-                )
+                self._init_as_actual(self.copy())
             if self.isbacked:
                 raise ValueError("Not implemented.")
             self._X = None
