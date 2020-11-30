@@ -626,10 +626,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @X.setter
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
         if value is None:
-            if self.is_view:
-                self._init_as_actual(self.copy())
             if self.isbacked:
                 raise ValueError("Not implemented.")
+            if self.is_view:
+                self._init_as_actual(self.copy())
             self._X = None
             return
         if not isinstance(value, StorageType.classes()) and not np.isscalar(value):
