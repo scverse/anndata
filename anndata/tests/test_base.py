@@ -118,15 +118,6 @@ def test_attr_deletion():
     assert_equal(full, empty, exact=True)
 
 
-def test_not_view_after_deletion():
-    full = gen_adata((30, 30))
-    for attr in ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]:
-        view = full[:, :20]
-        assert view.is_view
-        delattr(view, attr)
-        assert not view.is_view
-
-
 def test_names():
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
