@@ -627,7 +627,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self, value: Optional[Union[np.ndarray, sparse.spmatrix]]):
         if value is None:
             if self.isbacked:
-                raise ValueError(
+                raise NotImplementedError(
                     "Cannot currently remove data matrix from backed object."
                 )
             if self.is_view:
