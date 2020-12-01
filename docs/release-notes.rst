@@ -13,6 +13,7 @@ Release Notes
 - :attr:`~anndata.AnnData.filename` and :attr:`~anndata.AnnData.isbacked` will be unified under a new name.
 - The types of :attr:`~anndata.AnnData.raw`, :attr:`~anndata.AnnData.layers`, :attr:`~anndata.AnnData.obsm`,
   :attr:`~anndata.AnnData.varm`, :attr:`~anndata.AnnData.obsp` and :attr:`~anndata.AnnData.varp` will be exported.
+- :attr:`~anndata.AnnData.write_zarr` will write :attr:`~anndata.AnnData.obsm` keys to the `.zattrs` file.
 
 Version 0.7
 -----------
