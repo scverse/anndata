@@ -72,6 +72,8 @@ def write_attribute_zarr(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 
 def write_mapping(f, key, value: Mapping, dataset_kwargs=MappingProxyType({})):
+    group = f.create_group(key)
+    group.attrs["column-order"] = list(value.keys())
     for sub_k, sub_v in value.items():
         if not isinstance(key, str):
             warn(
