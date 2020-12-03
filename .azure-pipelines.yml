@@ -13,7 +13,7 @@ jobs:
         python.version: '3.6'
       static_analysis:
         python.version: '3.7'
-        STATIC_ANALYSIS: yes
+        STATIC_ANALYSIS: 'yes'
   steps:
   - task: UsePythonVersion@0
     inputs:
