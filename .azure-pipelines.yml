@@ -11,9 +11,6 @@ jobs:
         python.version: '3.7'
       Python36:
         python.version: '3.6'
-      static_analysis:
-        python.version: '3.7'
-        STATIC_ANALYSIS: 'yes'
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -30,13 +27,20 @@ jobs:
       pytest --cov=. --cov-report=xml
     displayName: 'PyTest'
 
+- job: 'Static analysis'
+  pool:
+    vmImage: 'ubuntu-16.04'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.8'
+    displayName: 'Use Python 3.8'
+
   - script: |
       pip install black
       black . --check --diff
-    displayName: 'STATIC_ANALYSIS: black'
-    condition: eq(variables['STATIC_ANALYSIS'], 'yes')
+    displayName: 'black'
 
   - script: |
       rst2html.py --halt=2 README.rst >/dev/null
-    displayName: 'STATIC_ANALYSIS: rst2html'
-    condition: eq(variables['STATIC_ANALYSIS'], 'yes')
+    displayName: 'rst2html'
