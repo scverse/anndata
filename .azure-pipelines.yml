@@ -27,7 +27,7 @@ jobs:
       pytest --cov=. --cov-report=xml
     displayName: 'PyTest'
 
-- job: 'Static analysis'
+- job: static_analysis
   pool:
     vmImage: 'ubuntu-16.04'
   steps:
