@@ -31,10 +31,6 @@ jobs:
     displayName: 'PyTest'
 
   - script: |
-      python-codacy-coverage -r coverage.xml
-    displayName: 'Code review: odacy-coverage'
-
-  - script: |
       pip install black
       black . --check --diff
     displayName: 'STATIC_ANALYSIS: black'
