@@ -42,7 +42,6 @@ setup(
             "loompy>=3.0.5",
             "pytest>=4.6",
             "pytest-cov>=2.10",
-            "codacy-coverage",
             "docutils",  # for rst2html.py
             "zarr",
             "matplotlib",
