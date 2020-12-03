@@ -23,7 +23,7 @@ jobs:
   - script: |
       python -m pip install --upgrade pip
       pip install pytest-azurepipelines wheel
-      pip install -e .[dev,test]
+      pip install .[dev,test]
     displayName: 'Install dependencies'
 
   - script: |
