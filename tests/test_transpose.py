@@ -2,7 +2,7 @@ from scipy import sparse
 
 import pytest
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.test_utils import gen_adata, assert_equal
 
 
 def test_transpose_orig():

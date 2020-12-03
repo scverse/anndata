@@ -6,8 +6,9 @@ import pytest
 from scipy import sparse
 
 import anndata
-from anndata.tests.helpers import gen_typed_df_t2_size
+from anndata.test_utils import gen_typed_df_t2_size
 from anndata.utils import asarray
+
 
 M, N = (200, 100)
 

@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 
 from anndata import AnnData, read_loom, read_h5ad
-from anndata.tests.helpers import gen_typed_df_t2_size
+from anndata.test_utils import gen_typed_df_t2_size
+
 
 X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])

@@ -3,7 +3,7 @@ import pytest
 
 import anndata as ad
 from anndata._core.anndata import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal
+from anndata.test_utils import assert_equal
 
 
 # -------------------------------------------------------------------------------

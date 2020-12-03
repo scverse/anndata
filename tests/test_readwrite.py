@@ -13,7 +13,8 @@ from scipy.sparse import csr_matrix, csc_matrix
 import anndata as ad
 from anndata.utils import asarray
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.test_utils import gen_adata, assert_equal
+
 
 HERE = Path(__file__).parent
 

@@ -6,7 +6,7 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import assert_equal, report_name, gen_adata
+from anndata.test_utils import assert_equal, report_name, gen_adata
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.

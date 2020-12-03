@@ -16,8 +16,7 @@ from boltons.iterutils import research, remap, default_exit
 from anndata import AnnData, Raw, concat
 from anndata._core.index import _subset
 from anndata._core import merge
-from anndata.tests import helpers
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.test_utils import assert_equal, gen_adata, gen_typed_df
 from anndata.utils import asarray
 
 
@@ -812,7 +811,7 @@ def permute_nested_values(dicts: "List[dict]", gen_val: "Callable[[int], Any]"):
 
 
 def gen_df(n):
-    return helpers.gen_typed_df(n)
+    return gen_typed_df(n)
 
 
 def gen_array(n):

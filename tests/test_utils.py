@@ -5,7 +5,7 @@ import pytest
 
 import anndata as ad
 from anndata.utils import make_index_unique
-from anndata.tests.helpers import gen_typed_df
+from anndata.test_utils import gen_typed_df
 
 
 def test_make_index_unique():

@@ -3,7 +3,7 @@ import pytest
 from sklearn.utils.testing import assert_array_equal
 from scipy import sparse
 
-from anndata.tests.helpers import gen_adata, subset_func
+from anndata.test_utils import gen_adata
 from anndata.utils import asarray
 
 

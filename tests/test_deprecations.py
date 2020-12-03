@@ -11,7 +11,7 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 
-from anndata.tests.helpers import assert_equal
+from anndata.test_utils import assert_equal
 
 
 @pytest.fixture

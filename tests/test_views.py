@@ -10,7 +10,7 @@ import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata.utils import asarray
 
-from anndata.tests.helpers import (
+from anndata.test_utils import (
     gen_adata,
     subset_func,
     slice_subset,
