@@ -9,7 +9,6 @@ __pycache__/
 /build/
 /dist/
 /*.egg-info/
-/setup.py
 
 # Tests and coverage
 /.pytest_cache/
