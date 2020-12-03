@@ -36,11 +36,11 @@ jobs:
       versionSpec: '3.8'
     displayName: 'Use Python 3.8'
 
-  - script: |
-      pip install black
-      black . --check --diff
+  - script: pip install 'black>=20.8b1' docutils
+    displayName: 'Install dependencies'
+
+  - script: black . --check --diff
     displayName: 'black'
 
-  - script: |
-      rst2html.py --halt=2 README.rst >/dev/null
+  - script: rst2html.py --halt=2 README.rst >/dev/null
     displayName: 'rst2html'
