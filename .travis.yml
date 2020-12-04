@@ -8,17 +8,16 @@ matrix:
   include:
   - name: static analysis
     python: "3.7"
-    install: pip install .[dev,doc]
+    install: pip install .[dev]
     script:
     - black . --check --diff
-    - python setup.py check --restructuredtext --strict
     - rst2html.py --halt=2 README.rst >/dev/null
     after_success: skip
 python:
 - "3.6"
 - "3.7"
 install:
-- pip install -e .[dev,test]
+- pip install .[dev,test]
 script:
 - pytest --cov=. --cov-report=xml
 after_success:
