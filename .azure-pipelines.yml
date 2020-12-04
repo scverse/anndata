@@ -4,7 +4,7 @@ trigger:
 jobs:
 - job: PyTest
   pool:
-    vmImage: 'ubuntu-16.04'
+    vmImage: 'ubuntu-18.04'
   strategy:
     matrix:
       Python37:
@@ -29,7 +29,7 @@ jobs:
 
 - job: static_analysis
   pool:
-    vmImage: 'ubuntu-16.04'
+    vmImage: 'ubuntu-18.04'
   steps:
   - task: UsePythonVersion@0
     inputs:
