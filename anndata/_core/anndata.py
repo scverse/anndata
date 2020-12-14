@@ -555,7 +555,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 s = get_size(getattr(self, attr))
             if s > 0 and show_stratified:
-                str_attr = attr.replace('_', '.') + ' ' * (7 - len(attr))
+                str_attr = attr.replace("_", ".") + " " * (7 - len(attr))
                 print(f"Size of {str_attr}: {'%3.2f' % (s / (1024 ** 2))} MB")
             size += s
         return size
