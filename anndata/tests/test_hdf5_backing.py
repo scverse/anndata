@@ -168,12 +168,17 @@ def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
     backed_v = backed_adata[obs_idx, var_idx]
     assert backed_v.is_view
     mem_v = mem_adata[obs_idx, var_idx]
-    assert_equal(backed_v, mem_v)
+    assert_equal(backed_v, mem_v)  # meaningful as objects are not equivalent?
     backed_v.write_h5ad(final_pth)
 
     final_adata = ad.read_h5ad(final_pth)
-    # TODO: Figure out why this doesn’t work if I don’t copy
+    # todo: Figure out why this doesn’t work if I don’t copy
     assert_equal(final_adata, mem_v.copy())
+
+    # todo: breaks when removing this line, b/c backed_v.X is not accessible
+    backed_v = ad.read_h5ad(backed_pth, backed="r")[obs_idx, var_idx]
+    del final_adata.raw  # .raw is dropped when loading backed into memory.
+    assert_equal(final_adata, backed_v.to_memory())  # assert loading into memory
 
 
 def test_double_index(adata, backing_h5ad):

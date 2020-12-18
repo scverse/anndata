@@ -129,16 +129,16 @@ class Raw:
     def copy(self):
         return Raw(
             self._adata,
-            X=self._X.copy(),
-            var=self._var.copy(),
+            X=self.X.copy(),
+            var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
         )
 
     def to_adata(self):
         """Create full AnnData object."""
         return anndata.AnnData(
-            X=self._X.copy(),
-            var=self._var.copy(),
+            X=self.X.copy(),
+            var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
             obs=self._adata.obs.copy(),
             obsm=self._adata.obsm.copy(),
