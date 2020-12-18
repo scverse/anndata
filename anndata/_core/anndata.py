@@ -20,7 +20,7 @@ from numpy import ma
 import pandas as pd
 from pandas.api.types import is_string_dtype, is_categorical_dtype
 from scipy import sparse
-from scipy.sparse import issparse
+from scipy.sparse import issparse, csr_matrix
 
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
@@ -537,10 +537,26 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # layers
         self._layers = Layers(self, layers)
 
-    def __sizeof__(self) -> int:
+    def __sizeof__(self, show_stratified=None) -> int:
+        def get_size(X):
+            if issparse(X):
+                X_csr = csr_matrix(X)
+                return X_csr.data.nbytes + X_csr.indptr.nbytes + X_csr.indices.nbytes
+            else:
+                return X.__sizeof__()
+
         size = 0
-        for attr in ["_X", "_obs", "_var", "_uns", "_obsm", "_varm"]:
-            s = getattr(self, attr).__sizeof__()
+        attrs = list(["_X", "_obs", "_var"])
+        attrs_multi = list(["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"])
+        for attr in attrs + attrs_multi:
+            if attr in attrs_multi:
+                keys = getattr(self, attr).keys()
+                s = sum([get_size(getattr(self, attr)[k]) for k in keys])
+            else:
+                s = get_size(getattr(self, attr))
+            if s > 0 and show_stratified:
+                str_attr = attr.replace("_", ".") + " " * (7 - len(attr))
+                print(f"Size of {str_attr}: {'%3.2f' % (s / (1024 ** 2))} MB")
             size += s
         return size
 
