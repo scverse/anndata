@@ -46,7 +46,7 @@ setup(
             "zarr",
             "matplotlib",
             "sklearn",
-            "xlrd",
+            "xlrd<2",
             "joblib",
             "boltons",
             "scanpy",
