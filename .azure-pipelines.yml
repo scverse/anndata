@@ -28,12 +28,12 @@ jobs:
     displayName: 'Install dependencies'
 
   - script: |
-      pytest --junitxml=junit/test-results.xml
+      pytest --color=yes --junitxml=junit/test-results.xml
     displayName: 'PyTest'
     condition: eq(variables['RUN_COVERAGE'], 'no')
 
   - script: |
-      pytest --junitxml=junit/test-results.xml --cov --cov-report=xml
+      pytest --color=yes --junitxml=junit/test-results.xml --cov --cov-report=xml
     displayName: 'PyTest (coverage)'
     condition: eq(variables['RUN_COVERAGE'], 'yes')
 
