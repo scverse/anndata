@@ -8,6 +8,15 @@ author = 'Philipp Angerer, Alex Wolf, Isaac Virshup, Sergei Rybakov'
 # We don’t need all emails, the main authors are sufficient.
 author-email = 'phil.angerer@gmail.com, f.alex.wolf@gmx.de'
 
+[tool.coverage.run]
+source = ['anndata']
+omit = [
+	'setup.py',
+	'versioneer.py',
+	'anndata/_version.py',
+	'**/test_*.py',
+]
+
 [tool.pytest.ini_options]
 addopts = '--doctest-modules'
 python_files = 'test_*.py'
