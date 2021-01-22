@@ -10,7 +10,7 @@ jobs:
     vmImage: 'ubuntu-18.04'
   strategy:
     matrix:
-      Python37:
+      Python38:
         python.version: '3.8'
         RUN_COVERAGE: yes
       Python36:
