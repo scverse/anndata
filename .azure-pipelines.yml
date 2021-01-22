@@ -69,7 +69,8 @@ jobs:
     displayName: 'rst2html'
 
   - script: |
-      pip install setuptools twine
+      pip install setuptools twine pytoml
+      pip install .
       python setup.py sdist bdist_wheel
       twine check dist/*
     displayName: 'Twine check'
