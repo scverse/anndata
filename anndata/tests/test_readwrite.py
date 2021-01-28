@@ -249,6 +249,23 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
     assert_equal(from_h5ad, from_zarr, exact=True)
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        pytest.param({}, id="none"),
+        pytest.param({"compression": "lzf"}, id="lzf"),
+        pytest.param({"compression": "gzip"}, id="gzip"),
+        pytest.param({"compression": "gzip", "compression_opts": 8}, id="gzip-opts"),
+    ],
+)
+def test_hdf5_compression_opts(tmp_path, kwargs):
+    # https://github.com/theislab/anndata/issues/497
+    pth = Path(tmp_path) / "adata.h5ad"
+    adata = gen_adata((10, 8))
+    adata.write_h5ad(pth, **kwargs)
+    assert_equal(adata, ad.read_h5ad(pth))
+
+
 def test_changed_obs_var_names(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
 

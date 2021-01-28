@@ -171,9 +171,9 @@ def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
 @report_write_key_on_error
 def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     # Can’t compress scalars, error is thrown
-    if "compression" in dataset_kwargs:
-        dataset_kwargs = dict(dataset_kwargs)
-        dataset_kwargs.pop("compression")
+    # TODO: Add more terms to filter once they're supported by dataset_kwargs
+    key_filter = {"compression", "compression_opts"}
+    dataset_kwargs = {k: v for k, v in dataset_kwargs.items() if k not in key_filter}
     write_array(f, key, np.array(value), dataset_kwargs=dataset_kwargs)
 
 

@@ -132,6 +132,12 @@ def gen_adata(
     )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
+        nested=dict(
+            scalar_str="str",
+            scalar_int=42,
+            scalar_float=3.0,
+            nested_further=dict(array=np.arange(5)),
+        ),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     adata = AnnData(
