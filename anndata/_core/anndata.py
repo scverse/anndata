@@ -669,9 +669,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             oidx, vidx = self._oidx, self._vidx
         if (
             np.isscalar(value)
+            or (hasattr(value, "shape") and (self.shape == value.shape))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
-            or self.shape == value.shape
         ):
             if not np.isscalar(value) and self.shape != value.shape:
                 # For assigning vector of values to 2d array or matrix
