@@ -571,28 +571,3 @@ def test_copy():
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
         for key in map_sprs.keys():
             assert_eq_not_id(map_sprs[key], map_copy[key])
-
-
-def test_x_is_none():
-    # test setter and getter
-    adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
-    adata.X = None
-    assert adata.X is None
-
-    # test setter and deleter
-    adata.X = np.array([[4, 5, 6], [1, 2, 3]])
-    assert adata.X is not None
-    del adata.X
-    assert adata.X is None
-
-    # test initialiser
-    shape = (3, 5)
-    adata = AnnData(None, uns=dict(test=np.array((3, 3))), shape=shape)
-    assert adata.X is None
-    assert adata.shape == shape
-
-    # test transpose
-    adataT = adata.transpose()
-    assert_equal(adataT.shape, (5, 3))
-    assert_equal(adataT.obsp.keys(), adata.varp.keys())
-    assert_equal(adataT.T, adata)
