@@ -82,9 +82,9 @@ def write_csvs(
 def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
-    row_attrs["var_names"] = adata.var_names.values
+    row_attrs["Gene"] = adata.var_names.values
     col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict("list").items()}
-    col_attrs["obs_names"] = adata.obs_names.values
+    col_attrs["CellID"] = adata.obs_names.values
 
     if adata.X is None:
         raise ValueError("loompy does not accept empty matrices as data")
