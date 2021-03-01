@@ -76,7 +76,10 @@ test = [
 ]
 
 [tool.flit.sdist]
-exclude = ['anndata/tests']
+exclude = [
+    'anndata/tests',
+    'setup.py',
+]
 
 [tool.coverage.run]
 source = ['anndata']
