@@ -1,5 +1,7 @@
 dist: xenial
 language: python
+git:
+  depth: false  # Version detection needs all info
 cache: pip
 branches:
   only:
