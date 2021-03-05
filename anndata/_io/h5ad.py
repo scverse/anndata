@@ -4,7 +4,7 @@ from functools import _find_impl, partial
 from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Type, TypeVar, Union
+from typing import Callable, Type, TypeVar, Union, IO
 from typing import Collection, Sequence, Mapping
 
 import h5py
@@ -349,7 +349,7 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
 
 
 def read_h5ad(
-    filename: Union[str, Path],
+    filename: Union[str, Path, IO[bytes]],
     backed: Union[Literal["r", "r+"], bool, None] = None,
     *,
     as_sparse: Sequence[str] = (),
@@ -362,7 +362,7 @@ def read_h5ad(
     Parameters
     ----------
     filename
-        File name of data file.
+        Data file to read. Needs to be a string or path for `backed` mode.
     backed
         If `'r'`, load :class:`~anndata.AnnData` in `backed` mode
         instead of fully loading it into memory (`memory` mode).
@@ -385,6 +385,8 @@ def read_h5ad(
         if mode is True:
             mode = "r+"
         assert mode in {"r", "r+"}
+        if not isinstance(filename, (str, Path)):
+            raise ValueError("Filename needs to be a `str` or `Path` in backed mode")
         return read_h5ad_backed(filename, mode)
 
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):
