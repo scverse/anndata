@@ -44,7 +44,7 @@ from .views import (
 from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
-from ..html_repr import make_single_column_table, make_single_row_table
+from ..html_repr import make_single_column_table, make_single_row_table, svg_anndata
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
@@ -589,13 +589,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return self._gen_repr(self.n_obs, self.n_vars)
 
 
-    def _repr_html_(self) -> str:
-        html = ""
+    def _repr_html_(self) -> str:    
+        overview = []
+        
         if self.is_view:
-            html += "View of: <br>"
-        backed_at = ("", f" backed at {str(self.filename)!r}")[self.isbacked]
-        html += f"<b>AnnData object</b> with <em>n_obs × n_vars</em> = {self.n_obs} × {self.n_vars}{backed_at}"
-        cols = []
+            overview.append("is a view")
+
+        overview.append(f"n_obs: {self.n_obs}")
+        overview.append(f"n_vars: {self._n_vars}")
+        overview.append(svg_anndata(self.n_obs,self.n_vars))
+
+        cols = [make_single_column_table("AnnData object", overview)]
+        
         for attr in [
             "obs",
             "var",
@@ -608,10 +613,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ]:
             keys = getattr(self, attr).keys()
             if len(keys):
-                cols.append(self._make_single_column_table(attr, keys))
-        if len(cols):
-            html += self.make_single_row_table(cols) 
-        return html
+                cols.append(make_single_column_table(attr, keys))
+        
+        return(make_single_row_table(cols))
 
 
     def __eq__(self, other):
