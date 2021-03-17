@@ -3,6 +3,7 @@ import math
 import re
 import numpy as np
 
+
 def make_single_column_table(heading: str, entries: Iterable[str]) -> str:
     table = f"""
         <table>
@@ -17,11 +18,12 @@ def make_single_column_table(heading: str, entries: Iterable[str]) -> str:
                     <td>{entry}</td>
                 </tr>
                 """
-    table +=  """
+    table += """
             </tbody>
         </table>
-    """  
+    """
     return table
+
 
 def make_single_row_table(entries: Iterable[str]) -> str:
     table = f"""
@@ -31,15 +33,16 @@ def make_single_row_table(entries: Iterable[str]) -> str:
             """
     for entry in entries:
         table += f"""<td style="vertical-align:top">{entry}</td>"""
-    table +=  """
+    table += """
                 </tr>
             </tbody>
         </table>
     """
     return table
 
+
 # much of the svg code below is copied or adapted
-# from the dask project 
+# from the dask project
 # https://github.com/dask/dask/blob/main/dask/array/svg.py
 
 
@@ -57,9 +60,9 @@ def svg_anndata(n_obs, n_var, size=200, sizes=None):
     )
     footer = "\n</svg>"
 
-    #if shape[0] >= 100:
+    # if shape[0] >= 100:
     #    rotate = -90
-    #else:
+    # else:
     rotate = 0
 
     text = [
@@ -72,7 +75,6 @@ def svg_anndata(n_obs, n_var, size=200, sizes=None):
     ]
 
     return header + "\n".join(lines + text) + footer
-
 
 
 def svg_lines(x1, y1, x2, y2):
@@ -105,9 +107,9 @@ def svg_box(w, h, size=200):
         translational displacement of the grid in SVG coordinates
     """
 
-    x = np.array((0,w))
-    y = np.array((0,h))
-    
+    x = np.array((0, w))
+    y = np.array((0, h))
+
     # Horizontal lines
     x1 = np.zeros_like(y)
     y1 = y
@@ -117,14 +119,14 @@ def svg_box(w, h, size=200):
     h_lines = ["", "  <!-- Horizontal lines -->"] + svg_lines(x1, y1, x2, y2)
 
     # Vertical lines
-    x1 = x 
-    y1 = np.zeros_like(x) 
-    x2 = x 
+    x1 = x
+    y1 = np.zeros_like(x)
+    x2 = x
     y2 = np.full_like(x, y[-1])
 
     v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
 
-    color = "ECB172" # if len(x) < max_n and len(y) < max_n else "8B4903"
+    color = "ECB172"  # if len(x) < max_n and len(y) < max_n else "8B4903"
     corners = f"{x1[0]},{y1[0]} {x1[-1]},{y1[-1]} {x2[-1]},{y2[-1]} {x2[0]},{y2[0]}"
     rect = [
         "",
