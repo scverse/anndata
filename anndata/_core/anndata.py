@@ -1270,6 +1270,37 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def __len__(self) -> int:
         return self.shape[0]
 
+    def sum_by(self, group_list: List) -> "AnnData":
+        """
+        Group observations by the columns names in `group_list` and sum expression in `X`.
+
+        Params
+        -------
+        group_list: List of columns names in `.obs` to group observations by.
+
+        Returns
+        -------
+        A new `AnnData` where `obs` are individual groups and `X` is summed by group.
+        """
+        groupy_object = self.obs.groupby(group_list, observed=True)
+        N_obs = groupy_object.ngroups
+        N_var = self.X.shape[1]
+        X = sparse.lil_matrix((N_obs, N_var))
+        
+        group_names = []
+        index_names = []
+        row = 0
+        for group_columns, idx_ in groupy_object.indices.items():
+            X[row] = self.X[idx_].sum(0)
+            row += 1
+            group_names.append(group_columns)
+            index_names.append('-'.join(map(str, group_columns)))
+
+        X = X.tocsr()
+        obs = pd.DataFrame(group_names, columns=group_list, index=index_names)
+
+        return AnnData(X=X, obs=obs, var=self.var)
+    
     def transpose(self) -> "AnnData":
         """\
         Transpose whole object.
