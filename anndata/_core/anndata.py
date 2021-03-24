@@ -1272,7 +1272,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def sum_by(self, group_list: List) -> "AnnData":
         """
-        Group observations by the columns names in `group_list` and sum expression in `X`.
+        Group observations by the columns names in `group_list` and sum expression in `.X`.
 
         Params
         -------
@@ -1280,26 +1280,36 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Returns
         -------
-        A new `AnnData` where `obs` are individual groups and `X` is summed by group.
+        A new `AnnData` where `.obs` are individual groups and `.X` is summed by group.
         """
         groupy_object = self.obs.groupby(group_list, observed=True)
+
+        if not self.isbacked:
+            X = self.X
+        else:
+            X = self.file["X"]
+
         N_obs = groupy_object.ngroups
-        N_var = self.X.shape[1]
-        X = sparse.lil_matrix((N_obs, N_var))
+        N_var = X.shape[1]
+        X_summed = sparse.lil_matrix((N_obs, N_var))
         
         group_names = []
         index_names = []
         row = 0
         for group_columns, idx_ in groupy_object.indices.items():
-            X[row] = self.X[idx_].sum(0)
+            X_summed[row] = X[idx_].sum(0)
             row += 1
             group_names.append(group_columns)
             index_names.append('-'.join(map(str, group_columns)))
 
-        X = X.tocsr()
+        if sparse.isspmatrix_csr(X):
+            X_summed = X_summed.tocsr()
+        else:
+            X_summed = np.array(X_summed.todense())
+
         obs = pd.DataFrame(group_names, columns=group_list, index=index_names)
 
-        return AnnData(X=X, obs=obs, var=self.var)
+        return AnnData(X=X_summed, obs=obs, var=self.var)
     
     def transpose(self) -> "AnnData":
         """\
