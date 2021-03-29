@@ -2,10 +2,10 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from .index import _normalize_indices, Index
-from .views import _resolve_idx
-from .merge import concat_arrays
-from ..logging import anndata_logger as logger
+from ..._core.index import _normalize_indices, Index
+from ..._core.views import _resolve_idx
+from ..._core.merge import concat_arrays
+from ...logging import anndata_logger as logger
 
 
 def _merge(arrs):
@@ -53,7 +53,7 @@ class MapObsView:
 
     def __getitem__(self, key):
         if key not in self.keys:
-            raise KeyError(f'No {key} in {self.attr} view')
+            raise KeyError(f"No {key} in {self.attr} view")
 
         arrs = []
         for i, oidx in enumerate(self.adatas_oidx):
@@ -87,7 +87,7 @@ class AnnDataConcatView(_ConcatViewMixin):
                 attr + "_view",
                 MapObsView(
                     attr, adatas, keys, self.adatas_oidx, self.reverse, set_vidx
-                )
+                ),
             )
 
         self._attrs_keys = attrs_keys

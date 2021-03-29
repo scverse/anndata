@@ -1,6 +1,6 @@
 from sklearn.preprocessing import LabelEncoder
 from scipy.sparse import issparse
-from .._core.anndata import AnnData
+from ..._core.anndata import AnnData
 import warnings
 
 try:
