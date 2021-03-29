@@ -2,6 +2,7 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
+from ..._core.anndata import AnnData
 from ..._core.index import _normalize_indices, Index
 from ..._core.views import _resolve_idx
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
@@ -68,12 +69,20 @@ class MapObsView:
 
         return _arr[self.reverse] if self.reverse is not None else _arr
 
-    def __repr__(self):
+    def keys(self):
         if self._keys is not None:
-            keys = self._keys
+            return self._keys
         else:
-            keys = list(getattr(self.adatas[0], self.attr).keys())
-        descr = f"View of {self.attr} with keys: {str(keys)[1:-1]}"
+            return list(getattr(self.adatas[0], self.attr).keys())
+
+    def to_dict(self):
+        dct = {}
+        for key in self.keys():
+            dct[key] = self[key]
+        return dct
+
+    def __repr__(self):
+        descr = f"View of {self.attr} with keys: {str(self.keys())[1:-1]}"
         return descr
 
 
@@ -92,7 +101,11 @@ class AnnDataConcatView(_ConcatViewMixin):
         self._view_attrs_keys = self.reference._view_attrs_keys
         self._attrs = self.reference._attrs
 
+        self.layers_view, self.obsm_view, self.obs_view = None, None, None
+
         for attr, keys in self._view_attrs_keys.items():
+            if len(keys) == 0:
+                continue
             set_vidx = self.vidx if attr == "layers" else None
             setattr(
                 self,
@@ -157,6 +170,16 @@ class AnnDataConcatView(_ConcatViewMixin):
             if len(keys) > 0:
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
+
+    def to_adata(self):
+        layers = None if self.layers_view is None else self.layers_view.to_dict()
+        obsm = None if self.obsm_view is None else self.obsm_view.to_dict()
+        obs = None if self.obs_view is None else self.obs_view.to_dict()
+
+        adata = AnnData(self.X, obs=obs, obsm=obsm, layers=layers)
+        adata.obs_names = self.obs_names
+        adata.var_names = self.var_names
+        return adata
 
 
 class AnnDataConcatObs(_ConcatViewMixin):
@@ -263,6 +286,25 @@ class AnnDataConcatObs(_ConcatViewMixin):
     @property
     def shape(self):
         return self.limits[-1], self.adatas[0].n_vars
+
+    def to_adata(self):
+        if "obs" in self._view_attrs_keys or "obsm" in self._view_attrs_keys:
+            concat_view = self[self.obs_names]
+
+        if "obsm" in self._view_attrs_keys:
+            obsm = concat_view.obsm.to_dict() if concat_view.obsm is not None else None
+        else:
+            obsm = self.obsm.copy()
+
+        obs = self.obs.copy()
+        if "obs" in self._view_attrs_keys and concat_view.obs is not None:
+            for key, value in concat_view.obs.to_dict().items():
+                obs[key] = value
+
+        adata = AnnData(X=None, obs=obs, obsm=obsm, shape=self.shape)
+        adata.obs_names = self.obs_names
+        adata.var_names = self.var_names
+        return adata
 
     def __repr__(self):
         n_obs, n_vars = self.shape
