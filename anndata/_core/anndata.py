@@ -1292,7 +1292,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         N_obs = groupy_object.ngroups
         N_var = X.shape[1]
         X_summed = sparse.lil_matrix((N_obs, N_var))
-        
+
         group_names = []
         index_names = []
         row = 0
@@ -1300,7 +1300,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X_summed[row] = X[idx_].sum(0)
             row += 1
             group_names.append(group_columns)
-            index_names.append('-'.join(map(str, group_columns)))
+            index_names.append("-".join(map(str, group_columns)))
 
         if sparse.isspmatrix_csr(X):
             X_summed = X_summed.tocsr()
@@ -1310,7 +1310,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs = pd.DataFrame(group_names, columns=group_list, index=index_names)
 
         return AnnData(X=X_summed, obs=obs, var=self.var)
-    
+
     def transpose(self) -> "AnnData":
         """\
         Transpose whole object.
