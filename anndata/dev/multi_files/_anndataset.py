@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from functools import reduce
 import numpy as np
 import pandas as pd
 
@@ -127,6 +128,7 @@ class AnnDataConcatView(_ConcatViewMixin):
         Xs = []
         for i, oidx in enumerate(self.adatas_oidx):
             if oidx is not None:
+                # maybe check vidx is in increasing order like with oidx
                 Xs.append(self.adatas[i].X[oidx, self.vidx])
 
         _X = _merge(Xs)
@@ -198,6 +200,7 @@ class AnnDataConcatObs(_ConcatViewMixin):
         adatas,
         join_obs="inner",
         join_obsm=None,
+        join_vars=None,
         label=None,
         keys=None,
         index_unique=None,
@@ -211,6 +214,26 @@ class AnnDataConcatObs(_ConcatViewMixin):
             keys, adatas = list(adatas.keys()), list(adatas.values())
         else:
             adatas = list(adatas)
+
+        if len(adatas) < 2:
+            raise ValueError("Adatas should have the length greater than 1.")
+
+        # check if the variables are the same in all adatas
+        # inefficient solution for backed Xs of (views of) adatas with different vars
+        # todo: proper handling of this case
+        vars_names_list = [adata.var_names for adata in adatas]
+        vars_eq = all([adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:]])
+        if vars_eq:
+            self.var_names = adatas[0].var_names
+        elif join_vars == "inner":
+            var_names = reduce(pd.Index.intersection, vars_names_list)
+            adatas = [adata[:, var_names] for adata in adatas]
+            self.var_names = var_names
+        else:
+            raise ValueError(
+                "Adatas have different variables. "
+                "Please specify join_vars='inner' for intersection."
+            )
 
         if keys is None:
             keys = np.arange(len(adatas)).astype(str)
