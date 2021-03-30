@@ -87,40 +87,40 @@ class MapObsView:
 
 
 class AnnDataConcatView(_ConcatViewMixin):
-    def __init__(self, reference, resolved_idx, obs_names, var_names):
+    def __init__(self, reference, resolved_idx):
         self.reference = reference
 
         self.adatas = self.reference.adatas
         self.limits = self.reference.limits
-
-        self.obs_names = obs_names
-        self.var_names = var_names
 
         self.adatas_oidx, self.oidx, self.vidx, self.reverse = resolved_idx
 
         self._view_attrs_keys = self.reference._view_attrs_keys
         self._attrs = self.reference._attrs
 
-        self.layers_view, self.obsm_view, self.obs_view = None, None, None
+        self._layers_view, self._obsm_view, self._obs_view = None, None, None
 
-        for attr, keys in self._view_attrs_keys.items():
+    def _lazy_init_attr(self, attr, set_vidx=False):
+        if getattr(self, f"_{attr}_view") is not None:
+            return
+        keys = None
+        reverse = None
+        if attr in self._view_attrs_keys:
+            keys = self._view_attrs_keys[attr]
             if len(keys) == 0:
-                continue
-            set_vidx = self.vidx if attr == "layers" else None
-            setattr(
-                self,
-                attr + "_view",
-                MapObsView(
-                    attr, self.adatas, keys, self.adatas_oidx, self.reverse, set_vidx
-                ),
-            )
-        # non-view attrs
-        for attr in self._attrs:
-            setattr(
-                self,
-                attr + "_view",
-                MapObsView(attr, [self.reference], None, [self.oidx], None),
-            )
+                return
+            adatas = self.adatas
+            adatas_oidx = self.adatas_oidx
+            reverse = self.reverse
+        else:
+            adatas = [self.reference]
+            adatas_oidx = [self.oidx]
+        vidx = self.vidx if set_vidx else None
+        setattr(
+            self,
+            f"_{attr}_view",
+            MapObsView(attr, adatas, keys, adatas_oidx, reverse, vidx),
+        )
 
     @property
     def X(self):
@@ -135,15 +135,26 @@ class AnnDataConcatView(_ConcatViewMixin):
 
     @property
     def layers(self):
-        return self.layers_view
+        self._lazy_init_attr("layers", set_vidx=True)
+        return self._layers_view
 
     @property
     def obsm(self):
-        return self.obsm_view
+        self._lazy_init_attr("obsm")
+        return self._obsm_view
 
     @property
     def obs(self):
-        return self.obs_view
+        self._lazy_init_attr("obs")
+        return self._obs_view
+
+    @property
+    def obs_names(self):
+        return self.reference.obs_names[self.oidx]
+
+    @property
+    def var_names(self):
+        return self.reference.var_names[self.vidx]
 
     @property
     def shape(self):
@@ -153,12 +164,7 @@ class AnnDataConcatView(_ConcatViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnDataConcatView(
-            self.reference,
-            resolved_idx,
-            self.obs_names[oidx],
-            self.var_names[vidx],
-        )
+        return AnnDataConcatView(self.reference, resolved_idx)
 
     def __repr__(self):
         n_obs, n_vars = self.shape
@@ -171,12 +177,16 @@ class AnnDataConcatView(_ConcatViewMixin):
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
 
-    def to_adata(self):
-        layers = None if self.layers_view is None else self.layers_view.to_dict()
-        obsm = None if self.obsm_view is None else self.obsm_view.to_dict()
-        obs = None if self.obs_view is None else self.obs_view.to_dict()
+    def to_adata(self, ignore_X=False, ignore_layers=False):
+        if ignore_layers or self.layers is None:
+            layers = None
+        else:
+            layers = self.layers.to_dict()
+        obsm = None if self.obsm is None else self.obsm.to_dict()
+        obs = None if self.obs is None else self.obs.to_dict()
+        X = None if ignore_X else self.X
 
-        adata = AnnData(self.X, obs=obs, obsm=obsm, layers=layers)
+        adata = AnnData(X, obs=obs, obsm=obsm, layers=layers, shape=self.shape)
         adata.obs_names = self.obs_names
         adata.var_names = self.var_names
         return adata
@@ -279,9 +289,7 @@ class AnnDataConcatObs(_ConcatViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnDataConcatView(
-            self, resolved_idx, self.obs_names[oidx], self.var_names[vidx]
-        )
+        return AnnDataConcatView(self, resolved_idx)
 
     @property
     def shape(self):
