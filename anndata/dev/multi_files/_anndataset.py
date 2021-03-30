@@ -128,11 +128,23 @@ class AnnDataConcatView(_ConcatViewMixin):
         Xs = []
         for i, oidx in enumerate(self.adatas_oidx):
             if oidx is not None:
-                # todo: proper handling of backed views
-                # maybe check vidx is in increasing order like with oidx
-                Xs.append(self.adatas[i].X[oidx, self.vidx])
+                adata = self.adatas[i]
+                if adata.is_view and adata.isbacked:
+                    adata_ref = adata._adata_ref
+                    vidx = _resolve_idx(adata._vidx, self.vidx, adata_ref.n_vars)
+                    X = adata_ref.X
+                else:
+                    vidx = self.vidx
+                    X = adata.X
 
-        _X = _merge(Xs)
+                try:
+                    Xs.append(X[oidx, vidx])
+                except TypeError:
+                    # only one indexing array is allowed for advanced selection
+                    # very inefficient, needs to be fixed
+                    Xs.append(X[oidx][:, vidx])
+
+        _X = _merge(Xs) if len(Xs) > 1 else Xs[0]
 
         return _X[self.reverse] if self.reverse is not None else _X
 
@@ -161,7 +173,7 @@ class AnnDataConcatView(_ConcatViewMixin):
 
     @property
     def shape(self):
-        return len(self.oidx), len(self.var_names)
+        return len(self.obs_names), len(self.var_names)
 
     def __getitem__(self, index: Index):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
@@ -220,8 +232,6 @@ class AnnDataConcatObs(_ConcatViewMixin):
             raise ValueError("Adatas should have the length greater than 1.")
 
         # check if the variables are the same in all adatas
-        # inefficient solution for backed Xs of (views of) adatas with different vars
-        # todo: proper handling of this case
         vars_names_list = [adata.var_names for adata in adatas]
         vars_eq = all([adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:]])
         if vars_eq:
