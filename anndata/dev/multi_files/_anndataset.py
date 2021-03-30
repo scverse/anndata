@@ -128,6 +128,7 @@ class AnnDataConcatView(_ConcatViewMixin):
         Xs = []
         for i, oidx in enumerate(self.adatas_oidx):
             if oidx is not None:
+                # todo: proper handling of backed views
                 # maybe check vidx is in increasing order like with oidx
                 Xs.append(self.adatas[i].X[oidx, self.vidx])
 
@@ -337,9 +338,14 @@ class AnnDataConcatObs(_ConcatViewMixin):
         adata.var_names = self.var_names
         return adata
 
+    @property
+    def isbacked(self):
+        return any([adata.isbacked for adata in self.adatas])
+
     def __repr__(self):
         n_obs, n_vars = self.shape
         descr = f"AnnDataConcatObs object with n_obs × n_vars = {n_obs} × {n_vars}"
+        descr += f"\n  constructed from {len(self.adatas)} AnnData objects"
         for attr, keys in self._view_attrs_keys.items():
             if len(keys) > 0:
                 descr += f"\n    view of {attr}: {str(keys)[1:-1]}"
