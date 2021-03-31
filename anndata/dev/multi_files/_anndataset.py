@@ -30,7 +30,7 @@ class _ConcatViewMixin:
             start, stop, step = oidx.indices(self.limits[-1])
             u_oidx = np.arange(start, stop, step)
         else:
-            if oidx.size > 1 and not np.all(np.diff(oidx) > 0):
+            if self.has_backed and oidx.size > 1 and not np.all(np.diff(oidx) > 0):
                 u_oidx, reverse = np.unique(oidx, return_inverse=True)
             else:
                 u_oidx = oidx
@@ -180,6 +180,13 @@ class AnnDataConcatView(_ConcatViewMixin):
         resolved_idx = self._resolve_idx(oidx, vidx)
 
         return AnnDataConcatView(self.reference, resolved_idx)
+
+    @property
+    def has_backed(self):
+        for i, adata in enumerate(self.adatas):
+            if adata.isbacked and self.adatas_oidx[i] is not None:
+                return True
+        return False
 
     def __repr__(self):
         n_obs, n_vars = self.shape
@@ -349,7 +356,7 @@ class AnnDataConcatObs(_ConcatViewMixin):
         return adata
 
     @property
-    def isbacked(self):
+    def has_backed(self):
         return any([adata.isbacked for adata in self.adatas])
 
     def __repr__(self):
