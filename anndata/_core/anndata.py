@@ -18,7 +18,7 @@ from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.api.types import is_string_dtype, is_categorical_dtype
+from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
 from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
 
@@ -1208,7 +1208,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             string_cols = [
                 key
                 for key in df.columns
-                if is_string_dtype(df[key]) and not is_categorical_dtype(df[key])
+                if infer_dtype(df[key]) == "string"
             ]
             for key in string_cols:
                 # make sure we only have strings
