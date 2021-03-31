@@ -1,0 +1,9 @@
+# auto-generated from pyproject.toml, DO NOT EDIT
+pandas>=1.1.1
+numpy>=1.16.5
+scipy~=1.0
+h5py
+natsort
+packaging>=20
+xlrd<2.0
+importlib_metadata>=0.7; python_version < "3.8"
