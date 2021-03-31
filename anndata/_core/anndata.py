@@ -1206,16 +1206,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             dfs = [df]
         for df in dfs:
             string_cols = [
-                key
-                for key in df.columns
-                if infer_dtype(df[key]) == "string"
+                key for key in df.columns if infer_dtype(df[key]) == "string"
             ]
             for key in string_cols:
                 # make sure we only have strings
                 # (could be that there are np.nans (float), -666, "-666", for instance)
                 # make a categorical
                 col = df[key]
-                c = pd.Categorical(col, categories=natsorted(pd.unique(col[col.notnull()])))
+                c = pd.Categorical(
+                    col,
+                    categories=natsorted(pd.unique(col[col.notnull()])),
+                )
                 if len(c.categories) >= len(c):
                     continue
                 if dont_modify:
