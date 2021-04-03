@@ -1209,16 +1209,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 key for key in df.columns if infer_dtype(df[key]) == "string"
             ]
             for key in string_cols:
-                # make sure we only have strings
-                # (could be that there are np.nans (float), -666, "-666", for instance)
-                # make a categorical
-                col = df[key]
-                c = pd.Categorical(
-                    col,
-                    categories=natsorted(pd.unique(col[col.notnull()])),
-                )
+                c = pd.Categorical(df[key])
+                # TODO: We should only check if non-null values are unique, but
+                # this would break cases where string columns with nulls could
+                # be written as categorical, but not as string.
+                # Possible solution: https://github.com/theislab/anndata/issues/504
                 if len(c.categories) >= len(c):
                     continue
+                c.reorder_categories(natsorted(c.categories), inplace=True)
                 if dont_modify:
                     raise RuntimeError(
                         "Please call `.strings_to_categoricals()` on full "
