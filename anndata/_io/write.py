@@ -16,7 +16,7 @@ from .h5ad import write_h5ad as _write_h5ad
 
 try:
     from .zarr import write_zarr
-except ImportError as e:
+except ImportError as e:  # noqa: F841  # TODO: Is there a better way?
 
     def write_zarr(*_, **__):
         raise e

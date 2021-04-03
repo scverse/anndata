@@ -1740,7 +1740,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             pairwise=False,
         )
 
-        ### Backwards compat (some of this could be more efficient)
+        # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
         out.obs = concat(
             [AnnData(sparse.csr_matrix(a.shape), obs=a.obs) for a in all_adatas],
