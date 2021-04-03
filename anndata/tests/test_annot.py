@@ -40,6 +40,6 @@ def test_non_str_to_not_categorical():
     assert expected_dtypes == result_dtypes
 
     expected_non_transformed = obs.drop(columns=["str_with_nan"])
-    result_non_trasnformed = adata.obs.drop(columns=["str_with_nan"])
+    result_non_transformed = adata.obs.drop(columns=["str_with_nan"])
 
-    pd.testing.assert_frame_equal(expected_non_transformed, result_non_trasnformed)
+    pd.testing.assert_frame_equal(expected_non_transformed, result_non_transformed)
