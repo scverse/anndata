@@ -128,15 +128,16 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
+    assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
     assert is_categorical_dtype(adata.raw.var["vanno2"])
-    assert np.all(adata.obs == adata_src.obs)
-    assert np.all(adata.var == adata_src.var)
+    pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
+    pd.testing.assert_frame_equal(adata.var, adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
     assert type(adata.raw.X) is type(adata_src.raw.X)
     assert type(adata.raw.varm) is type(adata_src.raw.varm)
     assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
-    assert np.all(adata.raw.var == adata_src.raw.var)
+    pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
     assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
@@ -157,9 +158,10 @@ def test_readwrite_zarr(typ, tmp_path):
     assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
+    assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
     assert is_categorical_dtype(adata.raw.var["vanno2"])
-    assert np.all(adata.obs == adata_src.obs)
-    assert np.all(adata.var == adata_src.var)
+    pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
+    pd.testing.assert_frame_equal(adata.var, adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
     assert type(adata.raw.X) is type(adata_src.raw.X)

@@ -18,7 +18,7 @@ from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.api.types import is_string_dtype, is_categorical_dtype
+from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
 from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
 
@@ -1206,18 +1206,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             dfs = [df]
         for df in dfs:
             string_cols = [
-                key
-                for key in df.columns
-                if is_string_dtype(df[key]) and not is_categorical_dtype(df[key])
+                key for key in df.columns if infer_dtype(df[key]) == "string"
             ]
             for key in string_cols:
-                # make sure we only have strings
-                # (could be that there are np.nans (float), -666, "-666", for instance)
-                c = df[key].astype("U")
-                # make a categorical
-                c = pd.Categorical(c, categories=natsorted(np.unique(c)))
+                c = pd.Categorical(df[key])
+                # TODO: We should only check if non-null values are unique, but
+                # this would break cases where string columns with nulls could
+                # be written as categorical, but not as string.
+                # Possible solution: https://github.com/theislab/anndata/issues/504
                 if len(c.categories) >= len(c):
                     continue
+                c.reorder_categories(natsorted(c.categories), inplace=True)
                 if dont_modify:
                     raise RuntimeError(
                         "Please call `.strings_to_categoricals()` on full "
