@@ -9,6 +9,7 @@ On master
 - Fixed bug where `np.str_` column names errored at write time :pr:`457` :smaller:`I Virshup`
 - Fixed "value.index does not match parent’s axis 0/1 names" error triggered when a data frame is stored in obsm/varm after obs_names/var_names is updated :pr:`461` :smaller:`G Eraslan`
 - Fixed `adata.write_csvs` when `adata` is a view :pr:`462` :smaller:`I Virshup`
+- Fixed null values being converted to strings when strings are converted to categorical :pr:`529` :smaller:`I Virshup`
 
 0.7.5 :small:`2020-11-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
