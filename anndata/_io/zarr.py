@@ -133,7 +133,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         # Must coerce np.bool_ to bool for json writing
         group[category_key].attrs["ordered"] = bool(categorical.ordered)
     else:
-        group[key] = series.values
+        write_array(group, key, series.values, dataset_kwargs=dataset_kwargs)
 
 
 @report_write_key_on_error
@@ -183,25 +183,25 @@ def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
 
 # TODO: Figure out what to do with dataset_kwargs for these
 @report_write_key_on_error
-def write_csr(f, key, value, dataset_kwargs=MappingProxyType({})):
+def write_csr(f, key, value: sparse.csr_matrix, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csr_matrix"
     group.attrs["encoding-version"] = EncodingVersions.csr_matrix.value
     group.attrs["shape"] = value.shape
-    group["data"] = value.data
-    group["indices"] = value.indices
-    group["indptr"] = value.indptr
+    write_array(group, "data", value.data, dataset_kwargs=dataset_kwargs)
+    write_array(group, "indices", value.indices, dataset_kwargs=dataset_kwargs)
+    write_array(group, "indptr", value.indptr, dataset_kwargs=dataset_kwargs)
 
 
 @report_write_key_on_error
-def write_csc(f, key, value, dataset_kwargs=MappingProxyType({})):
+def write_csc(f, key, value: sparse.csc_matrix, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
     group.attrs["encoding-type"] = "csc_matrix"
     group.attrs["encoding-version"] = EncodingVersions.csc_matrix.value
     group.attrs["shape"] = value.shape
-    group["data"] = value.data
-    group["indices"] = value.indices
-    group["indptr"] = value.indptr
+    write_array(group, "data", value.data, dataset_kwargs=dataset_kwargs)
+    write_array(group, "indices", value.indices, dataset_kwargs=dataset_kwargs)
+    write_array(group, "indptr", value.indptr, dataset_kwargs=dataset_kwargs)
 
 
 def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
