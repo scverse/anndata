@@ -1,6 +1,6 @@
 from pathlib import Path
 from os import PathLike, fspath
-from typing import Union, Optional, Mapping
+from typing import Union, Optional, Mapping, Tuple
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
@@ -8,6 +8,7 @@ import bz2
 
 import h5py
 import numpy as np
+import pandas as pd
 
 from .. import AnnData
 from .utils import is_float
@@ -143,6 +144,26 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
+def _fmt_loom_axis_attrs(
+    input: Mapping, idx_name: str, mapped_names: Mapping[str, Iterable[str]]
+) -> Tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
+    axis_df = pd.DataFrame()
+    axis_mapping = {}
+    for key, names in mapped_names.items():
+        axis_mapping[key] = np.array([input.pop(name) for name in names]).T
+
+    for k, v in input.items():
+        if v.ndim > 1 and v.shape[1] > 1:
+            axis_mapping[k] = v
+        else:
+            axis_df[k] = v
+
+    if idx_name in axis_df:
+        axis_df.set_index(idx_name, drop=True, inplace=True)
+
+    return axis_df, axis_mapping
+
+
 def read_loom(
     filename: PathLike,
     sparse: bool = True,
@@ -180,7 +201,7 @@ def read_loom(
         Loompy keys which will be constructed into observation matrices
     var_names
         Loompy key where the variable/gene names are stored.
-    obsm_names
+    varm_names
         Loompy keys which will be constructed into variable matrices
     **kwargs:
         Arguments to loompy.connect
@@ -209,31 +230,9 @@ def read_loom(
                     else lc.layers[key][()].T
                 )
 
-        obs = dict(lc.col_attrs)
-
-        obsm = {}
-        for key, names in obsm_names.items():
-            obsm[key] = np.array([obs.pop(name) for name in names]).T
-
-        if obs_names in obs.keys():
-            obs["obs_names"] = obs.pop(obs_names)
-        obsm_attrs = [k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1]
-
-        for key in obsm_attrs:
-            obsm[key] = obs.pop(key)
-
-        var = dict(lc.row_attrs)
-
-        varm = {}
-        for key, names in varm_names.items():
-            varm[key] = np.array([var.pop(name) for name in names]).T
-
-        if var_names in var.keys():
-            var["var_names"] = var.pop(var_names)
-        varm_attrs = [k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1]
-
-        for key in varm_attrs:
-            varm[key] = var.pop(key)
+        # TODO: Figure out the singleton obs elements
+        obs, obsm = _fmt_loom_axis_attrs(dict(lc.col_attrs), obs_names, obsm_names)
+        var, varm = _fmt_loom_axis_attrs(dict(lc.row_attrs), var_names, varm_names)
 
         uns = {}
         if cleanup:

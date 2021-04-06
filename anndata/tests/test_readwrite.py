@@ -348,18 +348,26 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
 @pytest.mark.parametrize("varm_names", [{}, dict(X_composed2=["vanno3", "vanno4"])])
 def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
     X = typ(X_list)
+    obs_dim = "meaningful_obs_dim_name"
+    var_dim = "meaningful_var_dim_name"
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_src.obs_names.name = obs_dim
+    adata_src.var_names.name = var_dim
     adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
     adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
+
     adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
 
     adata = ad.read_loom(
         tmp_path / "test.loom",
         sparse=typ is csr_matrix,
         obsm_names=obsm_names,
+        obs_names=obs_dim,
         varm_names=varm_names,
+        var_names=var_dim,
         cleanup=True,
     )
+
     if isinstance(X, np.ndarray):
         assert np.allclose(adata.X, X)
     else:
@@ -374,6 +382,8 @@ def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
         assert k in adata.obsm_keys() and adata.obsm[k].shape[1] == len(v)
     for k, v in varm_names.items():
         assert k in adata.varm_keys() and adata.varm[k].shape[1] == len(v)
+    assert adata.obs_names.name == obs_dim
+    assert adata.var_names.name == var_dim
 
 
 def test_read_csv():

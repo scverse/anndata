@@ -82,9 +82,13 @@ def write_csvs(
 def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
-    row_attrs["var_names"] = adata.var_names.values
+    row_names = adata.var_names
+    row_dim = row_names.name if row_names.name is not None else "var_names"
+    row_attrs[row_dim] = row_names.values
     col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict("list").items()}
-    col_attrs["obs_names"] = adata.obs_names.values
+    col_names = adata.obs_names
+    col_dim = col_names.name if col_names.name is not None else "obs_names"
+    col_attrs[col_dim] = col_names.values
 
     if adata.X is None:
         raise ValueError("loompy does not accept empty matrices as data")
