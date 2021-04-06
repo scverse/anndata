@@ -139,6 +139,19 @@ def test_backing(adata, tmp_path, backing_h5ad):
     adata_subset.write()
 
 
+def test_backing_copy(adata, tmp_path, backing_h5ad):
+    adata.filename = backing_h5ad
+    adata.write()
+
+    copypath = tmp_path / "test.copy.h5ad"
+    copy = adata.copy(copypath)
+
+    assert adata.filename == backing_h5ad
+    assert copy.filename == copypath
+    assert adata.isbacked
+    assert copy.isbacked
+
+
 # TODO: Also test updating the backing file inplace
 def test_backed_raw(tmp_path):
     backed_pth = tmp_path / "backed.h5ad"
