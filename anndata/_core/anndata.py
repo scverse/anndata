@@ -9,6 +9,7 @@ from enum import Enum
 from functools import partial, singledispatch
 from pathlib import Path
 from os import PathLike
+from textwrap import dedent
 from typing import Any, Union, Optional  # Meta
 from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
 from typing import Tuple, List  # Generic
@@ -827,13 +828,23 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             value = pd.Index(value)
             if not isinstance(value.name, (str, type(None))):
                 value.name = None
-        if not isinstance(value, pd.RangeIndex) and not isinstance(
-            value[0], (str, bytes)
+        # fmt: off
+        if (
+            not isinstance(value, pd.RangeIndex)
+            and not infer_dtype(value) in ("string", "bytes")
         ):
-            logger.warning(
-                f"AnnData expects .{attr}.index to contain strings, "
-                f"but your first indices are: {value[:2]}, …"
+            sample = list(value[: min(len(value), 5)])
+            warnings.warn(dedent(
+                f"""
+                AnnData expects .{attr}.index to contain strings, but got values like:
+                    {sample}
+
+                    Inferred to be: {infer_dtype(value)}
+                """
+                ), # noqa
+                stacklevel=2,
             )
+        # fmt: on
         return value
 
     def _set_dim_index(self, value: pd.Index, attr: str):
