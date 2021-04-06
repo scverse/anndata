@@ -4,11 +4,13 @@ from pathlib import Path
 from string import ascii_letters
 import tempfile
 
+import h5py
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy.sparse import csr_matrix, csc_matrix
+import zarr
 
 import anndata as ad
 from anndata.utils import asarray
@@ -252,20 +254,70 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
 
 
 @pytest.mark.parametrize(
-    "kwargs",
+    "compression,compression_opts",
     [
-        pytest.param({}, id="none"),
-        pytest.param({"compression": "lzf"}, id="lzf"),
-        pytest.param({"compression": "gzip"}, id="gzip"),
-        pytest.param({"compression": "gzip", "compression_opts": 8}, id="gzip-opts"),
+        (None, None),
+        ("lzf", None),
+        ("gzip", None),
+        ("gzip", 8),
     ],
 )
-def test_hdf5_compression_opts(tmp_path, kwargs):
+def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     # https://github.com/theislab/anndata/issues/497
     pth = Path(tmp_path) / "adata.h5ad"
     adata = gen_adata((10, 8))
+    kwargs = {}
+    if compression is not None:
+        kwargs["compression"] = compression
+    if compression_opts is not None:
+        kwargs["compression_opts"] = compression_opts
+    not_compressed = []
+
     adata.write_h5ad(pth, **kwargs)
+
+    def check_compressed(key, value):
+        if isinstance(value, h5py.Dataset) and value.shape != ():
+            if compression is not None and value.compression != compression:
+                not_compressed.append(key)
+            elif (
+                compression_opts is not None
+                and value.compression_opts != compression_opts
+            ):
+                not_compressed.append(key)
+
+    with h5py.File(pth) as f:
+        f.visititems(check_compressed)
+
+    if not_compressed:
+        msg = "\n\t".join(not_compressed)
+        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+
     assert_equal(adata, ad.read_h5ad(pth))
+
+
+def test_zarr_compression(tmp_path):
+    from numcodecs import Blosc
+
+    pth = str(Path(tmp_path) / "adata.zarr")
+    adata = gen_adata((10, 8))
+    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    not_compressed = []
+
+    ad._io.write_zarr(pth, adata, compressor=compressor)
+
+    def check_compressed(key, value):
+        if isinstance(value, zarr.Array) and value.shape != ():
+            if value.compressor != compressor:
+                not_compressed.append(key)
+
+    with zarr.open(str(pth), "r") as f:
+        f.visititems(check_compressed)
+
+    if not_compressed:
+        msg = "\n\t".join(not_compressed)
+        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+
+    assert_equal(adata, ad.read_zarr(pth))
 
 
 def test_changed_obs_var_names(tmp_path, diskfmt):
