@@ -467,8 +467,13 @@ def test_pickle():
 
 
 def test_to_df_dense():
-    df = adata_dense.to_df()
-    df = adata_dense.to_df(layer="test")
+    X_df = adata_dense.to_df()
+    layer_df = adata_dense.to_df(layer="test")
+
+    np.testing.assert_array_equal(adata_dense.layers["test"], layer_df.values)
+    np.testing.assert_array_equal(adata_dense.X, X_df.values)
+    pd.testing.assert_index_equal(X_df.columns, layer_df.columns)
+    pd.testing.assert_index_equal(X_df.index, layer_df.index)
 
 
 def test_convenience():

@@ -2,6 +2,7 @@ trigger:
 - master
 
 variables:
+  PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
   RUN_COVERAGE: no
 
 jobs:
@@ -10,8 +11,8 @@ jobs:
     vmImage: 'ubuntu-18.04'
   strategy:
     matrix:
-      Python37:
-        python.version: '3.7'
+      Python38:
+        python.version: '3.8'
         RUN_COVERAGE: yes
       Python36:
         python.version: '3.6'
@@ -21,11 +22,24 @@ jobs:
       versionSpec: '$(python.version)'
     displayName: 'Use Python $(python.version)'
 
+  - task: Cache@2
+    inputs:
+      key: '"python $(python.version)" | "$(Agent.OS)" | pyproject.toml'
+      restoreKeys: |
+        python | "$(Agent.OS)"
+        python
+      path: $(PIP_CACHE_DIR)
+    displayName: Cache pip packages
+
   - script: |
       python -m pip install --upgrade pip
       pip install pytest-cov wheel
       pip install .[dev,test]
     displayName: 'Install dependencies'
+
+  - script: |
+      pip list
+    displayName: 'Display installed versions'
 
   - script: |
       pytest --color=yes --junitxml=junit/test-results.xml
@@ -52,21 +66,27 @@ jobs:
 
   - script: bash <(curl -s https://codecov.io/bash)
     displayName: 'Upload to codecov.io'
+    condition: eq(variables['RUN_COVERAGE'], 'yes')
 
-- job: static_analysis
+- job: CheckBuild
   pool:
     vmImage: 'ubuntu-18.04'
   steps:
+
   - task: UsePythonVersion@0
     inputs:
       versionSpec: '3.8'
     displayName: 'Use Python 3.8'
 
-  - script: pip install 'black>=20.8b1' docutils
-    displayName: 'Install dependencies'
+  - script: |
+      python -m pip install --upgrade pip
+      pip install build twine
+    displayName: 'Install build tools and requirements'
 
-  - script: black . --check --diff
-    displayName: 'black'
+  - script: pip list
+    displayName: 'Display installed versions'
 
-  - script: rst2html.py --halt=2 README.rst >/dev/null
-    displayName: 'rst2html'
+  - script: |
+      python -m build --sdist --wheel .
+      twine check dist/*
+    displayName: 'Build & Twine check'
