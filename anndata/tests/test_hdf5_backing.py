@@ -168,30 +168,62 @@ def test_backed_raw(tmp_path):
     assert_equal(final_adata, mem_adata)
 
 
-def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
+@pytest.mark.parametrize(
+    "array_type",
+    [
+        pytest.param(asarray, id="dense_array"),
+        pytest.param(sparse.csr_matrix, id="csr_matrix"),
+    ],
+)
+def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10))
+    mem_adata = gen_adata((10, 10), X_type=array_type)
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
     mem_adata.write(backed_pth)
 
+    ### Backed view has same values as in memory view ###
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
     backed_v = backed_adata[obs_idx, var_idx]
     assert backed_v.is_view
     mem_v = mem_adata[obs_idx, var_idx]
-    assert_equal(backed_v, mem_v)  # meaningful as objects are not equivalent?
-    backed_v.write_h5ad(final_pth)
 
+    ### Value equivalent ###
+    assert_equal(mem_v, backed_v)
+    # Type and value equivalent
+    assert_equal(mem_v.copy(), backed_v.to_memory(), exact=True)
+    assert backed_v.is_view
+    assert backed_v.isbacked
+
+    ### Write from backed view ###
+    backed_v.write_h5ad(final_pth)
     final_adata = ad.read_h5ad(final_pth)
-    # todo: Figure out why this doesn’t work if I don’t copy
-    assert_equal(final_adata, mem_v.copy())
+    # TODO: Figure out why this doesn’t work if I don’t copy
+    assert_equal(mem_v.copy(), final_adata)
 
     # todo: breaks when removing this line, b/c backed_v.X is not accessible
     backed_v = ad.read_h5ad(backed_pth, backed="r")[obs_idx, var_idx]
     del final_adata.raw  # .raw is dropped when loading backed into memory.
     assert_equal(final_adata, backed_v.to_memory())  # assert loading into memory
+
+
+@pytest.mark.parametrize(
+    "array_type",
+    [
+        pytest.param(asarray, id="dense_array"),
+        pytest.param(sparse.csr_matrix, id="csr_matrix"),
+    ],
+)
+def test_to_memory_full(tmp_path, array_type):
+    backed_pth = tmp_path / "backed.h5ad"
+    mem_adata = gen_adata((15, 10), X_type=array_type)
+    mem_adata.raw = gen_adata((15, 12), X_type=array_type)
+    mem_adata.write_h5ad(backed_pth, compression="lzf")
+
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    assert_equal(mem_adata, backed_adata.to_memory())
 
 
 def test_double_index(adata, backing_h5ad):
