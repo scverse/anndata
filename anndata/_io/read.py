@@ -18,7 +18,7 @@ try:
 except ImportError as e:  # noqa: F841
 
     def read_zarr(*_, **__):
-        raise e
+        raise e  # noqa: F821  TODO: There might be a better way to go about this
 
 
 def read_csv(

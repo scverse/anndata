@@ -1,6 +1,6 @@
 from functools import singledispatch, wraps
 from string import ascii_letters
-from typing import Tuple
+from typing import Tuple, Collection, Type
 from collections.abc import Mapping
 import warnings
 
@@ -68,9 +68,9 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    obsm_types: Collection[Type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    varm_types: Collection[Type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: Collection[Type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.

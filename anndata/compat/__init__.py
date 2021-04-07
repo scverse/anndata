@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from ._overloaded_dict import _overloaded_uns, OverloadedDict
-from .._core.index import _subset
+from .._core.index import _subset, Index1D
 
 # try importing zarr, dask, and zappy
 from packaging import version
@@ -194,7 +194,7 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
     return paths
 
 
-def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs: int):
+def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: Index1D, orig_n_obs: int):
     """slice sparse spatrices of n_obs × n_obs in self.uns"""
     if isinstance(oidx, slice) and len(range(*oidx.indices(orig_n_obs))) == orig_n_obs:
         return uns  # slice of entire dimension is a no-op

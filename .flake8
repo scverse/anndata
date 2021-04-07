@@ -25,9 +25,9 @@ ignore = # module imported but unused -> required for Scanpys API
          E731,
          # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
          E741
- per-file-ignores =
+per-file-ignores =
     # F811 Redefinition of unused name from line, does not play nice with pytest fixtures
-    tests/test*.py: F811
+    anndata/tests/test*.py: F811
     # F821 Undefined name, can't import AnnData or it'd be a circular import
     anndata/compat/_overloaded_dict.py: F821
     # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)

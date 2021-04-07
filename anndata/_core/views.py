@@ -8,6 +8,7 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
+import anndata
 from .access import ElementRef
 from ..logging import anndata_logger as logger
 from ..compat import ZappyArray
@@ -44,7 +45,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+        view_args: Tuple[anndata.AnnData, str, Tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:

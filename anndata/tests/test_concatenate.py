@@ -3,6 +3,7 @@ from copy import deepcopy
 from itertools import chain, product
 from functools import partial
 import warnings
+from typing import List, Callable, Any
 
 import numpy as np
 from numpy import ma
@@ -796,7 +797,7 @@ def map_values(mapping, path, key, old_parent, new_parent, new_items):
     return ret
 
 
-def permute_nested_values(dicts: "List[dict]", gen_val: "Callable[[int], Any]"):
+def permute_nested_values(dicts: List[dict], gen_val: Callable[[int], Any]):
     """
     This function permutes the values of a nested mapping, for testing that out merge
     method work regardless of the values types.
