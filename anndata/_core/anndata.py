@@ -24,7 +24,7 @@ from scipy.sparse import issparse, csr_matrix
 
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
-from .file_backing import AnnDataFileManager
+from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -1437,31 +1437,42 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.raw.var_vector(k)
 
-    def _create_anndata(self, **kwargs):
+    def _mutated_copy(self, **kwargs):
         """Creating AnnData with attributes optionally specified via kwargs."""
+        new = {}
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
-            kwargs[key] = kwargs.pop(key, getattr(self, key).copy())
-        if "X" not in kwargs:
-            kwargs["X"] = (
-                self.X.to_memory()
-                if self.isbacked and hasattr(self.X, "to_memory")
-                else self.X.copy()
-            )
-        if "uns" not in kwargs:
-            kwargs["uns"] = (
+            if key in kwargs:
+                new[key] = kwargs[key]
+            else:
+                new[key] = getattr(self, key).copy()
+        if "X" in kwargs:
+            new["X"] = kwargs["X"]
+        elif self.is_backed:
+            new["X"] = self.X.copy()
+        if "uns" in kwargs:
+            new["uns"] = kwargs["uns"]
+        else:
+            new["uns"] = (
                 self._uns.copy()
                 if isinstance(self.uns, DictView)
                 else deepcopy(self._uns)
             )
 
-        kwargs["raw"] = kwargs.pop("raw", None)
-        if self.raw is not None:
+        if "raw" in kwargs:
+            new["raw"] = kwargs["raw"]
+        elif self.raw is not None:
             if self.isbacked:
-                warnings.warn("Dropping .raw attribute when loading into memory mode.")
+                new["raw"] = self.raw.to_adata().to_memory()
             else:
-                kwargs["raw"] = self.raw.copy()
-        kwargs["dtype"] = kwargs["X"].dtype
-        return AnnData(**kwargs)
+                new["raw"] = self.raw.copy()
+        # kwargs["raw"] = kwargs.pop("raw", None)
+        # if self.raw is not None:
+        #     if self.isbacked:
+        #         warnings.warn("Dropping .raw attribute when loading into memory mode.")
+        #     else:
+        #         kwargs["raw"] = self.raw.copy()
+        new["dtype"] = new["X"].dtype
+        return AnnData(**new)
 
     def to_memory(self) -> "AnnData":
         """Loading AnnData object into memory."""
@@ -1469,7 +1480,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             warnings.warn("Object is already in memory.")
             adata = self
         else:
-            adata = self._create_anndata()
+            elems = {"X": to_memory(self.X)}
+            if self.raw is not None:
+                elems["raw"] = {
+                    "X": to_memory(self.raw.X),
+                    "var": self.raw.var,
+                    "varm": self.raw.varm,
+                }
+            adata = self._mutated_copy(**elems)
             self.file.close()
         return adata
 
@@ -1484,7 +1502,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
             else:
                 X = self.X.copy()
-            return self._create_anndata(X=X)
+            return self._mutated_copy(X=X)
         else:
             from .._io import read_h5ad
             from .._io.write import _write_h5ad

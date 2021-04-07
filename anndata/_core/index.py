@@ -3,6 +3,7 @@ from functools import singledispatch
 from itertools import repeat
 from typing import Union, Sequence, Optional, Tuple
 
+import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
@@ -137,6 +138,21 @@ def _subset_spmatrix(a: spmatrix, subset_idx: Index):
 @_subset.register(pd.DataFrame)
 def _subset_df(df: pd.DataFrame, subset_idx: Index):
     return df.iloc[subset_idx]
+
+
+@_subset.register(h5py.Dataset)
+def _subset_dataset(d, subset_idx):
+    if not isinstance(subset_idx, tuple):
+        subset_idx = (subset_idx,)
+    ordered = list(subset_idx)
+    rev_order = [slice(None) for _ in range(len(subset_idx))]
+    for axis, axis_idx in enumerate(ordered.copy()):
+        if isinstance(axis_idx, np.ndarray) and axis_idx.dtype.type != bool:
+            order = np.argsort(axis_idx)
+            ordered[axis] = axis_idx[order]
+            rev_order[axis] = np.argsort(order)
+    # from hdf5, then to real order
+    return d[tuple(ordered)][tuple(rev_order)]
 
 
 def make_slice(idx, dimidx, n=2):

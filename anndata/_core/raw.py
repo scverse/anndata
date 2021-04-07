@@ -65,7 +65,7 @@ class Raw:
         if self._adata.is_view:
             # TODO: As noted above, implement views of raw
             #       so we can know if we need to subset by var
-            return X[self._adata._oidx, slice(None)]
+            return _subset(X, (self._adata._oidx, slice(None)))
         else:
             return X
 

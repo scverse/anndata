@@ -1,3 +1,4 @@
+from functools import singledispatch
 from os import PathLike
 from pathlib import Path
 from typing import Optional, Union, Iterator
@@ -6,7 +7,7 @@ import h5py
 
 from . import anndata
 from .sparse_dataset import SparseDataset
-from ..compat import Literal
+from ..compat import Literal, ZarrArray
 
 
 class AnnDataFileManager:
@@ -88,3 +89,23 @@ class AnnDataFileManager:
             return False
         # try accessing the id attribute to see if the file is open
         return bool(self._file.id)
+
+
+@singledispatch
+def to_memory(x):
+    """Permissivley convert objects to in-memory representation.
+
+    If they already are in-memory, (or are just unrecognized) pass a copy through.
+    """
+    return x.copy()
+
+
+@to_memory.register(ZarrArray)
+@to_memory.register(h5py.Dataset)
+def _(x):
+    return x[...]
+
+
+@to_memory.register(SparseDataset)
+def _(x: SparseDataset):
+    return x.to_memory()
