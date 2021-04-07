@@ -26,7 +26,7 @@ try:
 except ImportError:
     _cs_matrix = ss.spmatrix
 
-from .index import unpack_index, Index
+from .index import unpack_index, Index, _subset
 
 
 class BackedFormat(NamedTuple):
@@ -372,3 +372,8 @@ class SparseDataset:
         mtx.indices = self.group["indices"][...]
         mtx.indptr = self.group["indptr"][...]
         return mtx
+
+
+@_subset.register(SparseDataset)
+def subset_sparsedataset(d, subset_idx):
+    return d[subset_idx]

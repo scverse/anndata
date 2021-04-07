@@ -611,18 +611,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # TODO: This should get replaced/ handled elsewhere
             # This is so that we can index into a backed dense dataset with
             # indices that aren’t strictly increasing
-            if self.is_view and isinstance(X, h5py.Dataset):
-                ordered = [self._oidx, self._vidx]  # this will be mutated
-                rev_order = [slice(None), slice(None)]
-                for axis, axis_idx in enumerate(ordered.copy()):
-                    if isinstance(axis_idx, np.ndarray) and axis_idx.dtype.type != bool:
-                        order = np.argsort(axis_idx)
-                        ordered[axis] = axis_idx[order]
-                        rev_order[axis] = np.argsort(order)
-                # from hdf5, then to real order
-                X = X[tuple(ordered)][tuple(rev_order)]
-            elif self.is_view:
-                X = X[self._oidx, self._vidx]
+            if self.is_view:
+                X = _subset(X, (self._oidx, self._vidx))
         elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),

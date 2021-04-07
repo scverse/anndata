@@ -140,6 +140,7 @@ def _subset_df(df: pd.DataFrame, subset_idx: Index):
     return df.iloc[subset_idx]
 
 
+# Registration for SparseDataset occurs in sparse_dataset.py
 @_subset.register(h5py.Dataset)
 def _subset_dataset(d, subset_idx):
     if not isinstance(subset_idx, tuple):
