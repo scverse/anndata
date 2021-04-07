@@ -11,6 +11,7 @@ On master
 - Fixed `adata.write_csvs` when `adata` is a view :pr:`462` :smaller:`I Virshup`
 - Fixed null values being converted to strings when strings are converted to categorical :pr:`529` :smaller:`I Virshup`
 - Fixed handling of compression key word arguments :pr:`536` :smaller:`I Virshup`
+- Fixed copying a backed `AnnData` from changing which file the original object points at :pr:`533` :smaller:`ilia-kats`
 
 0.7.5 :small:`2020-11-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
