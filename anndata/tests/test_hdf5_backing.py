@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 import joblib
 import pytest
@@ -182,6 +183,14 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
+    if (
+        array_type is asarray
+        and isinstance(obs_idx, (np.ndarray, sparse.spmatrix))
+        and isinstance(var_idx, (np.ndarray, sparse.spmatrix))
+    ):
+        pytest.xfail(
+            "Fancy indexing does not work with multiple arrays on a h5py.Dataset"
+        )
     mem_adata.write(backed_pth)
 
     ### Backed view has same values as in memory view ###
@@ -189,8 +198,9 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     backed_v = backed_adata[obs_idx, var_idx]
     assert backed_v.is_view
     mem_v = mem_adata[obs_idx, var_idx]
+    print(type(obs_idx), obs_idx, type(var_idx), var_idx)
 
-    ### Value equivalent ###
+    # Value equivalent
     assert_equal(mem_v, backed_v)
     # Type and value equivalent
     assert_equal(mem_v.copy(), backed_v.to_memory(), exact=True)
