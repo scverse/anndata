@@ -286,7 +286,7 @@ def write_series(group, key, series, dataset_kwargs=MappingProxyType({})):
         group[key].attrs["categories"] = group[category_key].ref
         group[category_key].attrs["ordered"] = categorical.ordered
     else:
-        group[key] = series.values
+        write_array(group, key, series.values, dataset_kwargs=dataset_kwargs)
 
 
 def write_mapping(f, key, value, dataset_kwargs=MappingProxyType({})):

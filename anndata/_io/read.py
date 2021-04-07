@@ -15,7 +15,7 @@ from .h5ad import read_h5ad
 
 try:
     from .zarr import read_zarr
-except ImportError as e:
+except ImportError as e:  # noqa: F841
 
     def read_zarr(*_, **__):
         raise e
@@ -90,7 +90,7 @@ def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
 
     dod = {}  # this will contain basically everything
     fh = gzip.open(fspath(filename))
-    header = fh.readline()  # read the first line
+    _ = fh.readline()  # read the first line
 
     for line in fh:
         # gzip read bytes, hence the decoding
