@@ -1429,7 +1429,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _mutated_copy(self, **kwargs):
         """Creating AnnData with attributes optionally specified via kwargs."""
+        if self.isbacked:
+            if "X" not in kwargs or (self.raw is not None and "raw" not in kwargs):
+                raise NotImplementedError(
+                    "This function does not currently handle backed objects "
+                    "internally, this should be dealt with before."
+                )
         new = {}
+
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
             if key in kwargs:
                 new[key] = kwargs[key]
@@ -1437,7 +1444,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = getattr(self, key).copy()
         if "X" in kwargs:
             new["X"] = kwargs["X"]
-        elif self.is_backed:
+        else:
             new["X"] = self.X.copy()
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
@@ -1451,16 +1458,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "raw" in kwargs:
             new["raw"] = kwargs["raw"]
         elif self.raw is not None:
-            if self.isbacked:
-                new["raw"] = self.raw.to_adata().to_memory()
-            else:
-                new["raw"] = self.raw.copy()
-        # kwargs["raw"] = kwargs.pop("raw", None)
-        # if self.raw is not None:
-        #     if self.isbacked:
-        #         warnings.warn("Dropping .raw attribute when loading into memory mode.")
-        #     else:
-        #         kwargs["raw"] = self.raw.copy()
+            new["raw"] = self.raw.copy()
         new["dtype"] = new["X"].dtype
         return AnnData(**new)
 
