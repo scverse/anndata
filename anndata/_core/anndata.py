@@ -1498,6 +1498,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return self._create_anndata(X=X)
         else:
             from .._io import read_h5ad
+            from .._io.write import _write_h5ad
 
             if filename is None:
                 raise ValueError(
@@ -1506,7 +1507,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     "To load the object into memory, use `.to_memory()`."
                 )
             mode = self.file._filemode
-            self.write(filename)
+            _write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
     def concatenate(
@@ -1896,7 +1897,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         )
 
         if self.isbacked:
-            self.file.close()
+            self.file.filename = filename
 
     write = write_h5ad  # a shortcut and backwards compat
 

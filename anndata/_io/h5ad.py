@@ -116,8 +116,6 @@ def write_h5ad(
         write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
         write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
-    if adata.isbacked:
-        adata.file.open(filepath, "r+")
 
 
 def _write_method(cls: Type[T]) -> Callable[[H5Group, str, T], None]:
