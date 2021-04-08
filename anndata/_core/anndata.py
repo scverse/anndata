@@ -1474,10 +1474,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return AnnData(**new)
 
     def to_memory(self) -> "AnnData":
-        """Loading AnnData object into memory."""
+        """Load backed AnnData object into memory.
+
+        Example
+        -------
+
+        .. code:: python
+
+            import anndata
+            backed = anndata.read_h5ad("file.h5ad", backed="r")
+            mem = backed[backed.obs["cluster"] == "a", :].to_memory()
+        """
         if not self.isbacked:
-            warnings.warn("Object is already in memory.")
-            adata = self
+            raise ValueError("Object is already in memory.")
         else:
             elems = {"X": to_memory(self.X)}
             if self.raw is not None:
