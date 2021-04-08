@@ -11,6 +11,7 @@ On master
 - Fixed `adata.write_csvs` when `adata` is a view :pr:`462` :smaller:`I Virshup`
 - Fixed null values being converted to strings when strings are converted to categorical :pr:`529` :smaller:`I Virshup`
 - Fixed handling of compression key word arguments :pr:`536` :smaller:`I Virshup`
+- Fixed a bug where calling `AnnData.concatenate` an `AnnData` with no variables would error :pr:`537`
 
 0.7.5 :small:`2020-11-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
