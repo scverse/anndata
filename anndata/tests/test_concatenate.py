@@ -999,6 +999,26 @@ def test_concat_names(axis):
     assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
 
 
+def test_concat_size_0_dim():
+    # https://github.com/theislab/anndata/issues/526
+    a = gen_adata((5, 10))
+    b = gen_adata((5, 0))
+
+    assert concat([a, b], axis=0).shape == (10, 0)
+    assert concat([a, b], axis=1).shape == (5, 10)
+
+
+def test_concatenate_size_0_dim():
+    # https://github.com/theislab/anndata/issues/526
+
+    a = gen_adata((5, 10))
+    b = gen_adata((5, 0))
+
+    # Mostly testing that this doesn't error
+    a.concatenate([b]).shape == (10, 0)
+    b.concatenate([a]).shape == (10, 0)
+
+
 # Leaving out for now. See definition of these values for explanation
 # def test_concatenate_uns_types():
 #     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE
