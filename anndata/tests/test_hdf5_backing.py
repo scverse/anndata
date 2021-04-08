@@ -198,7 +198,6 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     backed_v = backed_adata[obs_idx, var_idx]
     assert backed_v.is_view
     mem_v = mem_adata[obs_idx, var_idx]
-    print(type(obs_idx), obs_idx, type(var_idx), var_idx)
 
     # Value equivalent
     assert_equal(mem_v, backed_v)
@@ -210,12 +209,8 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     ### Write from backed view ###
     backed_v.write_h5ad(final_pth)
     final_adata = ad.read_h5ad(final_pth)
-    # TODO: Figure out why this doesn’t work if I don’t copy
-    assert_equal(mem_v.copy(), final_adata)
 
-    # todo: breaks when removing this line, b/c backed_v.X is not accessible
-    backed_v = ad.read_h5ad(backed_pth, backed="r")[obs_idx, var_idx]
-    del final_adata.raw  # .raw is dropped when loading backed into memory.
+    assert_equal(mem_v, final_adata)
     assert_equal(final_adata, backed_v.to_memory())  # assert loading into memory
 
 

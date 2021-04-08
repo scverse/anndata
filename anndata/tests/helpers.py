@@ -11,7 +11,7 @@ from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
-from anndata import AnnData
+from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
@@ -359,6 +359,21 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
         report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(Raw)
+def assert_equal_raw(a, b, exact=False, elem_name=None):
+    def assert_is_not_none(x):  # can't put an assert in a lambda
+        assert x is not None
+
+    report_name(assert_is_not_none)(b, _elem_name=elem_name)
+    for attr in ["X", "var", "varm", "obs_names"]:
+        assert_equal(
+            getattr(a, attr),
+            getattr(b, attr),
+            exact=exact,
+            elem_name=f"{elem_name}/{attr}",
+        )
+
+
 @assert_equal.register(AnnData)
 def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
     """\
@@ -390,17 +405,21 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
             change_flag = True
         if change_flag:
             b = b[tuple(idx)].copy()
-    assert_equal(a.obs, b.obs, exact, elem_name="obs")
-    assert_equal(a.var, b.var, exact, elem_name="var")
-    assert_equal(a.X, b.X, exact, elem_name="X")
-    for mapping_attr in ["obsm", "varm", "layers", "uns", "obsp", "varp"]:
+    for attr in [
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "layers",
+        "uns",
+        "obsp",
+        "varp",
+        "raw",
+    ]:
         assert_equal(
-            getattr(a, mapping_attr),
-            getattr(b, mapping_attr),
+            getattr(a, attr),
+            getattr(b, attr),
             exact,
-            elem_name=mapping_attr,
+            elem_name=attr,
         )
-    if a.raw is not None:
-        assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw/X")
-        assert_equal(a.raw.var, b.raw.var, exact, elem_name="raw/var")
-        assert_equal(a.raw.varm, b.raw.varm, exact, elem_name="raw/varm")

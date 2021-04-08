@@ -122,6 +122,20 @@ def test_assert_equal_raw():
         assert_equal(orig, to_compare)
 
 
+def test_assert_equal_raw_presence():
+    # This was causing some testing issues during
+    # https://github.com/theislab/anndata/pull/542
+    a = gen_adata((10, 20))
+    b = a.copy()
+    a.raw = a.copy()
+    assert b.raw is None
+
+    with pytest.raises(AssertionError):
+        assert_equal(a, b)
+    with pytest.raises(AssertionError):
+        assert_equal(b, a)
+
+
 # TODO: Should views be equal to actual?
 # Should they not be if an exact comparison is made?
 def test_assert_equal_aligned_mapping():
