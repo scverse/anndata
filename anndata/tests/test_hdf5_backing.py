@@ -230,6 +230,11 @@ def test_to_memory_full(tmp_path, array_type):
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
     assert_equal(mem_adata, backed_adata.to_memory())
 
+    # Test that raw can be removed
+    del backed_adata.raw
+    del mem_adata.raw
+    assert_equal(mem_adata, backed_adata.to_memory())
+
 
 def test_to_memory_error():
     adata = gen_adata((5, 3))
