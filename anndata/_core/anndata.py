@@ -1124,7 +1124,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if not is_categorical_dtype(df_full[k]):
                 continue
             all_categories = df_full[k].cat.categories
-            df_sub[k] = df_sub[k].cat.remove_unused_categories()
+            with pd.option_context("mode.chained_assignment", None):
+                df_sub[k] = df_sub[k].cat.remove_unused_categories()
             # also correct the colors...
             color_key = f"{k}_colors"
             if color_key not in uns:
