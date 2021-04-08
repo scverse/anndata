@@ -4,6 +4,10 @@
 On master
 ~~~~~~~~~
 
+.. rubric:: New features
+
+- Added :meth:`anndata.AnnData.to_memory` for returning an in memory object from a backed one :pr:`470` :pr:`542` :smaller:`V Bergen` :smaller:`I Virshup`
+
 .. rubric:: Bug fixes
 
 - Fixed bug where `np.str_` column names errored at write time :pr:`457` :smaller:`I Virshup`
@@ -12,7 +16,7 @@ On master
 - Fixed null values being converted to strings when strings are converted to categorical :pr:`529` :smaller:`I Virshup`
 - Fixed handling of compression key word arguments :pr:`536` :smaller:`I Virshup`
 - Fixed copying a backed `AnnData` from changing which file the original object points at :pr:`533` :smaller:`ilia-kats`
-- Fixed a bug where calling `AnnData.concatenate` an `AnnData` with no variables would error :pr:`537`
+- Fixed a bug where calling `AnnData.concatenate` an `AnnData` with no variables would error :pr:`537` :smaller:`I Virshup`
 
 0.7.5 :small:`2020-11-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
