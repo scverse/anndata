@@ -277,6 +277,11 @@ class Reindexer(object):
         return self.apply(el, axis=axis, fill_value=fill_value)
 
     def apply(self, el, *, axis, fill_value=None):
+        """
+        Reindex element so el[axis] is aligned to self.new_idx.
+
+        Missing values are to be replaced with `fill_value`.
+        """
         if self.no_change and (el.shape[axis] == len(self.old_idx)):
             return el
         if isinstance(el, pd.DataFrame):
