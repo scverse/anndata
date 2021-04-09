@@ -1021,13 +1021,15 @@ def expected_shape(a, b, axis, join):
 @pytest.mark.parametrize(
     "shape", [pytest.param((5, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-def test_concat_size_0_dim(axis, join_type, shape):
+def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     # https://github.com/theislab/anndata/issues/526
     a = gen_adata((5, 10))
     b = gen_adata(shape)
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
-    result = concat([a, b], axis=axis, join=join_type)
+    result = concat(
+        [a, b], axis=axis, join=join_type, merge=merge_strategy, pairwise=True
+    )
     assert result.shape == expected_size
 
 

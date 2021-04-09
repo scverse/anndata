@@ -321,7 +321,7 @@ class Reindexer(object):
             shape[axis] = len(self.new_idx)
             shape = tuple(shape)
             if fill_value == 0:
-                return sparse.coo_matrix(shape)
+                return sparse.csr_matrix(shape)
             else:
                 return np.broadcast_to(fill_value, shape)
 
