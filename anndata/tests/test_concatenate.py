@@ -999,13 +999,36 @@ def test_concat_names(axis):
     assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
 
 
-def test_concat_size_0_dim():
+def axis_labels(adata, axis):
+    return (adata.obs_names, adata.var_names)[axis]
+
+
+def expected_shape(a, b, axis, join):
+    labels = partial(axis_labels, axis=abs(axis - 1))
+    shape = [None, None]
+
+    shape[axis] = a.shape[axis] + b.shape[axis]
+    if join == "inner":
+        shape[abs(axis - 1)] = len(labels(a).intersection(labels(b)))
+    elif join == "outer":
+        shape[abs(axis - 1)] = len(labels(a).union(labels(b)))
+    else:
+        raise ValueError()
+
+    return tuple(shape)
+
+
+@pytest.mark.parametrize(
+    "shape", [pytest.param((5, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
+)
+def test_concat_size_0_dim(axis, join_type, shape):
     # https://github.com/theislab/anndata/issues/526
     a = gen_adata((5, 10))
-    b = gen_adata((5, 0))
+    b = gen_adata(shape)
 
-    assert concat([a, b], axis=0).shape == (10, 0)
-    assert concat([a, b], axis=1).shape == (5, 10)
+    expected_size = expected_shape(a, b, axis=axis, join=join_type)
+    result = concat([a, b], axis=axis, join=join_type)
+    assert result.shape == expected_size
 
 
 def test_concatenate_size_0_dim():
