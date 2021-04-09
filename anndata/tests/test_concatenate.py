@@ -81,6 +81,17 @@ def fix_known_differences(orig, result, backwards_compat=True):
     return orig, result
 
 
+def test_concat_interface_errors():
+    adatas = [gen_adata((5, 10)), gen_adata((5, 10))]
+
+    with pytest.raises(ValueError):
+        concat(adatas, axis=3)
+    with pytest.raises(ValueError):
+        concat(adatas, join="not implemented")
+    with pytest.raises(ValueError):
+        concat([])
+
+
 @pytest.mark.parametrize(
     ["concat_func", "backwards_compat"],
     [
