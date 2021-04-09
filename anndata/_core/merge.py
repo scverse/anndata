@@ -316,11 +316,14 @@ class Reindexer(object):
             to_fill = np.array([])
 
         # Fixing outer indexing for missing values
-        if el.shape[1] == 0:
+        if el.shape[axis] == 0:
+            shape = list(el.shape)
+            shape[axis] = len(self.new_idx)
+            shape = tuple(shape)
             if fill_value == 0:
-                return sparse.coo_matrix((el.shape[0], len(self.new_idx)))
+                return sparse.coo_matrix(shape)
             else:
-                return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
+                return np.broadcast_to(fill_value, shape)
 
         fill_idxer = None
 
