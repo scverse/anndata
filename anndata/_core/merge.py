@@ -294,8 +294,11 @@ class Reindexer(object):
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
-        if 0 in el.shape:
-            return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape = list(el.shape)
+            shape[axis] = len(self.new_idx)
+            return np.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.old_idx.get_indexer(self.new_idx)
 
