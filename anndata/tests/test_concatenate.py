@@ -1,7 +1,7 @@
 from collections.abc import Hashable
 from copy import deepcopy
 from itertools import chain, product
-from functools import partial
+from functools import partial, singledispatch
 import warnings
 
 import numpy as np
@@ -19,6 +19,46 @@ from anndata._core import merge
 from anndata.tests import helpers
 from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
+
+
+@singledispatch
+def filled_like(a, fill_value=None):
+    raise NotImplementedError()
+
+
+@filled_like.register(np.ndarray)
+def _filled_array(a, fill_value=None):
+    if fill_value is None:
+        fill_value = np.nan
+    return np.broadcast_to(fill_value, a.shape)
+
+
+@filled_like.register(sparse.spmatrix)
+def _filled_sparse(a, fill_value=None):
+    if fill_value is None:
+        return sparse.csr_matrix(a.shape)
+    else:
+        return sparse.csr_matrix(np.broadcast_to(fill_value, a.shape))
+
+
+@filled_like.register(pd.DataFrame)
+def _filled_df(a, fill_value=np.nan):
+    return pd.DataFrame().reindex(
+        index=a.index, columns=a.columns, fill_value=fill_value
+    )
+
+
+def check_filled_like(x, fill_value=None, elem_name=None):
+    if fill_value is None:
+        assert_equal(x, filled_like(x), elem_name=elem_name)
+    else:
+        assert_equal(x, filled_like(x, fill_value=fill_value), elem_name=elem_name)
+
+
+def make_idx_tuple(idx, axis):
+    tup = [slice(None), slice(None)]
+    tup[axis] = idx
+    return tuple(tup)
 
 
 @pytest.fixture(
@@ -1030,18 +1070,37 @@ def expected_shape(a, b, axis, join):
 
 
 @pytest.mark.parametrize(
-    "shape", [pytest.param((5, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
+    "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
 def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     # https://github.com/theislab/anndata/issues/526
-    a = gen_adata((5, 10))
+    a = gen_adata((5, 7))
     b = gen_adata(shape)
+    alt_axis = 1 - axis
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
-        [a, b], axis=axis, join=join_type, merge=merge_strategy, pairwise=True
+        {"a": a, "b": b},
+        axis=axis,
+        join=join_type,
+        merge=merge_strategy,
+        pairwise=True,
+        index_unique="-",
     )
     assert result.shape == expected_size
+
+    if join_type == "outer":
+        # Check new entries along axis of concatenation
+        axis_new_inds = axis_labels(result, axis).str.endswith("-b")
+        altaxis_new_inds = ~axis_labels(result, alt_axis).isin(axis_labels(a, alt_axis))
+        axis_idx = make_idx_tuple(axis_new_inds, axis)
+        altaxis_idx = make_idx_tuple(altaxis_new_inds, 1 - axis)
+
+        check_filled_like(result.X[axis_idx], elem_name="X")
+        check_filled_like(result.X[altaxis_idx], elem_name="X")
+        for k, elem in getattr(result, "layers").items():
+            check_filled_like(elem[axis_idx], elem_name=f"layers/{k}")
+            check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
 
 
 def test_concatenate_size_0_dim():
