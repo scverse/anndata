@@ -1,16 +1,19 @@
 from pathlib import Path
 from os import PathLike, fspath
+from types import MappingProxyType
 from typing import Union, Optional, Mapping, Tuple
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
 import bz2
+from warnings import warn
 
 import h5py
 import numpy as np
 import pandas as pd
 
 from .. import AnnData
+from ..compat import _deprecate_positional_args
 from .utils import is_float
 from .h5ad import read_h5ad
 
@@ -145,11 +148,11 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
 
 
 def _fmt_loom_axis_attrs(
-    input: Mapping, idx_name: str, mapped_names: Mapping[str, Iterable[str]]
+    input: Mapping, idx_name: str, dimm_mapping: Mapping[str, Iterable[str]]
 ) -> Tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
     axis_df = pd.DataFrame()
     axis_mapping = {}
-    for key, names in mapped_names.items():
+    for key, names in dimm_mapping.items():
         axis_mapping[key] = np.array([input.pop(name) for name in names]).T
 
     for k, v in input.items():
@@ -164,8 +167,10 @@ def _fmt_loom_axis_attrs(
     return axis_df, axis_mapping
 
 
+@_deprecate_positional_args(version="0.9")
 def read_loom(
     filename: PathLike,
+    *,
     sparse: bool = True,
     cleanup: bool = False,
     X_name: str = "spliced",
@@ -174,6 +179,8 @@ def read_loom(
     var_names: str = "Gene",
     varm_names: Optional[Mapping[str, Iterable[str]]] = None,
     dtype: str = "float32",
+    obsm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
+    varm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
     **kwargs,
 ) -> AnnData:
     """\
@@ -184,7 +191,7 @@ def read_loom(
     Beware that you have to explicitly state when you want to read the file as
     sparse data.
 
-    Parameters
+        Parameters
     ----------
     filename
         The filename.
@@ -197,17 +204,56 @@ def read_loom(
         Loompy key with which the data matrix :attr:`~anndata.AnnData.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
-    obsm_names
+    obsm_mapping
         Loompy keys which will be constructed into observation matrices
     var_names
         Loompy key where the variable/gene names are stored.
-    varm_names
+    varm_mapping
         Loompy keys which will be constructed into variable matrices
     **kwargs:
         Arguments to loompy.connect
+
+    Example
+    -------
+
+    .. code:: python
+
+        pbmc = anndata.read_loom(
+            "pbmc.loom",
+            sparse=True,
+            X_name="lognorm",
+            obs_names="cell_names",
+            var_names="gene_names",
+            obsm_mapping={
+                "X_umap": ["umap_1", "umap_2"]
+            }
+        )
     """
-    obsm_names = obsm_names or {}
-    varm_names = varm_names or {}
+    # Deprecations
+    if obsm_names is not None:
+        warn(
+            "Argument obsm_names has been deprecated in favour of `obsm_mapping`. "
+            "In 0.9 this will be an error.",
+            FutureWarning,
+        )
+        if obsm_mapping != {}:
+            raise ValueError(
+                "Recieved values for both `obsm_names` and `obsm_mapping`. This is "
+                "ambiguous, only pass `obsm_mapping`."
+            )
+        obsm_mapping = obsm_names
+    if varm_names is not None:
+        warn(
+            "Argument varm_names has been deprecated in favour of `varm_mapping`. "
+            "In 0.9 this will be an error.",
+            FutureWarning,
+        )
+        if varm_mapping != {}:
+            raise ValueError(
+                "Recieved values for both `varm_names` and `varm_mapping`. This is "
+                "ambiguous, only pass `varm_mapping`."
+            )
+        varm_mapping = varm_names
 
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
@@ -231,8 +277,8 @@ def read_loom(
                 )
 
         # TODO: Figure out the singleton obs elements
-        obs, obsm = _fmt_loom_axis_attrs(dict(lc.col_attrs), obs_names, obsm_names)
-        var, varm = _fmt_loom_axis_attrs(dict(lc.row_attrs), var_names, varm_names)
+        obs, obsm = _fmt_loom_axis_attrs(dict(lc.col_attrs), obs_names, obsm_mapping)
+        var, varm = _fmt_loom_axis_attrs(dict(lc.row_attrs), var_names, varm_mapping)
 
         uns = {}
         if cleanup:

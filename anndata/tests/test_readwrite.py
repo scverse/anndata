@@ -344,9 +344,9 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
 
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
-@pytest.mark.parametrize("obsm_names", [{}, dict(X_composed=["oanno3", "oanno4"])])
-@pytest.mark.parametrize("varm_names", [{}, dict(X_composed2=["vanno3", "vanno4"])])
-def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
+@pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
+@pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
+def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     X = typ(X_list)
     obs_dim = "meaningful_obs_dim_name"
     var_dim = "meaningful_var_dim_name"
@@ -361,9 +361,9 @@ def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
     adata = ad.read_loom(
         tmp_path / "test.loom",
         sparse=typ is csr_matrix,
-        obsm_names=obsm_names,
+        obsm_mapping=obsm_mapping,
         obs_names=obs_dim,
-        varm_names=varm_names,
+        varm_mapping=varm_mapping,
         var_names=var_dim,
         cleanup=True,
     )
@@ -378,12 +378,43 @@ def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
     # as we called with `cleanup=True`
     assert "oanno1b" in adata.uns["loom-obs"]
     assert "vanno2" in adata.uns["loom-var"]
-    for k, v in obsm_names.items():
+    for k, v in obsm_mapping.items():
         assert k in adata.obsm_keys() and adata.obsm[k].shape[1] == len(v)
-    for k, v in varm_names.items():
+    for k, v in varm_mapping.items():
         assert k in adata.varm_keys() and adata.varm[k].shape[1] == len(v)
     assert adata.obs_names.name == obs_dim
     assert adata.var_names.name == var_dim
+
+
+@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
+def test_readloom_deprecations(tmp_path):
+    loom_pth = tmp_path / "test.loom"
+    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
+    adata_src.write_loom(loom_pth, write_obsm_varm=True)
+
+    # obsm_names -> obsm_mapping
+    obsm_mapping = {"df": adata_src.obs.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.read_loom(loom_pth, obsm_names=obsm_mapping)
+    actual_result = ad.read_loom(loom_pth, obsm_mapping=obsm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match="ambiguous"):
+        ad.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
+
+    # varm_names -> varm_mapping
+    varm_mapping = {"df": adata_src.var.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.read_loom(loom_pth, varm_names=varm_mapping)
+    actual_result = ad.read_loom(loom_pth, varm_mapping=varm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match="ambiguous"):
+        ad.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
+
+    # positional -> keyword
+    with pytest.warns(FutureWarning, match="sparse"):
+        depr_result = ad.read_loom(loom_pth, True)
+    actual_result = ad.read_loom(loom_pth, sparse=True)
+    assert type(depr_result.X) == type(actual_result.X)
 
 
 def test_read_csv():
