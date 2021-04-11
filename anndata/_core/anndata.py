@@ -25,7 +25,7 @@ from scipy.sparse import issparse, csr_matrix
 
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
-from .file_backing import AnnDataFileManager
+from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -609,21 +609,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.file["X"]
             if isinstance(X, h5py.Group):
                 X = SparseDataset(X)
-            # TODO: This should get replaced/ handled elsewhere
             # This is so that we can index into a backed dense dataset with
             # indices that aren’t strictly increasing
-            if self.is_view and isinstance(X, h5py.Dataset):
-                ordered = [self._oidx, self._vidx]  # this will be mutated
-                rev_order = [slice(None), slice(None)]
-                for axis, axis_idx in enumerate(ordered.copy()):
-                    if isinstance(axis_idx, np.ndarray) and axis_idx.dtype.type != bool:
-                        order = np.argsort(axis_idx)
-                        ordered[axis] = axis_idx[order]
-                        rev_order[axis] = np.argsort(order)
-                # from hdf5, then to real order
-                X = X[tuple(ordered)][tuple(rev_order)]
-            elif self.is_view:
-                X = X[self._oidx, self._vidx]
+            if self.is_view:
+                X = _subset(X, (self._oidx, self._vidx))
         elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
@@ -1449,39 +1438,64 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.raw.var_vector(k)
 
-    def _create_anndata(self, **kwargs):
+    def _mutated_copy(self, **kwargs):
         """Creating AnnData with attributes optionally specified via kwargs."""
+        if self.isbacked:
+            if "X" not in kwargs or (self.raw is not None and "raw" not in kwargs):
+                raise NotImplementedError(
+                    "This function does not currently handle backed objects "
+                    "internally, this should be dealt with before."
+                )
+        new = {}
+
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
-            kwargs[key] = kwargs.pop(key, getattr(self, key).copy())
-        if "X" not in kwargs:
-            kwargs["X"] = (
-                self.X.to_memory()
-                if self.isbacked and hasattr(self.X, "to_memory")
-                else self.X.copy()
-            )
-        if "uns" not in kwargs:
-            kwargs["uns"] = (
+            if key in kwargs:
+                new[key] = kwargs[key]
+            else:
+                new[key] = getattr(self, key).copy()
+        if "X" in kwargs:
+            new["X"] = kwargs["X"]
+        else:
+            new["X"] = self.X.copy()
+        if "uns" in kwargs:
+            new["uns"] = kwargs["uns"]
+        else:
+            new["uns"] = (
                 self._uns.copy()
                 if isinstance(self.uns, DictView)
                 else deepcopy(self._uns)
             )
 
-        kwargs["raw"] = kwargs.pop("raw", None)
-        if self.raw is not None:
-            if self.isbacked:
-                warnings.warn("Dropping .raw attribute when loading into memory mode.")
-            else:
-                kwargs["raw"] = self.raw.copy()
-        kwargs["dtype"] = kwargs["X"].dtype
-        return AnnData(**kwargs)
+        if "raw" in kwargs:
+            new["raw"] = kwargs["raw"]
+        elif self.raw is not None:
+            new["raw"] = self.raw.copy()
+        new["dtype"] = new["X"].dtype
+        return AnnData(**new)
 
     def to_memory(self) -> "AnnData":
-        """Loading AnnData object into memory."""
+        """Load backed AnnData object into memory.
+
+        Example
+        -------
+
+        .. code:: python
+
+            import anndata
+            backed = anndata.read_h5ad("file.h5ad", backed="r")
+            mem = backed[backed.obs["cluster"] == "a", :].to_memory()
+        """
         if not self.isbacked:
-            warnings.warn("Object is already in memory.")
-            adata = self
+            raise ValueError("Object is already in memory.")
         else:
-            adata = self._create_anndata()
+            elems = {"X": to_memory(self.X)}
+            if self.raw is not None:
+                elems["raw"] = {
+                    "X": to_memory(self.raw.X),
+                    "var": self.raw.var,
+                    "varm": self.raw.varm,
+                }
+            adata = self._mutated_copy(**elems)
             self.file.close()
         return adata
 
@@ -1496,7 +1510,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
             else:
                 X = self.X.copy()
-            return self._create_anndata(X=X)
+            return self._mutated_copy(X=X)
         else:
             from .._io import read_h5ad
             from .._io.write import _write_h5ad
