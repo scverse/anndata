@@ -1,8 +1,8 @@
 .. role:: small
 .. role:: smaller
 
-On master
-~~~~~~~~~
+0.7.6 :small:`11 April, 2021`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: New features
 
@@ -25,8 +25,8 @@ On master
 - :func:`anndata.read_loom` arguments `obsm_names` and `varm_names` are now deprecated in favour of `obsm_mapping` and `varm_mapping` :pr:`538` :smaller:`I Virshup`
 
 
-0.7.5 :small:`2020-11-12`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.7.5 :small:`12 November, 2020`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Functionality
 
@@ -38,8 +38,8 @@ On master
 - Allow `adata.raw = None`, as is documented :pr:`447` :smaller:`I Virshup`
 - Fix warnings from pandas 1.1 :pr:`425` :smaller:`I Virshup`
 
-0.7.4 :small:`2020-07-10`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.7.4 :small:`10 July, 2020`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Concatenation overhaul :pr:`378` :smaller:`I Virshup`
 
@@ -55,15 +55,15 @@ On master
 - Fixed error from `AnnData.concatenate` by bumping minimum versions of numpy and pandas :issue:`385`
 - Fixed colors being incorrectly changed when `AnnData` object was subset :pr:`388`
 
-0.7.3 :small:`2020-05-20`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.7.3 :small:`20 May, 2020`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Bug fixes
 
 - Fixed bug where graphs used too much memory when copying :pr:`381` :smaller:`I Virshup`
 
-0.7.2 :small:`2020-05-15`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.7.2 :small:`15 May, 2020`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Concatenation overhaul :smaller:`I Virshup`
 
