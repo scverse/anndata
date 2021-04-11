@@ -1,6 +1,7 @@
 from copy import deepcopy
-from functools import reduce
-from typing import Union, Mapping, MutableMapping, Optional
+from functools import reduce, wraps
+from inspect import signature, Parameter
+from typing import Collection, Union, Mapping, MutableMapping, Optional
 from warnings import warn
 
 import h5py
@@ -217,3 +218,57 @@ def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs:
         d = reduce(lambda d, k: d[k], path[:-1], uns)
         d[path[-1]] = _subset(d[path[-1]], (oidx, oidx))
     return uns
+
+
+# This function was adapted from scikit-learn
+# github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/validation.py
+def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.25)"):
+    """Decorator for methods that issues warnings for positional arguments.
+    Using the keyword-only argument syntax in pep 3102, arguments after the
+    * will issue a warning when passed as a positional argument.
+
+    Parameters
+    ----------
+    func
+        Function to check arguments on.
+    version
+        The version when positional arguments will result in error.
+    """
+
+    def _inner_deprecate_positional_args(f):
+        sig = signature(f)
+        kwonly_args = []
+        all_args = []
+
+        for name, param in sig.parameters.items():
+            if param.kind == Parameter.POSITIONAL_OR_KEYWORD:
+                all_args.append(name)
+            elif param.kind == Parameter.KEYWORD_ONLY:
+                kwonly_args.append(name)
+
+        @wraps(f)
+        def inner_f(*args, **kwargs):
+            extra_args = len(args) - len(all_args)
+            if extra_args <= 0:
+                return f(*args, **kwargs)
+
+            # extra_args > 0
+            args_msg = [
+                "{}={}".format(name, arg)
+                for name, arg in zip(kwonly_args[:extra_args], args[-extra_args:])
+            ]
+            args_msg = ", ".join(args_msg)
+            warn(
+                f"Pass {args_msg} as keyword args. From version {version} passing "
+                "these as positional arguments will result in an error",
+                FutureWarning,
+            )
+            kwargs.update(zip(sig.parameters, args))
+            return f(**kwargs)
+
+        return inner_f
+
+    if func is not None:
+        return _inner_deprecate_positional_args(func)
+
+    return _inner_deprecate_positional_args
