@@ -191,7 +191,7 @@ def read_loom(
     Beware that you have to explicitly state when you want to read the file as
     sparse data.
 
-        Parameters
+    Parameters
     ----------
     filename
         The filename.

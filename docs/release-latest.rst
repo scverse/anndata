@@ -7,6 +7,7 @@ On master
 .. rubric:: New features
 
 - Added :meth:`anndata.AnnData.to_memory` for returning an in memory object from a backed one :pr:`470` :pr:`542` :smaller:`V Bergen` :smaller:`I Virshup`
+- :meth:`anndata.AnnData.write_loom` now writes `obs_names` and `var_names` using the `Index`'s `.name` attribute, if set :pr:`538` :smaller:`I Virshup`
 
 .. rubric:: Bug fixes
 
@@ -17,6 +18,12 @@ On master
 - Fixed handling of compression key word arguments :pr:`536` :smaller:`I Virshup`
 - Fixed copying a backed `AnnData` from changing which file the original object points at :pr:`533` :smaller:`ilia-kats`
 - Fixed a bug where calling `AnnData.concatenate` an `AnnData` with no variables would error :pr:`537` :smaller:`I Virshup`
+
+.. rubric:: Deprecations
+
+- Passing positional arguments to :func:`anndata.read_loom` besides the path is now deprecated :pr:`538` :smaller:`I Virshup`
+- :func:`anndata.read_loom` arguments `obsm_names` and `varm_names` are now deprecated in favour of `obsm_mapping` and `varm_mapping` :pr:`538` :smaller:`I Virshup`
+
 
 0.7.5 :small:`2020-11-12`
 ~~~~~~~~~~~~~~~~~~~~~~~~~
