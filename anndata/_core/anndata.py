@@ -609,7 +609,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.file["X"]
             if isinstance(X, h5py.Group):
                 X = SparseDataset(X)
-            # TODO: This should get replaced/ handled elsewhere
             # This is so that we can index into a backed dense dataset with
             # indices that aren’t strictly increasing
             if self.is_view:
