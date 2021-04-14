@@ -3,6 +3,8 @@ This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
+import warnings
+
 import h5py
 import numpy as np
 import pytest
@@ -17,7 +19,7 @@ from anndata.tests.helpers import assert_equal
 @pytest.fixture
 def adata():
     adata = AnnData(
-        X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         obs=dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         var=dict(var_names=["a", "b", "c"]),
     )
@@ -201,3 +203,27 @@ def test_deprecated_neighbors_set_other(adata_neighbors):
         }
 
         assert not rec
+
+
+# This should break in 0.8
+def test_dtype_warning():
+    # Tests a warning is thrown
+    with pytest.warns(FutureWarning):
+        a = AnnData(np.ones((3, 3), dtype=np.float64))
+    assert a.X.dtype == np.float32
+
+    # This shouldn't warn, shouldn't copy
+    with warnings.catch_warnings(record=True) as record:
+        b_X = np.ones((3, 3), dtype=np.float64)
+        b = AnnData(b_X, dtype=np.float64)
+        assert not record
+    assert b_X is b.X
+    assert b.X.dtype == np.float64
+
+    # Shouldn't warn, should copy
+    with warnings.catch_warnings(record=True) as record:
+        c_X = np.ones((3, 3), dtype=np.float32)
+        c = AnnData(np.ones((3, 3), dtype=np.float32), dtype=np.float64)
+        assert not record
+    assert c_X is not c.X
+    assert c.X.dtype == np.float64
