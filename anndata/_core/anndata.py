@@ -289,7 +289,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Mapping[str, Any]] = None,
-        dtype: Union[np.dtype, str] = "float32",
+        dtype: Optional[Union[np.dtype, str]] = None,
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
         filemode: Optional[Literal["r", "r+"]] = None,
@@ -388,7 +388,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp=None,
         raw=None,
         layers=None,
-        dtype="float32",
+        dtype=None,
         shape=None,
         filename=None,
         filemode=None,
@@ -462,6 +462,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
+            if dtype is None and X.dtype != np.float32:
+                warnings.warn(
+                    f"X.dtype being converted to np.float32 from {X.dtype}. In the next "
+                    "version of anndata (0.8) conversion will not be automatic. Pass "
+                    "dtype explicitly to avoid this warning. Pass "
+                    "`AnnData(X, dtype=X.dtype, ...)` to get the future behavour.",
+                    FutureWarning,
+                    stacklevel=3,
+                )
+                dtype = np.float32
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
