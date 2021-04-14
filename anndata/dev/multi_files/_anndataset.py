@@ -17,6 +17,20 @@ def _merge(arrs):
     return concat_arrays(arrs, rxers)
 
 
+def _select_convert(key, convert, arr=None):
+    key_convert = None
+
+    if callable(convert):
+        key_convert = convert
+    elif isinstance(convert, dict) and key in convert:
+        key_convert = convert[key]
+
+    if arr is not None:
+        return key_convert(arr) if key_convert is not None else arr
+    else:
+        return key_convert
+
+
 class _ConcatViewMixin:
     def _resolve_idx(self, oidx, vidx):
         reverse = None
@@ -47,13 +61,16 @@ class _ConcatViewMixin:
 
 
 class MapObsView:
-    def __init__(self, attr, adatas, keys, adatas_oidx, reverse, vidx=None):
+    def __init__(
+        self, attr, adatas, keys, adatas_oidx, reverse, vidx=None, convert=None
+    ):
         self.adatas = adatas
         self._keys = keys
         self.adatas_oidx = adatas_oidx
         self.reverse = reverse
         self.vidx = vidx
         self.attr = attr
+        self.convert = convert
 
     def __getitem__(self, key):
         if self._keys is not None and key not in self._keys:
@@ -67,8 +84,12 @@ class MapObsView:
                 arrs.append(arr[idx])
 
         _arr = _merge(arrs) if len(arrs) > 1 else arrs[0]
+        _arr = _arr[self.reverse] if self.reverse is not None else _arr
 
-        return _arr[self.reverse] if self.reverse is not None else _arr
+        if self.convert is not None:
+            _arr = _select_convert(key, self.convert, _arr)
+
+        return _arr
 
     def keys(self):
         if self._keys is not None:
@@ -101,6 +122,11 @@ class AnnDataConcatView(_ConcatViewMixin):
 
         self._layers_view, self._obsm_view, self._obs_view = None, None, None
 
+        self.convert = reference.convert
+        self.convert_X = None
+        if self.convert is not None:
+            self.convert_X = _select_convert("X", self.convert)
+
     def _lazy_init_attr(self, attr, set_vidx=False):
         if getattr(self, f"_{attr}_view") is not None:
             return
@@ -117,10 +143,15 @@ class AnnDataConcatView(_ConcatViewMixin):
             adatas = [self.reference]
             adatas_oidx = [self.oidx]
         vidx = self.vidx if set_vidx else None
+
+        attr_convert = None
+        if self.convert is not None:
+            attr_convert = _select_convert(attr, self.convert)
+
         setattr(
             self,
             f"_{attr}_view",
-            MapObsView(attr, adatas, keys, adatas_oidx, reverse, vidx),
+            MapObsView(attr, adatas, keys, adatas_oidx, reverse, vidx, attr_convert),
         )
 
     @property
@@ -145,8 +176,9 @@ class AnnDataConcatView(_ConcatViewMixin):
                     Xs.append(X[oidx][:, vidx])
 
         _X = _merge(Xs) if len(Xs) > 1 else Xs[0]
+        _X = _X[self.reverse] if self.reverse is not None else _X
 
-        return _X[self.reverse] if self.reverse is not None else _X
+        return self.convert_X(_X) if self.convert_X is not None else _X
 
     @property
     def layers(self):
@@ -224,6 +256,7 @@ class AnnDataConcatObs(_ConcatViewMixin):
         label=None,
         keys=None,
         index_unique=None,
+        convert=None,
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:
@@ -234,9 +267,6 @@ class AnnDataConcatObs(_ConcatViewMixin):
             keys, adatas = list(adatas.keys()), list(adatas.values())
         else:
             adatas = list(adatas)
-
-        if len(adatas) < 2:
-            raise ValueError("Adatas should have the length greater than 1.")
 
         # check if the variables are the same in all adatas
         vars_names_list = [adata.var_names for adata in adatas]
@@ -325,6 +355,8 @@ class AnnDataConcatObs(_ConcatViewMixin):
         self.limits = [adatas[0].n_obs]
         for i in range(len(adatas) - 1):
             self.limits.append(self.limits[i] + adatas[i + 1].n_obs)
+
+        self.convert = convert
 
     def __getitem__(self, index: Index):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
