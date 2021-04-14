@@ -472,6 +472,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     stacklevel=3,
                 )
                 dtype = np.float32
+            elif dtype is None:
+                dtype = np.float32
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
@@ -1728,17 +1730,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         >>> from scipy.sparse import csr_matrix
         >>> adata1 = AnnData(
-        ...     csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
         ...     dict(var_names=['a', 'b', 'c']),
         ... )
         >>> adata2 = AnnData(
-        ... csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
         >>> adata3 = AnnData(
-        ... csr_matrix([[1, 2, 0], [0, 5, 6]]),
+        ... csr_matrix([[1, 2, 0], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s5', 's6'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
