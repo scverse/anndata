@@ -544,7 +544,7 @@ def test_write_categorical_index(tmp_path, diskfmt):
 
 
 def test_dataframe_reserved_columns(tmp_path, diskfmt):
-    reserved = ("_index", "__categories")
+    reserved = ("_index",)
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(X=np.ones((5, 5)))
     for colname in reserved:

@@ -34,6 +34,7 @@ from .utils import (
     _read_legacy_raw,
     EncodingVersions,
 )
+from .specs import read_elem, write_elem, _REGISTRY, get_spec
 
 H5Group = Union[h5py.Group, h5py.File]
 H5Dataset = Union[h5py.Dataset]
@@ -95,27 +96,25 @@ def write_h5ad(
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
-            write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
             adata.raw.X, (sparse.spmatrix, SparseDataset)
         ):
             write_sparse_as_dense(
                 f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
             )
-            write_attribute(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_attribute(
-                f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs
-            )
-        else:
-            write_attribute(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obsm", adata.obsm, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "varm", adata.varm, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obsp", adata.obsp, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
+            write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
+            write_elem(f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs)
+        elif adata.raw is not None:
+            write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
+        write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
+        write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
+        write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
+        write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
+        write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
 
 
 def _write_method(cls: Type[T]) -> Callable[[H5Group, str, T], None]:
@@ -135,9 +134,9 @@ def write_raw(f, key, value, dataset_kwargs=MappingProxyType({})):
     group.attrs["encoding-type"] = "raw"
     group.attrs["encoding-version"] = EncodingVersions.raw.value
     group.attrs["shape"] = value.shape
-    write_attribute(f, "raw/X", value.X, dataset_kwargs=dataset_kwargs)
-    write_attribute(f, "raw/var", value.var, dataset_kwargs=dataset_kwargs)
-    write_attribute(f, "raw/varm", value.varm, dataset_kwargs=dataset_kwargs)
+    write_elem(f, "raw/X", value.X, dataset_kwargs=dataset_kwargs)
+    write_elem(f, "raw/var", value.var, dataset_kwargs=dataset_kwargs)
+    write_elem(f, "raw/varm", value.varm, dataset_kwargs=dataset_kwargs)
 
 
 @report_write_key_on_error
@@ -418,7 +417,7 @@ def read_h5ad(
             elif k in {"obs", "var"}:
                 d[k] = read_dataframe(f[k])
             else:  # Base case
-                d[k] = read_attribute(f[k])
+                d[k] = read_elem(f[k])
 
         d["raw"] = _read_raw(f, as_sparse, rdasp)
 
@@ -452,8 +451,8 @@ def _read_raw(
         raw["X"] = read_x(f["raw/X"])
     for v in ("var", "varm"):
         if v in attrs and f"raw/{v}" in f:
-            raw[v] = read_attribute(f[f"raw/{v}"])
-    return _read_legacy_raw(f, raw, read_dataframe, read_attribute, attrs=attrs)
+            raw[v] = read_elem(f[f"raw/{v}"])
+    return _read_legacy_raw(f, raw, read_dataframe, read_elem, attrs=attrs)
 
 
 @report_read_key_on_error
@@ -471,20 +470,24 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
     return df
 
 
-@report_read_key_on_error
 def read_dataframe(group) -> pd.DataFrame:
+    """Backwards compat function"""
+    # TODO: warn
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
-    columns = list(group.attrs["column-order"])
-    idx_key = group.attrs["_index"]
-    df = pd.DataFrame(
-        {k: read_series(group[k]) for k in columns},
-        index=read_series(group[idx_key]),
-        columns=list(columns),
-    )
-    if idx_key != "_index":
-        df.index.name = idx_key
-    return df
+    elif _REGISTRY.has_reader(get_spec(group)):
+        return read_elem(group)
+    else:
+        columns = list(group.attrs["column-order"])
+        idx_key = group.attrs["_index"]
+        df = pd.DataFrame(
+            {k: read_series(group[k]) for k in columns},
+            index=read_series(group[idx_key]),
+            columns=list(columns),
+        )
+        if idx_key != "_index":
+            df.index.name = idx_key
+        return df
 
 
 @report_read_key_on_error
