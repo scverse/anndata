@@ -279,7 +279,13 @@ class SparseDataset:
     def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
         row, col = self._normalize_index(index)
         mtx = self.to_backed()
-        return mtx[row, col]
+        sub = mtx[row, col]
+        # If indexing is array x array it returns a backed_sparse_matrix
+        # Not sure what the performance is on that operation
+        if isinstance(sub, BackedSparseMatrix):
+            return get_memory_class(self.format_str)(sub)
+        else:
+            return sub
 
     def __setitem__(self, index: Union[Index, Tuple[()]], value):
         row, col = self._normalize_index(index)
