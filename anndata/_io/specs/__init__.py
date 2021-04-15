@@ -366,9 +366,12 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
     write_elem(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
 
 
+# TODO: Is this the right behaviour for MaskedArrays?
+# It's in the `AnnData.concatenate` docstring, but should we keep it?
 @_REGISTRY.register_write(views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(np.ndarray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(h5py.Dataset, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 def write_basic(f, k, elem, dataset_kwargs=MappingProxyType({})):
     """Write methods which underlying library handles nativley."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
