@@ -104,7 +104,9 @@ def write_h5ad(
                 f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
             )
             write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_elem(f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs)
+            write_elem(
+                f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
+            )
         elif adata.raw is not None:
             write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
         write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
@@ -323,7 +325,7 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
     attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
     df_attributes = ["obs", "var"]
 
-    d.update({k: read_attribute(f[k]) for k in attributes if k in f})
+    d.update({k: read_elem(f[k]) for k in attributes if k in f})
     for k in df_attributes:
         if k in f:  # Backwards compat
             d[k] = read_dataframe(f[k])

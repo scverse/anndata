@@ -368,6 +368,7 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_write(views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(np.ndarray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Dataset, IOSpec("array", "0.2.0"))
 def write_basic(f, k, elem, dataset_kwargs=MappingProxyType({})):
     """Write methods which underlying library handles nativley."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
@@ -455,6 +456,16 @@ _REGISTRY.register_write(sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"))(write
 _REGISTRY.register_write(views.SparseCSRView, IOSpec("csr_matrix", "0.1.0"))(write_csr)
 _REGISTRY.register_write(sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"))(write_csc)
 _REGISTRY.register_write(views.SparseCSCView, IOSpec("csc_matrix", "0.1.0"))(write_csc)
+
+
+@_REGISTRY.register_write(SparseDataset, IOSpec("", "0.1.0"))
+def write_sparse_dataset(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    write_sparse_compressed(
+        f, k, elem.to_backed(), fmt=elem.format_str, dataset_kwargs=dataset_kwargs
+    )
+    # TODO: Cleaner way to do this
+    f[k].attrs["encoding-type"] = f"{elem.format_str}_matrix"
+    f[k].attrs["encoding-version"] = "0.1.0"
 
 
 @_REGISTRY.register_read(IOSpec("csc_matrix", "0.1.0"))
