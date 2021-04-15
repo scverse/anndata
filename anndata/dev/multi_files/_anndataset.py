@@ -72,7 +72,7 @@ class MapObsView:
         self.attr = attr
         self.convert = convert
 
-    def __getitem__(self, key):
+    def __getitem__(self, key, use_convert=True):
         if self._keys is not None and key not in self._keys:
             raise KeyError(f"No {key} in {self.attr} view")
 
@@ -86,7 +86,7 @@ class MapObsView:
         _arr = _merge(arrs) if len(arrs) > 1 else arrs[0]
         _arr = _arr[self.reverse] if self.reverse is not None else _arr
 
-        if self.convert is not None:
+        if self.convert is not None and use_convert:
             _arr = _select_convert(key, self.convert, _arr)
 
         return _arr
@@ -100,7 +100,7 @@ class MapObsView:
     def to_dict(self):
         dct = {}
         for key in self.keys():
-            dct[key] = self[key]
+            dct[key] = self.__getitem__(key, False)
         return dct
 
     def __repr__(self):
@@ -121,6 +121,7 @@ class AnnDataConcatView(_ConcatViewMixin):
         self._attrs = self.reference._attrs
 
         self._layers_view, self._obsm_view, self._obs_view = None, None, None
+        self._X = None
 
         self.convert = reference.convert
         self.convert_X = None
@@ -154,8 +155,10 @@ class AnnDataConcatView(_ConcatViewMixin):
             MapObsView(attr, adatas, keys, adatas_oidx, reverse, vidx, attr_convert),
         )
 
-    @property
-    def X(self):
+    def _gather_X(self):
+        if self._X is not None:
+            return self._X
+
         Xs = []
         for i, oidx in enumerate(self.adatas_oidx):
             if oidx is not None:
@@ -177,6 +180,14 @@ class AnnDataConcatView(_ConcatViewMixin):
 
         _X = _merge(Xs) if len(Xs) > 1 else Xs[0]
         _X = _X[self.reverse] if self.reverse is not None else _X
+
+        self._X = _X
+
+        return _X
+
+    @property
+    def X(self):
+        _X = self._gather_X()
 
         return self.convert_X(_X) if self.convert_X is not None else _X
 
@@ -237,10 +248,16 @@ class AnnDataConcatView(_ConcatViewMixin):
         else:
             layers = self.layers.to_dict()
         obsm = None if self.obsm is None else self.obsm.to_dict()
-        obs = None if self.obs is None else self.obs.to_dict()
-        X = None if ignore_X else self.X
+        obs = None if self.obs is None else pd.DataFrame(self.obs.to_dict())
 
-        adata = AnnData(X, obs=obs, obsm=obsm, layers=layers, shape=self.shape)
+        if ignore_X:
+            X = None
+            shape = self.shape
+        else:
+            X = self._gather_X()
+            shape = None
+
+        adata = AnnData(X, obs=obs, obsm=obsm, layers=layers, shape=shape)
         adata.obs_names = self.obs_names
         adata.var_names = self.var_names
         return adata
