@@ -218,6 +218,9 @@ class AnnDataConcatView(_ConcatViewMixin):
     def shape(self):
         return len(self.obs_names), len(self.var_names)
 
+    def __len__(self):
+        return len(self.obs_names)
+
     def __getitem__(self, index: Index):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
@@ -384,6 +387,9 @@ class AnnDataConcatObs(_ConcatViewMixin):
     @property
     def shape(self):
         return self.limits[-1], self.adatas[0].n_vars
+
+    def __len__(self):
+        return self.limits[-1]
 
     def to_adata(self):
         if "obs" in self._view_attrs_keys or "obsm" in self._view_attrs_keys:
