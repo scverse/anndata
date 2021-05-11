@@ -54,12 +54,11 @@ dev = [
     'docutils',
 ]
 doc = [
-    # Sphinx 2 has nicer looking sections
-    'sphinx>=2.0.1',
+    'sphinx>=4.0',
     'sphinx-rtd-theme',
     'sphinx-autodoc-typehints>=1.11.0',
     'sphinx_issues',
-    'scanpydoc>=0.5',
+    'scanpydoc>=0.7.1',
     'typing_extensions; python_version < "3.8"',
 ]
 test = [
