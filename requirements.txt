@@ -1,7 +1,7 @@
 # auto-generated from pyproject.toml, DO NOT EDIT
 pandas>=1.1.1
 numpy>=1.16.5
-scipy~=1.0
+scipy>1.4
 h5py
 natsort
 packaging>=20

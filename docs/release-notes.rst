@@ -20,8 +20,8 @@ Version 0.7
 .. include:: release-latest.rst
 
 
-0.7.0 :small:`2020-01-22`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.7.0 :small:`22 January, 2020`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. warning::
    Breaking changes introduced between `0.6.22.post1` and `0.7`:
@@ -91,8 +91,8 @@ Version 0.6
 - iteration over chunks :func:`~anndata.AnnData.chunked_X` and :func:`~anndata.AnnData.chunk_X`
   :noteversion:`0.6.1` :pr:`20` :smaller:`S Rybakov`
 
-0.6.0 :small:`2018-05-01`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.6.0 :small:`1 May, 2018`
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - compatibility with Seurat converter
 - tremendous speedup for :func:`~anndata.AnnData.concatenate`
@@ -105,8 +105,8 @@ Version 0.6
 Version 0.5
 -----------
 
-0.5.0 :small:`2018-02-09`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.5.0 :small:`9 February, 2018`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - inform about duplicates in :class:`~anndata.AnnData.var_names` and resolve them using :func:`~anndata.AnnData.var_names_make_unique`
 - automatically remove unused categories after slicing
@@ -120,8 +120,8 @@ Version 0.5
 Version 0.4
 -----------
 
-0.4.0 :small:`2017-12-23`
-~~~~~~~~~~~~~~~~~~~~~~~~~
+0.4.0 :small:`23 December, 2017`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - read/write `.loom`_ files
 - scalability beyond dataset sizes that fit into memory: see this `blog post`_
