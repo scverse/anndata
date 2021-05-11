@@ -43,9 +43,8 @@ def _filled_sparse(a, fill_value=None):
 
 @filled_like.register(pd.DataFrame)
 def _filled_df(a, fill_value=np.nan):
-    return pd.DataFrame().reindex(
-        index=a.index, columns=a.columns, fill_value=fill_value
-    )
+    # dtype from pd.concat can be unintuitive, this returns something close enough
+    return a.loc[[], :].reindex(index=a.index, fill_value=fill_value)
 
 
 def check_filled_like(x, fill_value=None, elem_name=None):
@@ -1077,6 +1076,7 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     a = gen_adata((5, 7))
     b = gen_adata(shape)
     alt_axis = 1 - axis
+    dim = ("obs", "var")[axis]
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
@@ -1101,6 +1101,41 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
         for k, elem in getattr(result, "layers").items():
             check_filled_like(elem[axis_idx], elem_name=f"layers/{k}")
             check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
+
+        if shape[axis] > 0:
+            b_result = result[axis_idx].copy()
+            b_result.strings_to_categoricals()
+            mapping_elem = f"{dim}m"
+            setattr(b_result, f"{dim}_names", getattr(b, f"{dim}_names"))
+            for k, result_elem in getattr(b_result, mapping_elem).items():
+                elem_name = f"{mapping_elem}/{k}"
+                # pd.concat can have unintuitive return types. is similar to numpy promotion
+                if isinstance(result_elem, pd.DataFrame):
+                    assert_equal(
+                        getattr(b, mapping_elem)[k].astype(object),
+                        result_elem.astype(object),
+                        elem_name=elem_name,
+                    )
+                else:
+                    assert_equal(
+                        getattr(b, mapping_elem)[k],
+                        result_elem,
+                        elem_name=elem_name,
+                    )
+
+
+@pytest.mark.parametrize("elem", ["sparse", "array", "df"])
+def test_concat_outer_aligned_mapping(elem):
+    a = gen_adata((5, 5))
+    b = gen_adata((3, 5))
+    del b.obsm[elem]
+
+    concated = concat({"a": a, "b": b}, join="outer", label="group")
+    result = concated.obsm[elem][concated.obs["group"] == "b"]
+    print(elem)
+    print(concated.obsm[elem])
+    # print(concated.obsm[elem].dtypes)
+    check_filled_like(result, elem_name=f"obsm/{elem}")
 
 
 def test_concatenate_size_0_dim():

@@ -415,7 +415,11 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         fill_value = default_fill_value(arrays)
 
     if any(isinstance(a, pd.DataFrame) for a in arrays):
-        if not all(isinstance(a, pd.DataFrame) for a in arrays):
+        # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
+        if not all(
+            isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
+            for a in arrays
+        ):
             raise NotImplementedError(
                 "Cannot concatenate a dataframe with other array types."
             )
@@ -482,7 +486,9 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
     if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
         reindexers = [
-            lambda x: x if not_missing(el) else pd.DataFrame(index=range(shape))
+            (lambda x: x)
+            if not_missing(el)
+            else (lambda x: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
     else:
@@ -510,6 +516,8 @@ def outer_concat_aligned_mapping(
         else:
             cur_reindexers = reindexers
 
+        # Handling of missing values here is hacky for dataframes
+        # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
                 el if not_missing(el) else np.zeros((n, 0), dtype=bool)
