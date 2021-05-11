@@ -1104,7 +1104,6 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
 
         if shape[axis] > 0:
             b_result = result[axis_idx].copy()
-            b_result.strings_to_categoricals()
             mapping_elem = f"{dim}m"
             setattr(b_result, f"{dim}_names", getattr(b, f"{dim}_names"))
             for k, result_elem in getattr(b_result, mapping_elem).items():
@@ -1132,6 +1131,7 @@ def test_concat_outer_aligned_mapping(elem):
 
     concated = concat({"a": a, "b": b}, join="outer", label="group")
     result = concated.obsm[elem][concated.obs["group"] == "b"]
+
     check_filled_like(result, elem_name=f"obsm/{elem}")
 
 
