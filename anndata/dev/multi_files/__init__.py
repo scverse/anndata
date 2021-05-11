@@ -1,1 +1,1 @@
-from ._anndataset import AnnDataConcatObs
+from ._anndataset import AnnDataSet

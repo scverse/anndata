@@ -1,6 +1,6 @@
 from scipy.sparse import issparse
 from ..._core.anndata import AnnData
-from ..multi_files._anndataset import AnnDataConcatObs, _ConcatViewMixin
+from ..multi_files._anndataset import AnnDataSet, _ConcatViewMixin
 import numpy as np
 import warnings
 
@@ -46,33 +46,54 @@ class BatchIndexSampler(Sampler):
         return length
 
 
-def default_converter(arr, use_cuda):
-    if np.issubdtype(arr.dtype, np.number):
+def default_converter(arr, use_cuda, pin_memory):
+    if arr.dtype.name != "category" and np.issubdtype(arr.dtype, np.number):
         if issparse(arr):
             arr = arr.toarray()
-        return torch.cuda.FloatTensor(arr) if use_cuda else torch.FloatTensor(arr)
+        if use_cuda:
+            arr = torch.cuda.FloatTensor(arr)
+        else:
+            arr = torch.FloatTensor(arr)
+            arr = arr.pin_memory() if pin_memory else arr
+    return arr
+
+
+def _convert_on_top(convert, top_convert, attrs_keys):
+    if convert is None:
+        new_convert = top_convert
+    elif callable(convert):
+        new_convert = lambda arr: top_convert(convert(arr))
     else:
-        return arr
+        new_convert = {}
+        for attr in attrs_keys:
+            if attr not in convert:
+                new_convert[attr] = top_convert
+            else:
+                if isinstance(attrs_keys, list):
+                    as_ks = None
+                else:
+                    as_ks = attrs_keys[attr]
+                new_convert[attr] = _convert_on_top(convert[attr], top_convert, as_ks)
+    return new_convert
 
 
 # AnnDataLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
 class AnnDataLoader(DataLoader):
-    def __init__(self, adata, batch_size=1, shuffle=False, **kwargs):
+    def __init__(self, adatas, batch_size=1, shuffle=False, **kwargs):
 
-        if isinstance(adata, AnnData):
+        if isinstance(adatas, AnnData):
+            adatas = [adatas]
+
+        if isinstance(adatas, list) or isinstance(adatas, tuple):
             join_obs = kwargs.pop("join_obs", "inner")
             join_obsm = kwargs.pop("join_obsm", None)
             label = kwargs.pop("label", None)
             keys = kwargs.pop("keys", None)
             index_unique = kwargs.pop("index_unique", None)
+            convert = kwargs.pop("convert", None)
 
-            use_cuda = kwargs.pop("use_cuda", False)
-
-            _converter = lambda arr: default_converter(arr, use_cuda)
-            convert = kwargs.pop("convert", _converter)
-
-            dataset = AnnDataConcatObs(
-                [adata],
+            dataset = AnnDataSet(
+                adatas,
                 join_obs=join_obs,
                 join_obsm=join_obsm,
                 label=label,
@@ -81,10 +102,19 @@ class AnnDataLoader(DataLoader):
                 convert=convert,
             )
 
-        elif isinstance(adata, _ConcatViewMixin):
-            dataset = adata
+        elif isinstance(adatas, _ConcatViewMixin):
+            dataset = adatas
         else:
             raise ValueError("adata should be of type AnnData or AnnDataSet.")
+
+        use_default_converter = kwargs.pop("use_default_converter", True)
+        if use_default_converter:
+            use_cuda = kwargs.pop("use_cuda", False)
+            pin_memory = kwargs.pop("pin_memory", False)
+            _converter = lambda arr: default_converter(arr, use_cuda, pin_memory)
+            dataset.convert = _convert_on_top(
+                dataset.convert, _converter, dataset.attrs_keys
+            )
 
         has_sampler = "sampler" in kwargs
         has_batch_sampler = "batch_sampler" in kwargs

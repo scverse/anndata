@@ -108,7 +108,7 @@ class MapObsView:
         return descr
 
 
-class AnnDataConcatView(_ConcatViewMixin):
+class AnnDataSetView(_ConcatViewMixin):
     def __init__(self, reference, resolved_idx):
         self.reference = reference
 
@@ -225,7 +225,7 @@ class AnnDataConcatView(_ConcatViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnDataConcatView(self.reference, resolved_idx)
+        return AnnDataSetView(self.reference, resolved_idx)
 
     @property
     def has_backed(self):
@@ -236,7 +236,7 @@ class AnnDataConcatView(_ConcatViewMixin):
 
     def __repr__(self):
         n_obs, n_vars = self.shape
-        descr = f"AnnDataConcatView object with n_obs × n_vars = {n_obs} × {n_vars}"
+        descr = f"AnnDataSetView object with n_obs × n_vars = {n_obs} × {n_vars}"
         all_attrs_keys = self._view_attrs_keys.copy()
         for attr in self._attrs:
             all_attrs_keys[attr] = list(getattr(self.reference, attr).keys())
@@ -266,7 +266,7 @@ class AnnDataConcatView(_ConcatViewMixin):
         return adata
 
 
-class AnnDataConcatObs(_ConcatViewMixin):
+class AnnDataSet(_ConcatViewMixin):
     def __init__(
         self,
         adatas,
@@ -382,7 +382,7 @@ class AnnDataConcatObs(_ConcatViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnDataConcatView(self, resolved_idx)
+        return AnnDataSetView(self, resolved_idx)
 
     @property
     def shape(self):
@@ -414,9 +414,18 @@ class AnnDataConcatObs(_ConcatViewMixin):
     def has_backed(self):
         return any([adata.isbacked for adata in self.adatas])
 
+    @property
+    def attrs_keys(self):
+        _attrs_keys = {}
+        for attr in self._attrs:
+            keys = list(getattr(self, attr).keys())
+            _attrs_keys[attr] = keys
+        _attrs_keys.update(self._view_attrs_keys)
+        return _attrs_keys
+
     def __repr__(self):
         n_obs, n_vars = self.shape
-        descr = f"AnnDataConcatObs object with n_obs × n_vars = {n_obs} × {n_vars}"
+        descr = f"AnnDataSet object with n_obs × n_vars = {n_obs} × {n_vars}"
         descr += f"\n  constructed from {len(self.adatas)} AnnData objects"
         for attr, keys in self._view_attrs_keys.items():
             if len(keys) > 0:
