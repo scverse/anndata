@@ -64,26 +64,7 @@ nitpicky = True  # Report broken links
 suppress_warnings = ["ref.citation"]
 
 
-def work_around_issue_6785():
-    """See https://github.com/sphinx-doc/sphinx/issues/6785"""
-    from docutils.parsers.rst import directives
-    from sphinx.ext import autodoc
-    from sphinx.domains.python import PyAttribute
-
-    # check if the code changes on the sphinx side and we can remove this
-    assert autodoc.PropertyDocumenter.directivetype == "method"
-    autodoc.PropertyDocumenter.directivetype = "attribute"
-
-    def get_signature_prefix(self, sig: str) -> str:
-        # TODO: abstract attributes
-        return "property " if "property" in self.options else ""
-
-    PyAttribute.option_spec["property"] = directives.flag
-    PyAttribute.get_signature_prefix = get_signature_prefix
-
-
 def setup(app: Sphinx):
-    work_around_issue_6785()
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
 
