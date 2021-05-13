@@ -19,7 +19,7 @@ try:
 except ImportError as e:  # noqa: F841  # TODO: Is there a better way?
 
     def write_zarr(*_, **__):
-        raise e
+        raise ImportError("Couldn't import 'zarr' module (not installed?)")
 
 
 logger = get_logger(__name__)
