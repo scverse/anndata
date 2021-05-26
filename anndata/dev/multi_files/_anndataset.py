@@ -123,10 +123,9 @@ class AnnDataSetView(_ConcatViewMixin):
         self._layers_view, self._obsm_view, self._obs_view = None, None, None
         self._X = None
 
+        self._convert = None
+        self._convert_X = None
         self.convert = reference.convert
-        self.convert_X = None
-        if self.convert is not None:
-            self.convert_X = _select_convert("X", self.convert)
 
     def _lazy_init_attr(self, attr, set_vidx=False):
         if getattr(self, f"_{attr}_view") is not None:
@@ -189,7 +188,7 @@ class AnnDataSetView(_ConcatViewMixin):
     def X(self):
         _X = self._gather_X()
 
-        return self.convert_X(_X) if self.convert_X is not None else _X
+        return self._convert_X(_X) if self._convert_X is not None else _X
 
     @property
     def layers(self):
@@ -217,6 +216,17 @@ class AnnDataSetView(_ConcatViewMixin):
     @property
     def shape(self):
         return len(self.obs_names), len(self.var_names)
+
+    @property
+    def convert(self):
+        return self._convert
+
+    @convert.setter
+    def convert(self, value):
+        self._convert = value
+        self._convert_X = _select_convert("X", self._convert)
+        for attr in ATTRS:
+            setattr(self, f"_{attr}_view", None)
 
     def __len__(self):
         return len(self.obs_names)
