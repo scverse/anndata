@@ -113,7 +113,7 @@ class AnnDataLoader(DataLoader):
             pin_memory = kwargs.pop("pin_memory", False)
             _converter = lambda arr: default_converter(arr, use_cuda, pin_memory)
             dataset.convert = _convert_on_top(
-                dataset.convert, _converter, dataset.attrs_keys
+                dataset.convert, _converter, dict(dataset.attrs_keys, X=[])
             )
 
         has_sampler = "sampler" in kwargs
