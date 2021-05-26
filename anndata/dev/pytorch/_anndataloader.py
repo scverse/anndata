@@ -45,9 +45,14 @@ class BatchIndexSampler(Sampler):
 
         return length
 
-
+# maybe replace use_cuda with explicit device option
 def default_converter(arr, use_cuda, pin_memory):
-    if arr.dtype.name != "category" and np.issubdtype(arr.dtype, np.number):
+    if isinstance(arr, torch.Tensor):
+        if use_cuda:
+            arr = arr.cuda()
+        elif pin_memory:
+            arr = arr.pin_memory()
+    elif arr.dtype.name != "category" and np.issubdtype(arr.dtype, np.number):
         if issparse(arr):
             arr = arr.toarray()
         if use_cuda:
