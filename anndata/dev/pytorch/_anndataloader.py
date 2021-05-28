@@ -45,6 +45,7 @@ class BatchIndexSampler(Sampler):
 
         return length
 
+
 # maybe replace use_cuda with explicit device option
 def default_converter(arr, use_cuda, pin_memory):
     if isinstance(arr, torch.Tensor):
@@ -56,9 +57,9 @@ def default_converter(arr, use_cuda, pin_memory):
         if issparse(arr):
             arr = arr.toarray()
         if use_cuda:
-            arr = torch.cuda.FloatTensor(arr)
+            arr = torch.tensor(arr, device="cuda")
         else:
-            arr = torch.FloatTensor(arr)
+            arr = torch.tensor(arr)
             arr = arr.pin_memory() if pin_memory else arr
     return arr
 
@@ -84,7 +85,15 @@ def _convert_on_top(convert, top_convert, attrs_keys):
 
 # AnnDataLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
 class AnnDataLoader(DataLoader):
-    def __init__(self, adatas, batch_size=1, shuffle=False, **kwargs):
+    def __init__(
+        self,
+        adatas,
+        batch_size=1,
+        shuffle=False,
+        use_default_converter=True,
+        use_cuda=False,
+        **kwargs,
+    ):
 
         if isinstance(adatas, AnnData):
             adatas = [adatas]
@@ -112,9 +121,7 @@ class AnnDataLoader(DataLoader):
         else:
             raise ValueError("adata should be of type AnnData or AnnDataSet.")
 
-        use_default_converter = kwargs.pop("use_default_converter", True)
         if use_default_converter:
-            use_cuda = kwargs.pop("use_cuda", False)
             pin_memory = kwargs.pop("pin_memory", False)
             _converter = lambda arr: default_converter(arr, use_cuda, pin_memory)
             dataset.convert = _convert_on_top(
