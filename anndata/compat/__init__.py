@@ -62,12 +62,28 @@ except ImportError:
             pass
 
 
+def _from_bytes(value):
+    """
+    Convert from bytes to a Python string.
+
+    For compatibility with other languages. For example Julia's HDF5.jl
+    writes string attributes as fixed-size strings, which are read as bytes
+    by h5py.
+    """
+    try:
+        return value.decode("utf-8")
+    except Exception:
+        return value
+
+
 def _from_fixed_length_strings(value):
     """\
     Convert from fixed length strings to unicode.
 
     For backwards compatability with older h5ad and zarr files.
     """
+    if not hasattr(value, "dtype"):
+        return value
     new_dtype = []
     for dt in value.dtype.descr:
         dt_list = list(dt)

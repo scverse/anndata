@@ -20,6 +20,8 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
+from ..compat import _from_bytes
+
 try:
     # Not really important, just for IDEs to be more helpful
     from scipy.sparse.compressed import _cs_matrix
@@ -238,10 +240,10 @@ class SparseDataset:
     @property
     def format_str(self) -> str:
         if "h5sparse_format" in self.group.attrs:
-            return self.group.attrs["h5sparse_format"]
+            return _from_bytes(self.group.attrs["h5sparse_format"])
         else:
             # Should this be an extra field?
-            return self.group.attrs["encoding-type"].replace("_matrix", "")
+            return _from_bytes(self.group.attrs["encoding-type"]).replace("_matrix", "")
 
     @property
     def h5py_group(self) -> h5py.Group:

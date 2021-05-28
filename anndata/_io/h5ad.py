@@ -18,6 +18,7 @@ from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
 from .._core.raw import Raw
 from ..compat import (
+    _from_bytes,
     _from_fixed_length_strings,
     _decode_structured_array,
     _clean_uns,
@@ -475,8 +476,8 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
 def read_dataframe(group) -> pd.DataFrame:
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
-    columns = list(group.attrs["column-order"])
-    idx_key = group.attrs["_index"]
+    columns = list(group.attrs["column-order"].astype("U"))
+    idx_key = _from_bytes(group.attrs["_index"])
     df = pd.DataFrame(
         {k: read_series(group[k]) for k in columns},
         index=read_series(group[idx_key]),
@@ -522,10 +523,10 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     if "h5sparse_format" in group.attrs:  # Backwards compat
         return SparseDataset(group).to_memory()
 
-    encoding_type = group.attrs.get("encoding-type")
+    encoding_type = _from_bytes(group.attrs.get("encoding-type"))
     if encoding_type:
         EncodingVersions[encoding_type].check(
-            group.name, group.attrs["encoding-version"]
+            group.name, _from_bytes(group.attrs["encoding-version"])
         )
     if encoding_type in {None, "raw"}:
         pass
