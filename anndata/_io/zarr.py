@@ -45,7 +45,7 @@ def write_zarr(
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
     f = zarr.open(store, mode="w")
-    if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
+    if chunks is not None:
         write_attribute(f, "X", adata.X, dict(chunks=chunks, **dataset_kwargs))
     else:
         write_attribute(f, "X", adata.X, dataset_kwargs)
@@ -190,7 +190,10 @@ def write_csr(f, key, value: sparse.csr_matrix, dataset_kwargs=MappingProxyType(
     group.attrs["shape"] = value.shape
     write_array(group, "data", value.data, dataset_kwargs=dataset_kwargs)
     write_array(group, "indices", value.indices, dataset_kwargs=dataset_kwargs)
+    if "chunks" in dataset_kwargs:
+        del dataset_kwargs["chunks"]
     write_array(group, "indptr", value.indptr, dataset_kwargs=dataset_kwargs)
+
 
 
 @report_write_key_on_error
@@ -201,6 +204,8 @@ def write_csc(f, key, value: sparse.csc_matrix, dataset_kwargs=MappingProxyType(
     group.attrs["shape"] = value.shape
     write_array(group, "data", value.data, dataset_kwargs=dataset_kwargs)
     write_array(group, "indices", value.indices, dataset_kwargs=dataset_kwargs)
+    if "chunks" in dataset_kwargs:
+        del dataset_kwargs["chunks"]
     write_array(group, "indptr", value.indptr, dataset_kwargs=dataset_kwargs)
 
 
