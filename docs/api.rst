@@ -72,7 +72,7 @@ Experimental development API
    :toctree: .
 
    dev.multi_files.AnnDataSet
-   dev.multi_files.AnnDataLoader
+   dev.pytorch.AnnDataLoader
 
 
 Errors and warnings

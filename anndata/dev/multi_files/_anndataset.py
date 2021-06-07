@@ -97,9 +97,10 @@ class MapObsView:
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
-    def to_dict(self):
+    def to_dict(self, keys=None):
         dct = {}
-        for key in self.keys():
+        keys = self.keys() if keys is None else keys
+        for key in keys:
             dct[key] = self.__getitem__(key, False)
         return dct
 
