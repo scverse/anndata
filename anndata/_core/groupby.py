@@ -1,9 +1,33 @@
+from typing import (
+    Optional,
+    Iterable,
+    AbstractSet,
+    Sequence,
+    TypedDict,
+    Literal,
+    Collection,
+    Tuple,
+    Union,
+)
+
 import numpy as np
 import pandas as pd
+import collections.abc as cabc
 from scipy.sparse import coo_matrix, dia_matrix
-from collections.abc import Iterable
 
 from .. import utils
+from .anndata import AnnData
+
+
+class CountMeanVar(TypedDict):
+    count: pd.Series
+    mean: pd.DataFrame
+    var: pd.DataFrame
+
+
+Score = Literal[
+    "diff-score", "fold-score", "t-score", "v-score", "t-score-pooled", "v-score-pooled"
+]
 
 
 class GroupBy:
@@ -42,28 +66,42 @@ class GroupBy:
 
     Params
     ------
-    adata : AnnData
-    key : str
+    adata
+    key
         Group key field in adata.obs.
-    weight : str
+    weight
         Weight field in adata.obs of type float.
-    explode : bool (default: False)
+    explode
         If False, each observation is assigned to the group keyed by adata.obs[key].
         If True, each observation is assigned to all groups in tuple adata.obs[key].
-    key_set: list or set
+    key_set
         Subset of keys to which to filter.
     """
 
-    def __init__(self, adata, key, weight=None, explode=False, key_set=None):
+    adata: AnnData
+    key: str
+    weight: Optional[str]
+    explode: bool
+    key_set: AbstractSet[str]
+    _key_index: Optional[np.ndarray]  # caution, may be stale if attributes are updated
+
+    def __init__(
+        self,
+        adata: AnnData,
+        key: str,
+        *,
+        weight: Optional[str] = None,
+        explode: bool = False,
+        key_set: Optional[Iterable[str]] = None,
+    ):
         self.adata = adata
         self.key = key
         self.weight = weight
         self.explode = explode
-        self.key_set = key_set
+        self.key_set = None if key_set is None else dict.fromkeys(key_set).keys()
+        self._key_index = None
 
-        self._key_index = None  # caution, may be stale if attributes are updated
-
-    def count(self):
+    def count(self) -> pd.Series:
         """
         Count the number of observations in each group.
 
@@ -79,7 +117,7 @@ class GroupBy:
             name="count",
         )
 
-    def sum(self):
+    def sum(self) -> pd.DataFrame:
         """
         Compute the sum per feature per group of observations.
 
@@ -95,7 +133,7 @@ class GroupBy:
             data=utils.asarray(A * X),
         )
 
-    def mean(self):
+    def mean(self) -> pd.DataFrame:
         """
         Compute the mean per feature per group of observations.
 
@@ -111,7 +149,7 @@ class GroupBy:
             data=utils.asarray(A * X),
         )
 
-    def var(self, dof=1):
+    def var(self, dof: int = 1) -> pd.DataFrame:
         """
         Compute the variance per feature per group of observations.
 
@@ -119,7 +157,7 @@ class GroupBy:
 
         Params
         ------
-        dof: int (default=1)
+        dof
             Degrees of freedom for variance.
 
         Returns
@@ -128,7 +166,7 @@ class GroupBy:
         """
         return self.count_mean_var(dof)["var"]
 
-    def count_mean_var(self, dof=1):
+    def count_mean_var(self, dof: int = 1) -> CountMeanVar:
         """
         Compute the count, as well as mean and variance per feature, per group of observations.
 
@@ -140,7 +178,7 @@ class GroupBy:
 
         Params
         ------
-        dof: int (default=1)
+        dof
             Degrees of freedom for variance.
 
         Returns
@@ -157,15 +195,14 @@ class GroupBy:
             sq_mean = mean_ ** 2
         else:
             A_unweighted, _ = GroupBy(
-                self.adata, self.key, None, self.explode, self.key_set
+                self.adata, self.key, explode=self.explode, key_set=self.key_set
             ).sparse_aggregator()
             mean_unweighted = utils.asarray(A_unweighted * X)
             sq_mean = 2 * mean_ * mean_unweighted + mean_unweighted ** 2
         var_ = mean_sq - sq_mean
         precision = 2 << (42 if X.dtype == np.float64 else 20)
-        var_[
-            precision * var_ < sq_mean
-        ] = 0  # detects loss of precision in mean_sq - sq_mean, which suggests variance is 0
+        # detects loss of precision in mean_sq - sq_mean, which suggests variance is 0
+        var_[precision * var_ < sq_mean] = 0
         if dof != 0:
             var_ *= (count_ / (count_ - dof))[:, np.newaxis]
 
@@ -177,9 +214,16 @@ class GroupBy:
         var_df = pd.DataFrame(
             index=index.copy(), columns=self.adata.var_names.copy(), data=var_
         )
-        return {"count": count_sr, "mean": mean_df, "var": var_df}
+        return CountMeanVar(count=count_sr, mean=mean_df, var=var_df)
 
-    def score_pairs(self, score, pairs, return_stats=False, nan_to_zero=True):
+    def score_pairs(
+        self,
+        score: Score,
+        pairs: Collection[Tuple[str, str]],
+        *,
+        return_stats: bool = False,
+        nan_to_zero: bool = True,
+    ) -> Union[pd.DataFrame, Tuple[pd.DataFrame, CountMeanVar]]:
         """
         Compute scores per feature for pairs of groups of observations.
 
@@ -210,18 +254,21 @@ class GroupBy:
 
         Params
         ------
-        score: str
+        score
             One of diff-score, fold-score, t-score, v-score, t-score-pooled, v-score-pooled.
-        pairs: list<tuple>
+        pairs
             List of ordered pairs of keys in adata.obs['key'].
-        return_stats: bool (default: False)
+        return_stats
             If True, also return dictionary of summary stats via tuple (scores, stats).
         nan_to_zero: bool
             If True, ignore divide-by-zero warnings and reset non-finite scores to zero.
 
         Returns
         -------
+        scores
             DataFrame of scores indexed by key_0 and key_1 from each pair.
+        stats
+            If `return_stats=True` was specified, a dict of stat name to feature and observation
         """
         scores = {
             "diff-score": (
@@ -238,9 +285,9 @@ class GroupBy:
             "v-score-pooled": (self.count_mean_var, GroupBy._v_score_pooled),
         }
 
-        def _unpack_stats(stats):
+        def _unpack_stats(stats: Tuple[dict, dict]):
             if stats[0].keys() == stats[1].keys() == {"mean"}:
-                return (stats[0]["mean"], stats[1]["mean"])
+                return stats[0]["mean"], stats[1]["mean"]
             else:
                 assert stats[0].keys() == stats[1].keys() == {"count", "mean", "var"}
                 return (
@@ -277,7 +324,7 @@ class GroupBy:
         else:
             return df
 
-    def sparse_aggregator(self, normalize=False):
+    def sparse_aggregator(self, normalize: bool = False):
         """
         Form a coordinate-sparse matrix A such that rows of A * X are weighted sums of groups of
         rows of X.
@@ -334,13 +381,13 @@ class GroupBy:
                 key_value.iloc[0], tuple
             ), "key type must be tuple to explode"
             keys, key_index = np.unique(
-                _ndarray_from_list([k for ks in key_value for k in ks]),
+                _ndarray_from_seq([k for ks in key_value for k in ks]),
                 return_inverse=True,
             )
             obs_index = np.array([i for i, ks in enumerate(key_value) for _ in ks])
         else:
             keys, key_index = np.unique(
-                _ndarray_from_list(key_value), return_inverse=True
+                _ndarray_from_seq(key_value), return_inverse=True
             )
             obs_index = np.arange(len(key_index))
         if self.weight is None:
@@ -383,7 +430,7 @@ class GroupBy:
         )
         return df.groupby(self.key).agg(aggs)
 
-    def pd_score_pairs(self, score, pairs):
+    def pd_score_pairs(self, score: Score, pairs: Collection[Tuple[str, str]]):
         """
         Slower implementation of score_pairs that masks NaN values.
         """
@@ -459,10 +506,10 @@ def _power(X, power):
     return X ** power if isinstance(X, np.ndarray) else X.power(power)
 
 
-def _ndarray_from_list(lst):
+def _ndarray_from_seq(lst: Sequence):
     # prevents expansion of iterables as axis
     n = len(lst)
-    if n > 0 and isinstance(lst[0], Iterable):
+    if n > 0 and isinstance(lst[0], cabc.Iterable):
         arr = np.empty(n, dtype=np.object)
         arr[:] = lst
     else:
