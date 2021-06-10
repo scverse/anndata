@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ..._core.anndata import AnnData
-from ..._core.index import _normalize_indices, Index
+from ..._core.index import _normalize_indices, _normalize_index, Index
 from ..._core.views import _resolve_idx
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ...logging import anndata_logger as logger
@@ -62,13 +62,13 @@ class _ConcatViewMixin:
 
 class MapObsView:
     def __init__(
-        self, attr, adatas, keys, adatas_oidx, reverse, vidx=None, convert=None
+        self, attr, adatas, keys, adatas_oidx, reverse, adatas_vidx=None, convert=None
     ):
         self.adatas = adatas
         self._keys = keys
         self.adatas_oidx = adatas_oidx
         self.reverse = reverse
-        self.vidx = vidx
+        self.adatas_vidx = adatas_vidx
         self.attr = attr
         self.convert = convert
 
@@ -78,10 +78,16 @@ class MapObsView:
 
         arrs = []
         for i, oidx in enumerate(self.adatas_oidx):
-            if oidx is not None:
-                arr = getattr(self.adatas[i], self.attr)[key]
-                idx = (oidx, self.vidx) if self.vidx is not None else oidx
-                arrs.append(arr[idx])
+            if oidx is None:
+                continue
+
+            if self.adatas_vidx is not None:
+                idx = oidx, self.adatas_vidx[i]
+                idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
+            else:
+                idx = oidx
+            arr = getattr(self.adatas[i], self.attr)[key]
+            arrs.append(arr[idx])
 
         _arr = _merge(arrs) if len(arrs) > 1 else arrs[0]
         _arr = _arr[self.reverse] if self.reverse is not None else _arr
@@ -118,6 +124,15 @@ class AnnDataSetView(_ConcatViewMixin):
 
         self.adatas_oidx, self.oidx, self.vidx, self.reverse = resolved_idx
 
+        self.adatas_vidx = []
+
+        for i, vidx in enumerate(self.reference.adatas_vidx):
+            if vidx is None:
+                self.adatas_vidx.append(self.vidx)
+            else:
+                new_vidx = _resolve_idx(vidx, self.vidx, self.adatas[i].n_vars)
+                self.adatas_vidx.append(new_vidx)
+
         self._view_attrs_keys = self.reference._view_attrs_keys
         self._attrs = self.reference._attrs
 
@@ -143,7 +158,7 @@ class AnnDataSetView(_ConcatViewMixin):
         else:
             adatas = [self.reference]
             adatas_oidx = [self.oidx]
-        vidx = self.vidx if set_vidx else None
+        adatas_vidx = self.adatas_vidx if set_vidx else None
 
         attr_convert = None
         if self.convert is not None:
@@ -152,7 +167,9 @@ class AnnDataSetView(_ConcatViewMixin):
         setattr(
             self,
             f"_{attr}_view",
-            MapObsView(attr, adatas, keys, adatas_oidx, reverse, vidx, attr_convert),
+            MapObsView(
+                attr, adatas, keys, adatas_oidx, reverse, adatas_vidx, attr_convert
+            ),
         )
 
     def _gather_X(self):
@@ -161,22 +178,24 @@ class AnnDataSetView(_ConcatViewMixin):
 
         Xs = []
         for i, oidx in enumerate(self.adatas_oidx):
-            if oidx is not None:
-                adata = self.adatas[i]
-                if adata.is_view and adata.isbacked:
-                    adata_ref = adata._adata_ref
-                    vidx = _resolve_idx(adata._vidx, self.vidx, adata_ref.n_vars)
-                    X = adata_ref.X
-                else:
-                    vidx = self.vidx
-                    X = adata.X
+            if oidx is None:
+                continue
 
-                try:
+            adata = self.adatas[i]
+            X = adata.X
+            vidx = self.adatas_vidx[i]
+
+            if adata.isbacked:
+                if isinstance(vidx, slice):
                     Xs.append(X[oidx, vidx])
-                except TypeError:
-                    # only one indexing array is allowed for advanced selection
-                    # very inefficient, needs to be fixed
+                else:
+                    # this is a very memory inefficient approach
+                    # todo: fix
                     Xs.append(X[oidx][:, vidx])
+            else:
+                idx = oidx, vidx
+                idx = np.ix_(*idx) if not isinstance(vidx, slice) else idx
+                Xs.append(X[idx])
 
         _X = _merge(Xs) if len(Xs) > 1 else Xs[0]
         _X = _X[self.reverse] if self.reverse is not None else _X
@@ -300,13 +319,20 @@ class AnnDataSet(_ConcatViewMixin):
             adatas = list(adatas)
 
         # check if the variables are the same in all adatas
+        self.adatas_vidx = [None for adata in adatas]
         vars_names_list = [adata.var_names for adata in adatas]
         vars_eq = all([adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:]])
         if vars_eq:
             self.var_names = adatas[0].var_names
         elif join_vars == "inner":
             var_names = reduce(pd.Index.intersection, vars_names_list)
-            adatas = [adata[:, var_names] for adata in adatas]
+            self.adatas_vidx = []
+            for adata in adatas:
+                if var_names.equals(adata.var_names):
+                    self.adatas_vidx.append(None)
+                else:
+                    adata_vidx = _normalize_index(var_names, adata.var_names)
+                    self.adatas_vidx.append(adata_vidx)
             self.var_names = var_names
         else:
             raise ValueError(
@@ -365,8 +391,6 @@ class AnnDataSet(_ConcatViewMixin):
             self._view_attrs_keys[attr] = list(getattr(adatas[0], attr).keys())
 
         for a in adatas[1:]:
-            if not adatas[0].var_names.equals(a.var_names):
-                raise ValueError("Variables in the adatas are different.")
             for attr, keys in self._view_attrs_keys.items():
                 ai_attr = getattr(a, attr)
                 a0_attr = getattr(adatas[0], attr)
@@ -375,7 +399,11 @@ class AnnDataSet(_ConcatViewMixin):
                     if key in ai_attr.keys():
                         a0_ashape = a0_attr[key].shape
                         ai_ashape = ai_attr[key].shape
-                        if len(a0_ashape) < 2 or a0_ashape[1] == ai_ashape[1]:
+                        if (
+                            len(a0_ashape) < 2
+                            or a0_ashape[1] == ai_ashape[1]
+                            or attr == "layers"
+                        ):
                             new_keys.append(key)
                 self._view_attrs_keys[attr] = new_keys
 
