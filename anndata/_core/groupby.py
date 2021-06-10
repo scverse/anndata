@@ -339,7 +339,6 @@ class GroupBy:
         are weighted sums of groups of rows of X.
 
         A[i, j] = w includes X[j,:] in group i with weight w.
-
         Params
         ------
         normalize
