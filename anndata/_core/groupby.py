@@ -330,12 +330,15 @@ class GroupBy:
         """
         Form a coordinate-sparse matrix A such that rows of A * X
         are weighted sums of groups of rows of X.
+
         A[i, j] = w includes X[j,:] in group i with weight w.
+
         Params
         ------
         normalize
             If true, weights for each group are normalized to sum to 1.0,
             corresponding to (weighted) mean.
+
         Returns
         -------
         A
