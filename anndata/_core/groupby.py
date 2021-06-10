@@ -3,6 +3,8 @@ import pandas as pd
 from scipy.sparse import coo_matrix, dia_matrix
 from collections.abc import Iterable
 
+from .. import utils
+
 
 class GroupBy:
     """
@@ -90,7 +92,7 @@ class GroupBy:
         return pd.DataFrame(
             index=pd.Index(keys, name=self.key, tupleize_cols=False),
             columns=self.adata.var_names.copy(),
-            data=_toarray(A * X),
+            data=utils.asarray(A * X),
         )
 
     def mean(self):
@@ -106,7 +108,7 @@ class GroupBy:
         return pd.DataFrame(
             index=pd.Index(keys, name=self.key, tupleize_cols=False),
             columns=self.adata.var_names.copy(),
-            data=_toarray(A * X),
+            data=utils.asarray(A * X),
         )
 
     def var(self, dof=1):
@@ -149,15 +151,15 @@ class GroupBy:
         A, keys = self.sparse_aggregator(normalize=True)
         X = self.adata.X
         count_ = np.bincount(self._key_index)
-        mean_ = _toarray(A @ X)
-        mean_sq = _toarray(A @ _power(X, 2))
+        mean_ = utils.asarray(A @ X)
+        mean_sq = utils.asarray(A @ _power(X, 2))
         if self.weight is None:
             sq_mean = mean_ ** 2
         else:
             A_unweighted, _ = GroupBy(
                 self.adata, self.key, None, self.explode, self.key_set
             ).sparse_aggregator()
-            mean_unweighted = _toarray(A_unweighted * X)
+            mean_unweighted = utils.asarray(A_unweighted * X)
             sq_mean = 2 * mean_ * mean_unweighted + mean_unweighted ** 2
         var_ = mean_sq - sq_mean
         precision = 2 << (42 if X.dtype == np.float64 else 20)
@@ -362,7 +364,7 @@ class GroupBy:
         df = pd.DataFrame(
             index=self.adata.obs[self.key],
             columns=self.adata.var_names,
-            data=_toarray(self.adata.X),
+            data=utils.asarray(self.adata.X),
         )
         return df.groupby(self.key).mean()
 
@@ -377,7 +379,7 @@ class GroupBy:
         df = pd.DataFrame(
             index=self.adata.obs[self.key],
             columns=self.adata.var_names,
-            data=_toarray(self.adata.X),
+            data=utils.asarray(self.adata.X),
         )
         return df.groupby(self.key).agg(aggs)
 
@@ -451,11 +453,6 @@ class GroupBy:
     def _v_score_pooled(count0, mean0, var0, count1, mean1, var1):
         var_pooled = ((count0 - 1) * var0 + (count1 - 1) * var1) / (count0 + count1 - 2)
         return (mean1 - mean0) / np.sqrt(var_pooled)
-
-
-def _toarray(X):
-    # asarray converts np.matrix to base np.ndarray.
-    return np.asarray(X if isinstance(X, np.ndarray) else X.toarray())
 
 
 def _power(X, power):
