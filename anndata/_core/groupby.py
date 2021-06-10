@@ -324,21 +324,24 @@ class GroupBy:
         else:
             return df
 
-    def sparse_aggregator(self, normalize: bool = False):
+    def sparse_aggregator(
+        self, normalize: bool = False
+    ) -> Tuple[coo_matrix, np.ndarray]:
         """
-        Form a coordinate-sparse matrix A such that rows of A * X are weighted sums of groups of
-        rows of X.
-
+        Form a coordinate-sparse matrix A such that rows of A * X
+        are weighted sums of groups of rows of X.
         A[i, j] = w includes X[j,:] in group i with weight w.
-
         Params
         ------
-        normalize : bool (default: False)
-            If true, weights for each group are normalized to sum to 1.0, corresponding to (weighted) mean.
-
+        normalize
+            If true, weights for each group are normalized to sum to 1.0,
+            corresponding to (weighted) mean.
         Returns
         -------
-            Tuple (A, keys) where keys is an ndarray with keys[i] the group key corresponding to row i of A.
+        A
+            weighted sums of groups of rows of X.
+        keys
+            An ndarray with keys[i] the group key corresponding to row i of A.
         """
         keys, key_index, obs_index, weight_value = self._extract_indices()
         if obs_index is None:
@@ -401,7 +404,7 @@ class GroupBy:
         self._key_index = key_index  # passed to count and count_mean_var to avoid re-extracting in the latter
         return keys, key_index, obs_index, weight_value
 
-    def pd_mean(self):
+    def pd_mean(self) -> pd.DataFrame:
         """
         Slower implementation of mean that masks NaN values.
         """
@@ -415,7 +418,7 @@ class GroupBy:
         )
         return df.groupby(self.key).mean()
 
-    def pd_count_mean_var(self):
+    def pd_count_mean_var(self) -> pd.DataFrame:
         """
         Slower implementation of count_mean_var that masks NaN values.
         """
@@ -430,7 +433,9 @@ class GroupBy:
         )
         return df.groupby(self.key).agg(aggs)
 
-    def pd_score_pairs(self, score: Score, pairs: Collection[Tuple[str, str]]):
+    def pd_score_pairs(
+        self, score: Score, pairs: Collection[Tuple[str, str]]
+    ) -> pd.DataFrame:
         """
         Slower implementation of score_pairs that masks NaN values.
         """
