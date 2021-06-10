@@ -149,8 +149,8 @@ class GroupBy:
         A, keys = self.sparse_aggregator(normalize=True)
         X = self.adata.X
         count_ = np.bincount(self._key_index)
-        mean_ = _toarray(A * X)
-        mean_sq = _toarray(A * _power(X, 2))
+        mean_ = _toarray(A @ X)
+        mean_sq = _toarray(A @ _power(X, 2))
         if self.weight is None:
             sq_mean = mean_ ** 2
         else:
