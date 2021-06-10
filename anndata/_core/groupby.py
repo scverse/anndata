@@ -31,7 +31,7 @@ class GroupBy:
 
     Runtime is effectively computation of the product A * X, i.e. the count of (non-zero)
     entries in X with multiplicity the number of group memberships for that entry. This is
-    O(data) for partitions (each observation belongign to exactly one group), independent of
+    O(data) for partitions (each observation belonging to exactly one group), independent of
     the number of groups.
 
     To compute scores, first statistics are computed for each group in at least one pair, and
