@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from functools import reduce
+from h5py import Dataset
 import numpy as np
 import pandas as pd
 
@@ -7,6 +8,7 @@ from ..._core.anndata import AnnData
 from ..._core.index import _normalize_indices, _normalize_index, Index
 from ..._core.views import _resolve_idx
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
+from ..._core.sparse_dataset import SparseDataset
 from ...logging import anndata_logger as logger
 
 ATTRS = ["obs", "obsm", "layers"]
@@ -62,7 +64,6 @@ def _harmonize_types(attrs_keys, adatas):
 
 class _ConcatViewMixin:
     def _resolve_idx(self, oidx, vidx):
-        reverse = None
         adatas_oidx = []
 
         old_oidx = getattr(self, "oidx", None)
@@ -73,10 +74,7 @@ class _ConcatViewMixin:
             start, stop, step = oidx.indices(self.limits[-1])
             u_oidx = np.arange(start, stop, step)
         else:
-            if self.has_backed and oidx.size > 1 and not np.all(np.diff(oidx) > 0):
-                u_oidx, reverse = np.unique(oidx, return_inverse=True)
-            else:
-                u_oidx = oidx
+            u_oidx = oidx
 
         for lower, upper in zip([0] + self.limits, self.limits):
             mask = (u_oidx >= lower) & (u_oidx < upper)
@@ -86,7 +84,7 @@ class _ConcatViewMixin:
         if old_vidx is not None:
             vidx = _resolve_idx(old_vidx, vidx, self.adatas[0].n_vars)
 
-        return adatas_oidx, oidx, vidx, reverse
+        return adatas_oidx, oidx, vidx
 
 
 class MapObsView:
@@ -96,7 +94,6 @@ class MapObsView:
         adatas,
         keys,
         adatas_oidx,
-        reverse,
         adatas_vidx=None,
         convert=None,
         dtypes=None,
@@ -104,7 +101,6 @@ class MapObsView:
         self.adatas = adatas
         self._keys = keys
         self.adatas_oidx = adatas_oidx
-        self.reverse = reverse
         self.adatas_vidx = adatas_vidx
         self.attr = attr
         self.convert = convert
@@ -133,8 +129,6 @@ class MapObsView:
             _arr = arrs[0]
             if self.dtypes is not None:
                 _arr = _arr.astype(self.dtypes[key], copy=False)
-
-        _arr = _arr[self.reverse] if self.reverse is not None else _arr
 
         if self.convert is not None and use_convert:
             _arr = _select_convert(key, self.convert, _arr)
@@ -166,7 +160,7 @@ class AnnDataSetView(_ConcatViewMixin):
         self.adatas = self.reference.adatas
         self.limits = self.reference.limits
 
-        self.adatas_oidx, self.oidx, self.vidx, self.reverse = resolved_idx
+        self.adatas_oidx, self.oidx, self.vidx = resolved_idx
 
         self.adatas_vidx = []
 
@@ -193,7 +187,6 @@ class AnnDataSetView(_ConcatViewMixin):
         if getattr(self, f"_{attr}_view") is not None:
             return
         keys = None
-        reverse = None
         attr_dtypes = None
         if attr in self._view_attrs_keys:
             keys = self._view_attrs_keys[attr]
@@ -201,7 +194,6 @@ class AnnDataSetView(_ConcatViewMixin):
                 return
             adatas = self.adatas
             adatas_oidx = self.adatas_oidx
-            reverse = self.reverse
             if self._dtypes is not None:
                 attr_dtypes = self._dtypes[attr]
         else:
@@ -221,7 +213,6 @@ class AnnDataSetView(_ConcatViewMixin):
                 adatas,
                 keys,
                 adatas_oidx,
-                reverse,
                 adatas_vidx,
                 attr_convert,
                 attr_dtypes,
@@ -241,12 +232,23 @@ class AnnDataSetView(_ConcatViewMixin):
             X = adata.X
             vidx = self.adatas_vidx[i]
 
-            if adata.isbacked:
+            if isinstance(X, Dataset):
+                reverse = None
+                if oidx.size > 1 and not np.all(np.diff(oidx) > 0):
+                    oidx, reverse = np.unique(oidx, return_inverse=True)
+
                 if isinstance(vidx, slice):
-                    Xs.append(X[oidx, vidx])
+                    arr = X[oidx, vidx]
                 else:
                     # this is a very memory inefficient approach
                     # todo: fix
+                    arr = X[oidx][:, vidx]
+                Xs.append(arr if reverse is None else arr[reverse])
+            elif isinstance(X, SparseDataset):
+                # very slow indexing with two arrays
+                if isinstance(vidx, slice) or len(vidx) <= 1000:
+                    Xs.append(X[oidx, vidx])
+                else:
                     Xs.append(X[oidx][:, vidx])
             else:
                 idx = oidx, vidx
@@ -259,7 +261,6 @@ class AnnDataSetView(_ConcatViewMixin):
             _X = Xs[0]
             if self._dtypes is not None:
                 _X = _X.astype(self._dtypes["X"], copy=False)
-        _X = _X[self.reverse] if self.reverse is not None else _X
 
         self._X = _X
 
@@ -468,8 +469,6 @@ class AnnDataSet(_ConcatViewMixin):
                             new_keys.append(key)
                 self._view_attrs_keys[attr] = new_keys
 
-        self.var_names = adatas[0].var_names
-
         self.adatas = adatas
 
         self.limits = [adatas[0].n_obs]
@@ -490,7 +489,7 @@ class AnnDataSet(_ConcatViewMixin):
 
     @property
     def shape(self):
-        return self.limits[-1], self.adatas[0].n_vars
+        return self.limits[-1], len(self.var_names)
 
     def __len__(self):
         return self.limits[-1]
