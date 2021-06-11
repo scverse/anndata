@@ -71,8 +71,8 @@ Experimental development API
 .. autosummary::
    :toctree: .
 
-   anndata.dev.multi_files.AnnDataSet
-   anndata.dev.pytorch.AnnDataLoader
+   dev.multi_files.AnnDataSet
+   dev.pytorch.AnnDataLoader
 
 
 Errors and warnings
