@@ -31,6 +31,35 @@ def _select_convert(key, convert, arr=None):
         return key_convert
 
 
+def _harmonize_types(attrs_keys, adatas):
+    attrs_keys_types = {}
+
+    def check_type(attr, key=None):
+        arrs = []
+        for a in adatas:
+            attr_arr = getattr(a, attr)
+            if key is not None:
+                attr_arr = attr_arr[key]
+            arrs.append(attr_arr)
+        # hacky but numpy find_common_type doesn't work with categoricals
+        try:
+            dtype = _merge([arr[:1] for arr in arrs]).dtype
+        except ValueError:
+            dtype = _merge([arr[:1, :1] for arr in arrs]).dtype
+        return dtype
+
+    for attr, keys in attrs_keys.items():
+        if len(keys) == 0:
+            continue
+        attrs_keys_types[attr] = {}
+        for key in keys:
+            attrs_keys_types[attr][key] = check_type(attr, key)
+
+    attrs_keys_types["X"] = check_type("X")
+
+    return attrs_keys_types
+
+
 class _ConcatViewMixin:
     def _resolve_idx(self, oidx, vidx):
         reverse = None
@@ -62,7 +91,15 @@ class _ConcatViewMixin:
 
 class MapObsView:
     def __init__(
-        self, attr, adatas, keys, adatas_oidx, reverse, adatas_vidx=None, convert=None
+        self,
+        attr,
+        adatas,
+        keys,
+        adatas_oidx,
+        reverse,
+        adatas_vidx=None,
+        convert=None,
+        dtypes=None,
     ):
         self.adatas = adatas
         self._keys = keys
@@ -71,6 +108,7 @@ class MapObsView:
         self.adatas_vidx = adatas_vidx
         self.attr = attr
         self.convert = convert
+        self.dtypes = dtypes
 
     def __getitem__(self, key, use_convert=True):
         if self._keys is not None and key not in self._keys:
@@ -89,7 +127,13 @@ class MapObsView:
             arr = getattr(self.adatas[i], self.attr)[key]
             arrs.append(arr[idx])
 
-        _arr = _merge(arrs) if len(arrs) > 1 else arrs[0]
+        if len(arrs) > 1:
+            _arr = _merge(arrs)
+        else:
+            _arr = arrs[0]
+            if self.dtypes is not None:
+                _arr = _arr.astype(self.dtypes[key], copy=False)
+
         _arr = _arr[self.reverse] if self.reverse is not None else _arr
 
         if self.convert is not None and use_convert:
@@ -136,6 +180,8 @@ class AnnDataSetView(_ConcatViewMixin):
         self._view_attrs_keys = self.reference._view_attrs_keys
         self._attrs = self.reference._attrs
 
+        self._dtypes = self.reference._dtypes
+
         self._layers_view, self._obsm_view, self._obs_view = None, None, None
         self._X = None
 
@@ -148,6 +194,7 @@ class AnnDataSetView(_ConcatViewMixin):
             return
         keys = None
         reverse = None
+        attr_dtypes = None
         if attr in self._view_attrs_keys:
             keys = self._view_attrs_keys[attr]
             if len(keys) == 0:
@@ -155,6 +202,8 @@ class AnnDataSetView(_ConcatViewMixin):
             adatas = self.adatas
             adatas_oidx = self.adatas_oidx
             reverse = self.reverse
+            if self._dtypes is not None:
+                attr_dtypes = self._dtypes[attr]
         else:
             adatas = [self.reference]
             adatas_oidx = [self.oidx]
@@ -168,7 +217,14 @@ class AnnDataSetView(_ConcatViewMixin):
             self,
             f"_{attr}_view",
             MapObsView(
-                attr, adatas, keys, adatas_oidx, reverse, adatas_vidx, attr_convert
+                attr,
+                adatas,
+                keys,
+                adatas_oidx,
+                reverse,
+                adatas_vidx,
+                attr_convert,
+                attr_dtypes,
             ),
         )
 
@@ -197,7 +253,12 @@ class AnnDataSetView(_ConcatViewMixin):
                 idx = np.ix_(*idx) if not isinstance(vidx, slice) else idx
                 Xs.append(X[idx])
 
-        _X = _merge(Xs) if len(Xs) > 1 else Xs[0]
+        if len(Xs) > 1:
+            _X = _merge(Xs)
+        else:
+            _X = Xs[0]
+            if self._dtypes is not None:
+                _X = _X.astype(self._dtypes["X"], copy=False)
         _X = _X[self.reverse] if self.reverse is not None else _X
 
         self._X = _X
@@ -307,6 +368,7 @@ class AnnDataSet(_ConcatViewMixin):
         keys=None,
         index_unique=None,
         convert=None,
+        harmonize_dtypes=True,
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:
@@ -340,17 +402,16 @@ class AnnDataSet(_ConcatViewMixin):
                 "Please specify join_vars='inner' for intersection."
             )
 
-        if keys is None:
-            keys = np.arange(len(adatas)).astype(str)
-
         concat_indices = pd.concat(
             [pd.Series(a.obs_names) for a in adatas], ignore_index=True
         )
-        label_col = pd.Categorical.from_codes(
-            np.repeat(np.arange(len(adatas)), [a.shape[0] for a in adatas]),
-            categories=keys,
-        )
         if index_unique is not None:
+            if keys is None:
+                keys = np.arange(len(adatas)).astype(str)
+            label_col = pd.Categorical.from_codes(
+                np.repeat(np.arange(len(adatas)), [a.shape[0] for a in adatas]),
+                categories=keys,
+            )
             concat_indices = concat_indices.str.cat(
                 label_col.map(str), sep=index_unique
             )
@@ -416,6 +477,10 @@ class AnnDataSet(_ConcatViewMixin):
             self.limits.append(self.limits[i] + adatas[i + 1].n_obs)
 
         self.convert = convert
+
+        self._dtypes = None
+        if len(adatas) > 1 and harmonize_dtypes:
+            self._dtypes = _harmonize_types(self._view_attrs_keys, self.adatas)
 
     def __getitem__(self, index: Index):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
