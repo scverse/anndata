@@ -513,6 +513,9 @@ class AnnDataSet(_ConcatViewMixin):
         adata.var_names = self.var_names
         return adata
 
+    def lazy_attr(self, attr, key=None):
+        return LazyAttrData(self, attr, key)
+
     @property
     def has_backed(self):
         return any([adata.isbacked for adata in self.adatas])
@@ -543,3 +546,44 @@ class AnnDataSet(_ConcatViewMixin):
                 descr += f"\n    own obs: {str(keys)[1:-1]}"
 
         return descr
+
+
+class LazyAttrData():
+    def __init__(self, adset: AnnDataSet, attr, key=None):
+        self.adset = adset
+        self.attr = attr
+        self.key = key
+
+    def __getitem__(self, index):
+        attr_arr = getattr(self.adset[index], self.attr)
+        if self.key is not None:
+            attr_arr = attr_arr[self.key]
+        return attr_arr
+
+    @property
+    def shape(self):
+        shape = self.adset.shape
+        if self.attr in ['X', 'layers']:
+            return shape
+        elif self.attr == 'obs':
+            return shape[0],
+        elif self.attr == 'obsm' and self.key is not None:
+            return shape[0], self[:1].shape[1]
+        else:
+            return None
+
+    @property
+    def ndim(self):
+        return len(self.shape) if self.shape is not None else 0
+
+    @property
+    def dtype(self):
+        _dtypes = self.adset._dtypes
+        if _dtypes is not None and self.attr in _dtypes:
+            return _dtypes[self.attr][self.key]
+
+        attr = self[:1]
+        if hasattr(attr, dtype):
+            return attr.dtype
+        else:
+            return None
