@@ -548,7 +548,7 @@ class AnnDataSet(_ConcatViewMixin):
         return descr
 
 
-class LazyAttrData():
+class LazyAttrData:
     def __init__(self, adset: AnnDataSet, attr, key=None):
         self.adset = adset
         self.attr = attr
@@ -563,11 +563,11 @@ class LazyAttrData():
     @property
     def shape(self):
         shape = self.adset.shape
-        if self.attr in ['X', 'layers']:
+        if self.attr in ["X", "layers"]:
             return shape
-        elif self.attr == 'obs':
-            return shape[0],
-        elif self.attr == 'obsm' and self.key is not None:
+        elif self.attr == "obs":
+            return (shape[0],)
+        elif self.attr == "obsm" and self.key is not None:
             return shape[0], self[:1].shape[1]
         else:
             return None
