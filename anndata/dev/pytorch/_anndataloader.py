@@ -1,4 +1,5 @@
 from scipy.sparse import issparse
+from copy import copy
 from ..._core.anndata import AnnData
 from ..multi_files._anndataset import AnnDataSet, _ConcatViewMixin
 import numpy as np
@@ -117,7 +118,7 @@ class AnnDataLoader(DataLoader):
             )
 
         elif isinstance(adatas, _ConcatViewMixin):
-            dataset = adatas
+            dataset = copy(adatas)
         else:
             raise ValueError("adata should be of type AnnData or AnnDataSet.")
 

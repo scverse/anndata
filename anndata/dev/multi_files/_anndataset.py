@@ -78,11 +78,18 @@ class _ConcatViewMixin:
 
         for lower, upper in zip([0] + self.limits, self.limits):
             mask = (u_oidx >= lower) & (u_oidx < upper)
-            adatas_oidx.append(u_oidx[mask] - lower if mask.any() else None)
+            if isinstance(mask, bool):
+                # case when selection is just an integer
+                adatas_oidx.append(np.array([u_oidx - lower]) if mask else None)
+                oidx = np.array([oidx])
+            else:
+                adatas_oidx.append(u_oidx[mask] - lower if mask.any() else None)
 
         old_vidx = getattr(self, "vidx", None)
         if old_vidx is not None:
             vidx = _resolve_idx(old_vidx, vidx, self.adatas[0].n_vars)
+        if isinstance(vidx, int):
+            vidx = np.array([vidx])
 
         return adatas_oidx, oidx, vidx
 
@@ -115,18 +122,30 @@ class MapObsView:
             if oidx is None:
                 continue
 
+            arr = getattr(self.adatas[i], self.attr)[key]
+
             if self.adatas_vidx is not None:
-                idx = oidx, self.adatas_vidx[i]
-                idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
+                vidx = self.adatas_vidx[i]
+            else:
+                vidx = None
+
+            if vidx is not None:
+                idx = oidx, vidx
             else:
                 idx = oidx
-            arr = getattr(self.adatas[i], self.attr)[key]
-            arrs.append(arr[idx])
+
+            if isinstance(arr, pd.DataFrame):
+                arrs.append(arr.iloc[idx])
+            else:
+                if vidx is not None:
+                    idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
+                arrs.append(arr[idx])
 
         if len(arrs) > 1:
             _arr = _merge(arrs)
         else:
             _arr = arrs[0]
+            # what if it is a dataframe?
             if self.dtypes is not None:
                 _arr = _arr.astype(self.dtypes[key], copy=False)
 
@@ -515,6 +534,29 @@ class AnnDataSet(_ConcatViewMixin):
 
     def lazy_attr(self, attr, key=None):
         return LazyAttrData(self, attr, key)
+
+    def iterate_axis(self, batch_size, axis=0, shuffle=False, drop_last=False):
+        if axis not in (0, 1):
+            raise ValueError("Axis should be either 0 or 1.")
+
+        n = self.shape[axis]
+
+        if shuffle:
+            indices = np.random.permutation(n)
+        else:
+            indices = list(range(n))
+
+        for i in range(0, n, batch_size):
+            idx = indices[i : min(i + batch_size, n)]
+            if axis == 1:
+                batch = self[:, idx]
+            else:
+                batch = self[idx]
+            # only happens if the last batch is smaller then batch_size
+            if len(batch) < batch_size and drop_last:
+                continue
+
+            yield batch, idx
 
     @property
     def has_backed(self):
