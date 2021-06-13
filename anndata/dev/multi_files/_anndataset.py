@@ -93,6 +93,29 @@ class _ConcatViewMixin:
 
         return adatas_oidx, oidx, vidx
 
+    def iterate_axis(self, batch_size, axis=0, shuffle=False, drop_last=False):
+        if axis not in (0, 1):
+            raise ValueError("Axis should be either 0 or 1.")
+
+        n = self.shape[axis]
+
+        if shuffle:
+            indices = np.random.permutation(n)
+        else:
+            indices = list(range(n))
+
+        for i in range(0, n, batch_size):
+            idx = indices[i : min(i + batch_size, n)]
+            if axis == 1:
+                batch = self[:, idx]
+            else:
+                batch = self[idx]
+            # only happens if the last batch is smaller then batch_size
+            if len(batch) < batch_size and drop_last:
+                continue
+
+            yield batch, idx
+
 
 class MapObsView:
     def __init__(
@@ -542,29 +565,6 @@ class AnnDataSet(_ConcatViewMixin):
 
     def lazy_attr(self, attr, key=None):
         return LazyAttrData(self, attr, key)
-
-    def iterate_axis(self, batch_size, axis=0, shuffle=False, drop_last=False):
-        if axis not in (0, 1):
-            raise ValueError("Axis should be either 0 or 1.")
-
-        n = self.shape[axis]
-
-        if shuffle:
-            indices = np.random.permutation(n)
-        else:
-            indices = list(range(n))
-
-        for i in range(0, n, batch_size):
-            idx = indices[i : min(i + batch_size, n)]
-            if axis == 1:
-                batch = self[:, idx]
-            else:
-                batch = self[idx]
-            # only happens if the last batch is smaller then batch_size
-            if len(batch) < batch_size and drop_last:
-                continue
-
-            yield batch, idx
 
     @property
     def has_backed(self):

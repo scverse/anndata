@@ -1,4 +1,5 @@
 from scipy.sparse import issparse
+from math import ceil
 from copy import copy
 from ..._core.anndata import AnnData
 from ..multi_files._anndataset import AnnDataSet, _ConcatViewMixin
@@ -37,8 +38,6 @@ class BatchIndexSampler(Sampler):
             yield batch
 
     def __len__(self):
-        from math import ceil
-
         if self.drop_last:
             length = self.n_obs // self.batch_size
         else:
