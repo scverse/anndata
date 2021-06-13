@@ -160,11 +160,11 @@ class MapObsView:
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
-    def to_dict(self, keys=None):
+    def to_dict(self, keys=None, use_convert=True):
         dct = {}
         keys = self.keys() if keys is None else keys
         for key in keys:
-            dct[key] = self.__getitem__(key, False)
+            dct[key] = self.__getitem__(key, use_convert)
         return dct
 
     def __repr__(self):
@@ -360,9 +360,13 @@ class AnnDataSetView(_ConcatViewMixin):
         if ignore_layers or self.layers is None:
             layers = None
         else:
-            layers = self.layers.to_dict()
-        obsm = None if self.obsm is None else self.obsm.to_dict()
-        obs = None if self.obs is None else pd.DataFrame(self.obs.to_dict())
+            layers = self.layers.to_dict(use_convert=False)
+        obsm = None if self.obsm is None else self.obsm.to_dict(use_convert=False)
+        obs = (
+            None
+            if self.obs is None
+            else pd.DataFrame(self.obs.to_dict(use_convert=False))
+        )
 
         if ignore_X:
             X = None
@@ -518,13 +522,17 @@ class AnnDataSet(_ConcatViewMixin):
             concat_view = self[self.obs_names]
 
         if "obsm" in self._view_attrs_keys:
-            obsm = concat_view.obsm.to_dict() if concat_view.obsm is not None else None
+            obsm = (
+                concat_view.obsm.to_dict(use_convert=False)
+                if concat_view.obsm is not None
+                else None
+            )
         else:
             obsm = self.obsm.copy()
 
         obs = self.obs.copy()
         if "obs" in self._view_attrs_keys and concat_view.obs is not None:
-            for key, value in concat_view.obs.to_dict().items():
+            for key, value in concat_view.obs.to_dict(use_convert=False).items():
                 obs[key] = value
 
         adata = AnnData(X=None, obs=obs, obsm=obsm, shape=self.shape)
