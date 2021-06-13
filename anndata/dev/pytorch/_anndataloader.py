@@ -15,6 +15,7 @@ except ImportError:
 
 
 # Custom sampler to get proper batches instead of joined separate indices
+# maybe move to multi_files
 class BatchIndexSampler(Sampler):
     def __init__(self, n_obs, batch_size, shuffle=False, drop_last=False):
         self.n_obs = n_obs
@@ -24,7 +25,7 @@ class BatchIndexSampler(Sampler):
 
     def __iter__(self):
         if self.shuffle:
-            indices = torch.randperm(self.n_obs).tolist()
+            indices = np.random.permutation(self.n_obs).tolist()
         else:
             indices = list(range(self.n_obs))
 

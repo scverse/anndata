@@ -100,7 +100,7 @@ class _ConcatViewMixin:
         n = self.shape[axis]
 
         if shuffle:
-            indices = np.random.permutation(n)
+            indices = np.random.permutation(n).tolist()
         else:
             indices = list(range(n))
 
