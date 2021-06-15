@@ -62,19 +62,27 @@ except ImportError:
             pass
 
 
-def _from_bytes(value):
+def _read_hdf5_attribute(attrs: h5py.AttributeManager, name: str):
     """
-    Convert from bytes to a Python string.
+    Read an HDF5 attribute and perform all necessary conversions.
 
-    For compatibility with other languages. For example Julia's HDF5.jl
-    writes string attributes as fixed-size strings, which are read as bytes
-    by h5py.
+    At the moment, this only implements conversions for string attributes, other types
+    are passed through. String conversion is needed compatibility with other languages.
+    For example Julia's HDF5.jl writes string attributes as fixed-size strings, which
+    are read as bytes by h5py.
     """
-    try:
-        return value.decode("utf-8")
-    except Exception:
-        return value
-
+    attr = attrs[name]
+    attr_id = attrs.get_id(name)
+    dtype = h5py.check_string_dtype(attr_id.dtype)
+    if dtype is None:
+        return attr
+    else:
+        if dtype.length is None: # variable-length string, no problem
+            return attr
+        elif len(attr_id.shape) == 0: # Python bytestring
+            return attr.decode("utf-8")
+        else: # NumPy array
+            return attr.astype("U")
 
 def _from_fixed_length_strings(value):
     """\
