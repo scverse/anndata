@@ -88,7 +88,13 @@ class _ConcatViewMixin:
             if np.any((u_oidx >= lower) & (u_oidx < upper)):
                 n_adatas_used += 1
 
-        if n_adatas_used > 1 and u_oidx.size > 1 and np.any(u_oidx[:-1] > u_oidx[1:]):
+        need_reverse = (
+            self.indices_strict
+            and n_adatas_used > 1
+            and u_oidx.size > 1
+            and np.any(u_oidx[:-1] > u_oidx[1:])
+        )
+        if need_reverse:
             u_oidx, reverse = np.unique(u_oidx, return_inverse=True)
 
         for lower, upper in iter_limits:
@@ -211,6 +217,8 @@ class MapObsView:
 class AnnDataSetView(_ConcatViewMixin):
     def __init__(self, reference, resolved_idx):
         self.reference = reference
+
+        self.indices_strict = self.reference.indices_strict
 
         self.adatas = self.reference.adatas
         self.limits = self.reference.limits
@@ -435,6 +443,7 @@ class AnnDataSet(_ConcatViewMixin):
         index_unique=None,
         convert=None,
         harmonize_dtypes=True,
+        indices_strict=True,
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:
@@ -546,6 +555,8 @@ class AnnDataSet(_ConcatViewMixin):
         self._dtypes = None
         if len(adatas) > 1 and harmonize_dtypes:
             self._dtypes = _harmonize_types(self._view_attrs_keys, self.adatas)
+
+        self.indices_strict = indices_strict
 
     def __getitem__(self, index: Index):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
