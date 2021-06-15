@@ -75,7 +75,7 @@ class _ConcatViewMixin:
             start, stop, step = oidx.indices(self.limits[-1])
             u_oidx = np.arange(start, stop, step)
         else:
-            oidx =  np.array([oidx]) if isinstance(oidx, int) else oidx
+            oidx = np.array([oidx]) if isinstance(oidx, int) else oidx
             u_oidx = oidx
 
         if len(self.adatas) == 1:
