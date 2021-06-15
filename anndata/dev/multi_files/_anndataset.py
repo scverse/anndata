@@ -73,10 +73,10 @@ class _ConcatViewMixin:
 
         if isinstance(oidx, slice):
             start, stop, step = oidx.indices(self.limits[-1])
-            u_oidx = np.arange(start, stop, step)
+            oidx = np.arange(start, stop, step)
         else:
             oidx = np.array([oidx]) if isinstance(oidx, int) else oidx
-            u_oidx = oidx
+        u_oidx = oidx
 
         if len(self.adatas) == 1:
             return [u_oidx], oidx, vidx, reverse
@@ -88,7 +88,7 @@ class _ConcatViewMixin:
             if np.any((u_oidx >= lower) & (u_oidx < upper)):
                 n_adatas_used += 1
 
-        if n_adatas_used > 1 and oidx.size > 1 and np.any(np.diff(u_oidx) < 0):
+        if n_adatas_used > 1 and u_oidx.size > 1 and np.any(u_oidx[:-1] > u_oidx[1:]):
             u_oidx, reverse = np.unique(u_oidx, return_inverse=True)
 
         for lower, upper in iter_limits:
@@ -292,7 +292,7 @@ class AnnDataSetView(_ConcatViewMixin):
 
             if isinstance(X, Dataset):
                 reverse = None
-                if oidx.size > 1 and np.any(np.diff(oidx) <= 0):
+                if oidx.size > 1 and np.any(oidx[:-1] >= oidx[1:]):
                     oidx, reverse = np.unique(oidx, return_inverse=True)
 
                 if isinstance(vidx, slice):
@@ -309,12 +309,14 @@ class AnnDataSetView(_ConcatViewMixin):
                 else:
                     Xs.append(X[oidx][:, vidx])
             else:
+                # if vidx is present it is less memory efficient
                 idx = oidx, vidx
                 idx = np.ix_(*idx) if not isinstance(vidx, slice) else idx
                 Xs.append(X[idx])
 
         if len(Xs) > 1:
             _X = _merge(Xs)
+            # todo: get rid of reverse for dense arrays
             _X = _X if self.reverse is None else _X[self.reverse]
         else:
             _X = Xs[0]
