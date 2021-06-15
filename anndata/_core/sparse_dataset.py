@@ -243,7 +243,9 @@ class SparseDataset:
             return _read_hdf5_attribute(self.group.attrs, "h5sparse_format")
         else:
             # Should this be an extra field?
-            return _read_hdf5_attribute(self.group.attrs, "encoding-type").replace("_matrix", "")
+            return _read_hdf5_attribute(self.group.attrs, "encoding-type").replace(
+                "_matrix", ""
+            )
 
     @property
     def h5py_group(self) -> h5py.Group:

@@ -570,6 +570,7 @@ def read_dataset(dataset: h5py.Dataset):
         value = value[()]
     return value
 
+
 @report_read_key_on_error
 def read_dense_as_sparse(
     dataset: h5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int
