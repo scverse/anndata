@@ -65,6 +65,7 @@ def _harmonize_types(attrs_keys, adatas):
 class _ConcatViewMixin:
     def _resolve_idx(self, oidx, vidx):
         adatas_oidx = []
+        reverse = None
 
         old_oidx = getattr(self, "oidx", None)
         if old_oidx is not None:
@@ -74,16 +75,25 @@ class _ConcatViewMixin:
             start, stop, step = oidx.indices(self.limits[-1])
             u_oidx = np.arange(start, stop, step)
         else:
+            oidx =  np.array([oidx]) if isinstance(oidx, int) else oidx
             u_oidx = oidx
 
-        for lower, upper in zip([0] + self.limits, self.limits):
+        if len(self.adatas) == 1:
+            return [u_oidx], oidx, vidx, reverse
+
+        iter_limits = list(zip([0] + self.limits, self.limits))
+
+        n_adatas_used = 0
+        for lower, upper in iter_limits:
+            if np.any((u_oidx >= lower) & (u_oidx < upper)):
+                n_adatas_used += 1
+
+        if n_adatas_used > 1 and oidx.size > 1 and np.any(np.diff(u_oidx) < 0):
+            u_oidx, reverse = np.unique(u_oidx, return_inverse=True)
+
+        for lower, upper in iter_limits:
             mask = (u_oidx >= lower) & (u_oidx < upper)
-            if isinstance(mask, bool):
-                # case when selection is just an integer
-                adatas_oidx.append(np.array([u_oidx - lower]) if mask else None)
-                oidx = np.array([oidx])
-            else:
-                adatas_oidx.append(u_oidx[mask] - lower if mask.any() else None)
+            adatas_oidx.append(u_oidx[mask] - lower if mask.any() else None)
 
         old_vidx = getattr(self, "vidx", None)
         if old_vidx is not None:
@@ -91,7 +101,7 @@ class _ConcatViewMixin:
         if isinstance(vidx, int):
             vidx = np.array([vidx])
 
-        return adatas_oidx, oidx, vidx
+        return adatas_oidx, oidx, vidx, reverse
 
     def iterate_axis(self, batch_size, axis=0, shuffle=False, drop_last=False):
         if axis not in (0, 1):
@@ -126,6 +136,7 @@ class MapObsView:
         adatas_oidx,
         adatas_vidx=None,
         convert=None,
+        reverse=None,
         dtypes=None,
     ):
         self.adatas = adatas
@@ -134,6 +145,7 @@ class MapObsView:
         self.adatas_vidx = adatas_vidx
         self.attr = attr
         self.convert = convert
+        self.reverse = reverse
         self.dtypes = dtypes
 
     def __getitem__(self, key, use_convert=True):
@@ -166,6 +178,7 @@ class MapObsView:
 
         if len(arrs) > 1:
             _arr = _merge(arrs)
+            _arr = _arr if self.reverse is None else _arr[self.reverse]
         else:
             _arr = arrs[0]
             # what if it is a dataframe?
@@ -202,7 +215,7 @@ class AnnDataSetView(_ConcatViewMixin):
         self.adatas = self.reference.adatas
         self.limits = self.reference.limits
 
-        self.adatas_oidx, self.oidx, self.vidx = resolved_idx
+        self.adatas_oidx, self.oidx, self.vidx, self.reverse = resolved_idx
 
         self.adatas_vidx = []
 
@@ -231,6 +244,7 @@ class AnnDataSetView(_ConcatViewMixin):
         keys = None
         attr_dtypes = None
         if attr in self._view_attrs_keys:
+            reverse = self.reverse
             keys = self._view_attrs_keys[attr]
             if len(keys) == 0:
                 return
@@ -239,6 +253,7 @@ class AnnDataSetView(_ConcatViewMixin):
             if self._dtypes is not None:
                 attr_dtypes = self._dtypes[attr]
         else:
+            reverse = None
             adatas = [self.reference]
             adatas_oidx = [self.oidx]
         adatas_vidx = self.adatas_vidx if set_vidx else None
@@ -257,6 +272,7 @@ class AnnDataSetView(_ConcatViewMixin):
                 adatas_oidx,
                 adatas_vidx,
                 attr_convert,
+                reverse,
                 attr_dtypes,
             ),
         )
@@ -276,7 +292,7 @@ class AnnDataSetView(_ConcatViewMixin):
 
             if isinstance(X, Dataset):
                 reverse = None
-                if oidx.size > 1 and not np.all(np.diff(oidx) > 0):
+                if oidx.size > 1 and np.any(np.diff(oidx) <= 0):
                     oidx, reverse = np.unique(oidx, return_inverse=True)
 
                 if isinstance(vidx, slice):
@@ -299,6 +315,7 @@ class AnnDataSetView(_ConcatViewMixin):
 
         if len(Xs) > 1:
             _X = _merge(Xs)
+            _X = _X if self.reverse is None else _X[self.reverse]
         else:
             _X = Xs[0]
             if self._dtypes is not None:
@@ -452,13 +469,13 @@ class AnnDataSet(_ConcatViewMixin):
         concat_indices = pd.concat(
             [pd.Series(a.obs_names) for a in adatas], ignore_index=True
         )
+        if keys is None:
+            keys = np.arange(len(adatas)).astype(str)
+        label_col = pd.Categorical.from_codes(
+            np.repeat(np.arange(len(adatas)), [a.shape[0] for a in adatas]),
+            categories=keys,
+        )
         if index_unique is not None:
-            if keys is None:
-                keys = np.arange(len(adatas)).astype(str)
-            label_col = pd.Categorical.from_codes(
-                np.repeat(np.arange(len(adatas)), [a.shape[0] for a in adatas]),
-                categories=keys,
-            )
             concat_indices = concat_indices.str.cat(
                 label_col.map(str), sep=index_unique
             )
@@ -481,6 +498,7 @@ class AnnDataSet(_ConcatViewMixin):
             self.obs = concat_annot
         else:
             self.obs = pd.DataFrame(index=self.obs_names)
+
         if label is not None:
             self.obs[label] = label_col
 
