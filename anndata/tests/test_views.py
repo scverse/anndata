@@ -478,3 +478,11 @@ def test_view_retains_ndarray_subclass():
 
     assert isinstance(view.obsm["foo"], NDArraySubclass)
     assert view.obsm["foo"].shape == (5, 5)
+
+
+def test_modify_uns_in_copy():
+    # https://github.com/theislab/anndata/issues/571
+    adata = ad.AnnData(np.ones((5, 5)), uns={"parent": {"key": "value"}})
+    adata_copy = adata[:3].copy()
+    adata_copy.uns["parent"]["key"] = "new_value"
+    assert adata.uns["parent"]["key"] != adata_copy.uns["parent"]["key"]
