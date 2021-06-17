@@ -523,7 +523,7 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     if "h5sparse_format" in group.attrs:  # Backwards compat
         return SparseDataset(group).to_memory()
 
-    try:
+    if "encoding-type" in group.attrs:
         encoding_type = _read_hdf5_attribute(group.attrs, "encoding-type")
         EncodingVersions[encoding_type].check(
             group.name, _read_hdf5_attribute(group.attrs, "encoding-version")
@@ -535,8 +535,7 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
             return SparseDataset(group).to_memory()
         elif encoding_type != "raw":
             raise ValueError(f"Unfamiliar `encoding-type`: {encoding_type}.")
-    except KeyError:
-        pass
+
     d = dict()
     for sub_key, sub_value in group.items():
         d[sub_key] = read_attribute(sub_value)

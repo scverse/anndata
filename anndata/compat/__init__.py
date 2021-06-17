@@ -1,5 +1,6 @@
 from copy import deepcopy
 from functools import reduce, wraps
+from codecs import decode
 from inspect import signature, Parameter
 from typing import Collection, Union, Mapping, MutableMapping, Optional
 from warnings import warn
@@ -82,7 +83,7 @@ def _read_hdf5_attribute(attrs: h5py.AttributeManager, name: str):
         elif len(attr_id.shape) == 0:  # Python bytestring
             return attr.decode("utf-8")
         else:  # NumPy array
-            return attr.astype("U")
+            return [decode(s, "utf-8") for s in attr]
 
 
 def _from_fixed_length_strings(value):
@@ -91,8 +92,6 @@ def _from_fixed_length_strings(value):
 
     For backwards compatability with older h5ad and zarr files.
     """
-    if not hasattr(value, "dtype"):
-        return value
     new_dtype = []
     for dt in value.dtype.descr:
         dt_list = list(dt)

@@ -621,7 +621,8 @@ def test_write_string_types(tmp_path, diskfmt):
 
 
 @pytest.mark.parametrize(
-    "teststring", ["teststring", np.asarray(["test1", "test2", "test3"])]
+    "teststring",
+    ["teststring", np.asarray(["test1", "test2", "test3"], dtype="object")],
 )
 @pytest.mark.parametrize("encoding", ["ascii", "utf-8"])
 @pytest.mark.parametrize("length", [None, 15])
