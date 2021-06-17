@@ -109,6 +109,8 @@ class _ConcatViewMixin:
 
         return adatas_oidx, oidx, vidx, reverse
 
+
+class _IterateViewMixin:
     def iterate_axis(self, batch_size, axis=0, shuffle=False, drop_last=False):
         if axis not in (0, 1):
             raise ValueError("Axis should be either 0 or 1.")
@@ -214,7 +216,7 @@ class MapObsView:
         return descr
 
 
-class AnnDataSetView(_ConcatViewMixin):
+class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
     def __init__(self, reference, resolved_idx):
         self.reference = reference
 
@@ -431,7 +433,7 @@ class AnnDataSetView(_ConcatViewMixin):
         return adata
 
 
-class AnnDataSet(_ConcatViewMixin):
+class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     def __init__(
         self,
         adatas,
@@ -629,17 +631,29 @@ class AnnDataSet(_ConcatViewMixin):
         return descr
 
 
-class LazyAttrData:
+class LazyAttrData(_IterateViewMixin):
     def __init__(self, adset: AnnDataSet, attr, key=None):
         self.adset = adset
         self.attr = attr
         self.key = key
 
     def __getitem__(self, index):
-        attr_arr = getattr(self.adset[index], self.attr)
+        oidx = None
+        vidx = None
+
+        if isinstance(index, tuple) and self.attr in ("obs", "obsm"):
+            oidx = index[0]
+            if len(index) > 1:
+                vidx = index[1]
+
+        if oidx is None:
+            view = self.adset[index]
+        else:
+            view = self.adset[oidx]
+        attr_arr = getattr(view, self.attr)
         if self.key is not None:
             attr_arr = attr_arr[self.key]
-        return attr_arr
+        return attr_arr if vidx is None else attr_arr[:, vidx]
 
     @property
     def shape(self):
