@@ -508,12 +508,12 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
                 [a.obs for a in adatas], join=join_obs, ignore_index=True
             )
             concat_annot.index = self.obs_names
-            self.obs = concat_annot
+            self._obs = concat_annot
         else:
-            self.obs = pd.DataFrame(index=self.obs_names)
+            self._obs = pd.DataFrame(index=self.obs_names)
 
         if label is not None:
-            self.obs[label] = label_col
+            self._obs[label] = label_col
 
         # process obsm inner join
         self.obsm = None
@@ -565,6 +565,10 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         resolved_idx = self._resolve_idx(oidx, vidx)
 
         return AnnDataSetView(self, resolved_idx)
+
+    @property
+    def obs(self):
+        return self._obs
 
     @property
     def shape(self):
