@@ -223,3 +223,30 @@ class DeprecationMixinMeta(type):
             for item in type.__dir__(cls)
             if not is_deprecated(getattr(cls, item, None))
         ]
+
+
+def import_function(module, name):
+    """\
+    Try to import function from module. If the module is not installed or
+    function is not part of the module, it returns a dummy function that raises
+    the respective import error once the function is called. This could be a
+    ModuleNotFoundError if the module is missing or an AttributeError if the
+    module is installed but the function is not exported by it.
+    """
+    try:
+        module = __import__(module, fromlist=[name])
+        try:
+            func = getattr(module, name)
+        except AttributeError as e:
+            error = e
+
+            def func(*_, **__):
+                raise error
+             
+    except ImportError as e:
+        error = e
+
+        def func(*_, **__):
+            raise error
+
+    return func
