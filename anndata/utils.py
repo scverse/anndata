@@ -225,25 +225,25 @@ class DeprecationMixinMeta(type):
         ]
 
 
-def import_function(module, name):
+def import_function(module: str, name: str):
     """\
     Try to import function from module. If the module is not installed or
     function is not part of the module, it returns a dummy function that raises
     the respective import error once the function is called. This could be a
     ModuleNotFoundError if the module is missing or an AttributeError if the
     module is installed but the function is not exported by it.
+
+    Params
+    -------
+    module
+        Module to import from. Can be nested, e.g. "sklearn.utils".
+    name
+        Name of function to import from module.
     """
     try:
         module = __import__(module, fromlist=[name])
-        try:
-            func = getattr(module, name)
-        except AttributeError as e:
-            error = e
-
-            def func(*_, **__):
-                raise error
-             
-    except ImportError as e:
+        func = getattr(module, name)
+    except (ImportError, AttributeError) as e:
         error = e
 
         def func(*_, **__):
