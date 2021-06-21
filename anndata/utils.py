@@ -1,6 +1,6 @@
 import warnings
 from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union
+from typing import Mapping, Any, Sequence, Union, Callable
 
 import h5py
 import pandas as pd
@@ -225,7 +225,7 @@ class DeprecationMixinMeta(type):
         ]
 
 
-def import_function(module: str, name: str):
+def import_function(module: str, name: str) -> Callable:
     """\
     Try to import function from module. If the module is not installed or
     function is not part of the module, it returns a dummy function that raises
@@ -240,8 +240,9 @@ def import_function(module: str, name: str):
     name
         Name of function to import from module.
     """
+    from importlib import import_module
     try:
-        module = __import__(module, fromlist=[name])
+        module = import_module(module)
         func = getattr(module, name)
     except (ImportError, AttributeError) as e:
         error = e
