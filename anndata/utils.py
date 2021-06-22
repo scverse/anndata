@@ -241,6 +241,7 @@ def import_function(module: str, name: str) -> Callable:
         Name of function to import from module.
     """
     from importlib import import_module
+
     try:
         module = import_module(module)
         func = getattr(module, name)
