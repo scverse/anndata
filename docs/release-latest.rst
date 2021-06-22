@@ -1,6 +1,13 @@
 .. role:: small
 .. role:: smaller
 
+On `master` :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Fixed propagation of import error when importing `write_zarr` but not all dependencies are installed :pr:`579` :smaller:`R Hillje`
+
 0.7.6 :small:`11 April, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
