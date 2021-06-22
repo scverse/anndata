@@ -2,7 +2,7 @@
 .. role:: smaller
 
 On `master` :small:`the future`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Bug fixes
 
