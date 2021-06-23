@@ -9,6 +9,7 @@ from ..._core.index import _normalize_indices, _normalize_index, Index
 from ..._core.views import _resolve_idx
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import SparseDataset
+from ..._core.aligned_mapping import AxisArrays
 from ...logging import anndata_logger as logger
 
 ATTRS = ["obs", "obsm", "layers"]
@@ -523,6 +524,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
             self.obsm = inner_concat_aligned_mapping(
                 [a.obsm for a in adatas], index=self.obs_names
             )
+            self.obsm = AxisArrays(self, axis=0) if self.obsm == {} else self.obsm
 
         # process inner join of views
         self._view_attrs_keys = {}
