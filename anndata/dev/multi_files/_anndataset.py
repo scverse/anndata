@@ -147,6 +147,7 @@ class MapObsView:
         convert=None,
         reverse=None,
         dtypes=None,
+        obs_names=None
     ):
         self.adatas = adatas
         self._keys = keys
@@ -156,6 +157,7 @@ class MapObsView:
         self.convert = convert
         self.reverse = reverse
         self.dtypes = dtypes
+        self.obs_names = obs_names
 
     def __getitem__(self, key, use_convert=True):
         if self._keys is not None and key not in self._keys:
@@ -211,6 +213,12 @@ class MapObsView:
         for key in keys:
             dct[key] = self.__getitem__(key, use_convert)
         return dct
+
+    @property
+    def df(self):
+        if self.attr != 'obs':
+            return None
+        return pd.DataFrame(self.to_dict(use_convert=False), index=self.obs_names)
 
     def __repr__(self):
         descr = f"View of {self.attr} with keys: {str(self.keys())[1:-1]}"
@@ -273,6 +281,11 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
         if self.convert is not None:
             attr_convert = _select_convert(attr, self.convert)
 
+        if attr == 'obs':
+            obs_names = self.obs_names
+        else:
+            obs_names = None
+
         setattr(
             self,
             f"_{attr}_view",
@@ -285,6 +298,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
                 attr_convert,
                 reverse,
                 attr_dtypes,
+                obs_names
             ),
         )
 
