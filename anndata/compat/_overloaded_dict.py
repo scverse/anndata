@@ -1,6 +1,6 @@
 from collections.abc import MutableMapping
 from functools import partial
-from typing import Any, Callable, List, Mapping, Optional
+from typing import Any, Callable, List, Mapping, Optional, Union
 from warnings import warn
 from weakref import proxy
 
@@ -198,9 +198,9 @@ def _neighbors_getter(ovld: OverloadedDict, key, adata: "AnnData"):
     )
 
 
-def _overloaded_uns(adata: "AnnData") -> OverloadedDict:
+def _overloaded_uns(adata: "AnnData", uns: Union[dict, "DictView"]) -> OverloadedDict:
     return OverloadedDict(
-        adata._uns,
+        uns,
         overloaded={
             "neighbors": KeyOverload(
                 "neighbors",
