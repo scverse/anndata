@@ -1,6 +1,13 @@
 .. role:: small
 .. role:: smaller
 
+On master :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Fixed issue with `.uns` sub-dictionaries being referenced by copies :pr:`576` :smaller:`I Virshup`
+
 0.7.6 :small:`11 April, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
