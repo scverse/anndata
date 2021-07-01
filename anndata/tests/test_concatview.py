@@ -1,6 +1,8 @@
 import pytest
 import anndata as ad
 import numpy as np
+
+from sklearn.preprocessing import LabelEncoder
 from anndata.dev.multi_files import AnnDataSet
 
 
@@ -50,3 +52,15 @@ def test_creation(adatas):
     dat = AnnDataSet(adatas_inner, join_vars="inner", index_unique="_")
     adt_concat = ad.concat(adatas_inner, index_unique="_")
     np.testing.assert_array_equal(dat.var_names, adt_concat.var_names)
+
+
+def test_convert(adatas):
+    dat = AnnDataSet(adatas, index_unique="_")
+
+    le = LabelEncoder()
+    le.fit(dat[:].obs["a_test"])
+
+    obs_no_convert = dat[:].obs["a_test"]
+    convert = dict(obs={"a_test": lambda a: le.transform(a)})
+    dat.convert = convert
+    np.testing.assert_array_equal(dat[:].obs["a_test"], le.transform(obs_no_convert))

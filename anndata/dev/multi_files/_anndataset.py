@@ -147,7 +147,7 @@ class MapObsView:
         convert=None,
         reverse=None,
         dtypes=None,
-        obs_names=None
+        obs_names=None,
     ):
         self.adatas = adatas
         self._keys = keys
@@ -216,7 +216,7 @@ class MapObsView:
 
     @property
     def df(self):
-        if self.attr != 'obs':
+        if self.attr != "obs":
             return None
         return pd.DataFrame(self.to_dict(use_convert=False), index=self.obs_names)
 
@@ -281,7 +281,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
         if self.convert is not None:
             attr_convert = _select_convert(attr, self.convert)
 
-        if attr == 'obs':
+        if attr == "obs":
             obs_names = self.obs_names
         else:
             obs_names = None
@@ -298,7 +298,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
                 attr_convert,
                 reverse,
                 attr_dtypes,
-                obs_names
+                obs_names,
             ),
         )
 
