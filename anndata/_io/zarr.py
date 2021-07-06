@@ -181,7 +181,6 @@ def write_none(f, key, value, dataset_kwargs=MappingProxyType({})):
     pass
 
 
-# TODO: Figure out what to do with dataset_kwargs for these
 @report_write_key_on_error
 def write_csr(f, key, value: sparse.csr_matrix, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
