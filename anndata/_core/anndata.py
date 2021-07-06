@@ -337,6 +337,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
+        # self._adata_ref is never a view
         self._adata_ref = adata_ref
         self._oidx = oidx
         self._vidx = vidx
@@ -360,7 +361,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # set attributes
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
-        self._uns = DictView(uns_new, view_args=(self, "uns"))
+        self._uns = uns_new
         self._n_obs = len(self.obs)
         self._n_vars = len(self.var)
 
@@ -894,9 +895,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def uns(self) -> MutableMapping:
         """Unstructured annotation (ordered dictionary)."""
-        uns = _overloaded_uns(self)
+        uns = self._uns
         if self.is_view:
-            uns = DictView(uns, view_args=(self, "uns"))
+            uns = DictView(uns, view_args=(self, "_uns"))
+        uns = _overloaded_uns(self, uns)
         return uns
 
     @uns.setter
@@ -1460,12 +1462,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
-            new["uns"] = (
-                self._uns.copy()
-                if isinstance(self.uns, DictView)
-                else deepcopy(self._uns)
-            )
-
+            new["uns"] = deepcopy(self._uns)
         if "raw" in kwargs:
             new["raw"] = kwargs["raw"]
         elif self.raw is not None:
