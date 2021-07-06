@@ -631,6 +631,7 @@ def test_zarr_chunk_X_dense(tmp_path):
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
 
+
 def test_zarr_chunk_X_sparse(tmp_path):
     import zarr
 

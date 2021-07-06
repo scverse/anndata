@@ -193,7 +193,6 @@ def write_csr(f, key, value: sparse.csr_matrix, dataset_kwargs=MappingProxyType(
     write_array(group, "indptr", value.indptr, dataset_kwargs=dataset_kwargs)
 
 
-
 @report_write_key_on_error
 def write_csc(f, key, value: sparse.csc_matrix, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(key)
