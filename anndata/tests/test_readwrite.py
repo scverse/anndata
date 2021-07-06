@@ -641,8 +641,7 @@ def test_zarr_chunk_X_sparse(tmp_path):
     z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
     assert z["X"]["data"].chunks == (20,)
     assert z["X"]["indices"].chunks == (20,)
-    # Chunks arg only affects the "data" arrays.
-    assert z["X"]["indptr"].chunks == (101,)
+    assert z["X"]["indptr"].chunks == (20,)
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
 

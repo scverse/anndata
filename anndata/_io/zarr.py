@@ -190,8 +190,6 @@ def write_csr(f, key, value: sparse.csr_matrix, dataset_kwargs=MappingProxyType(
     group.attrs["shape"] = value.shape
     write_array(group, "data", value.data, dataset_kwargs=dataset_kwargs)
     write_array(group, "indices", value.indices, dataset_kwargs=dataset_kwargs)
-    if "chunks" in dataset_kwargs:
-        del dataset_kwargs["chunks"]
     write_array(group, "indptr", value.indptr, dataset_kwargs=dataset_kwargs)
 
 
@@ -204,8 +202,6 @@ def write_csc(f, key, value: sparse.csc_matrix, dataset_kwargs=MappingProxyType(
     group.attrs["shape"] = value.shape
     write_array(group, "data", value.data, dataset_kwargs=dataset_kwargs)
     write_array(group, "indices", value.indices, dataset_kwargs=dataset_kwargs)
-    if "chunks" in dataset_kwargs:
-        del dataset_kwargs["chunks"]
     write_array(group, "indptr", value.indptr, dataset_kwargs=dataset_kwargs)
 
 
