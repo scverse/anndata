@@ -354,6 +354,10 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
     @property
     def X(self):
+        # inconsistent behavior here, _X can be changed,
+        # but the other attributes can't be changed.
+        # maybe do return ... _X.copy() or _X.setflags(write=False)
+
         _X = self._gather_X()
 
         return self._convert_X(_X) if self._convert_X is not None else _X
