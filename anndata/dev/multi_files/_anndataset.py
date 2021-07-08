@@ -535,14 +535,14 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
             self._obs[label] = label_col
 
         # process obsm inner join
-        self.obsm = None
+        self._obsm = None
         if join_obsm == "inner":
             view_attrs.remove("obsm")
             self._attrs.append("obsm")
-            self.obsm = inner_concat_aligned_mapping(
+            self._obsm = inner_concat_aligned_mapping(
                 [a.obsm for a in adatas], index=self.obs_names
             )
-            self.obsm = AxisArrays(self, axis=0) if self.obsm == {} else self.obsm
+            self._obsm = AxisArrays(self, axis=0) if self._obsm == {} else self._obsm
 
         # process inner join of views
         self._view_attrs_keys = {}
@@ -589,6 +589,10 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     @property
     def obs(self):
         return self._obs
+
+    @property
+    def obsm(self):
+        return self._obsm
 
     @property
     def shape(self):
