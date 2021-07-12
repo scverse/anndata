@@ -54,7 +54,7 @@ dev = [
     'docutils',
 ]
 doc = [
-    'sphinx>=4.0',
+    'sphinx>=4.0,<4.1',
     'sphinx-rtd-theme',
     'sphinx-autodoc-typehints>=1.11.0',
     'sphinx_issues',
@@ -68,7 +68,7 @@ test = [
     'zarr',
     'matplotlib',
     'sklearn',
-    'xlrd',
+    'openpyxl',
     'joblib',
     'boltons',
     'scanpy',
