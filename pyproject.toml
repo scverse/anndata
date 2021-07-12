@@ -68,7 +68,7 @@ test = [
     'zarr',
     'matplotlib',
     'sklearn',
-    'xlrd',
+    'openpyxl',
     'joblib',
     'boltons',
     'scanpy',
