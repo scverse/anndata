@@ -229,6 +229,13 @@ class MapObsView:
 
 
 class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
+    """\
+    View of AnnDataSet.
+
+    Notes
+    -----
+    """
+
     def __init__(self, reference, resolved_idx):
         self.reference = reference
 
@@ -460,6 +467,35 @@ ConvertType = Union[Callable, DictCallable, Dict[str, DictCallable]]
 
 
 class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
+    """\
+    An object to lazily concatenate and jointly subset AnnData objects along the obs axis.
+
+    Subsetting of this object returns :class:`~anndata.dev.multi_files._anndataset.AnnDataSetView`.
+
+    Parameters
+    ----------
+    adatas
+        The objects to be concatenated. If a Mapping is passed, keys are used for the `keys`
+        argument and values are concatenated.
+    join_obs
+    join_obsm
+    join_vars
+    label
+        Column in `.obs` to place batch information in.
+        If it's None, no column is added.
+    keys
+        Names for each object being added. These values are used for column values for
+        `label` or appended to the index if `index_unique` is not `None`. Defaults to
+        incrementing integer labels.
+    index_unique
+        Whether to make the index unique by using the keys. If provided, this
+        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
+        the original indices are kept.
+    convert
+    harmonize_dtypes
+    indices_strict
+    """
+
     def __init__(
         self,
         adatas: Union[Sequence[AnnData], Dict[str, AnnData]],

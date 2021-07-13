@@ -72,6 +72,7 @@ Experimental development API
    :toctree: .
 
    dev.AnnDataSet
+   dev.multi_files._anndataset.AnnDataSetView
    dev.AnnDataLoader
 
 

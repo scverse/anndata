@@ -90,12 +90,29 @@ def _convert_on_top(convert, top_convert, attrs_keys):
 
 # AnnDataLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
 class AnnDataLoader(DataLoader):
+    """\
+    PyTorch DataLoader for AnndData objects.
+
+    Parameters
+    ----------
+    adatas
+        The AnnData objects or an :class:`~anndata.dev.AnnDataSet` object
+        from which to load the data.
+    batch_size
+        How many samples per batch to load.
+    shuffle
+        Set to `True` to have the data reshuffled at every epoch`.
+    use_default_converter
+    use_cuda
+    **kwargs
+    """
+
     def __init__(
         self,
         adatas: Union[Sequence[AnnData], Dict[str, AnnData]],
         batch_size: int = 1,
         shuffle: bool = False,
-        use_default_converte: bool = True,
+        use_default_converter: bool = True,
         use_cuda: bool = False,
         **kwargs,
     ):
