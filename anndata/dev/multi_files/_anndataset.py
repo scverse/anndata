@@ -4,8 +4,9 @@ from h5py import Dataset
 import numpy as np
 import pandas as pd
 
-from typing import Literal, Dict, Union, Optional, Sequence, Callable
+from typing import Dict, Union, Optional, Sequence, Callable
 
+from ...compat import Literal
 from ..._core.anndata import AnnData
 from ..._core.index import _normalize_indices, _normalize_index, Index
 from ..._core.views import _resolve_idx
