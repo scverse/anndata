@@ -4,6 +4,8 @@ from h5py import Dataset
 import numpy as np
 import pandas as pd
 
+from typing import Literal, Dict, Union, Optional, Sequence, Callable
+
 from ..._core.anndata import AnnData
 from ..._core.index import _normalize_indices, _normalize_index, Index
 from ..._core.views import _resolve_idx
@@ -452,19 +454,23 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
         return adata
 
 
+DictCallable = Dict[str, Callable]
+ConvertType = Union[Callable, DictCallable, Dict[str, DictCallable]]
+
+
 class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     def __init__(
         self,
-        adatas,
-        join_obs="inner",
-        join_obsm=None,
-        join_vars=None,
-        label=None,
-        keys=None,
-        index_unique=None,
-        convert=None,
-        harmonize_dtypes=True,
-        indices_strict=True,
+        adatas: Union[Sequence[AnnData], Dict[str, AnnData]],
+        join_obs: Optional[Literal["inner", "outer"]] = "inner",
+        join_obsm: Optional[Literal["inner"]] = None,
+        join_vars: Optional[Literal["inner"]] = None,
+        label: Optional[str] = None,
+        keys: Optional[Sequence[str]] = None,
+        index_unique: Optional[str] = None,
+        convert: Optional[ConvertType] = None,
+        harmonize_dtypes: bool = True,
+        indices_strict: bool = True,
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:

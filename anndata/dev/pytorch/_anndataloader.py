@@ -1,10 +1,14 @@
 from scipy.sparse import issparse
 from math import ceil
 from copy import copy
-from ..._core.anndata import AnnData
-from ..multi_files._anndataset import AnnDataSet, _ConcatViewMixin
+from typing import Dict, Union, Sequence
+
 import numpy as np
 import warnings
+
+from ..._core.anndata import AnnData
+from ..multi_files._anndataset import AnnDataSet, _ConcatViewMixin
+
 
 try:
     import torch
@@ -88,18 +92,22 @@ def _convert_on_top(convert, top_convert, attrs_keys):
 class AnnDataLoader(DataLoader):
     def __init__(
         self,
-        adatas,
-        batch_size=1,
-        shuffle=False,
-        use_default_converter=True,
-        use_cuda=False,
+        adatas: Union[Sequence[AnnData], Dict[str, AnnData]],
+        batch_size: int = 1,
+        shuffle: bool = False,
+        use_default_converte: bool = True,
+        use_cuda: bool = False,
         **kwargs,
     ):
 
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
-        if isinstance(adatas, list) or isinstance(adatas, tuple):
+        if (
+            isinstance(adatas, list)
+            or isinstance(adatas, tuple)
+            or isinstance(adatas, dict)
+        ):
             join_obs = kwargs.pop("join_obs", "inner")
             join_obsm = kwargs.pop("join_obsm", None)
             label = kwargs.pop("label", None)
