@@ -54,11 +54,11 @@ dev = [
     'docutils',
 ]
 doc = [
-    'sphinx>=4.0,<4.1',
+    'sphinx>=4.1',
     'sphinx-rtd-theme',
     'sphinx-autodoc-typehints>=1.11.0',
     'sphinx_issues',
-    'scanpydoc>=0.7.1',
+    'scanpydoc>=0.7.3',
     'typing_extensions; python_version < "3.8"',
 ]
 test = [
