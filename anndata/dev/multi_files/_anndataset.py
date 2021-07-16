@@ -470,7 +470,13 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     """\
     An object to lazily concatenate and jointly subset AnnData objects along the obs axis.
 
+    This object doesn't copy data from AnnData objects, it uses joint index of observations
+    and variables of the AnnData objects to allow joint subsetting. It also allows on the fly
+    application of prespecified converters to observation attributes of The AnnData objects.
+
     Subsetting of this object returns :class:`~anndata.dev.multi_files._anndataset.AnnDataSetView`.
+    Only these subset objects have views of `.obs`, `.obsm`, `.layers`, `.X` from the passed
+    AnnData objects.
 
     Parameters
     ----------
@@ -478,8 +484,26 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         The objects to be concatenated. If a Mapping is passed, keys are used for the `keys`
         argument and values are concatenated.
     join_obs
+        If "inner" specified all `.obs` attributes from `adatas` will be inner joined
+        and copied to this object.
+        If "outer" specified all `.obsm` attributes from `adatas` will be outer joined
+        and copied to this object.
+        For "inner" and "outer" subset objects will access `.obs` of this object,
+        not the original `.obs` attributes of `adatas`.
+        If `None`, nothing is copied to this object's `.obs`, a subset object will directly
+        access `.obs` attributes of `adatas` (with proper reindexing and dtype conversions).
+        For `None`the inner join rule is used to select columns of `.obs` of `adatas`.
     join_obsm
+        If "inner" specified all `.obsm` attributes from `adatas` will be inner joined
+        and copied to this object. Subset objects will access `.obsm` of this object,
+        not the original `.obsm` attributes of `adatas`.
+        If `None`, nothing is copied to this object's `.obsm`, a subset object will directly
+        access `.obsm` attributes of `adatas` (with proper reindexing and dtype conversions).
+        For both options the inner join rule for the underlying `.obsm` attributes is used.
     join_vars
+        Specify how to join `adatas` along the var axis. If `None`, assumes all `adatas`
+        have the same variables. If "inner", the intersection of all variables in
+        `adatas` will be used.
     label
         Column in `.obs` to place batch information in.
         If it's None, no column is added.
@@ -492,8 +516,26 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
         the original indices are kept.
     convert
+        You can pass a function or a Mapping of functions which will be applied
+        to the values of attributes (`.obs`, `.obsm`, `.layers`, `.X`) or to specific
+        keys of these attributes in the subset object.
+        Specify an attribute and a key (if needed) as keys of the passed Mapping
+        and a function to be applied as a value.
     harmonize_dtypes
+        If `True`, all retrieved arrays from subset objects will have the same dtype.
     indices_strict
+        If  `True`, arrays from the subset objects will always have the same order
+        of indices as in selection used to subset.
+        This parameter can be set to `False` if the order in the returned arrays
+        is not important, for example, when using them for stochastic gradient descent.
+
+    Examples
+    ----------
+    >>> dc = AnnDataSet([adata1, adata2])
+    >>> batch = dc[100:200] # AnnDataSetView
+    >>> batch.X
+    >>> batch.obsm['embed']
+    >>> batch.obs['label']
     """
 
     def __init__(

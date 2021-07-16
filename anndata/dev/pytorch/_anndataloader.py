@@ -93,18 +93,32 @@ class AnnDataLoader(DataLoader):
     """\
     PyTorch DataLoader for AnndData objects.
 
+    Builds DataLoader from a sequence of AnnData objects, from an
+    :class:`~anndata.dev.AnnDataSet` object
+    or from an :class:`~anndata.dev.multi_files._anndataset.AnnDataSetView` object.
+    Takes care of the required conversions.
+
     Parameters
     ----------
     adatas
-        The AnnData objects or an :class:`~anndata.dev.AnnDataSet` object
+        The AnnData objects, an AnnDataSet or AnnDataSetView object.
         from which to load the data.
     batch_size
         How many samples per batch to load.
     shuffle
         Set to `True` to have the data reshuffled at every epoch`.
     use_default_converter
+        Use the default converter to convert arrays to pytorch tensors, transfer to
+        the default cuda device (if `use_cuda=True`), do memory pinning (if `pin_memory=True`).
+        If you pass an AnnDataSet object with prespecified converters, the default converter
+        won't overwrite these converters but will be applied on top of them.
     use_cuda
+        Transfer pytorch tensors to the default cuda device after conversion.
+        Only works if `use_default_converter=True`
     **kwargs
+        Argumens for PyTorch DataLoader.
+        If `adatas` is not an AnnDataSet or AnnDataSetView object, then also arguments for
+        AnnDataSet object initialization.
     """
 
     def __init__(
