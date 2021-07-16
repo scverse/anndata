@@ -531,11 +531,27 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
 
     Examples
     ----------
-    >>> dc = AnnDataSet([adata1, adata2])
+    >>> from scanpy.datasets import pbmc68k_reduced, pbmc3k_processed
+    >>> adata1, adata2 = pbmc68k_reduced(), pbmc3k_processed()
+    >>> adata1.shape
+    (700, 765)
+    >>> adata2.shape
+    (2638, 1838)
+    >>> dc = AnnDataSet([adata1, adata2], join_vars='inner')
+    >>> dc
+    AnnDataSet object with n_obs × n_vars = 3338 × 208
+        constructed from 2 AnnData objects
+            view of obsm: 'X_pca', 'X_umap'
+            obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
     >>> batch = dc[100:200] # AnnDataSetView
-    >>> batch.X
-    >>> batch.obsm['embed']
-    >>> batch.obs['label']
+    >>> batch
+    AnnDataSetView object with n_obs × n_vars = 100 × 208
+        obsm: 'X_pca', 'X_umap'
+        obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
+    >>> batch.X.shape
+    (100, 208)
+    >>> len(batch.obs['louvain'])
+    100
     """
 
     def __init__(
