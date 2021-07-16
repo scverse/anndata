@@ -230,10 +230,15 @@ class MapObsView:
 
 class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
     """\
-    View of AnnDataSet.
+    An object to access the observation attributes of `adatas` in AnnDataSet.
+
+    Created as a result of subsetting an :class:`~anndata.dev.AnnDataSet` object.
+    An object of this class can have `.obs`, `.obsm`, `.layers`, `.X` depending on the
+    results of joins in the reference AnnDataSet object.
 
     Notes
     -----
+    Nothing is copied until the keys of the attributes or `.X` are accessed.
     """
 
     def __init__(self, reference, resolved_idx):
@@ -481,8 +486,8 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     Parameters
     ----------
     adatas
-        The objects to be concatenated. If a Mapping is passed, keys are used for the `keys`
-        argument and values are concatenated.
+        The objects to be lazily concatenated.
+        If a Mapping is passed, keys are used for the `keys` argument and values are concatenated.
     join_obs
         If "inner" specified all `.obs` attributes from `adatas` will be inner joined
         and copied to this object.
