@@ -540,9 +540,9 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     >>> dc = AnnDataSet([adata1, adata2], join_vars='inner')
     >>> dc
     AnnDataSet object with n_obs × n_vars = 3338 × 208
-        constructed from 2 AnnData objects
-            view of obsm: 'X_pca', 'X_umap'
-            obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
+      constructed from 2 AnnData objects
+        view of obsm: 'X_pca', 'X_umap'
+        obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
     >>> batch = dc[100:200] # AnnDataSetView
     >>> batch
     AnnDataSetView object with n_obs × n_vars = 100 × 208
