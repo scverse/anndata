@@ -1,6 +1,7 @@
 from scipy.sparse import issparse
 from math import ceil
 from copy import copy
+from functools import partial
 from typing import Dict, Union, Sequence
 
 import numpy as np
@@ -73,7 +74,11 @@ def _convert_on_top(convert, top_convert, attrs_keys):
     if convert is None:
         new_convert = top_convert
     elif callable(convert):
-        new_convert = lambda arr: top_convert(convert(arr))
+
+        def compose_convert(arr):
+            return top_convert(convert(arr))
+
+        new_convert = compose_convert
     else:
         new_convert = {}
         for attr in attrs_keys:
@@ -167,21 +172,28 @@ class AnnDataLoader(DataLoader):
 
         if use_default_converter:
             pin_memory = kwargs.pop("pin_memory", False)
-            _converter = lambda arr: default_converter(arr, use_cuda, pin_memory)
+            _converter = partial(
+                default_converter, use_cuda=use_cuda, pin_memory=pin_memory
+            )
             dataset.convert = _convert_on_top(
                 dataset.convert, _converter, dict(dataset.attrs_keys, X=[])
             )
 
         has_sampler = "sampler" in kwargs
         has_batch_sampler = "batch_sampler" in kwargs
-        has_worker_init_fn = "worker_init_fn" in kwargs
+
+        has_worker_init_fn = (
+            "worker_init_fn" in kwargs and kwargs["worker_init_fn"] is not None
+        )
+        has_workers = "num_workers" in kwargs and kwargs["num_workers"] > 0
+        use_parallel = has_worker_init_fn or has_workers
 
         if (
             batch_size is not None
             and batch_size > 1
             and not has_sampler
             and not has_batch_sampler
-            and not has_worker_init_fn
+            and not use_parallel
         ):
             drop_last = kwargs.pop("drop_last", False)
             default_sampler = BatchIndexSampler(
