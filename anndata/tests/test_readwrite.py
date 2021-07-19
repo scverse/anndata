@@ -637,7 +637,7 @@ def test_zarr_chunk_X_sparse(tmp_path):
 
     zarr_pth = Path(tmp_path) / "test.zarr"
     adata = gen_adata((100, 100), X_type=csc_matrix)
-    adata.write_zarr(zarr_pth, chunks=(20,))
+    adata.write_zarr(zarr_pth, sparse_chunks=(20,))
 
     z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
     assert z["X"]["data"].chunks == (20,)

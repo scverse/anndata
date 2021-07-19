@@ -1950,6 +1950,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self,
         store: Union[MutableMapping, PathLike],
         chunks: Union[bool, int, Tuple[int, ...], None] = None,
+        sparse_chunks: Union[bool, int, Tuple[int, ...], None] = None,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1959,11 +1960,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         store
             The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
         chunks
-            Chunk shape.
+            Chunk shape for dense matrices.
+        sparse_chunks
+            Chunk shape for sparse matrices.
         """
         from .._io.write import write_zarr
 
-        write_zarr(store, self, chunks=chunks)
+        write_zarr(store, self, chunks=chunks, sparse_chunks=sparse_chunks)
 
     def chunked_X(self, chunk_size: Optional[int] = None):
         """\

@@ -37,6 +37,7 @@ def write_zarr(
     store: Union[MutableMapping, str, Path],
     adata: AnnData,
     chunks=None,
+    sparse_chunks=None,
     **dataset_kwargs,
 ) -> None:
     if isinstance(store, Path):
@@ -45,8 +46,11 @@ def write_zarr(
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
     f = zarr.open(store, mode="w")
-    if chunks is not None:
+    is_sparse = isinstance(adata.X, sparse.spmatrix)
+    if chunks is not None and not is_sparse:
         write_attribute(f, "X", adata.X, dict(chunks=chunks, **dataset_kwargs))
+    elif sparse_chunks is not None and is_sparse:
+        write_attribute(f, "X", adata.X, dict(chunks=sparse_chunks, **dataset_kwargs))
     else:
         write_attribute(f, "X", adata.X, dataset_kwargs)
     write_attribute(f, "obs", adata.obs, dataset_kwargs)
