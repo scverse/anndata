@@ -4,6 +4,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Callable, Type, TypeVar, Union
 from warnings import warn
+from copy import deepcopy
 
 import numpy as np
 from scipy import sparse
@@ -59,7 +60,7 @@ def write_zarr(
     write_attribute(f, "varm", adata.varm, dataset_kwargs)
     write_attribute(f, "obsp", adata.obsp, dataset_kwargs)
     write_attribute(f, "varp", adata.varp, dataset_kwargs)
-    write_attribute(f, "layers", adata.layers, dataset_kwargs)
+    write_attribute(f, "layers", adata.layers, dict(sparse_chunks=sparse_chunks, chunks=chunks, **dataset_kwargs))
     write_attribute(f, "uns", adata.uns, dataset_kwargs)
     write_attribute(f, "raw", adata.raw, dataset_kwargs)
 
@@ -83,7 +84,20 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs=MappingProxyType({})):
                 "string keys is recommended.",
                 WriteWarning,
             )
-        write_attribute(f, f"{key}/{sub_k}", sub_v, dataset_kwargs)
+        is_sparse = isinstance(sub_v, sparse.spmatrix)
+        new_dataset_kwargs_dict = deepcopy(dataset_kwargs.copy())
+        if 'chunks' in dataset_kwargs:
+            if dataset_kwargs['chunks'] is not None and not is_sparse:
+                if 'chunks' in dataset_kwargs:
+                    del new_dataset_kwargs_dict['sparse_chunks']
+                new_dataset_kwargs_dict = dict(chunks=new_dataset_kwargs_dict['chunks'], **new_dataset_kwargs_dict)
+        elif 'sparse_chunks' in dataset_kwargs:
+            if dataset_kwargs['sparse_chunks'] is not None and is_sparse:
+                if 'sparse_chunks' in dataset_kwargs:
+                    del new_dataset_kwargs_dict['chunks']
+                new_dataset_kwargs_dict = dict(chunks=new_dataset_kwargs_dict['sparse_chunks'], **new_dataset_kwargs_dict)
+        else:
+            write_attribute(f, f"{key}/{sub_k}", sub_v, new_dataset_kwargs_dict)
 
 
 @report_write_key_on_error
