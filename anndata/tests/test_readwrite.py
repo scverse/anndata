@@ -646,6 +646,21 @@ def test_zarr_chunk_X_sparse(tmp_path):
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
 
+def test_zarr_chunk_layers(tmp_path):
+    import zarr
+
+    zarr_pth = Path(tmp_path) / "test.zarr"
+    adata = gen_adata((100, 100), X_type=csc_matrix)
+    adata.write_zarr(zarr_pth, sparse_chunks=(20,), chunks=(10, 10))
+
+    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
+    assert z["layers"]['sparse']["data"].chunks == (20,)
+    assert z["layers"]['sparse']["indices"].chunks == (20,)
+    assert z["layers"]['sparse']["indptr"].chunks == (20,)
+    assert z["layers"]['array'].chunks == (10,10)
+    from_zarr = ad.read_zarr(zarr_pth)
+    assert_equal(from_zarr, adata)
+
 
 ################################
 # Round-tripping scanpy datasets
