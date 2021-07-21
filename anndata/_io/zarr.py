@@ -86,15 +86,19 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs=MappingProxyType({})):
             )
         is_sparse = isinstance(sub_v, sparse.spmatrix)
         new_dataset_kwargs_dict = deepcopy(dataset_kwargs.copy())
-        # Delete sparse_chunks key if not sparse and chunks key if it is.
-        if not is_sparse and 'sparse_chunks' in dataset_kwargs: 
-            del new_dataset_kwargs_dict['sparse_chunks']
-        if is_sparse and 'chunks' in dataset_kwargs: 
-            del new_dataset_kwargs_dict['chunks']
-        # If it is sparse and there is a sparse_chunks key, make it the new chunks key
-        if 'sparse_chunks' in dataset_kwargs:
-            if dataset_kwargs['sparse_chunks'] is not None and is_sparse:
-                new_dataset_kwargs_dict = dict(chunks=new_dataset_kwargs_dict['sparse_chunks'], **new_dataset_kwargs_dict)
+        # Pop sparse chunks and chunks keys if possible.
+        sparse_chunks = None
+        chunks = None
+        if 'sparse_chunks' in new_dataset_kwargs_dict: 
+            sparse_chunks = new_dataset_kwargs_dict.pop('sparse_chunks')
+        if 'chunks' in new_dataset_kwargs_dict: 
+            chunks = new_dataset_kwargs_dict.pop('chunks')
+        # If it is sparse and there is a sparse_chunks key, make it the new chunks key,
+        # and similarly for dense matrices and chunks key
+        if sparse_chunks is not None and is_sparse:
+            new_dataset_kwargs_dict = dict(chunks=sparse_chunks, **new_dataset_kwargs_dict)
+        if chunks is not None and not is_sparse:
+            new_dataset_kwargs_dict = dict(chunks=chunks, **new_dataset_kwargs_dict)
         write_attribute(f, f"{key}/{sub_k}", sub_v, new_dataset_kwargs_dict)
 
 
