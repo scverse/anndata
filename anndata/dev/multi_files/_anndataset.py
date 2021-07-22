@@ -694,20 +694,46 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
 
     @property
     def obs(self):
+        """One-dimensional annotation of observations.
+
+        If `join_obs` was set to "inner" and "outer", subset objects' `.obs`
+        will point to this `.obs`; otherwise, to `.obs` of the underlying objects (`adatas`).
+        """
         return self._obs
 
     @property
     def obsm(self):
+        """Multi-dimensional annotation of observations.
+
+        If `join_obsm` was set to "inner", subset objects' `.obsm`
+        will point to this `.obsm`; otherwise, to `.obsm` of the underlying objects (`adatas`).
+        In the latter case, `.obsm` of this object will be `None`.
+        """
         return self._obsm
 
     @property
     def shape(self):
+        """Shape of the lazily concatenated data matrix"""
         return self.limits[-1], len(self.var_names)
+
+    @property
+    def n_obs(self):
+        """Number of observations."""
+        return self.shape[0]
+
+    @property
+    def n_vars(self):
+        """Number of variables/features."""
+        return self.shape[1]
 
     def __len__(self):
         return self.limits[-1]
 
     def to_adata(self):
+        """Convert this AnnDataSet object to an AnnData object.
+
+        The AnnData object won't have `.X`, only `.obs` and `.obsm`.
+        """
         if "obs" in self._view_attrs_keys or "obsm" in self._view_attrs_keys:
             concat_view = self[self.obs_names]
 
@@ -731,14 +757,22 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         return adata
 
     def lazy_attr(self, attr, key=None):
+        """Get a subsettable key from an attribute (array-like) or an attribute.
+
+        Returns a LazyAttrData object which provides subsetting over the specified
+        attribute (`.obs` or `.obsm`) or over a key from this attribute.
+        In the latter case, it acts as a lazy array.
+        """
         return LazyAttrData(self, attr, key)
 
     @property
     def has_backed(self):
+        """`True` if `adatas` have backed AnnData objects, `False` otherwise."""
         return any([adata.isbacked for adata in self.adatas])
 
     @property
     def attrs_keys(self):
+        """Dict of all accessible attributes and their keys."""
         _attrs_keys = {}
         for attr in self._attrs:
             keys = list(getattr(self, attr).keys())
