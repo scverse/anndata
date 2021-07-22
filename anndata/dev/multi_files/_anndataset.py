@@ -238,7 +238,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
     Notes
     -----
-    Nothing is copied until the keys of the attributes or `.X` are accessed.
+    Nothing is copied until keys of the attributes or `.X` are accessed.
     """
 
     def __init__(self, reference, resolved_idx):
@@ -369,6 +369,13 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
     @property
     def X(self):
+        """Lazy subset of data matrix.
+
+        The data matrix formed from the `.X` attributes of the underlying `adatas`,
+        properly reindexed and lazily merged.
+        Nothing is copied until `.X` is accessed, no real concatenation of the
+        unerlying `.X` attributes is done.
+        """
         # inconsistent behavior here, _X can be changed,
         # but the other attributes can't be changed.
         # maybe do return ... _X.copy() or _X.setflags(write=False)
@@ -379,33 +386,85 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
     @property
     def layers(self):
+        """Lazy subset of layers.
+
+        The layers attribute formed from lazy inner join and subsetting of the `.layers`
+        of the underlying `adatas`. No copy is made until you access a key from `.layers`,
+        only the subset of the accessed key is copied.
+
+        To get `.layers` as a dictionary, use `.layers.to_dict()`. You can also specify keys
+        to include in the dict `.layers.to_dict(keys=['key1', 'key2'])` and if you want
+        converters to be turned off when copying to dict `.layers.to_dict(use_convert=False)`.
+        """
         self._lazy_init_attr("layers", set_vidx=True)
         return self._layers_view
 
     @property
     def obsm(self):
+        """Lazy subset of multi-dimensional annotation of observations.
+
+        Points to the `.obsm` attributes of the underlying adatas ot to `.obsm` of the parent
+        AnnDataSet object depending on the `join_obsm` option of the AnnDataSet object.
+        See the docs of `~anndata.dev.AnnDataSet` for details.
+        Copy rules are the same as for `.layers`, i.e. everything is lazy.
+
+        To get `.obsm` as a dictionary, use `.obsm.to_dict()`. You can also specify keys
+        to include in the dict `.obsm.to_dict(keys=['key1', 'key2'])` and if you want
+        converters to be turned off when copying to dict `.obsm.to_dict(use_convert=False)`.
+        """
         self._lazy_init_attr("obsm")
         return self._obsm_view
 
     @property
     def obs(self):
+        """Lazy suset of one-dimensional annotation of observations.
+
+        Points to the `.obs` attributes of the underlying adatas ot to `.obs` of the parent
+        AnnDataSet object depending on the `join_obs` option of the AnnDataSet object.
+        See the docs of `~anndata.dev.AnnDataSet` for details.
+        Copy rules are the same as for `.layers`, i.e. everything is lazy.
+
+        To get `.obs` as a DataFrame, use `.obs.df`.
+        To get `.obs` as a dictionary, use `.obs.to_dict()`. You can also specify keys
+        to include in the dict `.obs.to_dict(keys=['key1', 'key2'])` and if you want
+        converters to be truned off when copying to dict `.obs.to_dict(use_convert=False)`.
+        """
         self._lazy_init_attr("obs")
         return self._obs_view
 
     @property
     def obs_names(self):
+        """Names of observations of this subset object."""
         return self.reference.obs_names[self.oidx]
 
     @property
     def var_names(self):
+        """Names of variables of this subset object."""
         return self.reference.var_names[self.vidx]
 
     @property
     def shape(self):
+        """Shape of the lazily concatenated subset of the data matrix."""
         return len(self.obs_names), len(self.var_names)
 
     @property
     def convert(self):
+        """On the fly converters for keys of attributes and data matrix.
+
+        A function or a Mapping of functions which will be applied
+        to the values of attributes (`.X`) or to specific keys of these attributes
+        (`.obs`, `.obsm`, `.layers`).
+        The keys of the the Mapping should correspond to the attributes or keys of the
+        attributes (hierarchically) and the values should be functions used for conversion.
+
+        Examples
+        ----------
+        {
+            'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
+            'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
+            'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+        }
+        """
         return self._convert
 
     @convert.setter
@@ -426,6 +485,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
     @property
     def has_backed(self):
+        """`True` if the current subset of `adatas` has backed objects, `False` otherwise."""
         for i, adata in enumerate(self.adatas):
             if adata.isbacked and self.adatas_oidx[i] is not None:
                 return True
@@ -442,7 +502,16 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
 
-    def to_adata(self, ignore_X=False, ignore_layers=False):
+    def to_adata(self, ignore_X: bool = False, ignore_layers: bool = False):
+        """Convert this AnnDataSetView object to an AnnData object.
+
+        Parameters
+        ----------
+        ignore_X
+            if `True`, adds `.X` to the AnnData object.
+        ignore_layers
+            if `True`, copies `.layers` to the AnnData object.
+        """
         if ignore_layers or self.layers is None:
             layers = None
         else:
@@ -533,6 +602,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         of indices as in selection used to subset.
         This parameter can be set to `False` if the order in the returned arrays
         is not important, for example, when using them for stochastic gradient descent.
+        In this case the performance of subsetting can be a bit better.
 
     Examples
     ----------
@@ -800,7 +870,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
 
 
 class LazyAttrData(_IterateViewMixin):
-    def __init__(self, adset: AnnDataSet, attr, key=None):
+    def __init__(self, adset: AnnDataSet, attr: str, key: Optional[str] = None):
         self.adset = adset
         self.attr = attr
         self.key = key
