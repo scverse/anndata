@@ -115,7 +115,26 @@ class _ConcatViewMixin:
 
 
 class _IterateViewMixin:
-    def iterate_axis(self, batch_size, axis=0, shuffle=False, drop_last=False):
+    def iterate_axis(
+        self,
+        batch_size: int,
+        axis: Literal[0, 1] = 0,
+        shuffle: bool = False,
+        drop_last: bool = False,
+    ):
+        """Iterate the lazy object over an axis.
+
+        Parameters
+        ----------
+        batch_size
+            How many samples to put into a batch when iterating.
+        axis
+            The axis to iterate over.
+        shuffle
+            Set to `True` to have the indices reshuffled before iterating.
+        drop_last
+            Set to `True` to drop a batch with the length lower than `batch_size`.
+        """
         if axis not in (0, 1):
             raise ValueError("Axis should be either 0 or 1.")
 
@@ -405,7 +424,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
         Points to the `.obsm` attributes of the underlying adatas ot to `.obsm` of the parent
         AnnDataSet object depending on the `join_obsm` option of the AnnDataSet object.
-        See the docs of `~anndata.dev.AnnDataSet` for details.
+        See the docs of :class:`~anndata.dev.AnnDataSet` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
 
         To get `.obsm` as a dictionary, use `.obsm.to_dict()`. You can also specify keys
@@ -459,11 +478,13 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
         Examples
         ----------
-        {
-            'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
-            'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
-            'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
-        }
+        ::
+
+            {
+                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
+                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
+                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+            }
         """
         return self._convert
 

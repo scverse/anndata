@@ -111,7 +111,7 @@ class AnnDataLoader(DataLoader):
     batch_size
         How many samples per batch to load.
     shuffle
-        Set to `True` to have the data reshuffled at every epoch`.
+        Set to `True` to have the data reshuffled at every epoch.
     use_default_converter
         Use the default converter to convert arrays to pytorch tensors, transfer to
         the default cuda device (if `use_cuda=True`), do memory pinning (if `pin_memory=True`).
