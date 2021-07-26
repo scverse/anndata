@@ -37,7 +37,6 @@ Reading other file formats.
 
    read_csv
    read_excel
-   read_hdf
    read_loom
    read_mtx
    read_text
@@ -65,15 +64,22 @@ Writing to other formats.
    AnnData.write_zarr
 
 
-Experimental development API
-----------------------------
+Development API
+---------------
+
+Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files. In paritcular, for pytorch-based models.
 
 .. autosummary::
    :toctree: .
 
    dev.AnnDataSet
-   dev.multi_files._anndataset.AnnDataSetView
    dev.AnnDataLoader
+
+.. autosummary::
+   :toctree: .
+   :hidden:
+ 
+   dev.multi_files._anndataset.AnnDataSetView
 
 
 Errors and warnings
