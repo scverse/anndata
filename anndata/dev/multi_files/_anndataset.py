@@ -787,13 +787,15 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     @property
     def convert(self):
         """On the fly converters for keys of attributes and data matrix.
- 
+
         A function or a Mapping of functions which will be applied
         to the values of attributes (`.X`) or to specific keys of these attributes
-        (`.obs`, `.obsm`, `.layers`).
+        (`.obs`, `.obsm`, `.layers`) of subset objects. The converters are not
+        applied to `.obs` and `.obsm` (if present) of this object, only to the attributes
+        of subset objects.
         The keys of the the Mapping should correspond to the attributes or keys of the
         attributes (hierarchically) and the values should be functions used for conversion.
- 
+
         Examples
         --------
         ::
@@ -804,7 +806,11 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
             }
         """
         return self._convert
-    
+
+    @convert.setter
+    def convert(self, value):
+        self._convert = value
+
     @property
     def obs(self):
         """One-dimensional annotation of observations.
