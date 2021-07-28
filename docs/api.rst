@@ -37,6 +37,7 @@ Reading other file formats.
 
    read_csv
    read_excel
+   read_hdf
    read_loom
    read_mtx
    read_text
