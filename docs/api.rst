@@ -79,7 +79,7 @@ Two classes for working with batched access to collections of many `AnnData` obj
 .. autosummary::
    :toctree: .
 
-   dev.multi_files._AnnCollection.AnnCollectionView
+   dev.multi_files._anncollection.AnnCollectionView
 
 
 Errors and warnings

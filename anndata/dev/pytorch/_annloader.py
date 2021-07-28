@@ -100,7 +100,7 @@ class AnnLoader(DataLoader):
 
     Builds DataLoader from a sequence of AnnData objects, from an
     :class:`~anndata.dev.AnnCollection` object
-    or from an :class:`~anndata.dev.multi_files._AnnCollection.AnnCollectionView` object.
+    or from an :class:`~anndata.dev.multi_files._anncollection.AnnCollectionView` object.
     Takes care of the required conversions.
 
     Parameters
