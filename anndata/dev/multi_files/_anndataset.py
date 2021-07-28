@@ -769,7 +769,8 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         for i in range(len(adatas) - 1):
             self.limits.append(self.limits[i] + adatas[i + 1].n_obs)
 
-        self.convert = convert
+        # init converter
+        self._convert = convert
 
         self._dtypes = None
         if len(adatas) > 1 and harmonize_dtypes:
@@ -783,6 +784,27 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
 
         return AnnDataSetView(self, resolved_idx)
 
+    @property
+    def convert(self):
+        """On the fly converters for keys of attributes and data matrix.
+ 
+        A function or a Mapping of functions which will be applied
+        to the values of attributes (`.X`) or to specific keys of these attributes
+        (`.obs`, `.obsm`, `.layers`).
+        The keys of the the Mapping should correspond to the attributes or keys of the
+        attributes (hierarchically) and the values should be functions used for conversion.
+ 
+        Examples
+        --------
+        ::
+            {
+                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
+                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
+                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+            }
+        """
+        return self._convert
+    
     @property
     def obs(self):
         """One-dimensional annotation of observations.
