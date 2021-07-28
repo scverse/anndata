@@ -799,6 +799,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         Examples
         --------
         ::
+
             {
                 'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
                 'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
