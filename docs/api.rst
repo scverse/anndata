@@ -77,7 +77,6 @@ Two classes for working with batched access to collections of many `AnnData` obj
 
 .. autosummary::
    :toctree: .
-   :hidden:
  
    dev.multi_files._anndataset.AnnDataSetView
 
