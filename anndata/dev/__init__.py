@@ -1,2 +1,2 @@
-from .multi_files import AnnDataSet
-from .pytorch import AnnDataLoader
+from .multi_files import AnnCollection
+from .pytorch import AnnLoader

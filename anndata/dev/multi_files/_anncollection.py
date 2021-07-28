@@ -247,13 +247,13 @@ class MapObsView:
         return descr
 
 
-class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
+class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     """\
-    An object to access the observation attributes of `adatas` in AnnDataSet.
+    An object to access the observation attributes of `adatas` in AnnCollection.
 
-    Created as a result of subsetting an :class:`~anndata.dev.AnnDataSet` object.
+    Created as a result of subsetting an :class:`~anndata.dev.AnnCollection` object.
     An object of this class can have `.obs`, `.obsm`, `.layers`, `.X` depending on the
-    results of joins in the reference AnnDataSet object.
+    results of joins in the reference AnnCollection object.
 
     Notes
     -----
@@ -423,8 +423,8 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
         """Lazy subset of multi-dimensional annotation of observations.
 
         Points to the `.obsm` attributes of the underlying adatas ot to `.obsm` of the parent
-        AnnDataSet object depending on the `join_obsm` option of the AnnDataSet object.
-        See the docs of :class:`~anndata.dev.AnnDataSet` for details.
+        AnnCollection object depending on the `join_obsm` option of the AnnCollection object.
+        See the docs of :class:`~anndata.dev.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
 
         To get `.obsm` as a dictionary, use `.obsm.to_dict()`. You can also specify keys
@@ -439,8 +439,8 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
         """Lazy suset of one-dimensional annotation of observations.
 
         Points to the `.obs` attributes of the underlying adatas ot to `.obs` of the parent
-        AnnDataSet object depending on the `join_obs` option of the AnnDataSet object.
-        See the docs of `~anndata.dev.AnnDataSet` for details.
+        AnnCollection object depending on the `join_obs` option of the AnnCollection object.
+        See the docs of `~anndata.dev.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
 
         To get `.obs` as a DataFrame, use `.obs.df`.
@@ -502,7 +502,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnDataSetView(self.reference, resolved_idx)
+        return AnnCollectionView(self.reference, resolved_idx)
 
     @property
     def has_backed(self):
@@ -514,7 +514,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
 
     def __repr__(self):
         n_obs, n_vars = self.shape
-        descr = f"AnnDataSetView object with n_obs × n_vars = {n_obs} × {n_vars}"
+        descr = f"AnnCollectionView object with n_obs × n_vars = {n_obs} × {n_vars}"
         all_attrs_keys = self._view_attrs_keys.copy()
         for attr in self._attrs:
             all_attrs_keys[attr] = list(getattr(self.reference, attr).keys())
@@ -524,7 +524,7 @@ class AnnDataSetView(_ConcatViewMixin, _IterateViewMixin):
         return descr
 
     def to_adata(self, ignore_X: bool = False, ignore_layers: bool = False):
-        """Convert this AnnDataSetView object to an AnnData object.
+        """Convert this AnnCollectionView object to an AnnData object.
 
         Parameters
         ----------
@@ -561,7 +561,7 @@ DictCallable = Dict[str, Callable]
 ConvertType = Union[Callable, DictCallable, Dict[str, DictCallable]]
 
 
-class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
+class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     """\
     An object to lazily concatenate and jointly subset AnnData objects along the obs axis.
 
@@ -569,7 +569,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     and variables of the AnnData objects to allow joint subsetting. It also allows on the fly
     application of prespecified converters to observation attributes of The AnnData objects.
 
-    Subsetting of this object returns :class:`~anndata.dev.multi_files._anndataset.AnnDataSetView`.
+    Subsetting of this object returns :class:`~anndata.dev.multi_files._AnnCollection.AnnCollectionView`.
     Only these subset objects have views of `.obs`, `.obsm`, `.layers`, `.X` from the passed
     AnnData objects.
 
@@ -633,15 +633,15 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
     (700, 765)
     >>> adata2.shape
     (2638, 1838)
-    >>> dc = AnnDataSet([adata1, adata2], join_vars='inner')
+    >>> dc = AnnCollection([adata1, adata2], join_vars='inner')
     >>> dc
-    AnnDataSet object with n_obs × n_vars = 3338 × 208
+    AnnCollection object with n_obs × n_vars = 3338 × 208
       constructed from 2 AnnData objects
         view of obsm: 'X_pca', 'X_umap'
         obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
-    >>> batch = dc[100:200] # AnnDataSetView
+    >>> batch = dc[100:200] # AnnCollectionView
     >>> batch
-    AnnDataSetView object with n_obs × n_vars = 100 × 208
+    AnnCollectionView object with n_obs × n_vars = 100 × 208
         obsm: 'X_pca', 'X_umap'
         obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
     >>> batch.X.shape
@@ -782,7 +782,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnDataSetView(self, resolved_idx)
+        return AnnCollectionView(self, resolved_idx)
 
     @property
     def convert(self):
@@ -850,7 +850,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
         return self.limits[-1]
 
     def to_adata(self):
-        """Convert this AnnDataSet object to an AnnData object.
+        """Convert this AnnCollection object to an AnnData object.
 
         The AnnData object won't have `.X`, only `.obs` and `.obsm`.
         """
@@ -902,7 +902,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
 
     def __repr__(self):
         n_obs, n_vars = self.shape
-        descr = f"AnnDataSet object with n_obs × n_vars = {n_obs} × {n_vars}"
+        descr = f"AnnCollection object with n_obs × n_vars = {n_obs} × {n_vars}"
         descr += f"\n  constructed from {len(self.adatas)} AnnData objects"
         for attr, keys in self._view_attrs_keys.items():
             if len(keys) > 0:
@@ -920,7 +920,7 @@ class AnnDataSet(_ConcatViewMixin, _IterateViewMixin):
 
 
 class LazyAttrData(_IterateViewMixin):
-    def __init__(self, adset: AnnDataSet, attr: str, key: Optional[str] = None):
+    def __init__(self, adset: AnnCollection, attr: str, key: Optional[str] = None):
         self.adset = adset
         self.attr = attr
         self.key = key

@@ -8,7 +8,7 @@ import numpy as np
 import warnings
 
 from ..._core.anndata import AnnData
-from ..multi_files._anndataset import AnnDataSet, _ConcatViewMixin
+from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
 
 try:
@@ -93,20 +93,20 @@ def _convert_on_top(convert, top_convert, attrs_keys):
     return new_convert
 
 
-# AnnDataLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
-class AnnDataLoader(DataLoader):
+# AnnLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
+class AnnLoader(DataLoader):
     """\
     PyTorch DataLoader for AnndData objects.
 
     Builds DataLoader from a sequence of AnnData objects, from an
-    :class:`~anndata.dev.AnnDataSet` object
-    or from an :class:`~anndata.dev.multi_files._anndataset.AnnDataSetView` object.
+    :class:`~anndata.dev.AnnCollection` object
+    or from an :class:`~anndata.dev.multi_files._AnnCollection.AnnCollectionView` object.
     Takes care of the required conversions.
 
     Parameters
     ----------
     adatas
-        The AnnData objects, an AnnDataSet or AnnDataSetView object.
+        The AnnData objects, an AnnCollection or AnnCollectionView object.
         from which to load the data.
     batch_size
         How many samples per batch to load.
@@ -115,15 +115,15 @@ class AnnDataLoader(DataLoader):
     use_default_converter
         Use the default converter to convert arrays to pytorch tensors, transfer to
         the default cuda device (if `use_cuda=True`), do memory pinning (if `pin_memory=True`).
-        If you pass an AnnDataSet object with prespecified converters, the default converter
+        If you pass an AnnCollection object with prespecified converters, the default converter
         won't overwrite these converters but will be applied on top of them.
     use_cuda
         Transfer pytorch tensors to the default cuda device after conversion.
         Only works if `use_default_converter=True`
     **kwargs
         Argumens for PyTorch DataLoader.
-        If `adatas` is not an AnnDataSet or AnnDataSetView object, then also arguments for
-        AnnDataSet object initialization.
+        If `adatas` is not an AnnCollection or AnnCollectionView object, then also arguments for
+        AnnCollection object initialization.
     """
 
     def __init__(
@@ -153,7 +153,7 @@ class AnnDataLoader(DataLoader):
             harmonize_dtypes = kwargs.pop("harmonize_dtypes", True)
             indices_strict = kwargs.pop("indices_strict", True)
 
-            dataset = AnnDataSet(
+            dataset = AnnCollection(
                 adatas,
                 join_obs=join_obs,
                 join_obsm=join_obsm,
@@ -168,7 +168,7 @@ class AnnDataLoader(DataLoader):
         elif isinstance(adatas, _ConcatViewMixin):
             dataset = copy(adatas)
         else:
-            raise ValueError("adata should be of type AnnData or AnnDataSet.")
+            raise ValueError("adata should be of type AnnData or AnnCollection.")
 
         if use_default_converter:
             pin_memory = kwargs.pop("pin_memory", False)

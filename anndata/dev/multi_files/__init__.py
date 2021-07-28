@@ -1,1 +1,1 @@
-from ._anndataset import AnnDataSet
+from ._anncollection import AnnCollection

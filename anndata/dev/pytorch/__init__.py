@@ -1,1 +1,1 @@
-from ._anndataloader import AnnDataLoader
+from ._annloader import AnnLoader

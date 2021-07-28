@@ -5,7 +5,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, issparse
 
 from sklearn.preprocessing import LabelEncoder
-from anndata.dev.multi_files import AnnDataSet
+from anndata.dev.multi_files import AnnCollection
 
 _dense = lambda a: a.toarray() if issparse(a) else a
 
@@ -27,7 +27,7 @@ def adatas(request):
 
 @pytest.mark.parametrize("adatas", [np.array, csr_matrix], indirect=True)
 def test_full_selection(adatas):
-    dat = AnnDataSet(adatas, index_unique="_")
+    dat = AnnCollection(adatas, index_unique="_")
     adt_concat = ad.concat(adatas, index_unique="_")
 
     # sorted selection from one adata
@@ -59,14 +59,14 @@ def test_full_selection(adatas):
 def test_creation(adatas):
     adatas_inner = [adatas[0], adatas[1][:, :2].copy()]
 
-    dat = AnnDataSet(adatas_inner, join_vars="inner", index_unique="_")
+    dat = AnnCollection(adatas_inner, join_vars="inner", index_unique="_")
     adt_concat = ad.concat(adatas_inner, index_unique="_")
     np.testing.assert_array_equal(dat.var_names, adt_concat.var_names)
 
 
 @pytest.mark.parametrize("adatas", [np.array], indirect=True)
 def test_convert(adatas):
-    dat = AnnDataSet(adatas, index_unique="_")
+    dat = AnnCollection(adatas, index_unique="_")
 
     le = LabelEncoder()
     le.fit(dat[:].obs["a_test"])

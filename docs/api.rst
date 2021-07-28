@@ -73,13 +73,13 @@ Two classes for working with batched access to collections of many `AnnData` obj
 .. autosummary::
    :toctree: .
 
-   dev.AnnDataSet
-   dev.AnnDataLoader
+   dev.AnnCollection
+   dev.AnnLoader
 
 .. autosummary::
    :toctree: .
- 
-   dev.multi_files._anndataset.AnnDataSetView
+
+   dev.multi_files._AnnCollection.AnnCollectionView
 
 
 Errors and warnings
