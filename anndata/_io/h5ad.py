@@ -60,62 +60,70 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
-    if force_dense is not None:
-        warn(
-            "The `force_dense` argument is deprecated. Use `as_dense` instead.",
-            FutureWarning,
-        )
-    if force_dense is True:
-        if adata.raw is not None:
-            as_dense = ("X", "raw/X")
-        else:
-            as_dense = ("X",)
-    if isinstance(as_dense, str):
-        as_dense = [as_dense]
-    if "raw.X" in as_dense:
-        as_dense = list(as_dense)
-        as_dense[as_dense.index("raw.X")] = "raw/X"
-    if any(val not in {"X", "raw/X"} for val in as_dense):
-        raise NotImplementedError(
-            "Currently, only `X` and `raw/X` are supported values in `as_dense`"
-        )
-    if "raw/X" in as_dense and adata.raw is None:
-        raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
+    adatas = [adata]
+    filenames = [filepath]
+    if len(adata._multimodal_layers)>0:
+        for m in adata._multimodal_layers:
+            adatas.append(adata.__dict__[m])  
+            filenames.append(''.split('.h5ad')[0]+'_'+m+'.h5ad')
+    
+    for filepath,adata in zip(filenames,adatas):    
+        if force_dense is not None:
+            warn(
+                "The `force_dense` argument is deprecated. Use `as_dense` instead.",
+                FutureWarning,
+            )
+        if force_dense is True:
+            if adata.raw is not None:
+                as_dense = ("X", "raw/X")
+            else:
+                as_dense = ("X",)
+        if isinstance(as_dense, str):
+            as_dense = [as_dense]
+        if "raw.X" in as_dense:
+            as_dense = list(as_dense)
+            as_dense[as_dense.index("raw.X")] = "raw/X"
+        if any(val not in {"X", "raw/X"} for val in as_dense):
+            raise NotImplementedError(
+                "Currently, only `X` and `raw/X` are supported values in `as_dense`"
+            )
+        if "raw/X" in as_dense and adata.raw is None:
+            raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
 
-    adata.strings_to_categoricals()
-    if adata.raw is not None:
-        adata.strings_to_categoricals(adata.raw.var)
-    dataset_kwargs = {**dataset_kwargs, **kwargs}
-    filepath = Path(filepath)
-    mode = "a" if adata.isbacked else "w"
-    if adata.isbacked:  # close so that we can reopen below
-        adata.file.close()
-    with h5py.File(filepath, mode) as f:
-        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
-            # If adata.isbacked, X should already be up to date
-            write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        if "raw/X" in as_dense and isinstance(
-            adata.raw.X, (sparse.spmatrix, SparseDataset)
-        ):
-            write_sparse_as_dense(
-                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
-            )
-            write_attribute(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_attribute(
-                f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs
-            )
-        else:
-            write_attribute(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obsm", adata.obsm, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "varm", adata.varm, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obsp", adata.obsp, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
+        adata.strings_to_categoricals()
+        if adata.raw is not None:
+            adata.strings_to_categoricals(adata.raw.var)
+        dataset_kwargs = {**dataset_kwargs, **kwargs}
+        filepath = Path(filepath)
+        mode = "a" if adata.isbacked else "w"
+        if adata.isbacked:  # close so that we can reopen below
+            adata.file.close()
+        with h5py.File(filepath, mode) as f:
+            if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
+                write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+                # If adata.isbacked, X should already be up to date
+                write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            if "raw/X" in as_dense and isinstance(
+                adata.raw.X, (sparse.spmatrix, SparseDataset)
+            ):
+                write_sparse_as_dense(
+                    f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+                )
+                write_attribute(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
+                write_attribute(
+                    f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs
+                )
+            else:
+                write_attribute(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "obsm", adata.obsm, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "varm", adata.varm, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "obsp", adata.obsp, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
+            write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
 
 
 def _write_method(cls: Type[T]) -> Callable[[H5Group, str, T], None]:

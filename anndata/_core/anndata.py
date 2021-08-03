@@ -300,6 +300,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx: Index1D = None,
         vidx: Index1D = None,
     ):
+        self._multimodal_layers = []
+
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError("`X` has to be an AnnData object.")
@@ -858,6 +860,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @obs.deleter
     def obs(self):
         self.obs = pd.DataFrame(index=self.obs_names)
+        for mlayer in self._multimodal_layers:
+            self.__dict__[mlayer].obs = pd.DataFrame(index=self.obs_names)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -1108,7 +1112,36 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
-        return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
+        adata = AnnData(self, oidx=oidx, vidx=vidx, asview=True)
+        for mlayer in self._multimodal_layers:
+            adata.__dict__[mlayer] = AnnData(self.__dict__[mlayer], oidx=oidx, vidx=slice(None,None,None), asview=True)
+        return adata
+
+    def add_multimodal_layer(self,adata,name):
+        if name not in self._multimodal_layers:
+            self._multimodal_layers.append(name)
+            adata.obs_names = self.obs_names
+            self.__dict__[name] = adata
+        else:
+            raise ValueError(f"`{name}` is already used as a multimodal layer.")
+    
+    def del_multimodal_layer(self,name):
+        if name in self._multimodal_layers:
+            self._multimodal_layers.remove(name)
+            del self.__dict__[name]
+
+    def set_default_multimodal_layer(self,name,new_name):
+        if name in self._multimodal_layers:
+            backup = self.copy()      
+            self._multimodal_layers.remove(name)
+            self._multimodal_layers.append(new_name)   
+            ml = self._multimodal_layers.copy()   
+            for key in self.__dict__[name].__dict__.keys():
+                self.__dict__[key] = self.__dict__[name].__dict__[key]
+            self.__dict__[new_name] = backup
+            self.__dict__['_multimodal_layers'] = ml
+        else:
+            raise ValueError(f"`{name}` is not a valid multimodal layer ({' '.join(self._multimodal_layers)}).")
 
     def _remove_unused_categories(self, df_full, df_sub, uns):
         for k in df_full:
