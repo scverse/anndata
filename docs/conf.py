@@ -71,6 +71,7 @@ suppress_warnings = ["ref.citation"]
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
+    app.add_css_file("css/custom.css")
 
 
 intersphinx_mapping = dict(
@@ -110,6 +111,7 @@ html_context = dict(
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_show_sphinx = False
+html_static_path = ["_static"]
 
 
 # -- Options for other output formats ------------------------------------------
