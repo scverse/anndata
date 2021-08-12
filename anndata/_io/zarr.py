@@ -60,7 +60,12 @@ def write_zarr(
     write_attribute(f, "varm", adata.varm, dataset_kwargs)
     write_attribute(f, "obsp", adata.obsp, dataset_kwargs)
     write_attribute(f, "varp", adata.varp, dataset_kwargs)
-    write_attribute(f, "layers", adata.layers, dict(sparse_chunks=sparse_chunks, chunks=chunks, **dataset_kwargs))
+    write_attribute(
+        f,
+        "layers",
+        adata.layers,
+        dict(sparse_chunks=sparse_chunks, chunks=chunks, **dataset_kwargs),
+    )
     write_attribute(f, "uns", adata.uns, dataset_kwargs)
     write_attribute(f, "raw", adata.raw, dataset_kwargs)
 
@@ -89,14 +94,16 @@ def write_mapping(f, key, value: Mapping, dataset_kwargs=MappingProxyType({})):
         # Pop sparse chunks and chunks keys if possible.
         sparse_chunks = None
         chunks = None
-        if 'sparse_chunks' in new_dataset_kwargs_dict: 
-            sparse_chunks = new_dataset_kwargs_dict.pop('sparse_chunks')
-        if 'chunks' in new_dataset_kwargs_dict: 
-            chunks = new_dataset_kwargs_dict.pop('chunks')
+        if "sparse_chunks" in new_dataset_kwargs_dict:
+            sparse_chunks = new_dataset_kwargs_dict.pop("sparse_chunks")
+        if "chunks" in new_dataset_kwargs_dict:
+            chunks = new_dataset_kwargs_dict.pop("chunks")
         # If it is sparse and there is a sparse_chunks key, make it the new chunks key,
         # and similarly for dense matrices and chunks key
         if sparse_chunks is not None and is_sparse:
-            new_dataset_kwargs_dict = dict(chunks=sparse_chunks, **new_dataset_kwargs_dict)
+            new_dataset_kwargs_dict = dict(
+                chunks=sparse_chunks, **new_dataset_kwargs_dict
+            )
         if chunks is not None and not is_sparse:
             new_dataset_kwargs_dict = dict(chunks=chunks, **new_dataset_kwargs_dict)
         write_attribute(f, f"{key}/{sub_k}", sub_v, new_dataset_kwargs_dict)

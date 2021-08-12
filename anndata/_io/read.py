@@ -371,7 +371,7 @@ def read_text(
 
 
 def iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
-    """ Helper for iterating only nonempty lines without line breaks"""
+    """Helper for iterating only nonempty lines without line breaks"""
     for line in file_like:
         line = line.rstrip("\r\n")
         if line:
