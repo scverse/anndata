@@ -55,20 +55,15 @@ def test_groupby():
     gb = ad.GroupBy(adata_sparse, key="key")
     stats_sparse = gb.count_mean_var()
     stats_dense = ad.GroupBy(adata_dense, key="key").count_mean_var()
-    stats_pd = (
-        ad.GroupBy(adata_dense, key="key")
-        .pd_count_mean_var()
-        .swaplevel(axis=1)
-        .sort_index(axis=1)
-    )
+    stats_pd = ad.GroupBy(adata_dense, key="key").pd_count_mean_var()
 
-    assert stats_sparse["count"].equals(stats_dense["count"])
-    assert np.allclose(stats_sparse["mean"], stats_dense["mean"])
-    assert np.allclose(stats_sparse["var"], stats_dense["var"], equal_nan=True)
+    assert stats_sparse.count.equals(stats_dense.count)
+    assert np.allclose(stats_sparse.mean, stats_dense.mean)
+    assert np.allclose(stats_sparse.var, stats_dense.var, equal_nan=True)
 
-    assert stats_sparse["count"].equals(stats_pd["count"]["A"])
-    assert np.allclose(stats_sparse["mean"], stats_pd["mean"])
-    assert np.allclose(stats_sparse["var"], stats_pd["var"], equal_nan=True)
+    assert stats_sparse.count.equals(stats_pd.count["A"])
+    assert np.allclose(stats_sparse.mean, stats_pd.mean)
+    assert np.allclose(stats_sparse.var, stats_pd.var, equal_nan=True)
 
     gb_weight = ad.GroupBy(adata_sparse, key="key", weight="weight")
     stats_weight = gb_weight.count_mean_var()
@@ -76,19 +71,19 @@ def test_groupby():
     sum_weight = gb_weight.sum()
 
     assert np.allclose(2 * sum_, sum_weight)
-    assert np.allclose(stats_sparse["mean"], stats_weight["mean"])
-    assert np.allclose(stats_sparse["var"], stats_dense["var"], equal_nan=True)
+    assert np.allclose(stats_sparse.mean, stats_weight.mean)
+    assert np.allclose(stats_sparse.var, stats_dense.var, equal_nan=True)
 
     key_set = ["v", "w"]
     mean_key_set = ad.GroupBy(adata_sparse, key="key", key_set=key_set).mean()
-    assert np.allclose(stats_sparse["mean"].loc[key_set], mean_key_set)
+    assert np.allclose(stats_sparse.mean.loc[key_set], mean_key_set)
 
     gb_explode = ad.GroupBy(adata_sparse, key="tuple_key", explode=True)
     stats_explode = gb_explode.count_mean_var()
 
-    assert stats_sparse["count"].equals(stats_explode["count"])
-    assert np.allclose(stats_sparse["mean"], stats_explode["mean"])
-    assert np.allclose(stats_sparse["var"], stats_explode["var"], equal_nan=True)
+    assert stats_sparse.count.equals(stats_explode.count)
+    assert np.allclose(stats_sparse.mean, stats_explode.mean)
+    assert np.allclose(stats_sparse.var, stats_explode.var, equal_nan=True)
 
     for score in [
         "diff-score",
