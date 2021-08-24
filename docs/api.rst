@@ -76,12 +76,6 @@ Two classes for working with batched access to collections of many `AnnData` obj
    dev.AnnCollection
    dev.AnnLoader
 
-.. autosummary::
-   :toctree: .
-
-   dev.multi_files._anncollection.AnnCollectionView
-
-
 Errors and warnings
 -------------------
 
