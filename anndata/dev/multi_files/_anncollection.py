@@ -569,7 +569,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     and variables of the AnnData objects to allow joint subsetting. It also allows on the fly
     application of prespecified converters to observation attributes of The AnnData objects.
 
-    Subsetting of this object returns :class:`~anndata.dev.multi_files._anncollection.AnnCollectionView`.
+    Subsetting of this object returns `AnnCollectionView`.
     Only these subset objects have views of `.obs`, `.obsm`, `.layers`, `.X` from the passed
     AnnData objects.
 
