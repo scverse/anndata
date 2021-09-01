@@ -65,16 +65,20 @@ Writing to other formats.
    AnnData.write_zarr
 
 
-Development API
----------------
+Experimental API
+----------------
+
+.. warning::
+
+   API's in the experimenal module are currently in development and subject to change at any time.
 
 Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files. In paritcular, for pytorch-based models.
 
 .. autosummary::
    :toctree: .
 
-   dev.AnnCollection
-   dev.AnnLoader
+   experimental.AnnCollection
+   experimental.AnnLoader
 
 Errors and warnings
 -------------------
