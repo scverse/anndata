@@ -251,7 +251,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     """\
     An object to access the observation attributes of `adatas` in AnnCollection.
 
-    Created as a result of subsetting an :class:`~anndata.dev.AnnCollection` object.
+    Created as a result of subsetting an :class:`~anndata.experimental.AnnCollection` object.
     An object of this class can have `.obs`, `.obsm`, `.layers`, `.X` depending on the
     results of joins in the reference AnnCollection object.
 
@@ -424,7 +424,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
         Points to the `.obsm` attributes of the underlying adatas ot to `.obsm` of the parent
         AnnCollection object depending on the `join_obsm` option of the AnnCollection object.
-        See the docs of :class:`~anndata.dev.AnnCollection` for details.
+        See the docs of :class:`~anndata.experimental.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
 
         To get `.obsm` as a dictionary, use `.obsm.to_dict()`. You can also specify keys
@@ -440,7 +440,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
         Points to the `.obs` attributes of the underlying adatas ot to `.obs` of the parent
         AnnCollection object depending on the `join_obs` option of the AnnCollection object.
-        See the docs of `~anndata.dev.AnnCollection` for details.
+        See the docs of `~anndata.experimental.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
 
         To get `.obs` as a DataFrame, use `.obs.df`.

@@ -99,7 +99,7 @@ class AnnLoader(DataLoader):
     PyTorch DataLoader for AnndData objects.
 
     Builds DataLoader from a sequence of AnnData objects, from an
-    :class:`~anndata.dev.AnnCollection` object
+    :class:`~anndata.experimental.AnnCollection` object
     or from an `AnnCollectionView` object.
     Takes care of the required conversions.
 
