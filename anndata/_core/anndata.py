@@ -591,10 +591,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __eq__(self, other):
         """Equality testing"""
-        raise NotImplementedError(
-            "Equality comparisons are not supported for AnnData objects, "
-            "instead compare the desired attributes."
-        )
+        if self is other:
+            return True
+        else:
+            raise NotImplementedError(
+                "Equality comparisons are not supported for AnnData objects, "
+                "instead compare the desired attributes."
+            )
 
     @property
     def shape(self) -> Tuple[int, int]:
