@@ -430,8 +430,6 @@ def test_equality_comparisons():
     adata2 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     assert adata1 == adata1
     with pytest.raises(NotImplementedError):
-        adata1 == adata1
-    with pytest.raises(NotImplementedError):
         adata1 == adata2
     with pytest.raises(NotImplementedError):
         adata1 != adata2
