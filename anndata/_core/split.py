@@ -46,47 +46,28 @@ def split(
     (a list of lists in `groups`), they will be created by joining the groups' names.
     Examples
     --------
-    Split by all values in an `.obs` key:
+    >>> import scanpy as sc
+    >>> import pandas as pd
+    >>> from anndata import split
     >>> adata = sc.datasets.pbmc68k_reduced()
-    >>> adatas = sc.get.split_by(adata, 'bulk_labels')
-    >>> adatas
-    {'CD14+ Monocyte': View of AnnData object with n_obs × n_vars = 129 × 765
-     ...,
-     'CD19+ B': View of AnnData object with n_obs × n_vars = 95 × 765
-     ...,
-     ...
-    }
-    Select only specific groups from `.obs` key:
-    >>> adata = sc.datasets.pbmc68k_reduced()
-    >>> adatas = sc.get.split_by(adata, 'bulk_labels', ['CD14+ Monocyte', 'CD34+'])
-    >>> adatas
-    {'CD14+ Monocyte': View of AnnData object with n_obs × n_vars = 129 × 765
-     ...,
-     'CD34+': View of AnnData object with n_obs × n_vars = 13 × 765
-     ...
-    }
-    Aggreagte some groups from `.obs` key, put all others to `others_key`:
-    >>> adata = sc.datasets.pbmc68k_reduced()
-    >>> adatas = sc.get.split_by(adata, 'bulk_labels',
-                                 dict(some=['CD14+ Monocyte', 'CD34+']),
-                                 others_key='others')
-    >>> adatas
-    {'some': View of AnnData object with n_obs × n_vars = 142 × 765
-     ...,
-     'others': View of AnnData object with n_obs × n_vars = 558 × 765
-     ...
-    }
-    Split by axis 1 (var axis) passing the Series from the binned continuous variable
-    >>> adata = sc.datasets.pbmc68k_reduced()
+    >>> # Split by all values in an `.obs` key:
+    >>> adatas = split(adata, 'bulk_labels')
+    >>> adatas #doctest: +ELLIPSIS
+    {'CD14+ Monocyte': View of AnnData object with n_obs × n_vars = 129 × 765...}
+    >>> # Select only specific groups from `.obs` key:
+    >>> adatas = split(adata, 'bulk_labels', ['CD14+ Monocyte', 'CD34+'])
+    >>> adatas #doctest: +ELLIPSIS
+    {'CD14+ Monocyte': View of AnnData object with n_obs × n_vars = 129 × 765...}
+    >>> # Aggreagte some groups from `.obs` key, put all others to `others_key`:
+    >>> adatas = split(adata, 'bulk_labels', dict(some=['CD14+ Monocyte', 'CD34+']),
+    ...                others_key='others')
+    >>> adatas #doctest: +ELLIPSIS
+    {'some': View of AnnData object with n_obs × n_vars = 142 × 765...}
+    >>> # Split by axis 1 (var axis) passing the Series from the binned continuous variable
     >>> var_cats = pd.cut(adata.var.means, 4).cat.rename_categories(str)
-    >>> adatas = sc.get.split_by(adata, var_cats, axis=1)
-    >>> adatas
-    {'(0.0233, 1.135]': View of AnnData object with n_obs × n_vars = 700 × 535
-     ...,
-     '(1.135, 2.242]': View of AnnData object with n_obs × n_vars = 700 × 194
-     ...,
-     ...
-    }
+    >>> adatas = split(adata, var_cats, axis=1)
+    >>> adatas #doctest: +ELLIPSIS
+    {'(0.0233, 1.135]': View of AnnData object with n_obs × n_vars = 700 × 535...}
     """
     if axis not in (0, 1):
         raise ValueError("axis should be 0 or 1 only.")
