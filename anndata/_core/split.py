@@ -17,7 +17,12 @@ def split(
     copy: bool = False,
 ) -> Dict[str, AnnData]:
     """\
-    Split adata by obs key.
+    Splits an AnnData object along an axis.
+
+    Returns a dictionary with AnnData objects.
+    If names of the split AnnData objects are not specified
+    (a list of lists in `groups`), they will be created by joining the groups' names.
+
     Params
     ------
     adata
@@ -39,11 +44,7 @@ def split(
     copy
         If `True`, all split AnnData objects are copied; otherwise,
         the returned dict will have views.
-    Returns
-    -------
-    A dictionay with AnnData objects.
-    If names of the split AnnData objects are not specified
-    (a list of lists in `groups`), they will be created by joining the groups' names.
+
     Examples
     --------
     >>> import scanpy as sc
