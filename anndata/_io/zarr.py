@@ -41,10 +41,21 @@ def write_zarr(
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
+    f = zarr.open(store, mode="w")
+    write_anndata(f, None, adata, dataset_kwargs)
+
+@report_write_key_on_error
+def write_anndata(f, key, value, dataset_kwargs=MappingProxyType({}), chunks=None):
+    if key is not None:
+        group = f.create_group(key)
+        group.attrs["encoding-type"] = "anndata"
+        group.attrs["encoding-version"] = EncodingVersions.anndata.value
+        f = group
+    adata = value
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
-    f = zarr.open(store, mode="w")
+
     if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
         write_attribute(f, "X", adata.X, dict(chunks=chunks, **dataset_kwargs))
     else:
@@ -58,7 +69,6 @@ def write_zarr(
     write_attribute(f, "layers", adata.layers, dataset_kwargs)
     write_attribute(f, "uns", adata.uns, dataset_kwargs)
     write_attribute(f, "raw", adata.raw, dataset_kwargs)
-
 
 def _write_method(cls: Type[T]) -> Callable[[zarr.Group, str, T], None]:
     return _find_impl(cls, ZARR_WRITE_REGISTRY)
@@ -234,8 +244,8 @@ ZARR_WRITE_REGISTRY = {
     np.integer: write_scalar,
     sparse.csr_matrix: write_csr,
     sparse.csc_matrix: write_csc,
+    AnnData: write_anndata
 }
-
 
 def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     """\
@@ -250,27 +260,12 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         store = str(store)
 
     f = zarr.open(store, mode="r")
-    d = {}
-    for k in f.keys():
-        # Backwards compat
-        if k.startswith("raw."):
-            continue
-        if k in {"obs", "var"}:
-            d[k] = read_dataframe(f[k])
-        else:  # Base case
-            d[k] = read_attribute(f[k])
-
-    d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_attribute)
-
-    _clean_uns(d)
-
-    return AnnData(**d)
+    return read_anndata(f)
 
 
 @singledispatch
 def read_attribute(value):
     raise NotImplementedError()
-
 
 @read_attribute.register(zarr.Array)
 @report_read_key_on_error
@@ -300,6 +295,8 @@ def read_group(group: zarr.Group):
         EncodingVersions[enctype].check(group.name, group.attrs["encoding-version"])
         if enctype == "dataframe":
             return read_dataframe(group)
+        elif enctype == "anndata":
+            return read_anndata(group)
         elif enctype == "csr_matrix":
             return read_csr(group)
         elif enctype == "csc_matrix":
@@ -307,6 +304,22 @@ def read_group(group: zarr.Group):
         # At the moment, just treat raw as normal group
     return {k: read_attribute(group[k]) for k in group.keys()}
 
+
+@report_read_key_on_error
+def read_anndata(group: zarr.Group) -> AnnData:
+    d = {}
+    for k in group.keys():
+        # Backwards compat
+        if k.startswith("raw."):
+            continue
+        if k in {"obs", "var"}:
+            d[k] = read_dataframe(group[k])
+        else:  # Base case
+            d[k] = read_attribute(group[k])
+
+    d["raw"] = _read_legacy_raw(group, d.get("raw"), read_dataframe, read_attribute)
+    _clean_uns(d)
+    return AnnData(**d)
 
 @report_read_key_on_error
 def read_csr(group: zarr.Group) -> sparse.csr_matrix:
