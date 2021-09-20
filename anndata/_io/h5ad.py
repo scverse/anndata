@@ -1,11 +1,11 @@
-import re
 import collections.abc as cabc
+import re
 from functools import _find_impl, partial
-from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
 from typing import Callable, Type, TypeVar, Union
 from typing import Collection, Sequence, Mapping
+from warnings import warn
 
 import h5py
 import numpy as np
@@ -13,16 +13,6 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
-from .._core.sparse_dataset import SparseDataset
-from .._core.file_backing import AnnDataFileManager
-from .._core.anndata import AnnData
-from .._core.raw import Raw
-from ..compat import (
-    _from_fixed_length_strings,
-    _decode_structured_array,
-    _clean_uns,
-    Literal,
-)
 from .utils import (
     H5PY_V3,
     check_key,
@@ -33,6 +23,16 @@ from .utils import (
     read_attribute,
     _read_legacy_raw,
     EncodingVersions,
+)
+from .._core.anndata import AnnData
+from .._core.file_backing import AnnDataFileManager
+from .._core.raw import Raw
+from .._core.sparse_dataset import SparseDataset
+from ..compat import (
+    _from_fixed_length_strings,
+    _decode_structured_array,
+    _clean_uns,
+    Literal,
 )
 
 H5Group = Union[h5py.Group, h5py.File]
@@ -82,40 +82,51 @@ def write_h5ad(
     if "raw/X" in as_dense and adata.raw is None:
         raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
 
-    adata.strings_to_categoricals()
-    if adata.raw is not None:
-        adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
     with h5py.File(filepath, mode) as f:
-        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
-            # If adata.isbacked, X should already be up to date
-            write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        if "raw/X" in as_dense and isinstance(
-            adata.raw.X, (sparse.spmatrix, SparseDataset)
-        ):
-            write_sparse_as_dense(
-                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
-            )
-            write_attribute(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_attribute(
-                f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs
-            )
-        else:
-            write_attribute(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obsm", adata.obsm, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "varm", adata.varm, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "obsp", adata.obsp, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
-        write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
+        write_anndata(f, None, adata, dataset_kwargs, as_dense)
+
+
+@report_write_key_on_error
+def write_anndata(f, key, value, dataset_kwargs=MappingProxyType({}), as_dense=()):
+    adata = value
+    adata.strings_to_categoricals()
+    if key is not None:
+        group = f.create_group(key)
+        group.attrs["encoding-type"] = "anndata"
+        group.attrs["encoding-version"] = EncodingVersions.anndata.value
+        f = group
+    if adata.raw is not None:
+        adata.strings_to_categoricals(adata.raw.var)
+    if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
+        write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+    elif not (adata.isbacked and Path(adata.filename) == Path(f.filename)):
+        # If adata.isbacked, X should already be up to date
+        write_attribute(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+    if "raw/X" in as_dense and isinstance(
+        adata.raw.X, (sparse.spmatrix, SparseDataset)
+    ):
+        write_sparse_as_dense(
+            f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+        )
+        write_attribute(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
+        write_attribute(
+            f, "raw/varm", adata.raw.varm, dataset_kwargs=dataset_kwargs
+        )
+    else:
+        write_attribute(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "obsm", adata.obsm, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "varm", adata.varm, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "obsp", adata.obsp, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "varp", adata.varp, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "layers", adata.layers, dataset_kwargs=dataset_kwargs)
+    write_attribute(f, "uns", adata.uns, dataset_kwargs=dataset_kwargs)
 
 
 def _write_method(cls: Type[T]) -> Callable[[H5Group, str, T], None]:
@@ -313,6 +324,7 @@ H5AD_WRITE_REGISTRY = {
     SparseDataset: write_sparse_dataset,
     pd.DataFrame: write_dataframe,
     cabc.Mapping: write_mapping,
+    AnnData: write_anndata
 }
 
 
@@ -406,35 +418,8 @@ def read_h5ad(
     )
 
     with h5py.File(filename, "r") as f:
-        d = {}
-        for k in f.keys():
-            # Backwards compat for old raw
-            if k == "raw" or k.startswith("raw."):
-                continue
-            if k == "X" and "X" in as_sparse:
-                d[k] = rdasp(f[k])
-            elif k == "raw":
-                assert False, "unexpected raw format"
-            elif k in {"obs", "var"}:
-                d[k] = read_dataframe(f[k])
-            else:  # Base case
-                d[k] = read_attribute(f[k])
+        return read_anndata(f, as_sparse=as_sparse, rdasp=rdasp)
 
-        d["raw"] = _read_raw(f, as_sparse, rdasp)
-
-        X_dset = f.get("X", None)
-        if X_dset is None:
-            pass
-        elif isinstance(X_dset, h5py.Group):
-            d["dtype"] = X_dset["data"].dtype
-        elif hasattr(X_dset, "dtype"):
-            d["dtype"] = f["X"].dtype
-        else:
-            raise ValueError()
-
-    _clean_uns(d)  # backwards compat
-
-    return AnnData(**d)
 
 
 def _read_raw(
@@ -455,6 +440,38 @@ def _read_raw(
             raw[v] = read_attribute(f[f"raw/{v}"])
     return _read_legacy_raw(f, raw, read_dataframe, read_attribute, attrs=attrs)
 
+
+@report_read_key_on_error
+def read_anndata(group, as_sparse=(), rdasp=None) -> AnnData:
+    d = {}
+    for k in group.keys():
+        # Backwards compat for old raw
+        if k == "raw" or k.startswith("raw."):
+            continue
+        if k == "X" and "X" in as_sparse:
+            d[k] = rdasp(f[k])
+        elif k == "raw":
+            assert False, "unexpected raw format"
+        elif k in {"obs", "var"}:
+            d[k] = read_dataframe(group[k])
+        else:  # Base case
+            d[k] = read_attribute(group[k])
+
+    d["raw"] = _read_raw(group, as_sparse, rdasp)
+
+    X_dset = group.get("X", None)
+    if X_dset is None:
+        pass
+    elif isinstance(X_dset, h5py.Group):
+        d["dtype"] = X_dset["data"].dtype
+    elif hasattr(X_dset, "dtype"):
+        d["dtype"] = group["X"].dtype
+    else:
+        raise ValueError()
+
+    _clean_uns(d)  # backwards compat
+
+    return AnnData(**d)
 
 @report_read_key_on_error
 def read_dataframe_legacy(dataset) -> pd.DataFrame:
@@ -485,6 +502,7 @@ def read_dataframe(group) -> pd.DataFrame:
     if idx_key != "_index":
         df.index.name = idx_key
     return df
+
 
 
 @report_read_key_on_error
@@ -531,6 +549,8 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
         pass
     elif encoding_type == "dataframe":
         return read_dataframe(group)
+    elif encoding_type == "anndata":
+        return read_anndata(group)
     elif encoding_type in {"csr_matrix", "csc_matrix"}:
         return SparseDataset(group).to_memory()
     else:

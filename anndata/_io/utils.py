@@ -248,6 +248,7 @@ class EncodingVersions(Enum):
     raw = "0.1.0"
     csr_matrix = csc_matrix = "0.1.0"
     dataframe = "0.1.0"
+    anndata = "0.1.0"
 
     def check(self, key: str, encoded_version: str):
         if version.parse(encoded_version) > version.parse(self.value):
