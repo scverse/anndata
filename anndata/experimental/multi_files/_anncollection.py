@@ -563,15 +563,14 @@ ConvertType = Union[Callable, DictCallable, Dict[str, DictCallable]]
 
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     """\
-    An object to lazily concatenate and jointly subset AnnData objects along the obs axis.
+    Lazily concatenate AnnData objects along the `obs` axis.
 
-    This object doesn't copy data from AnnData objects, it uses joint index of observations
-    and variables of the AnnData objects to allow joint subsetting. It also allows on the fly
-    application of prespecified converters to observation attributes of The AnnData objects.
+    This class doesn't copy data from underlying AnnData objects, but lazily subsets using a joint
+    index of observations and variables. It also allows on-the-fly application of prespecified
+    converters to `.obs` attributes of the AnnData objects.
 
-    Subsetting of this object returns `AnnCollectionView`.
-    Only these subset objects have views of `.obs`, `.obsm`, `.layers`, `.X` from the passed
-    AnnData objects.
+    Subsetting of this object returns an `AnnCollectionView`, which provides views of `.obs`,
+    `.obsm`, `.layers`, `.X` from the underlying AnnData objects.
 
     Parameters
     ----------
