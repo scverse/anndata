@@ -96,18 +96,16 @@ def _convert_on_top(convert, top_convert, attrs_keys):
 # AnnLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
 class AnnLoader(DataLoader):
     """\
-    PyTorch DataLoader for AnndData objects.
+    PyTorch DataLoader for AnnData objects.
 
     Builds DataLoader from a sequence of AnnData objects, from an
-    :class:`~anndata.experimental.AnnCollection` object
-    or from an `AnnCollectionView` object.
+    :class:`~anndata.experimental.AnnCollection` object or from an `AnnCollectionView` object.
     Takes care of the required conversions.
 
     Parameters
     ----------
     adatas
-        The AnnData objects, an AnnCollection or AnnCollectionView object.
-        from which to load the data.
+        `AnnData` objects or an `AnnCollection` object from which to load the data.
     batch_size
         How many samples per batch to load.
     shuffle
@@ -121,9 +119,8 @@ class AnnLoader(DataLoader):
         Transfer pytorch tensors to the default cuda device after conversion.
         Only works if `use_default_converter=True`
     **kwargs
-        Argumens for PyTorch DataLoader.
-        If `adatas` is not an AnnCollection or AnnCollectionView object, then also arguments for
-        AnnCollection object initialization.
+        Arguments for PyTorch DataLoader. If `adatas` is not an `AnnCollection` object, then also
+        arguments for `AnnCollection` initialization.
     """
 
     def __init__(
