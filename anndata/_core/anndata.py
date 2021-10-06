@@ -1539,7 +1539,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Currently, this works only in `'memory'` mode.
 
-        For concatentation along an arbitary axis, see :func:`~anndata.concat`.
+        .. note::
+
+            For more flexible and efficient concatenation, see: :func:`~anndata.concat`.
 
         Parameters
         ----------
