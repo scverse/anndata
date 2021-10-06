@@ -1538,9 +1538,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         The :attr:`uns`, :attr:`varm` and :attr:`obsm` attributes are ignored.
 
         Currently, this works only in `'memory'` mode.
-        
-        For concatentation along an arbitary axis, see :func:`~anndata.concat`
-        
+
+        For concatentation along an arbitary axis, see :func:`~anndata.concat`.
+
         Parameters
         ----------
         adatas
