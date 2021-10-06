@@ -1539,6 +1539,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Currently, this works only in `'memory'` mode.
 
+        .. note::
+
+            For more flexible and efficient concatenation, see: :func:`~anndata.concat`.
+
         Parameters
         ----------
         adatas
