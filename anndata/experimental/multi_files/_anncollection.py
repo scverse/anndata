@@ -260,7 +260,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     Nothing is copied until keys of the attributes or `.X` are accessed.
     """
 
-    def __init__(self, reference, resolved_idx):
+    def __init__(self, reference, convert, resolved_idx):
         self.reference = reference
 
         self.indices_strict = self.reference.indices_strict
@@ -289,7 +289,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
         self._convert = None
         self._convert_X = None
-        self.convert = reference.convert
+        self.convert = convert
 
     def _lazy_init_attr(self, attr, set_vidx=False):
         if getattr(self, f"_{attr}_view") is not None:
@@ -502,7 +502,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnCollectionView(self.reference, resolved_idx)
+        return AnnCollectionView(self.reference, self.convert, resolved_idx)
 
     @property
     def has_backed(self):
@@ -555,6 +555,11 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         adata.obs_names = self.obs_names
         adata.var_names = self.var_names
         return adata
+
+    @property
+    def attrs_keys(self):
+        """Dict of all accessible attributes and their keys."""
+        return self.reference.attrs_keys
 
 
 DictCallable = Dict[str, Callable]
@@ -782,7 +787,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnCollectionView(self, resolved_idx)
+        return AnnCollectionView(self, self.convert, resolved_idx)
 
     @property
     def convert(self):
