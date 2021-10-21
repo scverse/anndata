@@ -149,7 +149,7 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
 
-    result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
+    result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=True)
 
     # Correcting for known differences
     orig, result = fix_known_differences(
@@ -1031,10 +1031,13 @@ def test_concat_categories_from_mapping():
 
     assert_equal(mapping_call(), iter_call())
     assert_equal(mapping_call(label="batch"), iter_call(label="batch"))
-    assert_equal(mapping_call(index_unique="-"), iter_call(index_unique="-"))
     assert_equal(
-        mapping_call(label="group", index_unique="+"),
-        iter_call(label="group", index_unique="+"),
+        mapping_call(index_unique=True, index_delimiter="-"),
+        iter_call(index_unique=True, index_delimiter="-"),
+    )
+    assert_equal(
+        mapping_call(label="group", index_unique=True, index_delimiter="+"),
+        iter_call(label="group", index_unique=True, index_delimiter="+"),
     )
 
 
@@ -1046,7 +1049,9 @@ def test_concat_names(axis):
     rhs = gen_adata((10, 10))
 
     assert not get_annot(concat([lhs, rhs], axis=axis)).index.is_unique
-    assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
+    assert get_annot(
+        concat([lhs, rhs], axis=axis, index_unique=True, index_delimiter="-")
+    ).index.is_unique
 
 
 def axis_labels(adata, axis):
@@ -1085,7 +1090,8 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
         join=join_type,
         merge=merge_strategy,
         pairwise=True,
-        index_unique="-",
+        index_unique=True,
+        index_delimiter="-",
     )
     assert result.shape == expected_size
 
