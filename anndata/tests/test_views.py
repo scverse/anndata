@@ -486,3 +486,30 @@ def test_modify_uns_in_copy():
     adata_copy = adata[:3].copy()
     adata_copy.uns["parent"]["key"] = "new_value"
     assert adata.uns["parent"]["key"] != adata_copy.uns["parent"]["key"]
+
+
+@pytest.mark.parametrize("index", [-101, 100, (None, -100), (None, 100)])
+def test_invalid_scalar_index(adata, index):
+    # https://github.com/theislab/anndata/issues/619
+    with pytest.raises(IndexError):
+        _ = adata[index]
+
+
+@pytest.mark.parametrize("obs", [False, True])
+@pytest.mark.parametrize("index", [-100, -50, -1])
+def test_negative_scalar_index(adata, index: int, obs: bool):
+    pos_index = index + (adata.n_obs if obs else adata.n_vars)
+
+    if obs:
+        adata_pos_subset = adata[pos_index]
+        adata_neg_subset = adata[index]
+    else:
+        adata_pos_subset = adata[:, pos_index]
+        adata_neg_subset = adata[:, index]
+
+    np.testing.assert_array_equal(
+        adata_pos_subset.obs_names, adata_neg_subset.obs_names
+    )
+    np.testing.assert_array_equal(
+        adata_pos_subset.var_names, adata_neg_subset.var_names
+    )
