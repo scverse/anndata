@@ -8,6 +8,7 @@ On `master` :small:`the future`
 
 - Fixed propagation of import error when importing `write_zarr` but not all dependencies are installed :pr:`579` :smaller:`R Hillje`
 - Fixed issue with `.uns` sub-dictionaries being referenced by copies :pr:`576` :smaller:`I Virshup`
+- Fixed out-of-bounds integer indices not raising :class:`IndexError` :pr:`630` :smaller:`M Klein`
 
 
 0.7.6 :small:`11 April, 2021`
