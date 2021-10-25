@@ -488,10 +488,10 @@ def test_modify_uns_in_copy():
     assert adata.uns["parent"]["key"] != adata_copy.uns["parent"]["key"]
 
 
-@pytest.mark.parametrize("index", [-101, 100, (None, -100), (None, 100)])
+@pytest.mark.parametrize("index", [-101, 100, (slice(None), -101), (slice(None), 100)])
 def test_invalid_scalar_index(adata, index):
     # https://github.com/theislab/anndata/issues/619
-    with pytest.raises(IndexError):
+    with pytest.raises(IndexError, match=r".*index.* out of range\."):
         _ = adata[index]
 
 
