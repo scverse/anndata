@@ -6,8 +6,8 @@ On-disk format
    Files written before this version may differ in some conventions,
    but will still be read by newer versions of the library.
 
-AnnData objects are saved on disk to hierarchichal array stores like HDF5_
-(via :doc:`H5py <h5py:index>`) and :doc:`zarr:index`.
+AnnData objects are saved on disk to hierarchichal array stores via HDF5_
+(via :doc:`H5py <h5py:index>`) and :doc:`zarr:index`, and referred to as `.h5ad` and `.zrad` files, respectively.
 This allows us to have very similar structures in disk and on memory.
 
 In general, `AnnData` objects can hold three kinds of values:
