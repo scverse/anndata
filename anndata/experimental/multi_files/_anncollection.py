@@ -260,7 +260,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     Nothing is copied until keys of the attributes or `.X` are accessed.
     """
 
-    def __init__(self, reference, resolved_idx):
+    def __init__(self, reference, convert, resolved_idx):
         self.reference = reference
 
         self.indices_strict = self.reference.indices_strict
@@ -289,7 +289,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
         self._convert = None
         self._convert_X = None
-        self.convert = reference.convert
+        self.convert = convert
 
     def _lazy_init_attr(self, attr, set_vidx=False):
         if getattr(self, f"_{attr}_view") is not None:
@@ -502,7 +502,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnCollectionView(self.reference, resolved_idx)
+        return AnnCollectionView(self.reference, self.convert, resolved_idx)
 
     @property
     def has_backed(self):
@@ -556,6 +556,11 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         adata.var_names = self.var_names
         return adata
 
+    @property
+    def attrs_keys(self):
+        """Dict of all accessible attributes and their keys."""
+        return self.reference.attrs_keys
+
 
 DictCallable = Dict[str, Callable]
 ConvertType = Union[Callable, DictCallable, Dict[str, DictCallable]]
@@ -563,15 +568,14 @@ ConvertType = Union[Callable, DictCallable, Dict[str, DictCallable]]
 
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     """\
-    An object to lazily concatenate and jointly subset AnnData objects along the obs axis.
+    Lazily concatenate AnnData objects along the `obs` axis.
 
-    This object doesn't copy data from AnnData objects, it uses joint index of observations
-    and variables of the AnnData objects to allow joint subsetting. It also allows on the fly
-    application of prespecified converters to observation attributes of The AnnData objects.
+    This class doesn't copy data from underlying AnnData objects, but lazily subsets using a joint
+    index of observations and variables. It also allows on-the-fly application of prespecified
+    converters to `.obs` attributes of the AnnData objects.
 
-    Subsetting of this object returns `AnnCollectionView`.
-    Only these subset objects have views of `.obs`, `.obsm`, `.layers`, `.X` from the passed
-    AnnData objects.
+    Subsetting of this object returns an `AnnCollectionView`, which provides views of `.obs`,
+    `.obsm`, `.layers`, `.X` from the underlying AnnData objects.
 
     Parameters
     ----------
@@ -782,7 +786,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
-        return AnnCollectionView(self, resolved_idx)
+        return AnnCollectionView(self, self.convert, resolved_idx)
 
     @property
     def convert(self):
