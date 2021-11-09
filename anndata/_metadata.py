@@ -23,15 +23,9 @@ def refresh_entry_points():
 
 try:
     from setuptools_scm import get_version
-    import pytoml
-
-    proj = pytoml.loads((here.parent / "pyproject.toml").read_text())
-    metadata = proj["tool"]["flit"]["metadata"]
 
     refresh_entry_points()
     __version__ = get_version(root="..", relative_to=__file__)
-    __author__ = metadata["author"]
-    __email__ = metadata["author-email"]
 except (ImportError, LookupError, FileNotFoundError):
     try:
         from importlib.metadata import metadata
@@ -40,8 +34,6 @@ except (ImportError, LookupError, FileNotFoundError):
 
     meta = metadata(here.name)
     __version__ = meta["Version"]
-    __author__ = meta["Author"]
-    __email__ = meta["Author-email"]
 
 
 def within_flit():
