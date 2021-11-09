@@ -1,6 +1,17 @@
 .. role:: small
 .. role:: smaller
 
+
+On `master` :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+.. rubric:: Features
+
+.. rubric:: Documentation
+
+
 0.7.8 :small:`9 November, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
