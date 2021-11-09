@@ -1,12 +1,12 @@
 .. role:: small
 .. role:: smaller
 
-On `master` :small:`the future`
+0.7.8 :small:`9 November, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Bug fixes
 
-.. rubric:: Features
+- Re-include test helpers :pr:`641` :smaller:`I Virshup`
 
 
 0.7.7 :small:`9 November, 2021`

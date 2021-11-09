@@ -10,7 +10,7 @@ of data and learned annotations.
 * See `Scanpy's documentation <https://scanpy.readthedocs.io/>`__ for usage
   related to single cell data.
 * Discuss development on `GitHub <https://github.com/theislab/anndata>`_.
-* Install via `pip install anndata` or `conda install anndata -c bioconda`.
+* Install via `pip install anndata` or `conda install anndata -c conda-forge`.
 * anndata was initially built for Scanpy `(Genome Biology, 2018)
   <https://doi.org/10.1186/s13059-017-1382-0>`__.
 
