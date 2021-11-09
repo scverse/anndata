@@ -1,101 +1,116 @@
 [build-system]
-build-backend = 'flit_core.buildapi'
+build-backend = "flit_core.buildapi"
 requires = [
-    'flit_core >=3.1,<4',
-    'setuptools_scm',
-    'pytoml',
-    'importlib_metadata>=0.7; python_version < "3.8"',
+    "flit_core >=3.4,<4",
+    "setuptools_scm",
+    "importlib_metadata>=0.7; python_version < '3.8'",
 ]
 
-[tool.flit.metadata]
-module = 'anndata'
-author = 'Philipp Angerer, Alex Wolf, Isaac Virshup, Sergei Rybakov'
-# We don’t need all emails, the main authors are sufficient.
-author-email = 'phil.angerer@gmail.com, f.alex.wolf@gmx.de'
-description-file = 'README.rst'
-home-page = 'http://github.com/theislab/anndata'
-urls = { Documentation = 'https://anndata.readthedocs.io/' }
+[project]
+name = "anndata"
+description = "Annotated data."
+requires-python = ">=3.6"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Philipp Angerer"},
+    {name = "Alex Wolf"},
+    {name = "Isaac Virshup"},
+    {name = "Sergei Rybakov"},
+]
+maintainers = [
+    {name = "Isaac Virshup", email = "ivirshup@gmail.com"},
+    {name = "Philipp Angerer", email = "philipp.angerer@helmholtz-muenchen.de"},
+    {name = "Alex Wolf", email = "f.alex.wolf@gmx.de"},
+]
+readme = {file = "README.rst", content-type="text/x-rst"}
 classifiers = [
-    'License :: OSI Approved :: BSD License',
-    'Environment :: Console',
-    'Framework :: Jupyter',
-    'Intended Audience :: Developers',
-    'Intended Audience :: Science/Research',
-    'Natural Language :: English',
-    'Operating System :: MacOS :: MacOS X',
-    'Operating System :: Microsoft :: Windows',
-    'Operating System :: POSIX :: Linux',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.6',
-    'Programming Language :: Python :: 3.7',
-    'Topic :: Scientific/Engineering :: Bio-Informatics',
-    'Topic :: Scientific/Engineering :: Visualization',
+    "License :: OSI Approved :: BSD License",
+    "Environment :: Console",
+    "Framework :: Jupyter",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Visualization",
 ]
-requires-python = '>=3.6'
-requires = [
-    'pandas>=1.1.1',  # pandas <1.1.1 has pandas/issues/35446
-    'numpy>=1.16.5',  # required by pandas 1.x
-    'scipy>1.4',
-    'h5py',
-    'natsort',
-    'packaging>=20',
-    'xlrd<2.0',  # xlsx format not support anymore from v2.0, see pandas/issues/38524
+dependencies = [
+    "pandas>=1.1.1",  # pandas <1.1.1 has pandas/issues/35446
+    "numpy>=1.16.5",  # required by pandas 1.x
+    "scipy>1.4",
+    "h5py",
+    "natsort",
+    "packaging>=20",
+    "xlrd<2.0",  # xlsx format not support anymore from v2.0, see pandas/issues/38524
     # for getting the stable version
-    'importlib_metadata>=0.7; python_version < "3.8"',
+    "importlib_metadata>=0.7; python_version < '3.8'",
 ]
+dynamic = ["version"]
 
-[tool.flit.metadata.requires-extra]
+[project.urls]
+Documentation = "https://anndata.readthedocs.io/"
+Source = "https://github.com/theislab/anndata"
+Home-page = "https://github.com/theislab/anndata"
+
+
+[project.optional-dependencies]
 dev = [
     # dev version generation
-    'setuptools_scm',
-    'pytoml',
+    "setuptools_scm",
     # static checking
-    'black>=20.8b1',
-    'docutils',
+    "black>=20.8b1",
+    "docutils",
 ]
 doc = [
-    'sphinx>=4.1,<4.2',
-    'sphinx-rtd-theme',
-    'sphinx-autodoc-typehints>=1.11.0',
-    'sphinx_issues',
-    'scanpydoc>=0.7.3',
-    'typing_extensions; python_version < "3.8"',
+    "sphinx>=4.1,<4.2",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints>=1.11.0",
+    "sphinx_issues",
+    "scanpydoc>=0.7.3",
+    "typing_extensions; python_version < '3.8'",
 ]
 test = [
-    'loompy>=3.0.5',
-    'pytest>=6.0',
-    'pytest-cov>=2.10',
-    'zarr',
-    'matplotlib',
-    'sklearn',
-    'openpyxl',
-    'joblib',
-    'boltons',
-    'scanpy',
+    "loompy>=3.0.5",
+    "pytest>=6.0",
+    "pytest-cov>=2.10",
+    "zarr",
+    "matplotlib",
+    "sklearn",
+    "openpyxl",
+    "joblib",
+    "boltons",
+    "scanpy",
 ]
 
 [tool.flit.sdist]
 exclude = [
-    'anndata/tests',
-    'setup.py',
+    "anndata/tests",
+    "setup.py",
 ]
 
 [tool.coverage.run]
-source = ['anndata']
+source = ["anndata"]
 omit = [
-	'setup.py',
-	'versioneer.py',
-	'anndata/_version.py',
-	'**/test_*.py',
+	"setup.py",
+	"versioneer.py",
+	"anndata/_version.py",
+	"**/test_*.py",
 ]
 
 [tool.pytest.ini_options]
-addopts = '--doctest-modules'
-python_files = 'test_*.py'
-testpaths = ['anndata', 'docs/concatenation.rst']
+addopts = "--doctest-modules"
+python_files = "test_*.py"
+testpaths = ["anndata", "docs/concatenation.rst"]
 xfail_strict = true
 
 [tool.black]
 line-length = 88
-target-version = ['py36']
-exclude = '^/build/.*$'
+target-version = ["py36"]
+exclude = "^/build/.*$"
