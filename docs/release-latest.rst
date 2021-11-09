@@ -1,7 +1,7 @@
 .. role:: small
 .. role:: smaller
 
-On `master` :small:`the future`
+0.7.7 :small:`9 November, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rubric:: Bug fixes
@@ -11,6 +11,9 @@ On `master` :small:`the future`
 - Fixed out-of-bounds integer indices not raising :class:`IndexError` :pr:`630` :smaller:`M Klein`
 - Fixed backed `SparseDataset` indexing with scipy 1.7.2 :pr:`638` :smaller:`I Virshup`
 
+.. rubric:: Development processes
+
+- Use PEPs 621 (standardized project metadata), 631 (standardized dependencies), and 660 (standardized editable installs) :pr:`639` :smaller:`I Virshup`
 
 0.7.6 :small:`11 April, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
