@@ -18,7 +18,7 @@ __pycache__/
 test.h5ad
 
 # docs
-/docs/anndata.*
+/docs/generated/
 /docs/_build/
 
 # IDEs
