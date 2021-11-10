@@ -619,7 +619,7 @@ def test_write_string_types(tmp_path, diskfmt):
         write(adata_pth)
 
 
-def test_zarr_chunk_X(tmp_path):
+def test_zarr_chunk_X_dense(tmp_path):
     import zarr
 
     zarr_pth = Path(tmp_path) / "test.zarr"
@@ -628,6 +628,37 @@ def test_zarr_chunk_X(tmp_path):
 
     z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
     assert z["X"].chunks == (10, 10)
+    from_zarr = ad.read_zarr(zarr_pth)
+    assert_equal(from_zarr, adata)
+
+
+def test_zarr_chunk_X_sparse(tmp_path):
+    import zarr
+
+    zarr_pth = Path(tmp_path) / "test.zarr"
+    adata = gen_adata((100, 100), X_type=csc_matrix)
+    adata.write_zarr(zarr_pth, sparse_chunks=(20,))
+
+    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
+    assert z["X"]["data"].chunks == (20,)
+    assert z["X"]["indices"].chunks == (20,)
+    assert z["X"]["indptr"].chunks == (20,)
+    from_zarr = ad.read_zarr(zarr_pth)
+    assert_equal(from_zarr, adata)
+
+
+def test_zarr_chunk_layers(tmp_path):
+    import zarr
+
+    zarr_pth = Path(tmp_path) / "test.zarr"
+    adata = gen_adata((100, 100), X_type=csc_matrix)
+    adata.write_zarr(zarr_pth, sparse_chunks=(20,), chunks=(10, 10))
+
+    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
+    assert z["layers"]["sparse"]["data"].chunks == (20,)
+    assert z["layers"]["sparse"]["indices"].chunks == (20,)
+    assert z["layers"]["sparse"]["indptr"].chunks == (20,)
+    assert z["layers"]["array"].chunks == (10, 10)
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
 
