@@ -18,6 +18,7 @@ from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
 from .._core.raw import Raw
 from ..compat import (
+    _read_hdf5_attribute,
     _from_fixed_length_strings,
     _decode_structured_array,
     _clean_uns,
@@ -475,8 +476,8 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
 def read_dataframe(group) -> pd.DataFrame:
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
-    columns = list(group.attrs["column-order"])
-    idx_key = group.attrs["_index"]
+    columns = _read_hdf5_attribute(group.attrs, "column-order")
+    idx_key = _read_hdf5_attribute(group.attrs, "_index")
     df = pd.DataFrame(
         {k: read_series(group[k]) for k in columns},
         index=read_series(group[idx_key]),
@@ -490,9 +491,9 @@ def read_dataframe(group) -> pd.DataFrame:
 @report_read_key_on_error
 def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
-        categories = dataset.attrs["categories"]
+        categories = _read_hdf5_attribute(dataset.attrs, "categories")
         if isinstance(categories, h5py.Reference):
-            categories_dset = dataset.parent[dataset.attrs["categories"]]
+            categories_dset = dataset.parent[categories]
             categories = read_dataset(categories_dset)
             ordered = bool(categories_dset.attrs.get("ordered", False))
         else:
@@ -522,19 +523,19 @@ def read_group(group: h5py.Group) -> Union[dict, pd.DataFrame, sparse.spmatrix]:
     if "h5sparse_format" in group.attrs:  # Backwards compat
         return SparseDataset(group).to_memory()
 
-    encoding_type = group.attrs.get("encoding-type")
-    if encoding_type:
+    if "encoding-type" in group.attrs:
+        encoding_type = _read_hdf5_attribute(group.attrs, "encoding-type")
         EncodingVersions[encoding_type].check(
-            group.name, group.attrs["encoding-version"]
+            group.name, _read_hdf5_attribute(group.attrs, "encoding-version")
         )
-    if encoding_type in {None, "raw"}:
-        pass
-    elif encoding_type == "dataframe":
-        return read_dataframe(group)
-    elif encoding_type in {"csr_matrix", "csc_matrix"}:
-        return SparseDataset(group).to_memory()
-    else:
-        raise ValueError(f"Unfamiliar `encoding-type`: {encoding_type}.")
+
+        if encoding_type == "dataframe":
+            return read_dataframe(group)
+        elif encoding_type in {"csr_matrix", "csc_matrix"}:
+            return SparseDataset(group).to_memory()
+        elif encoding_type != "raw":
+            raise ValueError(f"Unfamiliar `encoding-type`: {encoding_type}.")
+
     d = dict()
     for sub_key, sub_value in group.items():
         d[sub_key] = read_attribute(sub_value)
