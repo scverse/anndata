@@ -7,7 +7,8 @@ from anndata.utils import asarray
 
 import pytest
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.testing import assert_equal
+from anndata.tests.helpers import gen_adata
 
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),

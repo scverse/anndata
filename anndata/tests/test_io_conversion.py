@@ -7,7 +7,8 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.testing import assert_equal
+from anndata.tests.helpers import gen_adata
 
 
 @pytest.fixture(

@@ -15,7 +15,8 @@ import zarr
 import anndata as ad
 from anndata.utils import asarray
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.testing import assert_equal
+from anndata.tests.helpers import gen_adata
 
 HERE = Path(__file__).parent
 
