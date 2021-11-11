@@ -1,7 +1,8 @@
 from functools import wraps
+from typing import Optional, TypeVar
 
 
-def format_msg(elem_name):
+def format_msg(elem_name: Optional[str]) -> str:
     if elem_name is not None:
         return f"Error raised from element {elem_name!r}."
     else:
@@ -13,7 +14,7 @@ def report_name(func):
     """Report name of element being tested if test fails."""
 
     @wraps(func)
-    def func_wrapper(*args, _elem_name=None, **kwargs):
+    def func_wrapper(*args, _elem_name: Optional[str] = None, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:

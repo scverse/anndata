@@ -39,7 +39,7 @@ def assert_equal_ndarray(a, b, *, exact=False, elem_name=None):
         and len(a.dtype) > 1
         and len(b.dtype) > 0
     ):
-        assert_equal(pd.DataFrame(a), pd.DataFrame(b), exact, elem_name)
+        assert_equal(pd.DataFrame(a), pd.DataFrame(b), exact=exact, elem_name=elem_name)
     else:
         assert np.all(a == b), format_msg(elem_name)
 
@@ -53,19 +53,19 @@ def assert_equal_arrayview(a, b, *, exact=False, elem_name=None):
 @assert_equal.register(sparse.spmatrix)
 def assert_equal_sparse(a, b, *, exact=False, elem_name=None):
     a = asarray(a)
-    assert_equal(b, a, exact, elem_name=elem_name)
+    assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(h5py.Dataset)
 def assert_equal_h5py_dataset(a, b, *, exact=False, elem_name=None):
     a = asarray(a)
-    assert_equal(b, a, exact, elem_name=elem_name)
+    assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(pd.DataFrame)
 def are_equal_dataframe(a, b, *, exact=False, elem_name=None):
     if not isinstance(b, pd.DataFrame):
-        assert_equal(b, a, exact, elem_name)  # , a.values maybe?
+        assert_equal(b, a, exact=exact, elem_name=elem_name)  # , a.values maybe?
 
     report_name(pd.testing.assert_frame_equal)(
         a,
@@ -83,7 +83,7 @@ def assert_equal_mapping(a, b, *, exact=False, elem_name=None):
     for k in a.keys():
         if elem_name is None:
             elem_name = ""
-        assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
+        assert_equal(a[k], b[k], exact=exact, elem_name=f"{elem_name}/{k}")
 
 
 @assert_equal.register(AlignedMapping)
@@ -139,8 +139,8 @@ def assert_adata_equal(a: AnnData, b: AnnData, *, exact: bool = False):
     """
     # There may be issues comparing views, since np.allclose
     # can modify ArrayViews if they contain `nan`s
-    assert_equal(a.obs_names, b.obs_names, exact, elem_name="obs_names")
-    assert_equal(a.var_names, b.var_names, exact, elem_name="var_names")
+    assert_equal(a.obs_names, b.obs_names, exact=exact, elem_name="obs_names")
+    assert_equal(a.var_names, b.var_names, exact=exact, elem_name="var_names")
     if not exact:
         # Reorder all elements if neccesary
         idx = [slice(None), slice(None)]
@@ -169,6 +169,6 @@ def assert_adata_equal(a: AnnData, b: AnnData, *, exact: bool = False):
         assert_equal(
             getattr(a, attr),
             getattr(b, attr),
-            exact,
+            exact=exact,
             elem_name=attr,
         )
