@@ -39,8 +39,8 @@ def test_anndata_repr(adata):
     assert f"{adata.n_obs} × {adata.n_vars}" in repr(adata)
 
     for idxr in [
-        (slice(10, 20), 12),
-        (12, 10),
+        (slice(10, 20), 9),
+        (12, 9),
         (["cell1", "cell2"], slice(10, 15)),
     ]:
         v = adata[idxr]

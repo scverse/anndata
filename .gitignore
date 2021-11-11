@@ -13,9 +13,12 @@ __pycache__/
 # Tests and coverage
 /.pytest_cache/
 /.cache/
+/data/
+/tmp.zarr/
+test.h5ad
 
 # docs
-/docs/anndata.*
+/docs/generated/
 /docs/_build/
 
 # IDEs

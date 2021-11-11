@@ -1,6 +1,39 @@
 .. role:: small
 .. role:: smaller
 
+
+On `master` :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+.. rubric:: Features
+
+.. rubric:: Documentation
+
+
+0.7.8 :small:`9 November, 2021`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Re-include test helpers :pr:`641` :smaller:`I Virshup`
+
+
+0.7.7 :small:`9 November, 2021`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Fixed propagation of import error when importing `write_zarr` but not all dependencies are installed :pr:`579` :smaller:`R Hillje`
+- Fixed issue with `.uns` sub-dictionaries being referenced by copies :pr:`576` :smaller:`I Virshup`
+- Fixed out-of-bounds integer indices not raising :class:`IndexError` :pr:`630` :smaller:`M Klein`
+- Fixed backed `SparseDataset` indexing with scipy 1.7.2 :pr:`638` :smaller:`I Virshup`
+
+.. rubric:: Development processes
+
+- Use PEPs 621 (standardized project metadata), 631 (standardized dependencies), and 660 (standardized editable installs) :pr:`639` :smaller:`I Virshup`
+
 0.7.6 :small:`11 April, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

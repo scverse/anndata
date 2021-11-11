@@ -23,8 +23,8 @@ needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
-author = anndata.__author__
-copyright = f"{datetime.now():%Y}, {author}."
+author = "AnnData development team"
+copyright = f"{datetime.now():%Y}, the AnnData development team."
 version = anndata.__version__.replace(".dirty", "")
 release = version
 
@@ -61,6 +61,10 @@ napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 nitpicky = True  # Report broken links
+nitpick_ignore = [
+    ("py:meth", "pandas.DataFrame.iloc"),
+    ("py:meth", "pandas.DataFrame.loc"),
+]
 suppress_warnings = ["ref.citation"]
 
 
@@ -70,9 +74,9 @@ def setup(app: Sphinx):
 
 
 intersphinx_mapping = dict(
-    h5py=("http://docs.h5py.org/en/latest/", None),
+    h5py=("https://docs.h5py.org/en/latest/", None),
     loompy=("https://linnarssonlab.org/loompy/", None),
-    numpy=("https://docs.scipy.org/doc/numpy/", None),
+    numpy=("https://numpy.org/doc/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy/reference/", None),

@@ -366,7 +366,7 @@ class SparseDataset:
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.group["indptr"]
+        mtx.indptr = self.group["indptr"][:]
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
