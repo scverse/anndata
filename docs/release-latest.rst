@@ -9,6 +9,8 @@ On `master` :small:`the future`
 
 .. rubric:: Features
 
+- Compatability with `h5ad` files written from Julia :pr:`569` :smaller:`I Kats`
+
 .. rubric:: Documentation
 
 
