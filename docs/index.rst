@@ -28,6 +28,7 @@ Latest additions
    :maxdepth: 1
    :hidden:
 
+   tutorials
    api
    concatenation
    fileformat-prose
