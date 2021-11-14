@@ -127,35 +127,6 @@ class AwkwardArrayView(_ViewMixin, ak.Array):
         return ak.copy(self)
 
 
-# class AwkwardArrayView(_SetItemMixin, np.ndarray):
-#     def __new__(
-#         cls,
-#         input_array: Sequence[Any],
-#         view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
-#     ):
-#         arr = np.asanyarray(input_array).view(cls)
-
-#         if view_args is not None:
-#             view_args = ElementRef(*view_args)
-#         arr._view_args = view_args
-#         return arr
-
-#     def __array_finalize__(self, obj: Optional[np.ndarray]):
-#         if obj is not None:
-#             self._view_args = getattr(obj, "_view_args", None)
-
-#     def keys(self) -> KeysView[str]:
-#         # it’s a structured array
-#         return self.dtype.names
-
-#     def copy(self, order: str = "C") -> np.ndarray:
-#         # we want a conventional array
-#         return np.array(self)
-
-#     def toarray(self) -> np.ndarray:
-#         return self.copy()
-
-
 @singledispatch
 def as_view(obj, view_args):
     raise NotImplementedError(f"No view type has been registered for {type(obj)}")
