@@ -3,6 +3,17 @@ from collections import abc as cabc
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
+from functools import singledispatch
+
+import warnings
+
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        import awkward as ak
+except ImportError:
+    ak = None
+
 
 import numpy as np
 import pandas as pd
@@ -47,7 +58,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] != val.shape[i]:
+            if self.parent.shape[axis] != dim_len(val, i):  # val.shape[i]:
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
                 raise ValueError(
                     f"Value passed for key {key!r} is of incorrect shape. "
@@ -349,3 +360,15 @@ class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
 
 PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
+
+
+@singledispatch
+def dim_len(x, dim):
+    return x.shape[dim]
+
+
+@dim_len.register(ak.Array)
+def dim_len_array(x, dim):
+    if dim != 0:
+        raise IndexError()
+    return len(x)
