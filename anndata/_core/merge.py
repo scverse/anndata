@@ -506,6 +506,8 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             else (lambda x: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
+    elif all(isinstance(el, ak.Array) for el in els if not_missing(el)):
+        reindexers = [gen_reindexer(pd.RangeIndex(0), pd.RangeIndex(0)) for _ in els]
     else:
         # if fill_value is None:
         # fill_value = default_fill_value(els)
