@@ -17,8 +17,15 @@ from scipy.sparse.base import spmatrix
 
 from .anndata import AnnData
 from ..compat import Literal
-from ..utils import asarray
+from ..utils import asarray, dim_len
+import warnings
 
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        import awkward as ak
+except ImportError:
+    ak = None
 T = TypeVar("T")
 
 ###################
@@ -282,12 +289,14 @@ class Reindexer(object):
 
         Missing values are to be replaced with `fill_value`.
         """
-        if self.no_change and (el.shape[axis] == len(self.old_idx)):
+        if self.no_change and (dim_len(el, axis) == len(self.old_idx)):
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, ak.Array):
+            return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -365,6 +374,9 @@ class Reindexer(object):
 
         return out
 
+    def _apply_to_awkward(self, el: ak.Array, *, axis, fill_value=None):
+        return el
+
 
 def merge_indices(
     inds: Iterable[pd.Index], join: Literal["inner", "outer"]
@@ -438,6 +450,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             format="csr",
         )
+    elif any(isinstance(a, ak.Array) for a in arrays):
+        return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)])
     else:
         return np.concatenate(
             [
@@ -450,7 +464,6 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
 
 def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
     result = {}
-
     for k in intersect_keys(mappings):
         els = [m[k] for m in mappings]
         if reindexers is None:
@@ -474,6 +487,8 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
             lambda x, y: x.intersection(y), (df_indices(el) for el in els)
         )
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
+    elif all(isinstance(el, ak.Array) for el in els if not_missing(el)):
+        reindexers = [gen_reindexer(pd.RangeIndex(0), pd.RangeIndex(0)) for _ in els]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
         reindexers = [

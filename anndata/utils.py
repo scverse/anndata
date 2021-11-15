@@ -9,6 +9,14 @@ from scipy import sparse
 
 from .logging import get_logger
 from ._core.sparse_dataset import SparseDataset
+import warnings
+
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        import awkward as ak
+except ImportError:
+    ak = None
 
 logger = get_logger(__name__)
 
@@ -252,3 +260,18 @@ def import_function(module: str, name: str) -> Callable:
             raise error
 
     return func
+
+
+@singledispatch
+def dim_len(x, dim):
+    return x.shape[dim]
+
+
+@dim_len.register(ak.Array)
+def dim_len_array(x, dim):
+    if dim == 0:
+        return len(x)
+    elif dim == 1:
+        return None
+    else:
+        raise IndexError()

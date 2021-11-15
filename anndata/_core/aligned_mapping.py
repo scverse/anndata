@@ -3,23 +3,13 @@ from collections import abc as cabc
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
-from functools import singledispatch
-
-import warnings
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
 
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from ..utils import deprecated, ensure_df_homogeneous
+from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
@@ -360,15 +350,3 @@ class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
 
 PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
-
-
-@singledispatch
-def dim_len(x, dim):
-    return x.shape[dim]
-
-
-@dim_len.register(ak.Array)
-def dim_len_array(x, dim):
-    if dim != 0:
-        raise IndexError()
-    return len(x)

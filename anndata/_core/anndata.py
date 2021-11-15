@@ -44,7 +44,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous
+from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
@@ -56,7 +56,6 @@ from ..compat import (
     _overloaded_uns,
     OverloadedDict,
 )
-from .aligned_mapping import dim_len
 
 
 class StorageType(Enum):
@@ -1857,7 +1856,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "varm" in key:
             varm = self._varm
             if (
-                not all([v.shape[0] == self._n_vars for v in varm.values()])
+                not all([dim_len(v, 0) == self._n_vars for v in varm.values()])
                 and len(varm.dim_names) != self._n_vars
             ):
                 raise ValueError(
