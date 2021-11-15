@@ -87,7 +87,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy",
-    "awkward"
+    "awkward",
 ]
 
 [tool.flit.sdist]

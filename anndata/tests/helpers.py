@@ -53,6 +53,17 @@ def gen_typed_df(n, index=None):
     )
 
 
+def gen_awkward(n, index=None):
+    rng = np.random.default_rng(42)
+    arr = ak.Array(
+        [
+            rng.standard_normal((rng.integers(1, 10), rng.integers(1, 10)))
+            for _ in range(n)
+        ]
+    )
+    return arr
+
+
 def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     s = 0
     df = pd.DataFrame()
@@ -129,12 +140,14 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
+        awk=gen_awkward(M),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
+        awk=gen_awkward(N),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
