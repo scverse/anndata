@@ -17,6 +17,13 @@ from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
 
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        import awkward as ak
+except ImportError:
+    ak = None
+
 
 def gen_vstr_recarray(m, n, dtype=None):
     size = m * n
@@ -68,8 +75,18 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    obsm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        ak.Array,
+    ),
+    varm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        ak.Array,
+    ),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
     """\

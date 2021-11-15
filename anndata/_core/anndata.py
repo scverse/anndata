@@ -56,6 +56,7 @@ from ..compat import (
     _overloaded_uns,
     OverloadedDict,
 )
+from .aligned_mapping import dim_len
 
 
 class StorageType(Enum):
@@ -1846,7 +1847,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([len(o) == self._n_obs for o in obsm.values()])
+                not all([dim_len(o, 0) == self._n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self._n_obs
             ):
                 raise ValueError(
