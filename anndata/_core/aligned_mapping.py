@@ -8,6 +8,14 @@ from typing import Tuple, List, Dict  # Generic base types
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
+import warnings
+
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        import awkward as ak
+except ImportError:
+    ak = None
 
 from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
@@ -85,7 +93,10 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def copy(self):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
-            d[k] = v.copy()
+            if isinstance(v, ak.Array):
+                d[k] = v
+            else:
+                d[k] = v.copy()
         return d
 
     def _view(self, parent: "anndata.AnnData", subset_idx: I):

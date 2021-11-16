@@ -358,6 +358,11 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
     )
 
 
+@assert_equal.register(ak.Array)
+def assert_equal_awkarray(a, b, exact=False, elem_name=None):
+    assert ak.all(a == b)
+
+
 @assert_equal.register(Mapping)
 def assert_equal_mapping(a, b, exact=False, elem_name=None):
     assert set(a.keys()) == set(b.keys()), format_msg(elem_name)

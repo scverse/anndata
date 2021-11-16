@@ -42,6 +42,11 @@ def asarray_h5py_dataset(x):
     return x[...]
 
 
+@asarray.register(ak.Array)
+def asarray_awkward(x):
+    return x.toarray()
+
+
 @singledispatch
 def convert_to_dict(obj) -> dict:
     return dict(obj)
