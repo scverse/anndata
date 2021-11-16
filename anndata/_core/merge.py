@@ -129,6 +129,11 @@ def equal_sparse(a, b) -> bool:
         return False
 
 
+@equal.register(ak.Array)
+def equal_dataframe(a, b) -> bool:
+    return ak.all(a == b)
+
+
 def as_sparse(x):
     if not isinstance(x, sparse.spmatrix):
         return sparse.csr_matrix(x)
