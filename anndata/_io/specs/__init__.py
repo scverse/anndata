@@ -19,9 +19,14 @@ from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core import views
-from anndata.compat import _read_attr
+from anndata.compat import (
+    _read_attr,
+    _from_fixed_length_strings,
+    _decode_structured_array,
+)
 from scipy.sparse import data
-from anndata._io.utils import report_write_key_on_error, check_key
+from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
+from anndata._io import OldFormatWarning
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -202,6 +207,13 @@ def write_elem(f: h5py.Group, k: str, elem, *args, modifiers=frozenset(), **kwar
 @_REGISTRY.register_read(IOSpec("", ""))
 def read_basic(elem):
     from anndata._io import h5ad
+
+    warn(
+        f"Element '{elem.name}' was written without encoding metadata. "
+        "This must be an old file! "
+        "Consider re-writing this in a new format.",
+        OldFormatWarning,
+    )
 
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
@@ -428,7 +440,14 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-_REGISTRY.register_read(IOSpec("rec-array", "0.2.0"))(read_basic)
+@_REGISTRY.register_read(IOSpec("rec-array", "0.2.0"))
+def read_recarray(d):
+    value = d[()]
+    dtype = value.dtype
+    value = _from_fixed_length_strings(value)
+    if H5PY_V3:
+        value = _decode_structured_array(value, dtype=dtype)
+    return value
 
 
 @_REGISTRY.register_write((np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))

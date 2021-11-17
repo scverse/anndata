@@ -2,6 +2,10 @@ class WriteWarning(UserWarning):
     pass
 
 
+class OldFormatWarning(PendingDeprecationWarning):
+    pass
+
+
 from .read import (
     read_csv,
     read_excel,
