@@ -50,6 +50,7 @@ dependencies = [
     "xlrd<2.0",  # xlsx format not support anymore from v2.0, see pandas/issues/38524
     # for getting the stable version
     "importlib_metadata>=0.7; python_version < '3.8'",
+    "typing_extensions; python_version < '3.8'",  # Remove once we depend on python > 3.7
 ]
 dynamic = ["version"]
 

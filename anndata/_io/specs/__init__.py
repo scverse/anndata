@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from os import PathLike
-from collections import Mapping
+from collections.abc import Mapping
 from functools import singledispatch, partial, wraps
-from typing import NamedTuple, Tuple, Union, Type, Callable, Literal
+from typing import NamedTuple, Tuple, Union, Type, Callable
 import typing
 from types import MappingProxyType
 from warnings import warn
@@ -20,6 +20,7 @@ from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core import views
 from anndata.compat import (
+    Literal,
     _read_attr,
     _from_fixed_length_strings,
     _decode_structured_array,
