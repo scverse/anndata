@@ -1,3 +1,4 @@
+from importlib.util import find_spec
 import warnings
 
 import pytest
@@ -6,6 +7,7 @@ import anndata as ad
 from anndata.tests.helpers import gen_adata
 
 
+@pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_old_format_warning_thrown():
     import scanpy as sc
 
