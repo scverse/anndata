@@ -2,7 +2,7 @@ from copy import deepcopy
 from functools import reduce, wraps
 from codecs import decode
 from inspect import signature, Parameter
-from typing import Collection, Union, Mapping, MutableMapping, Optional
+from typing import Any, Collection, Union, Mapping, MutableMapping, Optional
 from warnings import warn
 
 import h5py
@@ -12,6 +12,11 @@ import pandas as pd
 
 from ._overloaded_dict import _overloaded_uns, OverloadedDict
 from .._core.index import _subset
+
+
+class Empty:
+    pass
+
 
 # try importing zarr, dask, and zappy
 from packaging import version
@@ -63,7 +68,9 @@ except ImportError:
             pass
 
 
-def _read_hdf5_attribute(attrs: h5py.AttributeManager, name: str):
+def _read_hdf5_attribute(
+    attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty
+):
     """
     Read an HDF5 attribute and perform all necessary conversions.
 
@@ -72,6 +79,8 @@ def _read_hdf5_attribute(attrs: h5py.AttributeManager, name: str):
     For example Julia's HDF5.jl writes string attributes as fixed-size strings, which
     are read as bytes by h5py.
     """
+    if name not in attrs and default is not Empty:
+        return default
     attr = attrs[name]
     attr_id = attrs.get_id(name)
     dtype = h5py.check_string_dtype(attr_id.dtype)

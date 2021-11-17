@@ -19,6 +19,7 @@ from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core import views
+from anndata.compat import _read_hdf5_attribute
 from scipy.sparse import data
 from anndata._io.utils import report_write_key_on_error, check_key
 
@@ -125,7 +126,10 @@ def proc_spec_mapping(spec) -> IOSpec:
 
 def get_spec(elem: Union[h5py.Dataset, h5py.Group]) -> IOSpec:
     return proc_spec(
-        {k: elem.attrs.get(k, "") for k in ["encoding-type", "encoding-version"]}
+        {
+            k: _read_hdf5_attribute(elem.attrs, k, "")
+            for k in ["encoding-type", "encoding-version"]
+        }
     )
 
 
@@ -225,10 +229,10 @@ def read_basic_partial(elem, *, items=None, indices=(slice(None), slice(None))):
 
 def read_indices(group):
     obs_group = group["obs"]
-    obs_idx_elem = obs_group[obs_group.attrs["_index"]]
+    obs_idx_elem = obs_group[_read_hdf5_attribute(obs_group.attrs, "_index")]
     obs_idx = read_elem(obs_idx_elem)
     var_group = group["var"]
-    var_idx_elem = var_group[var_group.attrs["_index"]]
+    var_idx_elem = var_group[_read_hdf5_attribute(var_group.attrs, "_index")]
     var_idx = read_elem(var_idx_elem)
     return obs_idx, var_idx
 
@@ -516,8 +520,8 @@ def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(IOSpec("dataframe", "0.2.0"))
 def read_dataframe(elem):
-    columns = list(elem.attrs["column-order"])
-    idx_key = elem.attrs["_index"]
+    columns = list(_read_hdf5_attribute(elem.attrs, "column-order"))
+    idx_key = _read_hdf5_attribute(elem.attrs, "_index")
     df = pd.DataFrame(
         {k: read_elem(elem[k]) for k in columns},
         index=read_elem(elem[idx_key]),
@@ -534,10 +538,14 @@ def read_dataframe_partial(
     elem, *, items=None, indices=(slice(None, None), slice(None, None))
 ):
     if items is not None:
-        columns = [col for col in elem.attrs["column-order"] if col in items]
+        columns = [
+            col
+            for col in _read_hdf5_attribute(elem.attrs, "column-order")
+            if col in items
+        ]
     else:
-        columns = list(elem.attrs["column-order"])
-    idx_key = elem.attrs["_index"]
+        columns = list(_read_hdf5_attribute(elem.attrs, "column-order"))
+    idx_key = _read_hdf5_attribute(elem.attrs, "_index")
     df = pd.DataFrame(
         {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
         index=read_elem_partial(elem[idx_key], indices=indices[0]),
@@ -553,8 +561,8 @@ def read_dataframe_partial(
 
 @_REGISTRY.register_read({"encoding-type": "dataframe", "encoding-version": "0.1.0"})
 def read_dataframe_0_1_0(elem):
-    columns = list(elem.attrs["column-order"])
-    idx_key = elem.attrs["_index"]
+    columns = _read_hdf5_attribute(elem.attrs, "column-order")
+    idx_key = _read_hdf5_attribute(elem.attrs, "_index")
     df = pd.DataFrame(
         {k: read_series(elem[k]) for k in columns},
         index=read_series(elem[idx_key]),
@@ -568,9 +576,11 @@ def read_dataframe_0_1_0(elem):
 def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     # For reading older dataframes
     if "categories" in dataset.attrs:
-        categories_dset = dataset.parent[dataset.attrs["categories"]]
+        categories_dset = dataset.parent[
+            _read_hdf5_attribute(dataset.attrs, "categories")
+        ]
         categories = categories_dset[...]
-        ordered = bool(categories_dset.attrs.get("ordered", False))
+        ordered = bool(_read_hdf5_attribute(categories_dset.attrs, "ordered", False))
         return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
     else:
         return dataset[...]
@@ -606,7 +616,7 @@ def read_categorical(elem):
     return pd.Categorical.from_codes(
         codes=read_elem(elem["codes"]),
         categories=read_elem(elem["categories"]),
-        ordered=elem.attrs["ordered"],
+        ordered=_read_hdf5_attribute(elem.attrs, "ordered"),
     )
 
 
@@ -615,7 +625,7 @@ def read_categorical(elem, *, items=None, indices=(slice(None),)):
     return pd.Categorical.from_codes(
         codes=read_elem_partial(elem["codes"], indices=indices),
         categories=read_elem(elem["categories"]),
-        ordered=elem.attrs["ordered"],
+        ordered=_read_hdf5_attribute(elem.attrs, "ordered"),
     )
 
 
