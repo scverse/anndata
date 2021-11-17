@@ -723,3 +723,25 @@ def test_backwards_compat_zarr():
         pbmc_zarr = ad.read_zarr(z)
 
     assert_equal(pbmc_zarr, pbmc_orig)
+
+
+# TODO: use diskfmt fixture once zarr backend implemented
+def test_adata_in_uns(tmp_path):
+    diskfmt = "h5ad"
+    pth = tmp_path / f"adatas_in_uns.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = gen_adata((4, 5))
+    orig.uns["adatas"] = {
+        "a": gen_adata((1, 2)),
+        "b": gen_adata((12, 8)),
+    }
+    another_one = gen_adata((2, 5))
+    another_one.raw = gen_adata((2, 7))
+    orig.uns["adatas"]["b"].uns["another_one"] = another_one
+
+    write(orig, pth)
+    curr = read(pth)
+
+    assert_equal(orig, curr)

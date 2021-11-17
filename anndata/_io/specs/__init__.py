@@ -332,15 +332,38 @@ def write(adata, pth, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_write(AnnData, IOSpec("anndata", "0.1.0"))
 def write_anndata(f, k, adata, dataset_kwargs=MappingProxyType({})):
-    write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
+    g = f.create_group(k)
+    write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
+    write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
+    write_elem(g, "var", adata.var, dataset_kwargs=dataset_kwargs)
+    write_elem(g, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
+    write_elem(g, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
+    write_elem(g, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
+    write_elem(g, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
+    write_elem(g, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
+    write_elem(g, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
+    write_elem(g, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_read(IOSpec("anndata", "0.1.0"))
+@_REGISTRY.register_read(IOSpec("raw", "0.1.0"))
+def read_anndata(elem):
+    d = {}
+    for k in [
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+        "layers",
+        "uns",
+        "raw",
+    ]:
+        if k in elem:
+            d[k] = read_elem(elem[k])
+    return AnnData(**d)
 
 
 @_REGISTRY.register_write(Raw, IOSpec("raw", "0.1.0"))
