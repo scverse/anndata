@@ -18,7 +18,7 @@ from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
 from .._core.raw import Raw
 from ..compat import (
-    _read_hdf5_attribute,
+    _read_attr,
     _from_fixed_length_strings,
     _decode_structured_array,
     _clean_uns,
@@ -306,8 +306,8 @@ def read_dataframe(group) -> pd.DataFrame:
         return read_elem(group)
     else:
         # backwards compat
-        columns = list(_read_hdf5_attribute(group.attrs, "column-order"))
-        idx_key = _read_hdf5_attribute(group.attrs, "_index")
+        columns = list(_read_attr(group.attrs, "column-order"))
+        idx_key = _read_attr(group.attrs, "_index")
         df = pd.DataFrame(
             {k: read_series(group[k]) for k in columns},
             index=read_series(group[idx_key]),
@@ -322,7 +322,7 @@ def read_dataframe(group) -> pd.DataFrame:
 @report_read_key_on_error
 def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
     if "categories" in dataset.attrs:
-        categories = _read_hdf5_attribute(dataset.attrs, "categories")
+        categories = _read_attr(dataset.attrs, "categories")
         if isinstance(categories, h5py.Reference):
             categories_dset = dataset.parent[categories]
             categories = read_dataset(categories_dset)

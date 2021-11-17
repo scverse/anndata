@@ -20,7 +20,7 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from ..compat import _read_hdf5_attribute
+from ..compat import _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -240,12 +240,10 @@ class SparseDataset:
     @property
     def format_str(self) -> str:
         if "h5sparse_format" in self.group.attrs:
-            return _read_hdf5_attribute(self.group.attrs, "h5sparse_format")
+            return _read_attr(self.group.attrs, "h5sparse_format")
         else:
             # Should this be an extra field?
-            return _read_hdf5_attribute(self.group.attrs, "encoding-type").replace(
-                "_matrix", ""
-            )
+            return _read_attr(self.group.attrs, "encoding-type").replace("_matrix", "")
 
     @property
     def h5py_group(self) -> h5py.Group:

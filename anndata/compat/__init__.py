@@ -68,9 +68,7 @@ except ImportError:
             pass
 
 
-def _read_hdf5_attribute(
-    attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty
-):
+def _read_attr(attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty):
     """
     Read an HDF5 attribute and perform all necessary conversions.
 

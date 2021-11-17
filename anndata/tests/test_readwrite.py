@@ -14,7 +14,7 @@ import zarr
 
 import anndata as ad
 from anndata.utils import asarray
-from anndata.compat import _read_hdf5_attribute
+from anndata.compat import _read_attr
 
 from anndata.tests.helpers import gen_adata, assert_equal
 
@@ -636,7 +636,7 @@ def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
             dtype=h5py.h5t.string_dtype(encoding=encoding, length=length),
         )
 
-        assert_equal(teststring, _read_hdf5_attribute(attrs, "string"))
+        assert_equal(teststring, _read_attr(attrs, "string"))
 
 
 def test_zarr_chunk_X(tmp_path):
