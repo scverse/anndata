@@ -27,7 +27,7 @@ from .utils import (
     EncodingVersions,
     check_key,
 )
-from . import WriteWarning
+from anndata._warnings import WriteWarning
 
 
 T = TypeVar("T")

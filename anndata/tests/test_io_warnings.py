@@ -11,7 +11,7 @@ from anndata.tests.helpers import gen_adata
 def test_old_format_warning_thrown():
     import scanpy as sc
 
-    with pytest.warns(ad._io.OldFormatWarning):
+    with pytest.warns(ad._warnings.OldFormatWarning):
         sc.datasets.pbmc68k_reduced()
 
 
@@ -21,7 +21,7 @@ def test_old_format_warning_not_thrown(tmp_path):
     adata.write_h5ad(pth)
 
     with warnings.catch_warnings(record=True) as record:
-        warnings.simplefilter("always", ad._io.OldFormatWarning)
+        warnings.simplefilter("always", ad._warnings.OldFormatWarning)
 
         ad.read_h5ad(pth)
 

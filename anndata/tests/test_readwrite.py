@@ -3,6 +3,7 @@ from os import PathLike
 from pathlib import Path
 from string import ascii_letters
 import tempfile
+import warnings
 
 import h5py
 import numpy as np
@@ -671,7 +672,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
 
     import scanpy as sc
 
-    pbmc = sc.datasets.pbmc68k_reduced()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ad.OldFormatWarning)
+        pbmc = sc.datasets.pbmc68k_reduced()
+
     write1(pbmc, filepth1)
     from_disk1 = read1(filepth1)  # Do we read okay
     write2(from_disk1, filepth2)  # Can we round trip

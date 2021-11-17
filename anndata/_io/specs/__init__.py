@@ -21,13 +21,13 @@ from anndata._core.sparse_dataset import SparseDataset
 from anndata._core import views
 from anndata.compat import (
     Literal,
+    OverloadedDict,
     _read_attr,
     _from_fixed_length_strings,
     _decode_structured_array,
 )
-from scipy.sparse import data
 from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
-from anndata._io import OldFormatWarning
+from anndata._warnings import OldFormatWarning
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -210,9 +210,7 @@ def read_basic(elem):
     from anndata._io import h5ad
 
     warn(
-        f"Element '{elem.name}' was written without encoding metadata. "
-        "This must be an old file! "
-        "Consider re-writing this in a new format.",
+        f"Element '{elem.name}' was written without encoding metadata.",
         OldFormatWarning,
     )
 
@@ -363,9 +361,7 @@ def read_mapping(elem):
     return {k: read_elem(v) for k, v in elem.items()}
 
 
-@_REGISTRY.register_write(
-    ad.compat._overloaded_dict.OverloadedDict, IOSpec("dict", "0.1.0")
-)
+@_REGISTRY.register_write(OverloadedDict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(dict, IOSpec("dict", "0.1.0"))
 def write_mapping(f, k, v, dataset_kwargs=MappingProxyType({})):
     g = f.create_group(k)
