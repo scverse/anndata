@@ -9,7 +9,7 @@ requires = [
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.6"
+requires-python = ">=3.7"
 license = {file = "LICENSE"}
 authors = [
     {name = "Philipp Angerer"},
@@ -34,7 +34,6 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -112,5 +111,5 @@ xfail_strict = true
 
 [tool.black]
 line-length = 88
-target-version = ["py36"]
+target-version = ["py37"]
 exclude = "^/build/.*$"
