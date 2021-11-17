@@ -14,15 +14,11 @@ from . import WriteWarning
 # Exports
 from .h5ad import write_h5ad as _write_h5ad
 
-try:
-    from .zarr import write_zarr
-except ImportError as e:  # noqa: F841  # TODO: Is there a better way?
-
-    def write_zarr(*_, **__):
-        raise e
-
+from ..utils import import_function
 
 logger = get_logger(__name__)
+
+write_zarr = import_function("anndata._io.zarr", "write_zarr")
 
 
 def write_csvs(

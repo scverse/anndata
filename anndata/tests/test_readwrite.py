@@ -14,6 +14,7 @@ import zarr
 
 import anndata as ad
 from anndata.utils import asarray
+from anndata.compat import _read_hdf5_attribute
 
 from anndata.tests.helpers import gen_adata, assert_equal
 
@@ -617,6 +618,25 @@ def test_write_string_types(tmp_path, diskfmt):
     # This should error, and tell you which key is at fault
     with pytest.raises(TypeError, match=str(b"c")):
         write(adata_pth)
+
+
+@pytest.mark.parametrize(
+    "teststring",
+    ["teststring", np.asarray(["test1", "test2", "test3"], dtype="object")],
+)
+@pytest.mark.parametrize("encoding", ["ascii", "utf-8"])
+@pytest.mark.parametrize("length", [None, 15])
+def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
+    with h5py.File(tmp_path / "attributes.h5", "w") as file:
+        dset = file.create_dataset("dset", data=np.arange(10))
+        attrs = dset.attrs
+        attrs.create(
+            "string",
+            teststring,
+            dtype=h5py.h5t.string_dtype(encoding=encoding, length=length),
+        )
+
+        assert_equal(teststring, _read_hdf5_attribute(attrs, "string"))
 
 
 def test_zarr_chunk_X(tmp_path):
