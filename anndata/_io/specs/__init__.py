@@ -202,7 +202,7 @@ def write_elem(f: h5py.Group, k: str, elem, *args, modifiers=frozenset(), **kwar
 # Fallbacks / backwards compat #
 ################################
 
-# Note: there is no need for writing in a backwards compatible format
+# Note: there is no need for writing in a backwards compatible format, maybe
 
 
 @_REGISTRY.register_read(IOSpec("", ""))
@@ -596,7 +596,7 @@ def read_dataframe_partial(
 # Backwards compat dataframe reading
 
 
-@_REGISTRY.register_read({"encoding-type": "dataframe", "encoding-version": "0.1.0"})
+@_REGISTRY.register_read(IOSpec("dataframe", "0.1.0"))
 def read_dataframe_0_1_0(elem):
     columns = _read_attr(elem.attrs, "column-order")
     idx_key = _read_attr(elem.attrs, "_index")
