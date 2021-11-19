@@ -57,7 +57,7 @@ def gen_awkward(n, index=None):
     rng = np.random.default_rng(42)
     arr = ak.Array(
         [
-            rng.standard_normal((rng.integers(1, 10), rng.integers(1, 10)))
+            rng.standard_normal(size=(rng.integers(1, 10), rng.integers(1, 10)))
             for _ in range(n)
         ]
     )

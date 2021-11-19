@@ -130,8 +130,11 @@ def equal_sparse(a, b) -> bool:
 
 
 @equal.register(ak.Array)
-def equal_dataframe(a, b) -> bool:
-    return ak.all(a == b)
+def equal_awkward(a, b) -> bool:
+    if dim_len(a, 0) == dim_len(b, 0):
+        return ak.all(a == b)
+    else:
+        return False
 
 
 def as_sparse(x):

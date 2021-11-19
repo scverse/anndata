@@ -44,7 +44,7 @@ def asarray_h5py_dataset(x):
 
 @asarray.register(ak.Array)
 def asarray_awkward(x):
-    return x
+    return ak.copy(x)
 
 
 @singledispatch

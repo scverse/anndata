@@ -18,7 +18,16 @@ from anndata._core.index import _subset
 from anndata._core import merge
 from anndata.tests import helpers
 from anndata.tests.helpers import assert_equal, gen_adata
-from anndata.utils import asarray
+from anndata.utils import asarray, dim_len
+
+import warnings
+
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        import awkward as ak
+except ImportError:
+    ak = None
 
 
 @singledispatch
@@ -430,19 +439,21 @@ def test_concatenate_fill_value(fill_val):
 
     adata1 = gen_adata((10, 10))
     adata1.obsm = {
-        k: v for k, v in adata1.obsm.items() if not isinstance(v, pd.DataFrame)
+        k: v
+        for k, v in adata1.obsm.items()
+        if not isinstance(v, (pd.DataFrame, ak.Array))
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, ak.Array))
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, ak.Array))
     }
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 

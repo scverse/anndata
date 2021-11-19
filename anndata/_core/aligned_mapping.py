@@ -56,7 +56,9 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] != dim_len(val, i):
+            if (not isinstance(val, ak.Array)) and (  # don't validate awk arrays
+                self.parent.shape[axis] != dim_len(val, i)
+            ):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
                 raise ValueError(
                     f"Value passed for key {key!r} is of incorrect shape. "
