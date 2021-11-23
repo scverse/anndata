@@ -10,6 +10,7 @@ On `master` :small:`the future`
 .. rubric:: Features
 
 - Compatability with `h5ad` files written from Julia :pr:`569` :smaller:`I Kats`
+- Many logging messages that should have been warnings are now warnings :pr:`650` :smaller:`I Virshup`
 
 .. rubric:: Documentation
 
