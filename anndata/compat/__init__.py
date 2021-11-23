@@ -1,5 +1,5 @@
 from copy import deepcopy
-from functools import reduce, wraps
+from functools import reduce, singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
 from typing import Any, Collection, Union, Mapping, MutableMapping, Optional
@@ -23,12 +23,18 @@ from packaging import version
 
 try:
     from zarr.core import Array as ZarrArray
+    from zarr.hierarchy import Group as ZarrGroup
 except ImportError:
 
     class ZarrArray:
         @staticmethod
         def __repr__():
             return "mock zarr.core.Array"
+
+    class ZarrGroup:
+        @staticmethod
+        def __repr__():
+            return "mock zarr.core.Group"
 
 
 try:
@@ -68,7 +74,18 @@ except ImportError:
             pass
 
 
-def _read_attr(attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty):
+@singledispatch
+def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
+    if default is Empty:
+        return attrs[name]
+    else:
+        return attrs.get(name, default=default)
+
+
+@_read_attr.register(h5py.AttributeManager)
+def _read_attr_hdf5(
+    attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty
+):
     """
     Read an HDF5 attribute and perform all necessary conversions.
 

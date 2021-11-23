@@ -302,7 +302,7 @@ def read_dataframe(group) -> pd.DataFrame:
     # TODO: warn
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
-    elif _REGISTRY.has_reader(get_spec(group)):
+    elif _REGISTRY.has_reader(h5py.Group, get_spec(group)):
         return read_elem(group)
     else:
         # backwards compat
