@@ -3,6 +3,7 @@ from functools import reduce
 from h5py import Dataset
 import numpy as np
 import pandas as pd
+import warnings
 
 from typing import Dict, Union, Optional, Sequence, Callable
 
@@ -13,7 +14,6 @@ from ..._core.views import _resolve_idx
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import SparseDataset
 from ..._core.aligned_mapping import AxisArrays
-from ...logging import anndata_logger as logger
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -715,7 +715,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         self.obs_names = pd.Index(concat_indices)
 
         if not self.obs_names.is_unique:
-            logger.info("Observation names are not unique.")
+            warnings.warn("Observation names are not unique.", UserWarning)
 
         view_attrs = ATTRS.copy()
 
