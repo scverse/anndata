@@ -371,6 +371,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
 def read_recarray(d):
     value = d[()]
     dtype = value.dtype
@@ -384,6 +385,14 @@ def read_recarray(d):
 @_REGISTRY.register_write(H5Group, np.recarray, IOSpec("rec-array", "0.2.0"))
 def write_recarray(f, k, elem, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(k, data=_to_hdf5_vlen_strings(elem), **dataset_kwargs)
+
+
+@_REGISTRY.register_write(ZarrGroup, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, np.recarray, IOSpec("rec-array", "0.2.0"))
+def write_recarray_zarr(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    from anndata.compat import _to_fixed_length_strings
+
+    f.create_dataset(k, data=_to_fixed_length_strings(elem), **dataset_kwargs)
 
 
 #################
