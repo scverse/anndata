@@ -42,6 +42,7 @@ from ._specs import (
 H5Array = h5py.Dataset
 H5Group = h5py.Group
 
+
 ####################
 # Dispatch methods #
 ####################
@@ -589,7 +590,7 @@ def read_partial_dataframe_0_1_0(
 @_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
 def write_categorical(f, k, v, dataset_kwargs=MappingProxyType({})):
     g = f.create_group(k)
-    g.attrs["ordered"] = v.ordered
+    g.attrs["ordered"] = bool(v.ordered)
 
     write_elem(g, "codes", v.codes, dataset_kwargs=dataset_kwargs)
     write_elem(g, "categories", v.categories._values, dataset_kwargs=dataset_kwargs)
@@ -622,12 +623,15 @@ def read_categorical(elem, *, items=None, indices=(slice(None),)):
 
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
-@_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
 def read_scalar(elem):
     return elem[()]
 
 
-def write_numeric_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
+def write_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
+    return f.create_dataset(key, data=np.array(value), **dataset_kwargs)
+
+
+def write_hdf5_scalar(f, key, value, dataset_kwargs=MappingProxyType({})):
     # Can’t compress scalars, error is thrown
     dataset_kwargs = dataset_kwargs.copy()
     dataset_kwargs.pop("compression", None)
@@ -643,21 +647,22 @@ for numeric_scalar_type in [
     float, np.float16, np.float32, np.float64, np.float128,
     np.complex64, np.complex128, np.complex256,
 ]:
-    _REGISTRY.register_write(H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_numeric_scalar)
-    _REGISTRY.register_write(ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_numeric_scalar)
+    _REGISTRY.register_write(H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_hdf5_scalar)
+    _REGISTRY.register_write(ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_scalar)
 # fmt: on
 
-_REGISTRY.register_write(ZarrGroup, str, IOSpec("numeric-scalar", "0.2.0"))(
-    write_numeric_scalar
-)
-_REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("numeric-scalar", "0.2.0"))(
-    write_numeric_scalar
-)
+_REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar)
+_REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_scalar)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))
-def read_string(elem):
+def read_hdf5_string(elem):
     return elem.asstr()[()]
+
+
+@_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
+def read_zarr_string(elem):
+    return str(elem[()])
 
 
 _REGISTRY.register_read(H5Array, IOSpec("bytes", "0.2.0"))(read_scalar)
