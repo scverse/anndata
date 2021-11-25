@@ -19,15 +19,7 @@ from anndata._core import merge
 from anndata.tests import helpers
 from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray, dim_len
-
-import warnings
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
+from anndata.compat import AwkArray, ak
 
 
 @singledispatch

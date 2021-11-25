@@ -8,20 +8,13 @@ from typing import Tuple, List, Dict  # Generic base types
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
-import warnings
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
 
 from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
 from .index import _subset
+from ..compat import AwkArray
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -56,7 +49,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
-            if (not isinstance(val, ak.Array)) and (  # don't validate awk arrays
+            if (not isinstance(val, AwkArray)) and (  # don't validate awk arrays
                 self.parent.shape[axis] != dim_len(val, i)
             ):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
@@ -95,7 +88,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def copy(self):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
-            if isinstance(v, ak.Array):
+            if isinstance(v, AwkArray):
                 d[k] = v
             else:
                 d[k] = v.copy()

@@ -7,15 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-
-import warnings
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
+from ..compat import AwkArray
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
 Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
@@ -148,8 +140,8 @@ def _subset_df(df: pd.DataFrame, subset_idx: Index):
     return df.iloc[subset_idx]
 
 
-@_subset.register(ak.Array)
-def _subset_awkarray(a: ak.Array, subset_idx: Index):
+@_subset.register(AwkArray)
+def _subset_awkarray(a: AwkArray, subset_idx: Index):
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]

@@ -27,6 +27,13 @@ except ImportError:
 
 
 try:
+    from awkward import Array as AwkArray
+    import awkward as ak
+except ImportError:
+    ak = None
+
+
+try:
     from zappy.base import ZappyArray
 except ImportError:
 

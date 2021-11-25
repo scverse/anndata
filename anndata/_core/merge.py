@@ -16,16 +16,9 @@ from scipy import sparse
 from scipy.sparse.base import spmatrix
 
 from .anndata import AnnData
-from ..compat import Literal
+from ..compat import Literal, AwkArray
 from ..utils import asarray, dim_len
-import warnings
 
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
 T = TypeVar("T")
 
 ###################
@@ -129,7 +122,7 @@ def equal_sparse(a, b) -> bool:
         return False
 
 
-@equal.register(ak.Array)
+@equal.register(AwkArray)
 def equal_awkward(a, b) -> bool:
     if dim_len(a, 0) == dim_len(b, 0):
         return ak.all(a == b)
@@ -303,7 +296,7 @@ class Reindexer(object):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, ak.Array):
+        elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
@@ -382,7 +375,7 @@ class Reindexer(object):
 
         return out
 
-    def _apply_to_awkward(self, el: ak.Array, *, axis, fill_value=None):
+    def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
         return el
 
 
@@ -458,7 +451,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             format="csr",
         )
-    elif any(isinstance(a, ak.Array) for a in arrays):
+    elif any(isinstance(a, AwkArray) for a in arrays):
         return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)])
     else:
         return np.concatenate(
@@ -495,7 +488,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
             lambda x, y: x.intersection(y), (df_indices(el) for el in els)
         )
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
-    elif all(isinstance(el, ak.Array) for el in els if not_missing(el)):
+    elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
         reindexers = [gen_reindexer(pd.RangeIndex(0), pd.RangeIndex(0)) for _ in els]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
@@ -514,7 +507,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             else (lambda x: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
-    elif all(isinstance(el, ak.Array) for el in els if not_missing(el)):
+    elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
         reindexers = [gen_reindexer(pd.RangeIndex(0), pd.RangeIndex(0)) for _ in els]
     else:
         # if fill_value is None:

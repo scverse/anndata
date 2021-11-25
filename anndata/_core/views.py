@@ -10,16 +10,7 @@ from scipy import sparse
 
 from .access import ElementRef
 from ..logging import anndata_logger as logger
-from ..compat import ZappyArray
-
-import warnings
-
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
+from ..compat import ZappyArray, AwkArray
 
 
 class _SetItemMixin:
@@ -121,7 +112,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
             df.drop(*args, inplace=True, **kw)
 
 
-class AwkwardArrayView(_ViewMixin, ak.Array):
+class AwkwardArrayView(_ViewMixin, AwkArray):
     def copy(self, order: str = "C") -> np.ndarray:
         # we want a copy of an akward array
         return ak.copy(self)
@@ -164,7 +155,7 @@ def as_view_zappy(z, view_args):
     return z
 
 
-@as_view.register(ak.Array)
+@as_view.register(AwkArray)
 def as_view_awkarray(array, view_args):
     return AwkwardArrayView(array, view_args=view_args)
 

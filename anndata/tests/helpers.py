@@ -17,12 +17,7 @@ from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
 
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
+from ..compat import AwkArray
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -55,7 +50,7 @@ def gen_typed_df(n, index=None):
 
 def gen_awkward(n, index=None):
     rng = np.random.default_rng(42)
-    arr = ak.Array(
+    arr = AwkArray(
         [
             rng.standard_normal(size=(rng.integers(1, 10), rng.integers(1, 10)))
             for _ in range(n)
@@ -90,13 +85,13 @@ def gen_adata(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
-        ak.Array,
+        AwkArray,
     ),
     varm_types: "Collection[Type]" = (
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
-        ak.Array,
+        AwkArray,
     ),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
@@ -358,7 +353,7 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
     )
 
 
-@assert_equal.register(ak.Array)
+@assert_equal.register(AwkArray)
 def assert_equal_awkarray(a, b, exact=False, elem_name=None):
     assert ak.all(a == b)
 
