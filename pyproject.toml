@@ -73,6 +73,7 @@ doc = [
     "sphinx-rtd-theme",
     "sphinx-autodoc-typehints>=1.11.0",
     "sphinx_issues",
+    "nbsphinx",
     "scanpydoc>=0.7.3",
     "typing_extensions; python_version < '3.8'",
 ]

@@ -46,6 +46,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
+    "nbsphinx",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
