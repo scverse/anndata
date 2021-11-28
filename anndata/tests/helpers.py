@@ -17,7 +17,7 @@ from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
 
-from ..compat import AwkArray
+from anndata.compat import AwkArray
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -355,6 +355,8 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AwkArray)
 def assert_equal_awkarray(a, b, exact=False, elem_name=None):
+    import awkward as ak
+
     assert ak.all(a == b)
 
 

@@ -14,7 +14,7 @@ from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
 from .index import _subset
-from ..compat import AwkArray
+from anndata.compat import AwkArray
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
