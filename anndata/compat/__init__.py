@@ -28,9 +28,12 @@ except ImportError:
 
 try:
     from awkward import Array as AwkArray
-    import awkward as ak
 except ImportError:
-    ak = None
+
+    class AwkArray:
+        @staticmethod
+        def __repr__():
+            return "mock awkward.highlevel.Array"
 
 
 try:

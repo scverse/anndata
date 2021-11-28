@@ -124,6 +124,8 @@ def equal_sparse(a, b) -> bool:
 
 @equal.register(AwkArray)
 def equal_awkward(a, b) -> bool:
+    import awkward as ak
+
     if dim_len(a, 0) == dim_len(b, 0):
         return ak.all(a == b)
     else:
@@ -452,6 +454,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             format="csr",
         )
     elif any(isinstance(a, AwkArray) for a in arrays):
+        import awkward as ak
+
         return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)])
     else:
         return np.concatenate(

@@ -20,7 +20,7 @@ from anndata._core import merge
 from anndata.tests import helpers
 from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray, dim_len
-from anndata.compat import AwkArray, ak
+from anndata.compat import AwkArray
 
 
 @singledispatch
