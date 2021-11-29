@@ -9,7 +9,6 @@ from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from .access import ElementRef
-from ..logging import anndata_logger as logger
 from ..compat import ZappyArray, AwkArray
 
 
