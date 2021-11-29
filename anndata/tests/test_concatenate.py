@@ -434,19 +434,19 @@ def test_concatenate_fill_value(fill_val):
     adata1.obsm = {
         k: v
         for k, v in adata1.obsm.items()
-        if not isinstance(v, (pd.DataFrame, ak.Array))
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, (pd.DataFrame, ak.Array))
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, (pd.DataFrame, ak.Array))
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 

@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-from anndata.compat import AwkArray
+from ..compat import AwkArray
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
 Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
