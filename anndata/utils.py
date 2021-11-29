@@ -136,9 +136,11 @@ def make_index_unique(index: pd.Index, join: str = "-"):
 
 def warn_names_duplicates(attr: str):
     names = "Observation" if attr == "obs" else "Variable"
-    logger.info(
+    warnings.warn(
         f"{names} names are not unique. "
-        f"To make them unique, call `.{attr}_names_make_unique`."
+        f"To make them unique, call `.{attr}_names_make_unique`.",
+        UserWarning,
+        stacklevel=2,
     )
 
 

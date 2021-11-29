@@ -2,12 +2,14 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import reduce, singledispatch, wraps
 from typing import Any, KeysView, Optional, Sequence, Tuple
+import warnings
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
+from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
 from ..compat import ZappyArray, AwkArray
 
@@ -23,8 +25,11 @@ class _SetItemMixin:
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
-            logger.warning(
-                f"Trying to set attribute `.{self._view_args.attrname}` of view, copying."
+            warnings.warn(
+                f"Trying to modify attribute `.{self._view_args.attrname}` of view, "
+                "initializing view as actual.",
+                ImplicitModificationWarning,
+                stacklevel=2,
             )
             with self._update() as container:
                 container[idx] = value

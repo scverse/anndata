@@ -23,6 +23,7 @@ from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
 from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
 
+from anndata._warnings import ImplicitModificationWarning
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager, to_memory
@@ -126,21 +127,6 @@ def _(anno, length, index_names):
 @_gen_dataframe.register(pd.Index)
 def _(anno, length, index_names):
     raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
-
-
-class ImplicitModificationWarning(UserWarning):
-    """\
-    Raised whenever initializing an object or assigning a property changes
-    the type of a part of a parameter or the value being assigned.
-
-    Examples
-    ========
-    >>> import pandas as pd
-    >>> adata = AnnData(obs=pd.DataFrame(index=[0, 1, 2]))  # doctest: +SKIP
-    ImplicitModificationWarning: Transforming to str index.
-    """
-
-    pass
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -1225,19 +1211,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Possible solution: https://github.com/theislab/anndata/issues/504
                 if len(c.categories) >= len(c):
                     continue
-                c.reorder_categories(natsorted(c.categories), inplace=True)
+                # Ideally this could be done inplace
+                sorted_categories = natsorted(c.categories)
+                if np.array_equal(c.categories, sorted_categories):
+                    c = c.reorder_categories(sorted_categories)
                 if dont_modify:
                     raise RuntimeError(
                         "Please call `.strings_to_categoricals()` on full "
                         "AnnData, not on this view. You might encounter this"
                         "error message while copying or writing to disk."
                     )
-                if self.is_view:
-                    warnings.warn(
-                        "Initializing view as actual.", ImplicitModificationWarning
-                    )
-                # If `self` is a view, it will be actualized in the next line,
-                # therefore the previous warning
                 df[key] = c
                 logger.info(f"... storing {key!r} as categorical")
 
