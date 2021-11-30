@@ -1309,7 +1309,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         * No annotations are maintained in the returned object.
         * If the data matrix is sparse, the series contained in the returned
-        * :class:`~pandas.DataFrame` are instances of :class:`~pandas.SparseArray`
+        * :class:`~pandas.DataFrame` are instances of :class:`~pandas.arrays.SparseArray`
 
         Params
         ------
