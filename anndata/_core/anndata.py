@@ -1213,7 +1213,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     continue
                 # Ideally this could be done inplace
                 sorted_categories = natsorted(c.categories)
-                if np.array_equal(c.categories, sorted_categories):
+                if not np.array_equal(c.categories, sorted_categories):
                     c = c.reorder_categories(sorted_categories)
                 if dont_modify:
                     raise RuntimeError(
