@@ -23,8 +23,8 @@ needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
-author = "AnnData development team"
-copyright = f"{datetime.now():%Y}, the AnnData development team."
+author = f"{project} developers"
+copyright = f"{datetime.now():%Y}, {author}"
 version = anndata.__version__.replace(".dirty", "")
 release = version
 
@@ -46,6 +46,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
+    "nbsphinx",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
