@@ -512,6 +512,15 @@ def test_read_excel():
     assert adata.X.tolist() == X_list
 
 
+def test_read_umi_tools():
+    adata = ad.read_umi_tools(HERE / "data/umi_tools.tsv.gz")
+    assert adata.obs_names.name == "cell"
+    assert adata.var_names.name == "gene"
+    assert adata.shape == (2, 13)
+    assert "ENSG00000070404.9" in adata.var_names
+    assert set(adata.obs_names) == {"ACAAGG", "TTCACG"}
+
+
 def test_write_categorical(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
