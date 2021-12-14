@@ -93,6 +93,25 @@ def read_basic(elem):
         return h5ad.read_dataset(elem)  # TODO: Handle legacy
 
 
+@_REGISTRY.register_read(ZarrGroup, IOSpec("", ""))
+@_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
+def read_basic_zarr(elem):
+    from anndata._io import zarr
+
+    warn(
+        f"Element '{elem.name}' was written without encoding metadata.",
+        OldFormatWarning,
+    )
+
+    if isinstance(elem, Mapping):
+        # Backwards compat sparse arrays
+        if "h5sparse_format" in elem.attrs:
+            return SparseDataset(elem).to_memory()
+        return {k: read_elem(v) for k, v in elem.items()}
+    elif isinstance(elem, ZarrArray):
+        return zarr.read_dataset(elem)  # TODO: Handle legacy
+
+
 # @_REGISTRY.register_read_partial(IOSpec("", ""))
 # def read_basic_partial(elem, *, items=None, indices=(slice(None), slice(None))):
 #     if isinstance(elem, Mapping):
@@ -558,10 +577,17 @@ def read_dataframe_0_1_0(elem):
     return df
 
 
-def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
+def read_series(dataset: h5py.Dataset) -> Union[np.ndarray, pd.Categorical]:
     # For reading older dataframes
     if "categories" in dataset.attrs:
-        categories_dset = dataset.parent[_read_attr(dataset.attrs, "categories")]
+        if isinstance(dataset, ZarrArray):
+            import zarr
+
+            parent_name = dataset.name.rstrip(dataset.basename)
+            parent = zarr.open(dataset.store)[parent_name]
+        else:
+            parent = dataset.parent
+        categories_dset = parent[_read_attr(dataset.attrs, "categories")]
         categories = categories_dset[...]
         ordered = bool(_read_attr(categories_dset.attrs, "ordered", False))
         return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
