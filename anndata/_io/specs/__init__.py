@@ -242,7 +242,7 @@ def read_anndata(elem):
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
 def write_raw(f, k, raw, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group("raw")
+    g = f.create_group(k)
     write_elem(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
     write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
     write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)

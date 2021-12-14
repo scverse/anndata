@@ -73,3 +73,15 @@ def test_io_spec(store, value, encoding_type):
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
+
+
+def test_io_spec_raw(store):
+    adata = gen_adata((3, 2))
+    adata.raw = adata
+
+    write_elem(store, "adata", adata)
+
+    assert "raw" == _read_attr(store["adata/raw"].attrs, "encoding-type")
+
+    from_disk = read_elem(store["adata"])
+    assert_equal(from_disk.raw, adata.raw)
