@@ -359,6 +359,17 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
         report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(pd.api.extensions.ExtensionArray)
+def assert_equal_extension_array(a, b, exact=False, elem_name=None):
+    report_name(pd.testing.assert_extension_array_equal)(
+        a,
+        b,
+        check_dtype=exact,
+        check_exact=exact,
+        _elem_name=elem_name,
+    )
+
+
 @assert_equal.register(Raw)
 def assert_equal_raw(a, b, exact=False, elem_name=None):
     def assert_is_not_none(x):  # can't put an assert in a lambda
