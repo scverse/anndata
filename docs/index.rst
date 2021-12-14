@@ -1,7 +1,7 @@
 .. include:: ../README.rst
    :end-line: 22
 
-.. image:: _static/img/stacked_violin_dotplot_matrixplot.png
+.. image:: _static/img/anndata_schema.svg
    :width: 550px
 
 :class:`~anndata.AnnData` provides a scalable way of keeping track
