@@ -114,19 +114,24 @@ def check_key(key):
 # -------------------------------------------------------------------------------
 
 
-@singledispatch
-def write_attribute(*args, **kwargs):
-    raise NotImplementedError("Unrecognized argument types for `write_attribute`.")
-
-
-@singledispatch
 def read_attribute(*args, **kwargs):
-    raise NotImplementedError("Unrecognized argument types for `read_attribute`.")
+    from .specs import read_elem
+
+    warn(
+        "This internal function has been deprecated, please use read_elem instead",
+        DeprecationWarning,
+    )
+    return read_elem(*args, **kwargs)
 
 
-@read_attribute.register(type(None))
-def read_attribute_none(value) -> None:
-    return None
+def write_attribute(*args, **kwargs):
+    from .specs import write_elem
+
+    warn(
+        "This internal function has been deprecated, please use write_elem instead",
+        DeprecationWarning,
+    )
+    return write_elem(*args, **kwargs)
 
 
 # -------------------------------------------------------------------------------
