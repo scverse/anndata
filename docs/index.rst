@@ -1,8 +1,8 @@
 .. include:: ../README.rst
    :end-line: 22
 
-.. figure:: https://falexwolf.de/img/scanpy/anndata.svg
-   :width: 350px
+.. image:: _static/img/stacked_violin_dotplot_matrixplot.png
+   :width: 550px
 
 :class:`~anndata.AnnData` provides a scalable way of keeping track
 of data and learned annotations.
