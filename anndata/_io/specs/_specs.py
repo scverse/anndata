@@ -138,7 +138,18 @@ def write_elem(
     modifiers=frozenset(),
     **kwargs,
 ):
-    """Write an element to an on disk store."""
+    """
+    Write an element to a disk store.
+
+    Params
+    ------
+    f
+        The store to write to.
+    k
+        The key to write for this value.
+    elem
+        The element to write as k to f.
+    """
     dest_type = type(f)
     if elem is None:
         return
