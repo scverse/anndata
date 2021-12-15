@@ -1,12 +1,9 @@
 .. include:: ../README.rst
-   :end-line: 22
+   :end-line: 24
 
 .. image:: _static/img/anndata_schema.svg
    :align: right
    :width: 350px
-
-:class:`~anndata.AnnData` provides a scalable way of keeping track
-of data and learned annotations.
 
 * Discuss development on `GitHub <https://github.com/theislab/anndata>`_.
 * Install via `pip install anndata` or `conda install anndata -c conda-forge`.
