@@ -138,7 +138,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     variables :attr:`var` (:attr:`varm`, :attr:`varp`),
     and unstructured annotations :attr:`uns`.
 
-    .. figure:: _static/img/anndata_schema.svg
+    .. figure:: ../_static/img/anndata_schema.svg
        :width: 260px
 
     An :class:`~anndata.AnnData` object `adata` can be sliced like a
