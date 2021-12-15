@@ -138,8 +138,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     variables :attr:`var` (:attr:`varm`, :attr:`varp`),
     and unstructured annotations :attr:`uns`.
 
-    .. figure:: https://falexwolf.de/img/scanpy/anndata.svg
-       :width: 350px
+    .. figure:: _static/img/anndata_schema.svg
+       :width: 260px
 
     An :class:`~anndata.AnnData` object `adata` can be sliced like a
     :class:`~pandas.DataFrame`,
@@ -147,9 +147,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     :class:`~anndata.AnnData`’s basic structure is similar to R’s ExpressionSet
     [Huber15]_. If setting an `.h5ad`-formatted HDF5 backing file `.filename`,
     data remains on the disk but is automatically loaded into memory if needed.
-    See this `blog post`_ for more details.
-
-    .. _blog post: http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/
 
     Parameters
     ----------
