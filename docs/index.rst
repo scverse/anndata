@@ -1,5 +1,5 @@
 .. include:: ../README.rst
-   :end-line: 24
+   :end-line: 28
 
 .. image:: _static/img/anndata_schema.svg
    :align: right
