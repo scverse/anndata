@@ -2,7 +2,8 @@
    :end-line: 22
 
 .. image:: _static/img/anndata_schema.svg
-   :width: 550px
+   :align: right
+   :width: 350px
 
 :class:`~anndata.AnnData` provides a scalable way of keeping track
 of data and learned annotations.
