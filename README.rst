@@ -14,8 +14,9 @@
    :target: https://anndata.readthedocs.io
 .. |Build Status| image:: https://dev.azure.com/theislab/anndata/_apis/build/status/theislab.anndata?branchName=master
    :target: https://dev.azure.com/theislab/anndata/_build
-.. |Coverage| image:: https://api.codacy.com/project/badge/Coverage/b92ae35b691141ceb5f2ee74beaf39d3
-   :target: https://www.codacy.com/manual/theislab/anndata
+.. |Coverage| image:: https://codecov.io/gh/theislab/anndata/branch/master/graph/badge.svg?token=IN1mJN1Wi8
+   :target: https://codecov.io/gh/theislab/anndata
+
 
 anndata - Annotated data
 ========================
