@@ -20,7 +20,7 @@
 anndata - Annotated data
 ========================
 
-anndata is a Python package for handling annotated data matrices in memory and on disk. It is positioned between pandas and xarray by providing structure that organizes data matrix annotations. anndata offers a broad range of computationally efficient features including, among others, sparse data support, lazy operations, and a PyTorch interface.
+anndata is a Python package for handling annotated data matrices in memory and on disk, positioned between pandas and xarray. anndata offers a broad range of computationally efficient features including, among others, sparse data support, lazy operations, and a PyTorch interface.
 
 * Read the `documentation <https://anndata.readthedocs.io>`_.
 * Install via ``pip install anndata`` or ``conda install anndata -c conda-forge``.
