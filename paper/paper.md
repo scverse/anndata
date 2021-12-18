@@ -1,5 +1,12 @@
 ---
 title: "anndata: Annotated data"
+tags:
+  - Python
+  - data structures
+  - data science
+  - machine learning
+  - computational biology
+  - bioinformatics
 authors:
   - name: Isaac Virshup
     orcid: 0000-0002-1710-8945
