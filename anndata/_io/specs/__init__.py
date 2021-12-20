@@ -588,11 +588,13 @@ def read_series(dataset: h5py.Dataset) -> Union[np.ndarray, pd.Categorical]:
         else:
             parent = dataset.parent
         categories_dset = parent[_read_attr(dataset.attrs, "categories")]
-        categories = categories_dset[...]
+        categories = read_elem(categories_dset)
         ordered = bool(_read_attr(categories_dset.attrs, "ordered", False))
-        return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
+        return pd.Categorical.from_codes(
+            read_elem(dataset), categories, ordered=ordered
+        )
     else:
-        return dataset[...]
+        return read_elem(dataset)
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("dataframe", "0.1.0"))
