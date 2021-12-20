@@ -1,6 +1,5 @@
 import re
-import collections.abc as cabc
-from functools import _find_impl, partial
+from functools import partial
 from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
@@ -10,13 +9,11 @@ from typing import Collection, Sequence, Mapping
 import h5py
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
 from scipy import sparse
 
 from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
-from .._core.raw import Raw
 from ..compat import (
     _read_attr,
     _from_fixed_length_strings,
