@@ -247,18 +247,3 @@ def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "v
     if "varm" in attrs and "raw.varm" in f:
         raw["varm"] = read_attr(f["raw.varm"])
     return raw
-
-
-class EncodingVersions(Enum):
-    raw = "0.1.0"
-    csr_matrix = csc_matrix = "0.1.0"
-    dataframe = "0.1.0"
-
-    def check(self, key: str, encoded_version: str):
-        if version.parse(encoded_version) > version.parse(self.value):
-            warn(
-                f"The supported version for decoding {self.name} is {self.value}, "
-                f"but a {self.name} with version {encoded_version} "
-                f"was encountered at {key}.",
-                FutureWarning,
-            )

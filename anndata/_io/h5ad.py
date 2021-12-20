@@ -26,12 +26,10 @@ from ..compat import (
 )
 from .utils import (
     H5PY_V3,
-    check_key,
     report_read_key_on_error,
     report_write_key_on_error,
     idx_chunks_along_axis,
     _read_legacy_raw,
-    EncodingVersions,
 )
 from .specs import read_elem, write_elem, _REGISTRY, get_spec
 
