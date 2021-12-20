@@ -45,7 +45,11 @@ def write_zarr(
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
+    # TODO: Use spec writing system for this
     f = zarr.open(store, mode="w")
+    f = f["/"]
+    f.attrs.setdefault("encoding-type", "anndata")
+    f.attrs.setdefault("encoding-version", "0.1.0")
     if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
         write_elem(
             f, "X", adata.X, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
@@ -253,17 +257,21 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         store = str(store)
 
     f = zarr.open(store, mode="r")
+
+    if "encoding-type" in f.attrs:
+        return read_elem(f["/"])
+
     d = {}
     for k in f.keys():
         # Backwards compat
         if k.startswith("raw."):
             continue
         if k in {"obs", "var"}:
-            d[k] = read_elem(f[k])
+            d[k] = read_dataframe(f[k])
         else:  # Base case
             d[k] = read_elem(f[k])
 
-    d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_attribute)
+    d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_elem)
 
     _clean_uns(d)
 

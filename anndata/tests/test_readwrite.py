@@ -700,6 +700,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
 
 # Checking if we can read legacy zarr files
 # TODO: Check how I should add this file to the repo
+@pytest.mark.filterwarnings("ignore::anndata.OldFormatWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.skipif(
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
