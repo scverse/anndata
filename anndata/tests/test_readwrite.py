@@ -727,8 +727,7 @@ def test_backwards_compat_zarr():
 
 
 # TODO: use diskfmt fixture once zarr backend implemented
-def test_adata_in_uns(tmp_path):
-    diskfmt = "h5ad"
+def test_adata_in_uns(tmp_path, diskfmt):
     pth = tmp_path / f"adatas_in_uns.{diskfmt}"
     read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
     write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
