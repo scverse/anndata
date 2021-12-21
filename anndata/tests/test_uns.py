@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from anndata import AnnData
-from anndata.tests.helpers import assert_equal
+from anndata.testing import assert_equal
 
 
 def test_uns_color_subset():

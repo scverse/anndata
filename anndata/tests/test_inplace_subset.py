@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from anndata.tests.helpers import assert_equal, gen_adata, subset_func
+from anndata.testing import assert_equal
+from anndata.tests.helpers import gen_adata, subset_func
 from anndata.utils import asarray
 
 

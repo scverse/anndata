@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 import joblib
 import pytest
@@ -7,7 +6,8 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal, subset_func
+from anndata.testing import assert_equal
+from anndata.tests.helpers import gen_adata, subset_func
 from anndata.utils import asarray
 
 subset_func2 = subset_func

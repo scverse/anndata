@@ -10,13 +10,8 @@ import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata.utils import asarray
 
-from anndata.tests.helpers import (
-    gen_adata,
-    subset_func,
-    slice_subset,
-    single_subset,
-    assert_equal,
-)
+from anndata.testing import assert_equal
+from anndata.tests.helpers import gen_adata, subset_func, slice_subset, single_subset
 
 # ------------------------------------------------------------------------------
 # Some test data
