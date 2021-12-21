@@ -36,7 +36,6 @@ def write_zarr(
         adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
     f = zarr.open(store, mode="w")
-    f = f["/"]
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
     if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
@@ -71,7 +70,7 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     f = zarr.open(store, mode="r")
 
     if "encoding-type" in f.attrs:
-        return read_elem(f["/"])
+        return read_elem(f[""])
 
     d = {}
     for k in f.keys():

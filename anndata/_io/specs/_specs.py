@@ -154,7 +154,9 @@ def write_elem(
     if elem is None:
         return
     t = type(elem)
-    if k in f:
+    if k == "/":
+        f.clear()
+    elif k in f:
         del f[k]
     if (
         hasattr(elem, "dtype")

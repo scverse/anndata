@@ -222,7 +222,7 @@ def write(adata, pth, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
 def write_anndata(f, k, adata, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
     write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
     write_elem(g, "var", adata.var, dataset_kwargs=dataset_kwargs)
