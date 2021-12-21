@@ -109,9 +109,6 @@ addopts = "--doctest-modules"
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]
 # For some reason this effects how logging is shown when tests are run
-# filterwarnings = [
-#     "ignore::anndata.OldFormatWarning",
-# ]
 xfail_strict = true
 
 [tool.black]
