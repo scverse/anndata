@@ -82,6 +82,7 @@ def read_basic(elem):
     warn(
         f"Element '{elem.name}' was written without encoding metadata.",
         OldFormatWarning,
+        stacklevel=3,
     )
 
     if isinstance(elem, Mapping):
@@ -101,6 +102,7 @@ def read_basic_zarr(elem):
     warn(
         f"Element '{elem.name}' was written without encoding metadata.",
         OldFormatWarning,
+        stacklevel=3,
     )
 
     if isinstance(elem, Mapping):
