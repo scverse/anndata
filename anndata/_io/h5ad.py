@@ -28,7 +28,7 @@ from .utils import (
     idx_chunks_along_axis,
     _read_legacy_raw,
 )
-from .specs import read_elem, write_elem, _REGISTRY, get_spec
+from .specs import read_elem, write_elem, get_spec
 
 H5Group = Union[h5py.Group, h5py.File]
 H5Dataset = Union[h5py.Dataset]
@@ -299,6 +299,8 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
 
 def read_dataframe(group) -> pd.DataFrame:
     """Backwards compat function"""
+    from .specs import _REGISTRY
+
     # TODO: warn
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)

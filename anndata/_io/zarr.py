@@ -17,7 +17,7 @@ from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
 )
-from .specs import read_elem, write_elem
+from .specs import read_elem, write_elem, get_spec
 
 
 T = TypeVar("T")
@@ -72,9 +72,9 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     if "encoding-type" in f.attrs:
         return read_elem(f[""])
 
+    # Backwards compat
     d = {}
     for k in f.keys():
-        # Backwards compat
         if k.startswith("raw."):
             continue
         if k in {"obs", "var"}:
@@ -119,8 +119,14 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 
 @report_read_key_on_error
 def read_dataframe(group) -> pd.DataFrame:
+    from .specs import _REGISTRY
+
+    # Fast paths
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)
+    elif _REGISTRY.has_reader(type(group), get_spec(group)):
+        return read_elem(group)
+
     columns = list(group.attrs["column-order"])
     idx_key = group.attrs["_index"]
     df = pd.DataFrame(
