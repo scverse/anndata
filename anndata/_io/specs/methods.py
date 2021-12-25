@@ -635,6 +635,52 @@ def read_categorical(elem, *, items=None, indices=(slice(None),)):
     )
 
 
+####################
+# Pandas nullables #
+####################
+
+
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
+)
+def write_nullable_integer(f, k, v, dataset_kwargs=MappingProxyType({})):
+    g = f.create_group(k)
+    if v._mask is not None:
+        write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
+    write_elem(g, "values", v._data, dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
+def read_nullable_integer(elem):
+    if "mask" in elem:
+        return pd.arrays.IntegerArray(
+            read_elem(elem["values"]), mask=read_elem(elem["mask"])
+        )
+    else:
+        return pd.array(read_elem(elem["values"]))
+
+
+@_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))
+def read_nullable_boolean(elem):
+    if "mask" in elem:
+        return pd.arrays.BooleanArray(
+            read_elem(elem["values"]), mask=read_elem(elem["mask"])
+        )
+    else:
+        return pd.array(read_elem(elem["values"]))
+
+
 ###########
 # Scalars #
 ###########
