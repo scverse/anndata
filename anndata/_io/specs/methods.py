@@ -210,17 +210,6 @@ def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
     return result
 
 
-def read(pth, *, modifiers=MappingProxyType({})):
-    with h5py.File(pth, "r") as f:
-        results = {k: read_elem(v) for k, v in f.items()}
-    return ad.AnnData(**results)
-
-
-def write(adata, pth, dataset_kwargs=MappingProxyType({})):
-    with h5py.File(pth, "w") as f:
-        write_elem(f, "/", adata, dataset_kwargs=dataset_kwargs)
-
-
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
 def write_anndata(f, k, adata, dataset_kwargs=MappingProxyType({})):
