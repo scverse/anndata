@@ -3,6 +3,8 @@ This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
+from pathlib import Path
+
 import h5py
 import numpy as np
 import pytest
@@ -201,3 +203,22 @@ def test_deprecated_neighbors_set_other(adata_neighbors):
         }
 
         assert not rec
+
+
+def test_deprecated_write_attribute(tmp_path):
+    pth = tmp_path / "file.h5"
+    A = np.random.randn(20, 10)
+    from anndata._io.utils import read_attribute, write_attribute
+    from anndata._io.specs import read_elem
+
+    with h5py.File(pth, "w") as f:
+        with pytest.warns(DeprecationWarning, match="write_elem"):
+            write_attribute(f, "written_attribute", A)
+
+    with h5py.File(pth, "r") as f:
+        elem_A = read_elem(f["written_attribute"])
+        with pytest.warns(DeprecationWarning, match="read_elem"):
+            attribute_A = read_attribute(f["written_attribute"])
+
+        assert_equal(elem_A, attribute_A)
+        assert_equal(A, attribute_A)

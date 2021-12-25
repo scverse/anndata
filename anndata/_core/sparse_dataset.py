@@ -20,7 +20,7 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from ..compat import _read_hdf5_attribute
+from ..compat import _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -240,12 +240,10 @@ class SparseDataset:
     @property
     def format_str(self) -> str:
         if "h5sparse_format" in self.group.attrs:
-            return _read_hdf5_attribute(self.group.attrs, "h5sparse_format")
+            return _read_attr(self.group.attrs, "h5sparse_format")
         else:
             # Should this be an extra field?
-            return _read_hdf5_attribute(self.group.attrs, "encoding-type").replace(
-                "_matrix", ""
-            )
+            return _read_attr(self.group.attrs, "encoding-type").replace("_matrix", "")
 
     @property
     def h5py_group(self) -> h5py.Group:
@@ -283,7 +281,13 @@ class SparseDataset:
     def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
         row, col = self._normalize_index(index)
         mtx = self.to_backed()
-        return mtx[row, col]
+        sub = mtx[row, col]
+        # If indexing is array x array it returns a backed_sparse_matrix
+        # Not sure what the performance is on that operation
+        if isinstance(sub, BackedSparseMatrix):
+            return get_memory_class(self.format_str)(sub)
+        else:
+            return sub
 
     def __setitem__(self, index: Union[Index, Tuple[()]], value):
         row, col = self._normalize_index(index)
