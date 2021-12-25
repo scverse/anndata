@@ -213,12 +213,15 @@ def report_write_key_on_error(func):
         try:
             return func(elem, key, val, *args, **kwargs)
         except Exception as e:
-            parent = _get_parent(elem)
-            raise type(e)(
-                f"{e}\n\n"
-                f"Above error raised while writing key {key!r} of {type(elem)}"
-                f" from {parent}."
-            ) from e
+            if "Above error raised while writing key" in format(e):
+                raise
+            else:
+                parent = _get_parent(elem)
+                raise type(e)(
+                    f"{e}\n\n"
+                    f"Above error raised while writing key {key!r} of {type(elem)} "
+                    f"to {parent}"
+                ) from e
 
     return func_wrapper
 

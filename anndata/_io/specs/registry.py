@@ -59,6 +59,12 @@ class IORegistry(object):
         if dest_type is h5py.File:
             dest_type = h5py.Group
         modifiers = frozenset(modifiers)
+
+        if (dest_type, typ, modifiers) not in self.write:
+            raise TypeError(
+                f"No method has been defined for writing {typ} elements to {dest_type}"
+            )
+
         return self.write[(dest_type, typ, modifiers)]
 
     def has_writer(self, dest_type, typ, modifiers):
