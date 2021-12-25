@@ -102,6 +102,11 @@ def equal_array(a, b) -> bool:
     return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
 
 
+@equal.register(pd.Series)
+def equal_series(a, b) -> bool:
+    return a.equals(b)
+
+
 @equal.register(sparse.spmatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
