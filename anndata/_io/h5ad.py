@@ -149,10 +149,14 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
     attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
     df_attributes = ["obs", "var"]
 
+    if "encoding-type" in f.attrs:
+        attributes.extend(df_attributes)
+    else:
+        for k in df_attributes:
+            if k in f:  # Backwards compat
+                d[k] = read_dataframe(f[k])
+
     d.update({k: read_elem(f[k]) for k in attributes if k in f})
-    for k in df_attributes:
-        if k in f:  # Backwards compat
-            d[k] = read_dataframe(f[k])
 
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
