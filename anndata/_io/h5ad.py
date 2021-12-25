@@ -15,7 +15,6 @@ from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
 from ..compat import (
-    _read_attr,
     _from_fixed_length_strings,
     _decode_structured_array,
     _clean_uns,
@@ -28,22 +27,12 @@ from .utils import (
     idx_chunks_along_axis,
     _read_legacy_raw,
 )
-from .specs import read_elem, write_elem, get_spec
+from .specs import read_elem, write_elem
+from anndata._warnings import OldFormatWarning
 
 H5Group = Union[h5py.Group, h5py.File]
-H5Dataset = Union[h5py.Dataset]
+H5Dataset = h5py.Dataset
 T = TypeVar("T")
-
-
-def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
-    """This corrects compound dtypes to work with hdf5 files."""
-    new_dtype = []
-    for dt_name, (dt_type, _) in value.dtype.fields.items():
-        if dt_type.kind in ("U", "O"):
-            new_dtype.append((dt_name, h5py.special_dtype(vlen=str)))
-        else:
-            new_dtype.append((dt_name, dt_type))
-    return value.astype(new_dtype)
 
 
 def write_h5ad(
@@ -289,6 +278,11 @@ def _read_raw(
 @report_read_key_on_error
 def read_dataframe_legacy(dataset) -> pd.DataFrame:
     """Read pre-anndata 0.7 dataframes."""
+    warn(
+        f"'{dataset.name}' was written with a very old version of AnnData. "
+        "Consider rewriting it.",
+        OldFormatWarning,
+    )
     if H5PY_V3:
         df = pd.DataFrame(
             _decode_structured_array(
@@ -303,50 +297,10 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
 
 def read_dataframe(group) -> pd.DataFrame:
     """Backwards compat function"""
-    from .specs import _REGISTRY
-
-    # TODO: warn
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
-    elif _REGISTRY.has_reader(h5py.Group, get_spec(group)):
+    else:
         return read_elem(group)
-    else:
-        # backwards compat
-        columns = list(_read_attr(group.attrs, "column-order"))
-        idx_key = _read_attr(group.attrs, "_index")
-        df = pd.DataFrame(
-            {k: read_series(group[k]) for k in columns},
-            index=read_series(group[idx_key]),
-            columns=list(columns),
-        )
-        if idx_key != "_index":
-            df.index.name = idx_key
-        return df
-
-
-# TODO: Move this to backwards compat only
-@report_read_key_on_error
-def read_series(dataset) -> Union[np.ndarray, pd.Categorical]:
-    if "categories" in dataset.attrs:
-        categories = _read_attr(dataset.attrs, "categories")
-        if isinstance(categories, h5py.Reference):
-            categories_dset = dataset.parent[categories]
-            categories = read_dataset(categories_dset)
-            ordered = bool(categories_dset.attrs.get("ordered", False))
-        else:
-            # TODO: remove this code at some point post 0.7
-            # TODO: Add tests for this
-            warn(
-                f"Your file {str(dataset.file.name)!r} has invalid categorical "
-                "encodings due to being written from a development version of "
-                "AnnData. Rewrite the file ensure you can read it in the future.",
-                FutureWarning,
-            )
-        return pd.Categorical.from_codes(
-            read_dataset(dataset), categories, ordered=ordered
-        )
-    else:
-        return read_dataset(dataset)
 
 
 @report_read_key_on_error

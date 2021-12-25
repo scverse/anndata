@@ -17,7 +17,8 @@ from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
 )
-from .specs import read_elem, write_elem, get_spec
+from .specs import read_elem, write_elem
+from anndata._warnings import OldFormatWarning
 
 
 T = TypeVar("T")
@@ -112,6 +113,11 @@ def read_dataset(dataset: zarr.Array):
 def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
+    warn(
+        f"'{dataset.name}' was written with a very old version of AnnData. "
+        "Consider rewriting it.",
+        OldFormatWarning,
+    )
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df
@@ -124,41 +130,5 @@ def read_dataframe(group) -> pd.DataFrame:
     # Fast paths
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)
-    elif _REGISTRY.has_reader(type(group), get_spec(group)):
-        return read_elem(group)
-
-    columns = list(group.attrs["column-order"])
-    idx_key = group.attrs["_index"]
-    df = pd.DataFrame(
-        {k: read_series(group[k]) for k in columns},
-        index=read_series(group[idx_key]),
-        columns=list(columns),
-    )
-    if idx_key != "_index":
-        df.index.name = idx_key
-    return df
-
-
-@report_read_key_on_error
-def read_series(dataset: zarr.Array) -> Union[np.ndarray, pd.Categorical]:
-    if "categories" in dataset.attrs:
-        categories = dataset.attrs["categories"]
-        if isinstance(categories, str):
-            categories_key = categories
-            parent_name = dataset.name.rstrip(dataset.basename)
-            parent = zarr.open(dataset.store)[parent_name]
-            categories_dset = parent[categories_key]
-            categories = categories_dset[...]
-            ordered = categories_dset.attrs.get("ordered", False)
-        else:
-            # TODO: remove this code at some point post 0.7
-            # TODO: Add tests for this
-            warn(
-                f"Your file {str(dataset.file.name)!r} has invalid categorical "
-                "encodings due to being written from a development version of "
-                "AnnData. Rewrite the file ensure you can read it in the future.",
-                FutureWarning,
-            )
-        return pd.Categorical.from_codes(dataset[...], categories, ordered=ordered)
     else:
-        return dataset[...]
+        return read_elem(group)
