@@ -1976,6 +1976,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if start < n:
             yield (self.X[start:n], start, n)
 
+    @utils.deprecated("chunk_obs")
     def chunk_X(
         self,
         select: Union[int, Sequence[int], np.ndarray] = 1000,
@@ -1993,7 +1994,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 A random chunk with `select` rows will be returned.
             :term:`sequence` (e.g. a list, tuple or numpy array) of :class:`int`
                 A chunk with these indices will be returned.
-
         replace
             If `select` is an integer then `True` means random sampling of
             indices with replacement, `False` without replacement.
@@ -2018,6 +2018,72 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         selection = selection.toarray() if issparse(selection) else selection
         return selection if reverse is None else selection[reverse]
+
+    def chunk_obs(
+        self,
+        select: Union[int, Sequence[int], np.ndarray] = 1000,
+        obs: Optional[str] = None,
+        obsm: Optional[str] = None,
+        layer: Optional[str] = None,
+        replace: bool = True,
+    ):
+        """\
+        Return a chunk of the data matrix :attr:`X`, a key from :attr:`obsm` or
+        a key from :attr:`layers` with random or specified indices.
+
+        If both obsm and layer are not specified, returns the selection
+        from the data matrix :attr:`X`.
+
+        Parameters
+        ----------
+        select
+            Depending on the type:
+
+            :class:`int`
+                A random chunk with `select` rows will be returned.
+            :term:`sequence` (e.g. a list, tuple or numpy array) of :class:`int`
+                A chunk with these indices will be returned.
+        obs
+            If specified, returns a chunk of the annotation from :attr:`obs`.
+        obsm
+            If specified, returns a chunk of the specified key from :attr:`obsm`.
+        layer
+            If specified, returns a chunk of the specified key from :attr:`layers`.
+        replace
+            If `select` is an integer then `True` means random sampling of
+            indices with replacement, `False` without replacement.
+        """
+        if obsm is not None and layer is not None:
+            raise ValueError("You can't specify both obsm and layer")
+
+        if isinstance(select, int):
+            select = select if select < self.n_obs else self.n_obs
+            choice = np.random.choice(self.n_obs, select, replace)
+        elif isinstance(select, (np.ndarray, cabc.Sequence)):
+            choice = np.asarray(select)
+        else:
+            raise ValueError("select should be int or array")
+
+        if obsm is not None:
+            selection = self.obsm[obsm][choice]
+        elif layer is not None:
+            selection = self.layers[layer][choice]
+        else:
+            reverse = None
+            if self.isbacked:
+                # h5py can only slice with a sorted list of unique index values
+                # so random batch with indices [2, 2, 5, 3, 8, 10, 8] will fail
+                # this fixes the problem
+                indices, reverse = np.unique(choice, return_inverse=True)
+                selection = self.X[indices.tolist()]
+            else:
+                selection = self.X[choice]
+            selection = selection.toarray() if issparse(selection) else selection
+            selection = selection if reverse is None else selection[reverse]
+
+        if obs is not None:
+            selection = (selection, self.obs[obs][choice])
+        return selection
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat
