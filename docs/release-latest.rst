@@ -9,9 +9,10 @@ On `master` :small:`the future`
 
 .. rubric:: Features
 
-- Compatability with `h5ad` files written from Julia :pr:`569` :smaller:`I Kats`
+- Compatibility with `h5ad` files written from Julia :pr:`569` :smaller:`I Kats`
 - Many logging messages that should have been warnings are now warnings :pr:`650` :smaller:`I Virshup`
-- Signifigantly more efficient :func:`anndata.read_umi_tools` :pr:`661` :smaller:`I Virshup`
+- Significantly more efficient :func:`anndata.read_umi_tools` :pr:`661` :smaller:`I Virshup`
+- Fixed deepcopy of a copy of a view retaining sparse matrix view mixin type :pr:`670` :smaller:`M Klein`
 
 .. rubric:: Documentation
 
