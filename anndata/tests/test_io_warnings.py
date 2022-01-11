@@ -1,4 +1,5 @@
 from importlib.util import find_spec
+from pathlib import Path
 import warnings
 
 import pytest
@@ -12,7 +13,8 @@ def test_old_format_warning_thrown():
     import scanpy as sc
 
     with pytest.warns(ad._warnings.OldFormatWarning):
-        sc.datasets.pbmc68k_reduced()
+        pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
+        ad.read_h5ad(pth)
 
 
 def test_old_format_warning_not_thrown(tmp_path):
