@@ -13,7 +13,7 @@ On `master` :small:`the future`
 - Many logging messages that should have been warnings are now warnings :pr:`650` :smaller:`I Virshup`
 - Significantly more efficient :func:`anndata.read_umi_tools` :pr:`661` :smaller:`I Virshup`
 - Fixed deepcopy of a copy of a view retaining sparse matrix view mixin type :pr:`670` :smaller:`M Klein`
-- In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`667` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
+- In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`677` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
 
 .. rubric:: Documentation
 
