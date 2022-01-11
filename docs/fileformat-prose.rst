@@ -180,3 +180,25 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 
 >>> dict(categorical["categories"].attrs)
 {'encoding-type': 'string-array', 'encoding-version': '0.2.0'}
+
+Nullable integers and booleans
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We support IO with Pandas nullable integer and boolean arrays.
+We represent these on disk similar to `numpy` masked arrays, `julia` nullable arrays, or `arrow` validity bitmaps (see :issue:`504` for more discussion).
+That is, we store a indicator array (or mask) of null values alongside the array of all values.
+
+>>> h5_file = h5py.File("anndata_format.h5", "a")
+>>> int_array = pd.array([1, None, 3, 4])
+>>> int_array
+<IntegerArray>
+[1, <NA>, 3, 4]
+Length: 4, dtype: Int64
+>>> write_elem(h5_file, "nullable_integer", int_array)
+
+>>> h5_file["nullable_integer"].visititems(print)
+mask <HDF5 dataset "mask": shape (4,), type "|b1">
+values <HDF5 dataset "values": shape (4,), type "<i8">
+
+>>> dict(h5_file["nullable_integer"].attrs)
+{'encoding-type': 'nullable-integer', 'encoding-version': '0.1.0'}
