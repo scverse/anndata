@@ -1146,6 +1146,21 @@ def test_concatenate_size_0_dim():
     b.concatenate([a]).shape == (10, 0)
 
 
+def test_concat_null_X():
+    adatas_orig = {k: gen_adata((20, 10)) for k in list("abc")}
+    adatas_no_X = {}
+    for k, v in adatas_orig.items():
+        v = v.copy()
+        del v.X
+        adatas_no_X[k] = v
+
+    orig = concat(adatas_orig, index_unique="-")
+    no_X = concat(adatas_no_X, index_unique="-")
+    del orig.X
+
+    assert_equal(no_X, orig)
+
+
 # Leaving out for now. See definition of these values for explanation
 # def test_concatenate_uns_types():
 #     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE

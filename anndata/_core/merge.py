@@ -602,6 +602,29 @@ def dim_size(adata, *, axis=None, dim=None) -> int:
     return adata.shape[ax]
 
 
+# TODO: Resolve https://github.com/theislab/anndata/issues/678 and remove this function
+def concat_Xs(adatas, reindexers, axis, fill_value):
+    """
+    Shimy until support for some missing X's is implemented.
+
+    Basically just checks if it's one of the two supported cases, or throws an error.
+
+    This is not done inline in `concat` because we don't want to maintain references
+    to the values of a.X.
+    """
+    Xs = [a.X for a in adatas]
+    if all(X is None for X in Xs):
+        return None
+    elif any(X is None for X in Xs):
+        raise NotImplementedError(
+            "Some (but not all) of the AnnData's to be concatenated had no .X value. "
+            "Concatenation is currently only implmented for cases where all or none of"
+            " the AnnData's have .X assigned."
+        )
+    else:
+        return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
+
+
 def concat(
     adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
     *,
@@ -844,9 +867,7 @@ def concat(
         [getattr(a, alt_dim) for a in adatas], alt_indices, merge
     )
 
-    X = concat_arrays(
-        [a.X for a in adatas], reindexers, axis=axis, fill_value=fill_value
-    )
+    X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
         layers = inner_concat_aligned_mapping(

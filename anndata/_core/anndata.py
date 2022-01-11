@@ -603,6 +603,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # indices that aren’t strictly increasing
             if self.is_view:
                 X = _subset(X, (self._oidx, self._vidx))
+        elif self.is_view and self._adata_ref.X is None:
+            X = None
         elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
@@ -1230,7 +1232,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
-        self._init_as_actual(adata_subset, dtype=self._X.dtype)
+        if adata_subset._has_X():
+            dtype = adata_subset.X.dtype
+        else:
+            dtype = None
+        self._init_as_actual(adata_subset, dtype=dtype)
 
     def _inplace_subset_obs(self, index: Index1D):
         """\
@@ -1239,7 +1245,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
-        self._init_as_actual(adata_subset, dtype=self.X.dtype)
+        if adata_subset._has_X():
+            dtype = adata_subset.X.dtype
+        else:
+            dtype = None
+        self._init_as_actual(adata_subset, dtype=dtype)
 
     # TODO: Update, possibly remove
     def __setitem__(
@@ -1314,6 +1324,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         if layer is not None:
             X = self.layers[layer]
+        elif not self._has_X():
+            raise ValueError("X is None, cannot convert to dataframe.")
         else:
             X = self.X
         if issparse(X):
@@ -1443,8 +1455,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = getattr(self, key).copy()
         if "X" in kwargs:
             new["X"] = kwargs["X"]
-        else:
+        elif self._has_X():
             new["X"] = self.X.copy()
+            new["dtype"] = new["X"].dtype
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
@@ -1453,7 +1466,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = kwargs["raw"]
         elif self.raw is not None:
             new["raw"] = self.raw.copy()
-        new["dtype"] = new["X"].dtype
         return AnnData(**new)
 
     def to_memory(self) -> "AnnData":
@@ -1485,15 +1497,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.is_view:
-                # TODO: How do I unambiguously check if this is a copy?
-                # Subsetting this way means we don’t have to have a view type
-                # defined for the matrix, which is needed for some of the
-                # current distributed backend.
-                X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
-            else:
-                X = self.X.copy()
-            return self._mutated_copy(X=X)
+            return self._mutated_copy()
         else:
             from .._io import read_h5ad
             from .._io.write import _write_h5ad
@@ -2018,6 +2022,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         selection = selection.toarray() if issparse(selection) else selection
         return selection if reverse is None else selection[reverse]
+
+    def _has_X(self) -> bool:
+        """
+        Check if X is None.
+
+        This is more efficient than trying `adata.X is None` for views, since creating
+        views (at least anndata's kind) can be expensive.
+        """
+        if not self.is_view:
+            return self.X is not None
+        else:
+            return self._adata_ref.X is not None
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat
