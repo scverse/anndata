@@ -35,13 +35,22 @@ def gen_typed_df(n, index=None):
     if n > len(letters):
         letters = letters[: n // 2]  # Make sure categories are repeated
     return pd.DataFrame(
-        dict(
-            cat=pd.Categorical(np.random.choice(letters, n)),
-            cat_ordered=pd.Categorical(np.random.choice(letters, n), ordered=True),
-            int64=np.random.randint(-50, 50, n),
-            float64=np.random.random(n),
-            uint8=np.random.randint(255, size=n, dtype="uint8"),
-        ),
+        {
+            "cat": pd.Categorical(np.random.choice(letters, n)),
+            "cat_ordered": pd.Categorical(np.random.choice(letters, n), ordered=True),
+            "int64": np.random.randint(-50, 50, n),
+            "float64": np.random.random(n),
+            "uint8": np.random.randint(255, size=n, dtype="uint8"),
+            "bool": np.random.randint(0, 2, size=n, dtype=bool),
+            "nullable-bool": pd.arrays.BooleanArray(
+                np.random.randint(0, 2, size=n, dtype=bool),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+            "nullable-int": pd.arrays.IntegerArray(
+                np.random.randint(0, 1000, size=n, dtype=np.int32),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+        },
         index=index,
     )
 

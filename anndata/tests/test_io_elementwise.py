@@ -57,6 +57,21 @@ def store(request):
         (pd.Categorical(list("aabccedd")), "categorical"),
         (pd.Categorical(list("aabccedd"), ordered=True), "categorical"),
         (pd.Categorical([1, 2, 1, 3], ordered=True), "categorical"),
+        (
+            pd.arrays.IntegerArray(
+                np.ones(5, dtype=int), mask=np.array([True, False, True, False, True])
+            ),
+            "nullable-integer",
+        ),
+        (pd.array([1, 2, 3]), "nullable-integer"),
+        (
+            pd.arrays.BooleanArray(
+                np.random.randint(0, 2, size=5, dtype=bool),
+                mask=np.random.randint(0, 2, size=5, dtype=bool),
+            ),
+            "nullable-boolean",
+        ),
+        (pd.array([True, False, True, True]), "nullable-boolean"),
         # (bytes, b"some bytes", "bytes"), # Does not work for zarr
         # TODO consider how specific encodings should be. Should we be fully describing the written type?
         # Currently the info we add is: "what you wouldn't be able to figure out yourself"
