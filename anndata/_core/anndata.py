@@ -1232,7 +1232,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
-        self._init_as_actual(adata_subset, dtype=self._X.dtype)
+        if adata_subset._has_X():
+            dtype = adata_subset.X.dtype
+        else:
+            dtype = None
+        self._init_as_actual(adata_subset, dtype=dtype)
 
     def _inplace_subset_obs(self, index: Index1D):
         """\
@@ -1241,7 +1245,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
-        self._init_as_actual(adata_subset, dtype=self.X.dtype)
+        if adata_subset._has_X():
+            dtype = adata_subset.X.dtype
+        else:
+            dtype = None
+        self._init_as_actual(adata_subset, dtype=dtype)
 
     # TODO: Update, possibly remove
     def __setitem__(
