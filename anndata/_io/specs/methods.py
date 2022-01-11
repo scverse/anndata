@@ -709,8 +709,8 @@ for numeric_scalar_type in [
     bool, np.bool_,
     np.uint8, np.uint16, np.uint32, np.uint64,
     int, np.int8, np.int16, np.int32, np.int64,
-    float, np.float16, np.float32, np.float64, np.float128,
-    np.complex64, np.complex128, np.complex256,
+    float, *np.floating.__subclasses__(),
+    *np.complexfloating.__subclasses__(),
 ]:
     _REGISTRY.register_write(H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_hdf5_scalar)
     _REGISTRY.register_write(ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_scalar)
