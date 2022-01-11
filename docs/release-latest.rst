@@ -5,7 +5,19 @@
 On `master` :small:`the future`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+.. rubric:: IO Specification
+
+Internal handling of IO has been overhauled.
+This should make it much easier to support new datatypes, use partial access, and use `AnnData` internally in other formats.
+
+- Each element should be tagged with an `enoding_type` and `encoding_version`. See updated docs on the :doc:`file format <fileformat-prose>`
+- Support for new data types including:
+  - nullable integer and boolean arrays
+  - datetime arrays
+
 .. rubric:: Bug fixes
+
+- Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
 
 .. rubric:: Features
 
