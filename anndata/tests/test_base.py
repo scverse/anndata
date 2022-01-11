@@ -554,6 +554,24 @@ def test_to_df_sparse():
     assert df.values.tolist() == X.tolist()
 
 
+def test_to_df_no_X():
+    adata = AnnData(
+        obs=pd.DataFrame(index=[f"cell-{i:02}" for i in range(20)]),
+        var=pd.DataFrame(index=[f"gene-{i:02}" for i in range(30)]),
+        layers={"present": np.ones((20, 30))},
+    )
+
+    with pytest.raises(ValueError):
+        _ = adata.to_df()
+
+    expected = pd.DataFrame(
+        np.ones(adata.shape), index=adata.obs_names, columns=adata.var_names
+    )
+    actual = adata.to_df(layer="present")
+
+    pd.testing.assert_frame_equal(actual, expected)
+
+
 def test_copy():
     adata_copy = adata_sparse.copy()
 

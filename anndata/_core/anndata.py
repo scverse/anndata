@@ -1316,6 +1316,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         if layer is not None:
             X = self.layers[layer]
+        elif not self._has_X():
+            raise ValueError("X is None, cannot convert to dataframe.")
         else:
             X = self.X
         if issparse(X):
@@ -2014,6 +2016,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         selection = selection.toarray() if issparse(selection) else selection
         return selection if reverse is None else selection[reverse]
+
+    def _has_X(self) -> bool:
+        """
+        Check if X is None.
+
+        This is more efficient than trying `adata.X is None` for views, since creating
+        views (at least anndata's kind) can be expensive.
+        """
+        if not self.is_view:
+            return self.X is not None
+        else:
+            return self._adata_ref.X is not None
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat
