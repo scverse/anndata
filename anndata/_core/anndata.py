@@ -1447,11 +1447,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = getattr(self, key).copy()
         if "X" in kwargs:
             new["X"] = kwargs["X"]
-        else:
-            old_X = self.X
-            if old_X is not None:
-                new["X"] = self.X.copy()
-                new["dtype"] = new["X"].dtype
+        elif self._has_X():
+            new["X"] = self.X.copy()
+            new["dtype"] = new["X"].dtype
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
