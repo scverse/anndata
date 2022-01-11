@@ -1,7 +1,9 @@
 """Tests for the attribute .X"""
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData
 from anndata.utils import asarray
 
@@ -17,6 +19,11 @@ UNLABELLED_ARRAY_TYPES = [
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
 ]
+
+
+@pytest.fixture(params=["h5ad", "zarr"])
+def diskfmt(request):
+    return request.param
 
 
 @pytest.mark.parametrize("shape", SINGULAR_SHAPES)
@@ -73,3 +80,22 @@ def test_transpose_with_X_as_none(shape):
     assert_equal(adataT.shape, shape[::-1])
     assert_equal(adataT.obsp.keys(), adata.varp.keys())
     assert_equal(adataT.T, adata)
+
+
+############
+# IO tests #
+############
+
+
+def test_io_missing_X(tmp_path, diskfmt):
+    file_pth = tmp_path / f"x_none_adata.{diskfmt}"
+    write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+
+    adata = gen_adata((20, 30))
+    del adata.X
+
+    write(adata, file_pth)
+    from_disk = read(file_pth)
+
+    assert_equal(from_disk, adata)
