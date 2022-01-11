@@ -603,6 +603,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # indices that aren’t strictly increasing
             if self.is_view:
                 X = _subset(X, (self._oidx, self._vidx))
+        elif self.is_view and self._adata_ref.X is None:
+            X = None
         elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
@@ -1444,7 +1446,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "X" in kwargs:
             new["X"] = kwargs["X"]
         else:
-            new["X"] = self.X.copy()
+            old_X = self.X
+            if old_X is not None:
+                new["X"] = self.X.copy()
+                new["dtype"] = new["X"].dtype
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
@@ -1453,7 +1458,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = kwargs["raw"]
         elif self.raw is not None:
             new["raw"] = self.raw.copy()
-        new["dtype"] = new["X"].dtype
         return AnnData(**new)
 
     def to_memory(self) -> "AnnData":
@@ -1485,15 +1489,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.is_view:
-                # TODO: How do I unambiguously check if this is a copy?
-                # Subsetting this way means we don’t have to have a view type
-                # defined for the matrix, which is needed for some of the
-                # current distributed backend.
-                X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
-            else:
-                X = self.X.copy()
-            return self._mutated_copy(X=X)
+            return self._mutated_copy()
         else:
             from .._io import read_h5ad
             from .._io.write import _write_h5ad

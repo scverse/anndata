@@ -82,6 +82,25 @@ def test_transpose_with_X_as_none(shape):
     assert_equal(adataT.T, adata)
 
 
+def test_copy():
+    adata = AnnData(
+        None,
+        obs=pd.DataFrame(index=[f"cell{i:03}" for i in range(100)]),
+        var=pd.DataFrame(index=[f"gene{i:03}" for i in range(200)]),
+    )
+    assert_equal(adata.copy(), adata)
+
+
+def test_copy_view():
+    adata = AnnData(
+        None,
+        obs=pd.DataFrame(index=[f"cell{i:03}" for i in range(100)]),
+        var=pd.DataFrame(index=[f"gene{i:03}" for i in range(200)]),
+    )
+    v = adata[::-2, ::-2]
+    assert_equal(v.copy(), v)
+
+
 ############
 # IO tests #
 ############
