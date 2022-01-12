@@ -534,3 +534,15 @@ def test_deepcopy_subset(adata, spmat: type):
         SparseCSRView if spmat is sparse.csr_matrix else SparseCSCView,
     )
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
+
+
+# https://github.com/theislab/anndata/issues/680
+def test_modifying_view_of_sparse_array():
+    a = ad.AnnData(sparse.csr_matrix(sparse.eye(200, 100).multiply(np.arange(1, 101))))
+    v = a[:100]
+    vx = v.X
+
+    vxc = vx.copy()
+    vxc.data[0] = -5
+
+    assert not np.array_equal(vxc.data, vx.data)
