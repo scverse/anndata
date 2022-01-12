@@ -1497,7 +1497,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            return self._mutated_copy()
+            if self.is_view:
+                # TODO: How do I unambiguously check if this is a copy?
+                # Subsetting this way means we don’t have to have a view type
+                # defined for the matrix, which is needed for some of the
+                # current distributed backend. Specifically Dask.
+                X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
+            else:
+                X = self.X.copy()
+            return self._mutated_copy(X=X)
         else:
             from .._io import read_h5ad
             from .._io.write import _write_h5ad
