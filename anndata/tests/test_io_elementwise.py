@@ -110,3 +110,14 @@ def test_write_to_root(store):
 
     assert "anndata" == _read_attr(store.attrs, "encoding-type")
     assert_equal(from_disk, adata)
+
+
+def test_write_none_clears(store):
+    write_elem(store, "key", np.ones(3))
+
+    assert "key" in store
+
+    write_elem(store, "key", None)
+
+    # Would also be fine if read_elem(store["key"]) returned None
+    assert "key" not in store
