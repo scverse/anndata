@@ -10,7 +10,7 @@ On `master` :small:`the future`
 Internal handling of IO has been overhauled.
 This should make it much easier to support new datatypes, use partial access, and use `AnnData` internally in other formats.
 
-- Each element should be tagged with an `enoding_type` and `encoding_version`. See updated docs on the :doc:`file format <fileformat-prose>`
+- Each element should be tagged with an `encoding_type` and `encoding_version`. See updated docs on the :doc:`file format <fileformat-prose>`
 - Support for new data types including:
   - nullable integer and boolean arrays
   - datetime arrays
