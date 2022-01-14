@@ -572,3 +572,9 @@ def test_view_mixin_copies_data(adata, array_type: type, attr):
 
         arr_view_copy[0, 0] = -5
         assert not np.array_equal(arr_view_copy, arr_view)
+
+
+def test_copy_X_dtype():
+    adata = ad.AnnData(sparse.eye(50, dtype=np.float64, format="csr"))
+    adata_c = adata[::2].copy()
+    assert adata_c.X.dtype == adata.X.dtype
