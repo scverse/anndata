@@ -537,12 +537,38 @@ def test_deepcopy_subset(adata, spmat: type):
 
 
 # https://github.com/theislab/anndata/issues/680
-def test_modifying_view_of_sparse_array():
-    a = ad.AnnData(sparse.csr_matrix(sparse.eye(200, 100).multiply(np.arange(1, 101))))
-    v = a[:100]
-    vx = v.X
+@pytest.mark.parametrize("array_type", [asarray, sparse.csr_matrix, sparse.csc_matrix])
+@pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
+def test_view_mixin_copies_data(adata, array_type: type, attr):
+    N = 100
+    adata = ad.AnnData(
+        obs=pd.DataFrame(index=np.arange(N)), var=pd.DataFrame(index=np.arange(N))
+    )
 
-    vxc = vx.copy()
-    vxc.data[0] = -5
+    X = array_type(sparse.eye(N, N).multiply(np.arange(1, N + 1)))
+    if attr == "X":
+        adata.X = X
+    else:
+        getattr(adata, attr)["arr"] = X
 
-    assert not np.array_equal(vxc.data, vx.data)
+    view = adata[:50]
+
+    if attr == "X":
+        arr_view = view.X
+    else:
+        arr_view = getattr(view, attr)["arr"]
+
+    arr_view_copy = arr_view.copy()
+
+    if sparse.issparse(X):
+        assert not np.shares_memory(arr_view.indices, arr_view_copy.indices)
+        assert not np.shares_memory(arr_view.indptr, arr_view_copy.indptr)
+        assert not np.shares_memory(arr_view.data, arr_view_copy.data)
+
+        arr_view_copy.data[0] = -5
+        assert not np.array_equal(arr_view_copy.data, arr_view.data)
+    else:
+        assert not np.shares_memory(arr_view, arr_view_copy)
+
+        arr_view_copy[0, 0] = -5
+        assert not np.array_equal(arr_view_copy, arr_view)
