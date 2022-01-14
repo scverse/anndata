@@ -26,6 +26,7 @@ This should make it much easier to support new datatypes, use partial access, an
 - Significantly more efficient :func:`anndata.read_umi_tools` :pr:`661` :smaller:`I Virshup`
 - Fixed deepcopy of a copy of a view retaining sparse matrix view mixin type :pr:`670` :smaller:`M Klein`
 - In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`677` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
+- Removed hard `xlrd` dependency :smaller:`I Virshup`
 
 .. rubric:: Documentation
 
