@@ -87,6 +87,8 @@ intersphinx_mapping = dict(
     xarray=("http://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
+    "h5py._hl.group.Group": "h5py.Group",
+    "h5py._hl.files.File": "h5py.File",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
     # Temporarily
     "anndata._core.raw.Raw": "anndata.AnnData",

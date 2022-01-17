@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from functools import singledispatch, wraps
-from typing import NamedTuple, Tuple, Type, Callable, Union
+from typing import Any, NamedTuple, Tuple, Type, Callable, Union
 
 
-from anndata.compat import _read_attr
+from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -137,15 +137,15 @@ def get_spec(
 
 @report_write_key_on_error
 def write_elem(
-    f: "Union[h5py.Group, zarr.Group]",
+    f: "Union[H5Group, ZarrGroup]",
     k: str,
-    elem,
+    elem: Any,
     *args,
     modifiers=frozenset(),
     **kwargs,
 ):
     """
-    Write an element to a disk store.
+    Write an element to a disk store using it's anndata encoding.
 
     Params
     ------
@@ -175,7 +175,10 @@ def write_elem(
         _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
 
 
-def read_elem(elem, modifiers: frozenset(str) = frozenset()):
+def read_elem(
+    elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
+    modifiers: frozenset(str) = frozenset(),
+) -> Any:
     """Read an element from an on disk store."""
     return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))(elem)
 
