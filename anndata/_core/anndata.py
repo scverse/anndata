@@ -455,7 +455,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if dtype is None and X.dtype != np.float32:
                 warnings.warn(
                     f"X.dtype being converted to np.float32 from {X.dtype}. In the next "
-                    "version of anndata (0.8) conversion will not be automatic. Pass "
+                    "version of anndata (0.9) conversion will not be automatic. Pass "
                     "dtype explicitly to avoid this warning. Pass "
                     "`AnnData(X, dtype=X.dtype, ...)` to get the future behavour.",
                     FutureWarning,
