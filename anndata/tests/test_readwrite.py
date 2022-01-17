@@ -3,6 +3,7 @@ from os import PathLike
 from pathlib import Path
 from string import ascii_letters
 import tempfile
+import warnings
 
 import h5py
 import numpy as np
@@ -14,6 +15,7 @@ import zarr
 
 import anndata as ad
 from anndata.utils import asarray
+from anndata.compat import _read_attr
 
 from anndata.tests.helpers import gen_adata, assert_equal
 
@@ -511,6 +513,15 @@ def test_read_excel():
     assert adata.X.tolist() == X_list
 
 
+def test_read_umi_tools():
+    adata = ad.read_umi_tools(HERE / "data/umi_tools.tsv.gz")
+    assert adata.obs_names.name == "cell"
+    assert adata.var_names.name == "gene"
+    assert adata.shape == (2, 13)
+    assert "ENSG00000070404.9" in adata.var_names
+    assert set(adata.obs_names) == {"ACAAGG", "TTCACG"}
+
+
 def test_write_categorical(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
@@ -544,7 +555,7 @@ def test_write_categorical_index(tmp_path, diskfmt):
 
 
 def test_dataframe_reserved_columns(tmp_path, diskfmt):
-    reserved = ("_index", "__categories")
+    reserved = ("_index",)
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(X=np.ones((5, 5)))
     for colname in reserved:
@@ -619,6 +630,25 @@ def test_write_string_types(tmp_path, diskfmt):
         write(adata_pth)
 
 
+@pytest.mark.parametrize(
+    "teststring",
+    ["teststring", np.asarray(["test1", "test2", "test3"], dtype="object")],
+)
+@pytest.mark.parametrize("encoding", ["ascii", "utf-8"])
+@pytest.mark.parametrize("length", [None, 15])
+def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
+    with h5py.File(tmp_path / "attributes.h5", "w") as file:
+        dset = file.create_dataset("dset", data=np.arange(10))
+        attrs = dset.attrs
+        attrs.create(
+            "string",
+            teststring,
+            dtype=h5py.h5t.string_dtype(encoding=encoding, length=length),
+        )
+
+        assert_equal(teststring, _read_attr(attrs, "string"))
+
+
 def test_zarr_chunk_X(tmp_path):
     import zarr
 
@@ -651,7 +681,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
 
     import scanpy as sc
 
-    pbmc = sc.datasets.pbmc68k_reduced()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ad.OldFormatWarning)
+        pbmc = sc.datasets.pbmc68k_reduced()
+
     write1(pbmc, filepth1)
     from_disk1 = read1(filepth1)  # Do we read okay
     write2(from_disk1, filepth2)  # Can we round trip
@@ -676,6 +709,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
 
 # Checking if we can read legacy zarr files
 # TODO: Check how I should add this file to the repo
+@pytest.mark.filterwarnings("ignore::anndata.OldFormatWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.skipif(
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
@@ -699,3 +733,24 @@ def test_backwards_compat_zarr():
         pbmc_zarr = ad.read_zarr(z)
 
     assert_equal(pbmc_zarr, pbmc_orig)
+
+
+# TODO: use diskfmt fixture once zarr backend implemented
+def test_adata_in_uns(tmp_path, diskfmt):
+    pth = tmp_path / f"adatas_in_uns.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = gen_adata((4, 5))
+    orig.uns["adatas"] = {
+        "a": gen_adata((1, 2)),
+        "b": gen_adata((12, 8)),
+    }
+    another_one = gen_adata((2, 5))
+    another_one.raw = gen_adata((2, 7))
+    orig.uns["adatas"]["b"].uns["another_one"] = another_one
+
+    write(orig, pth)
+    curr = read(pth)
+
+    assert_equal(orig, curr)

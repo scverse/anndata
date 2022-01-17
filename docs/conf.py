@@ -23,13 +23,14 @@ needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
-author = anndata.__author__
-copyright = f"{datetime.now():%Y}, {author}."
+author = f"{project} developers"
+copyright = f"{datetime.now():%Y}, {author}"
 version = anndata.__version__.replace(".dirty", "")
 release = version
 
 # default settings
 templates_path = ["_templates"]
+html_static_path = ["_static"]
 source_suffix = ".rst"
 master_doc = "index"
 default_role = "literal"
@@ -46,6 +47,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
+    "nbsphinx",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
@@ -61,37 +63,22 @@ napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 nitpicky = True  # Report broken links
+nitpick_ignore = [
+    ("py:meth", "pandas.DataFrame.iloc"),
+    ("py:meth", "pandas.DataFrame.loc"),
+]
 suppress_warnings = ["ref.citation"]
 
 
-def work_around_issue_6785():
-    """See https://github.com/sphinx-doc/sphinx/issues/6785"""
-    from docutils.parsers.rst import directives
-    from sphinx.ext import autodoc
-    from sphinx.domains.python import PyAttribute
-
-    # check if the code changes on the sphinx side and we can remove this
-    assert autodoc.PropertyDocumenter.directivetype == "method"
-    autodoc.PropertyDocumenter.directivetype = "attribute"
-
-    def get_signature_prefix(self, sig: str) -> str:
-        # TODO: abstract attributes
-        return "property " if "property" in self.options else ""
-
-    PyAttribute.option_spec["property"] = directives.flag
-    PyAttribute.get_signature_prefix = get_signature_prefix
-
-
 def setup(app: Sphinx):
-    work_around_issue_6785()
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
 
 
 intersphinx_mapping = dict(
-    h5py=("http://docs.h5py.org/en/latest/", None),
+    h5py=("https://docs.h5py.org/en/latest/", None),
     loompy=("https://linnarssonlab.org/loompy/", None),
-    numpy=("https://docs.scipy.org/doc/numpy/", None),
+    numpy=("https://numpy.org/doc/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy/reference/", None),

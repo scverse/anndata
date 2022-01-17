@@ -1,6 +1,6 @@
 from functools import singledispatch, wraps
 from string import ascii_letters
-from typing import Tuple
+from typing import Tuple, Optional
 from collections.abc import Mapping
 import warnings
 
@@ -35,13 +35,22 @@ def gen_typed_df(n, index=None):
     if n > len(letters):
         letters = letters[: n // 2]  # Make sure categories are repeated
     return pd.DataFrame(
-        dict(
-            cat=pd.Categorical(np.random.choice(letters, n)),
-            cat_ordered=pd.Categorical(np.random.choice(letters, n), ordered=True),
-            int64=np.random.randint(-50, 50, n),
-            float64=np.random.random(n),
-            uint8=np.random.randint(255, size=n, dtype="uint8"),
-        ),
+        {
+            "cat": pd.Categorical(np.random.choice(letters, n)),
+            "cat_ordered": pd.Categorical(np.random.choice(letters, n), ordered=True),
+            "int64": np.random.randint(-50, 50, n),
+            "float64": np.random.random(n),
+            "uint8": np.random.randint(255, size=n, dtype="uint8"),
+            "bool": np.random.randint(0, 2, size=n, dtype=bool),
+            "nullable-bool": pd.arrays.BooleanArray(
+                np.random.randint(0, 2, size=n, dtype=bool),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+            "nullable-int": pd.arrays.IntegerArray(
+                np.random.randint(0, 1000, size=n, dtype=np.int32),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+        },
         index=index,
     )
 
@@ -359,6 +368,17 @@ def assert_equal_index(a, b, exact=False, elem_name=None):
         report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(pd.api.extensions.ExtensionArray)
+def assert_equal_extension_array(a, b, exact=False, elem_name=None):
+    report_name(pd.testing.assert_extension_array_equal)(
+        a,
+        b,
+        check_dtype=exact,
+        check_exact=exact,
+        _elem_name=elem_name,
+    )
+
+
 @assert_equal.register(Raw)
 def assert_equal_raw(a, b, exact=False, elem_name=None):
     def assert_is_not_none(x):  # can't put an assert in a lambda
@@ -375,7 +395,9 @@ def assert_equal_raw(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(AnnData)
-def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
+def assert_adata_equal(
+    a: AnnData, b: AnnData, exact: bool = False, elem_name: Optional[str] = None
+):
     """\
     Check whether two AnnData objects are equivalent,
     raising an AssertionError if they aren’t.
@@ -388,10 +410,17 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
         Whether comparisons should be exact or not. This has a somewhat flexible
         meaning and should probably get refined in the future.
     """
+
+    def fmt_name(x):
+        if elem_name is None:
+            return x
+        else:
+            return f"{elem_name}/{x}"
+
     # There may be issues comparing views, since np.allclose
     # can modify ArrayViews if they contain `nan`s
-    assert_equal(a.obs_names, b.obs_names, exact, elem_name="obs_names")
-    assert_equal(a.var_names, b.var_names, exact, elem_name="var_names")
+    assert_equal(a.obs_names, b.obs_names, exact, elem_name=fmt_name("obs_names"))
+    assert_equal(a.var_names, b.var_names, exact, elem_name=fmt_name("var_names"))
     if not exact:
         # Reorder all elements if neccesary
         idx = [slice(None), slice(None)]
@@ -421,5 +450,5 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
             getattr(a, attr),
             getattr(b, attr),
             exact,
-            elem_name=attr,
+            elem_name=fmt_name(attr),
         )

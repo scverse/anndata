@@ -1,6 +1,45 @@
 .. role:: small
 .. role:: smaller
 
+
+On `master` :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+.. rubric:: Features
+
+- Compatibility with `h5ad` files written from Julia :pr:`569` :smaller:`I Kats`
+- Many logging messages that should have been warnings are now warnings :pr:`650` :smaller:`I Virshup`
+- Significantly more efficient :func:`anndata.read_umi_tools` :pr:`661` :smaller:`I Virshup`
+- Fixed deepcopy of a copy of a view retaining sparse matrix view mixin type :pr:`670` :smaller:`M Klein`
+- In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`667` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
+
+.. rubric:: Documentation
+
+
+0.7.8 :small:`9 November, 2021`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Re-include test helpers :pr:`641` :smaller:`I Virshup`
+
+
+0.7.7 :small:`9 November, 2021`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+- Fixed propagation of import error when importing `write_zarr` but not all dependencies are installed :pr:`579` :smaller:`R Hillje`
+- Fixed issue with `.uns` sub-dictionaries being referenced by copies :pr:`576` :smaller:`I Virshup`
+- Fixed out-of-bounds integer indices not raising :class:`IndexError` :pr:`630` :smaller:`M Klein`
+- Fixed backed `SparseDataset` indexing with scipy 1.7.2 :pr:`638` :smaller:`I Virshup`
+
+.. rubric:: Development processes
+
+- Use PEPs 621 (standardized project metadata), 631 (standardized dependencies), and 660 (standardized editable installs) :pr:`639` :smaller:`I Virshup`
+
 0.7.6 :small:`11 April, 2021`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

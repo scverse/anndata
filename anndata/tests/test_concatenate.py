@@ -1,7 +1,7 @@
 from collections.abc import Hashable
 from copy import deepcopy
 from itertools import chain, product
-from functools import partial
+from functools import partial, singledispatch
 import warnings
 
 import numpy as np
@@ -19,6 +19,45 @@ from anndata._core import merge
 from anndata.tests import helpers
 from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
+
+
+@singledispatch
+def filled_like(a, fill_value=None):
+    raise NotImplementedError()
+
+
+@filled_like.register(np.ndarray)
+def _filled_array(a, fill_value=None):
+    if fill_value is None:
+        fill_value = np.nan
+    return np.broadcast_to(fill_value, a.shape)
+
+
+@filled_like.register(sparse.spmatrix)
+def _filled_sparse(a, fill_value=None):
+    if fill_value is None:
+        return sparse.csr_matrix(a.shape)
+    else:
+        return sparse.csr_matrix(np.broadcast_to(fill_value, a.shape))
+
+
+@filled_like.register(pd.DataFrame)
+def _filled_df(a, fill_value=np.nan):
+    # dtype from pd.concat can be unintuitive, this returns something close enough
+    return a.loc[[], :].reindex(index=a.index, fill_value=fill_value)
+
+
+def check_filled_like(x, fill_value=None, elem_name=None):
+    if fill_value is None:
+        assert_equal(x, filled_like(x), elem_name=elem_name)
+    else:
+        assert_equal(x, filled_like(x, fill_value=fill_value), elem_name=elem_name)
+
+
+def make_idx_tuple(idx, axis):
+    tup = [slice(None), slice(None)]
+    tup[axis] = idx
+    return tuple(tup)
 
 
 @pytest.fixture(
@@ -79,6 +118,17 @@ def fix_known_differences(orig, result, backwards_compat=True):
             result.obs[k] = result.obs[k].astype(dtype)
 
     return orig, result
+
+
+def test_concat_interface_errors():
+    adatas = [gen_adata((5, 10)), gen_adata((5, 10))]
+
+    with pytest.raises(ValueError):
+        concat(adatas, axis=3)
+    with pytest.raises(ValueError):
+        concat(adatas, join="not implemented")
+    with pytest.raises(ValueError):
+        concat([])
 
 
 @pytest.mark.parametrize(
@@ -999,13 +1049,90 @@ def test_concat_names(axis):
     assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
 
 
-def test_concat_size_0_dim():
-    # https://github.com/theislab/anndata/issues/526
-    a = gen_adata((5, 10))
-    b = gen_adata((5, 0))
+def axis_labels(adata, axis):
+    return (adata.obs_names, adata.var_names)[axis]
 
-    assert concat([a, b], axis=0).shape == (10, 0)
-    assert concat([a, b], axis=1).shape == (5, 10)
+
+def expected_shape(a, b, axis, join):
+    labels = partial(axis_labels, axis=abs(axis - 1))
+    shape = [None, None]
+
+    shape[axis] = a.shape[axis] + b.shape[axis]
+    if join == "inner":
+        shape[abs(axis - 1)] = len(labels(a).intersection(labels(b)))
+    elif join == "outer":
+        shape[abs(axis - 1)] = len(labels(a).union(labels(b)))
+    else:
+        raise ValueError()
+
+    return tuple(shape)
+
+
+@pytest.mark.parametrize(
+    "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
+)
+def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
+    # https://github.com/theislab/anndata/issues/526
+    a = gen_adata((5, 7))
+    b = gen_adata(shape)
+    alt_axis = 1 - axis
+    dim = ("obs", "var")[axis]
+
+    expected_size = expected_shape(a, b, axis=axis, join=join_type)
+    result = concat(
+        {"a": a, "b": b},
+        axis=axis,
+        join=join_type,
+        merge=merge_strategy,
+        pairwise=True,
+        index_unique="-",
+    )
+    assert result.shape == expected_size
+
+    if join_type == "outer":
+        # Check new entries along axis of concatenation
+        axis_new_inds = axis_labels(result, axis).str.endswith("-b")
+        altaxis_new_inds = ~axis_labels(result, alt_axis).isin(axis_labels(a, alt_axis))
+        axis_idx = make_idx_tuple(axis_new_inds, axis)
+        altaxis_idx = make_idx_tuple(altaxis_new_inds, 1 - axis)
+
+        check_filled_like(result.X[axis_idx], elem_name="X")
+        check_filled_like(result.X[altaxis_idx], elem_name="X")
+        for k, elem in getattr(result, "layers").items():
+            check_filled_like(elem[axis_idx], elem_name=f"layers/{k}")
+            check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
+
+        if shape[axis] > 0:
+            b_result = result[axis_idx].copy()
+            mapping_elem = f"{dim}m"
+            setattr(b_result, f"{dim}_names", getattr(b, f"{dim}_names"))
+            for k, result_elem in getattr(b_result, mapping_elem).items():
+                elem_name = f"{mapping_elem}/{k}"
+                # pd.concat can have unintuitive return types. is similar to numpy promotion
+                if isinstance(result_elem, pd.DataFrame):
+                    assert_equal(
+                        getattr(b, mapping_elem)[k].astype(object),
+                        result_elem.astype(object),
+                        elem_name=elem_name,
+                    )
+                else:
+                    assert_equal(
+                        getattr(b, mapping_elem)[k],
+                        result_elem,
+                        elem_name=elem_name,
+                    )
+
+
+@pytest.mark.parametrize("elem", ["sparse", "array", "df"])
+def test_concat_outer_aligned_mapping(elem):
+    a = gen_adata((5, 5))
+    b = gen_adata((3, 5))
+    del b.obsm[elem]
+
+    concated = concat({"a": a, "b": b}, join="outer", label="group")
+    result = concated.obsm[elem][concated.obs["group"] == "b"]
+
+    check_filled_like(result, elem_name=f"obsm/{elem}")
 
 
 def test_concatenate_size_0_dim():
@@ -1017,6 +1144,21 @@ def test_concatenate_size_0_dim():
     # Mostly testing that this doesn't error
     a.concatenate([b]).shape == (10, 0)
     b.concatenate([a]).shape == (10, 0)
+
+
+def test_concat_null_X():
+    adatas_orig = {k: gen_adata((20, 10)) for k in list("abc")}
+    adatas_no_X = {}
+    for k, v in adatas_orig.items():
+        v = v.copy()
+        del v.X
+        adatas_no_X[k] = v
+
+    orig = concat(adatas_orig, index_unique="-")
+    no_X = concat(adatas_no_X, index_unique="-")
+    del orig.X
+
+    assert_equal(no_X, orig)
 
 
 # Leaving out for now. See definition of these values for explanation

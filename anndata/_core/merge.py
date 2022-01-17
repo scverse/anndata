@@ -102,6 +102,11 @@ def equal_array(a, b) -> bool:
     return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
 
 
+@equal.register(pd.Series)
+def equal_series(a, b) -> bool:
+    return a.equals(b)
+
+
 @equal.register(sparse.spmatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
@@ -277,6 +282,11 @@ class Reindexer(object):
         return self.apply(el, axis=axis, fill_value=fill_value)
 
     def apply(self, el, *, axis, fill_value=None):
+        """
+        Reindex element so el[axis] is aligned to self.new_idx.
+
+        Missing values are to be replaced with `fill_value`.
+        """
         if self.no_change and (el.shape[axis] == len(self.old_idx)):
             return el
         if isinstance(el, pd.DataFrame):
@@ -294,8 +304,11 @@ class Reindexer(object):
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
-        if 0 in el.shape:
-            return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape = list(el.shape)
+            shape[axis] = len(self.new_idx)
+            return np.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.old_idx.get_indexer(self.new_idx)
 
@@ -313,11 +326,14 @@ class Reindexer(object):
             to_fill = np.array([])
 
         # Fixing outer indexing for missing values
-        if el.shape[1] == 0:
+        if el.shape[axis] == 0:
+            shape = list(el.shape)
+            shape[axis] = len(self.new_idx)
+            shape = tuple(shape)
             if fill_value == 0:
-                return sparse.coo_matrix((el.shape[0], len(self.new_idx)))
+                return sparse.csr_matrix(shape)
             else:
-                return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
+                return np.broadcast_to(fill_value, shape)
 
         fill_idxer = None
 
@@ -404,7 +420,11 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         fill_value = default_fill_value(arrays)
 
     if any(isinstance(a, pd.DataFrame) for a in arrays):
-        if not all(isinstance(a, pd.DataFrame) for a in arrays):
+        # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
+        if not all(
+            isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
+            for a in arrays
+        ):
             raise NotImplementedError(
                 "Cannot concatenate a dataframe with other array types."
             )
@@ -471,7 +491,9 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
     if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
         reindexers = [
-            lambda x: x if not_missing(el) else pd.DataFrame(index=range(shape))
+            (lambda x: x)
+            if not_missing(el)
+            else (lambda x: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
     else:
@@ -499,6 +521,8 @@ def outer_concat_aligned_mapping(
         else:
             cur_reindexers = reindexers
 
+        # Handling of missing values here is hacky for dataframes
+        # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
                 el if not_missing(el) else np.zeros((n, 0), dtype=bool)
@@ -578,6 +602,29 @@ def dim_size(adata, *, axis=None, dim=None) -> int:
     return adata.shape[ax]
 
 
+# TODO: Resolve https://github.com/theislab/anndata/issues/678 and remove this function
+def concat_Xs(adatas, reindexers, axis, fill_value):
+    """
+    Shimy until support for some missing X's is implemented.
+
+    Basically just checks if it's one of the two supported cases, or throws an error.
+
+    This is not done inline in `concat` because we don't want to maintain references
+    to the values of a.X.
+    """
+    Xs = [a.X for a in adatas]
+    if all(X is None for X in Xs):
+        return None
+    elif any(X is None for X in Xs):
+        raise NotImplementedError(
+            "Some (but not all) of the AnnData's to be concatenated had no .X value. "
+            "Concatenation is currently only implmented for cases where all or none of"
+            " the AnnData's have .X assigned."
+        )
+    else:
+        return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
+
+
 def concat(
     adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
     *,
@@ -593,7 +640,7 @@ def concat(
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
 
-    See the :doc:`concatenation` section in the docs for a more in-depth description.
+    See the :doc:`concatenation <../concatenation>` section in the docs for a more in-depth description.
 
     .. warning::
 
@@ -610,7 +657,8 @@ def concat(
         Which axis to concatenate along.
     join
         How to align values when concatenating. If "outer", the union of the other axis
-        is taken. If "inner", the intersection. See :doc:`concatenation` for more.
+        is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
+        for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.
         Currently implemented strategies include:
@@ -819,9 +867,7 @@ def concat(
         [getattr(a, alt_dim) for a in adatas], alt_indices, merge
     )
 
-    X = concat_arrays(
-        [a.X for a in adatas], reindexers, axis=axis, fill_value=fill_value
-    )
+    X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
         layers = inner_concat_aligned_mapping(

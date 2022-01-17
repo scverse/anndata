@@ -1,7 +1,8 @@
 from copy import deepcopy
-from functools import reduce, wraps
+from functools import reduce, singledispatch, wraps
+from codecs import decode
 from inspect import signature, Parameter
-from typing import Collection, Union, Mapping, MutableMapping, Optional
+from typing import Any, Collection, Union, Mapping, MutableMapping, Optional
 from warnings import warn
 
 import h5py
@@ -12,17 +13,28 @@ import pandas as pd
 from ._overloaded_dict import _overloaded_uns, OverloadedDict
 from .._core.index import _subset
 
+
+class Empty:
+    pass
+
+
 # try importing zarr, dask, and zappy
 from packaging import version
 
 try:
     from zarr.core import Array as ZarrArray
+    from zarr.hierarchy import Group as ZarrGroup
 except ImportError:
 
     class ZarrArray:
         @staticmethod
         def __repr__():
             return "mock zarr.core.Array"
+
+    class ZarrGroup:
+        @staticmethod
+        def __repr__():
+            return "mock zarr.core.Group"
 
 
 try:
@@ -60,6 +72,42 @@ except ImportError:
 
         class Literal(metaclass=LiteralMeta):
             pass
+
+
+@singledispatch
+def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
+    if default is Empty:
+        return attrs[name]
+    else:
+        return attrs.get(name, default=default)
+
+
+@_read_attr.register(h5py.AttributeManager)
+def _read_attr_hdf5(
+    attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty
+):
+    """
+    Read an HDF5 attribute and perform all necessary conversions.
+
+    At the moment, this only implements conversions for string attributes, other types
+    are passed through. String conversion is needed compatibility with other languages.
+    For example Julia's HDF5.jl writes string attributes as fixed-size strings, which
+    are read as bytes by h5py.
+    """
+    if name not in attrs and default is not Empty:
+        return default
+    attr = attrs[name]
+    attr_id = attrs.get_id(name)
+    dtype = h5py.check_string_dtype(attr_id.dtype)
+    if dtype is None:
+        return attr
+    else:
+        if dtype.length is None:  # variable-length string, no problem
+            return attr
+        elif len(attr_id.shape) == 0:  # Python bytestring
+            return attr.decode("utf-8")
+        else:  # NumPy array
+            return [decode(s, "utf-8") for s in attr]
 
 
 def _from_fixed_length_strings(value):

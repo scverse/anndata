@@ -1,25 +1,11 @@
 Benchmarks
 ==========
 
-Reading and writing h5ad files
-------------------------------
+Computational operations in anndata are consistently benchmarked `here <https://github.com/ivirshup/anndata-benchmarks>`__.
 
-Of course, we want the associated notebook to be called "reading-writing.h5ad".
+Below follows a simple benchmark showing read-write efficiency.
 
-https://github.com/Koncopd/anndata-scanpy-benchmarks/blob/master/Benchmarks-Loading.ipynb
+.. toctree::
+   :maxdepth: 1
 
-The notebook should also cover reading chunks.
-
-https://github.com/Koncopd/anndata-scanpy-benchmarks/blob/master/chunk_X.ipynb
-
-It should compare the results with loom.
-
-We don’t need images here, at this stage.
-
-
-File sizes
-----------
-
-Another notebook should cover file sizes.
-
-https://github.com/Koncopd/anndata-scanpy-benchmarks/blob/master/File_sizes.ipynb
+   benchmark-read-write
