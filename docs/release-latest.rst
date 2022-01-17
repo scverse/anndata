@@ -11,13 +11,7 @@ Internal handling of IO has been overhauled.
 This should make it much easier to support new datatypes, use partial access, and use `AnnData` internally in other formats.
 
 - Each element should be tagged with an `encoding_type` and `encoding_version`. See updated docs on the :doc:`file format <fileformat-prose>`
-- Support for new data types including:
-  - nullable integer and boolean arrays
-  - datetime arrays
-
-.. rubric:: Bug fixes
-
-- Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
+- Support for nullable integer and boolean data arrays. More data types to come!
 
 .. rubric:: Features
 
@@ -28,7 +22,13 @@ This should make it much easier to support new datatypes, use partial access, an
 - In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`677` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
 - Removed hard `xlrd` dependency :smaller:`I Virshup`
 
-.. rubric:: Documentation
+.. rubric:: Experimental Module
+
+
+
+.. rubric:: Bug fixes
+
+- Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
 
 
 0.7.8 :small:`9 November, 2021`
