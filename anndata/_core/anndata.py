@@ -272,7 +272,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Mapping[str, Any]] = None,
-        dtype: Union[np.dtype, str] = "float32",
+        dtype: Optional[Union[np.dtype, str]] = None,
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
         filemode: Optional[Literal["r", "r+"]] = None,
@@ -378,7 +378,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp=None,
         raw=None,
         layers=None,
-        dtype="float32",
+        dtype=None,
         shape=None,
         filename=None,
         filemode=None,
@@ -452,6 +452,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
+            if dtype is None and X.dtype != np.float32:
+                warnings.warn(
+                    f"X.dtype being converted to np.float32 from {X.dtype}. In the next "
+                    "version of anndata (0.9) conversion will not be automatic. Pass "
+                    "dtype explicitly to avoid this warning. Pass "
+                    "`AnnData(X, dtype=X.dtype, ...)` to get the future behavour.",
+                    FutureWarning,
+                    stacklevel=3,
+                )
+                dtype = np.float32
+            elif dtype is None:
+                dtype = np.float32
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
@@ -1455,6 +1467,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = getattr(self, key).copy()
         if "X" in kwargs:
             new["X"] = kwargs["X"]
+            new["dtype"] = new["X"].dtype
         elif self._has_X():
             new["X"] = self.X.copy()
             new["dtype"] = new["X"].dtype
@@ -1718,17 +1731,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         >>> from scipy.sparse import csr_matrix
         >>> adata1 = AnnData(
-        ...     csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
         ...     dict(var_names=['a', 'b', 'c']),
         ... )
         >>> adata2 = AnnData(
-        ... csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
         >>> adata3 = AnnData(
-        ... csr_matrix([[1, 2, 0], [0, 5, 6]]),
+        ... csr_matrix([[1, 2, 0], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s5', 's6'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b']),
         ... )

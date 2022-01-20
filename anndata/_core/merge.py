@@ -924,6 +924,7 @@ def concat(
             [
                 AnnData(
                     X=a.raw.X,
+                    dtype=a.raw.X.dtype,
                     obs=pd.DataFrame(index=a.obs_names),
                     var=a.raw.var,
                     varm=a.raw.varm,
@@ -946,6 +947,7 @@ def concat(
     return AnnData(
         **{
             "X": X,
+            "dtype": None if X is None else X.dtype,
             "layers": layers,
             dim: concat_annot,
             alt_dim: alt_annot,
