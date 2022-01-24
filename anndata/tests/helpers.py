@@ -222,7 +222,7 @@ def slice_subset(index, min_size=2):
 
 
 def single_subset(index):
-    return index[np.random.randint(0, len(index), size=())]
+    return index[np.random.randint(0, len(index))]
 
 
 @pytest.fixture(

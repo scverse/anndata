@@ -30,8 +30,6 @@ from .utils import (
 from .specs import read_elem, write_elem
 from anndata._warnings import OldFormatWarning
 
-H5Group = Union[h5py.Group, h5py.File]
-H5Dataset = h5py.Dataset
 T = TypeVar("T")
 
 

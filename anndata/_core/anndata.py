@@ -116,7 +116,7 @@ def _gen_dataframe(anno, length, index_names):
 
 @_gen_dataframe.register(pd.DataFrame)
 def _(anno, length, index_names):
-    anno = anno.copy()
+    anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
         anno.index = anno.index.astype(str)

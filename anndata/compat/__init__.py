@@ -18,6 +18,10 @@ class Empty:
     pass
 
 
+H5Group = Union[h5py.Group, h5py.File]
+H5Array = h5py.Dataset
+
+
 # try importing zarr, dask, and zappy
 from packaging import version
 
