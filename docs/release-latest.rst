@@ -2,8 +2,10 @@
 .. role:: smaller
 
 
-On `master` :small:`the future`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`0.8.0` :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. note:: 0.8.0 is currently in the release candidate phase. Install this version with `pip install "anndata==0.8.0rc1"`.
 
 .. rubric:: IO Specification
 
