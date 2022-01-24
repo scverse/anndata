@@ -44,7 +44,7 @@ dependencies = [
     "pandas>=1.1.1",  # pandas <1.1.1 has pandas/issues/35446
     "numpy>=1.16.5",  # required by pandas 1.x
     "scipy>1.4",
-    "h5py",
+    "h5py>=3",
     "natsort",
     "packaging>=20",
     # for getting the stable version

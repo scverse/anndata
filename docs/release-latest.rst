@@ -22,10 +22,16 @@ This should make it much easier to support new datatypes, use partial access, an
 - Fixed deepcopy of a copy of a view retaining sparse matrix view mixin type :pr:`670` :smaller:`M Klein`
 - In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`677` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
 - Removed hard `xlrd` dependency :smaller:`I Virshup`
+- `obs` and `var` dataframes are no longer copied by default on `AnnData` instantiation :issue:`371` :smaller:`I Virshup`
 
 .. rubric:: Bug fixes
 
 - Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
+
+.. rubric:: Dependencies
+
+* `xlrd` dropped as a hard dependency
+* Now requires `h5py` `v3.0.0` or newer
 
 
 0.7.8 :small:`9 November, 2021`
