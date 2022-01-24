@@ -525,7 +525,6 @@ def test_read_umi_tools():
 def test_write_categorical(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        X=np.ones((5, 5)),
         obs=pd.DataFrame(
             dict(
                 cat1=["a", "a", "b", np.nan, np.nan],
@@ -542,7 +541,6 @@ def test_write_categorical(tmp_path, diskfmt):
 def test_write_categorical_index(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        X=np.ones((5, 5)),
         uns={"df": pd.DataFrame(index=pd.Categorical(list("aabcd")))},
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
@@ -557,7 +555,9 @@ def test_write_categorical_index(tmp_path, diskfmt):
 def test_dataframe_reserved_columns(tmp_path, diskfmt):
     reserved = ("_index",)
     adata_pth = tmp_path / f"adata.{diskfmt}"
-    orig = ad.AnnData(X=np.ones((5, 5)))
+    orig = ad.AnnData(
+        obs=pd.DataFrame(index=np.arange(5)), var=pd.DataFrame(index=np.arange(5))
+    )
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
@@ -608,7 +608,6 @@ def test_write_string_types(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
 
     adata = ad.AnnData(
-        np.ones((3, 3)),
         obs=pd.DataFrame(
             np.ones((3, 2)),
             columns=["a", np.str_("b")],

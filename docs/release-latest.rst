@@ -23,10 +23,6 @@ This should make it much easier to support new datatypes, use partial access, an
 - In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`677` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
 - Removed hard `xlrd` dependency :smaller:`I Virshup`
 
-.. rubric:: Experimental Module
-
-
-
 .. rubric:: Bug fixes
 
 - Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
