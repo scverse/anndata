@@ -62,6 +62,16 @@ except ImportError:
 
 
 try:
+    from jax.numpy import DeviceArray
+except ImportError:
+
+    class DeviceArray:
+        @staticmethod
+        def __repr__():
+            return "mock jax.numpy.DeviceArray"
+
+
+try:
     from typing import Literal
 except ImportError:
     try:

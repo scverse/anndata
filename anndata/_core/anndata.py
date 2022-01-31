@@ -51,6 +51,7 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
+    DeviceArray,
     Literal,
     _slice_uns_sparse_matrices,
     _move_adj_mtx,
@@ -66,6 +67,7 @@ class StorageType(Enum):
     ZarrArray = ZarrArray
     ZappyArray = ZappyArray
     DaskArray = DaskArray
+    DeviceArray = DeviceArray
 
     @classmethod
     def classes(cls):
