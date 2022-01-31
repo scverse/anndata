@@ -57,6 +57,7 @@ from ..compat import (
     _overloaded_uns,
     OverloadedDict,
 )
+from .repr import repr_html
 
 
 class StorageType(Enum):
@@ -589,6 +590,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return "View of " + self._gen_repr(self.n_obs, self.n_vars)
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
+
+    def _repr_html_(self) -> str:
+        """
+        HTML formatter for the AnnData object
+        for rich display in notebooks.
+        """
+        return repr_html(self, expand=0b10)
 
     def __eq__(self, other):
         """Equality testing"""
