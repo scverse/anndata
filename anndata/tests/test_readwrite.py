@@ -83,6 +83,11 @@ def rw(backing_h5ad):
     return curr, orig
 
 
+@pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
+def dtype(request):
+    return request.param
+
+
 diskfmt2 = diskfmt
 
 
@@ -753,3 +758,15 @@ def test_adata_in_uns(tmp_path, diskfmt):
     curr = read(pth)
 
     assert_equal(orig, curr)
+
+
+def test_io_dtype(tmp_path, diskfmt, dtype):
+    pth = tmp_path / f"adata_dtype.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = ad.AnnData(np.ones((5, 8), dtype=dtype), dtype=dtype)
+    write(orig, pth)
+    curr = read(pth)
+
+    assert curr.X.dtype == dtype
