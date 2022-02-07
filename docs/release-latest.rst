@@ -29,6 +29,7 @@ This should make it much easier to support new datatypes, use partial access, an
 .. rubric:: Bug fixes
 
 - Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
+- Fixed issue where `.X` matrix read in from `zarr` would always have `float32` values :pr:`701` :smaller:`I Virshup`
 
 .. rubric:: Dependencies
 
