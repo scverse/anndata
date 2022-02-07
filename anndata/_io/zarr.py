@@ -85,6 +85,9 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_elem)
 
+    if "X" in d:
+        d["dtype"] = d["X"].dtype
+
     _clean_uns(d)
 
     return AnnData(**d)
