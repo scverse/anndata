@@ -1,3 +1,13 @@
+class WriteWarning(UserWarning):
+    pass
+
+
+class OldFormatWarning(PendingDeprecationWarning):
+    """Raised when a file in an old file format is read."""
+
+    pass
+
+
 class ImplicitModificationWarning(UserWarning):
     """\
     Raised whenever initializing an object or assigning a property changes

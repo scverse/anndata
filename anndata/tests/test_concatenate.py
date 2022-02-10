@@ -1150,6 +1150,35 @@ def test_concatenate_size_0_dim():
     b.concatenate([a]).shape == (10, 0)
 
 
+def test_concat_null_X():
+    adatas_orig = {k: gen_adata((20, 10)) for k in list("abc")}
+    adatas_no_X = {}
+    for k, v in adatas_orig.items():
+        v = v.copy()
+        del v.X
+        adatas_no_X[k] = v
+
+    orig = concat(adatas_orig, index_unique="-")
+    no_X = concat(adatas_no_X, index_unique="-")
+    del orig.X
+
+    assert_equal(no_X, orig)
+
+
+# https://github.com/theislab/ehrapy/issues/151#issuecomment-1016753744
+def test_concat_X_dtype():
+    adatas_orig = {
+        k: AnnData(np.ones((20, 10), dtype=np.int8), dtype=np.int8) for k in list("abc")
+    }
+    for adata in adatas_orig.values():
+        adata.raw = AnnData(np.ones((20, 30), dtype=np.float64), dtype=np.float64)
+
+    result = concat(adatas_orig, index_unique="-")
+
+    assert result.X.dtype == np.int8
+    assert result.raw.X.dtype == np.float64
+
+
 # Leaving out for now. See definition of these values for explanation
 # def test_concatenate_uns_types():
 #     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE

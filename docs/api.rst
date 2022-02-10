@@ -80,6 +80,15 @@ Two classes for working with batched access to collections of many `AnnData` obj
    experimental.AnnCollection
    experimental.AnnLoader
 
+Low level methods for reading and writing elements of an `AnnData`` object to a store:
+
+
+.. autosummary::
+   :toctree: generated/
+
+   experimental.read_elem
+   experimental.write_elem
+
 
 Errors and warnings
 -------------------

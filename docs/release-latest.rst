@@ -2,17 +2,39 @@
 .. role:: smaller
 
 
-On `master` :small:`the future`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`0.8.0` :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. rubric:: Bug fixes
+.. note:: 0.8.0 is currently in the release candidate phase. Install this version with `pip install "anndata==0.8.0rc1"`.
+
+.. rubric:: IO Specification
+
+Internal handling of IO has been overhauled.
+This should make it much easier to support new datatypes, use partial access, and use `AnnData` internally in other formats.
+
+- Each element should be tagged with an `encoding_type` and `encoding_version`. See updated docs on the :doc:`file format <fileformat-prose>`
+- Support for nullable integer and boolean data arrays. More data types to come!
+- Experimental support for low level access to the IO API via :func:`~anndata.experimental.read_elem` and :func:`~anndata.experimental.write_elem`
 
 .. rubric:: Features
 
-- Compatability with `h5ad` files written from Julia :pr:`569` :smaller:`I Kats`
+- Compatibility with `h5ad` files written from Julia :pr:`569` :smaller:`I Kats`
 - Many logging messages that should have been warnings are now warnings :pr:`650` :smaller:`I Virshup`
+- Significantly more efficient :func:`anndata.read_umi_tools` :pr:`661` :smaller:`I Virshup`
+- Fixed deepcopy of a copy of a view retaining sparse matrix view mixin type :pr:`670` :smaller:`M Klein`
+- In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`677` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
+- Removed hard `xlrd` dependency :smaller:`I Virshup`
+- `obs` and `var` dataframes are no longer copied by default on `AnnData` instantiation :issue:`371` :smaller:`I Virshup`
 
-.. rubric:: Documentation
+.. rubric:: Bug fixes
+
+- Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
+- Fixed issue where `.X` matrix read in from `zarr` would always have `float32` values :pr:`701` :smaller:`I Virshup`
+
+.. rubric:: Dependencies
+
+* `xlrd` dropped as a hard dependency
+* Now requires `h5py` `v3.0.0` or newer
 
 
 0.7.8 :small:`9 November, 2021`

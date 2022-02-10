@@ -9,7 +9,7 @@ from scipy.sparse import issparse
 
 from .. import AnnData
 from ..logging import get_logger
-from . import WriteWarning
+from anndata._warnings import WriteWarning
 
 # Exports
 from .h5ad import write_h5ad as _write_h5ad
