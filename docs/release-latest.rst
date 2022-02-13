@@ -25,6 +25,9 @@ This should make it much easier to support new datatypes, use partial access, an
 - In many cases :attr:`~anndata.AnnData.X` can now be `None` :pr:`463` :smaller:`R Cannoodt` :pr:`677` :smaller:`I Virshup`. Remaining work is documented in :issue:`467`.
 - Removed hard `xlrd` dependency :smaller:`I Virshup`
 - `obs` and `var` dataframes are no longer copied by default on `AnnData` instantiation :issue:`371` :smaller:`I Virshup`
+- Added PyTorch dataloader :class:`~anndata.experimental.AnnLoader` and lazy concatenation object :class:`~anndata.experimental.AnnCollection`. See the `tutorials`_ :pr:`416` :smaller:`S Rybakov`
+
+.. _tutorials: https://anndata-tutorials.readthedocs.io/en/latest/index.html
 
 .. rubric:: Bug fixes
 
