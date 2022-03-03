@@ -11,6 +11,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+from scipy import sparse
 
 from .. import AnnData
 from ..compat import _deprecate_positional_args
@@ -78,7 +79,7 @@ def read_excel(
     return AnnData(X, row, col, dtype=dtype)
 
 
-def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
+def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
     """\
     Read a gzipped condensed count matrix from umi_tools.
 
@@ -89,29 +90,18 @@ def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
     """
     # import pandas for conversion of a dict of dicts into a matrix
     # import gzip to read a gzipped file :-)
-    import gzip
-    from pandas import DataFrame
+    table = pd.read_table(filename, dtype={"gene": "category", "cell": "category"})
 
-    dod = {}  # this will contain basically everything
-    fh = gzip.open(fspath(filename))
-    _ = fh.readline()  # read the first line
-
-    for line in fh:
-        # gzip read bytes, hence the decoding
-        t = line.decode("ascii").split("\t")
-        try:
-            dod[t[1]].update({t[0]: int(t[2])})
-        except KeyError:
-            dod[t[1]] = {t[0]: int(t[2])}
-
-    df = DataFrame.from_dict(dod, orient="index")  # build the matrix
-    df.fillna(value=0.0, inplace=True)  # many NaN, replace with zeros
-    return AnnData(
-        np.array(df),
-        dict(obs_names=df.index),
-        dict(var_names=df.columns),
-        dtype=dtype,
+    X = sparse.csr_matrix(
+        (table["count"], (table["cell"].cat.codes, table["gene"].cat.codes))
     )
+    obs = pd.DataFrame(index=pd.Index(table["cell"].cat.categories, name="cell"))
+    var = pd.DataFrame(index=pd.Index(table["gene"].cat.categories, name="gene"))
+
+    if dtype is None:
+        dtype = X.dtype
+
+    return AnnData(X=X, obs=obs, var=var, dtype=dtype)
 
 
 def read_hdf(filename: PathLike, key: str) -> AnnData:

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from operator import mul
 
 import joblib
@@ -8,6 +9,7 @@ import pytest
 
 import anndata as ad
 from anndata._core.index import _normalize_index
+from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
 from anndata.utils import asarray
 
 from anndata.tests.helpers import (
@@ -513,3 +515,66 @@ def test_negative_scalar_index(adata, index: int, obs: bool):
     np.testing.assert_array_equal(
         adata_pos_subset.var_names, adata_neg_subset.var_names
     )
+
+
+@pytest.mark.parametrize("spmat", [sparse.csr_matrix, sparse.csc_matrix])
+def test_deepcopy_subset(adata, spmat: type):
+    adata.obsp["arr"] = np.zeros((adata.n_obs, adata.n_obs))
+    adata.obsp["spmat"] = spmat((adata.n_obs, adata.n_obs))
+
+    adata = deepcopy(adata[:10].copy())
+
+    assert isinstance(adata.obsp["arr"], np.ndarray)
+    assert not isinstance(adata.obsp["arr"], ArrayView)
+    np.testing.assert_array_equal(adata.obsp["arr"].shape, (10, 10))
+
+    assert isinstance(adata.obsp["spmat"], spmat)
+    assert not isinstance(
+        adata.obsp["spmat"],
+        SparseCSRView if spmat is sparse.csr_matrix else SparseCSCView,
+    )
+    np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
+
+
+# https://github.com/theislab/anndata/issues/680
+@pytest.mark.parametrize("array_type", [asarray, sparse.csr_matrix, sparse.csc_matrix])
+@pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
+def test_view_mixin_copies_data(adata, array_type: type, attr):
+    N = 100
+    adata = ad.AnnData(
+        obs=pd.DataFrame(index=np.arange(N)), var=pd.DataFrame(index=np.arange(N))
+    )
+
+    X = array_type(sparse.eye(N, N).multiply(np.arange(1, N + 1)))
+    if attr == "X":
+        adata.X = X
+    else:
+        getattr(adata, attr)["arr"] = X
+
+    view = adata[:50]
+
+    if attr == "X":
+        arr_view = view.X
+    else:
+        arr_view = getattr(view, attr)["arr"]
+
+    arr_view_copy = arr_view.copy()
+
+    if sparse.issparse(X):
+        assert not np.shares_memory(arr_view.indices, arr_view_copy.indices)
+        assert not np.shares_memory(arr_view.indptr, arr_view_copy.indptr)
+        assert not np.shares_memory(arr_view.data, arr_view_copy.data)
+
+        arr_view_copy.data[0] = -5
+        assert not np.array_equal(arr_view_copy.data, arr_view.data)
+    else:
+        assert not np.shares_memory(arr_view, arr_view_copy)
+
+        arr_view_copy[0, 0] = -5
+        assert not np.array_equal(arr_view_copy, arr_view)
+
+
+def test_copy_X_dtype():
+    adata = ad.AnnData(sparse.eye(50, dtype=np.float64, format="csr"))
+    adata_c = adata[::2].copy()
+    assert adata_c.X.dtype == adata.X.dtype

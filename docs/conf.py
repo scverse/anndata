@@ -23,13 +23,14 @@ needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
-author = "AnnData development team"
-copyright = f"{datetime.now():%Y}, the AnnData development team."
+author = f"{project} developers"
+copyright = f"{datetime.now():%Y}, {author}"
 version = anndata.__version__.replace(".dirty", "")
 release = version
 
 # default settings
 templates_path = ["_templates"]
+html_static_path = ["_static"]
 source_suffix = ".rst"
 master_doc = "index"
 default_role = "literal"
@@ -46,6 +47,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
+    "nbsphinx",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
@@ -79,12 +81,14 @@ intersphinx_mapping = dict(
     numpy=("https://numpy.org/doc/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
     python=("https://docs.python.org/3", None),
-    scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
+    scipy=("https://scipy.github.io/devdocs/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     xarray=("http://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
+    "h5py._hl.group.Group": "h5py.Group",
+    "h5py._hl.files.File": "h5py.File",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
     # Temporarily
     "anndata._core.raw.Raw": "anndata.AnnData",

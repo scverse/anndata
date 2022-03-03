@@ -467,6 +467,16 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return len(self.obs_names), len(self.var_names)
 
     @property
+    def n_obs(self):
+        """Number of observations."""
+        return self.shape[0]
+
+    @property
+    def n_vars(self):
+        """Number of variables/features."""
+        return self.shape[1]
+
+    @property
     def convert(self):
         """On the fly converters for keys of attributes and data matrix.
 

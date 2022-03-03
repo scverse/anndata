@@ -13,10 +13,10 @@ from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
 try:
     import torch
-    from torch.utils.data import Sampler, Dataset, DataLoader
+    from torch.utils.data import Sampler, BatchSampler, Dataset, DataLoader
 except ImportError:
     warnings.warn("Сould not load pytorch.")
-    Sampler, Dataset, DataLoader = object, object, object
+    Sampler, BatchSampler, Dataset, DataLoader = object, object, object, object
 
 
 # Custom sampler to get proper batches instead of joined separate indices
@@ -188,17 +188,21 @@ class AnnLoader(DataLoader):
         if (
             batch_size is not None
             and batch_size > 1
-            and not has_sampler
             and not has_batch_sampler
             and not use_parallel
         ):
             drop_last = kwargs.pop("drop_last", False)
-            default_sampler = BatchIndexSampler(
-                len(dataset), batch_size, shuffle, drop_last
-            )
 
-            super().__init__(
-                dataset, batch_size=None, sampler=default_sampler, **kwargs
-            )
+            if has_sampler:
+                sampler = kwargs.pop("sampler")
+                sampler = BatchSampler(
+                    sampler, batch_size=batch_size, drop_last=drop_last
+                )
+            else:
+                sampler = BatchIndexSampler(
+                    len(dataset), batch_size, shuffle, drop_last
+                )
+
+            super().__init__(dataset, batch_size=None, sampler=sampler, **kwargs)
         else:
             super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
