@@ -495,7 +495,7 @@ def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
     group = f.create_group(k)
     form, length, container = ak.to_buffers(v)
     group.attrs["length"] = length
-    write_elem(group, "form", form.tojson(), dataset_kwargs=dataset_kwargs)
+    group.attrs["form"] = form.tojson()
     write_elem(group, "container", container, dataset_kwargs=dataset_kwargs)
 
 
@@ -504,7 +504,7 @@ def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
 def read_awkward(elem):
     import awkward as ak
 
-    form = read_elem(elem["form"])
+    form = _read_attr(elem.attrs, "form")
     length = _read_attr(elem.attrs, "length")
     container = read_elem(elem["container"])
 

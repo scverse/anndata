@@ -76,6 +76,7 @@ doc = [
     "scanpydoc>=0.7.3",
     "typing_extensions; python_version < '3.8'",
     "zarr",
+    "awkward",
 ]
 test = [
     "loompy>=3.0.5",
