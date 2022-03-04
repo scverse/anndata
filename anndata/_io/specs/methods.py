@@ -29,6 +29,7 @@ from anndata.compat import (
 )
 from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
 from anndata._warnings import OldFormatWarning
+from anndata.compat import AwkArray
 
 from .registry import (
     _REGISTRY,
@@ -479,6 +480,35 @@ def read_sparse(elem):
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
     return SparseDataset(elem)[indices]
+
+
+#################
+# Awkward array #
+#################
+
+
+@_REGISTRY.register_write(H5Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, AwkArray, IOSpec("awkward-array", "0.1.0"))
+def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
+    import awkward as ak
+
+    group = f.create_group(k)
+    form, length, container = ak.to_buffers(v)
+    group.attrs["length"] = length
+    write_elem(group, "form", form.tojson(), dataset_kwargs=dataset_kwargs)
+    write_elem(group, "container", container, dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
+def read_awkward(elem):
+    import awkward as ak
+
+    form = read_elem(elem["form"])
+    length = _read_attr(elem.attrs, "length")
+    container = read_elem(elem["container"])
+
+    return ak.from_buffers(form, length, container)
 
 
 ##############
