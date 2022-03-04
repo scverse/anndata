@@ -2052,10 +2052,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         This is more efficient than trying `adata.X is None` for views, since creating
         views (at least anndata's kind) can be expensive.
         """
-        if not self.is_view:
-            return self.X is not None
+        if self.isbacked:
+            if not self.file.is_open:
+                self.file.open()
+            return "X" in self.file
         else:
-            return self._adata_ref.X is not None
+            if not self.is_view:
+                return self.X is not None
+            else:
+                return self._adata_ref.X is not None
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat

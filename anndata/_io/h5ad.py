@@ -78,11 +78,12 @@ def write_h5ad(
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
-        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
-            # If adata.isbacked, X should already be up to date
-            write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+        if not adata.isbacked or adata._has_X():
+            if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
+                write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+                # If adata.isbacked, X should already be up to date
+                write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
             adata.raw.X, (sparse.spmatrix, SparseDataset)
         ):
