@@ -81,7 +81,7 @@ def write_h5ad(
         if not adata.isbacked or adata._has_X():
             if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
                 write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-            elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+            elif not (adata.isbacked and Path(adata.filename) == Path(filepath)) or adata.is_view:
                 # If adata.isbacked, X should already be up to date
                 write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
@@ -132,35 +132,34 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
 def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> AnnData:
     d = dict(filename=filename, filemode=mode)
 
-    f = h5py.File(filename, mode)
+    with h5py.File(filename, mode) as f:
+        attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
+        df_attributes = ["obs", "var"]
 
-    attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
-    df_attributes = ["obs", "var"]
+        if "encoding-type" in f.attrs:
+            attributes.extend(df_attributes)
+        else:
+            for k in df_attributes:
+                if k in f:  # Backwards compat
+                    d[k] = read_dataframe(f[k])
 
-    if "encoding-type" in f.attrs:
-        attributes.extend(df_attributes)
-    else:
-        for k in df_attributes:
-            if k in f:  # Backwards compat
-                d[k] = read_dataframe(f[k])
+        d.update({k: read_elem(f[k]) for k in attributes if k in f})
 
-    d.update({k: read_elem(f[k]) for k in attributes if k in f})
+        d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
-    d["raw"] = _read_raw(f, attrs={"var", "varm"})
+        X_dset = f.get("X", None)
+        if X_dset is None:
+            pass
+        elif isinstance(X_dset, h5py.Group):
+            d["dtype"] = X_dset["data"].dtype
+        elif hasattr(X_dset, "dtype"):
+            d["dtype"] = f["X"].dtype
+        else:
+            raise ValueError()
 
-    X_dset = f.get("X", None)
-    if X_dset is None:
-        pass
-    elif isinstance(X_dset, h5py.Group):
-        d["dtype"] = X_dset["data"].dtype
-    elif hasattr(X_dset, "dtype"):
-        d["dtype"] = f["X"].dtype
-    else:
-        raise ValueError()
+        _clean_uns(d)
 
-    _clean_uns(d)
-
-    return AnnData(**d)
+        return AnnData(**d)
 
 
 def read_h5ad(
