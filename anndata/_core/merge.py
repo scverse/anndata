@@ -13,7 +13,7 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from scipy.sparse.base import spmatrix
+from scipy.sparse import spmatrix
 
 from .anndata import AnnData
 from ..compat import Literal
