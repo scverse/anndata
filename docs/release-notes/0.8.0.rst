@@ -26,6 +26,8 @@ This should make it much easier to support new datatypes, use partial access, an
 - `obs` and `var` dataframes are no longer copied by default on `AnnData` instantiation :issue:`371` :smaller:`I Virshup`
 - - Added PyTorch dataloader :class:`~anndata.experimental.AnnLoader` and lazy concatenation object :class:`~anndata.experimental.AnnCollection`. See the `tutorials`_ :pr:`416` :smaller:`S Rybakov`
 
+.. _tutorials: https://anndata-tutorials.readthedocs.io/en/latest/index.html
+
 .. rubric:: Bug fixes
 
 - Fixed issue where `.copy` was creating sparse matrices views when copying :pr:`670` :smaller:`michalk8`
