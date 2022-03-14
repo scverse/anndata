@@ -9,6 +9,11 @@
 
 .. rubric:: IO Specification
 
+.. warning:: The on disk format of AnnData objects has been updated with this release.
+    Previous releases of `anndata` will not be able to read all files written by this version.
+
+    For discussion of possible future solutions to this issue, see :issue:`698`
+
 Internal handling of IO has been overhauled.
 This should make it much easier to support new datatypes, use partial access, and use `AnnData` internally in other formats.
 
