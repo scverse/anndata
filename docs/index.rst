@@ -1,6 +1,9 @@
 .. include:: ../README.rst
    :end-line: 22
 
+.. role:: small
+.. role:: smaller
+
 .. image:: _static/img/anndata_schema.svg
    :align: right
    :width: 40%
@@ -21,7 +24,7 @@ News
 Latest additions
 ----------------
 
-.. include:: release-latest.rst
+.. include:: release-notes/release-latest.rst
 
 .. toctree::
    :maxdepth: 1
@@ -32,5 +35,6 @@ Latest additions
    concatenation
    fileformat-prose
    benchmarks
-   release-notes
+   contributing
+   release-notes/index
    references
