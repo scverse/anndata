@@ -64,6 +64,7 @@ Writing to other formats.
    AnnData.write_loom
    AnnData.write_zarr
 
+.. _experimental_api:
 
 Experimental API
 ----------------
