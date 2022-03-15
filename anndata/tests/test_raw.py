@@ -3,7 +3,7 @@ import pytest
 
 import anndata as ad
 from anndata._core.anndata import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal
+from anndata.tests.helpers import assert_equal, gen_adata
 
 
 # -------------------------------------------------------------------------------
@@ -133,3 +133,17 @@ def test_raw_as_parent_view():
     b = a.raw[:, "0"]
     # actualize
     b.varm["PCs"] = np.array([[1, 2, 3]])
+
+
+def test_to_adata():
+    # https://github.com/theislab/anndata/pull/404
+    adata = gen_adata((20, 10))
+
+    with_raw = adata[:, ::2].copy()
+    with_raw.raw = adata.copy()
+
+    # Raw doesn't do layers or varp currently
+    # Deleting after creation so we know to rewrite the test if they are supported
+    del adata.layers, adata.varp
+
+    assert_equal(adata, with_raw.raw.to_adata())
