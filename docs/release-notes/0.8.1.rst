@@ -1,0 +1,6 @@
+0.8.1 :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+.. rubric:: Documentation
