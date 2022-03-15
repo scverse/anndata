@@ -1,0 +1,92 @@
+trigger:
+- master
+
+variables:
+  PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
+  RUN_COVERAGE: no
+
+jobs:
+- job: PyTest
+  pool:
+    vmImage: 'ubuntu-18.04'
+  strategy:
+    matrix:
+      Python39:
+        python.version: '3.9'
+        RUN_COVERAGE: yes
+      Python37:
+        python.version: '3.7'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '$(python.version)'
+    displayName: 'Use Python $(python.version)'
+
+  - task: Cache@2
+    inputs:
+      key: '"python $(python.version)" | "$(Agent.OS)" | pyproject.toml'
+      restoreKeys: |
+        python | "$(Agent.OS)"
+        python
+      path: $(PIP_CACHE_DIR)
+    displayName: Cache pip packages
+
+  - script: |
+      python -m pip install --upgrade pip
+      pip install pytest-cov wheel
+      pip install .[dev,test]
+    displayName: 'Install dependencies'
+
+  - script: |
+      pip list
+    displayName: 'Display installed versions'
+
+  - script: |
+      pytest --color=yes --junitxml=junit/test-results.xml
+    displayName: 'PyTest'
+    condition: eq(variables['RUN_COVERAGE'], 'no')
+
+  - script: |
+      pytest --color=yes --junitxml=junit/test-results.xml --cov --cov-report=xml --cov-context=test
+    displayName: 'PyTest (coverage)'
+    condition: eq(variables['RUN_COVERAGE'], 'yes')
+
+  - task: PublishCodeCoverageResults@1
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
+      reportDirectory: '$(System.DefaultWorkingDirectory)/**/htmlcov'
+    condition: eq(variables['RUN_COVERAGE'], 'yes')
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFiles: 'junit/test-*.xml'
+      testRunTitle: 'Publish test results for Python $(python.version)'
+
+  - script: bash <(curl -s https://codecov.io/bash)
+    displayName: 'Upload to codecov.io'
+    condition: eq(variables['RUN_COVERAGE'], 'yes')
+
+- job: CheckBuild
+  pool:
+    vmImage: 'ubuntu-18.04'
+  steps:
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.9'
+    displayName: 'Use Python 3.9'
+
+  - script: |
+      python -m pip install --upgrade pip
+      pip install build twine
+    displayName: 'Install build tools and requirements'
+
+  - script: pip list
+    displayName: 'Display installed versions'
+
+  - script: |
+      python -m build --sdist --wheel .
+      twine check dist/*
+    displayName: 'Build & Twine check'

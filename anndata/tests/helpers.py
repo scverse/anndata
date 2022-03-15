@@ -1,6 +1,6 @@
 from functools import singledispatch, wraps
 from string import ascii_letters
-from typing import Tuple
+from typing import Tuple, Optional
 from collections.abc import Mapping
 import warnings
 
@@ -11,7 +11,7 @@ from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
 
-from anndata import AnnData
+from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
@@ -35,13 +35,22 @@ def gen_typed_df(n, index=None):
     if n > len(letters):
         letters = letters[: n // 2]  # Make sure categories are repeated
     return pd.DataFrame(
-        dict(
-            cat=pd.Categorical(np.random.choice(letters, n)),
-            cat_ordered=pd.Categorical(np.random.choice(letters, n), ordered=True),
-            int64=np.random.randint(-50, 50, n),
-            float64=np.random.random(n),
-            uint8=np.random.randint(255, size=n, dtype="uint8"),
-        ),
+        {
+            "cat": pd.Categorical(np.random.choice(letters, n)),
+            "cat_ordered": pd.Categorical(np.random.choice(letters, n), ordered=True),
+            "int64": np.random.randint(-50, 50, n),
+            "float64": np.random.random(n),
+            "uint8": np.random.randint(255, size=n, dtype="uint8"),
+            "bool": np.random.randint(0, 2, size=n, dtype=bool),
+            "nullable-bool": pd.arrays.BooleanArray(
+                np.random.randint(0, 2, size=n, dtype=bool),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+            "nullable-int": pd.arrays.IntegerArray(
+                np.random.randint(0, 1000, size=n, dtype=np.int32),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+        },
         index=index,
     )
 
@@ -68,9 +77,9 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
+    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -104,6 +113,10 @@ def gen_adata(
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    if X_type is None:
+        X = None
+    else:
+        X = X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype))
     obsm = dict(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
@@ -128,10 +141,16 @@ def gen_adata(
     )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
+        nested=dict(
+            scalar_str="str",
+            scalar_int=42,
+            scalar_float=3.0,
+            nested_further=dict(array=np.arange(5)),
+        ),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     adata = AnnData(
-        X=X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype)),
+        X=X,
         obs=obs,
         var=var,
         obsm=obsm,
@@ -203,7 +222,7 @@ def slice_subset(index, min_size=2):
 
 
 def single_subset(index):
-    return index[np.random.randint(0, len(index), size=())]
+    return index[np.random.randint(0, len(index))]
 
 
 @pytest.fixture(
@@ -333,7 +352,7 @@ def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
     b_indices = (b.parent.obs_names, b.parent.var_names)
     for axis_idx in a.axes:
         assert_equal(
-            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx,
+            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx
         )
     assert a.attrname == b.attrname, format_msg(elem_name)
     assert_equal_mapping(a, b, exact=exact, elem_name=elem_name)
@@ -343,14 +362,42 @@ def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
 def assert_equal_index(a, b, exact=False, elem_name=None):
     if not exact:
         report_name(pd.testing.assert_index_equal)(
-            a, b, check_names=False, check_categorical=False, _elem_name=elem_name,
+            a, b, check_names=False, check_categorical=False, _elem_name=elem_name
         )
     else:
         report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(pd.api.extensions.ExtensionArray)
+def assert_equal_extension_array(a, b, exact=False, elem_name=None):
+    report_name(pd.testing.assert_extension_array_equal)(
+        a,
+        b,
+        check_dtype=exact,
+        check_exact=exact,
+        _elem_name=elem_name,
+    )
+
+
+@assert_equal.register(Raw)
+def assert_equal_raw(a, b, exact=False, elem_name=None):
+    def assert_is_not_none(x):  # can't put an assert in a lambda
+        assert x is not None
+
+    report_name(assert_is_not_none)(b, _elem_name=elem_name)
+    for attr in ["X", "var", "varm", "obs_names"]:
+        assert_equal(
+            getattr(a, attr),
+            getattr(b, attr),
+            exact=exact,
+            elem_name=f"{elem_name}/{attr}",
+        )
+
+
 @assert_equal.register(AnnData)
-def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
+def assert_adata_equal(
+    a: AnnData, b: AnnData, exact: bool = False, elem_name: Optional[str] = None
+):
     """\
     Check whether two AnnData objects are equivalent,
     raising an AssertionError if they aren’t.
@@ -363,10 +410,17 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
         Whether comparisons should be exact or not. This has a somewhat flexible
         meaning and should probably get refined in the future.
     """
+
+    def fmt_name(x):
+        if elem_name is None:
+            return x
+        else:
+            return f"{elem_name}/{x}"
+
     # There may be issues comparing views, since np.allclose
     # can modify ArrayViews if they contain `nan`s
-    assert_equal(a.obs_names, b.obs_names, exact, elem_name="obs_names")
-    assert_equal(a.var_names, b.var_names, exact, elem_name="var_names")
+    assert_equal(a.obs_names, b.obs_names, exact, elem_name=fmt_name("obs_names"))
+    assert_equal(a.var_names, b.var_names, exact, elem_name=fmt_name("var_names"))
     if not exact:
         # Reorder all elements if neccesary
         idx = [slice(None), slice(None)]
@@ -380,17 +434,21 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
             change_flag = True
         if change_flag:
             b = b[tuple(idx)].copy()
-    assert_equal(a.obs, b.obs, exact, elem_name="obs")
-    assert_equal(a.var, b.var, exact, elem_name="var")
-    assert_equal(a.X, b.X, exact, elem_name="X")
-    for mapping_attr in ["obsm", "varm", "layers", "uns", "obsp", "varp"]:
+    for attr in [
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "layers",
+        "uns",
+        "obsp",
+        "varp",
+        "raw",
+    ]:
         assert_equal(
-            getattr(a, mapping_attr),
-            getattr(b, mapping_attr),
+            getattr(a, attr),
+            getattr(b, attr),
             exact,
-            elem_name=mapping_attr,
+            elem_name=fmt_name(attr),
         )
-    if a.raw is not None:
-        assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw/X")
-        assert_equal(a.raw.var, b.raw.var, exact, elem_name="raw/var")
-        assert_equal(a.raw.varm, b.raw.varm, exact, elem_name="raw/varm")

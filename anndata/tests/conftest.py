@@ -1,4 +1,11 @@
+import warnings
+
 import pytest
+
+import anndata
+
+# TODO: Should be done in pyproject.toml, see anndata/conftest.py
+warnings.filterwarnings("ignore", category=anndata.OldFormatWarning)
 
 
 @pytest.fixture

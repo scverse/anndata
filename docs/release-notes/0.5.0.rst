@@ -1,0 +1,10 @@
+0.5.0 :small:`9 February, 2018`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- inform about duplicates in :class:`~anndata.AnnData.var_names` and resolve them using :func:`~anndata.AnnData.var_names_make_unique`
+- automatically remove unused categories after slicing
+- read/write `.loom <https://loompy.org>`_ files using loompy 2
+- fixed read/write for a few text file formats
+- read `UMI tools`_ files: :func:`~anndata.read_umi_tools`
+
+.. _UMI tools: https://github.com/CGATOxford/UMI-tools

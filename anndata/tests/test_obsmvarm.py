@@ -23,13 +23,15 @@ def adata():
 def test_assigmnent_dict(adata):
     d_obsm = dict(
         a=pd.DataFrame(
-            dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]), index=adata.obs_names,
+            dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]),
+            index=adata.obs_names,
         ),
         b=np.zeros((M, 2)),
     )
     d_varm = dict(
         a=pd.DataFrame(
-            dict(a1=np.ones(N), a2=[f"a{i}" for i in range(N)]), index=adata.var_names,
+            dict(a1=np.ones(N), a2=[f"a{i}" for i in range(N)]),
+            index=adata.var_names,
         ),
         b=np.zeros((N, 2)),
     )

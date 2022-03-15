@@ -1,28 +1,41 @@
 .. include:: ../README.rst
-   :end-line: 15
+   :end-line: 22
 
-.. figure:: https://falexwolf.de/img/scanpy/anndata.svg
-   :width: 350px
+.. role:: small
+.. role:: smaller
 
-Report issues and see the code on `GitHub <https://github.com/theislab/anndata>`_.
+.. image:: _static/img/anndata_schema.svg
+   :align: right
+   :width: 40%
 
-:class:`~anndata.AnnData` provides a scalable way of keeping track
-of data and learned annotations. It was initially built for
-`Scanpy <https://github.com/theislab/scanpy>`__
-`(Genome Biology, 2018) <https://doi.org/10.1186/s13059-017-1382-0>`__.
+anndata is a Python package for handling annotated data matrices in memory and on disk, positioned between pandas and xarray. anndata offers a broad range of computationally efficient features including, among others, sparse data support, lazy operations, and a PyTorch interface.
 
-Latest release
---------------
+* Discuss development on `GitHub <https://github.com/theislab/anndata>`_.
+* Ask questions on the `scverse Discourse <https://discourse.scverse.org>`_.
+* Install via `pip install anndata` or `conda install anndata -c conda-forge`.
+* Consider citing the `anndata paper <https://doi.org/10.1101/2021.12.16.473007>`__.
+* See `Scanpy's documentation <https://scanpy.readthedocs.io/>`__ for usage
+  related to single cell data. anndata was initially built for Scanpy.
 
-.. include:: release-latest.rst
+News
+----
+
+.. include:: news.rst
+
+Latest additions
+----------------
+
+.. include:: release-notes/release-latest.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
 
+   tutorials
    api
    concatenation
    fileformat-prose
    benchmarks
-   release-notes
+   contributing
+   release-notes/index
    references

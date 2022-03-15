@@ -1,16 +1,21 @@
 from importlib.util import find_spec
+from os import PathLike
 from pathlib import Path
 from string import ascii_letters
 import tempfile
+import warnings
 
+import h5py
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical
+from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy.sparse import csr_matrix, csc_matrix
+import zarr
 
 import anndata as ad
 from anndata.utils import asarray
+from anndata.compat import _read_attr
 
 from anndata.tests.helpers import gen_adata, assert_equal
 
@@ -29,8 +34,8 @@ X_list = [[1, 0], [3, 0], [5, 6]]  # data matrix of shape n_obs x n_vars
 obs_dict = dict(  # annotation of observations / rows
     row_names=["name1", "name2", "name3"],  # row annotation
     oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
-    oanno1b=["cat1", "cat1", "cat1",],  # categorical annotation with one category
-    oanno1c=["cat1", "cat1", np.nan,],  # categorical annotation with a missing value
+    oanno1b=["cat1", "cat1", "cat1"],  # categorical annotation with one category
+    oanno1c=["cat1", "cat1", np.nan],  # categorical annotation with a missing value
     oanno2=["o1", "o2", "o3"],  # string annotation
     oanno3=[2.1, 2.2, 2.3],  # float annotation
     oanno4=[3.3, 1.1, 2.2],  # float annotation
@@ -78,6 +83,11 @@ def rw(backing_h5ad):
     return curr, orig
 
 
+@pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
+def dtype(request):
+    return request.param
+
+
 diskfmt2 = diskfmt
 
 
@@ -115,7 +125,7 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
 
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert not is_categorical(adata_src.obs["oanno1"])
+    assert not is_categorical_dtype(adata_src.obs["oanno1"])
     adata_src.raw = adata_src
     adata_src.write(backing_h5ad, **dataset_kwargs)
 
@@ -123,19 +133,20 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     adata_mid.write(mid_pth, **dataset_kwargs)
 
     adata = ad.read_h5ad(mid_pth)
-    assert is_categorical(adata.obs["oanno1"])
-    assert not is_categorical(adata.obs["oanno2"])
+    assert is_categorical_dtype(adata.obs["oanno1"])
+    assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
-    assert is_categorical(adata.raw.var["vanno2"])
-    assert np.all(adata.obs == adata_src.obs)
-    assert np.all(adata.var == adata_src.var)
+    assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
+    assert is_categorical_dtype(adata.raw.var["vanno2"])
+    pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
+    pd.testing.assert_frame_equal(adata.var, adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
     assert type(adata.raw.X) is type(adata_src.raw.X)
     assert type(adata.raw.varm) is type(adata_src.raw.varm)
     assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
-    assert np.all(adata.raw.var == adata_src.raw.var)
+    pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
     assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
@@ -148,17 +159,18 @@ def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.raw = adata_src
-    assert not is_categorical(adata_src.obs["oanno1"])
+    assert not is_categorical_dtype(adata_src.obs["oanno1"])
     adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
 
     adata = ad.read_zarr(tmp_path / "test_zarr_dir")
-    assert is_categorical(adata.obs["oanno1"])
-    assert not is_categorical(adata.obs["oanno2"])
+    assert is_categorical_dtype(adata.obs["oanno1"])
+    assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
-    assert is_categorical(adata.raw.var["vanno2"])
-    assert np.all(adata.obs == adata_src.obs)
-    assert np.all(adata.var == adata_src.var)
+    assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
+    assert is_categorical_dtype(adata.raw.var["vanno2"])
+    pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
+    pd.testing.assert_frame_equal(adata.var, adata_src.var)
     assert np.all(adata.var.index == adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
     assert type(adata.raw.X) is type(adata_src.raw.X)
@@ -222,8 +234,8 @@ def test_readwrite_backed(typ, backing_h5ad):
     adata_src.write()
 
     adata = ad.read(backing_h5ad)
-    assert is_categorical(adata.obs["oanno1"])
-    assert not is_categorical(adata.obs["oanno2"])
+    assert is_categorical_dtype(adata.obs["oanno1"])
+    assert not is_categorical_dtype(adata.obs["oanno2"])
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
     assert_equal(adata, adata_src)
@@ -246,6 +258,73 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
     from_zarr = ad.read_zarr(zarr_pth)
 
     assert_equal(from_h5ad, from_zarr, exact=True)
+
+
+@pytest.mark.parametrize(
+    "compression,compression_opts",
+    [
+        (None, None),
+        ("lzf", None),
+        ("gzip", None),
+        ("gzip", 8),
+    ],
+)
+def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
+    # https://github.com/theislab/anndata/issues/497
+    pth = Path(tmp_path) / "adata.h5ad"
+    adata = gen_adata((10, 8))
+    kwargs = {}
+    if compression is not None:
+        kwargs["compression"] = compression
+    if compression_opts is not None:
+        kwargs["compression_opts"] = compression_opts
+    not_compressed = []
+
+    adata.write_h5ad(pth, **kwargs)
+
+    def check_compressed(key, value):
+        if isinstance(value, h5py.Dataset) and value.shape != ():
+            if compression is not None and value.compression != compression:
+                not_compressed.append(key)
+            elif (
+                compression_opts is not None
+                and value.compression_opts != compression_opts
+            ):
+                not_compressed.append(key)
+
+    with h5py.File(pth) as f:
+        f.visititems(check_compressed)
+
+    if not_compressed:
+        msg = "\n\t".join(not_compressed)
+        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+
+    assert_equal(adata, ad.read_h5ad(pth))
+
+
+def test_zarr_compression(tmp_path):
+    from numcodecs import Blosc
+
+    pth = str(Path(tmp_path) / "adata.zarr")
+    adata = gen_adata((10, 8))
+    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    not_compressed = []
+
+    ad._io.write_zarr(pth, adata, compressor=compressor)
+
+    def check_compressed(key, value):
+        if isinstance(value, zarr.Array) and value.shape != ():
+            if value.compressor != compressor:
+                not_compressed.append(key)
+
+    with zarr.open(str(pth), "r") as f:
+        f.visititems(check_compressed)
+
+    if not_compressed:
+        msg = "\n\t".join(not_compressed)
+        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+
+    assert_equal(adata, ad.read_zarr(pth))
 
 
 def test_changed_obs_var_names(tmp_path, diskfmt):
@@ -272,22 +351,30 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
 
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
-@pytest.mark.parametrize("obsm_names", [{}, dict(X_composed=["oanno3", "oanno4"])])
-@pytest.mark.parametrize("varm_names", [{}, dict(X_composed2=["vanno3", "vanno4"])])
-def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
+@pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
+@pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
+def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     X = typ(X_list)
+    obs_dim = "meaningful_obs_dim_name"
+    var_dim = "meaningful_var_dim_name"
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_src.obs_names.name = obs_dim
+    adata_src.var_names.name = var_dim
     adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
     adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
+
     adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
 
     adata = ad.read_loom(
         tmp_path / "test.loom",
         sparse=typ is csr_matrix,
-        obsm_names=obsm_names,
-        varm_names=varm_names,
+        obsm_mapping=obsm_mapping,
+        obs_names=obs_dim,
+        varm_mapping=varm_mapping,
+        var_names=var_dim,
         cleanup=True,
     )
+
     if isinstance(X, np.ndarray):
         assert np.allclose(adata.X, X)
     else:
@@ -298,10 +385,43 @@ def test_readwrite_loom(typ, obsm_names, varm_names, tmp_path):
     # as we called with `cleanup=True`
     assert "oanno1b" in adata.uns["loom-obs"]
     assert "vanno2" in adata.uns["loom-var"]
-    for k, v in obsm_names.items():
+    for k, v in obsm_mapping.items():
         assert k in adata.obsm_keys() and adata.obsm[k].shape[1] == len(v)
-    for k, v in varm_names.items():
+    for k, v in varm_mapping.items():
         assert k in adata.varm_keys() and adata.varm[k].shape[1] == len(v)
+    assert adata.obs_names.name == obs_dim
+    assert adata.var_names.name == var_dim
+
+
+@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
+def test_readloom_deprecations(tmp_path):
+    loom_pth = tmp_path / "test.loom"
+    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
+    adata_src.write_loom(loom_pth, write_obsm_varm=True)
+
+    # obsm_names -> obsm_mapping
+    obsm_mapping = {"df": adata_src.obs.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.read_loom(loom_pth, obsm_names=obsm_mapping)
+    actual_result = ad.read_loom(loom_pth, obsm_mapping=obsm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match="ambiguous"):
+        ad.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
+
+    # varm_names -> varm_mapping
+    varm_mapping = {"df": adata_src.var.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.read_loom(loom_pth, varm_names=varm_mapping)
+    actual_result = ad.read_loom(loom_pth, varm_mapping=varm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match="ambiguous"):
+        ad.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
+
+    # positional -> keyword
+    with pytest.warns(FutureWarning, match="sparse"):
+        depr_result = ad.read_loom(loom_pth, True)
+    actual_result = ad.read_loom(loom_pth, sparse=True)
+    assert type(depr_result.X) == type(actual_result.X)
 
 
 def test_read_csv():
@@ -331,6 +451,38 @@ def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
+
+
+@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+def test_write_csv_view(typ, tmp_path):
+    # https://github.com/theislab/anndata/issues/401
+    import hashlib
+
+    def md5_path(pth: PathLike) -> bytes:
+        checksum = hashlib.md5()
+        with open(pth, "rb") as f:
+            while True:
+                buf = f.read(checksum.block_size * 100)
+                if not buf:
+                    break
+                checksum.update(buf)
+        return checksum.digest()
+
+    def hash_dir_contents(dir: Path) -> "dict[str, bytes]":
+        root_pth = str(dir)
+        return {
+            str(k)[len(root_pth) :]: md5_path(k) for k in dir.rglob("*") if k.is_file()
+        }
+
+    adata = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
+
+    # Test writing a view
+    view_pth = tmp_path / "test_view_csv_dir"
+    copy_pth = tmp_path / "test_copy_csv_dir"
+    adata[::2].write_csvs(view_pth, skip_data=False)
+    adata[::2].copy().write_csvs(copy_pth, skip_data=False)
+
+    assert hash_dir_contents(view_pth) == hash_dir_contents(copy_pth)
 
 
 @pytest.mark.parametrize(
@@ -366,10 +518,18 @@ def test_read_excel():
     assert adata.X.tolist() == X_list
 
 
+def test_read_umi_tools():
+    adata = ad.read_umi_tools(HERE / "data/umi_tools.tsv.gz")
+    assert adata.obs_names.name == "cell"
+    assert adata.var_names.name == "gene"
+    assert adata.shape == (2, 13)
+    assert "ENSG00000070404.9" in adata.var_names
+    assert set(adata.obs_names) == {"ACAAGG", "TTCACG"}
+
+
 def test_write_categorical(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        X=np.ones((5, 5)),
         obs=pd.DataFrame(
             dict(
                 cat1=["a", "a", "b", np.nan, np.nan],
@@ -386,7 +546,6 @@ def test_write_categorical(tmp_path, diskfmt):
 def test_write_categorical_index(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        X=np.ones((5, 5)),
         uns={"df": pd.DataFrame(index=pd.Categorical(list("aabcd")))},
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
@@ -399,9 +558,11 @@ def test_write_categorical_index(tmp_path, diskfmt):
 
 
 def test_dataframe_reserved_columns(tmp_path, diskfmt):
-    reserved = ("_index", "__categories")
+    reserved = ("_index",)
     adata_pth = tmp_path / f"adata.{diskfmt}"
-    orig = ad.AnnData(X=np.ones((5, 5)))
+    orig = ad.AnnData(
+        obs=pd.DataFrame(index=np.arange(5)), var=pd.DataFrame(index=np.arange(5))
+    )
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
@@ -447,6 +608,51 @@ def test_write_large_categorical(tmp_path, diskfmt):
     assert_equal(orig, curr)
 
 
+def test_write_string_types(tmp_path, diskfmt):
+    # https://github.com/theislab/anndata/issues/456
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+
+    adata = ad.AnnData(
+        obs=pd.DataFrame(
+            np.ones((3, 2)),
+            columns=["a", np.str_("b")],
+            index=["a", "b", "c"],
+        ),
+    )
+
+    write = getattr(adata, f"write_{diskfmt}")
+    read = getattr(ad, f"read_{diskfmt}")
+
+    write(adata_pth)
+    from_disk = read(adata_pth)
+
+    assert_equal(adata, from_disk)
+
+    adata.obs[b"c"] = np.zeros(3)
+    # This should error, and tell you which key is at fault
+    with pytest.raises(TypeError, match=str(b"c")):
+        write(adata_pth)
+
+
+@pytest.mark.parametrize(
+    "teststring",
+    ["teststring", np.asarray(["test1", "test2", "test3"], dtype="object")],
+)
+@pytest.mark.parametrize("encoding", ["ascii", "utf-8"])
+@pytest.mark.parametrize("length", [None, 15])
+def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
+    with h5py.File(tmp_path / "attributes.h5", "w") as file:
+        dset = file.create_dataset("dset", data=np.arange(10))
+        attrs = dset.attrs
+        attrs.create(
+            "string",
+            teststring,
+            dtype=h5py.h5t.string_dtype(encoding=encoding, length=length),
+        )
+
+        assert_equal(teststring, _read_attr(attrs, "string"))
+
+
 def test_zarr_chunk_X(tmp_path):
     import zarr
 
@@ -479,7 +685,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
 
     import scanpy as sc
 
-    pbmc = sc.datasets.pbmc68k_reduced()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ad.OldFormatWarning)
+        pbmc = sc.datasets.pbmc68k_reduced()
+
     write1(pbmc, filepth1)
     from_disk1 = read1(filepth1)  # Do we read okay
     write2(from_disk1, filepth2)  # Can we round trip
@@ -504,6 +713,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
 
 # Checking if we can read legacy zarr files
 # TODO: Check how I should add this file to the repo
+@pytest.mark.filterwarnings("ignore::anndata.OldFormatWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.skipif(
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
@@ -527,3 +737,36 @@ def test_backwards_compat_zarr():
         pbmc_zarr = ad.read_zarr(z)
 
     assert_equal(pbmc_zarr, pbmc_orig)
+
+
+# TODO: use diskfmt fixture once zarr backend implemented
+def test_adata_in_uns(tmp_path, diskfmt):
+    pth = tmp_path / f"adatas_in_uns.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = gen_adata((4, 5))
+    orig.uns["adatas"] = {
+        "a": gen_adata((1, 2)),
+        "b": gen_adata((12, 8)),
+    }
+    another_one = gen_adata((2, 5))
+    another_one.raw = gen_adata((2, 7))
+    orig.uns["adatas"]["b"].uns["another_one"] = another_one
+
+    write(orig, pth)
+    curr = read(pth)
+
+    assert_equal(orig, curr)
+
+
+def test_io_dtype(tmp_path, diskfmt, dtype):
+    pth = tmp_path / f"adata_dtype.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = ad.AnnData(np.ones((5, 8), dtype=dtype), dtype=dtype)
+    write(orig, pth)
+    curr = read(pth)
+
+    assert curr.X.dtype == dtype

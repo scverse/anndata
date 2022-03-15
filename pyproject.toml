@@ -1,8 +1,122 @@
 [build-system]
-requires = ['setuptools', 'setuptools_scm', 'wheel']
-build-backend = 'setuptools.build_meta'
+build-backend = "flit_core.buildapi"
+requires = [
+    "flit_core >=3.4,<4",
+    "setuptools_scm",
+    "importlib_metadata>=0.7; python_version < '3.8'",
+]
+
+[project]
+name = "anndata"
+description = "Annotated data."
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Philipp Angerer"},
+    {name = "Alex Wolf"},
+    {name = "Isaac Virshup"},
+    {name = "Sergei Rybakov"},
+]
+maintainers = [
+    {name = "Isaac Virshup", email = "ivirshup@gmail.com"},
+    {name = "Philipp Angerer", email = "philipp.angerer@helmholtz-muenchen.de"},
+    {name = "Alex Wolf", email = "f.alex.wolf@gmx.de"},
+]
+readme = {file = "README.rst", content-type="text/x-rst"}
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Environment :: Console",
+    "Framework :: Jupyter",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = [
+    "pandas>=1.1.1",  # pandas <1.1.1 has pandas/issues/35446
+    "numpy>=1.16.5",  # required by pandas 1.x
+    "scipy>1.4",
+    "h5py>=3",
+    "natsort",
+    "packaging>=20",
+    # for getting the stable version
+    "importlib_metadata>=0.7; python_version < '3.8'",
+    "typing_extensions; python_version < '3.8'",  # Remove once we depend on python > 3.7
+]
+dynamic = ["version"]
+
+[project.urls]
+Documentation = "https://anndata.readthedocs.io/"
+Source = "https://github.com/theislab/anndata"
+Home-page = "https://github.com/theislab/anndata"
+
+
+[project.optional-dependencies]
+dev = [
+    # dev version generation
+    "setuptools_scm",
+    # static checking
+    "black>=20.8b1",
+    "docutils",
+]
+doc = [
+    "sphinx>=4.1,<4.2",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints>=1.11.0",
+    "sphinx_issues",
+    "nbsphinx",
+    "scanpydoc>=0.7.3",
+    "typing_extensions; python_version < '3.8'",
+    "zarr",
+]
+test = [
+    "loompy>=3.0.5",
+    "pytest>=6.0",
+    "pytest-cov>=2.10",
+    "zarr",
+    "matplotlib",
+    "sklearn",
+    "openpyxl",
+    "joblib",
+    "boltons",
+    "scanpy",
+    "dask[array]",
+]
+
+[tool.flit.sdist]
+exclude = [
+    'anndata/tests/test_*.py',
+    'anndata/tests/data',
+]
+
+[tool.coverage.run]
+source = ["anndata"]
+omit = [
+	"setup.py",
+	"versioneer.py",
+	"anndata/_version.py",
+	"**/test_*.py",
+]
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+python_files = "test_*.py"
+testpaths = ["anndata", "docs/concatenation.rst"]
+filterwarnings = [
+    'ignore:X\.dtype being converted to np.float32:FutureWarning'
+]
+# For some reason this effects how logging is shown when tests are run
+xfail_strict = true
 
 [tool.black]
 line-length = 88
-target-version = ['py36']
-exclude = '^/build/.*$'
+target-version = ["py37"]
+exclude = "^/build/.*$"

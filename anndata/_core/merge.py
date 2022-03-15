@@ -13,6 +13,7 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from scipy.sparse import spmatrix
 
 from .anndata import AnnData
 from ..compat import Literal
@@ -48,14 +49,14 @@ class OrderedSet(MutableSet):
     def add(self, val):
         self.dict[val] = None
 
-    def union(self, *vals):
+    def union(self, *vals) -> "OrderedSet":
         return reduce(or_, vals, self)
 
     def discard(self, val):
         if val in self:
             del self.dict[val]
 
-    def difference(self, *vals):
+    def difference(self, *vals) -> "OrderedSet":
         return reduce(sub, vals, self)
 
 
@@ -99,6 +100,11 @@ def equal_dataframe(a, b) -> bool:
 @equal.register(np.ndarray)
 def equal_array(a, b) -> bool:
     return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
+
+
+@equal.register(pd.Series)
+def equal_series(a, b) -> bool:
+    return a.equals(b)
 
 
 @equal.register(sparse.spmatrix)
@@ -276,6 +282,11 @@ class Reindexer(object):
         return self.apply(el, axis=axis, fill_value=fill_value)
 
     def apply(self, el, *, axis, fill_value=None):
+        """
+        Reindex element so el[axis] is aligned to self.new_idx.
+
+        Missing values are to be replaced with `fill_value`.
+        """
         if self.no_change and (el.shape[axis] == len(self.old_idx)):
             return el
         if isinstance(el, pd.DataFrame):
@@ -285,7 +296,7 @@ class Reindexer(object):
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
-    def _apply_to_df(self, el, *, axis, fill_value=None):
+    def _apply_to_df(self, el: pd.DataFrame, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = np.NaN
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
@@ -293,17 +304,20 @@ class Reindexer(object):
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
-        if 0 in el.shape:
-            return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape = list(el.shape)
+            shape[axis] = len(self.new_idx)
+            return np.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.old_idx.get_indexer(self.new_idx)
 
         # Indexes real fast, and does outer indexing
         return pd.api.extensions.take(
-            el, indexer, axis=axis, allow_fill=True, fill_value=fill_value,
+            el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
-    def _apply_to_sparse(self, el, *, axis, fill_value=None):
+    def _apply_to_sparse(self, el: spmatrix, *, axis, fill_value=None) -> spmatrix:
         if fill_value is None:
             fill_value = default_fill_value([el])
         if fill_value != 0:
@@ -312,11 +326,14 @@ class Reindexer(object):
             to_fill = np.array([])
 
         # Fixing outer indexing for missing values
-        if el.shape[1] == 0:
+        if el.shape[axis] == 0:
+            shape = list(el.shape)
+            shape[axis] = len(self.new_idx)
+            shape = tuple(shape)
             if fill_value == 0:
-                return sparse.coo_matrix((el.shape[0], len(self.new_idx)))
+                return sparse.csr_matrix(shape)
             else:
-                return np.broadcast_to(fill_value, (el.shape[0], len(self.new_idx)))
+                return np.broadcast_to(fill_value, shape)
 
         fill_idxer = None
 
@@ -354,7 +371,9 @@ class Reindexer(object):
         return out
 
 
-def resolve_index(inds: Iterable[pd.Index], join):
+def merge_indices(
+    inds: Iterable[pd.Index], join: Literal["inner", "outer"]
+) -> pd.Index:
     if join == "inner":
         return reduce(lambda x, y: x.intersection(y), inds)
     elif join == "outer":
@@ -401,7 +420,11 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         fill_value = default_fill_value(arrays)
 
     if any(isinstance(a, pd.DataFrame) for a in arrays):
-        if not all(isinstance(a, pd.DataFrame) for a in arrays):
+        # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
+        if not all(
+            isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
+            for a in arrays
+        ):
             raise NotImplementedError(
                 "Cannot concatenate a dataframe with other array types."
             )
@@ -444,7 +467,7 @@ def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
     return result
 
 
-def gen_inner_reindexers(els, new_index, axis=0):
+def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
     alt_axis = 1 - axis
     if axis == 0:
         df_indices = lambda x: x.columns
@@ -468,7 +491,9 @@ def gen_inner_reindexers(els, new_index, axis=0):
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
     if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
         reindexers = [
-            lambda x: x if not_missing(el) else pd.DataFrame(index=range(shape))
+            (lambda x: x)
+            if not_missing(el)
+            else (lambda x: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
     else:
@@ -478,7 +503,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         max_col = max(el.shape[1] for el in els if not_missing(el))
         orig_cols = [el.shape[1] if not_missing(el) else 0 for el in els]
         reindexers = [
-            gen_reindexer(pd.RangeIndex(max_col), pd.RangeIndex(n),) for n in orig_cols
+            gen_reindexer(pd.RangeIndex(max_col), pd.RangeIndex(n)) for n in orig_cols
         ]
     return reindexers
 
@@ -492,10 +517,12 @@ def outer_concat_aligned_mapping(
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
         if reindexers is None:
-            cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=axis,)
+            cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=axis)
         else:
             cur_reindexers = reindexers
 
+        # Handling of missing values here is hacky for dataframes
+        # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
                 el if not_missing(el) else np.zeros((n, 0), dtype=bool)
@@ -522,7 +549,9 @@ def concat_pairwise_mapping(
     return result
 
 
-def merge_dataframes(dfs, new_index, merge_strategy=merge_unique):
+def merge_dataframes(
+    dfs: Iterable[pd.DataFrame], new_index, merge_strategy=merge_unique
+) -> pd.DataFrame:
     dfs = [df.reindex(index=new_index) for df in dfs]
     # New dataframe with all shared data
     new_df = pd.DataFrame(merge_strategy(dfs), index=new_index)
@@ -561,14 +590,39 @@ def _resolve_dim(*, dim: str = None, axis: int = None) -> Tuple[int, str]:
         return axis, _dims[axis]
 
 
-def dim_indices(adata, *, axis=None, dim=None):
+def dim_indices(adata, *, axis=None, dim=None) -> pd.Index:
+    """Helper function to get adata.{dim}_names."""
     _, dim = _resolve_dim(axis=axis, dim=dim)
     return getattr(adata, f"{dim}_names")
 
 
-def dim_size(adata, *, axis=None, dim=None):
+def dim_size(adata, *, axis=None, dim=None) -> int:
+    """Helper function to get adata.shape[dim]."""
     ax, _ = _resolve_dim(axis, dim)
     return adata.shape[ax]
+
+
+# TODO: Resolve https://github.com/theislab/anndata/issues/678 and remove this function
+def concat_Xs(adatas, reindexers, axis, fill_value):
+    """
+    Shimy until support for some missing X's is implemented.
+
+    Basically just checks if it's one of the two supported cases, or throws an error.
+
+    This is not done inline in `concat` because we don't want to maintain references
+    to the values of a.X.
+    """
+    Xs = [a.X for a in adatas]
+    if all(X is None for X in Xs):
+        return None
+    elif any(X is None for X in Xs):
+        raise NotImplementedError(
+            "Some (but not all) of the AnnData's to be concatenated had no .X value. "
+            "Concatenation is currently only implmented for cases where all or none of"
+            " the AnnData's have .X assigned."
+        )
+    else:
+        return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
 
 
 def concat(
@@ -586,7 +640,7 @@ def concat(
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
 
-    See the :doc:`concatenation` section in the docs for a more in-depth description.
+    See the :doc:`concatenation <../concatenation>` section in the docs for a more in-depth description.
 
     .. warning::
 
@@ -603,7 +657,8 @@ def concat(
         Which axis to concatenate along.
     join
         How to align values when concatenating. If "outer", the union of the other axis
-        is taken. If "inner", the intersection. See :doc:`concatenation` for more.
+        is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
+        for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.
         Currently implemented strategies include:
@@ -774,11 +829,8 @@ def concat(
 
     if keys is None:
         keys = np.arange(len(adatas)).astype(str)
-    if axis == 0:
-        dim = "obs"
-    elif axis == 1:
-        dim = "var"
 
+    axis, dim = _resolve_dim(axis=axis)
     alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
     # Label column
@@ -795,11 +847,11 @@ def concat(
         concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = resolve_index(
-        [dim_indices(a, axis=1 - axis) for a in adatas], join=join
+    alt_indices = merge_indices(
+        [dim_indices(a, axis=alt_axis) for a in adatas], join=join
     )
     reindexers = [
-        gen_reindexer(alt_indices, dim_indices(a, axis=1 - axis)) for a in adatas
+        gen_reindexer(alt_indices, dim_indices(a, axis=alt_axis)) for a in adatas
     ]
 
     # Annotation for concatenation axis
@@ -815,9 +867,7 @@ def concat(
         [getattr(a, alt_dim) for a in adatas], alt_indices, merge
     )
 
-    X = concat_arrays(
-        [a.X for a in adatas], reindexers, axis=axis, fill_value=fill_value
-    )
+    X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
         layers = inner_concat_aligned_mapping(
@@ -874,6 +924,7 @@ def concat(
             [
                 AnnData(
                     X=a.raw.X,
+                    dtype=a.raw.X.dtype,
                     obs=pd.DataFrame(index=a.obs_names),
                     var=a.raw.var,
                     varm=a.raw.varm,
@@ -896,6 +947,7 @@ def concat(
     return AnnData(
         **{
             "X": X,
+            "dtype": None if X is None else X.dtype,
             "layers": layers,
             dim: concat_annot,
             alt_dim: alt_annot,

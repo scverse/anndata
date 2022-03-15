@@ -3,8 +3,13 @@ from functools import wraps, singledispatch
 from warnings import warn
 
 from packaging import version
+import h5py
 
 from .._core.sparse_dataset import SparseDataset
+
+# For allowing h5py v3
+# https://github.com/theislab/anndata/issues/442
+H5PY_V3 = version.parse(h5py.__version__).major >= 3
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -88,24 +93,45 @@ def convert_string(string):
         return string
 
 
+def check_key(key):
+    """Checks that passed value is a valid h5py key.
+
+    Should convert it if there is an obvious conversion path, error otherwise.
+    """
+    typ = type(key)
+    if issubclass(typ, str):
+        return str(key)
+    # TODO: Should I try to decode bytes? It's what h5py would do,
+    # but it will be read out as a str.
+    # elif issubclass(typ, bytes):
+    # return key
+    else:
+        raise TypeError(f"{key} of type {typ} is an invalid key. Should be str.")
+
+
 # -------------------------------------------------------------------------------
 # Generic functions
 # -------------------------------------------------------------------------------
 
 
-@singledispatch
-def write_attribute(*args, **kwargs):
-    raise NotImplementedError("Unrecognized argument types for `write_attribute`.")
-
-
-@singledispatch
 def read_attribute(*args, **kwargs):
-    raise NotImplementedError("Unrecognized argument types for `read_attribute`.")
+    from .specs import read_elem
+
+    warn(
+        "This internal function has been deprecated, please use read_elem instead",
+        DeprecationWarning,
+    )
+    return read_elem(*args, **kwargs)
 
 
-@read_attribute.register(type(None))
-def read_attribute_none(value) -> None:
-    return None
+def write_attribute(*args, **kwargs):
+    from .specs import write_elem
+
+    warn(
+        "This internal function has been deprecated, please use write_elem instead",
+        DeprecationWarning,
+    )
+    return write_elem(*args, **kwargs)
 
 
 # -------------------------------------------------------------------------------
@@ -187,12 +213,15 @@ def report_write_key_on_error(func):
         try:
             return func(elem, key, val, *args, **kwargs)
         except Exception as e:
-            parent = _get_parent(elem)
-            raise type(e)(
-                f"{e}\n\n"
-                f"Above error raised while writing key {key!r} of {type(elem)}"
-                f" from {parent}."
-            ) from e
+            if "Above error raised while writing key" in format(e):
+                raise
+            else:
+                parent = _get_parent(elem)
+                raise type(e)(
+                    f"{e}\n\n"
+                    f"Above error raised while writing key {key!r} of {type(elem)} "
+                    f"to {parent}"
+                ) from e
 
     return func_wrapper
 
@@ -221,18 +250,3 @@ def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "v
     if "varm" in attrs and "raw.varm" in f:
         raw["varm"] = read_attr(f["raw.varm"])
     return raw
-
-
-class EncodingVersions(Enum):
-    raw = "0.1.0"
-    csr_matrix = csc_matrix = "0.1.0"
-    dataframe = "0.1.0"
-
-    def check(self, key: str, encoded_version: str):
-        if version.parse(encoded_version) > version.parse(self.value):
-            warn(
-                f"The supported version for decoding {self.name} is {self.value}, "
-                f"but a {self.name} with version {encoded_version} "
-                f"was encountered at {key}.",
-                FutureWarning,
-            )

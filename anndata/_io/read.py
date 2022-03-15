@@ -1,21 +1,26 @@
 from pathlib import Path
 from os import PathLike, fspath
-from typing import Union, Optional, Mapping
+from types import MappingProxyType
+from typing import Union, Optional, Mapping, Tuple
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
 import bz2
+from warnings import warn
 
 import h5py
 import numpy as np
+import pandas as pd
+from scipy import sparse
 
 from .. import AnnData
+from ..compat import _deprecate_positional_args
 from .utils import is_float
 from .h5ad import read_h5ad
 
 try:
     from .zarr import read_zarr
-except ImportError as e:
+except ImportError as e:  # noqa: F841
 
     def read_zarr(*_, **__):
         raise e
@@ -74,7 +79,7 @@ def read_excel(
     return AnnData(X, row, col, dtype=dtype)
 
 
-def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
+def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
     """\
     Read a gzipped condensed count matrix from umi_tools.
 
@@ -85,26 +90,18 @@ def read_umi_tools(filename: PathLike, dtype: str = "float32") -> AnnData:
     """
     # import pandas for conversion of a dict of dicts into a matrix
     # import gzip to read a gzipped file :-)
-    import gzip
-    from pandas import DataFrame
+    table = pd.read_table(filename, dtype={"gene": "category", "cell": "category"})
 
-    dod = {}  # this will contain basically everything
-    fh = gzip.open(fspath(filename))
-    header = fh.readline()  # read the first line
-
-    for line in fh:
-        # gzip read bytes, hence the decoding
-        t = line.decode("ascii").split("\t")
-        try:
-            dod[t[1]].update({t[0]: int(t[2])})
-        except KeyError:
-            dod[t[1]] = {t[0]: int(t[2])}
-
-    df = DataFrame.from_dict(dod, orient="index")  # build the matrix
-    df.fillna(value=0.0, inplace=True)  # many NaN, replace with zeros
-    return AnnData(
-        np.array(df), dict(obs_names=df.index), dict(var_names=df.columns), dtype=dtype,
+    X = sparse.csr_matrix(
+        (table["count"], (table["cell"].cat.codes, table["gene"].cat.codes))
     )
+    obs = pd.DataFrame(index=pd.Index(table["cell"].cat.categories, name="cell"))
+    var = pd.DataFrame(index=pd.Index(table["gene"].cat.categories, name="gene"))
+
+    if dtype is None:
+        dtype = X.dtype
+
+    return AnnData(X=X, obs=obs, var=var, dtype=dtype)
 
 
 def read_hdf(filename: PathLike, key: str) -> AnnData:
@@ -140,8 +137,30 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
     return adata
 
 
+def _fmt_loom_axis_attrs(
+    input: Mapping, idx_name: str, dimm_mapping: Mapping[str, Iterable[str]]
+) -> Tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
+    axis_df = pd.DataFrame()
+    axis_mapping = {}
+    for key, names in dimm_mapping.items():
+        axis_mapping[key] = np.array([input.pop(name) for name in names]).T
+
+    for k, v in input.items():
+        if v.ndim > 1 and v.shape[1] > 1:
+            axis_mapping[k] = v
+        else:
+            axis_df[k] = v
+
+    if idx_name in axis_df:
+        axis_df.set_index(idx_name, drop=True, inplace=True)
+
+    return axis_df, axis_mapping
+
+
+@_deprecate_positional_args(version="0.9")
 def read_loom(
     filename: PathLike,
+    *,
     sparse: bool = True,
     cleanup: bool = False,
     X_name: str = "spliced",
@@ -150,6 +169,8 @@ def read_loom(
     var_names: str = "Gene",
     varm_names: Optional[Mapping[str, Iterable[str]]] = None,
     dtype: str = "float32",
+    obsm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
+    varm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
     **kwargs,
 ) -> AnnData:
     """\
@@ -173,17 +194,56 @@ def read_loom(
         Loompy key with which the data matrix :attr:`~anndata.AnnData.X` is initialized.
     obs_names
         Loompy key where the observation/cell names are stored.
-    obsm_names
+    obsm_mapping
         Loompy keys which will be constructed into observation matrices
     var_names
         Loompy key where the variable/gene names are stored.
-    obsm_names
+    varm_mapping
         Loompy keys which will be constructed into variable matrices
     **kwargs:
         Arguments to loompy.connect
+
+    Example
+    -------
+
+    .. code:: python
+
+        pbmc = anndata.read_loom(
+            "pbmc.loom",
+            sparse=True,
+            X_name="lognorm",
+            obs_names="cell_names",
+            var_names="gene_names",
+            obsm_mapping={
+                "X_umap": ["umap_1", "umap_2"]
+            }
+        )
     """
-    obsm_names = obsm_names or {}
-    varm_names = varm_names or {}
+    # Deprecations
+    if obsm_names is not None:
+        warn(
+            "Argument obsm_names has been deprecated in favour of `obsm_mapping`. "
+            "In 0.9 this will be an error.",
+            FutureWarning,
+        )
+        if obsm_mapping != {}:
+            raise ValueError(
+                "Recieved values for both `obsm_names` and `obsm_mapping`. This is "
+                "ambiguous, only pass `obsm_mapping`."
+            )
+        obsm_mapping = obsm_names
+    if varm_names is not None:
+        warn(
+            "Argument varm_names has been deprecated in favour of `varm_mapping`. "
+            "In 0.9 this will be an error.",
+            FutureWarning,
+        )
+        if varm_mapping != {}:
+            raise ValueError(
+                "Recieved values for both `varm_names` and `varm_mapping`. This is "
+                "ambiguous, only pass `varm_mapping`."
+            )
+        varm_mapping = varm_names
 
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
@@ -206,31 +266,9 @@ def read_loom(
                     else lc.layers[key][()].T
                 )
 
-        obs = dict(lc.col_attrs)
-
-        obsm = {}
-        for key, names in obsm_names.items():
-            obsm[key] = np.array([obs.pop(name) for name in names]).T
-
-        if obs_names in obs.keys():
-            obs["obs_names"] = obs.pop(obs_names)
-        obsm_attrs = [k for k, v in obs.items() if v.ndim > 1 and v.shape[1] > 1]
-
-        for key in obsm_attrs:
-            obsm[key] = obs.pop(key)
-
-        var = dict(lc.row_attrs)
-
-        varm = {}
-        for key, names in varm_names.items():
-            varm[key] = np.array([var.pop(name) for name in names]).T
-
-        if var_names in var.keys():
-            var["var_names"] = var.pop(var_names)
-        varm_attrs = [k for k, v in var.items() if v.ndim > 1 and v.shape[1] > 1]
-
-        for key in varm_attrs:
-            varm[key] = var.pop(key)
+        # TODO: Figure out the singleton obs elements
+        obs, obsm = _fmt_loom_axis_attrs(dict(lc.col_attrs), obs_names, obsm_mapping)
+        var, varm = _fmt_loom_axis_attrs(dict(lc.row_attrs), var_names, varm_mapping)
 
         uns = {}
         if cleanup:
@@ -323,7 +361,7 @@ def read_text(
 
 
 def iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
-    """ Helper for iterating only nonempty lines without line breaks"""
+    """Helper for iterating only nonempty lines without line breaks"""
     for line in file_like:
         line = line.rstrip("\r\n")
         if line:
@@ -431,7 +469,10 @@ def _read_text(
     for iname, name in enumerate(col_names):
         col_names[iname] = name.strip('"')
     return AnnData(
-        data, obs=dict(obs_names=row_names), var=dict(var_names=col_names), dtype=dtype,
+        data,
+        obs=dict(obs_names=row_names),
+        var=dict(var_names=col_names),
+        dtype=dtype,
     )
 
 

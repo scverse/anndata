@@ -214,6 +214,10 @@ class AxisArraysBase(AlignedMapping):
             )
         return super()._validate_value(val, key)
 
+    @property
+    def dim_names(self) -> pd.Index:
+        return (self.parent.obs_names, self.parent.var_names)[self._axis]
+
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
     def __init__(
@@ -226,7 +230,6 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
-        self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
         if vals is not None:
             self.update(vals)
@@ -243,7 +246,6 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self._parent = parent_view
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
-        self.dim_names = parent_mapping.dim_names[subset_idx]
 
 
 AxisArraysBase._view_class = AxisArraysView
@@ -318,7 +320,10 @@ class PairwiseArraysBase(AlignedMapping):
 
 class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(
-        self, parent: "anndata.AnnData", axis: int, vals: Optional[Mapping] = None,
+        self,
+        parent: "anndata.AnnData",
+        axis: int,
+        vals: Optional[Mapping] = None,
     ):
         self._parent = parent
         if axis not in (0, 1):

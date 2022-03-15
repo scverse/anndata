@@ -111,8 +111,8 @@ def test_df_warnings():
 def test_attr_deletion():
     full = gen_adata((30, 30))
     # Empty has just X, obs_names, var_names
-    empty = AnnData(full.X, obs=full.obs[[]], var=full.var[[]])
-    for attr in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]:
+    empty = AnnData(None, obs=full.obs[[]], var=full.var[[]])
+    for attr in ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]:
         delattr(full, attr)
         assert_equal(getattr(full, attr), getattr(empty, attr))
     assert_equal(full, empty, exact=True)
@@ -186,6 +186,7 @@ def test_setting_dim_index(dim):
     setattr(curr, index_attr, new_idx)
     pd.testing.assert_index_equal(getattr(curr, index_attr), new_idx)
     pd.testing.assert_index_equal(getattr(curr, mapping_attr)["df"].index, new_idx)
+    pd.testing.assert_index_equal(getattr(curr, mapping_attr).dim_names, new_idx)
     pd.testing.assert_index_equal(curr.obs_names, curr.raw.obs_names)
 
     # Testing view behaviour
@@ -193,11 +194,16 @@ def test_setting_dim_index(dim):
     assert not view.is_view
     pd.testing.assert_index_equal(getattr(view, index_attr), new_idx)
     pd.testing.assert_index_equal(getattr(view, mapping_attr)["df"].index, new_idx)
+    pd.testing.assert_index_equal(getattr(view, mapping_attr).dim_names, new_idx)
     with pytest.raises(AssertionError):
         pd.testing.assert_index_equal(
             getattr(view, index_attr), getattr(orig, index_attr)
         )
     assert_equal(view, curr, exact=True)
+
+    # test case in #459
+    fake_m = pd.DataFrame(curr.X.T, index=getattr(curr, index_attr))
+    getattr(curr, mapping_attr)["df2"] = fake_m
 
 
 def test_indices_dtypes():
@@ -364,21 +370,13 @@ def test_slicing_remove_unused_categories():
 
 def test_get_subset_annotation():
     adata = AnnData(
-        np.array([[1, 2, 3], [4, 5, 6]]), dict(S=["A", "B"]), dict(F=["a", "b", "c"]),
+        np.array([[1, 2, 3], [4, 5, 6]]),
+        dict(S=["A", "B"]),
+        dict(F=["a", "b", "c"]),
     )
 
     assert adata[0, 0].obs["S"].tolist() == ["A"]
     assert adata[0, 0].var["F"].tolist() == ["a"]
-
-
-def test_transpose():
-    adata = gen_adata((5, 3))
-    adata.varp = {f"varp_{k}": v for k, v in adata.varp.items()}
-    adata1 = adata.T
-    adata1.uns["test123"] = 1
-    assert "test123" in adata.uns
-    assert_equal(adata1.X.shape, (3, 5))
-    assert_equal(adata1.obsp.keys(), adata.varp.keys())
 
 
 def test_append_col():
@@ -469,8 +467,13 @@ def test_pickle():
 
 
 def test_to_df_dense():
-    df = adata_dense.to_df()
-    df = adata_dense.to_df(layer="test")
+    X_df = adata_dense.to_df()
+    layer_df = adata_dense.to_df(layer="test")
+
+    np.testing.assert_array_equal(adata_dense.layers["test"], layer_df.values)
+    np.testing.assert_array_equal(adata_dense.X, X_df.values)
+    pd.testing.assert_index_equal(X_df.columns, layer_df.columns)
+    pd.testing.assert_index_equal(X_df.index, layer_df.index)
 
 
 def test_convenience():
@@ -549,6 +552,34 @@ def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
     assert df.values.tolist() == X.tolist()
+
+
+def test_to_df_no_X():
+    adata = AnnData(
+        obs=pd.DataFrame(index=[f"cell-{i:02}" for i in range(20)]),
+        var=pd.DataFrame(index=[f"gene-{i:02}" for i in range(30)]),
+        layers={"present": np.ones((20, 30))},
+    )
+    v = adata[:10]
+
+    with pytest.raises(ValueError, match="X is None"):
+        _ = adata.to_df()
+    with pytest.raises(ValueError, match="X is None"):
+        _ = v.to_df()
+
+    expected = pd.DataFrame(
+        np.ones(adata.shape), index=adata.obs_names, columns=adata.var_names
+    )
+    actual = adata.to_df(layer="present")
+
+    pd.testing.assert_frame_equal(actual, expected)
+
+    view_expected = pd.DataFrame(
+        np.ones(v.shape), index=v.obs_names, columns=v.var_names
+    )
+    view_actual = v.to_df(layer="present")
+
+    pd.testing.assert_frame_equal(view_actual, view_expected)
 
 
 def test_copy():
