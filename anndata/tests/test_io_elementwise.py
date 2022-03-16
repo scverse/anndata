@@ -10,6 +10,7 @@ import pytest
 from scipy import sparse
 import zarr
 
+from anndata._io.specs.registry import NoSuchIO
 from anndata.compat import _read_attr
 from anndata._io.specs import write_elem, read_elem
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -106,3 +107,20 @@ def test_write_to_root(store):
 
     assert "anndata" == _read_attr(store.attrs, "encoding-type")
     assert_equal(from_disk, adata)
+
+
+@pytest.mark.parametrize(
+    ["attr", "val", "pattern"],
+    [
+        ("type", "floob", r"Unknown encoding type “floob”"),
+        ("version", "10000.0", r"Unknown encoding version 10000\.0"),
+    ],
+)
+def test_read_version_error(store, attr, val, pattern):
+    adata = gen_adata((3, 2))
+
+    write_elem(store, "/", adata)
+    store["obs"].attrs[f"encoding-{attr}"] = val
+    full_pattern = rf"No such read function registered: {pattern}"
+    with pytest.raises(NoSuchIO, match=full_pattern):
+        read_elem(store)

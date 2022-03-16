@@ -4,7 +4,7 @@ from collections.abc import Mapping, Callable, Iterable
 from functools import singledispatch, wraps
 from typing import Any, NamedTuple
 
-from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array
+from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array, Literal
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -14,6 +14,62 @@ from anndata._io.utils import report_write_key_on_error, report_read_key_on_erro
 class IOSpec(NamedTuple):
     encoding_type: str
     encoding_version: str
+
+
+class NoSuchIO(KeyError):
+    def __init__(
+        self,
+        registry: Literal["read", "read_partial", "write"],
+        key: tuple[type, IOSpec | type | tuple[type, str], frozenset[str]],
+    ):
+        self.registry = registry
+        self.key = key
+        super().__init__(str(self))
+
+    def __str__(self) -> str:
+        msg = self._get_msg()
+        return f"No such {self.registry} function registered: {msg}."
+
+    def _get_msg(self) -> str:
+        registry: Mapping[
+            tuple[type, IOSpec | type | tuple[type, str], frozenset[str]], Callable
+        ] = getattr(_REGISTRY, self.registry)
+
+        typ, spec_or_src_type, modifiers = self.key
+        is_read = self.registry != "write"
+        assert isinstance(spec_or_src_type, IOSpec) == is_read
+
+        dir_ = "destination" if is_read else "source"
+        desc_type = f"{dir_} type {typ.__name__}"
+        types = {typ for typ, _, _ in registry}
+        if typ not in types:
+            return f"Unknown {desc_type}"
+
+        sosts = {sost for typ, sost, _ in registry if typ in types}
+        if spec_or_src_type not in sosts:
+            if not is_read:
+                return f"Destination type {spec_or_src_type} not found for {desc_type}"
+            spec: IOSpec = spec_or_src_type
+            enc_types = {spec.encoding_type for spec in sosts}
+            if spec.encoding_type not in enc_types:
+                return f"Unknown encoding type “{spec.encoding_type}” for {desc_type}"
+            return (
+                f"Unknown encoding version {spec.encoding_version} "
+                f"for {desc_type} encoding “{spec.encoding_type}”"
+            )
+
+        modifier_sets = {
+            mods for typ, sost, mods in registry if typ in types and sost in sosts
+        }
+        if modifiers not in modifier_sets:
+            # “src type y’s encoding IOSpec(...)” or “dest type x and src type y”
+            if is_read:
+                desc = f"{desc_type}’s encoding {spec_or_src_type}"
+            else:
+                desc = f"source type {spec_or_src_type} and {desc_type}"
+            return f"Unknown modifier set {modifiers} for {desc}"
+
+        assert False, f"Don’t create NoSuchIO error from valid key: {self.key}"
 
 
 def write_spec(spec: IOSpec):
@@ -71,7 +127,10 @@ class IORegistry(object):
                 f"No method has been defined for writing {typ} elements to {dest_type}"
             )
 
-        return self.write[(dest_type, typ, modifiers)]
+        try:
+            return self.write[(dest_type, typ, modifiers)]
+        except KeyError:
+            raise NoSuchIO("write", (dest_type, typ, modifiers)) from None
 
     def has_writer(
         self, dest_type: type, typ: type | tuple[type, str], modifiers: Iterable[str]
@@ -101,7 +160,10 @@ class IORegistry(object):
         modifiers: Iterable[str] = frozenset(),
     ):
         modifiers = frozenset(modifiers)
-        return self.read[(src_type, spec, modifiers)]
+        try:
+            return self.read[(src_type, spec, modifiers)]
+        except KeyError:
+            raise NoSuchIO("read", (src_type, spec, modifiers)) from None
 
     def has_reader(
         self,
@@ -134,7 +196,10 @@ class IORegistry(object):
         modifiers: Iterable[str] = frozenset(),
     ):
         modifiers = frozenset(modifiers)
-        return self.read_partial[(src_type, spec, modifiers)]
+        try:
+            return self.read_partial[(src_type, spec, modifiers)]
+        except KeyError:
+            raise NoSuchIO("read_partial", (src_type, spec, modifiers)) from None
 
 
 _REGISTRY = IORegistry()
