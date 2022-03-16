@@ -1,8 +1,7 @@
 """
 Tests that each element in an anndata is written correctly
 """
-from tempfile import TemporaryDirectory
-from pathlib import Path
+import shutil
 
 import h5py
 import numpy as np
@@ -11,8 +10,6 @@ import pytest
 from scipy import sparse
 import zarr
 
-
-import anndata as ad
 from anndata.compat import _read_attr
 from anndata._io.specs import write_elem, read_elem
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -24,17 +21,16 @@ def diskfmt(request):
 
 
 @pytest.fixture(scope="function", params=["h5", "zarr"])
-def store(request):
-    with TemporaryDirectory() as tmpdir:
+def store(request, tmp_path):
+    if request.param == "h5":
+        file = h5py.File(tmp_path / "test.h5", "w")
+        store = file["/"]
+    elif request.param == "zarr":
+        store = zarr.open(tmp_path / "test.zarr", "w")
 
-        if request.param == "h5":
-            file = h5py.File(Path(tmpdir) / "test.h5", "w")
-            store = file["/"]
-        elif request.param == "zarr":
-            store = zarr.open(Path(tmpdir) / "test.zarr")
-
+    try:
         yield store
-
+    finally:
         if request.param == "h5":
             file.close()
 
