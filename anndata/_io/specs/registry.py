@@ -27,8 +27,7 @@ class NoSuchIO(KeyError):
         super().__init__(str(self))
 
     def __str__(self) -> str:
-        msg = self._get_msg()
-        return f"No such {self.registry} function registered: {msg}."
+        return f"No such {self.registry} function registered: {self._get_msg()}."
 
     def _get_msg(self) -> str:
         registry: Mapping[
@@ -55,7 +54,7 @@ class NoSuchIO(KeyError):
                 return f"Unknown encoding type “{spec.encoding_type}” for {desc_type}"
             return (
                 f"Unknown encoding version {spec.encoding_version} "
-                f"for {desc_type} encoding “{spec.encoding_type}”"
+                f"for {desc_type}’s encoding “{spec.encoding_type}”"
             )
 
         modifier_sets = {
