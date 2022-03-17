@@ -129,4 +129,4 @@ def test_read_io_error(store, attr, val, pattern):
     full_pattern = rf"No such read function registered: {pattern}"
     with pytest.raises(AnnDataReadError, match=r"while reading key '/obs'") as exc_info:
         read_elem(store)
-        assert re.match(full_pattern, str(exc_info.value.__cause__))
+    assert re.match(full_pattern, str(exc_info.value.__cause__))

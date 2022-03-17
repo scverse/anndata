@@ -287,10 +287,10 @@ def test_read_full_io_error(tmp_path, name, read, write):
         AnnDataReadError, match=r"raised while reading key '/obs'"
     ) as exc_info:
         read(path)
-        assert re.match(
-            r"No such read function registered: Unknown encoding type “invalid”",
-            str(exc_info.value.__cause__),
-        )
+    assert re.match(
+        r"No such read function registered: Unknown encoding type “invalid”",
+        str(exc_info.value.__cause__),
+    )
 
 
 @pytest.mark.parametrize(
@@ -597,17 +597,17 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
-        with pytest.raises((ValueError, AnnDataWriteError)) as e:
+        with pytest.raises(AnnDataWriteError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(e.value)
+        assert colname in str(exc_info.value.__cause__)
     for colname in reserved:
         to_write = orig.copy()
         to_write.varm["df"] = pd.DataFrame(
             {colname: list("aabcd")}, index=to_write.var_names
         )
-        with pytest.raises((ValueError, AnnDataWriteError)) as e:
+        with pytest.raises(AnnDataWriteError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(e.value)
+        assert colname in str(exc_info.value.__cause__)
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
@@ -661,8 +661,9 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest.raises(TypeError, match=str(b"c")):
+    with pytest.raises(AnnDataWriteError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
+    assert str(b"c") in str(exc_info.value.__cause__)
 
 
 @pytest.mark.parametrize(
