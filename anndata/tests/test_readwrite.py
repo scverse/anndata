@@ -1,8 +1,9 @@
+import re
+from contextlib import contextmanager
 from importlib.util import find_spec
 from os import PathLike
 from pathlib import Path
 from string import ascii_letters
-import tempfile
 import warnings
 
 import h5py
@@ -14,6 +15,8 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
+from anndata._io.specs.registry import NoSuchRead
+from anndata._io.utils import AnnDataReadError, AnnDataWriteError
 from anndata.utils import asarray
 from anndata.compat import _read_attr
 
@@ -118,10 +121,8 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
-def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
-    tmpdir = tempfile.TemporaryDirectory()
-    tmpdirpth = Path(tmpdir.name)
-    mid_pth = tmpdirpth / "mid.h5ad"
+def test_readwrite_h5ad(tmp_path, typ, dataset_kwargs, backing_h5ad):
+    mid_pth = tmp_path / "mid.h5ad"
 
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -153,7 +154,6 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
 def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
@@ -242,11 +242,9 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csc_matrix])
-def test_readwrite_equivalent_h5ad_zarr(typ):
-    tmpdir = tempfile.TemporaryDirectory()
-    tmpdirpth = Path(tmpdir.name)
-    h5ad_pth = tmpdirpth / "adata.h5ad"
-    zarr_pth = tmpdirpth / "adata.zarr"
+def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+    h5ad_pth = tmp_path / "adata.h5ad"
+    zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
     adata = gen_adata((M, N), X_type=typ)
@@ -258,6 +256,41 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
     from_zarr = ad.read_zarr(zarr_pth)
 
     assert_equal(from_h5ad, from_zarr, exact=True)
+
+
+@contextmanager
+def store_context(path: Path):
+    if path.suffix == ".zarr":
+        store = zarr.open(path, "r+")
+    else:
+        file = h5py.File(path, "r+")
+        store = file["/"]
+    yield store
+    if "file" in locals():
+        file.close()
+
+
+@pytest.mark.parametrize(
+    ["name", "read", "write"],
+    [
+        ("adata.h5ad", ad.read_h5ad, ad.AnnData.write_h5ad),
+        ("adata.zarr", ad.read_zarr, ad.AnnData.write_zarr),
+    ],
+)
+def test_read_full_io_error(tmp_path, name, read, write):
+    adata = gen_adata((4, 3))
+    path = tmp_path / name
+    write(adata, path)
+    with store_context(path) as store:
+        store["obs"].attrs["encoding-type"] = "invalid"
+    with pytest.raises(
+        AnnDataReadError, match=r"raised while reading key '/obs'"
+    ) as exc_info:
+        read(path)
+        assert re.match(
+            r"No such read function registered: Unknown encoding type “invalid”",
+            str(exc_info.value.__cause__),
+        )
 
 
 @pytest.mark.parametrize(
@@ -505,8 +538,6 @@ def test_write_csv_view(typ, tmp_path):
     ],
 )
 def test_readwrite_hdf5_empty(read, write, name, tmp_path):
-    if read is ad.read_zarr:
-        pytest.importorskip("zarr")
     adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
@@ -566,7 +597,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
-        with pytest.raises(ValueError) as e:
+        with pytest.raises((ValueError, AnnDataWriteError)) as e:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
         assert colname in str(e.value)
     for colname in reserved:
@@ -574,7 +605,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         to_write.varm["df"] = pd.DataFrame(
             {colname: list("aabcd")}, index=to_write.var_names
         )
-        with pytest.raises(ValueError) as e:
+        with pytest.raises((ValueError, AnnDataWriteError)) as e:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
         assert colname in str(e.value)
 

@@ -147,6 +147,12 @@ class AnnDataReadError(OSError):
     pass
 
 
+class AnnDataWriteError(OSError):
+    """Error caused while trying to write out AnnData."""
+
+    pass
+
+
 def _get_parent(elem):
     try:
         import zarr
@@ -188,7 +194,7 @@ def report_read_key_on_error(func):
                 raise AnnDataReadError(
                     f"Above error raised while reading key {elem.name!r} of "
                     f"type {type(elem)} from {parent}."
-                )
+                ) from e
 
     return func_wrapper
 
@@ -213,12 +219,11 @@ def report_write_key_on_error(func):
         try:
             return func(elem, key, val, *args, **kwargs)
         except Exception as e:
-            if "Above error raised while writing key" in format(e):
+            if isinstance(e, AnnDataWriteError):
                 raise
             else:
                 parent = _get_parent(elem)
-                raise type(e)(
-                    f"{e}\n\n"
+                raise AnnDataWriteError(
                     f"Above error raised while writing key {key!r} of {type(elem)} "
                     f"to {parent}"
                 ) from e

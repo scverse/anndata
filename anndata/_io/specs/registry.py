@@ -313,6 +313,7 @@ def write_elem(
         _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
 
 
+@report_read_key_on_error
 def read_elem(
     elem: H5Array | H5Group | ZarrArray | ZarrGroup,
     modifiers: frozenset[str] = frozenset(),
