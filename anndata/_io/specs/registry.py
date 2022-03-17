@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Callable, Iterable
+from abc import abstractmethod, ABC
+from collections.abc import Mapping, Callable, Iterable, Set
 from functools import singledispatch, wraps
 from typing import Any, NamedTuple
 
@@ -16,59 +17,106 @@ class IOSpec(NamedTuple):
     encoding_version: str
 
 
-class NoSuchIO(KeyError):
+class NoSuchIO(KeyError, ABC):
     def __init__(
         self,
         registry: Literal["read", "read_partial", "write"],
         key: tuple[type, IOSpec | type | tuple[type, str], frozenset[str]],
     ):
-        self.registry = registry
+        self.registry_name = registry
         self.key = key
+        self.registry = self._hierarchical_registry()
         super().__init__(str(self))
 
+    def _hierarchical_registry(
+        self,
+    ) -> Mapping[type, Mapping[IOSpec | type | tuple[type, str], Set[frozenset[str]]]]:
+        reg = {}
+        for typ, spec_or_src_type, modifiers in getattr(_REGISTRY, self.registry_name):
+            reg.setdefault(typ, {}).setdefault(spec_or_src_type, set()).add(modifiers)
+        return reg
+
     def __str__(self) -> str:
-        return f"No such {self.registry} function registered: {self._get_msg()}."
+        return f"No such {self.registry_name} function registered: {self._get_msg()}."
+
+    @property
+    def typ(self) -> type:
+        return self.key[0]
+
+    @property
+    def spec_or_dest_type(self) -> IOSpec | type | tuple[type, str]:
+        return self.key[1]
+
+    @property
+    def modifiers(self) -> frozenset[str]:
+        return self.key[2]
 
     def _get_msg(self) -> str:
-        registry: Mapping[
-            tuple[type, IOSpec | type | tuple[type, str], frozenset[str]], Callable
-        ] = getattr(_REGISTRY, self.registry)
+        if self.typ not in self.registry:
+            return f"Unknown {self.type_desc}"
 
-        typ, spec_or_src_type, modifiers = self.key
-        is_read = self.registry != "write"
-        assert isinstance(spec_or_src_type, IOSpec) == is_read
+        if self.spec_or_dest_type not in self.registry[self.typ]:
+            return self._get_spec_or_dest_type_msg()
 
-        dir_ = "destination" if is_read else "source"
-        desc_type = f"{dir_} type {typ.__name__}"
-        types = {typ for typ, _, _ in registry}
-        if typ not in types:
-            return f"Unknown {desc_type}"
-
-        sosts = {sost for typ, sost, _ in registry if typ in types}
-        if spec_or_src_type not in sosts:
-            if not is_read:
-                return f"Destination type {spec_or_src_type} not found for {desc_type}"
-            spec: IOSpec = spec_or_src_type
-            enc_types = {spec.encoding_type for spec in sosts}
-            if spec.encoding_type not in enc_types:
-                return f"Unknown encoding type “{spec.encoding_type}” for {desc_type}"
-            return (
-                f"Unknown encoding version {spec.encoding_version} "
-                f"for {desc_type}’s encoding “{spec.encoding_type}”"
-            )
-
-        modifier_sets = {
-            mods for typ, sost, mods in registry if typ in types and sost in sosts
-        }
-        if modifiers not in modifier_sets:
-            # “src type y’s encoding IOSpec(...)” or “dest type x and src type y”
-            if is_read:
-                desc = f"{desc_type}’s encoding {spec_or_src_type}"
-            else:
-                desc = f"source type {spec_or_src_type} and {desc_type}"
-            return f"Unknown modifier set {modifiers} for {desc}"
+        if self.modifiers not in self.registry[self.typ][self.spec_or_dest_type]:
+            desc = self._get_modifiers_desc()
+            return f"Unknown modifier set {self.modifiers} for {desc}"
 
         assert False, f"Don’t create NoSuchIO error from valid key: {self.key}"
+
+    @property
+    @abstractmethod
+    def type_desc(self) -> str:
+        ...
+
+    @abstractmethod
+    def _get_spec_or_dest_type_msg(self) -> str:
+        ...
+
+    @abstractmethod
+    def _get_modifiers_desc(self) -> str:
+        ...
+
+
+class NoSuchWrite(NoSuchIO):
+    @property
+    def dest_type(self) -> type | tuple[type, str]:
+        return self.spec_or_dest_type
+
+    @property
+    def type_desc(self) -> str:
+        return f"source type {self.typ.__name__}"
+
+    def _get_spec_or_dest_type_msg(self) -> str:
+        return f"Destination type {self.dest_type} not found for {self.type_desc}"
+
+    def _get_modifiers_desc(self) -> str:
+        return f"{self.type_desc} and destination type {self.dest_type}"
+
+
+class NoSuchRead(NoSuchIO):
+    @property
+    def spec(self) -> IOSpec:
+        return self.spec_or_dest_type
+
+    @property
+    def type_desc(self) -> str:
+        return f"destination type {self.typ.__name__}"
+
+    def _get_spec_or_dest_type_msg(self) -> str:
+        enc_types = {spec.encoding_type for spec in self.registry[self.typ]}
+        if self.spec.encoding_type not in enc_types:
+            return (
+                f"Unknown encoding type “{self.spec.encoding_type}” "
+                f"for {self.type_desc}"
+            )
+        return (
+            f"Unknown encoding version {self.spec.encoding_version} "
+            f"for {self.type_desc}’s encoding “{self.spec.encoding_type}”"
+        )
+
+    def _get_modifiers_desc(self) -> str:
+        return f"{self.type_desc}’s encoding {self.spec}"
 
 
 def write_spec(spec: IOSpec):
@@ -121,15 +169,10 @@ class IORegistry(object):
             dest_type = h5py.Group
         modifiers = frozenset(modifiers)
 
-        if (dest_type, typ, modifiers) not in self.write:
-            raise TypeError(
-                f"No method has been defined for writing {typ} elements to {dest_type}"
-            )
-
         try:
             return self.write[(dest_type, typ, modifiers)]
         except KeyError:
-            raise NoSuchIO("write", (dest_type, typ, modifiers)) from None
+            raise NoSuchWrite("write", (dest_type, typ, modifiers)) from None
 
     def has_writer(
         self, dest_type: type, typ: type | tuple[type, str], modifiers: Iterable[str]
@@ -162,7 +205,7 @@ class IORegistry(object):
         try:
             return self.read[(src_type, spec, modifiers)]
         except KeyError:
-            raise NoSuchIO("read", (src_type, spec, modifiers)) from None
+            raise NoSuchRead("read", (src_type, spec, modifiers)) from None
 
     def has_reader(
         self,
@@ -198,7 +241,7 @@ class IORegistry(object):
         try:
             return self.read_partial[(src_type, spec, modifiers)]
         except KeyError:
-            raise NoSuchIO("read_partial", (src_type, spec, modifiers)) from None
+            raise NoSuchRead("read_partial", (src_type, spec, modifiers)) from None
 
 
 _REGISTRY = IORegistry()
