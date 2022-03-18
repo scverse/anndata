@@ -3,7 +3,11 @@ from __future__ import annotations
 from abc import abstractmethod, ABC
 from collections.abc import Mapping, Callable, Iterable, Set
 from functools import singledispatch, wraps
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import h5py
+    import zarr
 
 from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array, Literal
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
@@ -275,7 +279,8 @@ def get_spec(
 
 @report_write_key_on_error
 def write_elem(
-    f: H5Group | ZarrGroup,
+    # should be “H5Group | ZarrGroup”, but weirdly that makes Sphinx error
+    f: h5py.Group | h5py.File | zarr.hierarchy.Group,
     k: str,
     elem: Any,
     *args,
