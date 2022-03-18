@@ -64,8 +64,16 @@ napoleon_custom_sections = [("Params", "Parameters")]
 todo_include_todos = False
 nitpicky = True  # Report broken links
 nitpick_ignore = [
+    ("py:class", "scipy.sparse.base.spmatrix"),
     ("py:meth", "pandas.DataFrame.iloc"),
     ("py:meth", "pandas.DataFrame.loc"),
+    ("py:class", "anndata._core.views.ArrayView"),
+    ("py:class", "anndata._core.raw.Raw"),
+    *[
+        ("py:class", f"anndata._core.aligned_mapping.{cls}{kind}")
+        for cls in "Layers AxisArrays PairwiseArrays".split()
+        for kind in ["", "View"]
+    ],
 ]
 suppress_warnings = ["ref.citation"]
 
@@ -84,20 +92,12 @@ intersphinx_mapping = dict(
     scipy=("https://docs.scipy.org/doc/scipy/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
-    xarray=("http://xarray.pydata.org/en/stable/", None),
+    xarray=("https://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
-    # Temporarily
-    "anndata._core.raw.Raw": "anndata.AnnData",
-    "anndata._core.views.ArrayView": "numpy.ndarray",
-    **{
-        f"anndata._core.aligned_mapping.{cls}{kind}": "typing.Mapping"
-        for cls in "Layers AxisArrays PairwiseArrays".split()
-        for kind in ["", "View"]
-    },
 }
 
 # -- Options for HTML output ----------------------------------------------
