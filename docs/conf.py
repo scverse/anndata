@@ -68,6 +68,7 @@ nitpick_ignore = [
     ("py:meth", "pandas.DataFrame.loc"),
     ("py:class", "anndata._core.views.ArrayView"),
     ("py:class", "anndata._core.raw.Raw"),
+    ("py:class", "anndata._core.aligned_mapping.Layers"),
 ]
 suppress_warnings = ["ref.citation"]
 
