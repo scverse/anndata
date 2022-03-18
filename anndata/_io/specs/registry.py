@@ -283,7 +283,7 @@ def write_elem(
     **kwargs,
 ):
     """
-    Write an element to a disk store using it's anndata encoding.
+    Write an element to a disk store using its anndata encoding.
 
     Params
     ------
