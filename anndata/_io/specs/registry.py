@@ -320,6 +320,7 @@ def write_elem(
 @report_read_key_on_error
 def read_elem(
     elem: H5Array | H5Group | ZarrArray | ZarrGroup,
+    *,
     modifiers: frozenset[str] = frozenset(),
 ) -> Any:
     """Read an element from an on disk store."""

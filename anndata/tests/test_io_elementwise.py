@@ -120,15 +120,15 @@ def test_write_to_root(store):
         # (lambda s: ???, r"Unknown source type"),
         (
             lambda s: s["obs"].attrs.__setitem__("encoding-type", "floob"),
-            frozenset(),
+            (),
             r"Unknown encoding type “floob”",
         ),
         (
             lambda s: s["obs"].attrs.__setitem__("encoding-version", "10000.0"),
-            frozenset(),
+            (),
             r"Unknown encoding version 10000\.0",
         ),
-        (lambda s: None, frozenset({"x"}), r"Unknown modifier set.+\{'x'\}"),
+        (lambda s: None, {"x"}, r"Unknown modifier set.+\{'x'\}"),
     ],
 )
 def test_read_io_error(store, mess_with, modifiers, pattern):
@@ -140,6 +140,22 @@ def test_read_io_error(store, mess_with, modifiers, pattern):
     with pytest.raises(
         AnnDataReadError, match=r"while reading key '/(obs)?'"
     ) as exc_info:
-        read_elem(store, modifiers)
+        read_elem(store, modifiers=frozenset(modifiers))
+    msg = str(exc_info.value.__cause__)
+    assert re.match(full_pattern, msg)
+
+
+@pytest.mark.parametrize(
+    ["obj", "modifiers", "pattern"],
+    [
+        (b"x", (), r"Source type <class 'bytes'> not found for dest.*Group"),
+        # (???, (), r"Dest.*not found for.*source.*asdfsdf"),
+        (np.ndarray([1]), {"x"}, r"Unknown modifier set.+\{'x'\}"),
+    ],
+)
+def test_write_io_error(store, obj, modifiers, pattern):
+    full_pattern = re.compile(rf"No such write function registered: {pattern}")
+    with pytest.raises(AnnDataWriteError, match=r"while writing key '/el'") as exc_info:
+        write_elem(store, "/el", obj, modifiers=frozenset(modifiers))
     msg = str(exc_info.value.__cause__)
     assert re.match(full_pattern, msg)
