@@ -44,11 +44,13 @@ class NoSuchIO(KeyError, ABC):
         return f"No such {self.registry_name} function registered: {self._get_msg()}."
 
     @property
-    def typ(self) -> type:
+    def type0(self) -> type:
+        """First type in key: Src type for read, dest type for write"""
         return self.key[0]
 
     @property
-    def spec_or_dest_type(self) -> IOSpec | type | tuple[type, str]:
+    def spec_or_src_type(self) -> IOSpec | type | tuple[type, str]:
+        """IOSpec for read, src type for write"""
         return self.key[1]
 
     @property
@@ -56,13 +58,13 @@ class NoSuchIO(KeyError, ABC):
         return self.key[2]
 
     def _get_msg(self) -> str:
-        if self.typ not in self.registry:
-            return f"Unknown {self.type_desc}"
+        if self.type0 not in self.registry:
+            return f"Unknown {self.type0_desc}"
 
-        if self.spec_or_dest_type not in self.registry[self.typ]:
-            return self._get_spec_or_dest_type_msg()
+        if self.spec_or_src_type not in self.registry[self.type0]:
+            return self._get_spec_or_src_type_msg()
 
-        if self.modifiers not in self.registry[self.typ][self.spec_or_dest_type]:
+        if self.modifiers not in self.registry[self.type0][self.spec_or_src_type]:
             desc = self._get_modifiers_desc()
             return f"Unknown modifier set {self.modifiers} for {desc}"
 
@@ -70,11 +72,11 @@ class NoSuchIO(KeyError, ABC):
 
     @property
     @abstractmethod
-    def type_desc(self) -> str:
+    def type0_desc(self) -> str:
         ...
 
     @abstractmethod
-    def _get_spec_or_dest_type_msg(self) -> str:
+    def _get_spec_or_src_type_msg(self) -> str:
         ...
 
     @abstractmethod
@@ -84,43 +86,43 @@ class NoSuchIO(KeyError, ABC):
 
 class NoSuchWrite(NoSuchIO):
     @property
-    def dest_type(self) -> type | tuple[type, str]:
-        return self.spec_or_dest_type
+    def src_type(self) -> type | tuple[type, str]:
+        return self.spec_or_src_type
 
     @property
-    def type_desc(self) -> str:
-        return f"source type {self.typ.__name__}"
+    def type0_desc(self) -> str:
+        return f"destination type {self.type0.__name__}"
 
-    def _get_spec_or_dest_type_msg(self) -> str:
-        return f"Destination type {self.dest_type} not found for {self.type_desc}"
+    def _get_spec_or_src_type_msg(self) -> str:
+        return f"Source type {self.src_type} not found for {self.type0_desc}"
 
     def _get_modifiers_desc(self) -> str:
-        return f"{self.type_desc} and destination type {self.dest_type}"
+        return f"{self.type0_desc} and source type {self.src_type}"
 
 
 class NoSuchRead(NoSuchIO):
     @property
     def spec(self) -> IOSpec:
-        return self.spec_or_dest_type
+        return self.spec_or_src_type
 
     @property
-    def type_desc(self) -> str:
-        return f"destination type {self.typ.__name__}"
+    def type0_desc(self) -> str:
+        return f"source type {self.type0.__name__}"
 
-    def _get_spec_or_dest_type_msg(self) -> str:
-        enc_types = {spec.encoding_type for spec in self.registry[self.typ]}
+    def _get_spec_or_src_type_msg(self) -> str:
+        enc_types = {spec.encoding_type for spec in self.registry[self.type0]}
         if self.spec.encoding_type not in enc_types:
             return (
                 f"Unknown encoding type “{self.spec.encoding_type}” "
-                f"for {self.type_desc}"
+                f"for {self.type0_desc}"
             )
         return (
             f"Unknown encoding version {self.spec.encoding_version} "
-            f"for {self.type_desc}’s encoding “{self.spec.encoding_type}”"
+            f"for {self.type0_desc}’s encoding “{self.spec.encoding_type}”"
         )
 
     def _get_modifiers_desc(self) -> str:
-        return f"{self.type_desc}’s encoding {self.spec}"
+        return f"{self.type0_desc}’s encoding {self.spec}"
 
 
 def write_spec(spec: IOSpec):
@@ -137,7 +139,7 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-class IORegistry(object):
+class IORegistry:
     def __init__(self):
         self.read: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
@@ -148,7 +150,7 @@ class IORegistry(object):
     def register_write(
         self,
         dest_type: type,
-        typ: type | tuple[type, str],
+        src_type: type | tuple[type, str],
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
     ):
@@ -156,7 +158,7 @@ class IORegistry(object):
         modifiers = frozenset(modifiers)
 
         def _register(func):
-            self.write[(dest_type, typ, modifiers)] = write_spec(spec)(func)
+            self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 
         return _register
@@ -164,25 +166,26 @@ class IORegistry(object):
     def get_writer(
         self,
         dest_type: type,
-        typ: type | tuple[type, str],
-        modifiers: Iterable[str] = frozenset(),
+        src_type: type | tuple[type, str],
+        modifiers: frozenset[str] = frozenset(),
     ):
         import h5py
 
         if dest_type is h5py.File:
             dest_type = h5py.Group
-        modifiers = frozenset(modifiers)
 
         try:
-            return self.write[(dest_type, typ, modifiers)]
+            return self.write[(dest_type, src_type, modifiers)]
         except KeyError:
-            raise NoSuchWrite("write", (dest_type, typ, modifiers)) from None
+            raise NoSuchWrite("write", (dest_type, src_type, modifiers)) from None
 
     def has_writer(
-        self, dest_type: type, typ: type | tuple[type, str], modifiers: Iterable[str]
+        self,
+        dest_type: type,
+        src_type: type | tuple[type, str],
+        modifiers: frozenset[str],
     ):
-        modifiers = frozenset(modifiers)
-        return (dest_type, typ, modifiers) in self.write
+        return (dest_type, src_type, modifiers) in self.write
 
     def register_read(
         self,
@@ -200,24 +203,16 @@ class IORegistry(object):
         return _register
 
     def get_reader(
-        self,
-        src_type: type,
-        spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
-        modifiers = frozenset(modifiers)
         try:
             return self.read[(src_type, spec, modifiers)]
         except KeyError:
             raise NoSuchRead("read", (src_type, spec, modifiers)) from None
 
     def has_reader(
-        self,
-        src_type: type,
-        spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
-        modifiers = frozenset(modifiers)
         return (src_type, spec, modifiers) in self.read
 
     def register_read_partial(
@@ -236,12 +231,8 @@ class IORegistry(object):
         return _register
 
     def get_partial_reader(
-        self,
-        src_type: type,
-        spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
-        modifiers = frozenset(modifiers)
         try:
             return self.read_partial[(src_type, spec, modifiers)]
         except KeyError:

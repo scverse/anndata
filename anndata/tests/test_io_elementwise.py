@@ -115,18 +115,30 @@ def test_write_to_root(store):
 
 
 @pytest.mark.parametrize(
-    ["attr", "val", "pattern"],
+    ["mess_with", "modifiers", "pattern"],
     [
-        ("type", "floob", r"Unknown encoding type “floob”"),
-        ("version", "10000.0", r"Unknown encoding version 10000\.0"),
+        # (lambda s: ???, r"Unknown source type"),
+        (
+            lambda s: s["obs"].attrs.__setitem__("encoding-type", "floob"),
+            frozenset(),
+            r"Unknown encoding type “floob”",
+        ),
+        (
+            lambda s: s["obs"].attrs.__setitem__("encoding-version", "10000.0"),
+            frozenset(),
+            r"Unknown encoding version 10000\.0",
+        ),
+        (lambda s: None, frozenset({"x"}), r"Unknown modifier set.+\{'x'\}"),
     ],
 )
-def test_read_io_error(store, attr, val, pattern):
+def test_read_io_error(store, mess_with, modifiers, pattern):
     adata = gen_adata((3, 2))
 
     write_elem(store, "/", adata)
-    store["obs"].attrs[f"encoding-{attr}"] = val
+    mess_with(store)
     full_pattern = rf"No such read function registered: {pattern}"
-    with pytest.raises(AnnDataReadError, match=r"while reading key '/obs'") as exc_info:
-        read_elem(store)
+    with pytest.raises(
+        AnnDataReadError, match=r"while reading key '/(obs)?'"
+    ) as exc_info:
+        read_elem(store, modifiers)
     assert re.match(full_pattern, str(exc_info.value.__cause__))
