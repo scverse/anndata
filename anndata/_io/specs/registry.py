@@ -101,6 +101,14 @@ class NoSuchWrite(NoSuchIO):
 
 
 class NoSuchRead(NoSuchIO):
+    def __str__(self) -> str:
+        msg = super().__str__()
+        return (
+            f"{msg}"
+            "You are possibly reading data from a newer anndata version than yours. "
+            "You might want to try updating anndata."
+        )
+
     @property
     def spec(self) -> IOSpec:
         return self.spec_or_src_type

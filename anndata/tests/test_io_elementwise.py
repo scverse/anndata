@@ -12,7 +12,7 @@ import pytest
 from scipy import sparse
 import zarr
 
-from anndata._io.utils import AnnDataReadError
+from anndata._io.utils import AnnDataReadError, AnnDataWriteError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
 from anndata._io.specs.registry import NoSuchIO
@@ -136,9 +136,10 @@ def test_read_io_error(store, mess_with, modifiers, pattern):
 
     write_elem(store, "/", adata)
     mess_with(store)
-    full_pattern = rf"No such read function registered: {pattern}"
+    full_pattern = rf"No such read function registered: {pattern}.*try updating"
     with pytest.raises(
         AnnDataReadError, match=r"while reading key '/(obs)?'"
     ) as exc_info:
         read_elem(store, modifiers)
-    assert re.match(full_pattern, str(exc_info.value.__cause__))
+    msg = str(exc_info.value.__cause__)
+    assert re.match(full_pattern, msg)
