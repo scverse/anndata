@@ -6,4 +6,4 @@
 - :class:`~anndata.AnnData` has a :class:`~anndata.AnnData.raw` attribute, which simplifies storing the data matrix when you consider it *raw*: see the `clustering tutorial`_
 
 .. _blog post: http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/
-.. _clustering tutorial: https://github.com/theislab/scanpy_usage/tree/master/170505_seurat
+.. _clustering tutorial: https://github.com/scverse/scanpy_usage/tree/master/170505_seurat

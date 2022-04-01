@@ -27,7 +27,7 @@ def get_memory_usage():
         meminfo = process.memory_info()
     except AttributeError:
         meminfo = process.get_memory_info()
-    mem = meminfo[0] / 2 ** 30  # output in GB
+    mem = meminfo[0] / 2**30  # output in GB
     mem_diff = mem
     global _previous_memory_usage
     if _previous_memory_usage is not None:

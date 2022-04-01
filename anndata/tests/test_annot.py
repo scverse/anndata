@@ -39,7 +39,7 @@ def test_to_categorical_ordering(dtype):
 
 
 def test_non_str_to_not_categorical():
-    # Test case based on https://github.com/theislab/anndata/issues/141#issuecomment-802105259
+    # Test case based on https://github.com/scverse/anndata/issues/141#issuecomment-802105259
     obs = pd.DataFrame(index=[f"cell-{i}" for i in range(5)]).assign(
         str_with_nan=["foo", "bar", None, np.nan, "foo"],
         boolean_with_nan_and_none=[True, False, np.nan, None, True],

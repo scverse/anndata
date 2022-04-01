@@ -16,6 +16,10 @@ __pycache__/
 /data/
 /tmp.zarr/
 test.h5ad
+.coverage
+
+# jupyter
+.ipynb_checkpoints
 
 # docs
 /docs/generated/

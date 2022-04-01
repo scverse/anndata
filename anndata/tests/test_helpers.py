@@ -133,7 +133,7 @@ def test_assert_equal_raw():
 
 def test_assert_equal_raw_presence():
     # This was causing some testing issues during
-    # https://github.com/theislab/anndata/pull/542
+    # https://github.com/scverse/anndata/pull/542
     a = gen_adata((10, 20))
     b = a.copy()
     a.raw = a.copy()
