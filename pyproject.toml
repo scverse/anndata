@@ -55,8 +55,8 @@ dynamic = ["version"]
 
 [project.urls]
 Documentation = "https://anndata.readthedocs.io/"
-Source = "https://github.com/theislab/anndata"
-Home-page = "https://github.com/theislab/anndata"
+Source = "https://github.com/scverse/anndata"
+Home-page = "https://github.com/scverse/anndata"
 
 
 [project.optional-dependencies]

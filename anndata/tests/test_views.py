@@ -483,7 +483,7 @@ def test_view_retains_ndarray_subclass():
 
 
 def test_modify_uns_in_copy():
-    # https://github.com/theislab/anndata/issues/571
+    # https://github.com/scverse/anndata/issues/571
     adata = ad.AnnData(np.ones((5, 5)), uns={"parent": {"key": "value"}})
     adata_copy = adata[:3].copy()
     adata_copy.uns["parent"]["key"] = "new_value"
@@ -492,7 +492,7 @@ def test_modify_uns_in_copy():
 
 @pytest.mark.parametrize("index", [-101, 100, (slice(None), -101), (slice(None), 100)])
 def test_invalid_scalar_index(adata, index):
-    # https://github.com/theislab/anndata/issues/619
+    # https://github.com/scverse/anndata/issues/619
     with pytest.raises(IndexError, match=r".*index.* out of range\."):
         _ = adata[index]
 
@@ -536,7 +536,7 @@ def test_deepcopy_subset(adata, spmat: type):
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
 
 
-# https://github.com/theislab/anndata/issues/680
+# https://github.com/scverse/anndata/issues/680
 @pytest.mark.parametrize("array_type", [asarray, sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
 def test_view_mixin_copies_data(adata, array_type: type, attr):
