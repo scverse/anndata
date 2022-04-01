@@ -60,7 +60,7 @@ def test_raw_del(adata_raw):
 
 
 def test_raw_set_as_none(adata_raw):
-    # Test for theislab/anndata#445
+    # Test for scverse/anndata#445
     a = adata_raw
     b = adata_raw.copy()
 
@@ -125,7 +125,7 @@ def test_raw_view_backed(adata_raw, backing_h5ad):
 
 
 def test_raw_as_parent_view():
-    # https://github.com/theislab/anndata/issues/288
+    # https://github.com/scverse/anndata/issues/288
     a = ad.AnnData(np.ones((4, 3)))
     a.varm["PCs"] = np.ones((3, 3))
     a.raw = a
@@ -136,7 +136,7 @@ def test_raw_as_parent_view():
 
 
 def test_to_adata():
-    # https://github.com/theislab/anndata/pull/404
+    # https://github.com/scverse/anndata/pull/404
     adata = gen_adata((20, 10))
 
     with_raw = adata[:, ::2].copy()

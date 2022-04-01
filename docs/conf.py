@@ -107,7 +107,7 @@ html_theme = "scanpydoc"
 html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
-    github_user="theislab",  # Username
+    github_user="scverse",  # Username
     github_repo="anndata",  # Repo name
     github_version="master",  # Version
     conf_py_path="/docs/",  # Path in the checkout to the docs root

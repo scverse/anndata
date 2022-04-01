@@ -30,7 +30,7 @@ def diskfmt(request):
 @pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
 @pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
 def test_setter_singular_dim(shape, orig_array_type, new_array_type):
-    # https://github.com/theislab/anndata/issues/500
+    # https://github.com/scverse/anndata/issues/500
     adata = gen_adata(shape, X_type=orig_array_type)
     adata.X = new_array_type(np.ones(shape))
     np.testing.assert_equal(asarray(adata.X), 1)

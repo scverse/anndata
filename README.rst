@@ -1,7 +1,7 @@
 |Stars| |PyPI| |PyPIDownloadsTotal| |PyPIDownloadsMonth| |Conda| |Docs| |Build Status| |Coverage|
 
-.. |Stars| image:: https://img.shields.io/github/stars/theislab/anndata?logo=GitHub&color=yellow
-   :target: https://github.com/theislab/anndata/stargazers
+.. |Stars| image:: https://img.shields.io/github/stars/scverse/anndata?logo=GitHub&color=yellow
+   :target: https://github.com/scverse/anndata/stargazers
 .. |PyPI| image:: https://img.shields.io/pypi/v/anndata.svg
    :target: https://pypi.org/project/anndata
 .. |PyPIDownloadsTotal| image:: https://pepy.tech/badge/anndata
@@ -12,10 +12,10 @@
    :target: https://anaconda.org/conda-forge/anndata
 .. |Docs| image:: https://readthedocs.com/projects/icb-anndata/badge/?version=latest
    :target: https://anndata.readthedocs.io
-.. |Build Status| image:: https://dev.azure.com/theislab/anndata/_apis/build/status/theislab.anndata?branchName=master
-   :target: https://dev.azure.com/theislab/anndata/_build
-.. |Coverage| image:: https://codecov.io/gh/theislab/anndata/branch/master/graph/badge.svg?token=IN1mJN1Wi8
-   :target: https://codecov.io/gh/theislab/anndata
+.. |Build Status| image:: https://dev.azure.com/scverse/anndata/_apis/build/status/scverse.anndata?branchName=master
+   :target: https://dev.azure.com/scverse/anndata/_build
+.. |Coverage| image:: https://codecov.io/gh/scverse/anndata/branch/master/graph/badge.svg?token=IN1mJN1Wi8
+   :target: https://codecov.io/gh/scverse/anndata
 
 
 anndata - Annotated data

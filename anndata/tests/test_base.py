@@ -164,7 +164,7 @@ def test_setting_index_names_error(attr):
     orig = adata_sparse[:2, :2]
     adata = adata_sparse[:2, :2]
     assert getattr(adata, attr).name is None
-    with pytest.raises(ValueError, match=fr"AnnData expects \.{attr[:3]}\.index\.name"):
+    with pytest.raises(ValueError, match=rf"AnnData expects \.{attr[:3]}\.index\.name"):
         setattr(adata, attr, pd.Index(["x", "y"], name=0))
     assert adata.is_view
     assert getattr(adata, attr).tolist() != ["x", "y"]
