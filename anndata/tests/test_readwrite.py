@@ -270,7 +270,7 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
     ],
 )
 def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
-    # https://github.com/theislab/anndata/issues/497
+    # https://github.com/scverse/anndata/issues/497
     pth = Path(tmp_path) / "adata.h5ad"
     adata = gen_adata((10, 8))
     kwargs = {}
@@ -455,7 +455,7 @@ def test_write_csv(typ, tmp_path):
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
 def test_write_csv_view(typ, tmp_path):
-    # https://github.com/theislab/anndata/issues/401
+    # https://github.com/scverse/anndata/issues/401
     import hashlib
 
     def md5_path(pth: PathLike) -> bytes:
@@ -609,7 +609,7 @@ def test_write_large_categorical(tmp_path, diskfmt):
 
 
 def test_write_string_types(tmp_path, diskfmt):
-    # https://github.com/theislab/anndata/issues/456
+    # https://github.com/scverse/anndata/issues/456
     adata_pth = tmp_path / f"adata.{diskfmt}"
 
     adata = ad.AnnData(

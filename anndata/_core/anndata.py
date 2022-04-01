@@ -1219,7 +1219,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # TODO: We should only check if non-null values are unique, but
                 # this would break cases where string columns with nulls could
                 # be written as categorical, but not as string.
-                # Possible solution: https://github.com/theislab/anndata/issues/504
+                # Possible solution: https://github.com/scverse/anndata/issues/504
                 if len(c.categories) >= len(c):
                     continue
                 # Ideally this could be done inplace
