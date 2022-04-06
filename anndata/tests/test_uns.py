@@ -8,7 +8,7 @@ from anndata.tests.helpers import assert_equal
 
 
 def test_uns_color_subset():
-    # Tests for https://github.com/theislab/anndata/issues/257
+    # Tests for https://github.com/scverse/anndata/issues/257
     obs = pd.DataFrame(
         {
             "cat1": pd.Categorical(list("aabcd")),

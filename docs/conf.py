@@ -61,6 +61,7 @@ napoleon_include_init_with_doc = False
 napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
+typehints_defaults = "braces"
 todo_include_todos = False
 nitpicky = True  # Report broken links
 nitpick_ignore = [
@@ -107,7 +108,7 @@ html_theme = "scanpydoc"
 html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
-    github_user="theislab",  # Username
+    github_user="scverse",  # Username
     github_repo="anndata",  # Repo name
     github_version="master",  # Version
     conf_py_path="/docs/",  # Path in the checkout to the docs root

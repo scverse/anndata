@@ -8,7 +8,7 @@ import h5py
 from .._core.sparse_dataset import SparseDataset
 
 # For allowing h5py v3
-# https://github.com/theislab/anndata/issues/442
+# https://github.com/scverse/anndata/issues/442
 H5PY_V3 = version.parse(h5py.__version__).major >= 3
 
 # -------------------------------------------------------------------------------

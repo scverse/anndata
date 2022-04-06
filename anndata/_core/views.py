@@ -94,13 +94,13 @@ class ArrayView(_SetItemMixin, np.ndarray):
 # Unlike array views, SparseCSRView and SparseCSCView
 # do not propagate through subsetting
 class SparseCSRView(_ViewMixin, sparse.csr_matrix):
-    # https://github.com/theislab/anndata/issues/656
+    # https://github.com/scverse/anndata/issues/656
     def copy(self) -> sparse.csr_matrix:
         return sparse.csr_matrix(self).copy()
 
 
 class SparseCSCView(_ViewMixin, sparse.csc_matrix):
-    # https://github.com/theislab/anndata/issues/656
+    # https://github.com/scverse/anndata/issues/656
     def copy(self) -> sparse.csc_matrix:
         return sparse.csc_matrix(self).copy()
 

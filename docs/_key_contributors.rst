@@ -5,6 +5,6 @@
    * `Alex Wolf`_: initial conception/development
    * Philipp Angerer: initial conception/development, software quality
 
-.. _contributions graph: https://github.com/theislab/anndata/graphs/contributors
+.. _contributions graph: https://github.com/scverse/anndata/graphs/contributors
 .. _Isaac Virshup: https://twitter.com/ivirshup
 .. _Alex Wolf: https://twitter.com/falexwolf
