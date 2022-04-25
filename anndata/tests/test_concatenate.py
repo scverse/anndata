@@ -1038,6 +1038,27 @@ def test_concat_categories_from_mapping():
     )
 
 
+def test_concat_categories_maintain_dtype():
+    a = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {"cat": pd.Categorical(list("aabcc"))},
+            index=[f"cell{i:02}" for i in range(5)],
+        ),
+    )
+    b = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {"cat": pd.Categorical(list("bccdd"))},
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+
+    c = concat({"a": a, "b": b})
+
+    assert pd.api.types.is_categorical_dtype(c.obs["cat"]), f"Was {c.obs['cat'].dtype}"
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
