@@ -176,7 +176,7 @@ def _check_category_types(dtype_col: pd.Series) -> bool:
     for dtype in dtype_col:
         if pd.api.types.is_categorical_dtype(dtype):
             dtypes.add(dtype.categories.dtype)
-            ordered = ordered & dtype.ordered
+            ordered = ordered | dtype.ordered
         else:
             assert pd.isnull(dtype)
     return len(dtypes) == 1 and not ordered
