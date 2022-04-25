@@ -1042,21 +1042,39 @@ def test_concat_categories_maintain_dtype():
     a = AnnData(
         X=np.ones((5, 1)),
         obs=pd.DataFrame(
-            {"cat": pd.Categorical(list("aabcc"))},
+            {
+                "cat": pd.Categorical(list("aabcc")),
+                "cat_ordered": pd.Categorical(list("aabcc"), ordered=True),
+            },
             index=[f"cell{i:02}" for i in range(5)],
         ),
     )
     b = AnnData(
         X=np.ones((5, 1)),
         obs=pd.DataFrame(
-            {"cat": pd.Categorical(list("bccdd"))},
+            {
+                "cat": pd.Categorical(list("bccdd")),
+                "cat_ordered": pd.Categorical(list("bccdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+    c = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("bccdd"), ordered=True),
+            },
             index=[f"cell{i:02}" for i in range(5, 10)],
         ),
     )
 
-    c = concat({"a": a, "b": b})
+    result = concat({"a": a, "b": b, "c": c}, join="outer")
 
-    assert pd.api.types.is_categorical_dtype(c.obs["cat"]), f"Was {c.obs['cat'].dtype}"
+    assert pd.api.types.is_categorical_dtype(
+        result.obs["cat"]
+    ), f"Was {result.obs['cat'].dtype}"
+    assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
 
 def test_concat_names(axis):
