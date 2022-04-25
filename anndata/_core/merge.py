@@ -135,27 +135,28 @@ def as_sparse(x):
         return x
 
 
-def unify_categorical_dtypes(dfs: "list[pd.DataFrame]") -> "list[pd.DataFrame]":
+def unify_categorical_dtypes(dfs):
     """
     Attempts to unify categorical datatypes from multiple dataframes
     """
     # Get shared categorical columns
-    dtypes = pd.concat([df.dtypes for df in dfs], axis=1, join="outer").T
-    cat_mask = dtypes.applymap(pd.api.types.is_categorical_dtype) | dtypes.applymap(
-        pd.isnull
-    )
-    categorical_cols = cat_mask.columns[cat_mask.all(axis=0)]
+    df_dtypes = [dict(df.dtypes) for df in dfs]
+    columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
 
-    if len(categorical_cols) == 0:
+    dtypes = {col: list() for col in columns}
+    for col in columns:
+        for df in df_dtypes:
+            dtypes[col].append(df.get(col, None))
+
+    dtypes = {k: v for k, v in dtypes.items() if unifiable_dtype(v)}
+
+    if len(dtypes) == 0:
         return dfs
     else:
         dfs = [df.copy(deep=False) for df in dfs]
 
-    dtypes = dtypes.loc[:, categorical_cols]
-    dtypes = dtypes.loc[:, dtypes.apply(_check_category_types)]
-
     new_dtypes = {}
-    for col in dtypes.columns:
+    for col in dtypes.keys():
         categories = reduce(
             lambda x, y: x.union(y),
             [x.categories for x in dtypes[col] if not pd.isnull(x)],
@@ -170,15 +171,15 @@ def unify_categorical_dtypes(dfs: "list[pd.DataFrame]") -> "list[pd.DataFrame]":
     return dfs
 
 
-def _check_category_types(dtype_col: pd.Series) -> bool:
+def unifiable_dtype(col: pd.Series) -> bool:
     dtypes = set()
     ordered = False
-    for dtype in dtype_col:
+    for dtype in col:
         if pd.api.types.is_categorical_dtype(dtype):
             dtypes.add(dtype.categories.dtype)
             ordered = ordered | dtype.ordered
-        else:
-            assert pd.isnull(dtype)
+        elif not pd.isnull(dtype):
+            return False
     return len(dtypes) == 1 and not ordered
 
 
