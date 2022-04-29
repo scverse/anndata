@@ -4,28 +4,38 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata._core.sparse_dataset import SparseDataset
+from anndata._core.sparse_dataset import sparse_dataset
 from anndata.tests.helpers import assert_equal, subset_func
 
 subset_func2 = subset_func
 
 
+@pytest.fixture(params=["h5ad", "zarr"])
+def diskfmt(request):
+    return request.param
+
+
 @pytest.fixture(scope="function")
-def ondisk_equivalent_adata(tmp_path):
-    csr_path = tmp_path / "csr.h5ad"
-    csc_path = tmp_path / "csc.h5ad"
-    dense_path = tmp_path / "dense.h5ad"
+def ondisk_equivalent_adata(tmp_path, diskfmt):
+    csr_path = tmp_path / f"csr.{diskfmt}"
+    csc_path = tmp_path / f"csc.{diskfmt}"
+    dense_path = tmp_path / f"dense.{diskfmt}"
+
+    read = lambda x, **kwargs: getattr(ad, f"read_{diskfmt}")(x, **kwargs)
+    write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
     csr_mem = ad.AnnData(X=sparse.random(50, 50, format="csr", density=0.1))
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
+    dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
-    csr_mem.write_h5ad(csr_path)
-    csc_mem.write_h5ad(csc_path)
-    csr_mem.write_h5ad(dense_path, as_dense="X")
+    write(csr_mem, csr_path)
+    write(csc_mem, csc_path)
+    # write(csr_mem, dense_path, as_dense="X")
+    write(dense_mem, dense_path)
 
-    csr_disk = ad.read_h5ad(csr_path, backed="r")
-    csc_disk = ad.read_h5ad(csc_path, backed="r")
-    dense_disk = ad.read_h5ad(dense_path, backed="r")
+    csr_disk = read(csr_path, backed="r")
+    csc_disk = read(csc_path, backed="r")
+    dense_disk = read(dense_path, backed="r")
 
     return csr_mem, csr_disk, csc_disk, dense_disk
 
@@ -56,7 +66,7 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method):
 
     with h5py.File(h5_path, "a") as f:
         ad._io.specs.write_elem(f, "mtx", a)
-        diskmtx = SparseDataset(f["mtx"])
+        diskmtx = sparse_dataset(f["mtx"])
 
         diskmtx.append(b)
         fromdisk = diskmtx.to_memory()
@@ -81,8 +91,8 @@ def test_dataset_append_disk(tmp_path, sparse_format, append_method):
     with h5py.File(h5_path, "a") as f:
         ad._io.specs.write_elem(f, "a", a)
         ad._io.specs.write_elem(f, "b", b)
-        a_disk = SparseDataset(f["a"])
-        b_disk = SparseDataset(f["b"])
+        a_disk = sparse_dataset(f["a"])
+        b_disk = sparse_dataset(f["b"])
 
         a_disk.append(b_disk)
         fromdisk = a_disk.to_memory()
@@ -107,8 +117,8 @@ def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape):
     with h5py.File(h5_path, "a") as f:
         ad._io.specs.write_elem(f, "a", a_mem)
         ad._io.specs.write_elem(f, "b", b_mem)
-        a_disk = SparseDataset(f["a"])
-        b_disk = SparseDataset(f["b"])
+        a_disk = sparse_dataset(f["a"])
+        b_disk = sparse_dataset(f["b"])
 
         with pytest.raises(AssertionError):
             a_disk.append(b_disk)
@@ -120,7 +130,7 @@ def test_wrong_formats(tmp_path):
 
     with h5py.File(h5_path, "a") as f:
         ad._io.specs.write_elem(f, "base", base)
-        disk_mtx = SparseDataset(f["base"])
+        disk_mtx = sparse_dataset(f["base"])
         pre_checks = disk_mtx.to_memory()
 
         with pytest.raises(ValueError):

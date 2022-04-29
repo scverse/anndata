@@ -8,7 +8,7 @@ import numpy as np
 from scipy import sparse
 
 from .logging import get_logger
-from ._core.sparse_dataset import SparseDataset
+from ._core.sparse_dataset import BaseCompressedSparseDataset
 
 logger = get_logger(__name__)
 
@@ -24,7 +24,7 @@ def asarray_sparse(x):
     return x.toarray()
 
 
-@asarray.register(SparseDataset)
+@asarray.register(BaseCompressedSparseDataset)
 def asarray_sparse_dataset(x):
     return asarray(x.value)
 

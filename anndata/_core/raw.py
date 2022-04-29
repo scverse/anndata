@@ -9,7 +9,7 @@ from scipy.sparse import issparse
 from . import anndata
 from .index import _normalize_index, _subset, unpack_index, get_vector
 from .aligned_mapping import AxisArrays, AxisArraysView
-from .sparse_dataset import SparseDataset
+from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 
 
 # TODO: Implement views for Raw
@@ -43,7 +43,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> Union[SparseDataset, np.ndarray, sparse.spmatrix]:
+    def X(self) -> Union[BaseCompressedSparseDataset, np.ndarray, sparse.spmatrix]:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -60,7 +60,7 @@ class Raw:
                 f"{self._adata.file.filename}."
             )
         if isinstance(X, h5py.Group):
-            X = SparseDataset(X)
+            X = sparse_dataset(X)
         # Check if we need to subset
         if self._adata.is_view:
             # TODO: As noted above, implement views of raw

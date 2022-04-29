@@ -6,7 +6,7 @@ from typing import Optional, Union, Iterator
 import h5py
 
 from . import anndata
-from .sparse_dataset import SparseDataset
+from .sparse_dataset import BaseCompressedSparseDataset
 from ..compat import Literal, ZarrArray
 
 
@@ -38,11 +38,15 @@ class AnnDataFileManager:
     def __iter__(self) -> Iterator[str]:
         return iter(self._file)
 
-    def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, SparseDataset]:
+    def __getitem__(
+        self, key: str
+    ) -> Union[h5py.Group, h5py.Dataset, BaseCompressedSparseDataset]:
         return self._file[key]
 
     def __setitem__(
-        self, key: str, value: Union[h5py.Group, h5py.Dataset, SparseDataset]
+        self,
+        key: str,
+        value: Union[h5py.Group, h5py.Dataset, BaseCompressedSparseDataset],
     ):
         self._file[key] = value
 
@@ -106,6 +110,6 @@ def _(x):
     return x[...]
 
 
-@to_memory.register(SparseDataset)
-def _(x: SparseDataset):
+@to_memory.register(BaseCompressedSparseDataset)
+def _(x: BaseCompressedSparseDataset):
     return x.to_memory()
