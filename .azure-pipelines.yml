@@ -32,7 +32,7 @@ jobs:
     displayName: Cache pip packages
 
   - script: |
-      python -m pip install --upgrade pip
+      python -m pip install --upgrade "pip!=22.1"
       pip install pytest-cov wheel
       pip install .[dev,test]
     displayName: 'Install dependencies'
