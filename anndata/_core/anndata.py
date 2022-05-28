@@ -1318,7 +1318,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     T = property(transpose)
 
-    def to_df(self, layer=None) -> pd.DataFrame:
+    def to_df(self, layer=None, obsm=None) -> pd.DataFrame:
         """\
         Generate shallow :class:`~pandas.DataFrame`.
 
@@ -1333,16 +1333,23 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ------
         layer : str
             Key for `.layers`.
+        obsm : str
+            Key for `.obsm`.
         """
+        if layer is not None and obsm is not None:
+            raise ValueError('Can not specify both layer and obsm at once.')
         if layer is not None:
             X = self.layers[layer]
+        elif obsm is not None:
+            X = self.obsm[obsm]
         elif not self._has_X():
             raise ValueError("X is None, cannot convert to dataframe.")
         else:
             X = self.X
         if issparse(X):
             X = X.toarray()
-        return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
+        return pd.DataFrame(X, index=self.obs_names,
+                            columns=self.var_names if not obsm else None)
 
     def _get_X(self, use_raw=False, layer=None):
         """\
