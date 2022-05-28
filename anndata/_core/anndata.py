@@ -1337,7 +1337,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Key for `.obsm`.
         """
         if layer is not None and obsm is not None:
-            raise ValueError('Can not specify both layer and obsm at once.')
+            raise ValueError("Can not specify both layer and obsm at once.")
         if layer is not None:
             X = self.layers[layer]
         elif obsm is not None:
@@ -1348,8 +1348,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.X
         if issparse(X):
             X = X.toarray()
-        return pd.DataFrame(X, index=self.obs_names,
-                            columns=self.var_names if not obsm else None)
+        return pd.DataFrame(
+            X, index=self.obs_names, columns=self.var_names if not obsm else None
+        )
 
     def _get_X(self, use_raw=False, layer=None):
         """\
