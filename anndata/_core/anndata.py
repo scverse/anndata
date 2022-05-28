@@ -834,7 +834,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
                     Inferred to be: {infer_dtype(value)}
                 """
-            ),  # noqa
+                ), # noqa
                 stacklevel=2,
             )
         # fmt: on
@@ -1809,13 +1809,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             partial(merge_outer, batch_keys=batch_categories, merge=merge_same),
         )
         out.var = out.var.iloc[
-                  :,
-                  (
-                      out.var.columns.str.extract(pat, expand=False)
-                          .fillna("")
-                          .argsort(kind="stable")
-                  ),
-                  ]
+            :,
+            (
+                out.var.columns.str.extract(pat, expand=False)
+                .fillna("")
+                .argsort(kind="stable")
+            ),
+        ]
 
         return out
 
