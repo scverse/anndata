@@ -112,6 +112,7 @@ Subsetting the data by observations produces a memory-efficient view of `AnnData
 
 Due to the increasing scale of data, we emphasized efficient operations with low memory and runtime overhead.
 To this end, anndata offers sparse data support, out of core conversions between dense and sparse data, lazy subsetting ("views"), per-element operations for low total memory usage, in-place subsetting, combining `AnnData` objects with various merge strategies, lazy concatenation, batching, and a backed out-of-memory mode.
+Furthermore, anndata is systematically benchmarked for performance using airspeed velocity [@Droettboom13], with the results linked from the docs.
 
 In particular, `AnnData` takes great pains to support efficient operations with sparse data.
 While there is no production-ready API for working with sparse and dense data in the python ecosystem, `AnnData` abstracts over the existing APIs making it much easier for novices to handle each.
