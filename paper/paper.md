@@ -145,7 +145,7 @@ On-disk formats within this schema closely mirror their in-memory representation
 
 Over the past 5 years, an ecosystem of packages that are built around anndata has grown. This ecosystem is highly focused on scRNA-seq (\autoref{fig:ecosystem}), and ranges from Python APIs [@Zappia2021] to user-interface-based applications [@Megill2021]. Tools like scikit-learn and UMAP [@mcinnes2020], which are designed around numpy and not anndata, are still centered around data matrices and hence integrate seamlessly with anndata-based workflows. Since releasing the PyTorch `DataLoader` interface `AnnLoader` and the lazy concatenation structure `AnnCollection`, `anndata` also offers native ways of integrating into the Pytorch ecosystem. scvi-tools [@Gayoso2021]  offers a widely used alternative for this.
 
-Through the language-independent on-disk format `h5ad`, interchange of data with non-Python ecosystems is easily possible. For analysis of scRNA-seq data in R this has been further simplified by anndata2ri and the CRAN anndata package [@Cannoodt21], which allow conversion to `SingleCellExperiment` [@amezquita2020] and Seurat's data format [@Hao2020].
+Through the language-independent on-disk format `h5ad`, interchange of data with non-Python ecosystems is easily possible. For analysis of scRNA-seq data in R this has been further simplified by anndata2ri, the CRAN anndata package [@Cannoodt21], and zellkonverter [@Zappia22]. These allow conversion to `SingleCellExperiment` [@amezquita2020] and Seurat's data format [@Hao2020].
 
 ![
 **Examples of how AnnData is used by packages in the ecosystem.**
