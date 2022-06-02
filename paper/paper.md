@@ -36,7 +36,7 @@ bibliography: [./paper.bib]
 
 # Summary
 
-anndata is a Python package for handling annotated data matrices in memory and on disk ([github.com/theislab/anndata](https://github.com/theislab/anndata)), positioned between pandas and xarray.
+anndata is a Python package for handling annotated data matrices in memory and on disk ([github.com/scverse/anndata](https://github.com/scverse/anndata)), positioned between pandas and xarray.
 anndata offers a broad range of computationally efficient features including, among others, sparse data support, lazy operations, and a PyTorch interface.
 
 
@@ -185,9 +185,9 @@ This project receives funding through CZI's Essential Open Source Software for S
 Isaac has led the anndata project since v0.7, and contributed as a developer before. His contributions include generalized storage for sparse matrices, IO efficiency, dedicated graph storage, concatenation, and general maintenance.
 Sergei made diverse contributions to the code base, in particular, the first version of `layers`, benchmarking and improvement of the earlier versions of the IO code, the PyTorch dataloader `AnnLoader` and the lazy concatenation data structure `AnnCollection`.
 Fabian contributed to supervision of the project.
-Phil co-created the package. He suggested to replace Scanpy's initial unstructured annotated data object to one mimicking R's ExpressionSet, and wrote AnnData's [first implementation](https://github.com/theislab/scanpy/commit/315859c5586116434ea3b7ce97512a5e2a1030e2) with indexing and slicing affecting one-dimensional metadata and the central matrix.
+Phil co-created the package. He suggested to replace Scanpy's initial unstructured annotated data object to one mimicking R's ExpressionSet, and wrote AnnData's [first implementation](https://github.com/scverse/scanpy/commit/315859c5586116434ea3b7ce97512a5e2a1030e2) with indexing and slicing affecting one-dimensional metadata and the central matrix.
 He further ascertained good software practices in the project, authored the documentation tool extensions for scanpy and anndata and anndata2ri, a library for in-memory conversion between anndata and SingleCellExperiment.
-Alex co-created the package. He introduced centering data science workflows around an [initially unstructured annotated data object](https://github.com/theislab/scanpy/tree/c22e48abe45a6ccca5918bbf689637caa4b31250), designed the API, wrote tutorials and documentation until v0.7, and implemented most of the early functionality, among others, reading & writing, the on-disk format `h5ad`, views, sparse data support, concatenation, backed mode.
+Alex co-created the package. He introduced centering data science workflows around an [initially unstructured annotated data object](https://github.com/scverse/scanpy/tree/c22e48abe45a6ccca5918bbf689637caa4b31250), designed the API, wrote tutorials and documentation until v0.7, and implemented most of the early functionality, among others, reading & writing, the on-disk format `h5ad`, views, sparse data support, concatenation, backed mode.
 Isaac and Alex wrote the paper with help from all co-authors ([github.com/ivirshup/anndata-paper](https://github.com/ivirshup/anndata-paper)).
 
 # Competing interests
