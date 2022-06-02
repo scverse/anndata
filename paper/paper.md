@@ -58,13 +58,15 @@ These new data profit much from the application of the scalable machine learning
 
 # The AnnData object
 
-`AnnData` is designed for data scientists and was inspired by a similar data structure in the R ecosystem, `ExpressionSet` [@Huber2015].
+`AnnData` is designed for data scientists and was inspired by a similar data structure in the R ecosystem, `ExpressionSet` [@Huber2015].[^1]
+
+^1: Please note that `AnnData` denotes the class (data structure), whereas anndata denotes the software package (python module).
 
 Within the pydata ecosystem, xarray [@Hoyer2017] enables to deal with labeled data tensors of arbitrary dimensions, while pandas [@McKinney2010] operates on single data matrices (tables) represented as `DataFrame` objects.
 anndata is positioned in between pandas and xarray by providing structure that organizes data matrix annotations. In contrast to pandas and xarray, `AnnData` offers a native on-disk format that allows sharing data with analysis results in form of learned annotations.
 
 ![**Structure of the AnnData object.**
-**a,** The AnnData object is a collection of arrays aligned to the common dimensions of observations (`obs`) and variables (`var`).
+**a,** The `AnnData` object is a collection of arrays aligned to the common dimensions of observations (`obs`) and variables (`var`).
 Here, color is used to denote elements of the object, with "warm" colors selected for elements aligned to the observations and "cool" colors for elements aligned to variables.
 The object is centered around the main data matrix `X`, whose two dimensions correspond to observations and variables respectively.
 Primary labels for each of these dimensions are stored as `obs_names` and `var_names`.
