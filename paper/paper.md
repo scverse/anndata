@@ -98,7 +98,7 @@ Prior annotations of observations will often denote the experimental groups and 
 Derived annotations of observations might be summary statistics, cluster assignments, low-dimensional representations or manifolds.
 Annotations of variables will often denote alternative names or measures quantifying feature importance.
 
-In the context of how [@Wickham2014] recommends to order variables, one can think of `X` as contiguously grouping the data of a specific set of *measured* variables of interest, typically high-dimensional readout data in an experiment. Other tables aligned to the observations axis in `AnnData` are then available to store both *fixed* (meta-)data of the experiment and derived data.
+In the context of how @Wickham2014 recommends to order variables, one can think of `X` as contiguously grouping the data of a specific set of *measured* variables of interest, typically high-dimensional readout data in an experiment. Other tables aligned to the observations axis in `AnnData` are then available to store both *fixed* (meta-)data of the experiment and derived data.
 
 We note that adoption of *tidy data* [@Wickham2014] leaves some room for ambiguity. For instance, the R package `tidySummarizedExperiment` [@Mangiola2021] provisions tables for scRNA-seq data that take a long form that spreads variables belonging to the same observational unit (a cell) across multiple rows. Generally, it may occur that there is no unique observational unit that is defined through a *joint measurement*, for instance, by measuring variables in the same system at the same time. It such cases, the *tidy data* layout is ambiguous and results in longer or wider table layouts depending on what an analyst considers the observational unit.
 
