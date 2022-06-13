@@ -1,0 +1,337 @@
+/* CSS stylesheet for displaying xarray objects in jupyterlab.
+ * TODO: Change
+ */
+
+:root {
+  --ad-font-color0: var(--jp-content-font-color0, rgba(0, 0, 0, 1));
+  --ad-font-color2: var(--jp-content-font-color2, rgba(0, 0, 0, 0.54));
+  --ad-font-color3: var(--jp-content-font-color3, rgba(0, 0, 0, 0.38));
+  --ad-border-color: var(--jp-border-color2, #e0e0e0);
+  --ad-disabled-color: var(--jp-layout-color3, #bdbdbd);
+  --ad-background-color: var(--jp-layout-color0, white);
+  --ad-background-color-row-even: var(--jp-layout-color1, white);
+  --ad-background-color-row-odd: var(--jp-layout-color2, #eeeeee);
+}
+
+html[theme=dark],
+body[data-theme=dark],
+body.vscode-dark {
+  --ad-font-color0: rgba(255, 255, 255, 1);
+  --ad-font-color2: rgba(255, 255, 255, 0.54);
+  --ad-font-color3: rgba(255, 255, 255, 0.38);
+  --ad-border-color: #1F1F1F;
+  --ad-disabled-color: #515151;
+  --ad-background-color: #111111;
+  --ad-background-color-row-even: #111111;
+  --ad-background-color-row-odd: #313131;
+}
+
+.ad-wrap {
+  display: block !important;
+  min-width: 300px;
+  max-width: 700px;
+}
+
+.ad-text-repr-fallback {
+  /* fallback to plain text repr when CSS is not injected (untrusted notebook) */
+  display: none;
+}
+
+.ad-header {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: solid 1px var(--ad-border-color);
+}
+
+.ad-header > div,
+.ad-header > ul {
+  display: inline;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.ad-obj-type,
+.ad-array-name {
+  margin-left: 2px;
+  margin-right: 10px;
+}
+
+.ad-obj-type {
+  color: var(--ad-font-color2);
+}
+
+.ad-sections {
+  padding-left: 0 !important;
+  display: grid;
+  grid-template-columns: 150px auto auto 1fr 20px 20px;
+}
+
+.ad-section-item {
+  display: contents;
+}
+
+.ad-section-item input {
+  display: none;
+}
+
+.ad-section-item input + label {
+  color: var(--ad-disabled-color);
+}
+
+.ad-section-item input:enabled + label {
+  cursor: pointer;
+  color: var(--ad-font-color2);
+}
+
+.ad-section-item input:enabled + label:hover {
+  color: var(--ad-font-color0);
+}
+
+.ad-section-summary {
+  grid-column: 1;
+  color: var(--ad-font-color2);
+  font-weight: 500;
+}
+
+.ad-section-summary > span {
+  display: inline-block;
+  padding-left: 0.5em;
+}
+
+.ad-section-summary-in:disabled + label {
+  color: var(--ad-font-color2);
+}
+
+.ad-section-summary-in + label:before {
+  display: inline-block;
+  content: '►';
+  font-size: 11px;
+  width: 15px;
+  text-align: center;
+}
+
+.ad-section-summary-in:disabled + label:before {
+  color: var(--ad-disabled-color);
+}
+
+.ad-section-summary-in:checked + label:before {
+  content: '▼';
+}
+
+.ad-section-summary-in:checked + label > span {
+  display: none;
+}
+
+.ad-section-summary,
+.ad-section-inline-details {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.ad-section-inline-details {
+  grid-column: 2 / -1;
+}
+
+.ad-section-details {
+  display: none;
+  grid-column: 1 / -1;
+  margin-bottom: 5px;
+}
+
+.ad-section-summary-in:checked ~ .ad-section-details {
+  display: contents;
+}
+
+.ad-array-wrap {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 20px auto;
+}
+
+.ad-array-wrap > label {
+  grid-column: 1;
+  vertical-align: top;
+}
+
+.ad-preview {
+  color: var(--ad-font-color3);
+}
+
+.ad-array-preview,
+.ad-array-data {
+  padding: 0 5px !important;
+  grid-column: 2;
+}
+
+.ad-array-data,
+.ad-array-in:checked ~ .ad-array-preview {
+  display: none;
+}
+
+.ad-array-in:checked ~ .ad-array-data,
+.ad-array-preview {
+  display: inline-block;
+}
+
+.ad-dim-list {
+  display: inline-block !important;
+  list-style: none;
+  padding: 0 !important;
+  margin: 0;
+}
+
+.ad-dim-list li {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+}
+
+.ad-dim-list:before {
+  content: '(';
+}
+
+.ad-dim-list:after {
+  content: ')';
+}
+
+.ad-dim-list li:not(:last-child):after {
+  content: ',';
+  padding-right: 5px;
+}
+
+.ad-has-index {
+  font-weight: bold;
+}
+
+.ad-var-list,
+.ad-var-item {
+  display: contents;
+}
+
+.ad-var-item > div,
+.ad-var-item label,
+.ad-var-item > .ad-var-name span {
+  background-color: var(--ad-background-color-row-even);
+  margin-bottom: 0;
+}
+
+.ad-var-item > .ad-var-name:hover span {
+  padding-right: 5px;
+}
+
+.ad-var-list > li:nth-child(odd) > div,
+.ad-var-list > li:nth-child(odd) > label,
+.ad-var-list > li:nth-child(odd) > .ad-var-name span {
+  background-color: var(--ad-background-color-row-odd);
+}
+
+.ad-var-name {
+  grid-column: 1;
+}
+
+.ad-var-dims {
+  grid-column: 2;
+}
+
+.ad-var-dtype {
+  grid-column: 3;
+  text-align: right;
+  color: var(--ad-font-color2);
+}
+
+.ad-var-preview {
+  grid-column: 4;
+}
+
+.ad-var-name,
+.ad-var-dims,
+.ad-var-dtype,
+.ad-preview,
+.ad-attrs dt {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 10px;
+}
+
+.ad-var-name:hover,
+.ad-var-dims:hover,
+.ad-var-dtype:hover,
+.ad-attrs dt:hover {
+  overflow: visible;
+  width: auto;
+  z-index: 1;
+}
+
+.ad-var-attrs,
+.ad-var-data {
+  display: none;
+  background-color: var(--ad-background-color) !important;
+  padding-bottom: 5px !important;
+}
+
+.ad-var-attrs-in:checked ~ .ad-var-attrs,
+.ad-var-data-in:checked ~ .ad-var-data {
+  display: block;
+}
+
+.ad-var-data > table {
+  float: right;
+}
+
+.ad-var-name span,
+.ad-var-data,
+.ad-attrs {
+  padding-left: 25px !important;
+}
+
+.ad-attrs,
+.ad-var-attrs,
+.ad-var-data {
+  grid-column: 1 / -1;
+}
+
+dl.ad-attrs {
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 125px auto;
+}
+
+.ad-attrs dt,
+.ad-attrs dd {
+  padding: 0;
+  margin: 0;
+  float: left;
+  padding-right: 10px;
+  width: auto;
+}
+
+.ad-attrs dt {
+  font-weight: normal;
+  grid-column: 1;
+}
+
+.ad-attrs dt:hover span {
+  display: inline-block;
+  background: var(--ad-background-color);
+  padding-right: 10px;
+}
+
+.ad-attrs dd {
+  grid-column: 2;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ad-icon-database,
+.ad-icon-file-text2 {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1em;
+  height: 1.5em !important;
+  stroke-width: 0;
+  stroke: currentColor;
+  fill: currentColor;
+}
