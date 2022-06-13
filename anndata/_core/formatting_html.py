@@ -75,7 +75,6 @@ from typing import Collection, Hashable, Literal, TypedDict
 import numpy as np
 
 
-
 STATIC_FILES = (
     ("anndata.static.html", "icons-svg-inline.html"),
     ("anndata.static.css", "style.css"),
@@ -92,16 +91,17 @@ Options = Literal[
     "display_expand_data",
 ]
 
+
 class T_Options(TypedDict):
-        display_max_rows: int
-        display_values_threshold: int
-        display_style: Literal["text", "html"]
-        display_width: int
-        display_expand_attrs: Literal["default", True, False]
-        display_expand_coords: Literal["default", True, False]
-        display_expand_data_vars: Literal["default", True, False]
-        display_expand_data: Literal["default", True, False]
-    
+    display_max_rows: int
+    display_values_threshold: int
+    display_style: Literal["text", "html"]
+    display_width: int
+    display_expand_attrs: Literal["default", True, False]
+    display_expand_coords: Literal["default", True, False]
+    display_expand_data_vars: Literal["default", True, False]
+    display_expand_data: Literal["default", True, False]
+
 
 OPTIONS: T_Options = {
     "display_max_rows": 12,
@@ -113,7 +113,6 @@ OPTIONS: T_Options = {
     "display_expand_data_vars": "default",
     "display_expand_data": "default",
 }
-
 
 
 @lru_cache(None)
@@ -129,9 +128,11 @@ def _load_static_files():
 def _html_format(x):
     return escape(str(x))
 
+
 @_html_format.register(pd.DataFrame)
 def _html_format_df(x: pd.DataFrame):
     return x._repr_html_()
+
 
 @_html_format.register(np.ndarray)
 def _html_format_np(x: np.ndarray):
@@ -152,6 +153,7 @@ def _html_format_np(x: np.ndarray):
     with set_numpy_options(**options):
         return repr(x)
 
+
 @_html_format.register(sparse.spmatrix)
 def _html_format_sp(x: sparse.spmatrix):
     return f"<pre>{escape(x.__repr__())}</pre>"
@@ -161,9 +163,11 @@ def _html_format_sp(x: sparse.spmatrix):
 def _dtype_repr(x):
     return escape(str(x.dtype))
 
+
 @_dtype_repr.register(pd.DataFrame)
 def _dtype_repr_pd(x: pd.DataFrame):
     return f"DataFrame {escape(str(x.shape))}"
+
 
 # TODO: document and mention
 # https://github.com/pydata/xarray/blob/8e9a9fb390f8f0d27a017a7affd8d308d2317959/xarray/core/formatting.py#L32
@@ -176,8 +180,7 @@ def maybe_truncate(obj, max_width=500):
 
 @singledispatch
 def _inline_format(x, max_width):
-    return maybe_truncate(escape(str(x)),max_width=max_width)
-
+    return maybe_truncate(escape(str(x)), max_width=max_width)
 
 
 @contextlib.contextmanager
@@ -211,6 +214,7 @@ def _obj_repr(obj, header_components, sections):
         "</div>"
     )
 
+
 def _summarize_attrs(attrs):
     attrs_dl = "".join(
         f"<dt><span>{escape(str(k))} :</span></dt>" f"<dd>{escape(str(v))}</dd>"
@@ -231,10 +235,12 @@ def _icon(icon_name):
     )
 
 
-def _summarize_item_html(name:str, x:Union[pd.DataFrame,np.ndarray,sparse.spmatrix],attrs=None):
+def _summarize_item_html(
+    name: str, x: Union[pd.DataFrame, np.ndarray, sparse.spmatrix], attrs=None
+):
     """
     Summarizes x
-    """    
+    """
     # TODO: more detail
 
     # TODO: learn what this is
@@ -272,8 +278,15 @@ def _summarize_item_html(name:str, x:Union[pd.DataFrame,np.ndarray,sparse.spmatr
         f"<div class='ad-var-data'>{data_repr}</div>"
     )
 
+
 def _collapsible_section(
-    name, inline_details="", details="", n_items=None, enabled=True, collapsed=False,**kwargs
+    name,
+    inline_details="",
+    details="",
+    n_items=None,
+    enabled=True,
+    collapsed=False,
+    **kwargs,
 ):
     # "unique" id to expand/collapse the section
     data_id = "section-" + str(uuid.uuid4())
@@ -293,7 +306,8 @@ def _collapsible_section(
         f"<div class='ad-section-details'>{details}</div>"
     )
 
-def _summarize_mapping_html(x:Mapping):
+
+def _summarize_mapping_html(x: Mapping):
     vars_li = "".join(
         f"<li class='ad-var-item'>{_summarize_item_html(k, v)}</li>"
         for k, v in x.items()
@@ -301,122 +315,121 @@ def _summarize_mapping_html(x:Mapping):
     return f"<ul class='ad-var-list'>{vars_li}</ul>"
 
 
-def _create_sections_from_conf(ad_obj,sections_conf):
+def _create_sections_from_conf(ad_obj, sections_conf):
     sections = []
-    for k,v in sections_conf.items():
+    for k, v in sections_conf.items():
         # TODO: maybe use enums?
         if v["section_type"] == "single":
-            sections.append(_collapsible_section(
-                name=k,
-                details = _summarize_item_html(
+            sections.append(
+                _collapsible_section(
                     name=k,
-                    x=getattr(ad_obj,k),
-                    attrs = v.get("attrs",{})
-                ),
-                **v["args"]
-            ))
+                    details=_summarize_item_html(
+                        name=k, x=getattr(ad_obj, k), attrs=v.get("attrs", {})
+                    ),
+                    **v["args"],
+                )
+            )
         elif v["section_type"] == "mapping":
-            sections.append(_collapsible_section(
-                name = k,
-                details = _summarize_mapping_html(
-                    x=getattr(ad_obj,k)
-                ),
-                **v["args"]
-            ))
+            sections.append(
+                _collapsible_section(
+                    name=k,
+                    details=_summarize_mapping_html(x=getattr(ad_obj, k)),
+                    **v["args"],
+                )
+            )
         else:
             raise NotImplementedError()
-    
+
     return sections
 
 
-def _create_anndata_repr(ad_obj:"AnnData"):
+def _create_anndata_repr(ad_obj: "AnnData"):
     obj_type = f"anndata.{type(ad_obj).__name__}"
-    
+
     header_components = [f"<div class='ad-obj-type'>{escape(obj_type)}</div>"]
 
     sections_conf = {
         # sections consisting of single items like matrices
-        "X":{
-            "section_type":"single",
-            "attrs":{
-                "Is backed": "Nowhere" if not ad_obj.isbacked else escape(ad_obj.file.filename)
+        "X": {
+            "section_type": "single",
+            "attrs": {
+                "Is backed": "Nowhere"
+                if not ad_obj.isbacked
+                else escape(ad_obj.file.filename)
             },
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":ad_obj.n_obs,
-            }
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": ad_obj.n_obs,
+            },
         },
-        "obs":{
-            "section_type":"single",
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":ad_obj.n_obs
-                }
+        "obs": {
+            "section_type": "single",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": ad_obj.n_obs,
+            },
         },
-        "var":{
-            "section_type":"single",
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":ad_obj.n_vars
-                }
+        "var": {
+            "section_type": "single",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": ad_obj.n_vars,
+            },
         },
         # dict like sections
-        "obsm":{
-            "section_type":"mapping",
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":len(ad_obj.obsm.keys()) # TODO: Handle when obsm is ndarray
-            }
+        "obsm": {
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.obsm.keys()),  # TODO: Handle when obsm is ndarray
+            },
         },
-        "varm":{
-            "section_type":"mapping",
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":len(ad_obj.varm.keys())
-            }
+        "varm": {
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.varm.keys()),
+            },
         },
-        "obsp":{
-            "section_type":"mapping",
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":len(ad_obj.obsp.keys())
-            }
+        "obsp": {
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.obsp.keys()),
+            },
         },
-        "varp":{
-            "section_type":"mapping",
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":len(ad_obj.varp.keys())
-            }
+        "varp": {
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.varp.keys()),
+            },
         },
     }
     if ad_obj.layers:
-        sections_conf["layers"]={
-            "section_type":"mapping",
-            "args":{
-                "inline_details":"",
-                "enabled":True,
-                "collapsed":False,
-                "n_items":len(ad_obj.layers.keys())
-            }
+        sections_conf["layers"] = {
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.layers.keys()),
+            },
         }
 
-    
-    sections = _create_sections_from_conf(ad_obj,sections_conf)
+    sections = _create_sections_from_conf(ad_obj, sections_conf)
     return _obj_repr(ad_obj, header_components, sections)
-
-

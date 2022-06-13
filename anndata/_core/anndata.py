@@ -59,6 +59,7 @@ from ..compat import (
 )
 from .formatting_html import _create_anndata_repr
 
+
 class StorageType(Enum):
     Array = np.ndarray
     Masked = ma.MaskedArray
