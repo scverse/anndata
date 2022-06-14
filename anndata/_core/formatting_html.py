@@ -11,6 +11,7 @@ from importlib.resources import read_binary
 from scipy import sparse
 import pandas as pd
 import numpy as np
+from . import anndata
 
 if sys.version_info >= (3, 8):
     from typing import TypedDict, Literal
@@ -48,7 +49,7 @@ class T_Options(TypedDict):
 
 OPTIONS: T_Options = {
     "display_max_rows": 12,
-    "display_values_threshold": 200,
+    "display_values_threshold": 300,
     "display_style": "html",
     "display_width": 100,
     "display_expand_attrs": "default",
@@ -69,7 +70,7 @@ def _load_static_files():
 
 @singledispatch
 def _html_format(x):
-    return escape(str(x))
+    return f"<pre>{escape(str(x))}</pre>"
 
 
 @_html_format.register(pd.DataFrame)
@@ -93,8 +94,8 @@ def _html_format_np(x: np.ndarray):
     else:
         edgeitems = 1
     options["edgeitems"] = edgeitems
-    with set_numpy_options(**options):
-        return repr(x)
+    with np.printoptions(**options):
+        return f"<pre>{escape(x.__repr__())}</pre>"
 
 
 @_html_format.register(sparse.spmatrix)
@@ -103,12 +104,34 @@ def _html_format_sp(x: sparse.spmatrix):
 
 
 @singledispatch
-def _dtype_repr(x):
+def _dim_repr(x):
+    if hasattr(x,"shape"):
+        return _dim_repr_shape(x)
+    return "Unstructured"
+
+
+@_dim_repr.register(pd.DataFrame)
+@_dim_repr.register(sparse.spmatrix)
+@_dim_repr.register(np.ndarray)
+def _dim_repr_shape(x):
+    return f"({', '.join(escape(str(dim)) for dim in x.shape)})"
+
+
+@singledispatch
+def _type_repr(x):
+    if hasattr(x,"dtype"):
+        return _type_repr_dtype(x)
+    return "Any"
+
+
+@_type_repr.register(sparse.spmatrix)
+@_type_repr.register(np.ndarray)
+def _type_repr_dtype(x):
     return escape(str(x.dtype))
 
 
-@_dtype_repr.register(pd.DataFrame)
-def _dtype_repr_pd(x: pd.DataFrame):
+@_type_repr.register(pd.DataFrame)
+def _type_repr_pd(x: pd.DataFrame):
     return f"DataFrame {escape(str(x.shape))}"
 
 
@@ -124,16 +147,6 @@ def maybe_truncate(obj, max_width=500):
 @singledispatch
 def _inline_format(x, max_width):
     return maybe_truncate(escape(str(x)), max_width=max_width)
-
-
-@contextlib.contextmanager
-def set_numpy_options(*args, **kwargs):
-    original = np.get_printoptions()
-    np.set_printoptions(*args, **kwargs)
-    try:
-        yield
-    finally:
-        np.set_printoptions(**original)
 
 
 def _obj_repr(obj, header_components, sections):
@@ -182,16 +195,13 @@ def _summarize_item_html(
     name: str, x: Union[pd.DataFrame, np.ndarray, sparse.spmatrix], attrs=None
 ):
     """
-    Summarizes x
+    Summarizes x, gives the html content
     """
-    # TODO: more detail
+    # TODO: add more detail to docs
 
-    # TODO: learn what this is
-    cssclass_idx = ""
-
-    dims_str = f"({', '.join(escape(str(dim)) for dim in x.shape)})"
+    dims_str = _dim_repr(x)
     name = escape(str(name))
-    dtype = _dtype_repr(x)
+    dtype = _type_repr(x)
 
     # "unique" ids required to expand/collapse subsections
     attrs_id = "attrs-" + str(uuid.uuid4())
@@ -206,7 +216,7 @@ def _summarize_item_html(
     data_icon = _icon("icon-database")
 
     return (
-        f"<div class='ad-var-name'><span{cssclass_idx}>{name}</span></div>"
+        f"<div class='ad-var-name'><span>{name}</span></div>"
         f"<div class='ad-var-dims'>{dims_str}</div>"
         f"<div class='ad-var-dtype'>{dtype}</div>"
         f"<div class='ad-var-preview ad-preview'>{preview}</div>"
@@ -286,11 +296,12 @@ def _create_sections_from_conf(ad_obj, sections_conf):
     return sections
 
 
-def _create_anndata_repr(ad_obj: "AnnData"):
+def _create_anndata_repr(ad_obj: "anndata.AnnData"):
     obj_type = f"anndata.{type(ad_obj).__name__}"
 
     header_components = [f"<div class='ad-obj-type'>{escape(obj_type)}</div>"]
 
+    # TODO: Check if None
     sections_conf = {
         # sections consisting of single items like matrices
         "X": {
@@ -371,6 +382,16 @@ def _create_anndata_repr(ad_obj: "AnnData"):
                 "enabled": True,
                 "collapsed": False,
                 "n_items": len(ad_obj.layers.keys()),
+            },
+        }
+    if ad_obj.uns:
+        sections_conf["uns"] = {
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.uns.keys()),
             },
         }
 
