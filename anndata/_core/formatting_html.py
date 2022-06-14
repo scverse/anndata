@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 
 if sys.version_info >= (3, 8):
-    from typing import TypedDict, Literal  # pylint: disable=no-name-in-module
+    from typing import TypedDict, Literal
 else:
     from typing_extensions import TypedDict, Literal
 
