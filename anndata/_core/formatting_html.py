@@ -105,7 +105,7 @@ def _html_format_sp(x: sparse.spmatrix):
 
 @singledispatch
 def _dim_repr(x):
-    if hasattr(x,"shape"):
+    if hasattr(x, "shape"):
         return _dim_repr_shape(x)
     return "Unstructured"
 
@@ -119,7 +119,7 @@ def _dim_repr_shape(x):
 
 @singledispatch
 def _type_repr(x):
-    if hasattr(x,"dtype"):
+    if hasattr(x, "dtype"):
         return _type_repr_dtype(x)
     return "Any"
 
