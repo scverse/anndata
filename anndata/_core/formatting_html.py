@@ -1,77 +1,14 @@
 """\
 Utility functions for AnnData._repr_html_()
 """
-import warnings
-import collections.abc as cabc
-from collections import OrderedDict
-from copy import copy, deepcopy
-from enum import Enum
-from functools import partial, singledispatch
-from pathlib import Path
-from os import PathLike
-from textwrap import dedent
-from typing import Any, Union, Optional  # Meta
-from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
-from typing import Tuple, List  # Generic
-
-import numpy as np
-from numpy import ma
-import pandas as pd
-from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
-from scipy import sparse
-from scipy.sparse import issparse, csr_matrix
-
-from anndata._warnings import ImplicitModificationWarning
-from .raw import Raw
-from .index import _normalize_indices, _subset, Index, Index1D, get_vector
-from .file_backing import AnnDataFileManager, to_memory
-from .access import ElementRef
-from .aligned_mapping import (
-    AxisArrays,
-    AxisArraysView,
-    PairwiseArrays,
-    PairwiseArraysView,
-    Layers,
-    LayersView,
-)
-from .views import (
-    ArrayView,
-    DictView,
-    DataFrameView,
-    as_view,
-    _resolve_idxs,
-)
-from .sparse_dataset import SparseDataset
-from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous
-from ..logging import anndata_logger as logger
-from ..compat import (
-    ZarrArray,
-    ZappyArray,
-    DaskArray,
-    Literal,
-    _slice_uns_sparse_matrices,
-    _move_adj_mtx,
-    _overloaded_uns,
-    OverloadedDict,
-)
-
-from typing import Tuple, Iterable
-from functools import singledispatch
-from numbers import Integral, Real, Complex
-from warnings import warn
-import numpy as np
-import pandas as pd
-from functools import singledispatch
-from html import escape
 import uuid
+from functools import lru_cache, singledispatch
+from html import escape
 import contextlib
-import uuid
-from collections import OrderedDict
-from functools import lru_cache, partial
-from html import escape
+from typing import Union, Literal, TypedDict, Mapping  # Generic ABCs
 from importlib.resources import read_binary
-from typing import Collection, Hashable, Literal, TypedDict
+from scipy import sparse
+import pandas as pd
 import numpy as np
 
 
@@ -226,7 +163,7 @@ def _summarize_attrs(attrs):
 
 def _icon(icon_name):
     # TODO: Change names etc.
-    # icon_name should be defined in xarray/static/html/icon-svg-inline.html
+    # icon_name should be defined in anndata/static/html/icon-svg-inline.html
     return (
         "<svg class='icon ad-{0}'>"
         "<use xlink:href='#{0}'>"
