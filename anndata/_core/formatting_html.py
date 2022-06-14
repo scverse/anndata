@@ -5,11 +5,15 @@ import uuid
 from functools import lru_cache, singledispatch
 from html import escape
 import contextlib
-from typing import Union, Literal, TypedDict, Mapping  # Generic ABCs
+from typing import Union, TypedDict, Mapping
 from importlib.resources import read_binary
 from scipy import sparse
 import pandas as pd
 import numpy as np
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
 
 
 STATIC_FILES = (
