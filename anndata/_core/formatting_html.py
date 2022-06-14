@@ -1,19 +1,21 @@
 """\
 Utility functions for AnnData._repr_html_()
 """
+import sys
 import uuid
 from functools import lru_cache, singledispatch
 from html import escape
 import contextlib
-from typing import Union, TypedDict, Mapping
+from typing import Union, Mapping
 from importlib.resources import read_binary
 from scipy import sparse
 import pandas as pd
 import numpy as np
-try:
-    from typing import Literal
-except ImportError:
-    from typing_extensions import Literal
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict, Literal  # pylint: disable=no-name-in-module
+else:
+    from typing_extensions import TypedDict, Literal
 
 
 STATIC_FILES = (
