@@ -10,6 +10,7 @@ from importlib.resources import read_binary
 from scipy import sparse
 import pandas as pd
 import numpy as np
+
 try:
     from typing import Literal
 except ImportError:
