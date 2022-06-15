@@ -59,6 +59,19 @@ OPTIONS: T_Options = {
 }
 
 
+def _get_boolean_with_default(option: Options, default: bool) -> bool:
+    global_choice = OPTIONS[option]
+
+    if global_choice == "default":
+        return default
+    elif isinstance(global_choice, bool):
+        return global_choice
+    else:
+        raise ValueError(
+            f"The global option {option} must be one of True, False or 'default'."
+        )
+
+
 @lru_cache(None)
 def _load_static_files():
     """Lazily load the resource files into memory the first time they are needed"""
@@ -272,7 +285,7 @@ def _create_sections_from_conf(ad_obj, sections_conf):
     sections = []
     for k, v in sections_conf.items():
         # check if the configuration is filled or not
-        if not v:
+        if v:
             # TODO: maybe use enums?
             if v["section_type"] == "single":
                 sections.append(
@@ -298,12 +311,20 @@ def _create_sections_from_conf(ad_obj, sections_conf):
     return sections
 
 
-def _create_anndata_repr(ad_obj: "anndata.AnnData"):
-    obj_type = f"anndata.{type(ad_obj).__name__}"
+def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
 
-    header_components = [f"<div class='ad-obj-type'>{escape(obj_type)}</div>"]
+    max_items_collapse = {
+        "X":30,
+        "obs":20,
+        "var":20,
+        "obsm":10,
+        "varm":10,
+        "layers":10,
+        "varp":10,
+        "obsp":10,
+        "uns":10
+    }
 
-    # TODO: Check if None
     sections_conf = {
         # sections consisting of single items like matrices
         "X": {
@@ -316,101 +337,145 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["X"] > ad_obj.n_obs
+                ),
                 "n_items": ad_obj.n_obs,
             },
         }
-        if ad_obj.X
+        if ad_obj.X is not None
         else {},
+
         "obs": {
             "section_type": "single",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["obs"] > ad_obj.n_obs
+                ),
                 "n_items": ad_obj.n_obs,
             },
         }
-        if ad_obj.obs
+        if ad_obj.obs is not None
         else {},
+
         "var": {
             "section_type": "single",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["var"] > ad_obj.n_vars
+                ),
                 "n_items": ad_obj.n_vars,
             },
         }
-        if ad_obj.var
+        if ad_obj.var is not None
         else {},
+
         # dict like sections
         "obsm": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["obsm"] > len(ad_obj.obsm)
+                ),
                 "n_items": len(ad_obj.obsm),
             }
-            if ad_obj.obsm
+            if ad_obj.obsm is not None
             else {},
         },
+
         "varm": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["varm"] > len(ad_obj.varm)
+                ),
                 "n_items": len(ad_obj.varm),
             }
-            if ad_obj.varm
+            if ad_obj.varm is not None
             else {},
         },
+
         "obsp": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["obsp"] > len(ad_obj.obsp)
+                ),
                 "n_items": len(ad_obj.obsp),
             }
-            if ad_obj.obsp
+            if ad_obj.obsp is not None
             else {},
         },
+
         "varp": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["varp"] > len(ad_obj.varp)
+                ),
                 "n_items": len(ad_obj.varp),
             }
-            if ad_obj.varp
+            if ad_obj.varp is not None
             else {},
         },
+
         "layers": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["layers"] > len(ad_obj.layers)
+                ),
                 "n_items": len(ad_obj.layers),
             }
-            if ad_obj.layers
+            if ad_obj.layers is not None
             else {},
         },
+
         "uns": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
-                "collapsed": False,
+                "collapsed": _get_boolean_with_default(
+                    "display_expand_single_item_section",
+                    max_items_collapse["uns"] > len(ad_obj.uns)
+                ),
                 "n_items": len(ad_obj.uns),
             }
-            if ad_obj.uns
+            if ad_obj.uns is not None
             else {},
         },
     }
+    return sections_conf
+
+
+def _create_anndata_repr(ad_obj: "anndata.AnnData"):
+    obj_type = f"anndata.{type(ad_obj).__name__}"
+
+    header_components = [f"<div class='ad-obj-type'>{escape(obj_type)}</div>"]
+
+    sections_conf = _create_anndata_display_conf(ad_obj)
     sections = _create_sections_from_conf(ad_obj, sections_conf)
     return _obj_repr(ad_obj, header_components, sections)
