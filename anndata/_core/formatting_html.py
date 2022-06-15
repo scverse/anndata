@@ -319,7 +319,9 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "collapsed": False,
                 "n_items": ad_obj.n_obs,
             },
-        } if ad_obj.X else {},
+        }
+        if ad_obj.X
+        else {},
         "obs": {
             "section_type": "single",
             "args": {
@@ -328,7 +330,9 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "collapsed": False,
                 "n_items": ad_obj.n_obs,
             },
-        } if ad_obj.obs else {},
+        }
+        if ad_obj.obs
+        else {},
         "var": {
             "section_type": "single",
             "args": {
@@ -337,7 +341,9 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "collapsed": False,
                 "n_items": ad_obj.n_vars,
             },
-        } if ad_obj.var else {},
+        }
+        if ad_obj.var
+        else {},
         # dict like sections
         "obsm": {
             "section_type": "mapping",
@@ -346,7 +352,9 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": False,
                 "n_items": len(ad_obj.obsm),
-            } if ad_obj.obsm else {},
+            }
+            if ad_obj.obsm
+            else {},
         },
         "varm": {
             "section_type": "mapping",
@@ -355,7 +363,9 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": False,
                 "n_items": len(ad_obj.varm),
-            } if ad_obj.varm else {},
+            }
+            if ad_obj.varm
+            else {},
         },
         "obsp": {
             "section_type": "mapping",
@@ -364,34 +374,42 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": False,
                 "n_items": len(ad_obj.obsp),
-            } if ad_obj.obsp else {},
+            }
+            if ad_obj.obsp
+            else {},
         },
-        "varp":{
+        "varp": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": False,
                 "n_items": len(ad_obj.varp),
-            } if ad_obj.varp else {},
+            }
+            if ad_obj.varp
+            else {},
         },
-        "layers":{
+        "layers": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": False,
                 "n_items": len(ad_obj.layers),
-            } if ad_obj.layers else {},
+            }
+            if ad_obj.layers
+            else {},
         },
-        "uns":{
+        "uns": {
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": False,
                 "n_items": len(ad_obj.uns),
-            } if ad_obj.uns else {},
+            }
+            if ad_obj.uns
+            else {},
         },
     }
     sections = _create_sections_from_conf(ad_obj, sections_conf)
