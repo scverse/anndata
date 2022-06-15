@@ -29,10 +29,10 @@ Options = Literal[
     "display_values_threshold",
     "display_style",
     "display_width",
-    "display_expand_attrs",
-    "display_expand_coords",
-    "display_expand_data_vars",
-    "display_expand_data",
+    "display_expand_attrs",  # the option with the page icon
+    "display_expand_data",  # the option with the database icon
+    "display_expand_mapping_section",  # the sections where data is mapping type e.g. obsm, varm, obsp...
+    "display_expand_single_item_section",  # the sections where data is not mapping type e.g. X, var, obs...
 ]
 
 
@@ -42,9 +42,9 @@ class T_Options(TypedDict):
     display_style: Literal["text", "html"]
     display_width: int
     display_expand_attrs: Literal["default", True, False]
-    display_expand_coords: Literal["default", True, False]
-    display_expand_data_vars: Literal["default", True, False]
     display_expand_data: Literal["default", True, False]
+    display_expand_mapping_section: Literal["default", True, False]
+    display_expand_single_item_section: Literal["default", True, False]
 
 
 OPTIONS: T_Options = {
@@ -53,9 +53,9 @@ OPTIONS: T_Options = {
     "display_style": "html",
     "display_width": 100,
     "display_expand_attrs": "default",
-    "display_expand_coords": "default",
-    "display_expand_data_vars": "default",
     "display_expand_data": "default",
+    "display_expand_mapping_section": "default",
+    "display_expand_single_item_section": "default",
 }
 
 
