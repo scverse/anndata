@@ -16,6 +16,8 @@ __pycache__/
 /data/
 /tmp.zarr/
 test.h5ad
+test.loom
+test.zarr
 .coverage
 
 # jupyter
