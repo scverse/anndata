@@ -271,27 +271,29 @@ def _summarize_mapping_html(x: Mapping):
 def _create_sections_from_conf(ad_obj, sections_conf):
     sections = []
     for k, v in sections_conf.items():
-        # TODO: maybe use enums?
-        if v["section_type"] == "single":
-            sections.append(
-                _collapsible_section(
-                    name=k,
-                    details=_summarize_item_html(
-                        name=k, x=getattr(ad_obj, k), attrs=v.get("attrs", {})
-                    ),
-                    **v["args"],
+        # check if the configuration is filled or not
+        if not v:
+            # TODO: maybe use enums?
+            if v["section_type"] == "single":
+                sections.append(
+                    _collapsible_section(
+                        name=k,
+                        details=_summarize_item_html(
+                            name=k, x=getattr(ad_obj, k), attrs=v.get("attrs", {})
+                        ),
+                        **v["args"],
+                    )
                 )
-            )
-        elif v["section_type"] == "mapping":
-            sections.append(
-                _collapsible_section(
-                    name=k,
-                    details=_summarize_mapping_html(x=getattr(ad_obj, k)),
-                    **v["args"],
+            elif v["section_type"] == "mapping":
+                sections.append(
+                    _collapsible_section(
+                        name=k,
+                        details=_summarize_mapping_html(x=getattr(ad_obj, k)),
+                        **v["args"],
+                    )
                 )
-            )
-        else:
-            raise NotImplementedError()
+            else:
+                raise NotImplementedError()
 
     return sections
 
@@ -317,7 +319,7 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "collapsed": False,
                 "n_items": ad_obj.n_obs,
             },
-        },
+        } if ad_obj.X else {},
         "obs": {
             "section_type": "single",
             "args": {
@@ -326,7 +328,7 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "collapsed": False,
                 "n_items": ad_obj.n_obs,
             },
-        },
+        } if ad_obj.obs else {},
         "var": {
             "section_type": "single",
             "args": {
@@ -335,7 +337,7 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "collapsed": False,
                 "n_items": ad_obj.n_vars,
             },
-        },
+        } if ad_obj.var else {},
         # dict like sections
         "obsm": {
             "section_type": "mapping",
@@ -343,8 +345,8 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": False,
-                "n_items": len(ad_obj.obsm.keys()),  # TODO: Handle when obsm is ndarray
-            },
+                "n_items": len(ad_obj.obsm),
+            } if ad_obj.obsm else {},
         },
         "varm": {
             "section_type": "mapping",
@@ -352,8 +354,8 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": False,
-                "n_items": len(ad_obj.varm.keys()),
-            },
+                "n_items": len(ad_obj.varm),
+            } if ad_obj.varm else {},
         },
         "obsp": {
             "section_type": "mapping",
@@ -361,39 +363,36 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": False,
-                "n_items": len(ad_obj.obsp.keys()),
-            },
+                "n_items": len(ad_obj.obsp),
+            } if ad_obj.obsp else {},
         },
-        "varp": {
+        "varp":{
             "section_type": "mapping",
             "args": {
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": False,
-                "n_items": len(ad_obj.varp.keys()),
-            },
+                "n_items": len(ad_obj.varp),
+            } if ad_obj.varp else {},
+        },
+        "layers":{
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.layers),
+            } if ad_obj.layers else {},
+        },
+        "uns":{
+            "section_type": "mapping",
+            "args": {
+                "inline_details": "",
+                "enabled": True,
+                "collapsed": False,
+                "n_items": len(ad_obj.uns),
+            } if ad_obj.uns else {},
         },
     }
-    if ad_obj.layers:
-        sections_conf["layers"] = {
-            "section_type": "mapping",
-            "args": {
-                "inline_details": "",
-                "enabled": True,
-                "collapsed": False,
-                "n_items": len(ad_obj.layers.keys()),
-            },
-        }
-    if ad_obj.uns:
-        sections_conf["uns"] = {
-            "section_type": "mapping",
-            "args": {
-                "inline_details": "",
-                "enabled": True,
-                "collapsed": False,
-                "n_items": len(ad_obj.uns.keys()),
-            },
-        }
-
     sections = _create_sections_from_conf(ad_obj, sections_conf)
     return _obj_repr(ad_obj, header_components, sections)
