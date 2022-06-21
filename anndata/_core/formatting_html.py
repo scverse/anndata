@@ -283,7 +283,7 @@ def _summarize_mapping_html(x: Mapping):
     return f"<ul class='ad-var-list'>{vars_li}</ul>"
 
 
-def _create_sections_from_conf(ad_obj, sections_conf):
+def _create_sections_from_conf(x, sections_conf):
     sections = []
     for k, v in sections_conf.items():
         # check if the configuration is filled or not
@@ -294,7 +294,7 @@ def _create_sections_from_conf(ad_obj, sections_conf):
                     _collapsible_section(
                         name=k,
                         details=_summarize_item_html(
-                            name="", x=getattr(ad_obj, k), attrs=v.get("attrs", {})
+                            name="", x=getattr(x, k), attrs=v.get("attrs", {})
                         ),
                         **v["args"],
                     )
@@ -303,7 +303,7 @@ def _create_sections_from_conf(ad_obj, sections_conf):
                 sections.append(
                     _collapsible_section(
                         name=k,
-                        details=_summarize_mapping_html(x=getattr(ad_obj, k)),
+                        details=_summarize_mapping_html(x=getattr(x, k)),
                         **v["args"],
                     )
                 )
