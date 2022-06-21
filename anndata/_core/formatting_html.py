@@ -49,9 +49,9 @@ class T_Options(TypedDict):
 
 OPTIONS: T_Options = {
     "display_max_rows": 12,
-    "display_values_threshold": 300,
+    "display_values_threshold": 50,
     "display_style": "html",
-    "display_width": 10,
+    "display_width": 75,
     "display_expand_attrs": "default",
     "display_expand_data": "default",
     "display_expand_mapping_section": "default",
@@ -224,6 +224,7 @@ def _summarize_item_html(
 
     preview = _inline_format(x, 35)
     data_repr = _html_format(x)
+    # TODO: Add pandas.AxisView support and categories to attr
     attrs_ul = _summarize_attrs(attrs if attrs else {})
 
     attrs_icon = _icon("icon-file-text2")
