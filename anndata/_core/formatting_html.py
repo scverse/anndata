@@ -116,6 +116,21 @@ def _html_format_sp(x: sparse.spmatrix):
     return f"<pre>{escape(x.__repr__())}</pre>"
 
 
+# TODO: find a test case when the array variable enters the last branch
+# then implement a similar mechanism for repr.
+# def short_data_repr(array):
+#     """Format "data" for DataArray and Variable."""
+#     internal_data = getattr(array, "variable", array)._data
+#     if isinstance(array, np.ndarray):
+#         return short_numpy_repr(array)
+#     elif is_duck_array(internal_data):
+#         return limit_lines(repr(array.data), limit=40)
+#     elif array._in_memory or array.size < 1e5:
+#         return short_numpy_repr(array)
+#     else:
+#         # internal xarray array type
+#         return f"[{array.size} values with dtype={array.dtype}]"
+
 @singledispatch
 def _dim_repr(x):
     if hasattr(x, "shape"):
