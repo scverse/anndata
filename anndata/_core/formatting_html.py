@@ -1,5 +1,6 @@
 """\
 Utility functions for AnnData._repr_html_()
+TODO: License stuff for Xarray codes here.
 """
 import sys
 import uuid
