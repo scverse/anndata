@@ -132,6 +132,7 @@ def _html_format_sp(x: sparse.spmatrix):
 #         # internal xarray array type
 #         return f"[{array.size} values with dtype={array.dtype}]"
 
+
 @singledispatch
 def _dim_repr(x):
     if hasattr(x, "shape"):
