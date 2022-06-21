@@ -51,7 +51,7 @@ OPTIONS: T_Options = {
     "display_max_rows": 12,
     "display_values_threshold": 300,
     "display_style": "html",
-    "display_width": 100,
+    "display_width": 10,
     "display_expand_attrs": "default",
     "display_expand_data": "default",
     "display_expand_mapping_section": "default",
@@ -194,7 +194,6 @@ def _summarize_attrs(attrs):
 
 
 def _icon(icon_name):
-    # TODO: Change names etc.
     # icon_name should be defined in anndata/static/html/icon-svg-inline.html
     return (
         "<svg class='icon ad-{0}'>"
@@ -207,10 +206,12 @@ def _icon(icon_name):
 def _summarize_item_html(
     name: str, x: Union[pd.DataFrame, np.ndarray, sparse.spmatrix], attrs=None
 ):
+    """Summarizes x, gives the html content
+
+    Returns:
+        Union[pd.DataFrame, np.ndarray, sparse.spmatrix]: data object to create an html item
+        with description, labels and icons.
     """
-    Summarizes x, gives the html content
-    """
-    # TODO: add more detail to docs
 
     dims_str = _dim_repr(x)
     name = escape(str(name))
@@ -292,7 +293,7 @@ def _create_sections_from_conf(ad_obj, sections_conf):
                     _collapsible_section(
                         name=k,
                         details=_summarize_item_html(
-                            name=k, x=getattr(ad_obj, k), attrs=v.get("attrs", {})
+                            name="", x=getattr(ad_obj, k), attrs=v.get("attrs", {})
                         ),
                         **v["args"],
                     )
@@ -314,15 +315,15 @@ def _create_sections_from_conf(ad_obj, sections_conf):
 def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
 
     max_items_collapse = {
-        "X": 30,
-        "obs": 20,
-        "var": 20,
-        "obsm": 10,
-        "varm": 10,
-        "layers": 10,
-        "varp": 10,
-        "obsp": 10,
-        "uns": 10,
+        "X": 1,
+        "obs": 1,
+        "var": 1,
+        "obsm": 1,
+        "varm": 1,
+        "layers": 1,
+        "varp": 1,
+        "obsp": 1,
+        "uns": 1,
     }
 
     sections_conf = {
@@ -332,14 +333,14 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
             "attrs": {
                 "Is backed": "Nowhere"
                 if not ad_obj.isbacked
-                else escape(ad_obj.file.filename)
+                else escape(str(ad_obj.file.filename))
             },
             "args": {
                 "inline_details": "",
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["X"] > ad_obj.n_obs,
+                    max_items_collapse["X"] < ad_obj.n_obs,
                 ),
                 "n_items": ad_obj.n_obs,
             },
@@ -353,7 +354,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["obs"] > ad_obj.n_obs,
+                    max_items_collapse["obs"] < ad_obj.n_obs,
                 ),
                 "n_items": ad_obj.n_obs,
             },
@@ -367,7 +368,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["var"] > ad_obj.n_vars,
+                    max_items_collapse["var"] < ad_obj.n_vars,
                 ),
                 "n_items": ad_obj.n_vars,
             },
@@ -382,7 +383,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["obsm"] > len(ad_obj.obsm),
+                    max_items_collapse["obsm"] < len(ad_obj.obsm),
                 ),
                 "n_items": len(ad_obj.obsm),
             }
@@ -396,7 +397,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["varm"] > len(ad_obj.varm),
+                    max_items_collapse["varm"] < len(ad_obj.varm),
                 ),
                 "n_items": len(ad_obj.varm),
             }
@@ -410,7 +411,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["obsp"] > len(ad_obj.obsp),
+                    max_items_collapse["obsp"] < len(ad_obj.obsp),
                 ),
                 "n_items": len(ad_obj.obsp),
             }
@@ -424,7 +425,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["varp"] > len(ad_obj.varp),
+                    max_items_collapse["varp"] < len(ad_obj.varp),
                 ),
                 "n_items": len(ad_obj.varp),
             }
@@ -438,7 +439,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["layers"] > len(ad_obj.layers),
+                    max_items_collapse["layers"] < len(ad_obj.layers),
                 ),
                 "n_items": len(ad_obj.layers),
             }
@@ -452,7 +453,7 @@ def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
                 "enabled": True,
                 "collapsed": _get_boolean_with_default(
                     "display_expand_single_item_section",
-                    max_items_collapse["uns"] > len(ad_obj.uns),
+                    max_items_collapse["uns"] < len(ad_obj.uns),
                 ),
                 "n_items": len(ad_obj.uns),
             }
