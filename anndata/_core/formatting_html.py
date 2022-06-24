@@ -83,7 +83,7 @@ def _load_static_files():
 
 # TODO: document and mention
 # https://github.com/pydata/xarray/blob/8e9a9fb390f8f0d27a017a7affd8d308d2317959/xarray/core/formatting.py#L32
-def _maybe_truncate(obj, max_width=500):
+def _maybe_truncate(obj, max_width=40):
     s = str(obj)
     if len(s) > max_width:
         s = s[: (max_width - 3)] + "..."
@@ -167,7 +167,7 @@ def _type_repr(x):
 @_type_repr.register(sparse.spmatrix)
 @_type_repr.register(np.ndarray)
 def _type_repr_dtype(x):
-    return escape(str(x.dtype))
+    return str(x.dtype)
 
 
 @_type_repr.register(pd.DataFrame)
@@ -195,10 +195,10 @@ def _add_attrs_pd_df(x: pd.DataFrame, attrs):
         if isinstance(t, pd.CategoricalDtype):
             txt = "Ordered " if t.ordered else "Unordered "
             txt += "Cat.: " + ", ".join(t.categories)
-            txt = escape(txt)
+            txt = txt
         else:
-            txt = escape(str(t))
-        key = escape("col_" + str(c) + "_dtype")
+            txt = str(t)
+        key = "col_" + str(c) + "_dtype"
         if attrs.get(key) is None:
             attrs[key] = txt
     return attrs
@@ -206,13 +206,14 @@ def _add_attrs_pd_df(x: pd.DataFrame, attrs):
 
 """
 Inline repr FUNCTIONS
-Expected to give short description of the data structure.
+Expected to give short description of the data structure compatible
+with html (e.g., calls escape before return).
 """
 
 
 @singledispatch
 def _inline_format(x, max_width):
-    return _maybe_truncate(escape(str(x)), max_width=max_width)
+    return escape(_maybe_truncate(str(x), max_width=max_width))
 
 
 def _obj_repr(obj, header_components, sections):
@@ -271,9 +272,10 @@ def _summarize_item_html(
         str: Html repr of x as str
     """
 
-    dims_str = _dim_repr(x)
-    name = escape(str(name))
-    dtype = _type_repr(x)
+    # TODO: Maybe make the truncation limit even smaller as it gets more nested?
+    dims_str = escape(_maybe_truncate(_dim_repr(x)),15)
+    name = escape(_maybe_truncate(str(name),15))
+    dtype = escape(_maybe_truncate(_type_repr(x),15))
     attrs = attrs if attrs else {}
     attrs = _add_attrs(x, attrs)
 
@@ -282,7 +284,7 @@ def _summarize_item_html(
     data_id = "data-" + str(uuid.uuid4())
     disabled = "" if attrs else "disabled"
 
-    preview = _inline_format(x, 35)
+    preview = _inline_format(x, 15)
     data_repr = _html_format(x)
     attrs_ul = _summarize_attrs(attrs)
 
