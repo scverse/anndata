@@ -172,7 +172,7 @@ def _type_repr_dtype(x):
 
 @_type_repr.register(pd.DataFrame)
 def _type_repr_pd(x: pd.DataFrame):
-    return f"DataFrame {escape(str(x.shape))}"
+    return f"DataFrame{str(x.shape)}"
 
 
 """
@@ -198,7 +198,7 @@ def _add_attrs_pd_df(x: pd.DataFrame, attrs):
             txt = txt
         else:
             txt = str(t)
-        key = "col_" + str(c) + "_dtype"
+        key = f"'{str(c)}'" + " Column Type"
         if attrs.get(key) is None:
             attrs[key] = txt
     return attrs
@@ -272,10 +272,9 @@ def _summarize_item_html(
         str: Html repr of x as str
     """
 
-    # TODO: Maybe make the truncation limit even smaller as it gets more nested?
-    dims_str = escape(_maybe_truncate(_dim_repr(x)), 15)
-    name = escape(_maybe_truncate(str(name), 15))
-    dtype = escape(_maybe_truncate(_type_repr(x), 15))
+    dims_str = escape(_dim_repr(x))
+    name = escape(str(name))
+    dtype = escape(_type_repr(x))
     attrs = attrs if attrs else {}
     attrs = _add_attrs(x, attrs)
 
