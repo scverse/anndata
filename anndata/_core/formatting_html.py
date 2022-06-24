@@ -273,9 +273,9 @@ def _summarize_item_html(
     """
 
     # TODO: Maybe make the truncation limit even smaller as it gets more nested?
-    dims_str = escape(_maybe_truncate(_dim_repr(x)),15)
-    name = escape(_maybe_truncate(str(name),15))
-    dtype = escape(_maybe_truncate(_type_repr(x),15))
+    dims_str = escape(_maybe_truncate(_dim_repr(x)), 15)
+    name = escape(_maybe_truncate(str(name), 15))
+    dtype = escape(_maybe_truncate(_type_repr(x), 15))
     attrs = attrs if attrs else {}
     attrs = _add_attrs(x, attrs)
 
