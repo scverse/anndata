@@ -274,7 +274,7 @@ def _summarize_item_html(
 
     dims_str = escape(_dim_repr(x))
     name = escape(str(name))
-    dtype = escape(_type_repr(x))
+    dtype = _maybe_truncate(escape(_type_repr(x)),20)
     attrs = attrs if attrs else {}
     attrs = _add_attrs(x, attrs)
 
@@ -283,7 +283,7 @@ def _summarize_item_html(
     data_id = "data-" + str(uuid.uuid4())
     disabled = "" if attrs else "disabled"
 
-    preview = _inline_format(x, 15)
+    preview = _inline_format(x, 20)
     data_repr = _html_format(x)
     attrs_ul = _summarize_attrs(attrs)
 
