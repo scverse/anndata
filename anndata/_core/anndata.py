@@ -1165,10 +1165,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("Only list-like `categories` is supported.")
         if key in self.obs:
             old_categories = self.obs[key].cat.categories.tolist()
-            self.obs[key].cat.rename_categories(categories, inplace=True)
+            self.obs[key] = self.obs[key].cat.rename_categories(categories)
         elif key in self.var:
             old_categories = self.var[key].cat.categories.tolist()
-            self.var[key].cat.rename_categories(categories, inplace=True)
+            self.var[key] = self.var[key].cat.rename_categories(categories)
         else:
             raise ValueError(f"{key} is neither in `.obs` nor in `.var`.")
         # this is not a good solution

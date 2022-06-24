@@ -3,4 +3,6 @@
 
 .. rubric:: Bug fixes
 
+* Fix warning from `rename_categories` :pr:`790` :smaller:`I Virshup`
+
 .. rubric:: Documentation
