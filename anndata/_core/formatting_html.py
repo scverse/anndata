@@ -216,7 +216,7 @@ def _inline_format(x, max_width):
     return escape(_maybe_truncate(str(x), max_width=max_width))
 
 
-def _obj_repr(obj, header_components, sections):
+def _obj_repr(fallback_repr_str, header_components, sections):
     """Return HTML repr of an anndata object.
 
     If CSS is not injected (untrusted notebook), fallback to the plain text repr.
@@ -229,7 +229,7 @@ def _obj_repr(obj, header_components, sections):
     return (
         "<div>"
         f"{icons_svg}<style>{css_style}</style>"
-        f"<pre class='ad-text-repr-fallback'>{escape(repr(obj))}</pre>"
+        f"<pre class='ad-text-repr-fallback'>{escape(fallback_repr_str)}</pre>"
         "<div class='ad-wrap' style='display:none'>"
         f"{header}"
         f"<ul class='ad-sections'>{sections}</ul>"
@@ -540,4 +540,4 @@ def _create_anndata_repr(ad_obj: "anndata.AnnData"):
 
     sections_conf = _create_anndata_display_conf(ad_obj)
     sections = _create_sections_from_conf(ad_obj, sections_conf)
-    return _obj_repr(ad_obj, header_components, sections)
+    return _obj_repr(str(ad_obj), header_components, sections)
