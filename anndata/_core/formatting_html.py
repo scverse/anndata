@@ -274,7 +274,7 @@ def _summarize_item_html(
 
     dims_str = escape(_dim_repr(x))
     name = escape(str(name))
-    dtype = _maybe_truncate(escape(_type_repr(x)),20)
+    dtype = _maybe_truncate(escape(_type_repr(x)), 20)
     attrs = attrs if attrs else {}
     attrs = _add_attrs(x, attrs)
 
