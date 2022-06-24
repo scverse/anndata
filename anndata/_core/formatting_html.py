@@ -137,7 +137,6 @@ Gives the shape of different data-structures based on their type.
 """
 
 
-
 @singledispatch
 def _dim_repr(x):
     if hasattr(x, "shape"):
@@ -185,15 +184,15 @@ type automatically.
 
 
 @singledispatch
-def _add_attrs(x, attrs:dict):
+def _add_attrs(x, attrs: dict):
     return attrs
 
 
 @_add_attrs.register(pd.DataFrame)
-def _add_attrs_pd_df(x : pd.DataFrame, attrs):
-    for c,t in zip(x.columns,x.dtypes):
+def _add_attrs_pd_df(x: pd.DataFrame, attrs):
+    for c, t in zip(x.columns, x.dtypes):
         txt = None
-        if isinstance(t,pd.CategoricalDtype):
+        if isinstance(t, pd.CategoricalDtype):
             txt = "Ordered " if t.ordered else "Unordered "
             txt += "Cat.: " + ", ".join(t.categories)
             txt = escape(txt)
@@ -276,7 +275,7 @@ def _summarize_item_html(
     name = escape(str(name))
     dtype = _type_repr(x)
     attrs = attrs if attrs else {}
-    attrs = _add_attrs(x,attrs)
+    attrs = _add_attrs(x, attrs)
 
     # "unique" ids required to expand/collapse subsections
     attrs_id = "attrs-" + str(uuid.uuid4())
