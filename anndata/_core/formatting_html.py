@@ -6,7 +6,6 @@ import sys
 import uuid
 from functools import lru_cache, singledispatch
 from html import escape
-import contextlib
 from typing import Union, Mapping
 from importlib.resources import read_binary
 from scipy import sparse
@@ -82,6 +81,21 @@ def _load_static_files():
     ]
 
 
+# TODO: document and mention
+# https://github.com/pydata/xarray/blob/8e9a9fb390f8f0d27a017a7affd8d308d2317959/xarray/core/formatting.py#L32
+def _maybe_truncate(obj, max_width=500):
+    s = str(obj)
+    if len(s) > max_width:
+        s = s[: (max_width - 3)] + "..."
+    return s
+
+
+"""
+HTML FORMAT FUNCTIONS
+These functions give an representation to be shown in the html summary.
+"""
+
+
 @singledispatch
 def _html_format(x):
     return f"<pre>{escape(str(x))}</pre>"
@@ -117,20 +131,11 @@ def _html_format_sp(x: sparse.spmatrix):
     return f"<pre>{escape(x.__repr__())}</pre>"
 
 
-# TODO: find a test case when the array variable enters the last branch
-# then implement a similar mechanism for repr.
-# def short_data_repr(array):
-#     """Format "data" for DataArray and Variable."""
-#     internal_data = getattr(array, "variable", array)._data
-#     if isinstance(array, np.ndarray):
-#         return short_numpy_repr(array)
-#     elif is_duck_array(internal_data):
-#         return limit_lines(repr(array.data), limit=40)
-#     elif array._in_memory or array.size < 1e5:
-#         return short_numpy_repr(array)
-#     else:
-#         # internal xarray array type
-#         return f"[{array.size} values with dtype={array.dtype}]"
+"""
+Dimension repr FUNCTIONS
+Gives the shape of different data-structures based on their type.
+"""
+
 
 @singledispatch
 def _dim_repr(x):
@@ -144,6 +149,12 @@ def _dim_repr(x):
 @_dim_repr.register(np.ndarray)
 def _dim_repr_shape(x):
     return f"({', '.join(escape(str(dim)) for dim in x.shape)})"
+
+
+"""
+Type repr FUNCTIONS
+Gives a short representation of the type of the data structure.
+"""
 
 
 @singledispatch
@@ -164,18 +175,44 @@ def _type_repr_pd(x: pd.DataFrame):
     return f"DataFrame {escape(str(x.shape))}"
 
 
-# TODO: document and mention
-# https://github.com/pydata/xarray/blob/8e9a9fb390f8f0d27a017a7affd8d308d2317959/xarray/core/formatting.py#L32
-def maybe_truncate(obj, max_width=500):
-    s = str(obj)
-    if len(s) > max_width:
-        s = s[: (max_width - 3)] + "..."
-    return s
+"""
+Default Attribute FUNCTIONS
+Adds attributes depending on the type of the data structure.
+By default does nothing but if overloaded, it can add attributes to the specific data
+type automatically.
+"""
+
+
+@singledispatch
+def _add_attrs(x, attrs:dict):
+    return attrs
+
+
+@_add_attrs.register(pd.DataFrame)
+def _add_attrs_pd_df(x : pd.DataFrame, attrs):
+    for c,t in zip(x.columns,x.dtypes):
+        txt = None
+        if isinstance(t,pd.CategoricalDtype):
+            txt = "Ordered " if t.ordered else "Unordered "
+            txt += "Cat.: " + ", ".join(t.categories)
+            txt = escape(txt)
+        else:
+            txt = escape(str(t))
+        key = escape("col_" + str(c) + "_dtype")
+        if attrs.get(key) is None:
+            attrs[key] = txt
+    return attrs
+
+
+"""
+Inline repr FUNCTIONS
+Expected to give short description of the data structure.
+"""
 
 
 @singledispatch
 def _inline_format(x, max_width):
-    return maybe_truncate(escape(str(x)), max_width=max_width)
+    return _maybe_truncate(escape(str(x)), max_width=max_width)
 
 
 def _obj_repr(obj, header_components, sections):
@@ -224,14 +261,21 @@ def _summarize_item_html(
 ):
     """Summarizes x, gives the html content
 
+    Args:
+        name (str): Name to show
+        x (Union[pd.DataFrame, np.ndarray, sparse.spmatrix]): The data structure to summarize
+        attrs (_type_, optional): Additional information to be
+            shown under the attributes button. Defaults to None.
+
     Returns:
-        Union[pd.DataFrame, np.ndarray, sparse.spmatrix]: data object to create an html item
-        with description, labels and icons.
+        str: Html repr of x as str
     """
 
     dims_str = _dim_repr(x)
     name = escape(str(name))
     dtype = _type_repr(x)
+    attrs = attrs if attrs else {}
+    attrs = _add_attrs(x,attrs)
 
     # "unique" ids required to expand/collapse subsections
     attrs_id = "attrs-" + str(uuid.uuid4())
@@ -240,8 +284,7 @@ def _summarize_item_html(
 
     preview = _inline_format(x, 35)
     data_repr = _html_format(x)
-    # TODO: Add pandas.AxisView support and categories to attr
-    attrs_ul = _summarize_attrs(attrs if attrs else {})
+    attrs_ul = _summarize_attrs(attrs)
 
     attrs_icon = _icon("icon-file-text2")
     data_icon = _icon("icon-database")
@@ -330,7 +373,15 @@ def _create_sections_from_conf(x, sections_conf):
 
 
 def _create_anndata_display_conf(ad_obj: "anndata.AnnData"):
+    """Factory to create the configuration of AnnData repr
+    the options are hard-coded here (e.g., max_items_collapse options).
 
+    Args:
+        ad_obj (anndata.AnnData): data represent
+
+    Returns:
+        dict: dict containing the configuration
+    """
     max_items_collapse = {
         "X": 1,
         "obs": 1,
