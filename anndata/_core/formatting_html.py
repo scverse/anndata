@@ -107,9 +107,12 @@ def _html_format(x):
 @_html_format.register(pd.DataFrame)
 def _html_format_df(x: pd.DataFrame):
     with pd.option_context(
-        "display.max_colwidth",OPTIONS["max_col_width"],
-        "display.max_columns",OPTIONS["display_width"] // OPTIONS["max_col_width"],
-        "display.max_rows",OPTIONS["display_max_rows"],
+        "display.max_colwidth",
+        OPTIONS["max_col_width"],
+        "display.max_columns",
+        OPTIONS["display_width"] // OPTIONS["max_col_width"],
+        "display.max_rows",
+        OPTIONS["display_max_rows"],
     ):
         return x._repr_html_()
 
