@@ -305,7 +305,7 @@ dl.ad-attrs {
   margin: 0;
   float: left;
   padding-right: 10px;
-  width: 20px;
+  width: auto;
 }
 
 .ad-attrs dt {
