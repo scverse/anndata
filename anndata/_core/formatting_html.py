@@ -29,6 +29,7 @@ Options = Literal[
     "display_values_threshold",
     "display_style",
     "display_width",
+    "max_col_width",  # pandas column maximum width
     "display_expand_attrs",  # the option with the page icon
     "display_expand_data",  # the option with the database icon
     "display_expand_mapping_section",  # the sections where data is mapping type e.g. obsm, varm, obsp...
@@ -41,6 +42,7 @@ class T_Options(TypedDict):
     display_values_threshold: int
     display_style: Literal["text", "html"]
     display_width: int
+    max_col_width: int
     display_expand_attrs: Literal["default", True, False]
     display_expand_data: Literal["default", True, False]
     display_expand_mapping_section: Literal["default", True, False]
@@ -51,7 +53,8 @@ OPTIONS: T_Options = {
     "display_max_rows": 12,
     "display_values_threshold": 50,
     "display_style": "html",
-    "display_width": 75,
+    "display_width": 80,
+    "max_col_width": 20,
     "display_expand_attrs": "default",
     "display_expand_data": "default",
     "display_expand_mapping_section": "default",
@@ -103,7 +106,12 @@ def _html_format(x):
 
 @_html_format.register(pd.DataFrame)
 def _html_format_df(x: pd.DataFrame):
-    return x._repr_html_()
+    with pd.option_context(
+        "display.max_colwidth",OPTIONS["max_col_width"],
+        "display.max_columns",OPTIONS["display_width"] // OPTIONS["max_col_width"],
+        "display.max_rows",OPTIONS["display_max_rows"],
+    ):
+        return x._repr_html_()
 
 
 @_html_format.register(np.ndarray)

@@ -21,7 +21,7 @@ body.vscode-dark {
   --ad-font-color3: rgba(255, 255, 255, 0.38);
   --ad-border-color: #1F1F1F;
   --ad-disabled-color: #515151;
-  --ad-background-color: #111111;
+  --ad-background-color: transparent;
   --ad-background-color-row-even: #111111;
   --ad-background-color-row-odd: #313131;
 }
