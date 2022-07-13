@@ -205,7 +205,8 @@ def _add_attrs_pd_df(x: pd.DataFrame, attrs):
         txt = None
         if isinstance(t, pd.CategoricalDtype):
             txt = "Ordered " if t.ordered else "Unordered "
-            txt += "Cat.: " + ", ".join(t.categories)
+            cats = [str(cat) for cat in t.categories]
+            txt += "Cat.: " + ", ".join(cats)
             txt = txt
         else:
             txt = str(t)
