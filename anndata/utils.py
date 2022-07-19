@@ -11,12 +11,6 @@ from .logging import get_logger
 from ._core.sparse_dataset import SparseDataset
 import warnings
 
-try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        import awkward as ak
-except ImportError:
-    ak = None
 
 logger = get_logger(__name__)
 
@@ -42,11 +36,6 @@ def asarray_h5py_dataset(x):
     return x[...]
 
 
-@asarray.register(ak.Array)
-def asarray_awkward(x):
-    return ak.copy(x)
-
-
 @singledispatch
 def convert_to_dict(obj) -> dict:
     return dict(obj)
@@ -70,6 +59,29 @@ def convert_to_dict_ndarray(obj: np.ndarray):
 @convert_to_dict.register(type(None))
 def convert_to_dict_nonetype(obj: None):
     return dict()
+
+
+@singledispatch
+def dim_len(x, dim):
+    """\
+    Return the size of an array in dimension `dim`.
+
+    Raises a ValueError if `x` is an awkward array with variable length in the requested dimension.
+    """
+    return x.shape[dim]
+
+
+try:
+    import awkward as ak
+
+    dim_len.register(ak.Array, ak.size)
+
+    @asarray.register(ak.Array)
+    def asarray_awkward(x):
+        return x
+
+except ImportError:
+    pass
 
 
 def make_index_unique(index: pd.Index, join: str = "-"):
@@ -267,18 +279,3 @@ def import_function(module: str, name: str) -> Callable:
             raise error
 
     return func
-
-
-@singledispatch
-def dim_len(x, dim):
-    return x.shape[dim]
-
-
-@dim_len.register(ak.Array)
-def dim_len_array(x, dim):
-    if dim == 0:
-        return len(x)
-    elif dim == 1:
-        return None
-    else:
-        raise IndexError()
