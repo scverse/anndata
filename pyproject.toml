@@ -76,7 +76,7 @@ doc = [
     "scanpydoc>=0.7.7",
     "typing_extensions; python_version < '3.8'",
     "zarr",
-    "awkward",
+    "awkward>=1,<2",
 ]
 test = [
     "loompy>=3.0.5",
@@ -90,7 +90,7 @@ test = [
     "boltons",
     "scanpy",
     "dask[array]",
-    "awkward",
+    "awkward>=1,<2",
 ]
 
 [tool.flit.sdist]
