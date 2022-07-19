@@ -1076,7 +1076,7 @@ def expected_shape(a, b, axis, join):
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
 def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
-    # https://github.com/theislab/anndata/issues/526
+    # https://github.com/scverse/anndata/issues/526
     a = gen_adata((5, 7))
     b = gen_adata(shape)
     alt_axis = 1 - axis
@@ -1140,7 +1140,7 @@ def test_concat_outer_aligned_mapping(elem):
 
 
 def test_concatenate_size_0_dim():
-    # https://github.com/theislab/anndata/issues/526
+    # https://github.com/scverse/anndata/issues/526
 
     a = gen_adata((5, 10))
     b = gen_adata((5, 0))
@@ -1165,7 +1165,7 @@ def test_concat_null_X():
     assert_equal(no_X, orig)
 
 
-# https://github.com/theislab/ehrapy/issues/151#issuecomment-1016753744
+# https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
 def test_concat_X_dtype():
     adatas_orig = {
         k: AnnData(np.ones((20, 10), dtype=np.int8), dtype=np.int8) for k in list("abc")

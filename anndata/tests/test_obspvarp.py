@@ -1,4 +1,6 @@
 # TODO: These tests should share code with test_layers, and test_obsmvarm
+import warnings
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -96,8 +98,8 @@ def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
         with pytest.warns(UserWarning, match=rf"{field.title()} 'df'.*dtype object"):
             getattr(adata, field)["df"] = df(dim)
     else:
-        with pytest.warns(None) as warnings:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             getattr(adata, field)["df"] = df(dim)
-            assert not len(warnings)
     assert isinstance(getattr(adata, field)["df"], np.ndarray)
     assert np.issubdtype(getattr(adata, field)["df"].dtype, dtype)

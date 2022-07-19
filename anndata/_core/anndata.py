@@ -272,7 +272,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Mapping[str, Any]] = None,
-        dtype: Optional[Union[np.dtype, str]] = None,
+        dtype: Optional[Union[np.dtype, type, str]] = None,
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
         filemode: Optional[Literal["r", "r+"]] = None,
@@ -1157,10 +1157,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("Only list-like `categories` is supported.")
         if key in self.obs:
             old_categories = self.obs[key].cat.categories.tolist()
-            self.obs[key].cat.rename_categories(categories, inplace=True)
+            self.obs[key] = self.obs[key].cat.rename_categories(categories)
         elif key in self.var:
             old_categories = self.var[key].cat.categories.tolist()
-            self.var[key].cat.rename_categories(categories, inplace=True)
+            self.var[key] = self.var[key].cat.rename_categories(categories)
         else:
             raise ValueError(f"{key} is neither in `.obs` nor in `.var`.")
         # this is not a good solution
@@ -1219,7 +1219,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # TODO: We should only check if non-null values are unique, but
                 # this would break cases where string columns with nulls could
                 # be written as categorical, but not as string.
-                # Possible solution: https://github.com/theislab/anndata/issues/504
+                # Possible solution: https://github.com/scverse/anndata/issues/504
                 if len(c.categories) >= len(c):
                     continue
                 # Ideally this could be done inplace

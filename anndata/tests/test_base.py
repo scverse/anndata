@@ -1,4 +1,5 @@
 from itertools import product
+import warnings
 
 import numpy as np
 from numpy import ma
@@ -164,7 +165,7 @@ def test_setting_index_names_error(attr):
     orig = adata_sparse[:2, :2]
     adata = adata_sparse[:2, :2]
     assert getattr(adata, attr).name is None
-    with pytest.raises(ValueError, match=fr"AnnData expects \.{attr[:3]}\.index\.name"):
+    with pytest.raises(ValueError, match=rf"AnnData expects \.{attr[:3]}\.index\.name"):
         setattr(adata, attr, pd.Index(["x", "y"], name=0))
     assert adata.is_view
     assert getattr(adata, attr).tolist() != ["x", "y"]
@@ -452,7 +453,9 @@ def test_rename_categories():
     adata.uns["tool"]["params"] = dict(groupby="cat_anno")
 
     new_categories = ["c", "d"]
-    adata.rename_categories("cat_anno", new_categories)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        adata.rename_categories("cat_anno", new_categories)
 
     assert list(adata.obs["cat_anno"].cat.categories) == new_categories
     assert list(adata.uns["tool"]["cat_array"].dtype.names) == new_categories

@@ -624,7 +624,7 @@ def dim_size(adata, *, axis=None, dim=None) -> int:
     return adata.shape[ax]
 
 
-# TODO: Resolve https://github.com/theislab/anndata/issues/678 and remove this function
+# TODO: Resolve https://github.com/scverse/anndata/issues/678 and remove this function
 def concat_Xs(adatas, reindexers, axis, fill_value):
     """
     Shimy until support for some missing X's is implemented.

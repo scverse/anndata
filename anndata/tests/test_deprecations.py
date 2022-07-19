@@ -69,14 +69,10 @@ def test_obsvar_vector_Xlayer(adata):
     adata = adata.copy()
     adata.layers["X"] = adata.X * 3
 
-    with pytest.warns(None) as records:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         adata.var_vector("s1", layer="X")
         adata.obs_vector("a", layer="X")
-
-    for r in records:
-        # This time it shouldn’t throw a warning
-        if "anndata" in r.filename:
-            assert r.category is not FutureWarning
 
 
 def test_force_dense_deprecated(tmp_path):
@@ -113,9 +109,9 @@ def test_get_uns_neighbors_deprecated(adata):
 
     assert_equal(from_uns, mtx)
 
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         v = adata[: n // 2]
-        assert not rec
 
     with pytest.warns(FutureWarning):
         from_uns_v = v.uns["neighbors"]["connectivities"]
@@ -182,16 +178,17 @@ def test_deprecated_neighbors_get_other(adata_neighbors):
     adata = adata_neighbors
 
     # This shouldn't throw a warning
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         assert adata.uns["neighbors"]["params"] == {"method": "umap", "n_neighbors": 10}
-        assert not rec
 
 
 def test_deprecated_neighbors_set_other(adata_neighbors):
     adata = adata_neighbors
 
     # This shouldn't throw a warning
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         adata.uns["neighbors"]["new_key"] = 10
         assert adata.uns["neighbors"]["new_key"] == 10
         # Test nested
@@ -202,8 +199,6 @@ def test_deprecated_neighbors_set_other(adata_neighbors):
             "n_neighbors": 10,
             "new_param": 100,
         }
-
-        assert not rec
 
 
 # This should break in 0.9

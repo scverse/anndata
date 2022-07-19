@@ -1,0 +1,8 @@
+0.8.1 :small:`the future`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. rubric:: Bug fixes
+
+* Fix warning from `rename_categories` :pr:`790` :smaller:`I Virshup`
+
+.. rubric:: Documentation
