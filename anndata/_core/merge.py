@@ -467,7 +467,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     elif any(isinstance(a, AwkArray) for a in arrays):
         import awkward as ak
 
-        return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)])
+        return ak.concatenate([f(a, axis=1 - axis) for f, a in zip(reindexers, arrays)])
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
@@ -515,7 +515,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
     elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
         # do not reindex awkward arrays
         # TODO unintended behaviour?
-        reindexers = [lambda x: x for _ in els]
+        reindexers = [lambda *args, **kwargs: args[0] for _ in els]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
         reindexers = [
@@ -536,7 +536,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
     elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
         # do not reindex awkward arrays
         # TODO unintended behaviour?
-        reindexers = [lambda x: x for _ in els]
+        reindexers = [lambda *args, **kwargs: args[0] for _ in els]
     else:
         # if fill_value is None:
         # fill_value = default_fill_value(els)

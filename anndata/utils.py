@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import warnings
 from functools import wraps, singledispatch
 from typing import Mapping, Any, Sequence, Union, Callable
@@ -75,13 +76,24 @@ try:
 
     @dim_len.register(ak.Array)
     def dim_len_awkward(x, dim):
-        dim_lengths = ak.num(x, dim)
-        if isinstance(dim_lengths, int):
-            return dim_lengths
-        elif ak.all(dim_lengths == dim_lengths[0]):
-            return dim_lengths[0]
+        if dim == 0:
+            try:
+                return x.type.length
+            except AttributeError:
+                return ValueError("The outermost type must be awkward.Array!")
         else:
-            raise ValueError(f"Array is of variable length in dimension {dim}")
+            t = x.type
+            for _ in range(dim):
+                if isinstance(t, ak.types.OptionType):
+                    t = t.content
+                elif isinstance(t, (ak.types.RegularType, ak.types.ArrayType)):
+                    t = t.type
+                else:
+                    raise ValueError(f"Unsupported type in awkward array {t}")
+            try:
+                return t.size
+            except AttributeError:
+                raise ValueError("Array is of variable length in dimension {dim}")
 
     @asarray.register(ak.Array)
     def asarray_awkward(x):
