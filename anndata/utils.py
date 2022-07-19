@@ -9,7 +9,6 @@ from scipy import sparse
 
 from .logging import get_logger
 from ._core.sparse_dataset import SparseDataset
-import warnings
 
 
 logger = get_logger(__name__)
