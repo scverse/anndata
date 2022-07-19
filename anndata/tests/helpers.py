@@ -59,7 +59,6 @@ def gen_typed_df(n, index=None):
 
 # TODO simulate variable-length non-aligned dimensions
 def gen_awkward(m, n=None, dtype=np.int32):
-    rng = np.random.default_rng(42)
     dim = (m,) if n is None else (m, n)
     arr = AwkArray(np.random.binomial(100, 0.005, dim).astype(dtype))
     return arr
