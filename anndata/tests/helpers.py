@@ -4,6 +4,7 @@ from typing import Tuple, Optional
 from collections.abc import Mapping
 import warnings
 import random
+import itertools
 
 import h5py
 import numpy as np
@@ -11,6 +12,7 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
+import awkward as ak
 
 from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
@@ -61,24 +63,32 @@ def gen_typed_df(n, index=None):
 def gen_awkward(m, n=None, ragged=False, dtype=np.int32):
     random.seed(123)
 
-    def gen_element(ragged=False):
-        """Return array of random length if ragged is True, otherwise returns a single element of dtype"""
-        if ragged:
-            return np.array(
-                [random.random() * 100 for _ in range(random.randint(0, 10))],
-                dtype=dtype,
-            )
-        else:
-            return dtype(random.random() * 100)
+    def gen_ragged():
+        """Return array of random length"""
+        return np.random.randint(
+            0, 1000, size=(np.random.randint(0, 10),), dtype=dtype
+        ).tolist()
 
-    awkward_pyobj = []
-    for _ in range(m):
-        if n is None:
-            awkward_pyobj.append(gen_element(ragged=ragged))
-        else:
-            awkward_pyobj.append([gen_element(ragged=ragged) for _ in range(n)])
+    shape = np.array((m,) if n is None else (m, n))
+    if np.any(shape == 0):
+        # use empty numpy array, to pass the correct dimensions to
+        # ak.Array when one of the dimensions is 0
+        np_arr = np.empty(shape, dtype=dtype)
+    elif ragged:
+        # build numpy array with list objects in the ragged dimension
+        np_arr = np.empty(shape, dtype=object)
+        for mi, ni in itertools.product(range(m), () if n is None else range(n)):
+            np_arr[mi, ni] = gen_ragged()
+    else:
+        # otherwise just build a regular numpy array
+        np_arr = np.random.randint(0, 1000, size=shape, dtype=dtype)
 
-    return AwkArray(awkward_pyobj)
+    arr = AwkArray(np_arr)
+    assert ak.num(arr, 0) == m
+    if n is not None:
+        assert ak.all(ak.num(arr, 1) == n)
+
+    return arr
 
 
 def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
