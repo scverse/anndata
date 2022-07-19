@@ -383,7 +383,18 @@ class Reindexer(object):
         return out
 
     def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
-        return el
+        try:
+            dim_len(el, axis)
+        except ValueError:
+            # Do not reindex variable-length dimensions
+            return el
+        else:
+            indexer = self.old_idx.get_indexer(self.new_idx)
+            if -1 in indexer:
+                raise ValueError(
+                    "Outer join operations are currently not supported with AwkwardArrays"
+                )
+            return pd.api.extensions.take(el, indexer, axis=axis, allow_fill=False)
 
 
 def merge_indices(
@@ -449,6 +460,10 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
         df.index = index
         return df
+    elif any(isinstance(a, AwkArray) for a in arrays):
+        import awkward as ak
+
+        return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)])
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
@@ -458,10 +473,6 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             format="csr",
         )
-    elif any(isinstance(a, AwkArray) for a in arrays):
-        import awkward as ak
-
-        return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)])
     else:
         return np.concatenate(
             [
@@ -498,7 +509,9 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
         )
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
     elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
-        reindexers = [gen_reindexer(pd.RangeIndex(0), pd.RangeIndex(0)) for _ in els]
+        # do not reindex awkward arrays
+        # TODO unintended behaviour?
+        reindexers = [lambda x: x for _ in els]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
         reindexers = [
@@ -517,7 +530,9 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             for el, shape in zip(els, shapes)
         ]
     elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
-        reindexers = [gen_reindexer(pd.RangeIndex(0), pd.RangeIndex(0)) for _ in els]
+        # do not reindex awkward arrays
+        # TODO unintended behaviour?
+        reindexers = [lambda x: x for _ in els]
     else:
         # if fill_value is None:
         # fill_value = default_fill_value(els)

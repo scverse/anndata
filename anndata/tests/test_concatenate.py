@@ -448,6 +448,10 @@ def test_concatenate_fill_value(fill_val):
         for k, v in adata3.obsm.items()
         if not isinstance(v, (pd.DataFrame, AwkArray))
     }
+    # TODO no outer joins with awkward arrays
+    for tmp_ad in [adata1, adata2, adata3]:
+        del tmp_ad.varm["awk"]
+
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 
     ptr = 0
@@ -986,6 +990,12 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
     lhs = gen_adata((10, 10), X_type=array_type)
     rhs = gen_adata((10, 12), X_type=array_type)
 
+    # TODO no outer joins with awkward arrays
+    if join_type == "outer":
+        for tmp_ad in [lhs, rhs]:
+            del tmp_ad.varm["awk"]
+            del tmp_ad.obsm["awk"]
+
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
     b = concat(
         [lhs.T, rhs.T], axis=abs(axis - 1), join=join_type, merge=merge_strategy
@@ -1081,6 +1091,12 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     b = gen_adata(shape)
     alt_axis = 1 - axis
     dim = ("obs", "var")[axis]
+
+    if join_type == "outer":
+        # TODO outer joins are currently not supported with awkward arrays
+        for tmp_ad in [a, b]:
+            del tmp_ad.obsm["awk"]
+            del tmp_ad.varm["awk"]
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(

@@ -74,7 +74,15 @@ def dim_len(x, dim):
 try:
     import awkward as ak
 
-    dim_len.register(ak.Array, ak.size)
+    # TODO use `.num`; ak.size is deprecated and doesn't handle missing dimensions.
+    # num will return one size per entry to accomodate for variable-length arrays
+    # so something like all(ak.num(x, d)[0] == ak.num(x, d))
+    @dim_len.register(ak.Array)
+    def dim_len_awkward(x, dim):
+        ak.num(
+            x, dim
+        )  # just to throw an error if out-of-dimension due to weird behavior of ak.size
+        return ak.size(x, dim)
 
     @asarray.register(ak.Array)
     def asarray_awkward(x):

@@ -57,14 +57,11 @@ def gen_typed_df(n, index=None):
     )
 
 
-def gen_awkward(n, index=None):
+# TODO simulate variable-length non-aligned dimensions
+def gen_awkward(m, n=None, dtype=np.int32):
     rng = np.random.default_rng(42)
-    arr = AwkArray(
-        [
-            rng.standard_normal(size=(rng.integers(1, 10), rng.integers(1, 10)))
-            for _ in range(n)
-        ]
-    )
+    dim = (m,) if n is None else (m, n)
+    arr = AwkArray(np.random.binomial(100, 0.005, dim).astype(dtype))
     return arr
 
 
@@ -136,6 +133,8 @@ def gen_adata(
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    # TODO test with awkward X
+    # TODO is AnnData not tested with dense matrices?
     if X_type is None:
         X = None
     else:
@@ -154,6 +153,7 @@ def gen_adata(
         awk=gen_awkward(N),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    # TODO test with awkward layer
     layers = dict(
         array=np.random.random((M, N)), sparse=sparse.random(M, N, format="csr")
     )
@@ -173,6 +173,7 @@ def gen_adata(
             nested_further=dict(array=np.arange(5)),
         ),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
+        # TODO Add awkward array to uns
     )
     adata = AnnData(
         X=X,
