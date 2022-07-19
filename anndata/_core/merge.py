@@ -394,7 +394,11 @@ class Reindexer(object):
                 raise ValueError(
                     "Outer join operations are currently not supported with AwkwardArrays"
                 )
-            return pd.api.extensions.take(el, indexer, axis=axis, allow_fill=False)
+            # TODO is there no way to slice an awkward array programmatically?
+            if axis == 0:
+                return el[indexer]
+            if axis == 1:
+                return el[:, indexer]
 
 
 def merge_indices(

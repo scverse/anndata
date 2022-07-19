@@ -283,7 +283,10 @@ class LayersBase(AlignedMapping):
     def copy(self) -> "Layers":
         d = self._actual_class(self.parent)
         for k, v in self.items():
-            d[k] = v.copy()
+            if isinstance(v, AwkArray):
+                d[k] = v
+            else:
+                d[k] = v.copy()
         return d
 
 

@@ -3,6 +3,7 @@ from string import ascii_letters
 from typing import Tuple, Optional
 from collections.abc import Mapping
 import warnings
+import random
 
 import h5py
 import numpy as np
@@ -15,7 +16,7 @@ from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
-from anndata.utils import asarray
+from anndata.utils import asarray, dim_len
 
 from anndata.compat import AwkArray
 
@@ -57,11 +58,27 @@ def gen_typed_df(n, index=None):
     )
 
 
-# TODO simulate variable-length non-aligned dimensions
-def gen_awkward(m, n=None, dtype=np.int32):
-    dim = (m,) if n is None else (m, n)
-    arr = AwkArray(np.random.binomial(100, 0.005, dim).astype(dtype))
-    return arr
+def gen_awkward(m, n=None, ragged=False, dtype=np.int32):
+    random.seed(123)
+
+    def gen_element(ragged=False):
+        """Return array of random length if ragged is True, otherwise returns a single element of dtype"""
+        if ragged:
+            return np.array(
+                [random.random() * 100 for _ in range(random.randint(0, 10))],
+                dtype=dtype,
+            )
+        else:
+            return dtype(random.random() * 100)
+
+    awkward_pyobj = []
+    for _ in range(m):
+        if n is None:
+            awkward_pyobj.append(gen_element(ragged=ragged))
+        else:
+            awkward_pyobj.append([gen_element(ragged=ragged) for _ in range(n)])
+
+    return AwkArray(awkward_pyobj)
 
 
 def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
@@ -98,7 +115,12 @@ def gen_adata(
         pd.DataFrame,
         AwkArray,
     ),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        AwkArray,
+    ),
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -132,8 +154,7 @@ def gen_adata(
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
-    # TODO test with awkward X
-    # TODO is AnnData not tested with dense matrices?
+    # TODO test with awkward X (see layers)
     if X_type is None:
         X = None
     else:
@@ -143,6 +164,9 @@ def gen_adata(
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
         awk=gen_awkward(M),
+        awk_2d=gen_awkward(M, 20),
+        awk_2d_ragged=gen_awkward(M, ragged=True),
+        awk_3d_ragged=gen_awkward(M, 20, ragged=True),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
@@ -150,11 +174,16 @@ def gen_adata(
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
         awk=gen_awkward(N),
+        awk_2d=gen_awkward(N, 20),
+        awk_2d_ragged=gen_awkward(N, ragged=True),
+        awk_3d_ragged=gen_awkward(N, 20, ragged=True),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
-    # TODO test with awkward layer
     layers = dict(
-        array=np.random.random((M, N)), sparse=sparse.random(M, N, format="csr")
+        array=np.random.random((M, N)),
+        sparse=sparse.random(M, N, format="csr"),
+        awk=gen_awkward(M, N),
+        # awk_ragged=gen_awkward(M, N, ragged=True),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(

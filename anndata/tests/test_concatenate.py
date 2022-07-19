@@ -430,27 +430,30 @@ def test_concatenate_fill_value(fill_val):
             **{f"obsm_{k}": adata.obsm[k] for k in adata.obsm},
         }
 
-    adata1 = gen_adata((10, 10))
+    # TODO outer joins are currently not supported with awkward arrays
+    types = {
+        k: (sparse.csr_matrix, np.ndarray, pd.DataFrame)
+        for k in ["obsm_types", "varm_types", "layers_types"]
+    }
+
+    adata1 = gen_adata((10, 10), **types)
     adata1.obsm = {
         k: v
         for k, v in adata1.obsm.items()
         if not isinstance(v, (pd.DataFrame, AwkArray))
     }
-    adata2 = gen_adata((10, 5))
+    adata2 = gen_adata((10, 5), **types)
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
         if not isinstance(v, (pd.DataFrame, AwkArray))
     }
-    adata3 = gen_adata((7, 3))
+    adata3 = gen_adata((7, 3), **types)
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
         if not isinstance(v, (pd.DataFrame, AwkArray))
     }
-    # TODO no outer joins with awkward arrays
-    for tmp_ad in [adata1, adata2, adata3]:
-        del tmp_ad.varm["awk"]
 
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 
@@ -987,14 +990,17 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
 
 
 def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
-    lhs = gen_adata((10, 10), X_type=array_type)
-    rhs = gen_adata((10, 12), X_type=array_type)
-
-    # TODO no outer joins with awkward arrays
+    # TODO outer joins are currently not supported with awkward arrays
     if join_type == "outer":
-        for tmp_ad in [lhs, rhs]:
-            del tmp_ad.varm["awk"]
-            del tmp_ad.obsm["awk"]
+        types = {
+            k: (sparse.csr_matrix, np.ndarray, pd.DataFrame)
+            for k in ["obsm_types", "varm_types", "layers_types"]
+        }
+    else:
+        types = {}
+
+    lhs = gen_adata((10, 10), X_type=array_type, **types)
+    rhs = gen_adata((10, 12), X_type=array_type, **types)
 
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
     b = concat(
@@ -1087,16 +1093,20 @@ def expected_shape(a, b, axis, join):
 )
 def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     # https://github.com/scverse/anndata/issues/526
-    a = gen_adata((5, 7))
-    b = gen_adata(shape)
+
+    # TODO outer joins are currently not supported with awkward arrays
+    if join_type == "outer":
+        types = {
+            k: (sparse.csr_matrix, np.ndarray, pd.DataFrame)
+            for k in ["obsm_types", "varm_types", "layers_types"]
+        }
+    else:
+        types = {}
+
+    a = gen_adata((5, 7), **types)
+    b = gen_adata(shape, **types)
     alt_axis = 1 - axis
     dim = ("obs", "var")[axis]
-
-    if join_type == "outer":
-        # TODO outer joins are currently not supported with awkward arrays
-        for tmp_ad in [a, b]:
-            del tmp_ad.obsm["awk"]
-            del tmp_ad.varm["awk"]
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
