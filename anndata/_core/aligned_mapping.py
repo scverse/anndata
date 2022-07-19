@@ -4,17 +4,18 @@ from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
 
-
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from ..utils import deprecated, ensure_df_homogeneous, dim_len
+from ..utils import deprecated, ensure_df_homogeneous, dim_len, import_function
 from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
 from .index import _subset
 from anndata.compat import AwkArray
+
+ak_to_regular = import_function("awkward", "to_regular")
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -22,7 +23,7 @@ TwoDIdx = Tuple[OneDIdx, OneDIdx]
 
 I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
 # TODO: pd.DataFrame only allowed in AxisArrays?
-V = Union[pd.DataFrame, spmatrix, np.ndarray]
+V = Union[pd.DataFrame, spmatrix, np.ndarray, AwkArray]
 
 
 class AlignedMapping(cabc.MutableMapping, ABC):
@@ -49,16 +50,25 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
-            if (not isinstance(val, AwkArray)) and (  # don't validate awk arrays
-                self.parent.shape[axis] != dim_len(val, i)
-            ):
+            if isinstance(val, AwkArray):
+                try:
+                    val = ak_to_regular(val, i)
+                except ValueError:
+                    raise ValueError(
+                        f"Awkward array passed for key {key!r} is of variable length in dimension {i}."
+                        "Dimensions aligned to AnnData axes must be fixed-length."
+                    )
+
+            if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
+                actual_shape = tuple(dim_len(val, a) for a in self.axes)
                 raise ValueError(
                     f"Value passed for key {key!r} is of incorrect shape. "
                     f"Values of {self.attrname} must match dimensions "
-                    f"{self.axes} of parent. Value had shape {val.shape} while "
+                    f"{self.axes} of parent. Value had shape {actual_shape} while "
                     f"it should have had {right_shape}."
                 )
+
         if not self._allow_df and isinstance(val, pd.DataFrame):
             name = self.attrname.title().rstrip("s")
             val = ensure_df_homogeneous(val, f"{name} {key!r}")
