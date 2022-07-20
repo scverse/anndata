@@ -50,15 +50,6 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
-            if isinstance(val, AwkArray):
-                try:
-                    val = ak_to_regular(val, i)
-                except ValueError:
-                    raise ValueError(
-                        f"Awkward array passed for key {key!r} is of variable length in dimension {i}."
-                        "Dimensions aligned to AnnData axes must be fixed-length."
-                    )
-
             if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
                 actual_shape = tuple(dim_len(val, a) for a in self.axes)

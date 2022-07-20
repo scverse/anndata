@@ -607,3 +607,11 @@ def test_copy():
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
         for key in map_sprs.keys():
             assert_eq_not_id(map_sprs[key], map_copy[key])
+
+
+def test_set_awkward():
+    """Check if we can set .X, .layers, .obsm, .varm and .uns with different types
+    of awkward arrays and if error messages are properly raised when the dimensions do not align.
+    """
+    # adata = gen_adata((10, 20), varm_types=tuple(), obsm_types=tuple())
+    assert False, "TODO"

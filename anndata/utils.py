@@ -80,20 +80,19 @@ try:
             try:
                 return x.type.length
             except AttributeError:
-                return ValueError("The outermost type must be awkward.Array!")
-        else:
-            t = x.type
-            for _ in range(dim):
-                if isinstance(t, ak.types.OptionType):
-                    t = t.content
-                elif isinstance(t, (ak.types.RegularType, ak.types.ArrayType)):
-                    t = t.type
-                else:
-                    raise ValueError(f"Unsupported type in awkward array {t}")
+                raise ValueError("The outermost type must be awkward.Array!")
+        elif dim == 1:
             try:
-                return t.size
+                return x.type.type.size
             except AttributeError:
-                raise ValueError("Array is of variable length in dimension {dim}")
+                raise ValueError(
+                    f"Array is of variable length in dimension {dim}.",
+                    f"Try ak.to_regular(array, {dim}) before including the array in AnnData",
+                )
+        else:
+            raise NotImplementedError(
+                "This check is currently only implemented for the first two dimensions. "
+            )
 
     @asarray.register(ak.Array)
     def asarray_awkward(x):

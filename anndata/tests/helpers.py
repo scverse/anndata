@@ -84,9 +84,12 @@ def gen_awkward(m, n=None, ragged=False, dtype=np.int32):
         np_arr = np.random.randint(0, 1000, size=shape, dtype=dtype)
 
     arr = AwkArray(np_arr)
-    assert ak.num(arr, 0) == m
     if n is not None:
-        assert ak.all(ak.num(arr, 1) == n)
+        arr = ak.to_regular(arr, 1)
+
+    assert dim_len(arr, 0) == m
+    if n is not None:
+        assert dim_len(arr, 1) == n
 
     return arr
 
