@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from functools import partial
 from warnings import warn
@@ -49,7 +51,7 @@ def write_h5ad(
         try:
             Path(file)
         except TypeError:
-            raise TypeError("Can’t write backed AnnData object to file-like object")
+            raise TypeError("Can’t write backed AnnData object to file-like object.")
     if force_dense is not None:
         warn(
             "The `force_dense` argument is deprecated. Use `as_dense` instead.",

@@ -31,7 +31,8 @@ def to_convert(request):
     return request.param
 
 
-def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert):
+@pytest.mark.parametrize("backed", [None, "r"])
+def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert, backed):
     mem_pth = tmp_path / "orig.h5ad"
     dense_from_mem_pth = tmp_path / "dense_mem.h5ad"
     dense_from_disk_pth = tmp_path / "dense_disk.h5ad"
@@ -51,13 +52,12 @@ def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert):
         for k in to_convert:
             assert isinstance(f[k], h5py.Dataset)
 
-    for backed in [None, "r"]:
-        from_mem = ad.read_h5ad(dense_from_mem_pth, backed=backed)
-        from_disk = ad.read_h5ad(dense_from_disk_pth, backed=backed)
-        assert_equal(mem, from_mem)
-        assert_equal(mem, from_disk)
-        assert_equal(disk, from_mem)
-        assert_equal(disk, from_disk)
+    from_mem = ad.read_h5ad(dense_from_mem_pth, backed=backed)
+    from_disk = ad.read_h5ad(dense_from_disk_pth, backed=backed)
+    assert_equal(mem, from_mem)
+    assert_equal(mem, from_disk)
+    assert_equal(disk, from_mem)
+    assert_equal(disk, from_disk)
 
 
 def test_sparse_to_dense_inplace(tmp_path, spmtx_format):

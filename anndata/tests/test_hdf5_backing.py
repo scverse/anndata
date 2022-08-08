@@ -1,5 +1,5 @@
+import io
 from pathlib import Path
-import re
 
 import joblib
 import pytest
@@ -311,6 +311,21 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
     assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
     assert np.all(adata.X[2, :] == np.array([7, 0, 9]))
+
+
+def test_backed_no_buffer(adata, backing_h5ad):
+    buf = io.BytesIO()
+    with pytest.raises(
+        TypeError, match=r"^Can’t use backed mode with a file-like object\.$"
+    ):
+        ad.read_h5ad(buf, backed=True)
+
+    adata.write(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad, backed="r+")
+    with pytest.raises(
+        TypeError, match=r"^Can’t write backed AnnData object to file-like object."
+    ):
+        adata.write(buf)
 
 
 # TODO: Work around h5py not supporting this

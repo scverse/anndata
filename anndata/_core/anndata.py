@@ -1,6 +1,8 @@
 """\
 Main class and helper functions.
 """
+from __future__ import annotations
+
 import warnings
 import collections.abc as cabc
 from collections import OrderedDict
@@ -10,7 +12,7 @@ from functools import partial, singledispatch
 from pathlib import Path
 from os import PathLike
 from textwrap import dedent
-from typing import Any, Union, Optional  # Meta
+from typing import Any, Union, Optional, TYPE_CHECKING  # Meta
 from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
 from typing import Tuple, List  # Generic
 
@@ -57,6 +59,9 @@ from ..compat import (
     _overloaded_uns,
     OverloadedDict,
 )
+
+if TYPE_CHECKING:
+    from _typeshed import SupportsWrite
 
 
 class StorageType(Enum):
@@ -1872,7 +1877,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def write_h5ad(
         self,
-        file: Optional[PathLike] = None,
+        file: Union[PathLike, SupportsWrite[bytes]] = None,
         compression: Optional[Literal["gzip", "lzf"]] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None,
