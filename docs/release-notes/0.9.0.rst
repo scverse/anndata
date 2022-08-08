@@ -3,4 +3,7 @@
 
 .. rubric:: Features
 
+- Allow :meth:`~anndata.read_h5ad` and :meth:`~anndata.AnnData.write_h5ad` to read from /
+  write to byte buffers :pr:`800` :smaller:`P Angerer`
+
 .. rubric:: Bug fixes

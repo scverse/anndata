@@ -11,7 +11,7 @@
   :noteversion:`0.6.19` :smaller:`P Angerer`
 - bug fix for reading excel files.
   :noteversion:`0.6.19` :smaller:`A Wolf`
-- changed default compression to `None` in :func:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical.
+- changed default compression to `None` in :meth:`~anndata.AnnData.write_h5ad` to speed up read and write, disk space use is usually less critical.
   :noteversion:`0.6.16` :smaller:`A Wolf`
 - maintain dtype upon copy.
   :noteversion:`0.6.13` :smaller:`A Wolf`
