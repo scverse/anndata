@@ -22,6 +22,8 @@ from ..compat import (
     _clean_uns,
     Literal,
 )
+from .._types import SupportsRead, SupportsWrite
+from .._warnings import OldFormatWarning
 from .utils import (
     H5PY_V3,
     report_read_key_on_error,
@@ -30,8 +32,6 @@ from .utils import (
     _read_legacy_raw,
 )
 from .specs import read_elem, write_elem
-from .types import SupportsRead, SupportsWrite
-from anndata._warnings import OldFormatWarning
 
 
 T = TypeVar("T")

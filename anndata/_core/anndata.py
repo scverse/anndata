@@ -47,7 +47,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from .._io.types import SupportsWrite
+from .._types import SupportsWrite
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
 from ..compat import (
