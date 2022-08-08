@@ -12,7 +12,7 @@ from functools import partial, singledispatch
 from pathlib import Path
 from os import PathLike
 from textwrap import dedent
-from typing import Any, Union, Optional, TYPE_CHECKING  # Meta
+from typing import Any, Union, Optional  # Meta
 from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
 from typing import Tuple, List  # Generic
 
@@ -47,6 +47,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
+from .._io.types import SupportsWrite
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
 from ..compat import (
@@ -59,9 +60,6 @@ from ..compat import (
     _overloaded_uns,
     OverloadedDict,
 )
-
-if TYPE_CHECKING:
-    from _typeshed import SupportsWrite
 
 
 class StorageType(Enum):

@@ -5,7 +5,7 @@ from functools import partial
 from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Type, TypeVar, Union, TYPE_CHECKING
+from typing import Callable, Type, TypeVar, Union
 from typing import Collection, Sequence, Mapping
 
 import h5py
@@ -30,10 +30,9 @@ from .utils import (
     _read_legacy_raw,
 )
 from .specs import read_elem, write_elem
+from .types import SupportsRead, SupportsWrite
 from anndata._warnings import OldFormatWarning
 
-if TYPE_CHECKING:
-    from _typeshed import SupportsRead, SupportsWrite
 
 T = TypeVar("T")
 
