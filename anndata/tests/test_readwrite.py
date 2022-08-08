@@ -1,3 +1,4 @@
+import io
 from importlib.util import find_spec
 from os import PathLike
 from pathlib import Path
@@ -97,7 +98,7 @@ diskfmt2 = diskfmt
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
-def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
+def test_readwrite_roundtrip_disk(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
     pth1 = tmpdir / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
@@ -114,6 +115,17 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
 
     assert_equal(adata2, adata1)
     assert_equal(adata3, adata1)
+    assert_equal(adata2, adata3)
+
+
+@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+def test_readwrite_roundtrip_buf(typ):
+    adata1 = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
+
+    buf = io.BytesIO()
+    adata1.write_h5ad(buf)
+    adata2 = ad.read_h5ad(buf)
+
     assert_equal(adata2, adata1)
 
 
