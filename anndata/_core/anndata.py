@@ -1872,7 +1872,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def write_h5ad(
         self,
-        filename: Optional[PathLike] = None,
+        file: Optional[PathLike] = None,
         compression: Optional[Literal["gzip", "lzf"]] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None,
@@ -1895,8 +1895,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Parameters
         ----------
-        filename
-            Filename of data file. Defaults to backing file.
+        file
+            Filename of data file or file-like object. Defaults to backing file’s name.
         compression
             See the h5py :ref:`dataset_compression`.
         compression_opts
@@ -1910,13 +1910,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         from .._io.write import _write_h5ad
 
-        if filename is None and not self.isbacked:
+        if file is None and not self.isbacked:
             raise ValueError("Provide a filename!")
-        if filename is None:
-            filename = self.filename
+        if file is None:
+            file = self.filename
 
         _write_h5ad(
-            Path(filename),
+            file,
             self,
             compression=compression,
             compression_opts=compression_opts,
@@ -1925,7 +1925,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         )
 
         if self.isbacked:
-            self.file.filename = filename
+            self.file.filename = file
 
     write = write_h5ad  # a shortcut and backwards compat
 
