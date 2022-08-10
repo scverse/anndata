@@ -70,8 +70,6 @@ nitpick_ignore = [
     ("py:meth", "pandas.DataFrame.loc"),
     ("py:class", "anndata._core.views.ArrayView"),
     ("py:class", "anndata._core.raw.Raw"),
-    ("py:class", "anndata._types.SupportsRead"),
-    ("py:class", "anndata._types.SupportsWrite"),
     *[
         ("py:class", f"anndata._core.aligned_mapping.{cls}{kind}")
         for cls in "Layers AxisArrays PairwiseArrays".split()
