@@ -135,11 +135,18 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
         del f[key]
 
 
+def _maybe_get_file_name(file) -> Path | None:
+    if isinstance(file, (str, Path)):
+        return Path(file)
+    if hasattr(file, "name"):
+        return Path(file.name)
+    return None
+
+
 def read_h5ad_backed(
     file: Union[str, Path, BinaryIO], mode: Literal["r", "r+"]
 ) -> AnnData:
-    file_name = Path(file) if isinstance(file, (str, Path)) else getattr(file, "name")
-    d = dict(filename=file_name, filemode=mode)
+    d = dict(filename=_maybe_get_file_name(file), filemode=mode)
 
     f = h5py.File(file, mode)
 

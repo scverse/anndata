@@ -12,7 +12,7 @@ from functools import partial, singledispatch
 from pathlib import Path
 from os import PathLike
 from textwrap import dedent
-from typing import Any, Union, Optional  # Meta
+from typing import Any, Union, Optional, BinaryIO  # Meta
 from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
 from typing import Tuple, List  # Generic
 
@@ -47,7 +47,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from .._types import SupportsWrite
+from .._io.h5ad import _maybe_get_file_name
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
 from ..compat import (
@@ -1875,7 +1875,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def write_h5ad(
         self,
-        file: Union[PathLike, SupportsWrite[bytes]] = None,
+        file: Union[PathLike, str, BinaryIO] = None,
         compression: Optional[Literal["gzip", "lzf"]] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None,
@@ -1928,7 +1928,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         )
 
         if self.isbacked:
-            self.file.filename = file
+            self.file.filename = _maybe_get_file_name(file)
 
     write = write_h5ad  # a shortcut and backwards compat
 
