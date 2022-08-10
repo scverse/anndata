@@ -5,7 +5,7 @@ from functools import partial
 from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Type, TypeVar, Union
+from typing import Callable, Type, TypeVar, Union, BinaryIO
 from typing import Collection, Sequence, Mapping
 
 import h5py
@@ -22,7 +22,6 @@ from ..compat import (
     _clean_uns,
     Literal,
 )
-from .._types import SupportsRead, SupportsWrite
 from .._warnings import OldFormatWarning
 from .utils import (
     H5PY_V3,
@@ -38,7 +37,7 @@ T = TypeVar("T")
 
 
 def write_h5ad(
-    file: Union[Path, str, SupportsWrite[bytes]],
+    file: Union[Path, str, BinaryIO],
     adata: AnnData,
     *,
     force_dense: bool = None,
@@ -46,11 +45,6 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
-    if adata.isbacked:
-        try:
-            Path(file)
-        except TypeError:
-            raise TypeError("Can’t write backed AnnData object to file-like object.")
     if force_dense is not None:
         warn(
             "The `force_dense` argument is deprecated. Use `as_dense` instead.",
@@ -88,7 +82,12 @@ def write_h5ad(
 
         if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(file)):
+        elif not (
+            adata.isbacked
+            and (
+                not isinstance(file, (str, Path)) or Path(adata.filename) == Path(file)
+            )
+        ):
             # If adata.isbacked, X should already be up to date
             write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
@@ -136,10 +135,13 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
         del f[key]
 
 
-def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> AnnData:
-    d = dict(filename=filename, filemode=mode)
+def read_h5ad_backed(
+    file: Union[str, Path, BinaryIO], mode: Literal["r", "r+"]
+) -> AnnData:
+    file_name = Path(file) if isinstance(file, (str, Path)) else getattr(file, "name")
+    d = dict(filename=file_name, filemode=mode)
 
-    f = h5py.File(filename, mode)
+    f = h5py.File(file, mode)
 
     attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
     df_attributes = ["obs", "var"]
@@ -171,7 +173,7 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
 
 
 def read_h5ad(
-    file: Union[str, Path, SupportsRead[bytes]],
+    file: Union[str, Path, BinaryIO],
     backed: Union[Literal["r", "r+"], bool, None] = None,
     *,
     as_sparse: Sequence[str] = (),
@@ -203,10 +205,6 @@ def read_h5ad(
         loading speed.
     """
     if backed not in {None, False}:
-        try:
-            Path(file)
-        except TypeError:
-            raise TypeError("Can’t use backed mode with a file-like object.")
         mode = backed
         if mode is True:
             mode = "r+"
