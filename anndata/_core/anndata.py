@@ -47,7 +47,6 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from .._io.h5ad import _maybe_get_file_name
 from ..utils import convert_to_dict, ensure_df_homogeneous
 from ..logging import anndata_logger as logger
 from ..compat import (
@@ -1912,6 +1911,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Defaults to `True` if object is backed, otherwise to `False`.
         """
         from .._io.write import _write_h5ad
+        from .._io.h5ad import _maybe_get_file_name
 
         if file is None and not self.isbacked:
             raise ValueError("Provide a filename!")
