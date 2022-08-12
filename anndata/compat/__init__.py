@@ -41,7 +41,7 @@ except ImportError:
 
 
 try:
-    from awkward import Array as AwkArray
+    from awkward._v2 import Array as AwkArray
 except ImportError:
 
     class AwkArray:

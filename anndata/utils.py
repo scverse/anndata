@@ -72,7 +72,7 @@ def dim_len(x, dim):
 
 
 try:
-    import awkward as ak
+    import awkward._v2 as ak
 
     @dim_len.register(ak.Array)
     def dim_len_awkward(x, dim):
@@ -80,10 +80,10 @@ try:
             try:
                 return x.type.length
             except AttributeError:
-                raise ValueError("The outermost type must be awkward.Array!")
+                raise ValueError("The outermost type must be an `awkward.Array`!")
         elif dim == 1:
             try:
-                return x.type.type.size
+                return x.type.content.size
             except AttributeError:
                 raise ValueError(
                     f"Array is of variable length in dimension {dim}.",

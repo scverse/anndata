@@ -12,7 +12,7 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
-import awkward as ak
+import awkward._v2 as ak
 
 from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
@@ -406,7 +406,7 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AwkArray)
 def assert_equal_awkarray(a, b, exact=False, elem_name=None):
-    import awkward as ak
+    import awkward._v2 as ak
 
     assert ak.all(a == b)
 

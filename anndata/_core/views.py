@@ -122,7 +122,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 class AwkwardArrayView(_ViewMixin, AwkArray):
     def copy(self, order: str = "C") -> np.ndarray:
-        import awkward as ak
+        import awkward._v2 as ak
 
         # we want a copy of an akward array
         return ak.copy(self)

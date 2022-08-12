@@ -490,7 +490,7 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 @_REGISTRY.register_write(H5Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, AwkArray, IOSpec("awkward-array", "0.1.0"))
 def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
-    import awkward as ak
+    import awkward._v2 as ak
 
     group = f.create_group(k)
     form, length, container = ak.to_buffers(v)
@@ -502,7 +502,7 @@ def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
 def read_awkward(elem):
-    import awkward as ak
+    import awkward._v2 as ak
 
     form = _read_attr(elem.attrs, "form")
     length = _read_attr(elem.attrs, "length")
