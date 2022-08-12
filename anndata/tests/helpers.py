@@ -23,6 +23,13 @@ from anndata.utils import asarray, dim_len
 
 from anndata.compat import AwkArray
 
+GEN_ADATA_DEFAULT_TYPES = (
+    sparse.csr_matrix,
+    np.ndarray,
+    pd.DataFrame,
+    AwkArray,
+)
+
 
 def gen_vstr_recarray(m, n, dtype=None):
     size = m * n
@@ -80,7 +87,7 @@ def _gen_awkward_inner(shape, rng, dtype):
         return lil
 
 
-def gen_awkward2(shape, dtype=np.int32):
+def gen_awkward(shape, dtype=np.int32):
     """Function to generate an awkward array with random values.
 
     Awkward array dimensions can either be fixed-length ("regular") or variable length ("ragged")
@@ -118,40 +125,6 @@ def gen_awkward2(shape, dtype=np.int32):
     return arr
 
 
-def gen_awkward(m, n=None, ragged=False, dtype=np.int32):
-    random.seed(123)
-
-    def gen_ragged():
-        """Return array of random length"""
-        return np.random.randint(
-            0, 1000, size=(np.random.randint(0, 10),), dtype=dtype
-        ).tolist()
-
-    shape = np.array((m,) if n is None else (m, n))
-    if np.any(shape == 0):
-        # use empty numpy array, to pass the correct dimensions to
-        # ak.Array when one of the dimensions is 0
-        np_arr = np.empty(shape, dtype=dtype)
-    elif ragged:
-        # build numpy array with list objects in the ragged dimension
-        np_arr = np.empty(shape, dtype=object)
-        for mi, ni in itertools.product(range(m), () if n is None else range(n)):
-            np_arr[mi, ni] = gen_ragged()
-    else:
-        # otherwise just build a regular numpy array
-        np_arr = np.random.randint(0, 1000, size=shape, dtype=dtype)
-
-    arr = AwkArray(np_arr)
-    if n is not None:
-        arr = ak.to_regular(arr, 1)
-
-    assert dim_len(arr, 0) == m
-    if n is not None:
-        assert dim_len(arr, 1) == n
-
-    return arr
-
-
 def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     s = 0
     df = pd.DataFrame()
@@ -174,24 +147,9 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        AwkArray,
-    ),
-    varm_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        AwkArray,
-    ),
-    layers_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        AwkArray,
-    ),
+    obsm_types: "Collection[Type]" = GEN_ADATA_DEFAULT_TYPES,
+    varm_types: "Collection[Type]" = GEN_ADATA_DEFAULT_TYPES,
+    layers_types: "Collection[Type]" = GEN_ADATA_DEFAULT_TYPES,
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -234,27 +192,27 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
-        awk=gen_awkward(M),
-        awk_2d=gen_awkward(M, 20),
-        awk_2d_ragged=gen_awkward(M, ragged=True),
-        awk_3d_ragged=gen_awkward(M, 20, ragged=True),
+        awk=gen_awkward((M,)),
+        awk_2d=gen_awkward((M, 20)),
+        awk_2d_ragged=gen_awkward((M, None)),
+        awk_3d_ragged=gen_awkward((M, 20, None)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
-        awk=gen_awkward(N),
-        awk_2d=gen_awkward(N, 20),
-        awk_2d_ragged=gen_awkward(N, ragged=True),
-        awk_3d_ragged=gen_awkward(N, 20, ragged=True),
+        awk=gen_awkward((N,)),
+        awk_2d=gen_awkward((N, 20)),
+        awk_2d_ragged=gen_awkward((N, None)),
+        awk_3d_ragged=gen_awkward((N, 20, None)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
         array=np.random.random((M, N)),
         sparse=sparse.random(M, N, format="csr"),
-        awk=gen_awkward(M, N),
-        # awk_ragged=gen_awkward(M, N, ragged=True),
+        awk=gen_awkward((M, N)),
+        awk_ragged=gen_awkward((M, N, None)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
@@ -271,8 +229,9 @@ def gen_adata(
             scalar_float=3.0,
             nested_further=dict(array=np.arange(5)),
         ),
+        awkward_regular=gen_awkward((10, 5)),
+        awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
-        # TODO Add awkward array to uns
     )
     adata = AnnData(
         X=X,

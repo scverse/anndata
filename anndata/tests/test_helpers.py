@@ -6,7 +6,7 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import assert_equal, gen_awkward2, report_name, gen_adata
+from anndata.tests.helpers import assert_equal, gen_awkward, report_name, gen_adata
 from anndata.utils import dim_len
 
 # Testing to see if all error types can have the key name appended.
@@ -58,7 +58,7 @@ def reusable_adata():
     ],
 )
 def test_gen_awkward(shape):
-    arr = gen_awkward2(shape)
+    arr = gen_awkward(shape)
     for i, s in enumerate(shape):
         if s is None:
             with pytest.raises(ValueError):
