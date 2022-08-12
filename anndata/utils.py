@@ -77,22 +77,31 @@ try:
     @dim_len.register(ak.Array)
     def dim_len_awkward(x, dim):
         if dim == 0:
+            # dimension 0 is a special case - it is always of `ArrayType` and has a fixed length.
             try:
                 return x.type.length
             except AttributeError:
                 raise ValueError("The outermost type must be an `awkward.Array`!")
-        elif dim == 1:
+        else:
+            arr_type = x.type
+            for _ in range(dim):
+                # we need to loop through the nested types for the other dimensions, e.g.
+                # ArrayType(RegularType(ListType(NumpyType('int64')), 200), 100)
+                try:
+                    arr_type = arr_type.content
+                except AttributeError:
+                    # RecordType and UnionType have multiple "contents" entries
+                    raise NotImplementedError(
+                        "This check is currently not implemented for RecordType and UnionType arrays. "
+                    )
+
             try:
-                return x.type.content.size
+                return arr_type.size
             except AttributeError:
                 raise ValueError(
                     f"Array is of variable length in dimension {dim}.",
                     f"Try ak.to_regular(array, {dim}) before including the array in AnnData",
                 )
-        else:
-            raise NotImplementedError(
-                "This check is currently only implemented for the first two dimensions. "
-            )
 
     @asarray.register(ak.Array)
     def asarray_awkward(x):

@@ -41,7 +41,22 @@ def reusable_adata():
     return gen_adata((10, 10))
 
 
-@pytest.mark.parametrize("shape", [(4, 2), (100, 200, 7), (4, None), (0, 4), (4, 0)])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (4, 2),
+        (100, 200, None),
+        (4, None),
+        (0, 4),
+        (4, 0),
+        (8, None, None),
+        (8, None, None, None),
+        (4, None, 8),
+        (100, 200, 4),
+        (4, 0, 0),
+        (0, 0, 0),
+    ],
+)
 def test_gen_awkward(shape):
     arr = gen_awkward2(shape)
     for i, s in enumerate(shape):

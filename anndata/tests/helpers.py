@@ -96,6 +96,7 @@ def gen_awkward2(shape, dtype=np.int32):
         raise ValueError("The first dimension must be fixed-length.")
 
     rng = random.Random(123)
+    shape = np.array(shape)
 
     if np.any(shape == 0):
         # use empty numpy array, to pass the correct dimensions to
