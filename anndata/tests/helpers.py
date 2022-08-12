@@ -1,5 +1,6 @@
 from functools import singledispatch, wraps
 from string import ascii_letters
+from threading import current_thread
 from typing import Tuple, Optional
 from collections.abc import Mapping
 import warnings
@@ -58,6 +59,62 @@ def gen_typed_df(n, index=None):
         },
         index=index,
     )
+
+
+def _gen_awkward_inner(shape, rng, dtype):
+    # the maximum length a ragged dimension can take
+    MAX_RAGGED_DIM_LEN = 20
+    if not len(shape):
+        # abort condition -> no dimension left, return an actual value instead
+        return dtype(rng.randrange(1000))
+    else:
+        curr_dim_len = shape[0]
+        lil = []
+        if curr_dim_len is None:
+            # ragged dimension, set random length
+            curr_dim_len = rng.randrange(MAX_RAGGED_DIM_LEN)
+
+        for _ in range(curr_dim_len):
+            lil.append(_gen_awkward_inner(shape[1:], rng, dtype))
+
+        return lil
+
+
+def gen_awkward2(shape, dtype=np.int32):
+    """Function to generate an awkward array with random values.
+
+    Awkward array dimensions can either be fixed-length ("regular") or variable length ("ragged")
+    (the first dimension is always fixed-length).
+
+
+    Parameters
+    ----------
+    shape
+        shape of the array to be generated. Any dimension specified as `None` will be simulated as ragged.
+    """
+    if shape[0] is None:
+        raise ValueError("The first dimension must be fixed-length.")
+
+    rng = random.Random(123)
+
+    if np.any(shape == 0):
+        # use empty numpy array, to pass the correct dimensions to
+        # ak.Array when one of the dimensions is 0 (the list-of-list approach
+        # does not work in that case because the list in the 0-dimension would be empty and all
+        # following dimensions would be lost).
+        # The size of the variable-length dimension is irrelevant in that case, we arbitrarily set it to 1
+        np_arr = np.empty([1 if x is None else x for x in shape], dtype=dtype)
+        arr = AwkArray(np_arr)
+    else:
+        lil = _gen_awkward_inner(shape, rng, dtype)
+        arr = AwkArray(lil)
+
+    # make fixed-length dimensions regular
+    for i, d in enumerate(shape):
+        if d is not None:
+            arr = ak.to_regular(arr, i)
+
+    return arr
 
 
 def gen_awkward(m, n=None, ragged=False, dtype=np.int32):
