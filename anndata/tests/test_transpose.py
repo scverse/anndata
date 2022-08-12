@@ -2,7 +2,13 @@ from scipy import sparse
 
 import pytest
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import GEN_ADATA_DEFAULT_TYPES, gen_adata, assert_equal
+from anndata.compat import AwkArray
+
+# TODO
+# transpose currently not implemented for awkward arrays
+_types = [x for x in GEN_ADATA_DEFAULT_TYPES if x != AwkArray]
+_types_kwargs = dict(obsm_types=_types, varm_types=_types, layers_types=_types)
 
 
 def test_transpose_orig():
@@ -10,7 +16,8 @@ def test_transpose_orig():
     Original test for transpose, should be covered by more thorough tests below, but
     keeping around just in case.
     """
-    adata = gen_adata((5, 3))
+    adata = gen_adata((5, 3), **_types_kwargs)
+
     adata.varp = {f"varp_{k}": v for k, v in adata.varp.items()}
     adata1 = adata.T
     adata1.uns["test123"] = 1
@@ -31,10 +38,12 @@ def _add_raw(adata, *, var_subset=slice(None)):
 # * Backed
 @pytest.fixture(
     params=[
-        pytest.param(gen_adata((50, 20)), id="csr_X"),
-        pytest.param(gen_adata((50, 20), sparse.csc_matrix), id="csc_X"),
-        pytest.param(_add_raw(gen_adata((50, 20))), id="with_raw"),
-        pytest.param(gen_adata((20, 10), X_type=None), id="None_X"),
+        pytest.param(gen_adata((50, 20), **_types_kwargs), id="csr_X"),
+        pytest.param(
+            gen_adata((50, 20), sparse.csc_matrix, **_types_kwargs), id="csc_X"
+        ),
+        pytest.param(_add_raw(gen_adata((50, 20), **_types_kwargs)), id="with_raw"),
+        pytest.param(gen_adata((20, 10), X_type=None, **_types_kwargs), id="None_X"),
     ]
 )
 def adata(request):
