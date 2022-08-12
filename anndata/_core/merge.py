@@ -467,7 +467,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     elif any(isinstance(a, AwkArray) for a in arrays):
         import awkward._v2 as ak
 
-        return ak.concatenate([f(a, axis=1 - axis) for f, a in zip(reindexers, arrays)])
+        return ak.concatenate(
+            [f(a, axis=1 - axis) for f, a in zip(reindexers, arrays)], axis=axis
+        )
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
@@ -985,6 +987,14 @@ def concat(
             "not concatenating `.raw` attributes.",
             UserWarning,
         )
+
+    # TODO Workaround for https://github.com/scikit-hep/awkward/issues/1586
+    for k, layer in layers.items():
+        if isinstance(layer, AwkArray):
+            import awkward._v2 as ak
+
+            layers[k] = ak.to_regular(layer, 1)
+
     return AnnData(
         **{
             "X": X,

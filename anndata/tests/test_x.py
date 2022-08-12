@@ -75,7 +75,9 @@ def test_init_X_as_none():
 
 @pytest.mark.parametrize("shape", SINGULAR_SHAPES + [pytest.param((5, 3), id="(5, 3)")])
 def test_transpose_with_X_as_none(shape):
-    adata = gen_adata(shape, X_type=lambda x: None)
+    from test_transpose import _types_kwargs
+
+    adata = gen_adata(shape, X_type=lambda x: None, **_types_kwargs)
     adataT = adata.transpose()
     assert_equal(adataT.shape, shape[::-1])
     assert_equal(adataT.obsp.keys(), adata.varp.keys())
