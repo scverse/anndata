@@ -90,6 +90,7 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
     return keys
 
 
+@singledispatch
 def _check_2d_shape(X):
     """\
     Check shape of array or sparse matrix.
@@ -99,6 +100,16 @@ def _check_2d_shape(X):
     if X.dtype.names is None and len(X.shape) != 2:
         raise ValueError(
             f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
+        )
+
+
+@_check_2d_shape.register(AwkArray)
+def _check_2d_shape_awkward(X):
+    shape = get_shape(X)
+    if len(shape) < 2 or None in shape[:2]:
+        raise ValueError(
+            "An awkward X needs to have at least 2 dimensions. The first two dimensions must be regular "
+            "(Try ak.to_regular(array, 1)). "
         )
 
 
@@ -454,30 +465,32 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
-            if dtype is None and X.dtype != np.float32:
-                warnings.warn(
-                    f"X.dtype being converted to np.float32 from {X.dtype}. In the next "
-                    "version of anndata (0.9) conversion will not be automatic. Pass "
-                    "dtype explicitly to avoid this warning. Pass "
-                    "`AnnData(X, dtype=X.dtype, ...)` to get the future behavour.",
-                    FutureWarning,
-                    stacklevel=3,
-                )
-                dtype = np.float32
-            elif dtype is None:
-                dtype = np.float32
-            if issparse(X) or isinstance(X, ma.MaskedArray):
-                # TODO: maybe use view on data attribute of sparse matrix
-                #       as in readwrite.read_10x_h5
-                if X.dtype != np.dtype(dtype):
+            if not isinstance(X, AwkArray):
+                if dtype is None and X.dtype != np.float32:
+                    warnings.warn(
+                        f"X.dtype being converted to np.float32 from {X.dtype}. In the next "
+                        "version of anndata (0.9) conversion will not be automatic. Pass "
+                        "dtype explicitly to avoid this warning. Pass "
+                        "`AnnData(X, dtype=X.dtype, ...)` to get the future behavour.",
+                        FutureWarning,
+                        stacklevel=3,
+                    )
+                    dtype = np.float32
+                elif dtype is None:
+                    dtype = np.float32
+                if issparse(X) or isinstance(X, ma.MaskedArray):
+                    # TODO: maybe use view on data attribute of sparse matrix
+                    #       as in readwrite.read_10x_h5
+                    if X.dtype != np.dtype(dtype):
+                        X = X.astype(dtype)
+                elif isinstance(X, ZarrArray):
                     X = X.astype(dtype)
-            elif isinstance(X, ZarrArray):
-                X = X.astype(dtype)
-            else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                X = np.array(X, dtype, copy=False)
+                else:  # is np.ndarray or a subclass, convert to true np.ndarray
+                    X = np.array(X, dtype, copy=False)
+
             # data matrix and shape
             self._X = X
-            self._n_obs, self._n_vars = self._X.shape
+            self._n_obs, self._n_vars = get_shape(self._X)[:2]
         else:
             self._X = None
             self._n_obs = len([] if obs is None else obs)

@@ -610,6 +610,29 @@ def test_copy():
 
 
 @pytest.mark.parametrize(
+    "value,valid",
+    [
+        [gen_awkward((10, 20)), True],
+        [gen_awkward((10, 20, 5)), True],
+        [gen_awkward((10, 20, None)), True],
+        [gen_awkward((10, None)), False],
+        [gen_awkward((10, None, 20)), False],
+    ],
+)
+def test_build_awkward(value, valid):
+    """Test that building an awkward array with X being awkward from scratch works"""
+
+    def _build():
+        AnnData(X=value)
+
+    if not valid:
+        with pytest.raises(ValueError):
+            _build()
+    else:
+        _build()
+
+
+@pytest.mark.parametrize(
     "field,value,valid",
     [
         ["X", gen_awkward((10, 20)), True],
