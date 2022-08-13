@@ -8,14 +8,12 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from ..utils import deprecated, ensure_df_homogeneous, dim_len, import_function
+from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
 from .index import _subset
 from anndata.compat import AwkArray
-
-ak_to_regular = import_function("awkward", "to_regular")
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -96,6 +94,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
             if isinstance(v, AwkArray):
+                # awkward arrays are immutable
                 d[k] = v
             else:
                 d[k] = v.copy()
@@ -281,6 +280,7 @@ class LayersBase(AlignedMapping):
         d = self._actual_class(self.parent)
         for k, v in self.items():
             if isinstance(v, AwkArray):
+                # awkward arrays are immutable
                 d[k] = v
             else:
                 d[k] = v.copy()

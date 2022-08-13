@@ -383,18 +383,15 @@ class Reindexer(object):
         return out
 
     def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
-        try:
-            dim_len(el, axis)
-        except ValueError:
+        if dim_len(el, axis) is None:
             # Do not reindex variable-length dimensions
             return el
         else:
             indexer = self.old_idx.get_indexer(self.new_idx)
             if -1 in indexer:
-                raise ValueError(
+                raise NotImplementedError(
                     "Outer join operations are currently not supported with AwkwardArrays"
                 )
-            # TODO is there no way to slice an awkward array programmatically?
             if axis == 0:
                 return el[indexer]
             if axis == 1:
