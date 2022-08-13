@@ -7,7 +7,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import assert_equal, gen_awkward, report_name, gen_adata
-from anndata.utils import dim_len
+from anndata.utils import dim_len, get_shape
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -59,12 +59,7 @@ def reusable_adata():
 )
 def test_gen_awkward(shape):
     arr = gen_awkward(shape)
-    for i, s in enumerate(shape):
-        if s is None:
-            with pytest.raises(ValueError):
-                dim_len(arr, i)
-        else:
-            assert dim_len(arr, i) == s
+    assert get_shape(arr) == shape
 
 
 # Does this work for every warning?

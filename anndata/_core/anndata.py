@@ -45,7 +45,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
+from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len, get_shape
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
@@ -56,6 +56,7 @@ from ..compat import (
     _move_adj_mtx,
     _overloaded_uns,
     OverloadedDict,
+    AwkArray,
 )
 
 
@@ -66,6 +67,7 @@ class StorageType(Enum):
     ZarrArray = ZarrArray
     ZappyArray = ZappyArray
     DaskArray = DaskArray
+    AwkArray = AwkArray
 
     @classmethod
     def classes(cls):
@@ -664,10 +666,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if (
             np.isscalar(value)
             or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (
+                isinstance(value, AwkArray)
+                and (self.shape == (dim_len(value, 0), dim_len(value, 1)))
+            )
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         ):
-            if not np.isscalar(value) and self.shape != value.shape:
+            if (
+                not np.isscalar(value)
+                and not isinstance(value, AwkArray)
+                and self.shape != value.shape
+            ):
                 # For assigning vector of values to 2d array or matrix
                 # Not neccesary for row of 2d array
                 value = value.reshape(self.shape)
@@ -690,7 +700,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self._X = value
         else:
             raise ValueError(
-                f"Data matrix has wrong shape {value.shape}, "
+                f"Data matrix has wrong shape {get_shape(value)}, "
                 f"need to be {self.shape}."
             )
 

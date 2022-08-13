@@ -212,7 +212,8 @@ def gen_adata(
         array=np.random.random((M, N)),
         sparse=sparse.random(M, N, format="csr"),
         awk=gen_awkward((M, N)),
-        awk_ragged=gen_awkward((M, N, None)),
+        # TODO
+        # awk_ragged=gen_awkward((M, N, None)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(

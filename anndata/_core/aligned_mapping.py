@@ -53,12 +53,18 @@ class AlignedMapping(cabc.MutableMapping, ABC):
             if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
                 actual_shape = tuple(dim_len(val, a) for a in self.axes)
-                raise ValueError(
-                    f"Value passed for key {key!r} is of incorrect shape. "
-                    f"Values of {self.attrname} must match dimensions "
-                    f"{self.axes} of parent. Value had shape {actual_shape} while "
-                    f"it should have had {right_shape}."
-                )
+                if None in actual_shape:
+                    raise ValueError(
+                        f"The AwkwardArray is of variable length in dimension {i}.",
+                        f"Try ak.to_regular(array, {i}) before including the array in AnnData",
+                    )
+                else:
+                    raise ValueError(
+                        f"Value passed for key {key!r} is of incorrect shape. "
+                        f"Values of {self.attrname} must match dimensions "
+                        f"{self.axes} of parent. Value had shape {actual_shape} while "
+                        f"it should have had {right_shape}."
+                    )
 
         if not self._allow_df and isinstance(val, pd.DataFrame):
             name = self.attrname.title().rstrip("s")

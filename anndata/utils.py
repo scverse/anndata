@@ -66,9 +66,15 @@ def dim_len(x, dim):
     """\
     Return the size of an array in dimension `dim`.
 
-    Raises a ValueError if `x` is an awkward array with variable length in the requested dimension.
+    Returns None if `x` is an awkward array with variable length in the requested dimension.
     """
     return x.shape[dim]
+
+
+@singledispatch
+def get_shape(x):
+    """Return the shape of an array"""
+    return x.shape
 
 
 try:
@@ -98,10 +104,12 @@ try:
             try:
                 return arr_type.size
             except AttributeError:
-                raise ValueError(
-                    f"Array is of variable length in dimension {dim}.",
-                    f"Try ak.to_regular(array, {dim}) before including the array in AnnData",
-                )
+                # the arrays is of variable length in the requested dimension
+                return None
+
+    @get_shape.register(ak.Array)
+    def get_shape_awkward(x):
+        return tuple(dim_len(x, i) for i in range(x.ndim))
 
     @asarray.register(ak.Array)
     def asarray_awkward(x):
