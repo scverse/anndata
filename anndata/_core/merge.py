@@ -985,13 +985,6 @@ def concat(
             UserWarning,
         )
 
-    # TODO Workaround for https://github.com/scikit-hep/awkward/issues/1586
-    for k, layer in layers.items():
-        if isinstance(layer, AwkArray):
-            import awkward._v2 as ak
-
-            layers[k] = ak.to_regular(layer, 1)
-
     return AnnData(
         **{
             "X": X,
