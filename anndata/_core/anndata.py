@@ -45,7 +45,13 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len, get_shape
+from ..utils import (
+    convert_to_dict,
+    ensure_df_homogeneous,
+    dim_len,
+    get_shape,
+    transpose_matrix,
+)
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
@@ -1321,11 +1327,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 "which is currently not implemented. Call `.copy()` before transposing."
             )
 
-        def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
-            return m.T.tocsr() if sparse.isspmatrix_csr(m) else m.T
-
         return AnnData(
-            X=t_csr(X) if X is not None else None,
+            X=transpose_matrix(X) if X is not None else None,
             obs=self.var,
             var=self.obs,
             # we're taking a private attributes here to be able to modify uns of the original object
@@ -1335,7 +1338,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             obsp=self.varp.copy(),
             varp=self.obsp.copy(),
             filename=self.filename,
-            layers={k: t_csr(v) for k, v in self.layers.items()},
+            layers={k: transpose_matrix(v) for k, v in self.layers.items()},
             dtype=self.X.dtype.name if X is not None else "float32",
         )
 

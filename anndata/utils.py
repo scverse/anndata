@@ -62,6 +62,17 @@ def convert_to_dict_nonetype(obj: None):
 
 
 @singledispatch
+def transpose_matrix(m):
+    return m.T
+
+
+@transpose_matrix.register(sparse.csr_matrix)
+@transpose_matrix.register(sparse.csr_array)
+def transpose_matrix_csr(m):
+    return m.T.tocsr()
+
+
+@singledispatch
 def dim_len(x, dim):
     """\
     Return the size of an array in dimension `dim`.
@@ -79,6 +90,19 @@ def get_shape(x):
 
 try:
     import awkward._v2 as ak
+
+    @transpose_matrix.register(ak.Array)
+    def transpose_matrix_awkward(array):
+        """
+        Compute the index over the flattened array that picks out the transposed elements, then re-assemble the array.
+
+        Source: https://gitter.im/Scikit-HEP/awkward-array?at=6303924c443b7927a7af1199 by @agoose77
+        """
+        flat = ak.flatten(array, axis=1)
+        ix = np.arange(len(flat)).reshape(len(array), -1)
+        flat_transposed = flat[np.ravel(ix.T)]
+        transposed = ak.unflatten(flat_transposed, len(array), axis=0)
+        return transposed
 
     @dim_len.register(ak.Array)
     def dim_len_awkward(x, dim):
