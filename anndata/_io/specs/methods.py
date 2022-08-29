@@ -493,9 +493,9 @@ def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
     import awkward._v2 as ak
 
     group = f.create_group(k)
-    form, length, container = ak.to_buffers(v)
+    form, length, container = ak.to_buffers(ak.packed(v))
     group.attrs["length"] = length
-    group.attrs["form"] = form.tojson()
+    group.attrs["form"] = form.to_json()
     write_elem(group, "container", container, dataset_kwargs=dataset_kwargs)
 
 
