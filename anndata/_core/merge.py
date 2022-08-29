@@ -988,7 +988,7 @@ def concat(
     return AnnData(
         **{
             "X": X,
-            "dtype": None if X is None else X.dtype,
+            "dtype": None if X is None or isinstance(X, AwkArray) else X.dtype,
             "layers": layers,
             dim: concat_annot,
             alt_dim: alt_annot,
