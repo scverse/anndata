@@ -100,6 +100,11 @@ indptr <HDF5 dataset "indptr": shape (38411,), type "<i4">
 ..    indices                  Dataset {41459314/Inf}
 ..    indptr                   Dataset {38411/Inf}
 
+AwkwardArrays
+~~~~~~~~~~~~~
+
+TODO
+
 DataFrames
 ~~~~~~~~~~
 

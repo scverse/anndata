@@ -283,13 +283,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __init__(
         self,
-        X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame]] = None,
+        X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame, AwkArray]] = None,
         obs: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         var: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         uns: Optional[Mapping[str, Any]] = None,
-        obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]], AwkArray]] = None,
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
+        layers: Optional[
+            Mapping[str, Union[np.ndarray, sparse.spmatrix, AwkArray]]
+        ] = None,
         raw: Optional[Mapping[str, Any]] = None,
         dtype: Optional[Union[np.dtype, type, str]] = None,
         shape: Optional[Tuple[int, int]] = None,
