@@ -88,7 +88,9 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     if "X" in d:
         d["dtype"] = d["X"].dtype
 
-    _clean_uns(d)
+    # Backwards compat to <0.7
+    if isinstance(f["obs"], zarr.Array):
+        _clean_uns(d)
 
     return AnnData(**d)
 
