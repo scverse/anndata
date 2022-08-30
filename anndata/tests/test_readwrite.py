@@ -15,9 +15,9 @@ import zarr
 
 import anndata as ad
 from anndata.utils import asarray
-from anndata.compat import _read_attr
+from anndata.compat import _read_attr, AwkArray
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import GEN_ADATA_DEFAULT_TYPES, gen_adata, assert_equal
 
 HERE = Path(__file__).parent
 
@@ -396,7 +396,12 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 def test_readloom_deprecations(tmp_path):
     loom_pth = tmp_path / "test.loom"
-    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
+    adata_src = gen_adata(
+        (5, 10),
+        obsm_types=[np.ndarray],
+        varm_types=[np.ndarray],
+        layers_types=[x for x in GEN_ADATA_DEFAULT_TYPES if x != AwkArray],
+    )
     adata_src.write_loom(loom_pth, write_obsm_varm=True)
 
     # obsm_names -> obsm_mapping
