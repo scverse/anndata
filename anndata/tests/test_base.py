@@ -9,7 +9,7 @@ from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
 
 
 # some test objects that we use below
@@ -607,3 +607,39 @@ def test_copy():
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
         for key in map_sprs.keys():
             assert_eq_not_id(map_sprs[key], map_copy[key])
+
+
+@pytest.mark.parametrize(
+    "field,value,valid",
+    [
+        ["obsm", gen_awkward((10, 5)), True],
+        ["obsm", gen_awkward((10, None)), True],
+        ["obsm", gen_awkward((10, None, None)), True],
+        ["obsm", gen_awkward((10, 5, None)), True],
+        ["obsm", gen_awkward((8, 10)), False],
+        ["obsm", gen_awkward((8, None)), False],
+        ["varm", gen_awkward((20, 5)), True],
+        ["varm", gen_awkward((20, None)), True],
+        ["varm", gen_awkward((20, None, None)), True],
+        ["varm", gen_awkward((20, 5, None)), True],
+        ["varm", gen_awkward((8, 20)), False],
+        ["varm", gen_awkward((8, None)), False],
+        ["uns", gen_awkward((7,)), True],
+        ["uns", gen_awkward((7, None)), True],
+        ["uns", gen_awkward((7, None, None)), True],
+    ],
+)
+def test_set_awkward(field, value, valid):
+    """Check if we can set .X, .layers, .obsm, .varm and .uns with different types
+    of awkward arrays and if error messages are properly raised when the dimensions do not align.
+    """
+    adata = gen_adata((10, 20), varm_types=(), obsm_types=(), layers_types=())
+
+    def _assign():
+        getattr(adata, field)["test"] = value
+
+    if not valid:
+        with pytest.raises(ValueError):
+            _assign()
+    else:
+        _assign()

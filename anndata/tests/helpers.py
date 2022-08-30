@@ -10,12 +10,15 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
+import awkward._v2 as ak
 
 from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
-from anndata.utils import asarray
+from anndata.utils import asarray, dim_len
+
+from anndata.compat import AwkArray
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -55,6 +58,63 @@ def gen_typed_df(n, index=None):
     )
 
 
+def _gen_awkward_inner(shape, rng, dtype):
+    # the maximum length a ragged dimension can take
+    MAX_RAGGED_DIM_LEN = 20
+    if not len(shape):
+        # abort condition -> no dimension left, return an actual value instead
+        return dtype(rng.randrange(1000))
+    else:
+        curr_dim_len = shape[0]
+        lil = []
+        if curr_dim_len is None:
+            # ragged dimension, set random length
+            curr_dim_len = rng.randrange(MAX_RAGGED_DIM_LEN)
+
+        for _ in range(curr_dim_len):
+            lil.append(_gen_awkward_inner(shape[1:], rng, dtype))
+
+        return lil
+
+
+def gen_awkward(shape, dtype=np.int32):
+    """Function to generate an awkward array with random values.
+
+    Awkward array dimensions can either be fixed-length ("regular") or variable length ("ragged")
+    (the first dimension is always fixed-length).
+
+
+    Parameters
+    ----------
+    shape
+        shape of the array to be generated. Any dimension specified as `None` will be simulated as ragged.
+    """
+    if shape[0] is None:
+        raise ValueError("The first dimension must be fixed-length.")
+
+    rng = random.Random(123)
+    shape = np.array(shape)
+
+    if np.any(shape == 0):
+        # use empty numpy array, to pass the correct dimensions to
+        # ak.Array when one of the dimensions is 0 (the list-of-list approach
+        # does not work in that case because the list in the 0-dimension would be empty and all
+        # following dimensions would be lost).
+        # The size of the variable-length dimension is irrelevant in that case, we arbitrarily set it to 1
+        np_arr = np.empty([1 if x is None else x for x in shape], dtype=dtype)
+        arr = AwkArray(np_arr)
+    else:
+        lil = _gen_awkward_inner(shape, rng, dtype)
+        arr = AwkArray(lil)
+
+    # make fixed-length dimensions regular
+    for i, d in enumerate(shape):
+        if d is not None:
+            arr = ak.to_regular(arr, i)
+
+    return arr
+
+
 def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     s = 0
     df = pd.DataFrame()
@@ -77,8 +137,18 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    obsm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        AwkArray,
+    ),
+    varm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        AwkArray,
+    ),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
     """\
@@ -121,12 +191,20 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
+        awk=gen_awkward((M,)),
+        awk_2d=gen_awkward((M, 20)),
+        awk_2d_ragged=gen_awkward((M, None)),
+        awk_3d_ragged=gen_awkward((M, 20, None)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
+        awk=gen_awkward((N,)),
+        awk_2d=gen_awkward((N, 20)),
+        awk_2d_ragged=gen_awkward((N, None)),
+        awk_3d_ragged=gen_awkward((N, 20, None)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
@@ -147,6 +225,8 @@ def gen_adata(
             scalar_float=3.0,
             nested_further=dict(array=np.arange(5)),
         ),
+        awkward_regular=gen_awkward((10, 5)),
+        awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     adata = AnnData(
@@ -335,6 +415,13 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
         _elem_name=elem_name,
         check_frame_type=False,
     )
+
+
+@assert_equal.register(AwkArray)
+def assert_equal_awkarray(a, b, exact=False, elem_name=None):
+    import awkward._v2 as ak
+
+    assert ak.all(a == b)
 
 
 @assert_equal.register(Mapping)
