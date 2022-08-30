@@ -16,8 +16,8 @@ from scipy import sparse
 from scipy.sparse import spmatrix
 
 from .anndata import AnnData
-from ..compat import Literal
-from ..utils import asarray
+from ..compat import Literal, AwkArray
+from ..utils import asarray, dim_len
 
 T = TypeVar("T")
 
@@ -123,6 +123,16 @@ def equal_sparse(a, b) -> bool:
             )
         )
         # fmt: on
+    else:
+        return False
+
+
+@equal.register(AwkArray)
+def equal_awkward(a, b) -> bool:
+    import awkward._v2 as ak
+
+    if dim_len(a, 0) == dim_len(b, 0):
+        return ak.all(a == b)
     else:
         return False
 
@@ -287,12 +297,14 @@ class Reindexer(object):
 
         Missing values are to be replaced with `fill_value`.
         """
-        if self.no_change and (el.shape[axis] == len(self.old_idx)):
+        if self.no_change and (dim_len(el, axis) == len(self.old_idx)):
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, AwkArray):
+            return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -370,6 +382,21 @@ class Reindexer(object):
 
         return out
 
+    def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
+        if dim_len(el, axis) is None:
+            # Do not reindex variable-length dimensions
+            return el
+        else:
+            indexer = self.old_idx.get_indexer(self.new_idx)
+            if -1 in indexer:
+                raise NotImplementedError(
+                    "Outer join operations are currently not supported with AwkwardArrays"
+                )
+            if axis == 0:
+                return el[indexer]
+            if axis == 1:
+                return el[:, indexer]
+
 
 def merge_indices(
     inds: Iterable[pd.Index], join: Literal["inner", "outer"]
@@ -434,6 +461,12 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
         df.index = index
         return df
+    elif any(isinstance(a, AwkArray) for a in arrays):
+        import awkward._v2 as ak
+
+        return ak.concatenate(
+            [f(a, axis=1 - axis) for f, a in zip(reindexers, arrays)], axis=axis
+        )
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
@@ -479,6 +512,10 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
             lambda x, y: x.intersection(y), (df_indices(el) for el in els)
         )
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
+    elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+        # do not reindex awkward arrays
+        # TODO unintended behaviour?
+        reindexers = [lambda *args, **kwargs: args[0] for _ in els]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
         reindexers = [
@@ -496,6 +533,10 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             else (lambda x: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
+    elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+        # do not reindex awkward arrays
+        # TODO unintended behaviour?
+        reindexers = [lambda *args, **kwargs: args[0] for _ in els]
     else:
         # if fill_value is None:
         # fill_value = default_fill_value(els)

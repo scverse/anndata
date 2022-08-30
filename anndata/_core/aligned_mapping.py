@@ -8,11 +8,12 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from ..utils import deprecated, ensure_df_homogeneous
+from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
 from .index import _subset
+from anndata.compat import AwkArray
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -47,14 +48,22 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] != val.shape[i]:
+            if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
-                raise ValueError(
-                    f"Value passed for key {key!r} is of incorrect shape. "
-                    f"Values of {self.attrname} must match dimensions "
-                    f"{self.axes} of parent. Value had shape {val.shape} while "
-                    f"it should have had {right_shape}."
-                )
+                actual_shape = tuple(dim_len(val, a) for a in self.axes)
+                if None in actual_shape:
+                    raise ValueError(
+                        f"The AwkwardArray is of variable length in dimension {i}.",
+                        f"Try ak.to_regular(array, {i}) before including the array in AnnData",
+                    )
+                else:
+                    raise ValueError(
+                        f"Value passed for key {key!r} is of incorrect shape. "
+                        f"Values of {self.attrname} must match dimensions "
+                        f"{self.axes} of parent. Value had shape {actual_shape} while "
+                        f"it should have had {right_shape}."
+                    )
+
         if not self._allow_df and isinstance(val, pd.DataFrame):
             name = self.attrname.title().rstrip("s")
             val = ensure_df_homogeneous(val, f"{name} {key!r}")
@@ -84,7 +93,11 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def copy(self):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
-            d[k] = v.copy()
+            if isinstance(v, AwkArray):
+                # awkward arrays are immutable
+                d[k] = v
+            else:
+                d[k] = v.copy()
         return d
 
     def _view(self, parent: "anndata.AnnData", subset_idx: I):

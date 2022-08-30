@@ -59,6 +59,54 @@ def convert_to_dict_nonetype(obj: None):
     return dict()
 
 
+@singledispatch
+def dim_len(x, dim):
+    """\
+    Return the size of an array in dimension `dim`.
+
+    Returns None if `x` is an awkward array with variable length in the requested dimension.
+    """
+    return x.shape[dim]
+
+
+try:
+    import awkward._v2 as ak
+
+    @dim_len.register(ak.Array)
+    def dim_len_awkward(x, dim):
+        if dim == 0:
+            # dimension 0 is a special case - it is always of `ArrayType` and has a fixed length.
+            try:
+                return x.type.length
+            except AttributeError:
+                raise ValueError("The outermost type must be an `awkward.Array`!")
+        else:
+            arr_type = x.type
+            for _ in range(dim):
+                # we need to loop through the nested types for the other dimensions, e.g.
+                # ArrayType(RegularType(ListType(NumpyType('int64')), 200), 100)
+                try:
+                    arr_type = arr_type.content
+                except AttributeError:
+                    # RecordType and UnionType have multiple "contents" entries
+                    raise NotImplementedError(
+                        "This check is currently not implemented for RecordType and UnionType arrays. "
+                    )
+
+            try:
+                return arr_type.size
+            except AttributeError:
+                # the arrays is of variable length in the requested dimension
+                return None
+
+    @asarray.register(ak.Array)
+    def asarray_awkward(x):
+        return x
+
+except ImportError:
+    pass
+
+
 def make_index_unique(index: pd.Index, join: str = "-"):
     """
     Makes the index unique by appending a number string to each duplicate index element:

@@ -45,7 +45,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous
+from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
@@ -56,6 +56,7 @@ from ..compat import (
     _move_adj_mtx,
     _overloaded_uns,
     OverloadedDict,
+    AwkArray,
 )
 
 
@@ -268,8 +269,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         var: Optional[Union[pd.DataFrame, Mapping[str, Iterable[Any]]]] = None,
         uns: Optional[Mapping[str, Any]] = None,
-        obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
-        varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
+        obsm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any], AwkArray]]] = None,
+        varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any], AwkArray]]] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Mapping[str, Any]] = None,
         dtype: Optional[Union[np.dtype, type, str]] = None,
@@ -1852,7 +1853,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([o.shape[0] == self._n_obs for o in obsm.values()])
+                not all([dim_len(o, 0) == self._n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self._n_obs
             ):
                 raise ValueError(
@@ -1862,7 +1863,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "varm" in key:
             varm = self._varm
             if (
-                not all([v.shape[0] == self._n_vars for v in varm.values()])
+                not all([dim_len(v, 0) == self._n_vars for v in varm.values()])
                 and len(varm.dim_names) != self._n_vars
             ):
                 raise ValueError(

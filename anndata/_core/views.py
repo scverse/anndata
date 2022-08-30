@@ -11,7 +11,7 @@ from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
-from ..compat import ZappyArray
+from ..compat import ZappyArray, AwkArray
 
 
 class _SetItemMixin:
@@ -120,6 +120,12 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
             df.drop(*args, inplace=True, **kw)
 
 
+class AwkwardArrayView(_ViewMixin, AwkArray):
+    def copy(self, order: str = "C") -> np.ndarray:
+        # awkward arrays are immutable, we don't need to make an explicit copy.
+        return self
+
+
 @singledispatch
 def as_view(obj, view_args):
     raise NotImplementedError(f"No view type has been registered for {type(obj)}")
@@ -155,6 +161,11 @@ def as_view_zappy(z, view_args):
     # Previous code says ZappyArray works as view,
     # but as far as I can tell they’re immutable.
     return z
+
+
+@as_view.register(AwkArray)
+def as_view_awkarray(array, view_args):
+    return AwkwardArrayView(array, view_args=view_args)
 
 
 def _resolve_idxs(old, new, adata):
