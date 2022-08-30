@@ -1077,6 +1077,32 @@ def test_concat_categories_maintain_dtype():
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
 
+def test_concat_ordered_categoricals_retained():
+    a = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("aabcd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5)],
+        ),
+    )
+    b = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("abcdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+
+    c = concat([a, b])
+
+    assert pd.api.types.is_categorical_dtype(c.obs["cat_ordered"])
+    assert c.obs["cat_ordered"].cat.ordered
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
