@@ -172,6 +172,11 @@ def unify_categorical_dtypes(dfs):
 
 
 def unifiable_dtype(col: pd.Series) -> bool:
+    """
+    Check if dtypes are mergable categoricals.
+
+    Currently, this means they must be unordered categoricals.
+    """
     dtypes = set()
     ordered = False
     for dtype in col:
