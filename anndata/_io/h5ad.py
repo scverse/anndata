@@ -157,7 +157,9 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
     else:
         raise ValueError()
 
-    _clean_uns(d)
+    # Backwards compat to <0.7
+    if isinstance(f["obs"], h5py.Dataset):
+        _clean_uns(d)
 
     return AnnData(**d)
 
@@ -249,7 +251,9 @@ def read_h5ad(
         else:
             raise ValueError()
 
-    _clean_uns(d)  # backwards compat
+        # Backwards compat to <0.7
+        if isinstance(f["obs"], h5py.Dataset):
+            _clean_uns(d)
 
     return AnnData(**d)
 
