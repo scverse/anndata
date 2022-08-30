@@ -3,4 +3,6 @@
 
 .. rubric:: Features
 
+* Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
+
 .. rubric:: Bug fixes
