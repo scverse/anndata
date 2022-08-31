@@ -51,7 +51,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
             if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
                 actual_shape = tuple(dim_len(val, a) for a in self.axes)
-                if None in actual_shape:
+                if actual_shape[i] is None and isinstance(val, AwkArray):
                     raise ValueError(
                         f"The AwkwardArray is of variable length in dimension {i}.",
                         f"Try ak.to_regular(array, {i}) before including the array in AnnData",
