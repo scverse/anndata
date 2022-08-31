@@ -9,7 +9,7 @@ from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
-from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
+from anndata.tests.helpers import assert_equal, gen_adata
 
 
 # some test objects that we use below
