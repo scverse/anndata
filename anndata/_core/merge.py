@@ -10,6 +10,7 @@ from typing import Any, Callable, Collection, Iterable, Optional, Tuple, TypeVar
 import typing
 from warnings import warn
 
+from natsort import natsorted
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -142,6 +143,59 @@ def as_sparse(x):
         return sparse.csr_matrix(x)
     else:
         return x
+
+
+def unify_categorical_dtypes(dfs):
+    """
+    Attempts to unify categorical datatypes from multiple dataframes
+    """
+    # Get shared categorical columns
+    df_dtypes = [dict(df.dtypes) for df in dfs]
+    columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
+
+    dtypes = {col: list() for col in columns}
+    for col in columns:
+        for df in df_dtypes:
+            dtypes[col].append(df.get(col, None))
+
+    dtypes = {k: v for k, v in dtypes.items() if unifiable_dtype(v)}
+
+    if len(dtypes) == 0:
+        return dfs
+    else:
+        dfs = [df.copy(deep=False) for df in dfs]
+
+    new_dtypes = {}
+    for col in dtypes.keys():
+        categories = reduce(
+            lambda x, y: x.union(y),
+            [x.categories for x in dtypes[col] if not pd.isnull(x)],
+        )
+        new_dtypes[col] = pd.CategoricalDtype(natsorted(categories), ordered=False)
+
+    for df in dfs:
+        for col, dtype in new_dtypes.items():
+            if col in df:
+                df[col] = df[col].astype(dtype)
+
+    return dfs
+
+
+def unifiable_dtype(col: pd.Series) -> bool:
+    """
+    Check if dtypes are mergable categoricals.
+
+    Currently, this means they must be unordered categoricals.
+    """
+    dtypes = set()
+    ordered = False
+    for dtype in col:
+        if pd.api.types.is_categorical_dtype(dtype):
+            dtypes.add(dtype.categories.dtype)
+            ordered = ordered | dtype.ordered
+        elif not pd.isnull(dtype):
+            return False
+    return len(dtypes) == 1 and not ordered
 
 
 ###################
@@ -457,7 +511,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
-            [f(x) for f, x in zip(reindexers, arrays)], ignore_index=True, axis=axis
+            unify_categorical_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
+            ignore_index=True,
+            axis=axis,
         )
         df.index = index
         return df
@@ -897,7 +953,9 @@ def concat(
 
     # Annotation for concatenation axis
     concat_annot = pd.concat(
-        [getattr(a, dim) for a in adatas], join=join, ignore_index=True
+        unify_categorical_dtypes([getattr(a, dim) for a in adatas]),
+        join=join,
+        ignore_index=True,
     )
     concat_annot.index = concat_indices
     if label is not None:
