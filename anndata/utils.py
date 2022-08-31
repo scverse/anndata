@@ -70,7 +70,7 @@ def dim_len(x, dim):
 
 
 try:
-    import awkward._v2 as ak
+    from .compat import awkward as ak
 
     @dim_len.register(ak.Array)
     def dim_len_awkward(x, dim):

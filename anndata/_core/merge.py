@@ -129,7 +129,7 @@ def equal_sparse(a, b) -> bool:
 
 @equal.register(AwkArray)
 def equal_awkward(a, b) -> bool:
-    import awkward._v2 as ak
+    from ..compat import awkward as ak
 
     if dim_len(a, 0) == dim_len(b, 0):
         return ak.all(a == b)
@@ -462,7 +462,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         df.index = index
         return df
     elif any(isinstance(a, AwkArray) for a in arrays):
-        import awkward._v2 as ak
+        from ..compat import awkward as ak
 
         return ak.concatenate(
             [f(a, axis=1 - axis) for f, a in zip(reindexers, arrays)], axis=axis

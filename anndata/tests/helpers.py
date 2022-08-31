@@ -10,7 +10,7 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
-import awkward._v2 as ak
+from anndata.compat import awkward as ak
 import random
 
 from anndata import AnnData, Raw
