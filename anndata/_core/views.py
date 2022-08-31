@@ -121,9 +121,10 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 
 class AwkwardArrayView(_ViewMixin, AwkArray):
-    def copy(self, order: str = "C") -> np.ndarray:
-        # awkward arrays are immutable, we don't need to make an explicit copy.
-        return self
+    def copy(self, order: str = "C") -> AwkArray:
+        from ..compat import awkward as ak
+
+        return ak.copy(self)
 
 
 @singledispatch

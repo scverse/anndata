@@ -1,6 +1,11 @@
 """Tests related to awkward arrays"""
 import pytest
+import numpy as np
+import numpy.testing as npt
+
 from anndata.tests.helpers import gen_adata, gen_awkward
+from anndata.compat import awkward as ak
+from anndata import ImplicitModificationWarning
 
 
 @pytest.mark.parametrize(
@@ -37,3 +42,43 @@ def test_set_awkward(field, value, valid):
             _assign()
     else:
         _assign()
+
+
+@pytest.mark.parametrize("key", ["obsm", "varm", "uns"])
+def test_copy(key):
+    """Check that modifying a copy does not modify the original"""
+    adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
+    getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
+    adata_copy = adata.copy()
+    getattr(adata_copy, key)["awk"]["c"] = np.full((3, 1), 4)
+    getattr(adata_copy, key)["awk"]["d"] = np.full((3, 1), 5)
+
+    # values in copy were correctly set
+    npt.assert_equal(getattr(adata_copy, key)["awk"]["c"], np.full((3, 1), 4))
+    npt.assert_equal(getattr(adata_copy, key)["awk"]["d"], np.full((3, 1), 5))
+
+    # values in original were not updated
+    npt.assert_equal(getattr(adata, key)["awk"]["c"], np.full((3, 1), 3))
+    with pytest.raises(IndexError):
+        getattr(adata, key)["awk"]["d"]
+
+
+@pytest.mark.parametrize("key", ["obsm", "varm"])
+def test_view(key):
+    """Check that modifying a view does not modify the original"""
+    adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
+    getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
+    adata_view = adata[:2, :2]
+
+    with pytest.warns(ImplicitModificationWarning, match="initializing view as actual"):
+        getattr(adata_view, key)["awk"]["c"] = np.full((2, 1), 4)
+        getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
+
+    # values in view were correctly set
+    npt.assert_equal(getattr(adata_view, key)["awk"]["c"], np.full((2, 1), 4))
+    npt.assert_equal(getattr(adata_view, key)["awk"]["d"], np.full((2, 1), 5))
+
+    # values in original were not updated
+    npt.assert_equal(getattr(adata, key)["awk"]["c"], np.full((3, 1), 3))
+    with pytest.raises(IndexError):
+        getattr(adata, key)["awk"]["d"]

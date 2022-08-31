@@ -520,6 +520,15 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     elif any(isinstance(a, AwkArray) for a in arrays):
         from ..compat import awkward as ak
 
+        if not all(
+            # TODO need to test MissingVal and shape 0 case.
+            isinstance(a, AwkArray) or a is MissingVal or 0 in a.shape
+            for a in arrays
+        ):
+            raise NotImplementedError(
+                "Cannot concatenate an AwkwardArray with other array types."
+            )
+
         return ak.concatenate(
             [f(a, axis=1 - axis) for f, a in zip(reindexers, arrays)], axis=axis
         )

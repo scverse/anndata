@@ -94,8 +94,9 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
             if isinstance(v, AwkArray):
-                # awkward arrays are immutable
-                d[k] = v
+                from ..compat import awkward as ak
+
+                d[k] = ak.copy(v)
             else:
                 d[k] = v.copy()
         return d
