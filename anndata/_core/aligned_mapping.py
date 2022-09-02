@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import abc as cabc
+from copy import copy
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
@@ -94,9 +95,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
             if isinstance(v, AwkArray):
-                from ..compat import awkward as ak
-
-                d[k] = ak.copy(v)
+                d[k] = copy(v)
             else:
                 d[k] = v.copy()
         return d

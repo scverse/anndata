@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from copy import deepcopy
+from copy import copy, deepcopy
 from functools import reduce, singledispatch, wraps
 from typing import Any, KeysView, Optional, Sequence, Tuple
 import warnings
@@ -163,8 +163,7 @@ try:
     @ak.behaviors.mixins.mixin_class(ak.behavior)
     class AwkwardArrayView(_ViewMixin, AwkArray):
         def copy(self, order: str = "C") -> AwkArray:
-
-            return ak.copy(self)
+            return copy(self)
 
     @as_view.register(AwkArray)
     def as_view_awkarray(array, view_args):
