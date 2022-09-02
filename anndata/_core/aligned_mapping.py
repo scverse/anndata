@@ -50,7 +50,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
-                actual_shape = tuple(dim_len(val, a) for a in self.axes)
+                actual_shape = tuple(dim_len(val, a) for a, _ in enumerate(self.axes))
                 if actual_shape[i] is None and isinstance(val, AwkArray):
                     raise ValueError(
                         f"The AwkwardArray is of variable length in dimension {i}.",
