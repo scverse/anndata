@@ -120,13 +120,6 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
             df.drop(*args, inplace=True, **kw)
 
 
-class AwkwardArrayView(_ViewMixin, AwkArray):
-    def copy(self, order: str = "C") -> AwkArray:
-        from ..compat import awkward as ak
-
-        return ak.copy(self)
-
-
 @singledispatch
 def as_view(obj, view_args):
     raise NotImplementedError(f"No view type has been registered for {type(obj)}")
@@ -164,9 +157,21 @@ def as_view_zappy(z, view_args):
     return z
 
 
-@as_view.register(AwkArray)
-def as_view_awkarray(array, view_args):
-    return AwkwardArrayView(array, view_args=view_args)
+try:
+    from ..compat import awkward as ak
+
+    @ak.behaviors.mixins.mixin_class(ak.behavior)
+    class AwkwardArrayView(_ViewMixin, AwkArray):
+        def copy(self, order: str = "C") -> AwkArray:
+
+            return ak.copy(self)
+
+    @as_view.register(AwkArray)
+    def as_view_awkarray(array, view_args):
+        return ak.with_name(array, name="AwkwardArrayView")
+
+except ImportError:
+    pass
 
 
 def _resolve_idxs(old, new, adata):
