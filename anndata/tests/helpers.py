@@ -420,8 +420,9 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AwkArray)
 def assert_equal_awkarray(a, b, exact=False, elem_name=None):
-    import awkward._v2 as ak
+    from anndata.compat import awkward as ak
 
+    assert a.type == b.type, "type mismatch"
     assert ak.all(a == b)
 
 

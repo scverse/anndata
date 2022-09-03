@@ -3,11 +3,11 @@ import pytest
 import numpy as np
 import numpy.testing as npt
 
-from anndata.tests.helpers import gen_adata, gen_awkward
+from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
 from anndata.compat import awkward as ak, awkward_version
 from anndata import ImplicitModificationWarning
 from anndata.utils import dim_len
-from anndata import AnnData
+from anndata import AnnData, read_h5ad
 
 
 @pytest.mark.parametrize(
@@ -151,3 +151,22 @@ def test_view(key):
     npt.assert_equal(getattr(adata, key)["awk"]["c"], np.full((3, 1), 3))
     with pytest.raises(IndexError):
         getattr(adata, key)["awk"]["d"]
+
+
+@pytest.mark.parametrize(
+    "array",
+    [
+        # numpy array
+        ak.Array(np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))),
+    ],
+)
+def test_awkward_io(tmp_path, array):
+    assert False, "add more test cases!"
+    adata = AnnData()
+    adata.uns["awk"] = array
+    adata_path = tmp_path / "adata.h5ad"
+    adata.write_h5ad(adata_path)
+
+    adata2 = read_h5ad(adata_path)
+
+    assert_equal(adata.uns["awk"], adata2.uns["awk"])
