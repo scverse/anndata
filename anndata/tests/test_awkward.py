@@ -6,6 +6,59 @@ import numpy.testing as npt
 from anndata.tests.helpers import gen_adata, gen_awkward
 from anndata.compat import awkward as ak
 from anndata import ImplicitModificationWarning
+from anndata.utils import dim_len
+
+
+@pytest.mark.parametrize(
+    "array,shape",
+    [
+        # numpy array
+        [ak.Array(np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))), (2, 3, 4, 5)],
+        # record
+        [ak.Array([{"a": 1, "b": 2}, {"a": 1, "b": 3}]), (2,)],
+        # ListType, variable length
+        [ak.Array([[1], [2, 3], [4, 5, 6]]), (3, None)],
+        # ListType, happens to have the same length, but is not regular
+        [ak.Array([[2], [3], [4]]), (3, None)],
+        # RegularType + nested ListType
+        [ak.to_regular(ak.Array([[[1, 2], [3]], [[2], [3, 4, 5]]]), 1), (2, 2, None)],
+        # nested record
+        [
+            ak.to_regular(ak.Array([[{"a": 0}, {"b": 1}], [{"c": 2}, {"d": 3}]]), 1),
+            (2, 2),
+        ],
+        # mixed types (variable length)
+        [ak.Array([[1, 2], ["a"]]), (2, None)],
+        # mixed types (but regular)
+        [ak.to_regular(ak.Array([[1, 2], ["a", "b"]]), 1), (2, 2)],
+        # zero-size edge cases
+        [ak.Array(np.ones((0, 7))), (0, 7)],
+        [ak.Array(np.ones((7, 0))), (7, 0)],
+        # UnionType of two regular types with different dimensions
+        [
+            ak.concatenate([ak.Array(np.ones((2, 2))), ak.Array(np.ones((2, 3)))]),
+            (4, None),
+        ],
+        # UnionType of two regular types with same dimension
+        [
+            ak.concatenate(
+                [
+                    ak.Array(np.ones((2, 2))),
+                    ak.Array(np.array([["a", "a"], ["a", "a"]])),
+                ]
+            ),
+            (4, 2),
+        ],
+    ],
+)
+def test_dim_len(array, shape):
+    """Test that dim_len returns the right value for awkward arrays."""
+    for axis, size in enumerate(shape):
+        assert size == dim_len(array, axis)
+
+    # Requesting the size for an axis higher than the array has dimensions should raise a TypeError
+    with pytest.raises(TypeError):
+        dim_len(array, len(shape))
 
 
 @pytest.mark.parametrize(

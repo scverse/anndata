@@ -60,44 +60,92 @@ def convert_to_dict_nonetype(obj: None):
 
 
 @singledispatch
-def dim_len(x, dim):
+def dim_len(x, axis):
     """\
-    Return the size of an array in dimension `dim`.
+    Return the size of an array in dimension `axis`.
 
     Returns None if `x` is an awkward array with variable length in the requested dimension.
     """
-    return x.shape[dim]
+    return x.shape[axis]
 
 
 try:
     from .compat import awkward as ak
 
     @dim_len.register(ak.Array)
-    def dim_len_awkward(x, dim):
-        if dim == 0:
-            # dimension 0 is a special case - it is always of `ArrayType` and has a fixed length.
-            try:
-                return x.type.length
-            except AttributeError:
-                raise ValueError("The outermost type must be an `awkward.Array`!")
+    def dim_len_awkward(array, axis):
+        """Get the length of an awkward array in a given dimension
+
+        Returns None if the dimension is of variable length.
+
+        Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
+        """
+        if axis < 0:  # negative axis is another can of worms... maybe later
+            raise NotImplementedError("Does not support negative axis")
+        elif axis == 0:
+            return len(array)
         else:
-            arr_type = x.type
-            for _ in range(dim):
-                # we need to loop through the nested types for the other dimensions, e.g.
-                # ArrayType(RegularType(ListType(NumpyType('int64')), 200), 100)
-                try:
-                    arr_type = arr_type.content
-                except AttributeError:
-                    # RecordType and UnionType have multiple "contents" entries
-                    raise NotImplementedError(
-                        "This check is currently not implemented for RecordType and UnionType arrays. "
+
+            def size_at_depth(layout, depth, lateral_context, **kwargs):
+                if layout.is_NumpyType:
+                    # if it's an embedded rectilinear array, we have to deal with its shape
+                    # which might not be 1-dimensional
+                    if layout.is_UnknownType:
+                        shape = (0,)
+                    else:
+                        shape = layout.shape
+                    numpy_axis = lateral_context["axis"] - depth + 1
+                    if not (1 <= numpy_axis < len(shape)):
+                        raise TypeError(f"axis={lateral_context['axis']} is too deep")
+                    lateral_context["out"] = shape[numpy_axis]
+                    return layout.nplike.empty(1)
+
+                elif layout.is_ListType and depth == lateral_context["axis"]:
+                    if layout.is_RegularType:
+                        # if it's a regular list, you want the size
+                        lateral_context["out"] = layout.size
+                    else:
+                        # if it's an irregular list, you want a null token
+                        lateral_context["out"] = -1
+                    return layout.nplike.empty(1)
+
+                elif layout.is_RecordType:
+                    # if it's a record, you want to stop descent with an error
+                    raise TypeError(
+                        f"axis={lateral_context['axis']} is too deep, reaches record"
                     )
 
-            try:
-                return arr_type.size
-            except AttributeError:
-                # the arrays is of variable length in the requested dimension
-                return None
+                elif layout.is_UnionType:
+                    # if it's a union, you could get the result of each union branch
+                    # separately and see if they're all the same; if not, it's an error
+                    result = None
+                    for content in layout.contents:
+                        context = {"axis": lateral_context["axis"]}
+                        ak.transform(
+                            size_at_depth,
+                            content,
+                            lateral_context=context,
+                            return_array=False,
+                        )
+                        if result is None:
+                            result = context["out"]
+                        elif result != context["out"]:
+                            # Union branches have different lengths -> return null token
+                            lateral_context["out"] = -1
+                            return layout.nplike.empty(1)
+                    lateral_context["out"] = result
+                    return layout.nplike.empty(1)
+
+            # communicate with the recursive function using a context (lateral)
+            context = {"axis": axis}
+
+            # "transform" but we don't care what kind of array it returns
+            ak.transform(
+                size_at_depth, array, lateral_context=context, return_array=False
+            )
+
+            # Use `None` as null token.
+            return None if context["out"] == -1 else context["out"]
 
     @asarray.register(ak.Array)
     def asarray_awkward(x):
