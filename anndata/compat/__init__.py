@@ -48,8 +48,9 @@ try:
 
     # Ensure compatibility with both 1.9rc and 2.x releases of awkward
     # TODO Once 2.x is released, we can require it as a minimal dependency and remove this code.
-    major, _ = version("awkward").split(".", maxsplit=1)
-    if int(major) < 2:
+    awkward_version, _ = version("awkward").split(".", maxsplit=1)
+    awkward_version = int(awkward_version)
+    if awkward_version < 2:
         import awkward._v2 as awkward
     else:
         import awkward
