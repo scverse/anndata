@@ -158,10 +158,31 @@ def test_view(key):
     [
         # numpy array
         ak.Array(np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))),
+        # record
+        ak.Array([{"a": 1, "b": 2}, {"a": 1, "b": 3}]),
+        # ListType, variable length
+        ak.Array([[1], [2, 3], [4, 5, 6]]),
+        # RegularType + nested ListType
+        ak.to_regular(ak.Array([[[1, 2], [3]], [[2], [3, 4, 5]]]), 1),
+        # nested record
+        ak.to_regular(ak.Array([[{"a": 0}, {"b": 1}], [{"c": 2}, {"d": 3}]]), 1),
+        # mixed types (variable length)
+        ak.Array([[1, 2], ["a"]]),
+        # zero-size edge cases
+        ak.Array(np.ones((0, 7))),
+        ak.Array(np.ones((7, 0))),
+        # UnionType of two regular types with different dimensions
+        ak.concatenate([ak.Array(np.ones((2, 2))), ak.Array(np.ones((2, 3)))]),
+        # UnionType of two regular types with same dimension
+        ak.concatenate(
+            [
+                ak.Array(np.ones((2, 2))),
+                ak.Array(np.array([["a", "a"], ["a", "a"]])),
+            ]
+        ),
     ],
 )
 def test_awkward_io(tmp_path, array):
-    assert False, "add more test cases!"
     adata = AnnData()
     adata.uns["awk"] = array
     adata_path = tmp_path / "adata.h5ad"

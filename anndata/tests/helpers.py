@@ -423,7 +423,7 @@ def assert_equal_awkarray(a, b, exact=False, elem_name=None):
     from anndata.compat import awkward as ak
 
     assert a.type == b.type, "type mismatch"
-    assert ak.all(a == b)
+    assert ak.to_json(a) == ak.to_json(b)
 
 
 @assert_equal.register(Mapping)
