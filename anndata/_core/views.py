@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from copy import copy, deepcopy
+from enum import Enum
 from functools import reduce, singledispatch, wraps
 from typing import Any, KeysView, Optional, Sequence, Tuple
 import warnings
@@ -159,15 +160,72 @@ def as_view_zappy(z, view_args):
 
 try:
     from ..compat import awkward as ak
+    import weakref
 
-    @ak.behaviors.mixins.mixin_class(ak.behavior)
+    # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
+    _registry = weakref.WeakValueDictionary()
+
+    class _PARAM_NAMES(Enum):
+        """Keynames used to store attributes of ElementRef as params in an awkward array"""
+
+        parent = "_view_args_parent"
+        attrname = "_view_args_attrname"
+        keys = "_view_args_keys"
+
     class AwkwardArrayView(_ViewMixin, AwkArray):
-        def copy(self, order: str = "C") -> AwkArray:
-            return copy(self)
+        @property
+        def _view_args(self):
+            """Override _view_args to retrieve the values from awkward arrays parameters.
+
+            Awkward arrays cannot be subclassed like other python objects. Instead subclasses need
+            to be attached as "behavior". These "behaviors" cannot take any additional parameters (as we do
+            for other data types to store `_view_args`). Therefore, we need to store `_view_args` using awkward's
+            parameter mechanism. These parameters need to be json-serializable, which is why we can't store
+            ElementRef directly. The reference to the parent AnnDataView object is stored as a key of a
+            WeakValueDictionary which holds weak references to all AnnDataViews.
+            """
+            parent_key = self.layout.parameter(_PARAM_NAMES.parent)
+            attrname = self.layout.parameter(_PARAM_NAMES.attrname)
+            keys = self.layout.parameter(_PARAM_NAMES.keys)
+            if parent_key is None or attrname is None or keys is None:
+                raise KeyError(
+                    "AwkwardArrayView does not hold reference to original AnnData object."
+                )
+            else:
+                try:
+                    parent = _registry[parent_key]
+                except KeyError:
+                    raise KeyError(
+                        "AwkwardArrayView has invalid reference to original AnnData object."
+                    )
+                else:
+                    return ElementRef(parent, attrname, keys)
+
+        def __copy__(self) -> AwkArray:
+            """
+            Turn the AwkwardArrayView into an actual AwkwardArray with no special behavior.
+
+            Need to override __copy__ instead of `.copy()` as awkward arrays don't implement `.copy()`
+            and are copied using python's standard copy mechanism in `aligned_mapping.py`.
+            """
+            array = self
+            # makes a shallow copy and removes the reference to the original AnnData object
+            for param in _PARAM_NAMES:
+                array = ak.with_parameter(self, param, None)
+            array = ak.with_name(array, "")
+            return array
 
     @as_view.register(AwkArray)
     def as_view_awkarray(array, view_args):
+        parent, attrname, keys = view_args
+        parent_key = f"target-{id(parent)}"
+        _registry[parent_key] = parent
+        array = ak.with_parameter(array, _PARAM_NAMES.parent, parent_key)
+        array = ak.with_parameter(array, _PARAM_NAMES.attrname, attrname)
+        array = ak.with_parameter(array, _PARAM_NAMES.keys, keys)
         return ak.with_name(array, name="AwkwardArrayView")
+
+    ak.behavior["*", "AwkwardArrayView"] = AwkwardArrayView
 
 except ImportError:
     pass
