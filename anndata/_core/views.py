@@ -164,13 +164,7 @@ try:
 
     # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
     _registry = weakref.WeakValueDictionary()
-
-    class _PARAM_NAMES(Enum):
-        """Keynames used to store attributes of ElementRef as params in an awkward array"""
-
-        parent = "_view_args_parent"
-        attrname = "_view_args_attrname"
-        keys = "_view_args_keys"
+    _PARAM_NAME = "_view_args"
 
     class AwkwardArrayView(_ViewMixin, AwkArray):
         @property
@@ -181,12 +175,10 @@ try:
             to be attached as "behavior". These "behaviors" cannot take any additional parameters (as we do
             for other data types to store `_view_args`). Therefore, we need to store `_view_args` using awkward's
             parameter mechanism. These parameters need to be json-serializable, which is why we can't store
-            ElementRef directly. The reference to the parent AnnDataView object is stored as a key of a
-            WeakValueDictionary which holds weak references to all AnnDataViews.
+            ElementRef directly, but need to replace the reference to the parent AnnDataView container with a weak
+            reference.
             """
-            parent_key = self.layout.parameter(_PARAM_NAMES.parent)
-            attrname = self.layout.parameter(_PARAM_NAMES.attrname)
-            keys = self.layout.parameter(_PARAM_NAMES.keys)
+            parent_key, attrname, keys = self.layout.parameter(_PARAM_NAME)
             if parent_key is None or attrname is None or keys is None:
                 raise KeyError(
                     "AwkwardArrayView does not hold reference to original AnnData object."
@@ -210,8 +202,8 @@ try:
             """
             array = self
             # makes a shallow copy and removes the reference to the original AnnData object
-            for param in _PARAM_NAMES:
-                array = ak.with_parameter(self, param, None)
+            array = ak.with_parameter(self, _PARAM_NAME, None)
+            # TODO what's the proper way of getting rid of a name?
             array = ak.with_name(array, "")
             return array
 
@@ -220,9 +212,7 @@ try:
         parent, attrname, keys = view_args
         parent_key = f"target-{id(parent)}"
         _registry[parent_key] = parent
-        array = ak.with_parameter(array, _PARAM_NAMES.parent, parent_key)
-        array = ak.with_parameter(array, _PARAM_NAMES.attrname, attrname)
-        array = ak.with_parameter(array, _PARAM_NAMES.keys, keys)
+        array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
         return ak.with_name(array, name="AwkwardArrayView")
 
     ak.behavior["*", "AwkwardArrayView"] = AwkwardArrayView
