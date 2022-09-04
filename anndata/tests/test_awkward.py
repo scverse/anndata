@@ -8,6 +8,8 @@ from anndata.compat import awkward as ak, awkward_version
 from anndata import ImplicitModificationWarning
 from anndata.utils import dim_len
 from anndata import AnnData, read_h5ad
+import anndata
+import pandas as pd
 
 
 @pytest.mark.parametrize(
@@ -83,7 +85,7 @@ def test_dim_len(array, shape):
     ],
 )
 def test_set_awkward(field, value, valid):
-    """Check if we can set .X, .layers, .obsm, .varm and .uns with different types
+    """Check if we can set obsm, .varm and .uns with different types
     of awkward arrays and if error messages are properly raised when the dimensions do not align.
     """
     adata = gen_adata((10, 20), varm_types=(), obsm_types=(), layers_types=())
@@ -191,3 +193,81 @@ def test_awkward_io(tmp_path, array):
     adata2 = read_h5ad(adata_path)
 
     assert_equal(adata.uns["awk"], adata2.uns["awk"])
+
+
+@pytest.mark.parametrize(
+    "arrays,expected",
+    [
+        [
+            [ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]), None],
+            ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}, {}, {}, {}]),
+        ],
+        [
+            [None, ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}])],
+            ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+        ],
+        [
+            [
+                None,
+                ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+                pd.DataFrame(),
+            ],
+            ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+        ],
+        [
+            [
+                ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+                pd.DataFrame(),
+            ],
+            ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+        ],
+        [
+            [
+                ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+                pd.DataFrame().assign(a=[3, 4], b=[5, 6]),
+            ],
+            NotImplementedError,
+        ],
+        [
+            [
+                ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+                np.ones((3, 2)),
+            ],
+            NotImplementedError,
+        ],
+    ],
+)
+@pytest.mark.parametrize("key", ["obsm", "varm"])
+@pytest.mark.parametrize("join", ["outer", "inner"])
+def test_concat_mixed_types(key, arrays, expected, join):
+    """Test that concatenation of AwkwardArrays with arbitrary types, but zero length dimension
+    or missing values works."""
+    axis = 0 if key == "obsm" else 1
+
+    to_concat = []
+    for a in arrays:
+        shape = np.array([3, 3])  # default shape (in case of missing array)
+        if a is not None:
+            length = dim_len(a, 0)
+            shape[axis] = length
+
+        tmp_adata = gen_adata(
+            tuple(shape), varm_types=(), obsm_types=(), layers_types=()
+        )
+
+        if a is not None:
+            if isinstance(a, pd.DataFrame):
+                a.set_index(
+                    tmp_adata.obs_names if key == "obsm" else tmp_adata.var_names,
+                    inplace=True,
+                )
+            getattr(tmp_adata, key)["test"] = a
+
+        to_concat.append(tmp_adata)
+
+    if isinstance(expected, type) and issubclass(expected, Exception):
+        with pytest.raises(expected):
+            anndata.concat(to_concat, axis=axis, join=join)
+    else:
+        result = anndata.concat(to_concat, axis=axis, join=join)
+        assert_equal(getattr(result, key)["test"], expected)

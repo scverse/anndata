@@ -521,9 +521,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         from ..compat import awkward as ak
 
         if not all(
-            # TODO need to test MissingVal and shape 0 case.
-            isinstance(a, AwkArray) or a is MissingVal or 0 in a.shape
-            for a in arrays
+            isinstance(a, AwkArray) or a is MissingVal or 0 in a.shape for a in arrays
         ):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
@@ -577,7 +575,11 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
             lambda x, y: x.intersection(y), (df_indices(el) for el in els)
         )
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
-    elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+    elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
+        if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+            raise NotImplementedError(
+                "Cannot concatenate an AwkwardArray with other array types."
+            )
         # do not reindex awkward arrays
         # TODO unintended behaviour?
         reindexers = [lambda *args, **kwargs: args[0] for _ in els]
@@ -598,7 +600,11 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             else (lambda x: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
-    elif all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+    elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
+        if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+            raise NotImplementedError(
+                "Cannot concatenate an AwkwardArray with other array types."
+            )
         # do not reindex awkward arrays
         # TODO unintended behaviour?
         reindexers = [lambda *args, **kwargs: args[0] for _ in els]
