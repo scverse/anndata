@@ -78,8 +78,8 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame, da.Array),
+    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame, da.Array),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
     """\
@@ -122,13 +122,16 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
+        da=da.random.random((M, 50), chunks=(min(M,100)//5+1,)*2), 
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
+        da=da.random.random((N, 50), chunks=(min(N,50)//5+1,)*2), 
     )
+    # TODO: Allow variable size chunks somehow
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
         array=np.random.random((M, N)), sparse=sparse.random(M, N, format="csr")
