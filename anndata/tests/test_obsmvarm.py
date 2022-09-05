@@ -20,7 +20,7 @@ def adata():
     return anndata.AnnData(X, obs=obs, var=var)
 
 
-def test_assigmnent_dict(adata):
+def test_assignment_dict(adata):
     d_obsm = dict(
         a=pd.DataFrame(
             dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]),
