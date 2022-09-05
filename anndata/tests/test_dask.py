@@ -37,7 +37,7 @@ def test_dask_write_h5ad():
     adata.X = da.ones((M, N))
     view = adata[:30]
     view.copy()
-    view.write_h5ad("test")
+    view.write_h5ad("test.h5ad")
 
 # TODO: Appropriate path to write in testing.
 # TODO: Check written object
@@ -54,7 +54,7 @@ def test_dask_write():
     adata.X = da.ones((M, N))
     view = adata[:30]
     view.copy()
-    view.write("test")
+    view.write("test.h5ad")
 
 
 @pytest.mark.parametrize(
