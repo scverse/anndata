@@ -132,7 +132,11 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
+<<<<<<< HEAD
         da=da.random.random((M, 50), chunks=(min(M, 100) // 5 + 1,) * 2),
+=======
+        da=da.random.random((M, 50), chunks=(min(M,50)//5+1,)*2), 
+>>>>>>> 57c2832 (minor fix)
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
