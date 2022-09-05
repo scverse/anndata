@@ -100,7 +100,16 @@ def test_set_awkward(field, value, valid):
         _assign()
 
 
-@pytest.mark.parametrize("key", ["obsm", "varm", "uns"])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "obsm",
+        "varm",
+        pytest.param(
+            "uns", marks=pytest.mark.xfail(reason="No checks for `uns` are implemented")
+        ),
+    ],
+)
 @pytest.mark.skipif(
     awkward_version >= 2, reason="This test is only applies for awkward versions 1.x"
 )
