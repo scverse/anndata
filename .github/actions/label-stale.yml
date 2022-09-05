@@ -1,0 +1,20 @@
+name: "Label stale issues"
+on:
+  schedule:
+    - cron: "30 1 * * *"
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v5
+        with:
+          days-before-issue-stale: 60
+          days-before-close: 65535 # We don't want to close issues in this action
+          stale-issue-label: stale
+          exempt-issue-labels: pinned,bug,enhancement
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had recent activity.
+            It will be closed if no further activity occurs. Thank you for your contributions!
+          stale-pr-message: null # if not provided, will not mark PRs as stale
+          debug-only: true # enable dry-run, remove when we know from the logs it's working.
