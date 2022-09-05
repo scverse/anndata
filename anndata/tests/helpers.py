@@ -453,4 +453,3 @@ def assert_adata_equal(
             exact,
             elem_name=fmt_name(attr),
         )
-
