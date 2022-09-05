@@ -25,6 +25,7 @@ def test_dask_X_view():
 
 # TODO: Appropriate path to write in testing.
 # TODO: Check written object
+# TODO: Check that this works with `zarr`
 
 
 def test_dask_write_h5ad():
