@@ -203,8 +203,7 @@ try:
             array = self
             # makes a shallow copy and removes the reference to the original AnnData object
             array = ak.with_parameter(self, _PARAM_NAME, None)
-            # TODO what's the proper way of getting rid of a name?
-            array = ak.with_name(array, "")
+            array = ak.with_name(array, None)
             return array
 
     @as_view.register(AwkArray)
