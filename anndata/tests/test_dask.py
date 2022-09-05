@@ -22,6 +22,41 @@ def test_dask_X_view():
     view = adata[:30]
     view.copy()
 
+# TODO: Appropriate path to write in testing.
+# TODO: Check written object
+
+
+def test_dask_write_h5ad():
+    import dask.array as da
+
+    M, N = 50, 30
+    adata = ad.AnnData(
+        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(M)]),
+        var=pd.DataFrame(index=[f"gene{i:02}" for i in range(N)]),
+    )
+    adata.X = da.ones((M, N))
+    view = adata[:30]
+    view.copy()
+    view.write_h5ad("test")
+
+# TODO: Appropriate path to write in testing.
+# TODO: Check written object
+
+
+def test_dask_write():
+    import dask.array as da
+
+    M, N = 50, 30
+    adata = ad.AnnData(
+        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(M)]),
+        var=pd.DataFrame(index=[f"gene{i:02}" for i in range(N)]),
+    )
+    adata.X = da.ones((M, N))
+    view = adata[:30]
+    view.copy()
+    view.write("test")
+
+
 @pytest.mark.parametrize(
     "shape,chunks",
     [
@@ -30,7 +65,6 @@ def test_dask_X_view():
         [(20,10),(1,1)],
         [(20,10),(1,1)],
     ]
-    
 )
 def test_assign(shape,chunks,idx):
     """Check if setting the given indices work"""
@@ -40,8 +74,8 @@ def test_assign(shape,chunks,idx):
     darr = da.from_array(np.ones(shape),chunks=chunks)
     adata = AnnData(darr)
     adata_copy = adata.copy()
-    adata.X = -1*da.from_array(np.ones(shape),chunks=chunks)
-    npt.assert_array_equal(adata.X,-1*np.ones(shape))
+    adata.X = -1 * da.from_array(np.ones(shape),chunks=chunks)
+    npt.assert_array_equal(adata.X,-1 * np.ones(shape))
     npt.assert_allclose(adata_copy.X,np.ones(shape))
 
     npt.assert_equal(adata.X[idx[0],idx[1]] , -1)
@@ -56,7 +90,7 @@ def test_assign(shape,chunks,idx):
         [(20,10),(1,1),(0,0)],
         [(20,10),(1,1),(4,3)],
     ]
-    
+
 )
 def test_idx_2d(shape,chunks,idx):
     """Check if setting the given indices work"""
@@ -66,7 +100,7 @@ def test_idx_2d(shape,chunks,idx):
     darr = da.from_array(np.ones(shape),chunks=chunks)
     adata = AnnData(darr)
     adata_copy = adata.copy()
-    adata.X = -1*da.from_array(np.ones(shape),chunks=chunks)
+    adata.X = -1 * da.from_array(np.ones(shape),chunks=chunks)
 
     npt.assert_equal(adata.X[idx[0],idx[1]] , -1)
     npt.assert_equal(adata_copy.X[idx[0],idx[1]] , 1)
