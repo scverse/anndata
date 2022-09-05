@@ -10,11 +10,11 @@ jobs:
       - uses: actions/stale@v5
         with:
           days-before-issue-stale: 60
-          days-before-close: 65535 # We don't want to close issues in this action
+          days-before-pr-stale: -1 # We don't want to mark PRs as stale
+          days-before-close: -1 # We don't want to close issues in this action
           stale-issue-label: stale
           exempt-issue-labels: pinned,bug,enhancement
           stale-issue-message: |
             This issue has been automatically marked as stale because it has not had recent activity.
-            It will be closed if no further activity occurs. Thank you for your contributions!
-          stale-pr-message: null # if not provided, will not mark PRs as stale
+            Please add a comment if you want to keep the issue open. Thank you for your contributions!
           debug-only: true # enable dry-run, remove when we know from the logs it's working.
