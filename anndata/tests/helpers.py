@@ -422,8 +422,9 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
 def assert_equal_awkarray(a, b, exact=False, elem_name=None):
     from anndata.compat import awkward as ak
 
-    assert a.type == b.type, "type mismatch"
-    assert ak.to_list(a) == ak.to_list(b)
+    if exact:
+        assert a.type == b.type, format_msg(elem_name)
+    assert ak.to_list(a) == ak.to_list(b), format_msg(elem_name)
 
 
 @assert_equal.register(Mapping)
