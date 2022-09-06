@@ -191,6 +191,8 @@ def test_view(key):
                 ak.Array(np.array([["a", "a"], ["a", "a"]])),
             ]
         ),
+        # categorical array
+        ak.operations.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
     ],
 )
 def test_awkward_io(tmp_path, array):
