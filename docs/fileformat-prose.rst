@@ -103,7 +103,75 @@ indptr <HDF5 dataset "indptr": shape (38411,), type "<i4">
 AwkwardArrays
 ~~~~~~~~~~~~~
 
-TODO
+Ragged arrays are supported in ``anndata`` through the `Awkward
+Array <https://awkward-array.org/>`__ library. For storage on disk, we
+break down the awkward array into it’s constituent arrays using
+```ak.to_buffers`` <https://awkward-array.readthedocs.io/en/latest/_auto/ak.to_buffers.html>`__,
+then writing these arrays using ``anndata``\ ’s methods.
+
+The container of arrays is stored in a group called ``"container"``
+
+.. code:: python
+
+   >>> import zarr
+   >>> z = zarr.open("airr.zarr", "r")
+   >>> awkward_group = z["obsm/airr"]
+   >>> awkward_group.tree()
+
+::
+
+   airr
+    └── container
+        ├── node0-offsets (17,) int64
+        ├── node2-offsets (40,) int64
+        ├── node3-data (117,) uint8
+        ├── node4-offsets (40,) int64
+        └── node5-data (117,) uint8
+
+The length of the array is saved to it’s own ``"length"`` attribute,
+while metadata for the array structure is serialized and saved to the
+“form” attribute.
+
+.. code:: python
+
+   >>> dict(awkward_group.attrs)
+
+.. code:: json
+
+   {'encoding-type': 'awkward-array',
+    'encoding-version': '0.1.0',
+    'form': '{"class": "ListOffsetArray", "offsets": "i64", "content": {"class": '
+            '"RecordArray", "contents": {"locus": {"class": "ListOffsetArray", '
+            '"offsets": "i64", "content": {"class": "NumpyArray", "primitive": '
+            '"uint8", "inner_shape": [], "has_identifier": false, "parameters": '
+            '{"__array__": "char"}, "form_key": "node3"}, "has_identifier": '
+            'false, "parameters": {"__array__": "string"}, "form_key": "node2"}, '
+            '"junction_aa": {"class": "ListOffsetArray", "offsets": "i64", '
+            '"content": {"class": "NumpyArray", "primitive": "uint8", '
+            '"inner_shape": [], "has_identifier": false, "parameters": '
+            '{"__array__": "char"}, "form_key": "node5"}, "has_identifier": '
+            'false, "parameters": {"__array__": "string"}, "form_key": "node4"}}, '
+            '"has_identifier": false, "parameters": {}, "form_key": "node1"}, '
+            '"has_identifier": false, "parameters": {}, "form_key": "node0"}',
+    'length': 16}
+
+These can be read back as awkward arrays using the
+```ak.from_buffers`` <https://awkward-array.readthedocs.io/en/latest/_auto/ak.from_buffers.html>`__
+function:
+
+.. code:: python
+
+   >>> import awkward._v2 as ak
+   >>> from anndata.experimental import read_elem
+   >>> ak.from_buffers(
+   ...     awkward_group.attrs["form"],
+   ...     awkward_group.attrs["length"],
+   ...     {k: read_elem(v) for k, v in awkward_group["container"].items()}
+   ... )
+
+::
+
+   <Array [[], [...], ..., [{locus: 'TRD', ...}]] type='16 * var * {locus: str...'>
 
 DataFrames
 ~~~~~~~~~~
