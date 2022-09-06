@@ -95,6 +95,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
             if isinstance(v, AwkArray):
+                # Shallow copy since awkward array buffers are immutable
                 d[k] = copy(v)
             else:
                 d[k] = v.copy()
