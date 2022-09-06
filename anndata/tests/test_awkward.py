@@ -203,7 +203,7 @@ def test_awkward_io(tmp_path, array):
 
     adata2 = read_h5ad(adata_path)
 
-    assert_equal(adata.uns["awk"], adata2.uns["awk"])
+    assert_equal(adata.uns["awk"], adata2.uns["awk"], exact=True)
 
 
 @pytest.mark.parametrize(
@@ -281,4 +281,4 @@ def test_concat_mixed_types(key, arrays, expected, join):
             anndata.concat(to_concat, axis=axis, join=join)
     else:
         result = anndata.concat(to_concat, axis=axis, join=join)
-        assert_equal(getattr(result, key)["test"], expected)
+        assert_equal(getattr(result, key)["test"], expected, exact=True)
