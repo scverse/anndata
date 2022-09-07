@@ -10,6 +10,9 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+import dask.array as da
+
+# TODO: is this import ok? check later
 from scipy import sparse
 
 import anndata as ad
@@ -292,7 +295,7 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
     write_elem(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
 
 
-# TODO: Is this the right behaviour for MaskedArrays?
+# TODO: Is this the right behavior for MaskedArrays?
 # It's in the `AnnData.concatenate` docstring, but should we keep it?
 @_REGISTRY.register_write(H5Group, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.ndarray, IOSpec("array", "0.2.0"))
@@ -305,6 +308,26 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
 def write_basic(f, k, elem, dataset_kwargs=MappingProxyType({})):
     """Write methods which underlying library handles natively."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
+
+
+@_REGISTRY.register_write(ZarrGroup, da.Array, IOSpec("dask-array", "0.2.0"))
+def write_zarr(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    g: ZarrGroup = f.create_group(k)
+    # TODO: Understand IOSpec stuff
+    da.Array.to_zarr(
+        elem,
+        g.store,
+        overwrite=True,
+        component=g.path + "/dask",
+        storage_options=dataset_kwargs,
+    )
+
+
+@_REGISTRY.register_read(ZarrGroup, IOSpec("dask-array", "0.2.0"))
+def read_zarr(elem):
+    # print(elem["dask"])
+    # print("here",elem.store,elem.info_items())
+    return da.from_zarr(elem.store, component=elem.path + "/dask")
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
