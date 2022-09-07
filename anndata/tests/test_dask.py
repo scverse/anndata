@@ -22,12 +22,15 @@ def test_dask_X_view():
     view = adata[:30]
     view.copy()
 
+
 @pytest.fixture(params=["h5ad", "zarr"])
 def diskfmt(request):
     return request.param
 
+
 def test_dask_write(tmp_path, diskfmt):
     import dask.array as da
+
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
@@ -40,6 +43,7 @@ def test_dask_write(tmp_path, diskfmt):
     write(adata, pth)
     result = read(pth)
     assert_equal(adata, result)
+
 
 @pytest.mark.parametrize(
     "shape,chunks",
@@ -61,6 +65,7 @@ def test_assign_X(shape, chunks):
     adata.X = -1 * da.from_array(np.ones(shape), chunks=chunks)
     assert_equal(asarray(adata.X), -1 * np.ones(shape))
     assert_equal(asarray(adata_copy.X), np.ones(shape))
+
 
 @pytest.mark.parametrize(
     "shape,chunks,idx",
