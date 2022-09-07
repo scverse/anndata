@@ -4,8 +4,8 @@ For tests using dask
 import anndata as ad
 import pandas as pd
 from anndata._core.anndata import AnnData
-import numpy.testing as npt
 import pytest
+from anndata.tests.helpers import assert_equal, asarray
 
 pytest.importorskip("dask.array")
 
@@ -22,43 +22,24 @@ def test_dask_X_view():
     view = adata[:30]
     view.copy()
 
+@pytest.fixture(params=["h5ad", "zarr"])
+def diskfmt(request):
+    return request.param
 
-# TODO: Appropriate path to write in testing.
-# TODO: Check written object
-# TODO: Check that this works with `zarr`
-
-
-def test_dask_write_h5ad():
+def test_dask_write(tmp_path, diskfmt):
     import dask.array as da
-
+    pth = tmp_path / f"test_write.{diskfmt}"
+    write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
+    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
     M, N = 50, 30
     adata = ad.AnnData(
         obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(M)]),
         var=pd.DataFrame(index=[f"gene{i:02}" for i in range(N)]),
     )
-    adata.X = da.ones((M, N))
-    view = adata[:30]
-    view.copy()
-    view.write_h5ad("test.h5ad")
-
-
-# TODO: Appropriate path to write in testing.
-# TODO: Check written object
-
-
-def test_dask_write():
-    import dask.array as da
-
-    M, N = 50, 30
-    adata = ad.AnnData(
-        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(M)]),
-        var=pd.DataFrame(index=[f"gene{i:02}" for i in range(N)]),
-    )
-    adata.X = da.ones((M, N))
-    view = adata[:30]
-    view.copy()
-    view.write("test.h5ad")
-
+    adata.X = da.random.randint((M, N))
+    write(adata, pth)
+    result = read(pth)
+    assert_equal(adata, result)
 
 @pytest.mark.parametrize(
     "shape,chunks",
@@ -69,8 +50,8 @@ def test_dask_write():
         [(20, 10), (1, 1)],
     ],
 )
-def test_assign(shape, chunks, idx):
-    """Check if setting the given indices work"""
+def test_assign_X(shape, chunks):
+    """Check if assignment works"""
     import dask.array as da
     import numpy as np
 
@@ -78,12 +59,8 @@ def test_assign(shape, chunks, idx):
     adata = AnnData(darr)
     adata_copy = adata.copy()
     adata.X = -1 * da.from_array(np.ones(shape), chunks=chunks)
-    npt.assert_array_equal(adata.X, -1 * np.ones(shape))
-    npt.assert_allclose(adata_copy.X, np.ones(shape))
-
-    npt.assert_equal(adata.X[idx[0], idx[1]], -1)
-    npt.assert_equal(adata_copy.X[idx[0], idx[1]], 1)
-
+    assert_equal(asarray(adata.X), -1 * np.ones(shape))
+    assert_equal(asarray(adata_copy.X), np.ones(shape))
 
 @pytest.mark.parametrize(
     "shape,chunks,idx",
@@ -104,5 +81,5 @@ def test_idx_2d(shape, chunks, idx):
     adata_copy = adata.copy()
     adata.X = -1 * da.from_array(np.ones(shape), chunks=chunks)
 
-    npt.assert_equal(adata.X[idx[0], idx[1]], -1)
-    npt.assert_equal(adata_copy.X[idx[0], idx[1]], 1)
+    assert_equal(adata.X[idx[0], idx[1]], -1)
+    assert_equal(adata_copy.X[idx[0], idx[1]], 1)

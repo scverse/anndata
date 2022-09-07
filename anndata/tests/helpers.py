@@ -82,13 +82,13 @@ def gen_adata(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
-        da.Array,
+        # da.Array,
     ),
     varm_types: "Collection[Type]" = (
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
-        da.Array,
+        # da.Array,
     ),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
@@ -132,14 +132,14 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
-        da=da.random.random((M, 50), chunks=(min(M, 50) // 5 + 1,) * 2),
+        # da=da.random.random((M, 50), chunks=(min(M, 50) // 5 + 1,) * 2),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
-        da=da.random.random((N, 50), chunks=(min(N, 50) // 5 + 1,) * 2),
+        # da=da.random.random((N, 50), chunks=(min(N, 50) // 5 + 1,) * 2),
     )
     # TODO: Allow variable size chunks somehow
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
