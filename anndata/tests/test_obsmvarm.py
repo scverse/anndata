@@ -1,6 +1,7 @@
 import joblib
 import numpy as np
 import pandas as pd
+import dask.array as da
 import pytest
 from scipy import sparse
 
@@ -100,4 +101,22 @@ def test_setting_sparse(adata):
     with pytest.raises(ValueError):
         adata.varm["b"] = bad_varm_sparse
 
+    assert h == joblib.hash(adata)
+
+
+def test_setting_daskarray(adata):
+    adata.obsm["a"] = da.ones((M, 10))
+    adata.varm["a"] = da.ones((N, 10))
+    assert da.all(adata.obsm["a"] == da.ones((M, 10)))
+    assert da.all(adata.varm["a"] == da.ones((N, 10)))
+
+    h = joblib.hash(adata)
+    with pytest.raises(ValueError):
+        adata.obsm["b"] = da.ones((int(M / 2), 10))
+    with pytest.raises(ValueError):
+        adata.obsm["b"] = da.ones((int(M * 2), 10))
+    with pytest.raises(ValueError):
+        adata.varm["b"] = da.ones((int(N / 2), 10))
+    with pytest.raises(ValueError):
+        adata.varm["b"] = da.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)
