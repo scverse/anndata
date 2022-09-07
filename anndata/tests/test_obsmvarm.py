@@ -109,6 +109,8 @@ def test_setting_daskarray(adata):
     adata.varm["a"] = da.ones((N, 10))
     assert da.all(adata.obsm["a"] == da.ones((M, 10)))
     assert da.all(adata.varm["a"] == da.ones((N, 10)))
+    assert type(adata.obsm["a"]) == da.Array
+    assert type(adata.varm["a"]) == da.Array
 
     h = joblib.hash(adata)
     with pytest.raises(ValueError):

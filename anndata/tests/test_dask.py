@@ -57,25 +57,21 @@ def test_dask_X_view():
     view.copy()
 
 
-@pytest.fixture
-def rw(adata, tmp_path, diskfmt):
+def test_dask_write(adata, tmp_path, diskfmt):
+    import dask.array as da
+
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
 
+    M, N = adata.X.shape
+    adata.obsm["a"] = da.ones((M, 10))
+    adata.varm["a"] = da.ones((N, 10))
+
     orig = adata
     write(orig, pth)
     curr = read(pth)
-    return curr, orig
-
-
-def test_dask_write(tmp_path, diskfmt, rw):
-    orig, curr = rw
     assert_equal(orig, curr)
-
-
-# TODO: this function can be made more detailed if there is something that doesn't match
-# For example dtype.
 
 
 def test_assign_X(adata):
@@ -83,7 +79,9 @@ def test_assign_X(adata):
     import dask.array as da
     import numpy as np
 
+    assert type(adata.X) == da.Array
     adata.X = adata.X * 1
+
     # This won't work since the setter converts the data as ndarray
     adata_copy = adata.copy()
 
