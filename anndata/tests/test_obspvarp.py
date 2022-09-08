@@ -4,7 +4,6 @@ import warnings
 import joblib
 import numpy as np
 import pandas as pd
-import dask.array as da
 import pytest
 from scipy import sparse
 
@@ -107,6 +106,8 @@ def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
 
 
 def test_setting_daskarray(adata):
+    import dask.array as da
+
     adata.obsp["a"] = da.ones((M, M))
     adata.varp["a"] = da.ones((N, N))
     assert da.all(adata.obsp["a"] == da.ones((M, M)))

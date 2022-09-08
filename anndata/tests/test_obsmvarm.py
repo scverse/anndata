@@ -1,7 +1,6 @@
 import joblib
 import numpy as np
 import pandas as pd
-import dask.array as da
 import pytest
 from scipy import sparse
 
@@ -105,6 +104,8 @@ def test_setting_sparse(adata):
 
 
 def test_setting_daskarray(adata):
+    import dask.array as da
+
     adata.obsm["a"] = da.ones((M, 10))
     adata.varm["a"] = da.ones((N, 10))
     assert da.all(adata.obsm["a"] == da.ones((M, 10)))
