@@ -63,11 +63,13 @@ uns_dict = dict(  # unstructured annotation
     ),
 )
 
+# TODO: Add this to the helpers.
 
-def _darr_from_list(lst):
+
+def _darr_from_arr(arr):
     import dask.array as da
 
-    return da.from_array(lst, chunks="auto")
+    return da.from_array(arr, chunks="auto")
 
 
 @pytest.fixture(params=[{}, dict(compression="gzip")])
@@ -123,7 +125,7 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_list])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_arr])
 def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     tmpdir = tempfile.TemporaryDirectory()
     tmpdirpth = Path(tmpdir.name)
