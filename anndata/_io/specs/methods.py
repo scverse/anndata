@@ -10,9 +10,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
-import dask.array as da
 
-# TODO: is this import ok? check later
 from scipy import sparse
 
 import anndata as ad
@@ -26,6 +24,7 @@ from anndata.compat import (
     OverloadedDict,
     ZarrArray,
     ZarrGroup,
+    DaskArray,
     _read_attr,
     _from_fixed_length_strings,
     _decode_structured_array,
@@ -305,29 +304,22 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic(f, k, elem, dataset_kwargs=MappingProxyType({})):
     """Write methods which underlying library handles natively."""
-    f.create_dataset(k, data=elem, **dataset_kwargs)
+    if isinstance(elem, DaskArray):
+        g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+        DaskArray.store(elem, g)
+    else:
+        f.create_dataset(k, data=elem, **dataset_kwargs)
 
 
-@_REGISTRY.register_write(ZarrGroup, da.Array, IOSpec("dask-array", "0.2.0"))
-def write_zarr(f, k, elem, dataset_kwargs=MappingProxyType({})):
-    g: ZarrGroup = f.create_group(k)
-    # TODO: Understand IOSpec stuff
-    da.Array.to_zarr(
-        elem,
-        g.store,
-        overwrite=True,
-        component=g.path + "/dask",
-        storage_options=dataset_kwargs,
-    )
-
-
-@_REGISTRY.register_read(ZarrGroup, IOSpec("dask-array", "0.2.0"))
-def read_zarr(elem):
-    # print(elem["dask"])
-    # print("here",elem.store,elem.info_items())
-    return da.from_zarr(elem.store, component=elem.path + "/dask")
+@_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
+def read_array(elem):
+    return elem[()]
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
