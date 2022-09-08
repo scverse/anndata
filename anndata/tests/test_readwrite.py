@@ -8,7 +8,6 @@ import warnings
 import h5py
 import numpy as np
 import pandas as pd
-import dask.array as da
 from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy.sparse import csr_matrix, csc_matrix
@@ -66,11 +65,9 @@ uns_dict = dict(  # unstructured annotation
 
 
 def _darr_from_list(lst):
+    import dask.array as da
+
     return da.from_array(lst, chunks="auto")
-
-
-# TODO: Find a way to configure chunk sizes
-# TODO: Discuss why this currently works
 
 
 @pytest.fixture(params=[{}, dict(compression="gzip")])

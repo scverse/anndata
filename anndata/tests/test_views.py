@@ -11,7 +11,6 @@ import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
 from anndata.utils import asarray
-
 from anndata.tests.helpers import (
     gen_adata,
     subset_func,
@@ -60,9 +59,15 @@ def adata_parameterized(request):
     return gen_adata(shape=(200, 300), X_type=request.param)
 
 
+def _darr_from_arr(arr):
+    import dask.array as da
+
+    return da.from_array(arr, chunks="auto")
+
+
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
-    ids=["np_array", "scipy_csr", "scipy_csc"],
+    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, _darr_from_arr],
+    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def matrix_type(request):
     return request.param
