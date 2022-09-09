@@ -994,7 +994,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def varp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
         """\
-        Pairwise annotation of observations,
+        Pairwise annotation of variables/features,
         a mutable mapping with array-like values.
 
         Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`

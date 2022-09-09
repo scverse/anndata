@@ -1038,6 +1038,71 @@ def test_concat_categories_from_mapping():
     )
 
 
+def test_concat_categories_maintain_dtype():
+    a = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat": pd.Categorical(list("aabcc")),
+                "cat_ordered": pd.Categorical(list("aabcc"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5)],
+        ),
+    )
+    b = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat": pd.Categorical(list("bccdd")),
+                "cat_ordered": pd.Categorical(list("bccdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+    c = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("bccdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+
+    result = concat({"a": a, "b": b, "c": c}, join="outer")
+
+    assert pd.api.types.is_categorical_dtype(
+        result.obs["cat"]
+    ), f"Was {result.obs['cat'].dtype}"
+    assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
+
+
+def test_concat_ordered_categoricals_retained():
+    a = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("aabcd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5)],
+        ),
+    )
+    b = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("abcdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+
+    c = concat([a, b])
+
+    assert pd.api.types.is_categorical_dtype(c.obs["cat_ordered"])
+    assert c.obs["cat_ordered"].cat.ordered
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])

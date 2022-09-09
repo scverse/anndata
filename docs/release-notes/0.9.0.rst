@@ -3,7 +3,8 @@
 
 .. rubric:: Features
 
-- Allow :meth:`~anndata.read_h5ad` and :meth:`~anndata.AnnData.write_h5ad` to read from /
+* Allow :meth:`~anndata.read_h5ad` and :meth:`~anndata.AnnData.write_h5ad` to read from /
   write to byte buffers :pr:`800` :smaller:`P Angerer`
+* Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
 
 .. rubric:: Bug fixes
