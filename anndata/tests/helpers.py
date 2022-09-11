@@ -5,7 +5,6 @@ from collections.abc import Mapping
 import warnings
 
 import h5py
-import dask.array as da
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
