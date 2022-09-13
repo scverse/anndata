@@ -3,7 +3,7 @@ from __future__ import annotations
 from os import PathLike
 from collections.abc import Mapping
 from functools import partial
-from typing import Union
+from typing import Union, Literal
 from types import MappingProxyType
 from warnings import warn
 
@@ -19,7 +19,6 @@ from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core import views
 from anndata.compat import (
-    Literal,
     OverloadedDict,
     ZarrArray,
     ZarrGroup,
