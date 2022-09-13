@@ -1,13 +1,13 @@
 from functools import singledispatch
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Union, Iterator
+from typing import Optional, Union, Iterator, Literal
 
 import h5py
 
 from . import anndata
 from .sparse_dataset import SparseDataset
-from ..compat import Literal, ZarrArray
+from ..compat import ZarrArray
 
 
 class AnnDataFileManager:
