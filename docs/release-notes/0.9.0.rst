@@ -6,3 +6,7 @@
 * Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
 
 .. rubric:: Bug fixes
+
+.. rubric:: Updates
+
+* Bump minimum python version to 3.8
