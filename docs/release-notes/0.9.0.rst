@@ -9,4 +9,4 @@
 
 .. rubric:: Updates
 
-* Bump minimum python version to 3.8
+* Bump minimum python version to 3.8 :pr:`820` :smaller:`ivirshup`
