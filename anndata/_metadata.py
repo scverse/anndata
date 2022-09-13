@@ -27,10 +27,7 @@ try:
     refresh_entry_points()
     __version__ = get_version(root="..", relative_to=__file__)
 except (ImportError, LookupError, FileNotFoundError):
-    try:
-        from importlib.metadata import metadata
-    except ImportError:
-        from importlib_metadata import metadata
+    from importlib.metadata import metadata
 
     meta = metadata(here.name)
     __version__ = meta["Version"]

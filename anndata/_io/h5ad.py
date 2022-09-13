@@ -3,7 +3,7 @@ from functools import partial
 from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Type, TypeVar, Union
+from typing import Callable, Type, TypeVar, Union, Literal
 from typing import Collection, Sequence, Mapping
 
 import h5py
@@ -18,7 +18,6 @@ from ..compat import (
     _from_fixed_length_strings,
     _decode_structured_array,
     _clean_uns,
-    Literal,
 )
 from .utils import (
     H5PY_V3,
