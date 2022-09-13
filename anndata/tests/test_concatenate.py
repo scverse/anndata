@@ -666,6 +666,44 @@ def test_concatenate_with_raw():
     assert adata_all.raw is None
 
 
+def test_concatenate_awkward():
+    import awkward._v2 as ak
+
+    a = ak.Array([[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
+    b = ak.Array(
+        [
+            [{"a": 4}, {"a": 5}],
+            [{"a": 6}],
+            [{"a": 7}],
+        ]
+    )
+
+    adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
+    adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
+
+    inner_result = ak.Array(
+        [
+            [{"a": 1}],
+            [{"a": 2}, {"a": 3}],
+            [{"a": 4}, {"a": 5}],
+            [{"a": 6}],
+            [{"a": 7}],
+        ]
+    )
+    outer_result = ak.Array(
+        [
+            [{"a": 1, "b": "foo"}],
+            [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+            [{"a": 4, "b": None}, {"a": 5, "b": None}],
+            [{"a": 6, "b": None}],
+            [{"a": 7, "b": None}],
+        ]
+    )
+
+    assert_equal(inner_result, concat([adata_a, adata_b], join="inner").obsm["awk"])
+    assert_equal(outer_result, concat([adata_a, adata_b], join="outer").obsm["awk"])
+
+
 def test_pairwise_concat(axis, array_type):
     dim_sizes = [[100, 200, 50], [50, 50, 50]]
     if axis:
