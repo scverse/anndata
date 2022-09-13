@@ -94,7 +94,7 @@ def test_assign_X(adata):
 # TODO: Views
 
 
-def test_assert_eq(adata):
+def test_assert_eq():
 
     import dask.array as da
     import numpy as np
@@ -107,3 +107,17 @@ def test_assert_eq(adata):
     c = np.ones(10, dtype="int32")
     d = np.ones(10, dtype="int64")
     assert_eq(c, d, check_dtype=False)
+
+
+def test_assert_equal_dask_arrays():
+
+    import dask.array as da
+
+    a = da.from_array([[1, 2, 3], [4, 5, 6]])
+    b = da.from_array([[1, 2, 3], [4, 5, 6]])
+
+    assert_equal(a, b)
+
+    c = da.ones(10, dtype="int32")
+    d = da.ones(10, dtype="int64")
+    assert_equal(c, d)
