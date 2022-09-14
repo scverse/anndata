@@ -10,6 +10,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
+from anndata.compat import DaskArray
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -37,7 +38,16 @@ var_dict = dict(vanno1=[3.1, 3.2, 3.3])
 # unstructured annotation
 uns_dict = dict(oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"])
 
-
+gen_adata_args = dict(
+    obsm_types=(
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+)
 subset_func2 = subset_func
 
 
@@ -341,7 +351,7 @@ def test_set_subset_varm(adata, subset_func):
 
 @pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_failed_delitem(attr):
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **gen_adata_args)
     view = adata[5:7, :][:, :5]
     adata_hash = joblib.hash(adata)
     view_hash = joblib.hash(view)
@@ -356,7 +366,7 @@ def test_view_failed_delitem(attr):
 
 @pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_delitem(attr):
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **gen_adata_args)
     getattr(adata, attr)["to_delete"] = np.ones((10, 10))
     # Shouldn’t be a subclass, should be an ndarray
     assert type(getattr(adata, attr)["to_delete"]) is np.ndarray
@@ -377,7 +387,7 @@ def test_view_delitem(attr):
     "attr", ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]
 )
 def test_view_delattr(attr, subset_func):
-    base = gen_adata((10, 10))
+    base = gen_adata((10, 10), **gen_adata_args)
     orig_hash = joblib.hash(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
     empty = ad.AnnData(obs=subset.obs[[]], var=subset.var[[]])
