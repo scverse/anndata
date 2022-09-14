@@ -53,6 +53,18 @@ except ImportError:
 
 try:
     from dask.array import Array as DaskArray
+    import collections.abc as cabc
+
+    # If this was on _core/index.py there would be a circular import.
+    # So registering the _subset function with the import here.
+
+    @_subset.register(DaskArray)
+    def _subset_dask(a: DaskArray, subset_idx):
+        if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+            subset_idx = np.ix_(*subset_idx)
+            return a.vindex[subset_idx]
+        return a[subset_idx]
+
 except ImportError:
 
     class DaskArray:

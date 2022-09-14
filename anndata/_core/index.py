@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
 
-
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
 Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
 

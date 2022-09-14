@@ -405,7 +405,7 @@ def test_view_delattr(attr, subset_func):
 )
 def test_view_setattr_machinery(attr, subset_func, subset_func2):
     # Tests that setting attributes on a view doesn't mess anything up too bad
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **gen_adata_args)
     view = adata[subset_func(adata.obs_names), subset_func2(adata.var_names)]
 
     actual = view.copy()
@@ -476,7 +476,7 @@ def test_view_of_view_modification():
 
 
 def test_double_index(subset_func, subset_func2):
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **gen_adata_args)
     obs_subset = subset_func(adata.obs_names)
     var_subset = subset_func2(adata.var_names)
     v1 = adata[obs_subset, var_subset]
