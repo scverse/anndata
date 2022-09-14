@@ -6,7 +6,17 @@ from collections.abc import Mapping, MutableSet
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Any, Callable, Collection, Iterable, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Iterable,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    Literal,
+)
 import typing
 from warnings import warn
 
@@ -17,7 +27,6 @@ from scipy import sparse
 from scipy.sparse import spmatrix
 
 from .anndata import AnnData
-from ..compat import Literal
 from ..utils import asarray
 
 T = TypeVar("T")
