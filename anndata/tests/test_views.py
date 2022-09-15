@@ -379,9 +379,13 @@ def test_view_delattr(attr, subset_func):
 
     delattr(subset, attr)
 
-    assert not subset.is_view
-    # Should now have same value as default
-    assert_equal(getattr(subset, attr), getattr(empty, attr))
+    if attr == "uns":
+        assert subset.is_view
+        assert_equal({}, getattr(empty, attr))
+    else:
+        assert not subset.is_view
+        # Should now have same value as default
+        assert_equal(getattr(subset, attr), getattr(empty, attr))
     assert orig_hash == joblib.hash(base)  # Original should not be modified
 
 

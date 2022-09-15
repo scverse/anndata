@@ -35,10 +35,10 @@ def write_csvs(
     if not dir_uns.is_dir():
         dir_uns.mkdir(parents=True, exist_ok=True)
     d = dict(
-        obs=adata._obs,
-        var=adata._var,
-        obsm=adata._obsm.to_df(),
-        varm=adata._varm.to_df(),
+        obs=adata.obs,
+        var=adata.var,
+        obsm=adata.obsm.to_df(),
+        varm=adata.varm.to_df(),
     )
     if not skip_data:
         d["X"] = pd.DataFrame(adata.X.toarray() if issparse(adata.X) else adata.X)

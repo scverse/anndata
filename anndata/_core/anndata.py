@@ -24,6 +24,7 @@ from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
 
 from anndata._warnings import ImplicitModificationWarning
+from .descriptors import DataFrameDescriptor, UnsDescriptor
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager, to_memory
@@ -38,8 +39,6 @@ from .aligned_mapping import (
 )
 from .views import (
     ArrayView,
-    DictView,
-    DataFrameView,
     as_view,
     _resolve_idxs,
 )
@@ -51,10 +50,7 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
-    _slice_uns_sparse_matrices,
     _move_adj_mtx,
-    _overloaded_uns,
-    OverloadedDict,
 )
 
 
@@ -261,6 +257,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         var={"var_names", "col_names", "index"},
     )
 
+    obs = DataFrameDescriptor(attr="obs")
+    var = DataFrameDescriptor(attr="var")
+    uns = UnsDescriptor()
+
     def __init__(
         self,
         X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame]] = None,
@@ -332,24 +332,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # the file is the same as of the reference object
         self.file = adata_ref.file
         # views on attributes of adata_ref
-        obs_sub = adata_ref.obs.iloc[oidx]
-        var_sub = adata_ref.var.iloc[vidx]
         self._obsm = adata_ref.obsm._view(self, (oidx,))
         self._varm = adata_ref.varm._view(self, (vidx,))
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
-        uns_new = _slice_uns_sparse_matrices(
-            copy(adata_ref._uns), self._oidx, adata_ref.n_obs
-        )
-        # fix categories
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
         # set attributes
-        self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
-        self._var = DataFrameView(var_sub, view_args=(self, "var"))
-        self._uns = uns_new
+        self._uns = adata_ref._uns
         self._n_obs = len(self.obs)
         self._n_vars = len(self.var)
 
@@ -849,19 +838,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 v.index = value
 
     @property
-    def obs(self) -> pd.DataFrame:
-        """One-dimensional annotation of observations (`pd.DataFrame`)."""
-        return self._obs
-
-    @obs.setter
-    def obs(self, value: pd.DataFrame):
-        self._set_dim_df(value, "obs")
-
-    @obs.deleter
-    def obs(self):
-        self.obs = pd.DataFrame(index=self.obs_names)
-
-    @property
     def obs_names(self) -> pd.Index:
         """Names of observations (alias for `.obs.index`)."""
         return self.obs.index
@@ -872,19 +848,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._set_dim_index(names, "obs")
 
     @property
-    def var(self) -> pd.DataFrame:
-        """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
-        return self._var
-
-    @var.setter
-    def var(self, value: pd.DataFrame):
-        self._set_dim_df(value, "var")
-
-    @var.deleter
-    def var(self):
-        self.var = pd.DataFrame(index=self.var_names)
-
-    @property
     def var_names(self) -> pd.Index:
         """Names of variables (alias for `.var.index`)."""
         return self.var.index
@@ -893,31 +856,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def var_names(self, names: Sequence[str]):
         names = self._prep_dim_index(names, "var")
         self._set_dim_index(names, "var")
-
-    @property
-    def uns(self) -> MutableMapping:
-        """Unstructured annotation (ordered dictionary)."""
-        uns = self._uns
-        if self.is_view:
-            uns = DictView(uns, view_args=(self, "_uns"))
-        uns = _overloaded_uns(self, uns)
-        return uns
-
-    @uns.setter
-    def uns(self, value: MutableMapping):
-        if not isinstance(value, MutableMapping):
-            raise ValueError(
-                "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
-            )
-        if isinstance(value, (OverloadedDict, DictView)):
-            value = value.copy()
-        if self.is_view:
-            self._init_as_actual(self.copy())
-        self._uns = value
-
-    @uns.deleter
-    def uns(self):
-        self.uns = OrderedDict()
 
     @property
     def obsm(self) -> Union[AxisArrays, AxisArraysView]:
@@ -1013,11 +951,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def obs_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obs`."""
-        return self._obs.keys().tolist()
+        return self.obs.keys().tolist()
 
     def var_keys(self) -> List[str]:
         """List keys of variable annotation :attr:`var`."""
-        return self._var.keys().tolist()
+        return self.var.keys().tolist()
 
     def obsm_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obsm`."""
@@ -1103,22 +1041,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             del X[obs, var]
             self._set_backed("X", X)
         if var == slice(None):
-            del self._obs.iloc[obs, :]
+            del self.obs.iloc[obs, :]
         if obs == slice(None):
-            del self._var.iloc[var, :]
+            del self.var.iloc[var, :]
 
     def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
-    def _remove_unused_categories(self, df_full, df_sub, uns):
+    def _remove_unused_categories(self, df_full, df_sub, uns, update_sub: bool = True):
         for k in df_full:
             if not is_categorical_dtype(df_full[k]):
                 continue
             all_categories = df_full[k].cat.categories
             with pd.option_context("mode.chained_assignment", None):
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
+                if update_sub:
+                    sub = df_sub[k] = df_sub[k].cat.remove_unused_categories()
+                else:
+                    sub = df_sub[k].cat.remove_unused_categories()
             # also correct the colors...
             color_key = f"{k}_colors"
             if color_key not in uns:
@@ -1131,7 +1072,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Reset colors
                 del uns[color_key]
             else:
-                idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
+                idx = np.where(np.in1d(all_categories, sub.cat.categories))[0]
                 uns[color_key] = np.array(color_vec)[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
@@ -1473,7 +1414,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
-            new["uns"] = deepcopy(self._uns)
+            # TODO(michalk8): find a better way than copy + deepcopy
+            new["uns"] = deepcopy(self.uns.copy())
         if "raw" in kwargs:
             new["raw"] = kwargs["raw"]
         elif self.raw is not None:
@@ -1838,15 +1780,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             key = {"obs", "var", "obsm", "varm"}
         else:
             key = {key}
-        if "obs" in key and len(self._obs) != self._n_obs:
+        if "obs" in key and len(self.obs) != self._n_obs:
             raise ValueError(
                 "Observations annot. `obs` must have number of rows of `X`"
-                f" ({self._n_obs}), but has {self._obs.shape[0]} rows."
+                f" ({self._n_obs}), but has {self.obs.shape[0]} rows."
             )
-        if "var" in key and len(self._var) != self._n_vars:
+        if "var" in key and len(self.var) != self._n_vars:
             raise ValueError(
                 "Variables annot. `var` must have number of columns of `X`"
-                f" ({self._n_vars}), but has {self._var.shape[0]} rows."
+                f" ({self._n_vars}), but has {self.var.shape[0]} rows."
             )
         if "obsm" in key:
             obsm = self._obsm
