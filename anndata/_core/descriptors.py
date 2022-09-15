@@ -25,7 +25,6 @@ class DataFrameDescriptor:
         self._attr = attr
 
     def __get__(self, adata: "AnnData", objtype: Optional[type] = None) -> pd.DataFrame:
-        print(objtype)
         if not adata.is_view:
             return adata._obs if self.attr == "obs" else adata._var
 
@@ -40,7 +39,7 @@ class DataFrameDescriptor:
             raise NotImplementedError(self.attr)
 
         # we don't care about uns at this point
-        adata._remove_unused_categories(container_full, container, {})
+        adata._remove_unused_categories(container_full, container, uns={})
         return DataFrameView(container, view_args=(adata, self.attr))
 
     def __set__(self, adata: "AnnData", value: pd.DataFrame) -> None:

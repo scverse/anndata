@@ -142,8 +142,10 @@ def test_slice_uns_sparse_deprecated():
     mtx = sparse.random(n, n, density=0.2, format="csr")
     adata.uns["sparse_mtx"] = mtx
 
+    v = adata[: n // 2]
     with pytest.warns(FutureWarning):
-        v = adata[: n // 2]
+        # uns is handled lazily
+        _ = v.uns
 
     assert_equal(adata.uns["sparse_mtx"], mtx)
     assert_equal(v.uns["sparse_mtx"], mtx[: n // 2, : n // 2])
