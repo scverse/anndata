@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 
 from ._overloaded_dict import _overloaded_uns, OverloadedDict
-from .._core.index import _subset
 
 
 class Empty:
@@ -53,18 +52,6 @@ except ImportError:
 
 try:
     from dask.array import Array as DaskArray
-    import collections.abc as cabc
-
-    # If this was on _core/index.py there would be a circular import.
-    # So registering the _subset function with the import here.
-
-    @_subset.register(DaskArray)
-    def _subset_dask(a: DaskArray, subset_idx):
-        if all(isinstance(x, cabc.Iterable) for x in subset_idx):
-            subset_idx = np.ix_(*subset_idx)
-            return a.vindex[subset_idx]
-        return a[subset_idx]
-
 except ImportError:
 
     class DaskArray:
@@ -244,6 +231,9 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
 
 def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs: int):
     """slice sparse spatrices of n_obs × n_obs in self.uns"""
+
+    from anndata._core.index import _subset
+
     if isinstance(oidx, slice) and len(range(*oidx.indices(orig_n_obs))) == orig_n_obs:
         return uns  # slice of entire dimension is a no-op
 

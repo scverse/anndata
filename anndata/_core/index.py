@@ -7,6 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
+from ..compat import DaskArray
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
 Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
@@ -120,15 +121,23 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
 @singledispatch
 def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
     # Select as combination of indexes, not coordinates
-    # Correcting for indexing behaviour of np.ndarray
+    # Correcting for indexing behavior of np.ndarray
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
 
 
+@_subset.register(DaskArray)
+def _subset_dask(a: DaskArray, subset_idx: Index):
+    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+        return a.vindex[subset_idx]
+    return a[subset_idx]
+
+
 @_subset.register(spmatrix)
 def _subset_spmatrix(a: spmatrix, subset_idx: Index):
-    # Correcting for indexing behaviour of sparse.spmatrix
+    # Correcting for indexing behavior of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = (subset_idx[0].reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
