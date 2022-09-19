@@ -340,9 +340,21 @@ def read_array_partial(d, items=None, indices=slice(None)):
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
 def write_vlen_string_array(f, k, elem, dataset_kwargs=MappingProxyType({})):
-    """Write methods which underlying library handles nativley."""
-    str_dtype = h5py.special_dtype(vlen=str)
-    f.create_dataset(k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs)
+    """Write methods which underlying library handles natively. Variable-length strings
+    incur some overhead in terms of file size, so we switch between fixed-length
+    and variable-length strings."""
+    dtype = h5py.string_dtype("utf-8")
+    if elem.size > 0:
+        length = None
+        if elem.dtype.char == "U":
+            lengths = np.char.str_len(elem)
+        else:
+            lengths = np.vectorize(len)(elem)
+        if lengths.min() >= 0.5 * lengths.max():
+            length = lengths.max().item()
+
+        dtype = h5py.string_dtype("utf-8", length)
+    f.create_dataset(k, data=elem.astype(dtype), dtype=dtype, **dataset_kwargs)
 
 
 @_REGISTRY.register_write(
