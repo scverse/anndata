@@ -303,15 +303,16 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic(f, k, elem, dataset_kwargs=MappingProxyType({})):
     """Write methods which underlying library handles natively."""
-    if isinstance(elem, DaskArray):
-        g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-        DaskArray.store(elem, g)
-    else:
-        f.create_dataset(k, data=elem, **dataset_kwargs)
+    f.create_dataset(k, data=elem, **dataset_kwargs)
+
+
+@_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
+def write_basic_dask(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    DaskArray.store(elem, g)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
