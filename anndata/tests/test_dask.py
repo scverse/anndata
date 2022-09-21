@@ -83,15 +83,11 @@ def test_assign_X(adata):
 
     adata.X = da.ones(adata.X.shape)
 
-    # This won't work since the setter converts the data as ndarray
     adata_copy = adata.copy()
 
     adata.X = -1 * da.ones(adata.X.shape)
-    assert_equal(asarray(adata.X), -1 * np.ones(adata.X.shape))
-    assert_equal(asarray(adata_copy.X), np.ones(adata.X.shape))
-
-
-# TODO: Views
+    assert_equal(adata.X, -1 * np.ones(adata.X.shape))
+    assert_equal(adata_copy.X, np.ones(adata.X.shape))
 
 
 def test_assert_equal_dask_arrays():
