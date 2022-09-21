@@ -30,13 +30,12 @@ def diskfmt(request):
 
 @pytest.fixture
 def adata(sizes):
-    import numpy as np
     import dask.array as da
 
     (M, N), chunks = sizes
     X = da.random.random((M, N), chunks=chunks)
     obs = pd.DataFrame(
-        dict(batch=np.array(["a", "b"])[np.random.randint(0, 2, M)]),
+        dict(batch=da.array(["a", "b"])[da.random.randint(0, 2, M)]),
         index=[f"cell{i:03d}" for i in range(M)],
     )
     var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
