@@ -17,7 +17,7 @@ import anndata as ad
 from anndata.utils import asarray
 from anndata.compat import _read_attr
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import gen_adata, assert_equal, darr_from_arr
 
 HERE = Path(__file__).parent
 
@@ -63,14 +63,6 @@ uns_dict = dict(  # unstructured annotation
     ),
 )
 
-# TODO: Add this to the helpers.
-
-
-def _darr_from_arr(arr):
-    import dask.array as da
-
-    return da.from_array(arr, chunks="auto")
-
 
 @pytest.fixture(params=[{}, dict(compression="gzip")])
 def dataset_kwargs(request):
@@ -104,7 +96,7 @@ diskfmt2 = diskfmt
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_arr])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, darr_from_arr])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
     pth1 = tmpdir / f"first.{diskfmt}"
@@ -125,7 +117,7 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_arr])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, darr_from_arr])
 def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     tmpdir = tempfile.TemporaryDirectory()
     tmpdirpth = Path(tmpdir.name)
@@ -162,7 +154,7 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
 
 
 @pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_arr])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, darr_from_arr])
 def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -190,7 +182,7 @@ def test_readwrite_zarr(typ, tmp_path):
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_arr])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, darr_from_arr])
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, dtype="int8")
@@ -223,7 +215,7 @@ def test_maintain_layers(rw):
     assert not np.any((orig.layers["sparse"] != curr.layers["sparse"]).toarray())
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_arr])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, darr_from_arr])
 def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -234,7 +226,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, _darr_from_arr])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, darr_from_arr])
 def test_readwrite_backed(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)

@@ -476,3 +476,9 @@ def assert_adata_equal(
             exact,
             elem_name=fmt_name(attr),
         )
+
+
+def darr_from_arr(arr):
+    import dask.array as da
+
+    return da.from_array(arr, chunks="auto")
