@@ -7,7 +7,7 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal, subset_func
+from anndata.tests.helpers import darr_from_arr, gen_adata, assert_equal, subset_func
 from anndata.utils import asarray
 
 subset_func2 = subset_func
@@ -47,8 +47,8 @@ def adata():
 
 
 @pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array],
-    ids=["scipy-csr", "scipy-csc", "np-array"],
+    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, darr_from_arr],
+    ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
 )
 def mtx_format(request):
     return request.param

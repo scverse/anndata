@@ -16,8 +16,7 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
-
-import dask.array as da
+from anndata.compat import DaskArray
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -116,6 +115,7 @@ def gen_adata(
     layers_types
         What kinds of containers should be in `.layers`?
     """
+    import dask.array as da
 
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
@@ -339,7 +339,7 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
-@assert_equal.register(da.Array)
+@assert_equal.register(DaskArray)
 def assert_equal_dask_array(a, b, exact=False, elem_name=None):
     from dask.array.utils import assert_eq
 
