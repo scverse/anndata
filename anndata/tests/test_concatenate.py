@@ -17,7 +17,7 @@ from anndata import AnnData, Raw, concat
 from anndata._core.index import _subset
 from anndata._core import merge
 from anndata.tests import helpers
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, darr_from_arr_dense, gen_adata
 from anndata.utils import asarray
 
 
@@ -61,8 +61,8 @@ def make_idx_tuple(idx, axis):
 
 
 @pytest.fixture(
-    params=[asarray, sparse.csr_matrix, sparse.csc_matrix],
-    ids=["np_array", "scipy_csr", "scipy_csc"],
+    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, darr_from_arr_dense],
+    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def array_type(request):
     return request.param

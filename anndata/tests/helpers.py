@@ -482,3 +482,12 @@ def darr_from_arr(arr):
     import dask.array as da
 
     return da.from_array(arr, chunks="auto")
+
+
+def darr_from_arr_dense(arr):
+    import dask.array as da
+    import scipy
+
+    if scipy.sparse.issparse(arr):
+        return da.from_array(asarray(arr.todense()), chunks="auto")
+    return da.from_array(asarray(arr), chunks="auto")
