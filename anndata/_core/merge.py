@@ -373,6 +373,10 @@ class Reindexer(object):
             shape[axis] = len(self.new_idx)
             return np.broadcast_to(fill_value, tuple(shape))
 
+        # TODO: Ask if this is a good practice
+        if hasattr(el, "compute"):
+            el = el.compute()
+
         indexer = self.old_idx.get_indexer(self.new_idx)
 
         # Indexes real fast, and does outer indexing
