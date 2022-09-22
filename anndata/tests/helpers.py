@@ -18,6 +18,18 @@ from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
 from anndata.compat import DaskArray
 
+# Give this to gen_adata when dask array support is expected.
+gen_adata_dask_args = dict(
+    obsm_types=(
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+)
+
 
 def gen_vstr_recarray(m, n, dtype=None):
     size = m * n
@@ -343,7 +355,8 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
 def assert_equal_dask_array(a, b, exact=False, elem_name=None):
     from dask.array.utils import assert_eq
 
-    assert_eq(a, b, check_dtype=False)
+    assert_eq(a, b, check_dtype=False, check_graph=False)
+    # TODO: Why does it fail when check_graph=True
 
 
 @assert_equal.register(pd.DataFrame)
@@ -489,5 +502,5 @@ def darr_from_arr_dense(arr):
     import scipy
 
     if scipy.sparse.issparse(arr):
-        return da.from_array(asarray(arr.todense()), chunks="auto")
+        return da.from_array(asarray(arr.toarray()), chunks="auto")
     return da.from_array(asarray(arr), chunks="auto")

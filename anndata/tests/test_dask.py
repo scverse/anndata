@@ -101,3 +101,14 @@ def test_assert_equal_dask_arrays():
     c = da.ones(10, dtype="int32")
     d = da.ones(10, dtype="int64")
     assert_equal(c, d)
+
+
+def test_assert_eq():
+    import dask.array as da
+    from scipy import sparse
+
+    m = 10
+    x = sparse.random(m, m, format="csr", density=0.1)
+    y = da.from_array(asarray(x.toarray()))
+    assert_equal(x, y)
+    assert_equal(y, x)

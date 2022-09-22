@@ -28,6 +28,7 @@ from scipy.sparse import spmatrix
 
 from .anndata import AnnData
 from ..utils import asarray
+from ..compat import DaskArray
 
 T = TypeVar("T")
 
@@ -105,6 +106,20 @@ def equal(a, b) -> bool:
 @equal.register(pd.DataFrame)
 def equal_dataframe(a, b) -> bool:
     return a.equals(b)
+
+
+@equal.register(DaskArray)
+def equal_dask_array(a, b) -> bool:
+
+    import dask.array as da
+
+    if isinstance(b, DaskArray):
+        return (
+            da.equal(a, b, where=da.logical_not(da.isnan(a) == da.isnan(b)))
+            .all()
+            .compute()
+        )
+    return equal(b, asarray(a))
 
 
 @equal.register(np.ndarray)

@@ -17,8 +17,14 @@ from anndata import AnnData, Raw, concat
 from anndata._core.index import _subset
 from anndata._core import merge
 from anndata.tests import helpers
-from anndata.tests.helpers import assert_equal, darr_from_arr_dense, gen_adata
+from anndata.tests.helpers import (
+    assert_equal,
+    darr_from_arr_dense,
+    gen_adata,
+    gen_adata_dask_args,
+)
 from anndata.utils import asarray
+from anndata.compat import DaskArray
 
 
 @singledispatch
@@ -27,10 +33,15 @@ def filled_like(a, fill_value=None):
 
 
 @filled_like.register(np.ndarray)
-def _filled_array(a, fill_value=None):
+def _filled_array_np(a, fill_value=None):
     if fill_value is None:
         fill_value = np.nan
     return np.broadcast_to(fill_value, a.shape)
+
+
+@filled_like.register(DaskArray)
+def _filled_array(a, fill_value=None):
+    return darr_from_arr_dense(_filled_array_np(a, fill_value))
 
 
 @filled_like.register(sparse.spmatrix)
@@ -60,11 +71,26 @@ def make_idx_tuple(idx, axis):
     return tuple(tup)
 
 
+# Will call func(sparse_matrix) so these types should be sparse compatible
+# See array_type_dense if only dense arrays are expected as input.
+@pytest.fixture(
+    params=[asarray, sparse.csr_matrix, sparse.csc_matrix],
+    ids=["np_array", "scipy_csr", "scipy_csc"],
+)
+def array_type(request):
+    return request.param
+
+
+# Give this array_type_dense instead of array_type if
+# the expected result is compared only content wise and
+# array types aren't expected to be the same
+# test_assert(arr1,arr2) = test_assert(arr1.todense(),arr2.todense())
+# test_assert(arr1,arr2) = test_assert(arr1.todense(),arr2.todense())
 @pytest.fixture(
     params=[asarray, sparse.csr_matrix, sparse.csc_matrix, darr_from_arr_dense],
     ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
-def array_type(request):
+def array_type_dense(request):
     return request.param
 
 
@@ -138,8 +164,10 @@ def test_concat_interface_errors():
         (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
     ],
 )
-def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_compat):
-    adata = gen_adata((100, 10), X_type=array_type)
+def test_concatenate_roundtrip(
+    join_type, array_type_dense, concat_func, backwards_compat
+):
+    adata = gen_adata((100, 10), X_type=array_type_dense, **gen_adata_dask_args)
 
     remaining = adata.obs_names
     subsets = []
@@ -234,10 +262,10 @@ def test_concatenate_dense():
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
 
 
-def test_concatenate_layers(array_type, join_type):
+def test_concatenate_layers(array_type_dense, join_type):
     adatas = []
     for _ in range(5):
-        a = array_type(sparse.random(100, 200, format="csr"))
+        a = array_type_dense(sparse.random(100, 200, format="csr"))
         adatas.append(AnnData(X=a, layers={"a": a}))
 
     merged = adatas[0].concatenate(adatas[1:], join=join_type)
@@ -392,10 +420,10 @@ def test_concat_annot_join(obsm_adatas, join_type):
     )
 
 
-def test_concatenate_layers_misaligned(array_type, join_type):
+def test_concatenate_layers_misaligned(array_type_dense, join_type):
     adatas = []
     for _ in range(5):
-        a = array_type(sparse.random(100, 200, format="csr"))
+        a = array_type_dense(sparse.random(100, 200, format="csr"))
         adata = AnnData(X=a, layers={"a": a})
         adatas.append(
             adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()
@@ -405,11 +433,11 @@ def test_concatenate_layers_misaligned(array_type, join_type):
     assert_equal(merged.X, merged.layers["a"])
 
 
-def test_concatenate_layers_outer(array_type, fill_val):
+def test_concatenate_layers_outer(array_type_dense, fill_val):
     # Testing that issue #368 is fixed
     a = AnnData(
         X=np.ones((10, 20)),
-        layers={"a": array_type(sparse.random(10, 20, format="csr"))},
+        layers={"a": array_type_dense(sparse.random(10, 20, format="csr"))},
     )
     b = AnnData(X=np.ones((10, 20)))
 
@@ -666,7 +694,7 @@ def test_concatenate_with_raw():
     assert adata_all.raw is None
 
 
-def test_pairwise_concat(axis, array_type):
+def test_pairwise_concat(axis, array_type_dense):
     dim_sizes = [[100, 200, 50], [50, 50, 50]]
     if axis:
         dim_sizes.reverse()
@@ -677,7 +705,7 @@ def test_pairwise_concat(axis, array_type):
     alt_attr = f"{alt}p"
 
     def gen_dim_array(m):
-        return array_type(sparse.random(m, m, format="csr", density=0.1))
+        return array_type_dense(sparse.random(m, m, format="csr", density=0.1))
 
     adatas = {
         k: AnnData(
@@ -748,6 +776,33 @@ def test_nan_merge(axis, join_type, array_type):
 
     orig_nonan = AnnData(
         **{"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr}}
+    )
+    result_nonan = concat([orig1, orig_nonan], axis=axis, merge="same")
+
+    assert len(getattr(result_nonan, mapping_attr)) == 0
+
+
+def test_nan_merge_dense(axis, join_type, array_type_dense):
+    # concat_dim = ("obs", "var")[axis]
+    alt_dim = ("var", "obs")[axis]
+    mapping_attr = f"{alt_dim}m"
+    adata_shape = (20, 10)
+
+    arr = array_type_dense(np.random.randn(adata_shape[1 - axis], 10))
+    arr_nan = arr.copy()
+
+    for _ in range(10):
+        arr_nan[np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])] = np.nan
+
+    _data = {"X": np.random.randn(*adata_shape), mapping_attr: {"arr": arr_nan}}
+    orig1 = AnnData(**_data)
+    orig2 = AnnData(**_data)
+    result = concat([orig1, orig2], axis=axis, merge="same")
+
+    assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
+
+    orig_nonan = AnnData(
+        **{"X": np.random.randn(*adata_shape), mapping_attr: {"arr": arr}}
     )
     result_nonan = concat([orig1, orig_nonan], axis=axis, merge="same")
 
@@ -978,9 +1033,9 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     )
 
 
-def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
-    lhs = gen_adata((10, 10), X_type=array_type)
-    rhs = gen_adata((10, 12), X_type=array_type)
+def test_transposed_concat(array_type_dense, axis, join_type, merge_strategy, fill_val):
+    lhs = gen_adata((10, 10), X_type=array_type_dense, **gen_adata_dask_args)
+    rhs = gen_adata((10, 12), X_type=array_type_dense, **gen_adata_dask_args)
 
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
     b = concat(
@@ -990,14 +1045,14 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
     assert_equal(a, b)
 
 
-def test_batch_key(axis):
+def test_batch_key(axis, array_type_dense):
     """Test that concat only adds a label if the key is provided"""
 
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
 
-    lhs = gen_adata((10, 10))
-    rhs = gen_adata((10, 12))
+    lhs = gen_adata((10, 10), **gen_adata_dask_args)
+    rhs = gen_adata((10, 12), **gen_adata_dask_args)
 
     # There is probably a prettier way to do this
     annot = get_annot(concat([lhs, rhs], axis=axis))
@@ -1188,10 +1243,10 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
                     )
 
 
-@pytest.mark.parametrize("elem", ["sparse", "array", "df"])
+@pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
 def test_concat_outer_aligned_mapping(elem):
-    a = gen_adata((5, 5))
-    b = gen_adata((3, 5))
+    a = gen_adata((5, 5), **gen_adata_dask_args)
+    b = gen_adata((3, 5), **gen_adata_dask_args)
     del b.obsm[elem]
 
     concated = concat({"a": a, "b": b}, join="outer", label="group")
