@@ -114,11 +114,7 @@ def equal_dask_array(a, b) -> bool:
     import dask.array as da
 
     if isinstance(b, DaskArray):
-        return (
-            da.equal(a, b, where=da.logical_not(da.isnan(a) == da.isnan(b)))
-            .all()
-            .compute()
-        )
+        return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all().compute()
     return equal(b, asarray(a))
 
 
