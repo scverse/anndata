@@ -64,17 +64,22 @@ def test_dask_write(adata, tmp_path, diskfmt):
     read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
 
     M, N = adata.X.shape
-    adata.obsm["a"] = da.ones((M, 10))
-    adata.varm["a"] = da.ones((N, 10))
-
+    adata.obsm["a"] = da.random.random((M, 10))
+    adata.obsm["b"] = da.random.random((M, 10))
+    adata.varm["a"] = da.random.random((N, 10))
+    
     orig = adata
     write(orig, pth)
     curr = read(pth)
-    assert da.equal(curr.varm["a"], orig.varm["a"]).all()
-    assert da.equal(curr.obsm["a"], orig.obsm["a"]).all()
-    # assert_equal(asarray(orig), asarray(curr)) # find way to compare
+    
+    with pytest.raises(Exception):
+        assert_equal(curr.obsm["a"], curr.obsm["b"])
 
+    assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(curr.obsm["a"], orig.obsm["a"])
 
+    #assert_equal(asarray(orig), asarray(curr)) # TODO: find way to compare
+    
 def test_assign_X(adata):
     """Check if assignment works"""
     import dask.array as da
