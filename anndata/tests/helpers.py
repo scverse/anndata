@@ -353,9 +353,13 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(DaskArray)
 def assert_equal_dask_array(a, b, exact=False, elem_name=None):
+
     from dask.array.utils import assert_eq
 
-    assert_eq(a, b, check_dtype=False, check_graph=False)
+    if exact:
+        assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
+    else:
+        assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
     # TODO: Why does it fail when check_graph=True
 
 
