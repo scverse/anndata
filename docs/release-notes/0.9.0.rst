@@ -4,6 +4,7 @@
 .. rubric:: Features
 
 * Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
+* `obsm`, `varm` and `uns` can now hold `AwkwardArrays <https://awkward-array.org/quickstart.html>`__ :pr:`647` :smaller:`giovp, grst, ivirshup`
 
 .. rubric:: Bug fixes
 
