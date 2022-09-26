@@ -52,6 +52,10 @@ import pandas as pd
             ),
             (4, 2),
         ],
+        # Array of string types
+        [ak.Array(["a", "b", "c"]), (3,)],
+        [ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), (3, None)],
+        [ak.to_regular(ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), 1), (3, 2)],
     ],
 )
 def test_dim_len(array, shape):
