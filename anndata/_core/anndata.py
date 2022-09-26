@@ -468,7 +468,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 #       as in readwrite.read_10x_h5
                 if X.dtype != np.dtype(dtype):
                     X = X.astype(dtype)
-            elif isinstance(X, ZarrArray):
+            elif isinstance(X, (ZarrArray, DaskArray)):
                 X = X.astype(dtype)
             else:  # is np.ndarray or a subclass, convert to true np.ndarray
                 X = np.array(X, dtype, copy=False)
