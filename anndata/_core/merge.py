@@ -110,11 +110,10 @@ def equal_dataframe(a, b) -> bool:
 
 @equal.register(DaskArray)
 def equal_dask_array(a, b) -> bool:
-
     import dask.array as da
 
     if isinstance(b, DaskArray):
-        return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all().compute()
+        return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
     return equal(b, asarray(a))
 
 
