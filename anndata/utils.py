@@ -88,6 +88,12 @@ try:
             return layout.nplike.empty(1)
 
         elif layout.is_ListType and depth == lateral_context["axis"]:
+            if layout.parameter("__array__") in ("string", "bytestring"):
+                # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
+                # which results in an extra hierarchy-level that shouldn't show up in dim_len
+                # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
+                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+
             if layout.is_RegularType:
                 # if it's a regular list, you want the size
                 lateral_context["out"] = layout.size
