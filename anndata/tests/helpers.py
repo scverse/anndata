@@ -513,10 +513,9 @@ def darr_from_arr(arr):
 # We wouldn't want all inputs to be called asarray
 # since we already assume they should have the same sematic.
 def darr_from_arr_dense(arr):
-    """For cases when we take scipy.sparse as input
-    and don't care if it gets turned into a dense array.
-    (e.g., comparing only the contents and not the type)
-    """
+    # For cases when we take scipy.sparse as input
+    # and don't care if it gets turned into a dense array.
+    # (e.g., comparing only the contents and not the type)
     import dask.array as da
 
     return da.from_array(asarray(arr), chunks="auto")
