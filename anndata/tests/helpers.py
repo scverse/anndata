@@ -495,16 +495,28 @@ def assert_adata_equal(
         )
 
 
+# Dev. Note: Dask assumes behavior of numpy and sparse are identical.
+# Technically there shouldn't be a difference using this
+# or darr_from_arr_dense function, but there is in some cases.
+# See darr_from_arr_dense these cases.
 def darr_from_arr(arr):
     import dask.array as da
 
     return da.from_array(arr, chunks="auto")
 
 
+# Some tests use scipy.sparse matrices to create their
+# data. Unfortunately da.from_array doesn't work
+# properly if this is the case. To be sure that
+# dask from_array works as intended with the types
+# we use in AnnData this function can be helpful.
+# We wouldn't want all inputs to be called asarray
+# since we already assume they should have the same sematic.
 def darr_from_arr_dense(arr):
+    """For cases when we take scipy.sparse as input
+    and don't care if it gets turned into a dense array.
+    (e.g., comparing only the contents and not the type)
+    """
     import dask.array as da
-    import scipy
 
-    if scipy.sparse.issparse(arr):
-        return da.from_array(asarray(arr.toarray()), chunks="auto")
     return da.from_array(asarray(arr), chunks="auto")
