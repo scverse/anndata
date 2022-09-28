@@ -58,7 +58,16 @@ except ImportError:
     class DaskArray:
         @staticmethod
         def __repr__():
-            return "mock dask.array.core.Array"
+            return "mock dask.array.core.Array" 
+
+try:
+    from dask.dataframe import DataFrame as DaskDataFrame 
+except ImportError:
+
+    class DaskDataFrame:
+        @staticmethod
+        def __repr__():
+            return "mock dask.dataframe.core.DataFrame"
 
 
 @singledispatch
