@@ -46,6 +46,7 @@ from .views import (
 from .sparse_dataset import SparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous
+from ..html_repr import make_single_column_table, make_single_row_table, svg_anndata
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
@@ -588,6 +589,34 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return "View of " + self._gen_repr(self.n_obs, self.n_vars)
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
+
+    def _repr_html_(self) -> str:
+        overview = []
+
+        if self.is_view:
+            overview.append("is a view")
+
+        overview.append(f"n_obs: {self.n_obs}")
+        overview.append(f"n_vars: {self._n_vars}")
+        overview.append(svg_anndata(self.n_obs, self.n_vars))
+
+        cols = [make_single_column_table("AnnData object", overview)]
+
+        for attr in [
+            "obs",
+            "var",
+            "uns",
+            "obsm",
+            "varm",
+            "layers",
+            "obsp",
+            "varp",
+        ]:
+            keys = getattr(self, attr).keys()
+            if len(keys):
+                cols.append(make_single_column_table(attr, keys))
+
+        return make_single_row_table(cols)
 
     def __eq__(self, other):
         """Equality testing"""
