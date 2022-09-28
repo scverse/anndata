@@ -25,14 +25,15 @@ def test_dask_X_view():
     view = adata[:30]
     view.copy()
 
+
 def test_assert_equal_dask_dataframes():
     import dask.dataframe as dd
 
-    data_1 = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
-    data_2 = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
-    
+    data_1 = {"col1": [1, 2, 3, 4], "col2": [5, 6, 7, 8]}
+    data_2 = {"col1": [1, 2, 3, 4], "col2": [5, 6, 7, 8]}
+
     a = dd.from_pandas(pd.DataFrame(data=data_1), npartitions=1)
-    
+
     b = dd.from_pandas(pd.DataFrame(data=data_2), npartitions=1)
 
     assert_equal(a, b)
