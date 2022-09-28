@@ -16,6 +16,7 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
+from anndata.compat import DaskDataFrame
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -321,6 +322,15 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
 
+@assert_equal.register(DaskDataFrame)
+def assert_equal_dask_dataframe(a,b, exact=False, elem_name=None):
+
+    from dask.dataframe.utils import assert_eq
+
+    if exact:
+        assert_eq(a, b, check_dtype=True)
+    else:
+        assert_eq(a,b, check_dtype=False)
 
 @assert_equal.register(pd.DataFrame)
 def are_equal_dataframe(a, b, exact=False, elem_name=None):
