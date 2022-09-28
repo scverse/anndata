@@ -682,6 +682,59 @@ def read_nullable_boolean(elem):
         return pd.array(read_elem(elem["values"]))
 
 
+#############
+# datetimes #
+#############
+
+
+@_REGISTRY.register_write(
+    ZarrGroup, (views.ArrayView, "M"), IOSpec("datetime-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, (views.ArrayView, "M"), IOSpec("datetime-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (np.ndarray, "M"), IOSpec("datetime-array", "0.1.0")
+)
+@_REGISTRY.register_write(H5Group, (np.ndarray, "M"), IOSpec("datetime-array", "0.1.0"))
+def write_datetime_array(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    unit, step = np.datetime_data(elem.dtype)
+
+    if step != 1:
+        raise ValueError(
+            f"Datetime had non-unit step '{step}', which is currently unsupported."
+        )
+
+    dset = f.create_dataset(k, data=elem.view("uint64"), **dataset_kwargs)
+    dset.attrs["unit"] = unit
+
+
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.DatetimeArray, IOSpec("datetime-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.DatetimeArray, IOSpec("datetime-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.DatetimeIndex, IOSpec("datetime-array", "0.1.0")
+)
+@_REGISTRY.register_write(H5Group, pd.DatetimeIndex, IOSpec("datetime-array", "0.1.0"))
+def write_datetime_array_from_pandas(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    if elem.tz is not None:
+        raise NotImplementedError(
+            "Datetime had timezone specified, which is currently not supported."
+        )
+
+    write_elem(f, k, elem.to_numpy(), dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_read(ZarrArray, IOSpec("datetime-array", "0.1.0"))
+@_REGISTRY.register_read(H5Array, IOSpec("datetime-array", "0.1.0"))
+def read_np_datetime_array(elem):
+    unit = _read_attr(elem.attrs, "unit")
+    return elem[()].view(f"datetime64[{unit}]")
+
+
 ###########
 # Scalars #
 ###########

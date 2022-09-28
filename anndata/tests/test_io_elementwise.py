@@ -72,6 +72,17 @@ def store(request):
             "nullable-boolean",
         ),
         (pd.array([True, False, True, True]), "nullable-boolean"),
+        (pd.array(pd.date_range("2018-01-01", periods=3, freq="H")), "datetime-array"),
+        (
+            pd.Categorical(
+                np.repeat(pd.date_range("2018-01-01", periods=3, freq="Y"), 3)
+            ),
+            "categorical",
+        ),
+        (
+            pd.date_range("2000-01-01", periods=5, freq="ms").to_numpy(),
+            "datetime-array",
+        ),
         # (bytes, b"some bytes", "bytes"), # Does not work for zarr
         # TODO consider how specific encodings should be. Should we be fully describing the written type?
         # Currently the info we add is: "what you wouldn't be able to figure out yourself"
@@ -110,3 +121,14 @@ def test_write_to_root(store):
 
     assert "anndata" == _read_attr(store.attrs, "encoding-type")
     assert_equal(from_disk, adata)
+
+
+def test_write_none_clears(store):
+    write_elem(store, "key", np.ones(3))
+
+    assert "key" in store
+
+    write_elem(store, "key", None)
+
+    # Would also be fine if read_elem(store["key"]) returned None
+    assert "key" not in store

@@ -53,19 +53,27 @@ class IORegistry(object):
 
         return _register
 
-    def get_writer(self, dest_type, typ, modifiers=frozenset()):
+    def get_writer(self, dest, elem, modifiers=frozenset()):
         import h5py
+
+        typ = type(elem)
+        dest_type = type(dest)
 
         if dest_type is h5py.File:
             dest_type = h5py.Group
         modifiers = frozenset(modifiers)
 
-        if (dest_type, typ, modifiers) not in self.write:
+        if (
+            hasattr(elem, "dtype")
+            and (dest_type, (typ, elem.dtype.kind), modifiers) in _REGISTRY.write
+        ):
+            return self.write[(dest_type, (typ, elem.dtype.kind), modifiers)]
+        elif (dest_type, typ, modifiers) in _REGISTRY.write:
+            return self.write[(dest_type, typ, modifiers)]
+        else:
             raise TypeError(
                 f"No method has been defined for writing {typ} elements to {dest_type}"
             )
-
-        return self.write[(dest_type, typ, modifiers)]
 
     def has_writer(self, dest_type, typ, modifiers):
         modifiers = frozenset(modifiers)
@@ -156,23 +164,15 @@ def write_elem(
     elem
         The element to write as k to f.
     """
-    dest_type = type(f)
-    if elem is None:
-        return
-    t = type(elem)
     if k == "/":
         f.clear()
     elif k in f:
         del f[k]
-    if (
-        hasattr(elem, "dtype")
-        and (dest_type, (t, elem.dtype.kind), modifiers) in _REGISTRY.write
-    ):
-        _REGISTRY.get_writer(dest_type, (t, elem.dtype.kind), modifiers)(
-            f, k, elem, *args, **kwargs
-        )
-    else:
-        _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
+
+    if elem is None:
+        return
+
+    _REGISTRY.get_writer(f, elem, modifiers)(f, k, elem, *args, **kwargs)
 
 
 def read_elem(
