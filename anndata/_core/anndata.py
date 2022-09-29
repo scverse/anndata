@@ -1480,6 +1480,53 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
+    def _to_memory_copy(self):
+        """Creates a new adata that has the computed results of the previous adata.
+        This is for the unbacked case
+        """
+        already_in_mem = False
+        new = {}
+
+        # TODO: How to to_mem uns?
+        # TODO: If there is a case that the object
+        # can both include lazy attributes and be in backed mode
+        # support that case
+
+        # TODO: uns
+        # unstructured annotations
+        # self.uns = uns or OrderedDict()
+
+        # TODO: check if its in memory already
+        if self.obsm is not None:
+            new["obsm"] = AxisArrays(
+                self, 0, vals={k: to_memory(v) for k, v in self.obsm.items()}
+            )
+        if self.varm is not None:
+            new["varm"] = AxisArrays(
+                self, 1, vals={k: to_memory(v) for k, v in self.varm.items()}
+            )
+        if self.obsp is not None:
+            new["obsp"] = PairwiseArrays(
+                self, 0, vals={k: to_memory(v) for k, v in self.obsp.items()}
+            )
+        if self.varp is not None:
+            new["varp"] = PairwiseArrays(
+                self, 1, vals={k: to_memory(v) for k, v in self.varp.items()}
+            )
+
+        for key in ["X", "obs", "var", "layers", "uns", "raw"]:
+            elem = getattr(self, key)
+            if elem is not None:
+                prev_type = type(elem)
+                elem = to_memory(elem)
+                if not isinstance(elem, prev_type):
+                    # TODO Delete this if already_in_mem is not used
+                    already_in_mem = False
+                new[key] = elem
+        if self._has_X():
+            new["dtype"] = new["X"].dtype
+        return AnnData(**new), already_in_mem
+
     def to_memory(self) -> "AnnData":
         """Load backed AnnData object into memory.
 
@@ -1493,7 +1540,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         if not self.isbacked:
-            raise ValueError("Object is already in memory.")
+            adata, already_in_mem = self._to_memory_copy()
+            if already_in_mem:
+                raise ValueError("Object is already in memory.")
         else:
             elems = {"X": to_memory(self.X)}
             if self.raw is not None:

@@ -93,6 +93,44 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
+def test_dask_to_mem(adata, tmp_path, diskfmt):
+    import dask.array as da
+    import numpy as np
+
+    pth = tmp_path / f"test_write.{diskfmt}"
+    write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
+    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+
+    M, N = adata.X.shape
+    adata.obsm["a"] = da.random.random((M, 10))
+    adata.obsm["b"] = da.random.random((M, 10))
+    adata.varm["a"] = da.random.random((N, 10))
+
+    orig = adata
+    write(orig, pth)
+    curr = read(pth)
+
+    mem = orig.to_memory()
+
+    with pytest.raises(Exception):
+        assert_equal(curr.obsm["a"], curr.obsm["b"])
+
+    assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(curr.obsm["a"], orig.obsm["a"])
+    assert_equal(mem.obsm["a"], orig.obsm["a"])
+    assert_equal(mem.varm["a"], orig.varm["a"])
+
+    assert isinstance(curr.X, np.ndarray)
+    assert isinstance(curr.obsm["a"], np.ndarray)
+    assert isinstance(curr.varm["a"], np.ndarray)
+    assert isinstance(mem.X, np.ndarray)
+    assert isinstance(mem.obsm["a"], np.ndarray)
+    assert isinstance(mem.varm["a"], np.ndarray)
+    assert isinstance(orig.X, DaskArray)
+    assert isinstance(orig.obsm["a"], DaskArray)
+    assert isinstance(orig.varm["a"], DaskArray)
+
+
 def test_dask_copy(adata):
     import dask.array as da
 

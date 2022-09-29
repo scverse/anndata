@@ -2,12 +2,13 @@ from functools import singledispatch
 from os import PathLike
 from pathlib import Path
 from typing import Optional, Union, Iterator, Literal
+from anndata._core.aligned_mapping import AxisArrays
 
 import h5py
 
 from . import anndata
 from .sparse_dataset import SparseDataset
-from ..compat import ZarrArray
+from ..compat import ZarrArray, DaskArray
 
 
 class AnnDataFileManager:
@@ -109,3 +110,8 @@ def _(x):
 @to_memory.register(SparseDataset)
 def _(x: SparseDataset):
     return x.to_memory()
+
+
+@to_memory.register(DaskArray)
+def _(x: DaskArray):
+    return x.compute()
