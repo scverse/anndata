@@ -359,8 +359,8 @@ def assert_equal_dask_array(a, b, exact=False, elem_name=None):
     if exact:
         assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
     else:
+        # TODO: Why does it fail when check_graph=True
         assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
-    # TODO: Why does it fail when check_graph=True
 
 
 @assert_equal.register(pd.DataFrame)
@@ -511,7 +511,7 @@ def darr_from_arr(arr):
 # dask from_array works as intended with the types
 # we use in AnnData this function can be helpful.
 # We wouldn't want all inputs to be called asarray
-# since we already assume they should have the same sematic.
+# since we already assume they should have the same semantic.
 def darr_from_arr_dense(arr):
     # For cases when we take scipy.sparse as input
     # and don't care if it gets turned into a dense array.
