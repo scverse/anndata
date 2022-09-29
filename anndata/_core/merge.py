@@ -112,13 +112,17 @@ def equal_dataframe(a, b) -> bool:
 @equal.register(DaskArray)
 def equal_dask_array(a, b) -> bool:
     import dask.array as da
+    from dask.base import tokenize
 
-    # TODO: Add potential performance warning
-    # TODO: In which cases do we test the else case?
-    # Why don't we use these dispatches in assert_array_equal anyways?
-    if not isinstance(b, DaskArray):
-        raise NotImplementedError()
-        # TODO: is it better to convert b to DaskArray here?
+    if a is b:
+        return True
+    if a.shape != b.shape:
+        return False
+    if isinstance(b, DaskArray):
+        if tokenize(a) == tokenize(b):
+            return True
+    # TODO: If we are going to give a performance warning what should it
+    # we say or recommend in the message?
     return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
