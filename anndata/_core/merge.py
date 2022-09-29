@@ -117,7 +117,7 @@ def equal_dask_array(a, b) -> bool:
     # TODO: In which cases do we test the else case?
     # Why don't we use these dispatches in assert_array_equal anyways?
     if not isinstance(b, DaskArray):
-        NotImplementedError()
+        raise NotImplementedError()
         # TODO: is it better to convert b to DaskArray here?
     return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
