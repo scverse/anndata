@@ -393,10 +393,9 @@ class Reindexer(object):
 
         indexer = self.old_idx.get_indexer(self.new_idx)
 
-        # Indexes real fast, and does outer indexing
-        # TODO this
-
-        return _subset(el, make_slice(indexer, axis, len(shape)))
+        sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
+        sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+        return sub_el
 
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
