@@ -420,10 +420,23 @@ def test_concat_annot_join(obsm_adatas, join_type):
     )
 
 
-def test_concatenate_layers_misaligned(array_type_dense, join_type):
+def test_concatenate_layers_misaligned(array_type, join_type):
     adatas = []
     for _ in range(5):
-        a = array_type_dense(sparse.random(100, 200, format="csr"))
+        a = array_type(sparse.random(100, 200, format="csr"))
+        adata = AnnData(X=a, layers={"a": a})
+        adatas.append(
+            adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()
+        )
+
+    merged = adatas[0].concatenate(adatas[1:], join=join_type)
+    assert_equal(merged.X, merged.layers["a"])
+
+
+def test_concatenate_layers_misaligned_dense(array_type_dense, join_type):
+    adatas = []
+    for _ in range(5):
+        a = array_type_dense(np.random.rand(100, 200))
         adata = AnnData(X=a, layers={"a": a})
         adatas.append(
             adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()

@@ -29,6 +29,7 @@ from scipy.sparse import spmatrix
 from .anndata import AnnData
 from ..utils import asarray
 from ..compat import DaskArray
+from .index import _subset, make_slice
 
 T = TypeVar("T")
 
@@ -112,9 +113,13 @@ def equal_dataframe(a, b) -> bool:
 def equal_dask_array(a, b) -> bool:
     import dask.array as da
 
-    if isinstance(b, DaskArray):
-        return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
-    return equal(b, asarray(a))
+    # TODO: Add potential performance warning
+    # TODO: In which cases do we test the else case?
+    # Why don't we use these dispatches in assert_array_equal anyways?
+    if not isinstance(b, DaskArray):
+        NotImplementedError()
+        # TODO: is it better to convert b to DaskArray here?
+    return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
 @equal.register(np.ndarray)
@@ -340,7 +345,6 @@ class Reindexer(object):
     def __init__(self, old_idx, new_idx):
         self.old_idx = old_idx
         self.new_idx = new_idx
-
         self.no_change = new_idx.equals(old_idx)
 
         new_pos = new_idx.get_indexer(old_idx)
@@ -366,6 +370,8 @@ class Reindexer(object):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, DaskArray):
+            return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -373,6 +379,24 @@ class Reindexer(object):
         if fill_value is None:
             fill_value = np.NaN
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
+
+    def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
+        import dask.array as da
+
+        if fill_value is None:
+            fill_value = default_fill_value([el])
+        shape = list(el.shape)
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape[axis] = len(self.new_idx)
+            return da.broadcast_to(fill_value, tuple(shape))
+
+        indexer = self.old_idx.get_indexer(self.new_idx)
+
+        # Indexes real fast, and does outer indexing
+        # TODO this
+
+        return _subset(el, make_slice(indexer, axis, len(shape)))
 
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
@@ -382,10 +406,6 @@ class Reindexer(object):
             shape = list(el.shape)
             shape[axis] = len(self.new_idx)
             return np.broadcast_to(fill_value, tuple(shape))
-
-        # TODO: Ask if this is a good practice
-        if hasattr(el, "compute"):
-            el = el.compute()
 
         indexer = self.old_idx.get_indexer(self.new_idx)
 
