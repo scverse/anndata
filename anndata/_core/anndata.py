@@ -339,7 +339,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
+        # Special case for old neighbors, backwards compat. Remove in anndata 0.8.
         uns_new = _slice_uns_sparse_matrices(
             copy(adata_ref._uns), self._oidx, adata_ref.n_obs
         )
