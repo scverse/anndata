@@ -437,7 +437,7 @@ def test_concatenate_layers_misaligned_dense(array_type_dense, join_type):
     adatas = []
     for _ in range(5):
         a = array_type_dense(np.random.rand(100, 200))
-        adata = AnnData(X=a, layers={"a": a})
+        adata = AnnData(X=a, layers={"a": a}, dtype=a.dtype)
         adatas.append(
             adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()
         )
