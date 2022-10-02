@@ -58,7 +58,7 @@ These new data profit much from the application of the scalable machine learning
 
 # The AnnData object
 
-`AnnData` is designed for data scientists and was inspired by a similar data structure in the R ecosystem, `ExpressionSet` [@Huber2015].[^1]
+`AnnData` is designed for data scientists and was inspired by a similar data structure in the R ecosystem, `ExpressionSet` [@Huber2015], filling this gap in the Python ecosystem.[^1]
 
 ^1: Please note that `AnnData` denotes the class (data structure), whereas anndata denotes the software package (python module).
 
