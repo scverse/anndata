@@ -97,6 +97,7 @@ Performing exploratory data analysis with `AnnData`, one builds an understanding
 Prior annotations of observations will often denote the experimental groups and conditions that come along with measured data.
 Derived annotations of observations might be summary statistics, cluster assignments, low-dimensional representations or manifolds.
 Annotations of variables will often denote alternative names or measures quantifying feature importance.
+`AnnData` also offers a field `layers`, which allows to store multiple data matrices of the same shape.
 
 In the context of how @Wickham2014 recommends to order variables, one can think of `X` as contiguously grouping the data of a specific set of *measured* variables of interest, typically high-dimensional readout data in an experiment. Other tables aligned to the observations axis in `AnnData` are then available to store both *fixed* (meta-)data of the experiment and derived data.
 
