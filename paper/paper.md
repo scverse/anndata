@@ -107,7 +107,7 @@ We note that adoption of *tidy data* [@Wickham2014] leaves some room for ambigui
 ## The data analysis workflow
 
 Let us illustrate how `AnnData` supports analysis workflows of iteratively learning representations and scalar annotations.
-For instance, training a clustering, classification or regression model on raw data in `X` produces an estimate of a response variable _ŷ_. This derived vector is conveniently kept track off by adding it as an annotation of observations (`obs`, \autoref{fig:overview}b).
+For instance, training a clustering, classification or regression model on raw data in `X` produces an estimate of a response variable _ŷ_. This derived vector is conveniently kept track of by adding it as an annotation of observations (`obs`, \autoref{fig:overview}b).
 A reduced dimensional representation obtained through, say Principal Component Analysis or any bottleneck layer of a machine learning model, would be stored as multi-dimensional annotation (`obsm`, \autoref{fig:overview}c).
 Storing low-dimensional manifold structure within a desired reduced representation is achieved through a k-nearest neighbor graph in form of a sparse adjacency matrix: a matrix of pairwise relationships of observations (`obsp`, \autoref{fig:overview}d).
 Subsetting the data by observations produces a memory-efficient view of `AnnData` (\autoref{fig:overview}e).
