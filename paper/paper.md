@@ -58,7 +58,7 @@ These new data profit much from the application of the scalable machine learning
 
 # The AnnData object
 
-`AnnData` is designed for data scientists and was inspired by a similar data structure in the R ecosystem, `ExpressionSet` [@Huber2015].[^1]
+`AnnData` is designed for data scientists and was inspired by a similar data structure in the R ecosystem, `ExpressionSet` [@Huber2015], filling this gap in the Python ecosystem.[^1]
 
 ^1: Please note that `AnnData` denotes the class (data structure), whereas anndata denotes the software package (python module).
 
@@ -93,10 +93,12 @@ Performing exploratory data analysis with `AnnData`, one builds an understanding
 * One-dimensional annotations get added to the main annotation `DataFrame` for each axis, `obs` and `var`.
 * Multi-dimensional representations get added to `obsm` and `varm`.
 * Pair-wise relations among observations and variables get added to `obsp` and `varp` in form of sparse graph adjacency matrices.
+* Unstructured dictionary-like annotations get added to a field `uns`.
 
 Prior annotations of observations will often denote the experimental groups and conditions that come along with measured data.
 Derived annotations of observations might be summary statistics, cluster assignments, low-dimensional representations or manifolds.
 Annotations of variables will often denote alternative names or measures quantifying feature importance.
+`AnnData` also offers a field `layers`, which allows to store multiple data matrices of the same shape.
 
 In the context of how @Wickham2014 recommends to order variables, one can think of `X` as contiguously grouping the data of a specific set of *measured* variables of interest, typically high-dimensional readout data in an experiment. Other tables aligned to the observations axis in `AnnData` are then available to store both *fixed* (meta-)data of the experiment and derived data.
 
@@ -105,7 +107,7 @@ We note that adoption of *tidy data* [@Wickham2014] leaves some room for ambigui
 ## The data analysis workflow
 
 Let us illustrate how `AnnData` supports analysis workflows of iteratively learning representations and scalar annotations.
-For instance, training a clustering, classification or regression model on raw data in `X` produces an estimate of a response variable _ŷ_. This derived vector is conveniently kept track off by adding it as an annotation of observations (`obs`, \autoref{fig:overview}b).
+For instance, training a clustering, classification or regression model on raw data in `X` produces an estimate of a response variable _ŷ_. This derived vector is conveniently kept track of by adding it as an annotation of observations (`obs`, \autoref{fig:overview}b).
 A reduced dimensional representation obtained through, say Principal Component Analysis or any bottleneck layer of a machine learning model, would be stored as multi-dimensional annotation (`obsm`, \autoref{fig:overview}c).
 Storing low-dimensional manifold structure within a desired reduced representation is achieved through a k-nearest neighbor graph in form of a sparse adjacency matrix: a matrix of pairwise relationships of observations (`obsp`, \autoref{fig:overview}d).
 Subsetting the data by observations produces a memory-efficient view of `AnnData` (\autoref{fig:overview}e).
@@ -126,7 +128,7 @@ For access along variables, for instance, to visualize gene expression across a 
 
 An `AnnData` object captures a unit of the data analysis workflow that groups original and derived data together.
 Providing a persistent and standard on-disk format for this unit relieves the pain of working with many competing formats for each individual element and thereby aids reproducibility.
-This is particularly needed as even pandas `DataFrame` has no canonical persistent data storage format. `AnnData` has chosen the self-describing hierarchical data formats HDF5 [@collette14] and zarr [@zarr] for this purpose (\autoref{fig:ecosystem}), which are compatible with non-Python programming environments. The broad compatibility and high stability of the format led to wide adoption, and initiatives like the Human Cell Atlas [@HCA], HuBMAP [@HuBMAP] and a NeurIPS 2021 competition [@Luecken21] distribute their single-cell omics datasets through `.h5ad`.
+This is particularly needed as even pandas `DataFrame` has no canonical persistent data storage format. `AnnData` has chosen the self-describing hierarchical data formats HDF5 [@collette14] and zarr [@zarr] for this purpose (\autoref{fig:ecosystem}), which are compatible with non-Python programming environments. The broad compatibility and high stability of the format led to wide adoption, and initiatives like the Human Cell Atlas [@HCA], HuBMAP [@HuBMAP] and a NeurIPS 2021 competition [@Luecken21] distribute their single-cell omics datasets through the HDF5 AnnData format `.h5ad`.
 
 ![**AnnData provides broad interoperability with tools and platforms.**
 `AnnData` objects can be created from a number of formats, including common delimited text files, or domain-specific formats like `loom` files or `CellRanger` outputs.
