@@ -93,6 +93,7 @@ Performing exploratory data analysis with `AnnData`, one builds an understanding
 * One-dimensional annotations get added to the main annotation `DataFrame` for each axis, `obs` and `var`.
 * Multi-dimensional representations get added to `obsm` and `varm`.
 * Pair-wise relations among observations and variables get added to `obsp` and `varp` in form of sparse graph adjacency matrices.
+* Unstructured dictionary-like annotations get added to a field `uns`.
 
 Prior annotations of observations will often denote the experimental groups and conditions that come along with measured data.
 Derived annotations of observations might be summary statistics, cluster assignments, low-dimensional representations or manifolds.
