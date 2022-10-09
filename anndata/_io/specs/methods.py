@@ -314,10 +314,14 @@ def read_array(elem):
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array_partial(elem, *, items=None, indices=(slice(None, None))):
     return elem[indices]
+
+
+@_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
+def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
+    return elem.oindex[indices]
 
 
 # arrays of strings
@@ -476,6 +480,8 @@ def read_sparse(elem):
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
     return SparseDataset(elem)[indices]
 
