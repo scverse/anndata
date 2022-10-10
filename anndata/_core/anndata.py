@@ -1899,10 +1899,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Filename of data file. Defaults to backing file.
         compression
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
-            For [`zstd`], see the hdf5plugin :ref:`usage`. Experimental.
+            For [`zstd`], see the hdf5plugin :ref:`usage <usage.html>`. Experimental.
         compression_opts
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
-            For [`zstd`], see the hdf5plugin :ref:`usage`. Experimental.
+            For [`zstd`], see the hdf5plugin :ref:`usage <usage.html>`. Experimental.
             Construct `compression_opts` using the helper functions provided
             by the hdf5plugin package - for instance:
             `hdf5plugin.Zstd(clevel=5).filter_options`
