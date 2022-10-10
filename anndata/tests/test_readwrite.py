@@ -263,13 +263,7 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
 
 @pytest.mark.parametrize(
     "compression,compression_opts",
-    [
-        (None, None), 
-        ("lzf", None), 
-        ("gzip", None), 
-        ("gzip", 8), 
-        ("zstd", None)
-    ],
+    [(None, None), ("lzf", None), ("gzip", None), ("gzip", 8), ("zstd", None)],
 )
 def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     # https://github.com/scverse/anndata/issues/497
