@@ -44,6 +44,7 @@ dependencies = [
     "numpy>=1.16.5",  # required by pandas 1.x
     "scipy>1.4",
     "h5py>=3",
+    "hdf5plugin>=3.3.1",
     "natsort",
     "packaging>=20",
 ]
