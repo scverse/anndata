@@ -1902,7 +1902,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             For [`zstd`], see the hdf5plugin :ref:`usage.html <usage>`. Experimental.
         compression_opts
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
-            For [`zstd`], see the hdf5plugin :ref:`usage.html <usage>`. Experimental.
+            For [`zstd`], see the hdf5plugin :ref:`hdf5plugin:usage`. Experimental.
             Construct `compression_opts` using the helper functions provided
             by the hdf5plugin package - for instance:
             `hdf5plugin.Zstd(clevel=5).filter_options`
