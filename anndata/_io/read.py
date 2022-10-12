@@ -1,7 +1,7 @@
 from pathlib import Path
 from os import PathLike, fspath
 from types import MappingProxyType
-from typing import Union, Optional, Mapping, Tuple
+from typing import Callable, Union, Optional, Mapping, Tuple
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
@@ -9,6 +9,7 @@ import bz2
 from warnings import warn
 
 import h5py
+import zarr
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -17,6 +18,7 @@ from .. import AnnData
 from ..compat import _deprecate_positional_args
 from .utils import is_float
 from .h5ad import read_h5ad
+from .._io.specs.registry import get_reader, get_spec
 
 try:
     from .zarr import read_zarr
@@ -24,6 +26,25 @@ except ImportError as e:  # noqa: F841
 
     def read_zarr(*_, **__):
         raise e
+
+def read_dispatched(
+    group: Union[zarr.Group, h5py.Group],
+    dispatch_element: Callable,
+    dispatch_anndata_args: Callable = lambda x: x
+) -> AnnData:
+    """
+    Custom reading of `filename` via `dispatcher` - limited to zarr and h5ad.
+    group
+        Data group.
+    dispatch_element
+        Function for reading data into AnnData slots in a custom way.
+    dispatch_anndata_args
+        Function for doing any sort of cleanup needed on the args to the AnnData object, like data type changes.
+    """
+    d = {}
+    for k in group.keys():
+        d[k] = dispatch_element(get_reader(group[k]), group, k, get_spec(f[k]))
+    return dispatch_anndata_args(d)
 
 
 def read_csv(

@@ -174,13 +174,18 @@ def write_elem(
     else:
         _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
 
+def get_reader(
+    elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
+    modifiers: frozenset(str) = frozenset(),
+) -> Callable:
+    return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))
 
 def read_elem(
     elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
     modifiers: frozenset(str) = frozenset(),
 ) -> Any:
     """Read an element from an on disk store."""
-    return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))(elem)
+    return get_reader(elem, modifiers)(elem)
 
 
 # TODO: If all items would be read, just call normal read method
