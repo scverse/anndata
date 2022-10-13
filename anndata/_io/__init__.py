@@ -6,6 +6,7 @@ from .read import (
     read_loom,
     read_mtx,
     read_text,
+    read_dispatched,
 )
 from .zarr import read_zarr
 from .h5ad import read_h5ad
