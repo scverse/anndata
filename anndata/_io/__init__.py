@@ -6,8 +6,8 @@ from .read import (
     read_loom,
     read_mtx,
     read_text,
-    read_zarr,
-    read_h5ad,
 )
+from .zarr import read_zarr
+from .h5ad import read_h5ad
 from .write import write_csvs, write_loom, _write_h5ad, write_zarr
 from . import h5ad

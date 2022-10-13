@@ -8,6 +8,8 @@ from scipy import sparse
 import pandas as pd
 import zarr
 
+from .read import read_dispatched
+
 from .._core.anndata import AnnData
 from ..compat import (
     _from_fixed_length_strings,
@@ -72,28 +74,29 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     if "encoding-type" in f.attrs:
         return read_elem(f[""])
-
+    
     # Backwards compat
     d = {}
-    for k in f.keys():
-        if k.startswith("raw."):
-            continue
+    def dispatch_element(read_func, f, k, _):
         if k in {"obs", "var"}:
-            d[k] = read_dataframe(f[k])
+            return read_dataframe(f[k])
         else:  # Base case
-            d[k] = read_elem(f[k])
+            return read_func(f[k])
+    
+    def dispatch_anndata_args(group, args):
+        args["raw"] = _read_legacy_raw(group, args.get("raw"), read_dataframe, read_elem)
 
-    d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_elem)
+        if "X" in d:
+            args["dtype"] = args["X"].dtype
 
-    if "X" in d:
-        d["dtype"] = d["X"].dtype
-
-    # Backwards compat to <0.7
-    if isinstance(f["obs"], zarr.Array):
-        _clean_uns(d)
-
-    return AnnData(**d)
-
+        # Backwards compat to <0.7
+        if isinstance(group["obs"], zarr.Array):
+            _clean_uns(args)
+         
+        return args
+    
+    
+    return read_dispatched(f, dispatch_element, dispatch_anndata_args)
 
 @report_read_key_on_error
 def read_dataset(dataset: zarr.Array):

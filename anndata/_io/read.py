@@ -20,13 +20,6 @@ from .utils import is_float
 from .h5ad import read_h5ad
 from .._io.specs.registry import get_reader, get_spec
 
-try:
-    from .zarr import read_zarr
-except ImportError as e:  # noqa: F841
-
-    def read_zarr(*_, **__):
-        raise e
-
 def read_dispatched(
     group: Union[zarr.Group, h5py.Group],
     dispatch_element: Callable,
@@ -43,8 +36,9 @@ def read_dispatched(
     """
     d = {}
     for k in group.keys():
-        d[k] = dispatch_element(get_reader(group[k]), group, k, get_spec(f[k]))
-    return dispatch_anndata_args(d)
+        d[k] = dispatch_element(get_reader(group[k]), group, k, get_spec(group[k]))
+    d = dispatch_anndata_args(group, d)
+    return AnnData(**d)
 
 
 def read_csv(
