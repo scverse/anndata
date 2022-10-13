@@ -232,7 +232,7 @@ def read_h5ad(
                 # Backwards compat
                 return read_dataframe(group[k])
             return read_func(group[k])
-        
+
         def dispatch_anndata_args(group, args):
             args["raw"] = _read_raw(group, as_sparse, rdasp)
 
@@ -249,10 +249,11 @@ def read_h5ad(
             # Backwards compat to <0.7
             if isinstance(group["obs"], h5py.Dataset):
                 _clean_uns(args)
-            return args            
+            return args
 
         adata = read_dispatched(f, dispatch_element, dispatch_anndata_args)
     return adata
+
 
 def _read_raw(
     f: Union[h5py.File, AnnDataFileManager],

@@ -19,10 +19,11 @@ from ..compat import _deprecate_positional_args
 from .utils import is_float
 from .._io.specs.registry import get_reader, get_spec
 
+
 def read_dispatched(
     group: Union[zarr.Group, h5py.Group],
     dispatch_element: Callable,
-    dispatch_anndata_args: Callable = lambda x: x
+    dispatch_anndata_args: Callable = lambda x: x,
 ) -> AnnData:
     """
     Custom reading of `filename` via `dispatcher` - limited to zarr and h5ad.
