@@ -76,17 +76,15 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         return read_elem(f[""])
     
     # Backwards compat
-    d = {}
-    def dispatch_element(read_func, f, k, _):
+    def dispatch_element(read_func, group, k, _):
         if k in {"obs", "var"}:
-            return read_dataframe(f[k])
-        else:  # Base case
-            return read_func(f[k])
+            return read_dataframe(group[k])
+        return read_func(group[k])
     
     def dispatch_anndata_args(group, args):
         args["raw"] = _read_legacy_raw(group, args.get("raw"), read_dataframe, read_elem)
 
-        if "X" in d:
+        if "X" in args:
             args["dtype"] = args["X"].dtype
 
         # Backwards compat to <0.7
