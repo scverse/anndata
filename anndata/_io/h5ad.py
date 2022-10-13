@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from anndata._io.read import read_dispatched
+
 from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
@@ -217,45 +219,41 @@ def read_h5ad(
             raise NotImplementedError(
                 "Currently only `X` and `raw/X` can be read as sparse."
             )
-
-    rdasp = partial(
-        read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size
-    )
-
     with h5py.File(filename, "r") as f:
-        d = {}
-        for k in f.keys():
-            # Backwards compat for old raw
+        rdasp = partial(
+            read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size
+        )
+
+        def dispatch_element(read_func, group, k, _):
             if k == "raw" or k.startswith("raw."):
-                continue
-            if k == "X" and "X" in as_sparse:
-                d[k] = rdasp(f[k])
-            elif k == "raw":
-                assert False, "unexpected raw format"
+                return None
+            elif k == "X" and "X" in as_sparse:
+                return rdasp(group[k])
             elif k in {"obs", "var"}:
                 # Backwards compat
-                d[k] = read_dataframe(f[k])
-            else:  # Base case
-                d[k] = read_elem(f[k])
+                return read_dataframe(group[k])
+            return read_func(group[k])
+        
+        def dispatch_anndata_args(group, args):
+            args["raw"] = _read_raw(group, as_sparse, rdasp)
 
-        d["raw"] = _read_raw(f, as_sparse, rdasp)
+            X_dset = group.get("X", None)
+            if X_dset is None:
+                pass
+            elif isinstance(X_dset, h5py.Group):
+                args["dtype"] = X_dset["data"].dtype
+            elif hasattr(X_dset, "dtype"):
+                args["dtype"] = group["X"].dtype
+            else:
+                raise ValueError()
 
-        X_dset = f.get("X", None)
-        if X_dset is None:
-            pass
-        elif isinstance(X_dset, h5py.Group):
-            d["dtype"] = X_dset["data"].dtype
-        elif hasattr(X_dset, "dtype"):
-            d["dtype"] = f["X"].dtype
-        else:
-            raise ValueError()
+            # Backwards compat to <0.7
+            if isinstance(group["obs"], h5py.Dataset):
+                _clean_uns(args)
+            return args            
 
-        # Backwards compat to <0.7
-        if isinstance(f["obs"], h5py.Dataset):
-            _clean_uns(d)
-
-    return AnnData(**d)
-
+        adata = read_dispatched(f, dispatch_element, dispatch_anndata_args)
+    return adata
 
 def _read_raw(
     f: Union[h5py.File, AnnDataFileManager],

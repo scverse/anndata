@@ -17,7 +17,6 @@ from scipy import sparse
 from .. import AnnData
 from ..compat import _deprecate_positional_args
 from .utils import is_float
-from .h5ad import read_h5ad
 from .._io.specs.registry import get_reader, get_spec
 
 def read_dispatched(
@@ -36,7 +35,9 @@ def read_dispatched(
     """
     d = {}
     for k in group.keys():
-        d[k] = dispatch_element(get_reader(group[k]), group, k, get_spec(group[k]))
+        v = dispatch_element(get_reader(group[k]), group, k, get_spec(group[k]))
+        if v is not None:
+            d[k] = v
     d = dispatch_anndata_args(group, d)
     return AnnData(**d)
 
