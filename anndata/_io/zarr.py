@@ -74,7 +74,7 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     if "encoding-type" in f.attrs:
         return read_elem(f[""])
-    
+
     # Backwards compat
     def dispatch_element(read_func, group, k, _):
         if k in {"obs", "var"}:

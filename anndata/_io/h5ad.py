@@ -11,8 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from anndata._io.read import read_dispatched
-
+from .read import read_dispatched
 from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import AnnDataFileManager
 from .._core.anndata import AnnData
