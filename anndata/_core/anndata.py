@@ -1484,7 +1484,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Creates a new adata that has the computed results of the previous adata.
         This is for the unbacked case
         """
-        already_in_mem = False
         new = {}
 
         # TODO: How to to_mem uns?
@@ -1517,15 +1516,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         for key in ["X", "obs", "var", "layers", "uns", "raw"]:
             elem = getattr(self, key)
             if elem is not None:
-                prev_type = type(elem)
                 elem = to_memory(elem)
-                if not isinstance(elem, prev_type):
-                    # TODO Delete this if already_in_mem is not used
-                    already_in_mem = False
                 new[key] = elem
         if self._has_X():
             new["dtype"] = new["X"].dtype
-        return AnnData(**new), already_in_mem
+        return AnnData(**new)
 
     def to_memory(self) -> "AnnData":
         """Load backed AnnData object into memory.
@@ -1540,9 +1535,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         if not self.isbacked:
-            adata, already_in_mem = self._to_memory_copy()
-            if already_in_mem:
-                raise ValueError("Object is already in memory.")
+            adata = self._to_memory_copy()
         else:
             elems = {"X": to_memory(self.X)}
             if self.raw is not None:

@@ -84,8 +84,9 @@ def array_type(request):
 # Give this array_type_dense instead of array_type if
 # the expected result is compared only content wise and
 # array types aren't expected to be the same
+# in other words, when:
 # test_assert(arr1,arr2) = test_assert(arr1.todense(),arr2.todense())
-# test_assert(arr1,arr2) = test_assert(arr1.todense(),arr2.todense())
+# is the expected behaviour.
 @pytest.fixture(
     params=[asarray, sparse.csr_matrix, sparse.csc_matrix, darr_from_arr_dense],
     ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
@@ -1312,3 +1313,25 @@ def test_concat_X_dtype():
 # def test_concatenate_uns_types():
 #     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE
 #     assert set(UNS_STRATEGIES.keys()) == set(UNS_STRATEGIES_TYPE.__args__)
+
+# Tests how dask plays with other types on concatenation.
+def test_concat_different_types_dask(merge_strategy, array_type_dense):
+    from scipy import sparse
+    import anndata as ad
+    import dask.array as da
+
+    varm_array = sparse.random(5, 20, density=0.5, format="csr")
+
+    ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array}, dtype=np.float64)
+    ad1_other = ad.AnnData(
+        X=np.ones((5, 5)), varm={"a": array_type_dense(varm_array)}, dtype=np.float64
+    )
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)}, dtype=np.float64)
+
+    result1 = ad.concat([ad1, ad2], merge=merge_strategy)
+    target1 = ad.concat([ad1_other, ad2], merge=merge_strategy)
+    result2 = ad.concat([ad2, ad1], merge=merge_strategy)
+    target2 = ad.concat([ad2, ad1_other], merge=merge_strategy)
+
+    assert_equal(result1, target1)
+    assert_equal(result2, target2)
