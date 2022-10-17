@@ -94,13 +94,11 @@ def gen_adata(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
-        # da.Array,
     ),
     varm_types: "Collection[Type]" = (
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
-        # da.Array,
     ),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:

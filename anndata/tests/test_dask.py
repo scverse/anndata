@@ -5,7 +5,13 @@ import anndata as ad
 import pandas as pd
 from anndata._core.anndata import AnnData
 import pytest
-from anndata.tests.helpers import assert_equal, asarray
+from anndata.tests.helpers import (
+    darr_from_arr,
+    gen_adata_dask_args,
+    gen_adata,
+    assert_equal,
+    asarray,
+)
 from anndata.compat import DaskArray
 
 pytest.importorskip("dask.array")
@@ -93,7 +99,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_dask_to_mem(adata, tmp_path, diskfmt):
+def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     import dask.array as da
     import numpy as np
 
@@ -131,7 +137,7 @@ def test_dask_to_mem(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_dask_copy(adata):
+def test_dask_copy_check_array_types(adata):
     import dask.array as da
 
     M, N = adata.X.shape
@@ -196,3 +202,23 @@ def test_assert_equal_dask_sparse_arrays():
 
     assert_equal(x, y)
     assert_equal(y, x)
+
+
+# Test if dask arrays turn into numpy arrays after to_memory is called
+def test_dask_to_memory_unbacked():
+    import numpy as np
+
+    orig = gen_adata((15, 10), X_type=darr_from_arr, **gen_adata_dask_args)
+    orig.uns = {"da": {"da": darr_from_arr(np.ones(12))}}
+    curr = orig.to_memory()
+    assert_equal(orig, curr)
+    assert isinstance(curr.X, np.ndarray)
+    assert isinstance(curr.obsm["da"], np.ndarray)
+    assert isinstance(curr.varm["da"], np.ndarray)
+    assert isinstance(curr.layers["da"], np.ndarray)
+    assert isinstance(curr.uns["da"]["da"], np.ndarray)
+    assert isinstance(orig.X, DaskArray)
+    assert isinstance(orig.obsm["da"], DaskArray)
+    assert isinstance(orig.layers["da"], DaskArray)
+    assert isinstance(orig.varm["da"], DaskArray)
+    assert isinstance(orig.uns["da"]["da"], DaskArray)

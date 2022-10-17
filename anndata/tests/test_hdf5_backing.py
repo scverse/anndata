@@ -7,7 +7,6 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-import pandas as pd
 from anndata.tests.helpers import (
     darr_from_arr,
     gen_adata_dask_args,
@@ -16,7 +15,6 @@ from anndata.tests.helpers import (
     subset_func,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray
 
 subset_func2 = subset_func
 # -------------------------------------------------------------------------------

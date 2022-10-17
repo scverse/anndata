@@ -1486,8 +1486,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         new = {}
 
-        self.uns = to_memory(self.uns)
-
         if self.obsm is not None:
             new["obsm"] = AxisArrays(
                 self, 0, vals={k: to_memory(v) for k, v in self.obsm.items()}
@@ -1504,8 +1502,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["varp"] = PairwiseArrays(
                 self, 1, vals={k: to_memory(v) for k, v in self.varp.items()}
             )
+        if self.uns is not None:
+            new["uns"] = {k: to_memory(v) for k, v in self.uns.items()}
+        if self.layers is not None:
+            new["layers"] = {k: to_memory(v) for k, v in self.layers.items()}
 
-        for key in ["X", "obs", "var", "layers", "uns", "raw"]:
+        for key in ["X", "obs", "var", "raw"]:
             elem = getattr(self, key)
             if elem is not None:
                 elem = to_memory(elem)
