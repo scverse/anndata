@@ -101,6 +101,11 @@ def to_memory(x):
     return x.copy()
 
 
+@to_memory.register(dict)
+def _(x):
+    return {k: to_memory(v) for k, v in x.items()}
+
+
 @to_memory.register(ZarrArray)
 @to_memory.register(h5py.Dataset)
 def _(x):

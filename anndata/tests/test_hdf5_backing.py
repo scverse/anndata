@@ -250,12 +250,6 @@ def test_to_memory_full(tmp_path, array_type):
     assert_equal(mem_adata, backed_adata.to_memory())
 
 
-def test_to_memory_error():
-    adata = gen_adata((5, 3), **gen_adata_args)
-    with pytest.raises(ValueError):
-        adata.to_memory()
-
-
 def test_double_index(adata, backing_h5ad):
     adata.filename = backing_h5ad
     with pytest.raises(ValueError):

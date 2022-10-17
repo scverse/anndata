@@ -1486,16 +1486,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         new = {}
 
-        # TODO: How to to_mem uns?
-        # TODO: If there is a case that the object
-        # can both include lazy attributes and be in backed mode
-        # support that case
+        self.uns = to_memory(self.uns)
 
-        # TODO: uns
-        # unstructured annotations
-        # self.uns = uns or OrderedDict()
-
-        # TODO: check if its in memory already
         if self.obsm is not None:
             new["obsm"] = AxisArrays(
                 self, 0, vals={k: to_memory(v) for k, v in self.obsm.items()}
