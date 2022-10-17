@@ -8,7 +8,13 @@ from scipy import sparse
 
 import anndata as ad
 import pandas as pd
-from anndata.tests.helpers import darr_from_arr, gen_adata, assert_equal, subset_func
+from anndata.tests.helpers import (
+    darr_from_arr,
+    gen_adata_dask_args,
+    gen_adata,
+    assert_equal,
+    subset_func,
+)
 from anndata.utils import asarray
 from anndata.compat import DaskArray
 
@@ -16,17 +22,6 @@ subset_func2 = subset_func
 # -------------------------------------------------------------------------------
 # Some test data
 # -------------------------------------------------------------------------------
-
-gen_adata_args = dict(
-    obsm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-    ),
-    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
-    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
-)
 
 
 @pytest.fixture
@@ -170,7 +165,7 @@ def test_backing_copy(adata, tmp_path, backing_h5ad):
 def test_backed_raw(tmp_path):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10), **gen_adata_args)
+    mem_adata = gen_adata((10, 10), **gen_adata_dask_args)
     mem_adata.raw = mem_adata
     mem_adata.write(backed_pth)
 
@@ -237,8 +232,8 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
 )
 def test_to_memory_full(tmp_path, array_type):
     backed_pth = tmp_path / "backed.h5ad"
-    mem_adata = gen_adata((15, 10), X_type=array_type, **gen_adata_args)
-    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **gen_adata_args)
+    mem_adata = gen_adata((15, 10), X_type=array_type, **gen_adata_dask_args)
+    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **gen_adata_dask_args)
     mem_adata.write_h5ad(backed_pth, compression="lzf")
 
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
