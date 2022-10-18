@@ -1506,8 +1506,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["uns"] = {k: to_memory(v) for k, v in self.uns.items()}
         if self.layers is not None:
             new["layers"] = {k: to_memory(v) for k, v in self.layers.items()}
+        if self.raw is not None:
+            new["raw"] = {
+                "X": to_memory(self.raw.X),
+                "var": self.raw.var,
+                "varm": {k: to_memory(v) for k, v in self.raw.varm.items()},
+            }
 
-        for key in ["X", "obs", "var", "raw"]:
+        for key in ["X", "obs", "var"]:
             elem = getattr(self, key)
             if elem is not None:
                 elem = to_memory(elem)

@@ -98,7 +98,10 @@ def to_memory(x):
 
     If they already are in-memory, (or are just unrecognized) pass a copy through.
     """
-    return x.copy()
+    if hasattr(x, "copy"):
+        return x.copy()
+    # primitive type like int float str
+    return x
 
 
 @to_memory.register(dict)
