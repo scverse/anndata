@@ -222,3 +222,21 @@ def test_dask_to_memory_unbacked():
     assert isinstance(orig.layers["da"], DaskArray)
     assert isinstance(orig.varm["da"], DaskArray)
     assert isinstance(orig.uns["da"]["da"], DaskArray)
+
+
+def test_to_memory_raw():
+    import numpy as np
+    import dask.array as da
+
+    orig = gen_adata((20, 10), **gen_adata_dask_args)
+    orig.X = da.ones((20, 10))
+
+    with_raw = orig[:, ::2].copy()
+    with_raw.raw = orig.copy()
+
+    curr = with_raw.to_memory()
+
+    assert isinstance(curr.raw.X, np.ndarray)
+    assert isinstance(curr.raw.varm["da"], np.ndarray)
+    assert isinstance(with_raw.raw.X, DaskArray)
+    assert isinstance(with_raw.raw.varm["da"], DaskArray)
