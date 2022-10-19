@@ -17,7 +17,9 @@
 .. |Coverage| image:: https://codecov.io/gh/scverse/anndata/branch/master/graph/badge.svg?token=IN1mJN1Wi8
    :target: https://codecov.io/gh/scverse/anndata
 
-.. image:: docs/_static/img/anndata_schema.svg
+.. use URL instead of path here so PyPI can render it
+
+.. image:: https://raw.githubusercontent.com/scverse/anndata/master/docs/_static/img/anndata_schema.svg
    :align: right
    :width: 350px
 
