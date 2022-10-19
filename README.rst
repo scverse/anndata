@@ -17,6 +17,9 @@
 .. |Coverage| image:: https://codecov.io/gh/scverse/anndata/branch/master/graph/badge.svg?token=IN1mJN1Wi8
    :target: https://codecov.io/gh/scverse/anndata
 
+.. image:: docs/_static/img/anndata_schema.svg
+   :align: right
+   :width: 350px
 
 anndata - Annotated data
 ========================
@@ -26,6 +29,3 @@ anndata is a Python package for handling annotated data matrices in memory and o
 * Read the `documentation <https://anndata.readthedocs.io>`_.
 * Ask questions on the `scverse Discourse <https://discourse.scverse.org>`_.
 * Install via ``pip install anndata`` or ``conda install anndata -c conda-forge``.
-
-.. would be nice to have the schema also on GitHub, but it’s much too wide there, hence need to duplicate description
-.. GitHub doesn’t plan to resolve scaling images: https://github.com/github/markup/issues/295
