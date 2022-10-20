@@ -135,6 +135,31 @@ def get_spec(
     )
 
 
+class Reader:
+    def __init__(
+        self, registry: IORegistry, callback: Union[Callable, None] = None
+    ) -> None:
+        self.registry = registry
+        self.callback = callback
+
+    def read_elem(
+        self,
+        elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
+        modifiers: frozenset(str) = frozenset(),
+    ) -> Any:
+        """Read an element from an on disk store."""
+        from functools import partial
+
+        read_func = self.registry.get_reader(
+            type(elem), get_spec(elem), frozenset(modifiers)
+        )
+        read_func = partial(read_func, _reader=self)
+        if self.callback is not None:
+            return self.callback(read_func, elem.name, elem, get_spec(elem))
+        else:
+            return read_func(elem)
+
+
 @report_write_key_on_error
 def write_elem(
     f: "Union[H5Group, ZarrGroup]",
@@ -175,12 +200,13 @@ def write_elem(
         _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
 
 
-def read_elem(
-    elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
-    modifiers: frozenset(str) = frozenset(),
-) -> Any:
-    """Read an element from an on disk store."""
-    return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))(elem)
+read_elem = Reader(_REGISTRY).read_elem
+# def read_elem(
+#     elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
+#     modifiers: frozenset(str) = frozenset(),
+# ) -> Any:
+#     """Read an element from an on disk store."""
+#     return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))(elem)
 
 
 # TODO: If all items would be read, just call normal read method
@@ -195,3 +221,21 @@ def read_elem_partial(
     return _REGISTRY.get_partial_reader(
         type(elem), get_spec(elem), frozenset(modifiers)
     )(elem, items=items, indices=indices)
+
+
+@singledispatch
+def elem_key(elem) -> str:
+    return elem.name
+
+
+#     raise NotImplementedError()
+
+# @elem_key.register(ZarrGroup)
+# @elem_key.register(ZarrArray)
+# def _(elem):
+#     return elem.name
+
+# @elem_key.register(H5Array)
+# @elem_key.register(H5Group)
+# def _(elem):
+#     re
