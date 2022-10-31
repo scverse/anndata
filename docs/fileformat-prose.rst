@@ -6,7 +6,7 @@ On-disk format
    Files written before this version may differ in some conventions,
    but will still be read by newer versions of the library.
 
-AnnData objects are saved on disk to hierarchichal array stores like HDF5_
+AnnData objects are saved on disk to hierarchical array stores like HDF5_
 (via :doc:`H5py <h5py:index>`) and :doc:`zarr:index`.
 This allows us to have very similar structures in disk and on memory.
 
@@ -68,7 +68,7 @@ Sparse arrays
 Sparse arrays don’t have a native representations in HDF5 or Zarr,
 so we've defined our own based on their in-memory structure.
 Currently two sparse data formats are supported by `AnnData` objects, CSC and CSR
-(corresponding to :class:`scipy.sparse.csc_matrix` and :class:`scipy.sparse.csr_matrix` respectivley).
+(corresponding to :class:`scipy.sparse.csc_matrix` and :class:`scipy.sparse.csr_matrix` respectively).
 These formats represent a two-dimensional sparse array with
 three one-dimensional arrays, `indptr`, `indices`, and `data`.
 
@@ -103,7 +103,7 @@ indptr <HDF5 dataset "indptr": shape (38411,), type "<i4">
 DataFrames
 ~~~~~~~~~~
 
-DataFrames are saved as a columnar format in a group, so each column of a DataFrame is saved as a seperate array.
+DataFrames are saved as a columnar format in a group, so each column of a DataFrame is saved as a separate array.
 We save a little more information in the attributes here.
 
 >>> dict(f["obs"].attrs)
@@ -166,7 +166,7 @@ Categorical arrays
 
 Discrete labels can be efficiently represented with categorical arrays (similar to `factors` in `R`).
 These arrays encode the labels as small width integers (`codes`), which map to the original label set (`categories`).
-We store these two arrays seperatley
+We store these two arrays separately.
 
 >>> categorical.visititems(print)
 categories <HDF5 dataset "categories": shape (22,), type "|O">
