@@ -3,13 +3,12 @@ build-backend = "flit_core.buildapi"
 requires = [
     "flit_core >=3.4,<4",
     "setuptools_scm",
-    "importlib_metadata>=0.7; python_version < '3.8'",
 ]
 
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 license = {file = "LICENSE"}
 authors = [
     {name = "Philipp Angerer"},
@@ -34,9 +33,9 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
@@ -47,9 +46,6 @@ dependencies = [
     "h5py>=3",
     "natsort",
     "packaging>=20",
-    # for getting the stable version
-    "importlib_metadata>=0.7; python_version < '3.8'",
-    "typing_extensions; python_version < '3.8'",  # Remove once we depend on python > 3.7
 ]
 dynamic = ["version"]
 
@@ -74,7 +70,6 @@ doc = [
     "sphinx_issues",
     "nbsphinx",
     "scanpydoc>=0.7.7",
-    "typing_extensions; python_version < '3.8'",
     "zarr",
 ]
 test = [
@@ -118,5 +113,5 @@ xfail_strict = true
 
 [tool.black]
 line-length = 88
-target-version = ["py37"]
+target-version = ["py38"]
 exclude = "^/build/.*$"

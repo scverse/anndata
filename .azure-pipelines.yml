@@ -8,14 +8,14 @@ variables:
 jobs:
 - job: PyTest
   pool:
-    vmImage: 'ubuntu-18.04'
+    vmImage: 'ubuntu-22.04'
   strategy:
     matrix:
-      Python39:
-        python.version: '3.9'
+      Python310:
+        python.version: '3.10'
         RUN_COVERAGE: yes
-      Python37:
-        python.version: '3.7'
+      Python38:
+        python.version: '3.8'
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -70,13 +70,13 @@ jobs:
 
 - job: CheckBuild
   pool:
-    vmImage: 'ubuntu-18.04'
+    vmImage: 'ubuntu-22.04'
   steps:
 
   - task: UsePythonVersion@0
     inputs:
-      versionSpec: '3.9'
-    displayName: 'Use Python 3.9'
+      versionSpec: '3.10'
+    displayName: 'Use Python 3.10'
 
   - script: |
       python -m pip install --upgrade pip
