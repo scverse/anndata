@@ -29,6 +29,7 @@ Latest additions
    api
    concatenation
    fileformat-prose
+   interoperability
    benchmarks
    contributing
    release-notes/index
