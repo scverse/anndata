@@ -14,6 +14,13 @@ def matrix_type(request):
     return request.param
 
 
+def subset_dim(adata, *, obs=slice(None), var=slice(None)):
+    # Should probably get used for test_inplace_subset_var and test_inplace_subset_obs
+    from anndata._core.index import _subset
+
+    return _subset(adata, (obs, var))
+
+
 # TODO: Test values of .uns
 def test_inplace_subset_var(matrix_type, subset_func):
     orig = gen_adata((30, 30), X_type=matrix_type)
@@ -27,14 +34,12 @@ def test_inplace_subset_var(matrix_type, subset_func):
     assert_equal(from_view.obs, modified.obs, exact=True)
     assert_equal(from_view.var, modified.var, exact=True)
     for k in from_view.obsm:
-        assert_equal(asarray(from_view.obsm[k]), asarray(modified.obsm[k]), exact=True)
-        assert_equal(asarray(orig.obsm[k]), asarray(modified.obsm[k]), exact=True)
+        assert_equal(from_view.obsm[k], modified.obsm[k], exact=True)
+        assert_equal(orig.obsm[k], modified.obsm[k], exact=True)
     for k in from_view.varm:
-        assert_equal(asarray(from_view.varm[k]), asarray(modified.varm[k]), exact=True)
+        assert_equal(from_view.varm[k], modified.varm[k], exact=True)
     for k in from_view.layers:
-        assert_equal(
-            asarray(from_view.layers[k]), asarray(modified.layers[k]), exact=True
-        )
+        assert_equal(from_view.layers[k], modified.layers[k], exact=True)
 
 
 def test_inplace_subset_obs(matrix_type, subset_func):
@@ -49,11 +54,23 @@ def test_inplace_subset_obs(matrix_type, subset_func):
     assert_equal(from_view.obs, modified.obs, exact=True)
     assert_equal(from_view.var, modified.var, exact=True)
     for k in from_view.obsm:
-        assert_equal(asarray(from_view.obsm[k]), asarray(modified.obsm[k]), exact=True)
+        assert_equal(from_view.obsm[k], modified.obsm[k], exact=True)
     for k in from_view.varm:
-        assert_equal(asarray(from_view.varm[k]), asarray(modified.varm[k]), exact=True)
-        assert_equal(asarray(orig.varm[k]), asarray(modified.varm[k]), exact=True)
+        assert_equal(from_view.varm[k], modified.varm[k], exact=True)
+        assert_equal(orig.varm[k], modified.varm[k], exact=True)
     for k in from_view.layers:
-        assert_equal(
-            asarray(from_view.layers[k]), asarray(modified.layers[k]), exact=True
-        )
+        assert_equal(from_view.layers[k], modified.layers[k], exact=True)
+
+
+@pytest.mark.parametrize("dim", ("obs", "var"))
+def test_inplace_subset_no_X(subset_func, dim):
+    orig = gen_adata((30, 30))
+    del orig.X
+
+    subset_idx = subset_func(getattr(orig, f"{dim}_names"))
+
+    modified = orig.copy()
+    from_view = subset_dim(orig, **{dim: subset_idx}).copy()
+    getattr(modified, f"_inplace_subset_{dim}")(subset_idx)
+
+    assert_equal(modified, from_view, exact=True)

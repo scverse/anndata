@@ -10,7 +10,7 @@ from functools import partial, singledispatch
 from pathlib import Path
 from os import PathLike
 from textwrap import dedent
-from typing import Any, Union, Optional  # Meta
+from typing import Any, Union, Optional, Literal  # Meta
 from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
 from typing import Tuple, List  # Generic
 
@@ -23,6 +23,7 @@ from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
 from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
 
+from anndata._warnings import ImplicitModificationWarning
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager, to_memory
@@ -50,7 +51,6 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
-    Literal,
     _slice_uns_sparse_matrices,
     _move_adj_mtx,
     _overloaded_uns,
@@ -115,7 +115,7 @@ def _gen_dataframe(anno, length, index_names):
 
 @_gen_dataframe.register(pd.DataFrame)
 def _(anno, length, index_names):
-    anno = anno.copy()
+    anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
         anno.index = anno.index.astype(str)
@@ -128,21 +128,6 @@ def _(anno, length, index_names):
     raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
 
 
-class ImplicitModificationWarning(UserWarning):
-    """\
-    Raised whenever initializing an object or assigning a property changes
-    the type of a part of a parameter or the value being assigned.
-
-    Examples
-    ========
-    >>> import pandas as pd
-    >>> adata = AnnData(obs=pd.DataFrame(index=[0, 1, 2]))  # doctest: +SKIP
-    ImplicitModificationWarning: Transforming to str index.
-    """
-
-    pass
-
-
 class AnnData(metaclass=utils.DeprecationMixinMeta):
     """\
     An annotated data matrix.
@@ -152,8 +137,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     variables :attr:`var` (:attr:`varm`, :attr:`varp`),
     and unstructured annotations :attr:`uns`.
 
-    .. figure:: https://falexwolf.de/img/scanpy/anndata.svg
-       :width: 350px
+    .. figure:: ../_static/img/anndata_schema.svg
+       :width: 260px
 
     An :class:`~anndata.AnnData` object `adata` can be sliced like a
     :class:`~pandas.DataFrame`,
@@ -161,9 +146,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     :class:`~anndata.AnnData`’s basic structure is similar to R’s ExpressionSet
     [Huber15]_. If setting an `.h5ad`-formatted HDF5 backing file `.filename`,
     data remains on the disk but is automatically loaded into memory if needed.
-    See this `blog post`_ for more details.
-
-    .. _blog post: http://falexwolf.de/blog/171223_AnnData_indexing_views_HDF5-backing/
 
     Parameters
     ----------
@@ -289,7 +271,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varm: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         layers: Optional[Mapping[str, Union[np.ndarray, sparse.spmatrix]]] = None,
         raw: Optional[Mapping[str, Any]] = None,
-        dtype: Union[np.dtype, str] = "float32",
+        dtype: Optional[Union[np.dtype, type, str]] = None,
         shape: Optional[Tuple[int, int]] = None,
         filename: Optional[PathLike] = None,
         filemode: Optional[Literal["r", "r+"]] = None,
@@ -330,8 +312,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
         self._is_view = True
         if isinstance(oidx, (int, np.integer)):
+            if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
+                raise IndexError(f"Observation index `{oidx}` is out of range.")
+            oidx += adata_ref.n_obs * (oidx < 0)
             oidx = slice(oidx, oidx + 1, 1)
         if isinstance(vidx, (int, np.integer)):
+            if not (-adata_ref.n_vars <= vidx < adata_ref.n_vars):
+                raise IndexError(f"Variable index `{vidx}` is out of range.")
+            vidx += adata_ref.n_vars * (vidx < 0)
             vidx = slice(vidx, vidx + 1, 1)
         if adata_ref.is_view:
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
@@ -389,7 +377,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp=None,
         raw=None,
         layers=None,
-        dtype="float32",
+        dtype=None,
         shape=None,
         filename=None,
         filemode=None,
@@ -463,6 +451,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
+            if dtype is None and X.dtype != np.float32:
+                warnings.warn(
+                    f"X.dtype being converted to np.float32 from {X.dtype}. In the next "
+                    "version of anndata (0.9) conversion will not be automatic. Pass "
+                    "dtype explicitly to avoid this warning. Pass "
+                    "`AnnData(X, dtype=X.dtype, ...)` to get the future behavour.",
+                    FutureWarning,
+                    stacklevel=3,
+                )
+                dtype = np.float32
+            elif dtype is None:
+                dtype = np.float32
             if issparse(X) or isinstance(X, ma.MaskedArray):
                 # TODO: maybe use view on data attribute of sparse matrix
                 #       as in readwrite.read_10x_h5
@@ -614,6 +614,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # indices that aren’t strictly increasing
             if self.is_view:
                 X = _subset(X, (self._oidx, self._vidx))
+        elif self.is_view and self._adata_ref.X is None:
+            X = None
         elif self.is_view:
             X = as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
@@ -989,7 +991,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def varp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
         """\
-        Pairwise annotation of observations,
+        Pairwise annotation of variables/features,
         a mutable mapping with array-like values.
 
         Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
@@ -1154,10 +1156,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("Only list-like `categories` is supported.")
         if key in self.obs:
             old_categories = self.obs[key].cat.categories.tolist()
-            self.obs[key].cat.rename_categories(categories, inplace=True)
+            self.obs[key] = self.obs[key].cat.rename_categories(categories)
         elif key in self.var:
             old_categories = self.var[key].cat.categories.tolist()
-            self.var[key].cat.rename_categories(categories, inplace=True)
+            self.var[key] = self.var[key].cat.rename_categories(categories)
         else:
             raise ValueError(f"{key} is neither in `.obs` nor in `.var`.")
         # this is not a good solution
@@ -1216,22 +1218,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # TODO: We should only check if non-null values are unique, but
                 # this would break cases where string columns with nulls could
                 # be written as categorical, but not as string.
-                # Possible solution: https://github.com/theislab/anndata/issues/504
+                # Possible solution: https://github.com/scverse/anndata/issues/504
                 if len(c.categories) >= len(c):
                     continue
-                c.reorder_categories(natsorted(c.categories), inplace=True)
+                # Ideally this could be done inplace
+                sorted_categories = natsorted(c.categories)
+                if not np.array_equal(c.categories, sorted_categories):
+                    c = c.reorder_categories(sorted_categories)
                 if dont_modify:
                     raise RuntimeError(
                         "Please call `.strings_to_categoricals()` on full "
                         "AnnData, not on this view. You might encounter this"
                         "error message while copying or writing to disk."
                     )
-                if self.is_view:
-                    warnings.warn(
-                        "Initializing view as actual.", ImplicitModificationWarning
-                    )
-                # If `self` is a view, it will be actualized in the next line,
-                # therefore the previous warning
                 df[key] = c
                 logger.info(f"... storing {key!r} as categorical")
 
@@ -1244,7 +1243,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
-        self._init_as_actual(adata_subset, dtype=self._X.dtype)
+        if adata_subset._has_X():
+            dtype = adata_subset.X.dtype
+        else:
+            dtype = None
+        self._init_as_actual(adata_subset, dtype=dtype)
 
     def _inplace_subset_obs(self, index: Index1D):
         """\
@@ -1253,7 +1256,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
-        self._init_as_actual(adata_subset, dtype=self.X.dtype)
+        if adata_subset._has_X():
+            dtype = adata_subset.X.dtype
+        else:
+            dtype = None
+        self._init_as_actual(adata_subset, dtype=dtype)
 
     # TODO: Update, possibly remove
     def __setitem__(
@@ -1328,6 +1335,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         if layer is not None:
             X = self.layers[layer]
+        elif not self._has_X():
+            raise ValueError("X is None, cannot convert to dataframe.")
         else:
             X = self.X
         if issparse(X):
@@ -1457,8 +1466,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = getattr(self, key).copy()
         if "X" in kwargs:
             new["X"] = kwargs["X"]
-        else:
+            new["dtype"] = new["X"].dtype
+        elif self._has_X():
             new["X"] = self.X.copy()
+            new["dtype"] = new["X"].dtype
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
@@ -1467,7 +1478,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = kwargs["raw"]
         elif self.raw is not None:
             new["raw"] = self.raw.copy()
-        new["dtype"] = new["X"].dtype
         return AnnData(**new)
 
     def to_memory(self) -> "AnnData":
@@ -1499,15 +1509,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.is_view:
+            if self.is_view and self._has_X():
                 # TODO: How do I unambiguously check if this is a copy?
                 # Subsetting this way means we don’t have to have a view type
                 # defined for the matrix, which is needed for some of the
-                # current distributed backend.
-                X = _subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
+                # current distributed backend. Specifically Dask.
+                return self._mutated_copy(
+                    X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
+                )
             else:
-                X = self.X.copy()
-            return self._mutated_copy(X=X)
+                return self._mutated_copy()
         else:
             from .._io import read_h5ad
             from .._io.write import _write_h5ad
@@ -1719,17 +1730,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         >>> from scipy.sparse import csr_matrix
         >>> adata1 = AnnData(
-        ...     csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s1', 's2'], anno1=['c1', 'c2']),
         ...     dict(var_names=['a', 'b', 'c']),
         ... )
         >>> adata2 = AnnData(
-        ... csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        ...     csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s3', 's4'], anno1=['c3', 'c4']),
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
         >>> adata3 = AnnData(
-        ... csr_matrix([[1, 2, 0], [0, 5, 6]]),
+        ... csr_matrix([[1, 2, 0], [0, 5, 6]], dtype=np.float32),
         ...     dict(obs_names=['s5', 's6'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
@@ -2032,6 +2043,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         selection = selection.toarray() if issparse(selection) else selection
         return selection if reverse is None else selection[reverse]
+
+    def _has_X(self) -> bool:
+        """
+        Check if X is None.
+
+        This is more efficient than trying `adata.X is None` for views, since creating
+        views (at least anndata's kind) can be expensive.
+        """
+        if not self.is_view:
+            return self.X is not None
+        else:
+            return self._adata_ref.X is not None
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat

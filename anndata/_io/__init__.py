@@ -1,7 +1,3 @@
-class WriteWarning(UserWarning):
-    pass
-
-
 from .read import (
     read_csv,
     read_excel,

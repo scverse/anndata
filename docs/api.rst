@@ -6,7 +6,7 @@ API
 The central class:
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    AnnData
 
@@ -16,7 +16,7 @@ Combining
 Combining AnnData objects. See also the section on concatenation.
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    concat
 
@@ -38,14 +38,14 @@ Reading
 Reading anndata’s native file format `.h5ad`.
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    read_h5ad
 
 Reading other file formats.
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    read_csv
    read_excel
@@ -63,19 +63,20 @@ Writing
 Writing to anndata’s native file format `.h5ad`.
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    AnnData.write
 
 Writing to other formats.
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    AnnData.write_csvs
    AnnData.write_loom
    AnnData.write_zarr
 
+.. _experimental_api:
 
 Experimental API
 ----------------
@@ -87,15 +88,25 @@ Experimental API
 Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files. In paritcular, for pytorch-based models.
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    experimental.AnnCollection
    experimental.AnnLoader
+
+Low level methods for reading and writing elements of an `AnnData`` object to a store:
+
+
+.. autosummary::
+   :toctree: generated/
+
+   experimental.read_elem
+   experimental.write_elem
+
 
 Errors and warnings
 -------------------
 
 .. autosummary::
-   :toctree: .
+   :toctree: generated/
 
    ImplicitModificationWarning

@@ -3,6 +3,7 @@ from os import PathLike
 from pathlib import Path
 from string import ascii_letters
 import tempfile
+import warnings
 
 import h5py
 import numpy as np
@@ -14,6 +15,7 @@ import zarr
 
 import anndata as ad
 from anndata.utils import asarray
+from anndata.compat import _read_attr
 
 from anndata.tests.helpers import gen_adata, assert_equal
 
@@ -79,6 +81,11 @@ def rw(backing_h5ad):
     orig.write(backing_h5ad)
     curr = ad.read(backing_h5ad)
     return curr, orig
+
+
+@pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
+def dtype(request):
+    return request.param
 
 
 diskfmt2 = diskfmt
@@ -263,7 +270,7 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
     ],
 )
 def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
-    # https://github.com/theislab/anndata/issues/497
+    # https://github.com/scverse/anndata/issues/497
     pth = Path(tmp_path) / "adata.h5ad"
     adata = gen_adata((10, 8))
     kwargs = {}
@@ -448,7 +455,7 @@ def test_write_csv(typ, tmp_path):
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
 def test_write_csv_view(typ, tmp_path):
-    # https://github.com/theislab/anndata/issues/401
+    # https://github.com/scverse/anndata/issues/401
     import hashlib
 
     def md5_path(pth: PathLike) -> bytes:
@@ -511,10 +518,18 @@ def test_read_excel():
     assert adata.X.tolist() == X_list
 
 
+def test_read_umi_tools():
+    adata = ad.read_umi_tools(HERE / "data/umi_tools.tsv.gz")
+    assert adata.obs_names.name == "cell"
+    assert adata.var_names.name == "gene"
+    assert adata.shape == (2, 13)
+    assert "ENSG00000070404.9" in adata.var_names
+    assert set(adata.obs_names) == {"ACAAGG", "TTCACG"}
+
+
 def test_write_categorical(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        X=np.ones((5, 5)),
         obs=pd.DataFrame(
             dict(
                 cat1=["a", "a", "b", np.nan, np.nan],
@@ -531,7 +546,6 @@ def test_write_categorical(tmp_path, diskfmt):
 def test_write_categorical_index(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        X=np.ones((5, 5)),
         uns={"df": pd.DataFrame(index=pd.Categorical(list("aabcd")))},
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
@@ -544,9 +558,11 @@ def test_write_categorical_index(tmp_path, diskfmt):
 
 
 def test_dataframe_reserved_columns(tmp_path, diskfmt):
-    reserved = ("_index", "__categories")
+    reserved = ("_index",)
     adata_pth = tmp_path / f"adata.{diskfmt}"
-    orig = ad.AnnData(X=np.ones((5, 5)))
+    orig = ad.AnnData(
+        obs=pd.DataFrame(index=np.arange(5)), var=pd.DataFrame(index=np.arange(5))
+    )
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
@@ -593,11 +609,10 @@ def test_write_large_categorical(tmp_path, diskfmt):
 
 
 def test_write_string_types(tmp_path, diskfmt):
-    # https://github.com/theislab/anndata/issues/456
+    # https://github.com/scverse/anndata/issues/456
     adata_pth = tmp_path / f"adata.{diskfmt}"
 
     adata = ad.AnnData(
-        np.ones((3, 3)),
         obs=pd.DataFrame(
             np.ones((3, 2)),
             columns=["a", np.str_("b")],
@@ -617,6 +632,25 @@ def test_write_string_types(tmp_path, diskfmt):
     # This should error, and tell you which key is at fault
     with pytest.raises(TypeError, match=str(b"c")):
         write(adata_pth)
+
+
+@pytest.mark.parametrize(
+    "teststring",
+    ["teststring", np.asarray(["test1", "test2", "test3"], dtype="object")],
+)
+@pytest.mark.parametrize("encoding", ["ascii", "utf-8"])
+@pytest.mark.parametrize("length", [None, 15])
+def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
+    with h5py.File(tmp_path / "attributes.h5", "w") as file:
+        dset = file.create_dataset("dset", data=np.arange(10))
+        attrs = dset.attrs
+        attrs.create(
+            "string",
+            teststring,
+            dtype=h5py.h5t.string_dtype(encoding=encoding, length=length),
+        )
+
+        assert_equal(teststring, _read_attr(attrs, "string"))
 
 
 def test_zarr_chunk_X(tmp_path):
@@ -651,7 +685,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
 
     import scanpy as sc
 
-    pbmc = sc.datasets.pbmc68k_reduced()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ad.OldFormatWarning)
+        pbmc = sc.datasets.pbmc68k_reduced()
+
     write1(pbmc, filepth1)
     from_disk1 = read1(filepth1)  # Do we read okay
     write2(from_disk1, filepth2)  # Can we round trip
@@ -676,6 +713,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
 
 # Checking if we can read legacy zarr files
 # TODO: Check how I should add this file to the repo
+@pytest.mark.filterwarnings("ignore::anndata.OldFormatWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.skipif(
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
@@ -699,3 +737,36 @@ def test_backwards_compat_zarr():
         pbmc_zarr = ad.read_zarr(z)
 
     assert_equal(pbmc_zarr, pbmc_orig)
+
+
+# TODO: use diskfmt fixture once zarr backend implemented
+def test_adata_in_uns(tmp_path, diskfmt):
+    pth = tmp_path / f"adatas_in_uns.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = gen_adata((4, 5))
+    orig.uns["adatas"] = {
+        "a": gen_adata((1, 2)),
+        "b": gen_adata((12, 8)),
+    }
+    another_one = gen_adata((2, 5))
+    another_one.raw = gen_adata((2, 7))
+    orig.uns["adatas"]["b"].uns["another_one"] = another_one
+
+    write(orig, pth)
+    curr = read(pth)
+
+    assert_equal(orig, curr)
+
+
+def test_io_dtype(tmp_path, diskfmt, dtype):
+    pth = tmp_path / f"adata_dtype.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = ad.AnnData(np.ones((5, 8), dtype=dtype), dtype=dtype)
+    write(orig, pth)
+    curr = read(pth)
+
+    assert curr.X.dtype == dtype

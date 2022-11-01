@@ -1,7 +1,14 @@
 .. role:: small
 
+Muon paper published :small:`2022-02-02`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Muon has been published in Genome Biology [Bredikhin22]_.
+Muon is a framework for multimodal data built on top of `AnnData`.
+
+Check out `Muon <https://muon.readthedocs.io/en/latest/>`_ and its datastructure `MuData <https://mudata.readthedocs.io/en/latest/>`_.
 
 COVID-19 datasets distributed as `h5ad` :small:`2020-04-01`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In a joint initiative, the Wellcome Sanger Institute, the Human Cell Atlas, and the CZI distribute datasets related to COVID-19 via anndata's `h5ad` files: `covid19cellatlas.org <https://www.covid19cellatlas.org/>`__. It wasn't anticipated that the `initial idea <https://falexwolf.de/blog/2017-12-23-anndata-indexing-views-HDF5-backing/>`__ of sharing and backing an on-disk representation of `AnnData` would become so widely adopted. Curious? Read up more on the `format <https://anndata.readthedocs.io/en/latest/fileformat-prose.html>`__.
+In a joint initiative, the Wellcome Sanger Institute, the Human Cell Atlas, and the CZI distribute datasets related to COVID-19 via anndata's `h5ad` files: `covid19cellatlas.org <https://www.covid19cellatlas.org/>`__.

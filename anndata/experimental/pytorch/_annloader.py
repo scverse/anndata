@@ -13,10 +13,10 @@ from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
 try:
     import torch
-    from torch.utils.data import Sampler, Dataset, DataLoader
+    from torch.utils.data import Sampler, BatchSampler, Dataset, DataLoader
 except ImportError:
     warnings.warn("Сould not load pytorch.")
-    Sampler, Dataset, DataLoader = object, object, object
+    Sampler, BatchSampler, Dataset, DataLoader = object, object, object, object
 
 
 # Custom sampler to get proper batches instead of joined separate indices
@@ -96,18 +96,16 @@ def _convert_on_top(convert, top_convert, attrs_keys):
 # AnnLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
 class AnnLoader(DataLoader):
     """\
-    PyTorch DataLoader for AnndData objects.
+    PyTorch DataLoader for AnnData objects.
 
     Builds DataLoader from a sequence of AnnData objects, from an
-    :class:`~anndata.experimental.AnnCollection` object
-    or from an `AnnCollectionView` object.
+    :class:`~anndata.experimental.AnnCollection` object or from an `AnnCollectionView` object.
     Takes care of the required conversions.
 
     Parameters
     ----------
     adatas
-        The AnnData objects, an AnnCollection or AnnCollectionView object.
-        from which to load the data.
+        `AnnData` objects or an `AnnCollection` object from which to load the data.
     batch_size
         How many samples per batch to load.
     shuffle
@@ -121,9 +119,8 @@ class AnnLoader(DataLoader):
         Transfer pytorch tensors to the default cuda device after conversion.
         Only works if `use_default_converter=True`
     **kwargs
-        Argumens for PyTorch DataLoader.
-        If `adatas` is not an AnnCollection or AnnCollectionView object, then also arguments for
-        AnnCollection object initialization.
+        Arguments for PyTorch DataLoader. If `adatas` is not an `AnnCollection` object, then also
+        arguments for `AnnCollection` initialization.
     """
 
     def __init__(
@@ -191,17 +188,21 @@ class AnnLoader(DataLoader):
         if (
             batch_size is not None
             and batch_size > 1
-            and not has_sampler
             and not has_batch_sampler
             and not use_parallel
         ):
             drop_last = kwargs.pop("drop_last", False)
-            default_sampler = BatchIndexSampler(
-                len(dataset), batch_size, shuffle, drop_last
-            )
 
-            super().__init__(
-                dataset, batch_size=None, sampler=default_sampler, **kwargs
-            )
+            if has_sampler:
+                sampler = kwargs.pop("sampler")
+                sampler = BatchSampler(
+                    sampler, batch_size=batch_size, drop_last=drop_last
+                )
+            else:
+                sampler = BatchIndexSampler(
+                    len(dataset), batch_size, shuffle, drop_last
+                )
+
+            super().__init__(dataset, batch_size=None, sampler=sampler, **kwargs)
         else:
             super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)

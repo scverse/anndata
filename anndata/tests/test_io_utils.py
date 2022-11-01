@@ -5,8 +5,14 @@ import zarr
 import h5py
 import pandas as pd
 
+import anndata as ad
 from anndata.compat import _clean_uns
 from anndata._io.utils import report_read_key_on_error, AnnDataReadError
+
+
+@pytest.fixture(params=["h5ad", "zarr"])
+def diskfmt(request):
+    return request.param
 
 
 @pytest.mark.parametrize(
@@ -31,6 +37,17 @@ def test_key_error(tmp_path, group_fn):
         with pytest.raises(AnnDataReadError) as e:
             read_attr(group["group"])
         assert "'/group'" in str(e.value)
+
+
+def test_write_error_info(diskfmt, tmp_path):
+    pth = tmp_path / f"failed_write.{diskfmt}"
+    write = lambda x: getattr(x, f"write_{diskfmt}")(pth)
+
+    # Assuming we don't define a writer for tuples
+    a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
+
+    with pytest.raises(Exception, match=r"Above error raised while writing key 'c'"):
+        write(a)
 
 
 def test_clean_uns():

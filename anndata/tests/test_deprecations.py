@@ -3,6 +3,9 @@ This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
+from pathlib import Path
+import warnings
+
 import h5py
 import numpy as np
 import pytest
@@ -17,7 +20,7 @@ from anndata.tests.helpers import assert_equal
 @pytest.fixture
 def adata():
     adata = AnnData(
-        X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         obs=dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         var=dict(var_names=["a", "b", "c"]),
     )
@@ -66,14 +69,10 @@ def test_obsvar_vector_Xlayer(adata):
     adata = adata.copy()
     adata.layers["X"] = adata.X * 3
 
-    with pytest.warns(None) as records:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         adata.var_vector("s1", layer="X")
         adata.obs_vector("a", layer="X")
-
-    for r in records:
-        # This time it shouldn’t throw a warning
-        if "anndata" in r.filename:
-            assert r.category is not FutureWarning
 
 
 def test_force_dense_deprecated(tmp_path):
@@ -110,9 +109,9 @@ def test_get_uns_neighbors_deprecated(adata):
 
     assert_equal(from_uns, mtx)
 
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         v = adata[: n // 2]
-        assert not rec
 
     with pytest.warns(FutureWarning):
         from_uns_v = v.uns["neighbors"]["connectivities"]
@@ -179,16 +178,17 @@ def test_deprecated_neighbors_get_other(adata_neighbors):
     adata = adata_neighbors
 
     # This shouldn't throw a warning
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         assert adata.uns["neighbors"]["params"] == {"method": "umap", "n_neighbors": 10}
-        assert not rec
 
 
 def test_deprecated_neighbors_set_other(adata_neighbors):
     adata = adata_neighbors
 
     # This shouldn't throw a warning
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         adata.uns["neighbors"]["new_key"] = 10
         assert adata.uns["neighbors"]["new_key"] == 10
         # Test nested
@@ -200,4 +200,45 @@ def test_deprecated_neighbors_set_other(adata_neighbors):
             "new_param": 100,
         }
 
-        assert not rec
+
+# This should break in 0.9
+def test_dtype_warning():
+    # Tests a warning is thrown
+    with pytest.warns(FutureWarning):
+        a = AnnData(np.ones((3, 3), dtype=np.float64))
+    assert a.X.dtype == np.float32
+
+    # This shouldn't warn, shouldn't copy
+    with warnings.catch_warnings(record=True) as record:
+        b_X = np.ones((3, 3), dtype=np.float64)
+        b = AnnData(b_X, dtype=np.float64)
+        assert not record
+    assert b_X is b.X
+    assert b.X.dtype == np.float64
+
+    # Shouldn't warn, should copy
+    with warnings.catch_warnings(record=True) as record:
+        c_X = np.ones((3, 3), dtype=np.float32)
+        c = AnnData(np.ones((3, 3), dtype=np.float32), dtype=np.float64)
+        assert not record
+    assert c_X is not c.X
+    assert c.X.dtype == np.float64
+
+
+def test_deprecated_write_attribute(tmp_path):
+    pth = tmp_path / "file.h5"
+    A = np.random.randn(20, 10)
+    from anndata._io.utils import read_attribute, write_attribute
+    from anndata._io.specs import read_elem
+
+    with h5py.File(pth, "w") as f:
+        with pytest.warns(DeprecationWarning, match="write_elem"):
+            write_attribute(f, "written_attribute", A)
+
+    with h5py.File(pth, "r") as f:
+        elem_A = read_elem(f["written_attribute"])
+        with pytest.warns(DeprecationWarning, match="read_elem"):
+            attribute_A = read_attribute(f["written_attribute"])
+
+        assert_equal(elem_A, attribute_A)
+        assert_equal(A, attribute_A)

@@ -1038,6 +1038,71 @@ def test_concat_categories_from_mapping():
     )
 
 
+def test_concat_categories_maintain_dtype():
+    a = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat": pd.Categorical(list("aabcc")),
+                "cat_ordered": pd.Categorical(list("aabcc"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5)],
+        ),
+    )
+    b = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat": pd.Categorical(list("bccdd")),
+                "cat_ordered": pd.Categorical(list("bccdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+    c = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("bccdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+
+    result = concat({"a": a, "b": b, "c": c}, join="outer")
+
+    assert pd.api.types.is_categorical_dtype(
+        result.obs["cat"]
+    ), f"Was {result.obs['cat'].dtype}"
+    assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
+
+
+def test_concat_ordered_categoricals_retained():
+    a = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("aabcd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5)],
+        ),
+    )
+    b = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("abcdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+
+    c = concat([a, b])
+
+    assert pd.api.types.is_categorical_dtype(c.obs["cat_ordered"])
+    assert c.obs["cat_ordered"].cat.ordered
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
@@ -1072,7 +1137,7 @@ def expected_shape(a, b, axis, join):
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
 def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
-    # https://github.com/theislab/anndata/issues/526
+    # https://github.com/scverse/anndata/issues/526
     a = gen_adata((5, 7))
     b = gen_adata(shape)
     alt_axis = 1 - axis
@@ -1136,7 +1201,7 @@ def test_concat_outer_aligned_mapping(elem):
 
 
 def test_concatenate_size_0_dim():
-    # https://github.com/theislab/anndata/issues/526
+    # https://github.com/scverse/anndata/issues/526
 
     a = gen_adata((5, 10))
     b = gen_adata((5, 0))
@@ -1144,6 +1209,35 @@ def test_concatenate_size_0_dim():
     # Mostly testing that this doesn't error
     a.concatenate([b]).shape == (10, 0)
     b.concatenate([a]).shape == (10, 0)
+
+
+def test_concat_null_X():
+    adatas_orig = {k: gen_adata((20, 10)) for k in list("abc")}
+    adatas_no_X = {}
+    for k, v in adatas_orig.items():
+        v = v.copy()
+        del v.X
+        adatas_no_X[k] = v
+
+    orig = concat(adatas_orig, index_unique="-")
+    no_X = concat(adatas_no_X, index_unique="-")
+    del orig.X
+
+    assert_equal(no_X, orig)
+
+
+# https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
+def test_concat_X_dtype():
+    adatas_orig = {
+        k: AnnData(np.ones((20, 10), dtype=np.int8), dtype=np.int8) for k in list("abc")
+    }
+    for adata in adatas_orig.values():
+        adata.raw = AnnData(np.ones((20, 30), dtype=np.float64), dtype=np.float64)
+
+    result = concat(adatas_orig, index_unique="-")
+
+    assert result.X.dtype == np.int8
+    assert result.raw.X.dtype == np.float64
 
 
 # Leaving out for now. See definition of these values for explanation

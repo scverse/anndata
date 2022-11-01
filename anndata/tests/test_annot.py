@@ -1,4 +1,5 @@
 """Test handling of values in `obs`/ `var`"""
+from natsort import natsorted
 import numpy as np
 import pandas as pd
 
@@ -20,8 +21,25 @@ def test_str_to_categorical(dtype):
     pd.testing.assert_series_equal(expected, a.obs["str"])
 
 
+@pytest.mark.parametrize("dtype", [object, "string"])
+def test_to_categorical_ordering(dtype):
+    obs = pd.DataFrame(
+        {"str": ["10", "11", "3", "9", "10", "10"]},
+        index=[f"cell-{i}" for i in range(6)],
+    )
+    obs["str"] = obs["str"].astype(dtype)
+    a = ad.AnnData(obs=obs.copy())
+
+    a.strings_to_categoricals()
+
+    expected = obs["str"].astype(
+        pd.CategoricalDtype(categories=natsorted(obs["str"].unique()))
+    )
+    pd.testing.assert_series_equal(expected, a.obs["str"])
+
+
 def test_non_str_to_not_categorical():
-    # Test case based on https://github.com/theislab/anndata/issues/141#issuecomment-802105259
+    # Test case based on https://github.com/scverse/anndata/issues/141#issuecomment-802105259
     obs = pd.DataFrame(index=[f"cell-{i}" for i in range(5)]).assign(
         str_with_nan=["foo", "bar", None, np.nan, "foo"],
         boolean_with_nan_and_none=[True, False, np.nan, None, True],

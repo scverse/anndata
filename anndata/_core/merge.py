@@ -6,17 +6,27 @@ from collections.abc import Mapping, MutableSet
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Any, Callable, Collection, Iterable, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Iterable,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    Literal,
+)
 import typing
 from warnings import warn
 
+from natsort import natsorted
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from scipy.sparse.base import spmatrix
+from scipy.sparse import spmatrix
 
 from .anndata import AnnData
-from ..compat import Literal
 from ..utils import asarray
 
 T = TypeVar("T")
@@ -102,6 +112,11 @@ def equal_array(a, b) -> bool:
     return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
 
 
+@equal.register(pd.Series)
+def equal_series(a, b) -> bool:
+    return a.equals(b)
+
+
 @equal.register(sparse.spmatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
@@ -127,6 +142,59 @@ def as_sparse(x):
         return sparse.csr_matrix(x)
     else:
         return x
+
+
+def unify_categorical_dtypes(dfs):
+    """
+    Attempts to unify categorical datatypes from multiple dataframes
+    """
+    # Get shared categorical columns
+    df_dtypes = [dict(df.dtypes) for df in dfs]
+    columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
+
+    dtypes = {col: list() for col in columns}
+    for col in columns:
+        for df in df_dtypes:
+            dtypes[col].append(df.get(col, None))
+
+    dtypes = {k: v for k, v in dtypes.items() if unifiable_dtype(v)}
+
+    if len(dtypes) == 0:
+        return dfs
+    else:
+        dfs = [df.copy(deep=False) for df in dfs]
+
+    new_dtypes = {}
+    for col in dtypes.keys():
+        categories = reduce(
+            lambda x, y: x.union(y),
+            [x.categories for x in dtypes[col] if not pd.isnull(x)],
+        )
+        new_dtypes[col] = pd.CategoricalDtype(natsorted(categories), ordered=False)
+
+    for df in dfs:
+        for col, dtype in new_dtypes.items():
+            if col in df:
+                df[col] = df[col].astype(dtype)
+
+    return dfs
+
+
+def unifiable_dtype(col: pd.Series) -> bool:
+    """
+    Check if dtypes are mergable categoricals.
+
+    Currently, this means they must be unordered categoricals.
+    """
+    dtypes = set()
+    ordered = False
+    for dtype in col:
+        if pd.api.types.is_categorical_dtype(dtype):
+            dtypes.add(dtype.categories.dtype)
+            ordered = ordered | dtype.ordered
+        elif not pd.isnull(dtype):
+            return False
+    return len(dtypes) == 1 and not ordered
 
 
 ###################
@@ -425,7 +493,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
-            [f(x) for f, x in zip(reindexers, arrays)], ignore_index=True, axis=axis
+            unify_categorical_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
+            ignore_index=True,
+            axis=axis,
         )
         df.index = index
         return df
@@ -597,6 +667,29 @@ def dim_size(adata, *, axis=None, dim=None) -> int:
     return adata.shape[ax]
 
 
+# TODO: Resolve https://github.com/scverse/anndata/issues/678 and remove this function
+def concat_Xs(adatas, reindexers, axis, fill_value):
+    """
+    Shimy until support for some missing X's is implemented.
+
+    Basically just checks if it's one of the two supported cases, or throws an error.
+
+    This is not done inline in `concat` because we don't want to maintain references
+    to the values of a.X.
+    """
+    Xs = [a.X for a in adatas]
+    if all(X is None for X in Xs):
+        return None
+    elif any(X is None for X in Xs):
+        raise NotImplementedError(
+            "Some (but not all) of the AnnData's to be concatenated had no .X value. "
+            "Concatenation is currently only implmented for cases where all or none of"
+            " the AnnData's have .X assigned."
+        )
+    else:
+        return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
+
+
 def concat(
     adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
     *,
@@ -612,7 +705,7 @@ def concat(
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
 
-    See the :doc:`concatenation` section in the docs for a more in-depth description.
+    See the :doc:`concatenation <../concatenation>` section in the docs for a more in-depth description.
 
     .. warning::
 
@@ -629,7 +722,8 @@ def concat(
         Which axis to concatenate along.
     join
         How to align values when concatenating. If "outer", the union of the other axis
-        is taken. If "inner", the intersection. See :doc:`concatenation` for more.
+        is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
+        for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.
         Currently implemented strategies include:
@@ -827,7 +921,9 @@ def concat(
 
     # Annotation for concatenation axis
     concat_annot = pd.concat(
-        [getattr(a, dim) for a in adatas], join=join, ignore_index=True
+        unify_categorical_dtypes([getattr(a, dim) for a in adatas]),
+        join=join,
+        ignore_index=True,
     )
     concat_annot.index = concat_indices
     if label is not None:
@@ -838,9 +934,7 @@ def concat(
         [getattr(a, alt_dim) for a in adatas], alt_indices, merge
     )
 
-    X = concat_arrays(
-        [a.X for a in adatas], reindexers, axis=axis, fill_value=fill_value
-    )
+    X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
         layers = inner_concat_aligned_mapping(
@@ -897,6 +991,7 @@ def concat(
             [
                 AnnData(
                     X=a.raw.X,
+                    dtype=a.raw.X.dtype,
                     obs=pd.DataFrame(index=a.obs_names),
                     var=a.raw.var,
                     varm=a.raw.varm,
@@ -919,6 +1014,7 @@ def concat(
     return AnnData(
         **{
             "X": X,
+            "dtype": None if X is None else X.dtype,
             "layers": layers,
             dim: concat_annot,
             alt_dim: alt_annot,

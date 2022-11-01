@@ -6,7 +6,6 @@ _previous_memory_usage = None
 anndata_logger = logging.getLogger("anndata")
 # Don’t pass log messages on to logging.root and its handler
 anndata_logger.propagate = False
-anndata_logger.setLevel("INFO")
 anndata_logger.addHandler(logging.StreamHandler())  # Logs go to stderr
 anndata_logger.handlers[-1].setFormatter(logging.Formatter("%(message)s"))
 anndata_logger.handlers[-1].setLevel("INFO")
@@ -28,7 +27,7 @@ def get_memory_usage():
         meminfo = process.memory_info()
     except AttributeError:
         meminfo = process.get_memory_info()
-    mem = meminfo[0] / 2 ** 30  # output in GB
+    mem = meminfo[0] / 2**30  # output in GB
     mem_diff = mem
     global _previous_memory_usage
     if _previous_memory_usage is not None:

@@ -102,6 +102,15 @@ def test_assert_equal():
     assert_equal(csc, dense)
     assert_equal(dense, csc)
 
+    unordered_cat = pd.Categorical(list("aabdcc"), ordered=False)
+    ordered_cat = pd.Categorical(list("aabdcc"), ordered=True)
+
+    assert_equal(unordered_cat, unordered_cat.copy())
+    assert_equal(ordered_cat, ordered_cat.copy())
+    assert_equal(ordered_cat, unordered_cat, exact=False)
+    with pytest.raises(AssertionError):
+        assert_equal(ordered_cat, unordered_cat, exact=True)
+
 
 def test_assert_equal_raw():
     base = gen_adata((10, 10))
@@ -124,7 +133,7 @@ def test_assert_equal_raw():
 
 def test_assert_equal_raw_presence():
     # This was causing some testing issues during
-    # https://github.com/theislab/anndata/pull/542
+    # https://github.com/scverse/anndata/pull/542
     a = gen_adata((10, 20))
     b = a.copy()
     a.raw = a.copy()

@@ -23,13 +23,14 @@ needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
-author = anndata.__author__
-copyright = f"{datetime.now():%Y}, {author}."
+author = f"{project} developers"
+copyright = f"{datetime.now():%Y}, {author}"
 version = anndata.__version__.replace(".dirty", "")
 release = version
 
 # default settings
 templates_path = ["_templates"]
+html_static_path = ["_static"]
 source_suffix = ".rst"
 master_doc = "index"
 default_role = "literal"
@@ -46,6 +47,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
+    "nbsphinx",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
@@ -59,11 +61,20 @@ napoleon_include_init_with_doc = False
 napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
+typehints_defaults = "braces"
 todo_include_todos = False
 nitpicky = True  # Report broken links
 nitpick_ignore = [
+    ("py:class", "scipy.sparse.base.spmatrix"),
     ("py:meth", "pandas.DataFrame.iloc"),
     ("py:meth", "pandas.DataFrame.loc"),
+    ("py:class", "anndata._core.views.ArrayView"),
+    ("py:class", "anndata._core.raw.Raw"),
+    *[
+        ("py:class", f"anndata._core.aligned_mapping.{cls}{kind}")
+        for cls in "Layers AxisArrays PairwiseArrays".split()
+        for kind in ["", "View"]
+    ],
 ]
 suppress_warnings = ["ref.citation"]
 
@@ -79,21 +90,15 @@ intersphinx_mapping = dict(
     numpy=("https://numpy.org/doc/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
     python=("https://docs.python.org/3", None),
-    scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
+    scipy=("https://docs.scipy.org/doc/scipy/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
-    xarray=("http://xarray.pydata.org/en/stable/", None),
+    xarray=("https://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
+    "h5py._hl.group.Group": "h5py.Group",
+    "h5py._hl.files.File": "h5py.File",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
-    # Temporarily
-    "anndata._core.raw.Raw": "anndata.AnnData",
-    "anndata._core.views.ArrayView": "numpy.ndarray",
-    **{
-        f"anndata._core.aligned_mapping.{cls}{kind}": "typing.Mapping"
-        for cls in "Layers AxisArrays PairwiseArrays".split()
-        for kind in ["", "View"]
-    },
 }
 
 # -- Options for HTML output ----------------------------------------------
@@ -103,7 +108,7 @@ html_theme = "scanpydoc"
 html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
-    github_user="theislab",  # Username
+    github_user="scverse",  # Username
     github_repo="anndata",  # Repo name
     github_version="master",  # Version
     conf_py_path="/docs/",  # Path in the checkout to the docs root
