@@ -2,7 +2,6 @@ from functools import singledispatch
 from os import PathLike
 from pathlib import Path
 from typing import Optional, Union, Iterator, Literal
-from anndata._core.aligned_mapping import AxisArrays
 
 import h5py
 
