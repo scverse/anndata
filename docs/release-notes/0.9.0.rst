@@ -4,6 +4,7 @@
 .. rubric:: Features
 
 * Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
+* Expanded docstring more documentation for ``backed`` argument of :func:`anndata.read_h5ad` :pr:`812` :smaller:`jeskowagner`
 
 .. rubric:: Bug fixes
 
