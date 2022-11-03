@@ -37,6 +37,7 @@ def diskfmt(request):
 @pytest.fixture
 def adata(sizes):
     import dask.array as da
+    import numpy as np
 
     (M, N), chunks = sizes
     X = da.random.random((M, N), chunks=chunks)
