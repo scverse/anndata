@@ -1757,8 +1757,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         from .merge import concat, merge_outer, merge_dataframes, merge_same
 
+        warnings.warn(
+            "The AnnData.concatenate method is deprecated in favour of the "
+            "anndata.concat function. Please use anndata.concat instead.\n\n"
+            "See the tutorial for concat at: "
+            "https://anndata.readthedocs.io/en/latest/concatenation.html",
+            FutureWarning,
+        )
+
         if self.isbacked:
-            raise ValueError("Currently, concatenate does only work in memory mode.")
+            raise ValueError("Currently, concatenate only works in memory mode.")
 
         if len(adatas) == 0:
             return self.copy()
