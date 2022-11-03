@@ -80,11 +80,6 @@ def test_dask_write(adata, tmp_path, diskfmt):
     write(orig, pth)
     curr = read(pth)
 
-    # orig.to_memory() Both give an error
-    # In what case should we assume it shouldn't?
-    # If we assign X should we get into backed mode?
-    # curr.to_memory() # TODO: why does this give an error
-
     with pytest.raises(Exception):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
