@@ -310,8 +310,10 @@ def write_basic(f, k, elem, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    import dask.array as da
+
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    DaskArray.store(elem, g)
+    da.store(elem, g)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
