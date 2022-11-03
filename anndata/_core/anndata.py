@@ -1480,7 +1480,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def _to_memory_compute_lazy(self):
+    def _to_memory_replace_lazy(self):
         """
         Instantiates lazy objects stored.
         For example calls compute() on dask.array
@@ -1518,9 +1518,33 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if isinstance(self.X, DaskArray):
                 self.X = self.X.compute()
 
-        return self
+    def _to_memory_copy(self):
+        """Creates a new adata that has the computed results of the previous adata.
+        This is for the unbacked case
+        """
+        new = {}
+        for attr_name in ["obsm", "varm", "obsp", "varp", "layers"]:
+            attr = getattr(self, attr_name, None)
+            if attr is not None:
+                new[attr_name] = {k: to_memory(v) for k, v in attr.items()}
+        if self.uns is not None:
+            new["uns"] = {k: to_memory(v) for k, v in self.uns.items()}
+        if self.raw is not None:
+            new["raw"] = {
+                "X": to_memory(self.raw.X),
+                "var": self.raw.var,
+                "varm": {k: to_memory(v) for k, v in self.raw.varm.items()},
+            }
+        for key in ["X", "obs", "var"]:
+            elem = getattr(self, key)
+            if elem is not None:
+                elem = to_memory(elem)
+                new[key] = elem
+        if self._has_X():
+            new["dtype"] = new["X"].dtype
+        return AnnData(**new)
 
-    def to_memory(self) -> "AnnData":
+    def to_memory(self, copy=False) -> "AnnData":
         """Load backed AnnData object into memory.
 
         Example
@@ -1533,7 +1557,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         if not self.isbacked:
-            adata = self._to_memory_compute_lazy()
+            if copy:
+                adata = self._to_memory_copy()
+            else:
+                self._to_memory_replace_lazy()
+                adata = self
         else:
             elems = {"X": to_memory(self.X)}
             if self.raw is not None:
