@@ -110,6 +110,10 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     write(orig, pth)
     curr = read(pth)
 
+    assert isinstance(orig.X, DaskArray)
+    assert isinstance(orig.obsm["a"], DaskArray)
+    assert isinstance(orig.varm["a"], DaskArray)
+
     mem = orig.to_memory()
 
     with pytest.raises(Exception):
@@ -126,9 +130,9 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     assert isinstance(mem.X, np.ndarray)
     assert isinstance(mem.obsm["a"], np.ndarray)
     assert isinstance(mem.varm["a"], np.ndarray)
-    assert isinstance(orig.X, DaskArray)
-    assert isinstance(orig.obsm["a"], DaskArray)
-    assert isinstance(orig.varm["a"], DaskArray)
+    assert isinstance(orig.X, np.ndarray)
+    assert isinstance(orig.obsm["a"], np.ndarray)
+    assert isinstance(orig.varm["a"], np.ndarray)
 
 
 def test_dask_copy_check_array_types(adata):
@@ -178,6 +182,13 @@ def test_dask_to_memory_unbacked():
 
     orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)
     orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}
+
+    assert isinstance(orig.X, DaskArray)
+    assert isinstance(orig.obsm["da"], DaskArray)
+    assert isinstance(orig.layers["da"], DaskArray)
+    assert isinstance(orig.varm["da"], DaskArray)
+    assert isinstance(orig.uns["da"]["da"], DaskArray)
+
     curr = orig.to_memory()
     assert_equal(orig, curr)
     assert isinstance(curr.X, np.ndarray)
@@ -185,11 +196,11 @@ def test_dask_to_memory_unbacked():
     assert isinstance(curr.varm["da"], np.ndarray)
     assert isinstance(curr.layers["da"], np.ndarray)
     assert isinstance(curr.uns["da"]["da"], np.ndarray)
-    assert isinstance(orig.X, DaskArray)
-    assert isinstance(orig.obsm["da"], DaskArray)
-    assert isinstance(orig.layers["da"], DaskArray)
-    assert isinstance(orig.varm["da"], DaskArray)
-    assert isinstance(orig.uns["da"]["da"], DaskArray)
+    assert isinstance(orig.X, np.ndarray)
+    assert isinstance(orig.obsm["da"], np.ndarray)
+    assert isinstance(orig.layers["da"], np.ndarray)
+    assert isinstance(orig.varm["da"], np.ndarray)
+    assert isinstance(orig.uns["da"]["da"], np.ndarray)
 
 
 def test_to_memory_raw():
@@ -202,9 +213,10 @@ def test_to_memory_raw():
     with_raw = orig[:, ::2].copy()
     with_raw.raw = orig.copy()
 
+    assert isinstance(with_raw.raw.X, DaskArray)
+    assert isinstance(with_raw.raw.varm["da"], DaskArray)
+
     curr = with_raw.to_memory()
 
     assert isinstance(curr.raw.X, np.ndarray)
     assert isinstance(curr.raw.varm["da"], np.ndarray)
-    assert isinstance(with_raw.raw.X, DaskArray)
-    assert isinstance(with_raw.raw.varm["da"], DaskArray)

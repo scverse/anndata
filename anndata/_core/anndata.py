@@ -1480,47 +1480,45 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def _to_memory_copy(self):
-        """Creates a new adata that has the computed results of the previous adata.
-        This is for the unbacked case
+    def _to_memory_compute_lazy(self):
         """
-        new = {}
+        Instantiates lazy objects stored.
+        For example calls compute() on dask.array
+        """
 
-        if self.obsm is not None:
-            new["obsm"] = AxisArrays(
-                self, 0, vals={k: to_memory(v) for k, v in self.obsm.items()}
-            )
-        if self.varm is not None:
-            new["varm"] = AxisArrays(
-                self, 1, vals={k: to_memory(v) for k, v in self.varm.items()}
-            )
-        if self.obsp is not None:
-            new["obsp"] = PairwiseArrays(
-                self, 0, vals={k: to_memory(v) for k, v in self.obsp.items()}
-            )
-        if self.varp is not None:
-            new["varp"] = PairwiseArrays(
-                self, 1, vals={k: to_memory(v) for k, v in self.varp.items()}
-            )
+        for attr_name in ["obsm", "varm", "obsp", "varp", "layers"]:
+            attr = getattr(self, attr_name, None)
+            if attr is not None:
+                for k, v in attr.items():
+                    if isinstance(v, DaskArray):
+                        attr[k] = v.compute()
+
         if self.uns is not None:
-            new["uns"] = {k: to_memory(v) for k, v in self.uns.items()}
-        if self.layers is not None:
-            new["layers"] = {k: to_memory(v) for k, v in self.layers.items()}
-        if self.raw is not None:
-            new["raw"] = {
-                "X": to_memory(self.raw.X),
-                "var": self.raw.var,
-                "varm": {k: to_memory(v) for k, v in self.raw.varm.items()},
-            }
 
-        for key in ["X", "obs", "var"]:
-            elem = getattr(self, key)
-            if elem is not None:
-                elem = to_memory(elem)
-                new[key] = elem
-        if self._has_X():
-            new["dtype"] = new["X"].dtype
-        return AnnData(**new)
+            maps = []
+            if isinstance(self.uns, Mapping):
+                maps.append(self.uns)
+            while maps:
+                uns = maps.pop()
+                for k, v in uns.items():
+                    if isinstance(v, DaskArray):
+                        uns[k] = v.compute()
+                    elif isinstance(v, Mapping):
+                        maps.append(v)
+
+        if self.raw is not None:
+            if isinstance(self.raw.X, DaskArray):
+                self.raw._X = self.raw.X.compute()
+            if self.raw._varm is not None:
+                for k, v in self.raw._varm.items():
+                    if isinstance(v, DaskArray):
+                        self.raw._varm[k] = v.compute()
+
+        if self.X is not None:
+            if isinstance(self.X, DaskArray):
+                self.X = self.X.compute()
+
+        return self
 
     def to_memory(self) -> "AnnData":
         """Load backed AnnData object into memory.
@@ -1535,7 +1533,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         if not self.isbacked:
-            adata = self._to_memory_copy()
+            adata = self._to_memory_compute_lazy()
         else:
             elems = {"X": to_memory(self.X)}
             if self.raw is not None:
