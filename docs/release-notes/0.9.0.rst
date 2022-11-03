@@ -14,4 +14,4 @@
 
 .. rubric:: Deprecations
 
-* :method:`AnnData.concatenate` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :smaller:`ivirshup`
+* :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :smaller:`ivirshup`
