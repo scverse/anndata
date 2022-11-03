@@ -18,7 +18,7 @@ from anndata.tests.helpers import (
     slice_subset,
     single_subset,
     assert_equal,
-    darr_from_arr,
+    as_dense_dask_array,
     gen_adata_dask_args,
 )
 
@@ -62,7 +62,7 @@ def adata_parameterized(request):
 
 
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, darr_from_arr],
+    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
     ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def matrix_type(request):

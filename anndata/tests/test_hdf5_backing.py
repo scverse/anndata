@@ -8,7 +8,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import (
-    darr_from_arr,
+    as_dense_dask_array,
     gen_adata_dask_args,
     gen_adata,
     assert_equal,
@@ -53,7 +53,7 @@ def adata():
 
 
 @pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, darr_from_arr],
+    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
     ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
 )
 def mtx_format(request):
@@ -225,7 +225,7 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     [
         pytest.param(asarray, id="dense_array"),
         pytest.param(sparse.csr_matrix, id="csr_matrix"),
-        pytest.param(darr_from_arr, id="dask_array"),
+        pytest.param(as_dense_dask_array, id="dask_array"),
     ],
 )
 def test_to_memory_full(tmp_path, array_type):

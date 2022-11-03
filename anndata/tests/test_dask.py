@@ -6,7 +6,7 @@ import pandas as pd
 from anndata._core.anndata import AnnData
 import pytest
 from anndata.tests.helpers import (
-    darr_from_arr,
+    as_dense_dask_array,
     gen_adata_dask_args,
     gen_adata,
     assert_equal,
@@ -203,8 +203,8 @@ def test_assert_equal_dask_sparse_arrays():
 def test_dask_to_memory_unbacked():
     import numpy as np
 
-    orig = gen_adata((15, 10), X_type=darr_from_arr, **gen_adata_dask_args)
-    orig.uns = {"da": {"da": darr_from_arr(np.ones(12))}}
+    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **gen_adata_dask_args)
+    orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}
     curr = orig.to_memory()
     assert_equal(orig, curr)
     assert isinstance(curr.X, np.ndarray)

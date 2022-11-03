@@ -19,7 +19,7 @@ from anndata._core import merge
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     assert_equal,
-    darr_from_arr_dense,
+    as_dense_dask_array,
     gen_adata,
     gen_adata_dask_args,
 )
@@ -41,7 +41,7 @@ def _filled_array_np(a, fill_value=None):
 
 @filled_like.register(DaskArray)
 def _filled_array(a, fill_value=None):
-    return darr_from_arr_dense(_filled_array_np(a, fill_value))
+    return as_dense_dask_array(_filled_array_np(a, fill_value))
 
 
 @filled_like.register(sparse.spmatrix)
@@ -88,7 +88,7 @@ def array_type(request):
 # test_assert(arr1,arr2) = test_assert(arr1.todense(),arr2.todense())
 # is the expected behaviour.
 @pytest.fixture(
-    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, darr_from_arr_dense],
+    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
     ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def array_type_dense(request):
