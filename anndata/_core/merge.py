@@ -121,8 +121,6 @@ def equal_dask_array(a, b) -> bool:
     if isinstance(b, DaskArray):
         if tokenize(a) == tokenize(b):
             return True
-    # TODO: If we are going to give a performance warning what should it
-    # we say or recommend in the message?
     return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
