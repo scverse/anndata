@@ -351,7 +351,6 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(DaskArray)
 def assert_equal_dask_array(a, b, exact=False, elem_name=None):
-
     from dask.array.utils import assert_eq
 
     if exact:
