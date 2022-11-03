@@ -90,16 +90,8 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-    ),
-    varm_types: "Collection[Type]" = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-    ),
+    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
 ) -> AnnData:
     """\
