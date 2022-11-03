@@ -21,7 +21,7 @@ from anndata.tests.helpers import (
     assert_equal,
     as_dense_dask_array,
     gen_adata,
-    gen_adata_dask_args,
+    GEN_ADATA_DASK_ARGS,
 )
 from anndata.utils import asarray
 from anndata.compat import DaskArray
@@ -168,7 +168,7 @@ def test_concat_interface_errors():
 def test_concatenate_roundtrip(
     join_type, array_type_dense, concat_func, backwards_compat
 ):
-    adata = gen_adata((100, 10), X_type=array_type_dense, **gen_adata_dask_args)
+    adata = gen_adata((100, 10), X_type=array_type_dense, **GEN_ADATA_DASK_ARGS)
 
     remaining = adata.obs_names
     subsets = []
@@ -1048,8 +1048,8 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
 
 
 def test_transposed_concat(array_type_dense, axis, join_type, merge_strategy, fill_val):
-    lhs = gen_adata((10, 10), X_type=array_type_dense, **gen_adata_dask_args)
-    rhs = gen_adata((10, 12), X_type=array_type_dense, **gen_adata_dask_args)
+    lhs = gen_adata((10, 10), X_type=array_type_dense, **GEN_ADATA_DASK_ARGS)
+    rhs = gen_adata((10, 12), X_type=array_type_dense, **GEN_ADATA_DASK_ARGS)
 
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
     b = concat(
@@ -1065,8 +1065,8 @@ def test_batch_key(axis, array_type_dense):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
 
-    lhs = gen_adata((10, 10), **gen_adata_dask_args)
-    rhs = gen_adata((10, 12), **gen_adata_dask_args)
+    lhs = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
+    rhs = gen_adata((10, 12), **GEN_ADATA_DASK_ARGS)
 
     # There is probably a prettier way to do this
     annot = get_annot(concat([lhs, rhs], axis=axis))
@@ -1259,8 +1259,8 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
 
 @pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
 def test_concat_outer_aligned_mapping(elem):
-    a = gen_adata((5, 5), **gen_adata_dask_args)
-    b = gen_adata((3, 5), **gen_adata_dask_args)
+    a = gen_adata((5, 5), **GEN_ADATA_DASK_ARGS)
+    b = gen_adata((3, 5), **GEN_ADATA_DASK_ARGS)
     del b.obsm[elem]
 
     concated = concat({"a": a, "b": b}, join="outer", label="group")

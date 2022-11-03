@@ -7,7 +7,7 @@ from anndata._core.anndata import AnnData
 import pytest
 from anndata.tests.helpers import (
     as_dense_dask_array,
-    gen_adata_dask_args,
+    GEN_ADATA_DASK_ARGS,
     gen_adata,
     assert_equal,
     asarray,
@@ -203,7 +203,7 @@ def test_assert_equal_dask_sparse_arrays():
 def test_dask_to_memory_unbacked():
     import numpy as np
 
-    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **gen_adata_dask_args)
+    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)
     orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}
     curr = orig.to_memory()
     assert_equal(orig, curr)
@@ -223,7 +223,7 @@ def test_to_memory_raw():
     import numpy as np
     import dask.array as da
 
-    orig = gen_adata((20, 10), **gen_adata_dask_args)
+    orig = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
     orig.X = da.ones((20, 10))
 
     with_raw = orig[:, ::2].copy()

@@ -3,7 +3,7 @@ import pytest
 
 import anndata as ad
 from anndata._core.anndata import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal, gen_adata, gen_adata_dask_args
+from anndata.tests.helpers import assert_equal, gen_adata, GEN_ADATA_DASK_ARGS
 
 
 # -------------------------------------------------------------------------------
@@ -137,7 +137,7 @@ def test_raw_as_parent_view():
 
 def test_to_adata():
     # https://github.com/scverse/anndata/pull/404
-    adata = gen_adata((20, 10), **gen_adata_dask_args)
+    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
 
     with_raw = adata[:, ::2].copy()
     with_raw.raw = adata.copy()

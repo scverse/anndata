@@ -19,7 +19,7 @@ from anndata.utils import asarray
 from anndata.compat import DaskArray
 
 # Give this to gen_adata when dask array support is expected.
-gen_adata_dask_args = dict(
+GEN_ADATA_DASK_ARGS = dict(
     obsm_types=(
         sparse.csr_matrix,
         np.ndarray,

@@ -9,7 +9,7 @@ from scipy import sparse
 import anndata as ad
 from anndata.tests.helpers import (
     as_dense_dask_array,
-    gen_adata_dask_args,
+    GEN_ADATA_DASK_ARGS,
     gen_adata,
     assert_equal,
     subset_func,
@@ -163,7 +163,7 @@ def test_backing_copy(adata, tmp_path, backing_h5ad):
 def test_backed_raw(tmp_path):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10), **gen_adata_dask_args)
+    mem_adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     mem_adata.raw = mem_adata
     mem_adata.write(backed_pth)
 
@@ -230,8 +230,8 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
 )
 def test_to_memory_full(tmp_path, array_type):
     backed_pth = tmp_path / "backed.h5ad"
-    mem_adata = gen_adata((15, 10), X_type=array_type, **gen_adata_dask_args)
-    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **gen_adata_dask_args)
+    mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     mem_adata.write_h5ad(backed_pth, compression="lzf")
 
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
