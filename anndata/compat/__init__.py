@@ -61,6 +61,16 @@ except ImportError:
             return "mock dask.array.core.Array"
 
 
+try:
+    from dask.dataframe import DataFrame as DaskDataFrame
+except ImportError:
+
+    class DaskDataFrame:
+        @staticmethod
+        def __repr__():
+            return "mock dask.dataframe.core.DataFrame"
+
+
 @singledispatch
 def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
     if default is Empty:
