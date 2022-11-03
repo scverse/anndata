@@ -1547,10 +1547,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Args:
             copy (bool, optional):
-            If file is not backed and if set it will return a copy of
-            anndata with the lazy objects computed. Original anndata will
-            still contain the lazy objects.
-            If false the lazy objects will be replaced by their computed
+                If file is not backed and if set it will return a copy of
+                anndata with the lazy objects computed. Original anndata will
+                still contain the lazy objects.
+                If false the lazy objects will be replaced by their computed
                 versions. Defaults to False.
 
         Example
