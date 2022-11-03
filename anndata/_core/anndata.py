@@ -1523,12 +1523,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         This is for the unbacked case
         """
         new = {}
-        for attr_name in ["obsm", "varm", "obsp", "varp", "layers"]:
+        for attr_name in ["obsm", "varm", "obsp", "varp", "layers", "uns"]:
             attr = getattr(self, attr_name, None)
             if attr is not None:
                 new[attr_name] = {k: to_memory(v) for k, v in attr.items()}
-        if self.uns is not None:
-            new["uns"] = {k: to_memory(v) for k, v in self.uns.items()}
         if self.raw is not None:
             new["raw"] = {
                 "X": to_memory(self.raw.X),
