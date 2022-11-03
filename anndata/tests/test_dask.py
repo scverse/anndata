@@ -10,7 +10,6 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     gen_adata,
     assert_equal,
-    asarray,
 )
 from anndata.compat import DaskArray
 
