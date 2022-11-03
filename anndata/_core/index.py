@@ -121,7 +121,7 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
 @singledispatch
 def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
     # Select as combination of indexes, not coordinates
-    # Correcting for indexing behavior of np.ndarray
+    # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
