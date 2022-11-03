@@ -173,32 +173,6 @@ def test_assign_X(adata):
     assert_equal(adata_copy.X, np.ones(adata.X.shape))
 
 
-def test_assert_equal_dask_arrays():
-
-    import dask.array as da
-
-    a = da.from_array([[1, 2, 3], [4, 5, 6]])
-    b = da.from_array([[1, 2, 3], [4, 5, 6]])
-
-    assert_equal(a, b)
-
-    c = da.ones(10, dtype="int32")
-    d = da.ones(10, dtype="int64")
-    assert_equal(c, d)
-
-
-def test_assert_equal_dask_sparse_arrays():
-
-    import dask.array as da
-    from scipy import sparse
-
-    x = sparse.random(10, 10, format="csr", density=0.1)
-    y = da.from_array(asarray(x))
-
-    assert_equal(x, y)
-    assert_equal(y, x)
-
-
 # Test if dask arrays turn into numpy arrays after to_memory is called
 def test_dask_to_memory_unbacked():
     import numpy as np

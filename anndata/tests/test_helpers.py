@@ -188,3 +188,29 @@ def test_assert_equal_aligned_mapping_empty():
         with pytest.raises(AssertionError):
             assert_equal(getattr(adata, attr), getattr(diff_idx, attr))
         assert_equal(getattr(adata, attr), getattr(same_idx, attr))
+
+
+def test_assert_equal_dask_arrays():
+
+    import dask.array as da
+
+    a = da.from_array([[1, 2, 3], [4, 5, 6]])
+    b = da.from_array([[1, 2, 3], [4, 5, 6]])
+
+    assert_equal(a, b)
+
+    c = da.ones(10, dtype="int32")
+    d = da.ones(10, dtype="int64")
+    assert_equal(c, d)
+
+
+def test_assert_equal_dask_sparse_arrays():
+
+    import dask.array as da
+    from scipy import sparse
+
+    x = sparse.random(10, 10, format="csr", density=0.1)
+    y = da.from_array(asarray(x))
+
+    assert_equal(x, y)
+    assert_equal(y, x)
