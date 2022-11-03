@@ -11,3 +11,7 @@
 .. rubric:: Updates
 
 * Bump minimum python version to 3.8 :pr:`820` :smaller:`ivirshup`
+
+.. rubric:: Deprecations
+
+* :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :smaller:`ivirshup`
