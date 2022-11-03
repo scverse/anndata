@@ -41,7 +41,7 @@ def adata(sizes):
     (M, N), chunks = sizes
     X = da.random.random((M, N), chunks=chunks)
     obs = pd.DataFrame(
-        dict(batch=da.array(["a", "b"])[da.random.randint(0, 2, M)]),
+        {"batch": np.random.choice(["a", "b"], M)},
         index=[f"cell{i:03d}" for i in range(M)],
     )
     var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
