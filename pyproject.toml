@@ -71,6 +71,7 @@ doc = [
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",
+    "myst_parser",
 ]
 test = [
     "loompy>=3.0.5",
