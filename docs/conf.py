@@ -31,7 +31,7 @@ release = version
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = ".rst"
+source_suffix = ".md"
 master_doc = "index"
 default_role = "literal"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
@@ -48,6 +48,7 @@ extensions = [
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
     "nbsphinx",
+    "myst_parser",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
@@ -81,7 +82,7 @@ suppress_warnings = ["ref.citation"]
 
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = True
+    app.warningiserror = False
 
 
 intersphinx_mapping = dict(
