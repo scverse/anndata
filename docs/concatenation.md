@@ -5,9 +5,9 @@ With {func}`~anndata.concat`, {class}`~anndata.AnnData` objects can be combined 
 - Concatenation is when we keep all sub elements of each object, and stack these elements in an ordered way.
 - Merging is combining a set of collections into one resulting collection which contains elements from the objects.
 
-:::{note}
+```{note}
 This function borrows from similar functions in [pandas] and [xarray]. Argument which are used to control concatenation are modeled after {func}`pandas.concat` while strategies for merging are inspired by {func}`xarray.merge`'s `compat` argument.
-:::
+```
 
 ## Concatenation
 

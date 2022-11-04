@@ -11,14 +11,12 @@
 
 # News
 
-```{eval-rst}
-.. include:: news.rst
+```{include} news.md
 ```
 
 # Latest additions
 
-```{eval-rst}
-.. include:: release-notes/release-latest.rst
+```{include} release-notes/release-latest.md
 ```
 
 ```{toctree}

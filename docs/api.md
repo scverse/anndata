@@ -75,12 +75,11 @@ Writing to other formats.
 ```
 
 (experimental-api)=
-
 ## Experimental API
 
-:::{warning}
+```{warning}
 API's in the experimenal module are currently in development and subject to change at any time.
-:::
+```
 
 Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files. In paritcular, for pytorch-based models.
 

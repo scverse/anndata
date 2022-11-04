@@ -31,13 +31,13 @@ release = version
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = ".md"
 master_doc = "index"
 default_role = "literal"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 pygments_style = "sphinx"
 
 extensions = [
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
@@ -48,7 +48,6 @@ extensions = [
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
     "nbsphinx",
-    "myst_parser",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
@@ -77,12 +76,15 @@ nitpick_ignore = [
         for kind in ["", "View"]
     ],
 ]
-suppress_warnings = ["ref.citation"]
+suppress_warnings = [
+    "ref.citation",
+    "myst.header",  # https://github.com/executablebooks/MyST-Parser/issues/262
+]
 
 
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = False
+    app.warningiserror = True
 
 
 intersphinx_mapping = dict(
