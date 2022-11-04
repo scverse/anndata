@@ -2,6 +2,7 @@ from functools import singledispatch
 from os import PathLike
 from pathlib import Path
 from typing import Optional, Union, Iterator, Literal
+from collections.abc import Mapping
 
 import h5py
 
@@ -97,15 +98,7 @@ def to_memory(x):
 
     If they already are in-memory, (or are just unrecognized) pass a copy through.
     """
-    if hasattr(x, "copy"):
-        return x.copy()
-    # primitive type like int float str
-    return x
-
-
-@to_memory.register(dict)
-def _(x):
-    return {k: to_memory(v) for k, v in x.items()}
+    return x.copy()
 
 
 @to_memory.register(ZarrArray)
@@ -119,6 +112,19 @@ def _(x: SparseDataset):
     return x.to_memory()
 
 
-@to_memory.register(DaskArray)
-def _(x: DaskArray):
+@singledispatch
+def _to_memory_helper(x, copy=False):
+    if copy and hasattr(x, "copy"):
+        return x.copy()
+    else:
+        return x
+
+
+@_to_memory_helper.register(DaskArray)
+def _to_memory_helper_dask(x, copy=False):
     return x.compute()
+
+
+@_to_memory_helper.register(Mapping)
+def _to_memory_helper_mapping(x: Mapping, copy=False):
+    return {k: _to_memory_helper(v, copy) for k, v in x.items()}

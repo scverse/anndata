@@ -26,7 +26,7 @@ from scipy.sparse import issparse, csr_matrix
 from anndata._warnings import ImplicitModificationWarning
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
-from .file_backing import AnnDataFileManager, to_memory
+from .file_backing import AnnDataFileManager, to_memory, _to_memory_helper
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -1480,64 +1480,33 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def _to_memory_replace_lazy(self):
-        """
-        Instantiates lazy objects stored.
-        For example calls compute() on dask.array
-        """
-
-        for attr_name in ["obsm", "varm", "obsp", "varp", "layers"]:
-            attr = getattr(self, attr_name, None)
-            if attr is not None:
-                for k, v in attr.items():
-                    if isinstance(v, DaskArray):
-                        attr[k] = v.compute()
-
-        if self.uns is not None:
-
-            maps = []
-            if isinstance(self.uns, Mapping):
-                maps.append(self.uns)
-            while maps:
-                uns = maps.pop()
-                for k, v in uns.items():
-                    if isinstance(v, DaskArray):
-                        uns[k] = v.compute()
-                    elif isinstance(v, Mapping):
-                        maps.append(v)
-
-        if self.raw is not None:
-            if isinstance(self.raw.X, DaskArray):
-                self.raw._X = self.raw.X.compute()
-            if self.raw._varm is not None:
-                for k, v in self.raw._varm.items():
-                    if isinstance(v, DaskArray):
-                        self.raw._varm[k] = v.compute()
-
-        if self.X is not None:
-            if isinstance(self.X, DaskArray):
-                self.X = self.X.compute()
-
-    def _to_memory_copy(self):
-        """Creates a new adata that has the computed results of the previous adata.
-        This is for the unbacked case
+    def _to_memory_unbacked(self, copy=False):
+        """Creates a new adata that has the computed results of the previous
+        adata. This is for the unbacked case.
         """
         new = {}
-        for attr_name in ["obsm", "varm", "obsp", "varp", "layers", "uns"]:
+        for attr_name in [
+            "X",
+            "obs",
+            "var",
+            "obsm",
+            "varm",
+            "obsp",
+            "varp",
+            "layers",
+            "uns",
+        ]:
             attr = getattr(self, attr_name, None)
             if attr is not None:
-                new[attr_name] = {k: to_memory(v) for k, v in attr.items()}
+                new[attr_name] = _to_memory_helper(attr, copy)
+
         if self.raw is not None:
             new["raw"] = {
-                "X": to_memory(self.raw.X),
-                "var": self.raw.var,
-                "varm": {k: to_memory(v) for k, v in self.raw.varm.items()},
+                "X": _to_memory_helper(self.raw.X, copy),
+                "var": _to_memory_helper(self.raw.var, copy),
+                "varm": _to_memory_helper(self.raw.varm, copy),
             }
-        for key in ["X", "obs", "var"]:
-            elem = getattr(self, key)
-            if elem is not None:
-                elem = to_memory(elem)
-                new[key] = elem
+
         if self._has_X():
             new["dtype"] = new["X"].dtype
         return AnnData(**new)
@@ -1549,9 +1518,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             copy (bool, optional):
                 If file is not backed and if set it will return a copy of
                 anndata with the lazy objects computed. Original anndata will
-                still contain the lazy objects.
-                If false the lazy objects will be replaced by their computed
-                versions. Defaults to False.
+                still contain the lazy objects. If false the lazy objects
+                will be replaced by their computed versions in the returned
+                object but, their other contents reference to the objects from
+                original adata. Defaults to False.
 
         Example
         -------
@@ -1563,11 +1533,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         if not self.isbacked:
-            if copy:
-                adata = self._to_memory_copy()
-            else:
-                self._to_memory_replace_lazy()
-                adata = self
+            adata = self._to_memory_unbacked(copy=copy)
         else:
             elems = {"X": to_memory(self.X)}
             if self.raw is not None:
