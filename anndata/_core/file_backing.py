@@ -93,38 +93,33 @@ class AnnDataFileManager:
 
 
 @singledispatch
-def to_memory(x):
+def to_memory(x, copy=True):
     """Permissivley convert objects to in-memory representation.
 
     If they already are in-memory, (or are just unrecognized) pass a copy through.
     """
-    return x.copy()
-
-
-@to_memory.register(ZarrArray)
-@to_memory.register(h5py.Dataset)
-def _(x):
-    return x[...]
-
-
-@to_memory.register(SparseDataset)
-def _(x: SparseDataset):
-    return x.to_memory()
-
-
-@singledispatch
-def _to_memory_helper(x, copy=False):
     if copy and hasattr(x, "copy"):
         return x.copy()
     else:
         return x
 
 
-@_to_memory_helper.register(DaskArray)
-def _to_memory_helper_dask(x, copy=False):
+@to_memory.register(ZarrArray)
+@to_memory.register(h5py.Dataset)
+def _(x, copy=True):
+    return x[...]
+
+
+@to_memory.register(SparseDataset)
+def _(x: SparseDataset, copy=True):
+    return x.to_memory()
+
+
+@to_memory.register(DaskArray)
+def _(x, copy=True):
     return x.compute()
 
 
-@_to_memory_helper.register(Mapping)
-def _to_memory_helper_mapping(x: Mapping, copy=False):
-    return {k: _to_memory_helper(v, copy) for k, v in x.items()}
+@to_memory.register(Mapping)
+def _to_memory_helper_mapping(x: Mapping, copy=True):
+    return {k: to_memory(v, copy=copy) for k, v in x.items()}

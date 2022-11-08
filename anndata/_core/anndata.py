@@ -26,7 +26,7 @@ from scipy.sparse import issparse, csr_matrix
 from anndata._warnings import ImplicitModificationWarning
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
-from .file_backing import AnnDataFileManager, to_memory, _to_memory_helper
+from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -1480,9 +1480,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def _to_memory_unbacked(self, copy=False):
-        """Creates a new adata that has the computed results of the previous
-        adata. This is for the unbacked case.
+    def to_memory(self, copy=True) -> "AnnData":
+        """Return a new AnnData object with all backed arrays loaded into memory.
+
+        Params
+        ------
+            copy:
+                Whether the arrays that are already in-memory should be copied.
+
+        Example
+        -------
+
+        .. code:: python
+
+            import anndata
+            backed = anndata.read_h5ad("file.h5ad", backed="r")
+            mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         new = {}
         for attr_name in [
@@ -1498,53 +1511,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ]:
             attr = getattr(self, attr_name, None)
             if attr is not None:
-                new[attr_name] = _to_memory_helper(attr, copy)
+                new[attr_name] = to_memory(attr, copy)
 
         if self.raw is not None:
             new["raw"] = {
-                "X": _to_memory_helper(self.raw.X, copy),
-                "var": _to_memory_helper(self.raw.var, copy),
-                "varm": _to_memory_helper(self.raw.varm, copy),
+                "X": to_memory(self.raw.X, copy),
+                "var": to_memory(self.raw.var, copy),
+                "varm": to_memory(self.raw.varm, copy),
             }
 
         if self._has_X():
             new["dtype"] = new["X"].dtype
-        return AnnData(**new)
 
-    def to_memory(self, copy=False) -> "AnnData":
-        """Load backed AnnData object into memory.
-
-        Args:
-            copy (bool, optional):
-                If file is not backed and if set it will return a copy of
-                anndata with the lazy objects computed. Original anndata will
-                still contain the lazy objects. If false the lazy objects
-                will be replaced by their computed versions in the returned
-                object but, their other contents reference to the objects from
-                original adata. Defaults to False.
-
-        Example
-        -------
-
-        .. code:: python
-
-            import anndata
-            backed = anndata.read_h5ad("file.h5ad", backed="r")
-            mem = backed[backed.obs["cluster"] == "a", :].to_memory()
-        """
-        if not self.isbacked:
-            adata = self._to_memory_unbacked(copy=copy)
-        else:
-            elems = {"X": to_memory(self.X)}
-            if self.raw is not None:
-                elems["raw"] = {
-                    "X": to_memory(self.raw.X),
-                    "var": self.raw.var,
-                    "varm": self.raw.varm,
-                }
-            adata = self._mutated_copy(**elems)
+        if self.isbacked:
             self.file.close()
-        return adata
+
+        return AnnData(**new)
 
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
