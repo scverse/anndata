@@ -339,7 +339,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
+        # Special case for old neighbors, backwards compat. Remove in anndata 0.8.
         uns_new = _slice_uns_sparse_matrices(
             copy(adata_ref._uns), self._oidx, adata_ref.n_obs
         )
@@ -468,7 +468,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 #       as in readwrite.read_10x_h5
                 if X.dtype != np.dtype(dtype):
                     X = X.astype(dtype)
-            elif isinstance(X, ZarrArray):
+            elif isinstance(X, (ZarrArray, DaskArray)):
                 X = X.astype(dtype)
             else:  # is np.ndarray or a subclass, convert to true np.ndarray
                 X = np.array(X, dtype, copy=False)
@@ -1480,8 +1480,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self) -> "AnnData":
-        """Load backed AnnData object into memory.
+    def to_memory(self, copy=True) -> "AnnData":
+        """Return a new AnnData object with all backed arrays loaded into memory.
+
+        Params
+        ------
+            copy:
+                Whether the arrays that are already in-memory should be copied.
 
         Example
         -------
@@ -1492,19 +1497,36 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             backed = anndata.read_h5ad("file.h5ad", backed="r")
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
-        if not self.isbacked:
-            raise ValueError("Object is already in memory.")
-        else:
-            elems = {"X": to_memory(self.X)}
-            if self.raw is not None:
-                elems["raw"] = {
-                    "X": to_memory(self.raw.X),
-                    "var": self.raw.var,
-                    "varm": self.raw.varm,
-                }
-            adata = self._mutated_copy(**elems)
+        new = {}
+        for attr_name in [
+            "X",
+            "obs",
+            "var",
+            "obsm",
+            "varm",
+            "obsp",
+            "varp",
+            "layers",
+            "uns",
+        ]:
+            attr = getattr(self, attr_name, None)
+            if attr is not None:
+                new[attr_name] = to_memory(attr, copy)
+
+        if self.raw is not None:
+            new["raw"] = {
+                "X": to_memory(self.raw.X, copy),
+                "var": to_memory(self.raw.var, copy),
+                "varm": to_memory(self.raw.varm, copy),
+            }
+
+        if self._has_X():
+            new["dtype"] = new["X"].dtype
+
+        if self.isbacked:
             self.file.close()
-        return adata
+
+        return AnnData(**new)
 
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""

@@ -103,3 +103,25 @@ def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
             getattr(adata, field)["df"] = df(dim)
     assert isinstance(getattr(adata, field)["df"], np.ndarray)
     assert np.issubdtype(getattr(adata, field)["df"].dtype, dtype)
+
+
+def test_setting_daskarray(adata):
+    import dask.array as da
+
+    adata.obsp["a"] = da.ones((M, M))
+    adata.varp["a"] = da.ones((N, N))
+    assert da.all(adata.obsp["a"] == da.ones((M, M)))
+    assert da.all(adata.varp["a"] == da.ones((N, N)))
+    assert type(adata.obsp["a"]) == da.Array
+    assert type(adata.varp["a"]) == da.Array
+
+    h = joblib.hash(adata)
+    with pytest.raises(ValueError):
+        adata.obsp["b"] = da.ones((int(M / 2), M))
+    with pytest.raises(ValueError):
+        adata.obsp["b"] = da.ones((M, int(M * 2)))
+    with pytest.raises(ValueError):
+        adata.varp["b"] = da.ones((int(N / 2), 10))
+    with pytest.raises(ValueError):
+        adata.varp["b"] = da.ones((N, int(N * 2)))
+    assert h == joblib.hash(adata)

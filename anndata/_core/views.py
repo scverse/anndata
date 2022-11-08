@@ -11,7 +11,7 @@ from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
-from ..compat import ZappyArray
+from ..compat import ZappyArray, DaskArray
 
 
 class _SetItemMixin:
@@ -91,6 +91,12 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
+# Same behavior as ArrayView
+# To show the type of the view
+class DaskArrayView(ArrayView):
+    pass
+
+
 # Unlike array views, SparseCSRView and SparseCSCView
 # do not propagate through subsetting
 class SparseCSRView(_ViewMixin, sparse.csr_matrix):
@@ -128,6 +134,11 @@ def as_view(obj, view_args):
 @as_view.register(np.ndarray)
 def as_view_array(array, view_args):
     return ArrayView(array, view_args=view_args)
+
+
+@as_view.register(DaskArray)
+def as_view_dask_array(array, view_args):
+    return DaskArrayView(array, view_args=view_args)
 
 
 @as_view.register(pd.DataFrame)
