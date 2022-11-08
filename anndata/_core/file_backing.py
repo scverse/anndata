@@ -8,7 +8,7 @@ import h5py
 
 from . import anndata
 from .sparse_dataset import BaseCompressedSparseDataset
-from ..compat import ZarrArray, DaskArray
+from ..compat import ZarrArray, ZarrGroup, DaskArray
 
 
 class AnnDataFileManager:
@@ -127,3 +127,20 @@ def _(x, copy=True):
 @to_memory.register(Mapping)
 def _(x: Mapping, copy=True):
     return {k: to_memory(v, copy=copy) for k, v in x.items()}
+
+
+@singledispatch
+def filename(x):
+    raise NotImplementedError(f"Not implemented for {type(x)}")
+
+
+@filename.register(h5py.Group)
+@filename.register(h5py.Dataset)
+def _(x):
+    return x.file.filename
+
+
+@filename.register(ZarrArray)
+@filename.register(ZarrGroup)
+def _(x):
+    return x.store.path

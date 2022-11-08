@@ -12,7 +12,7 @@ import pandas as pd
 from scipy import sparse
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from .._core.file_backing import AnnDataFileManager
+from .._core.file_backing import AnnDataFileManager, filename
 from .._core.anndata import AnnData
 from ..compat import (
     _from_fixed_length_strings,
@@ -110,9 +110,8 @@ def write_h5ad(
 def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
     real_key = None  # Flag for if temporary key was used
     if key in f:
-        if (
-            isinstance(value, (h5py.Group, h5py.Dataset, BaseCompressedSparseDataset))
-            and value.file.filename == f.file.filename
+        if isinstance(value, BaseCompressedSparseDataset) and (
+            filename(value.group) == filename(f)
         ):  # Write to temporary key before overwriting
             real_key = key
             # Transform key to temporary, e.g. raw/X -> raw/_X, or X -> _X
