@@ -121,5 +121,5 @@ def _(x, copy=True):
 
 
 @to_memory.register(Mapping)
-def _to_memory_helper_mapping(x: Mapping, copy=True):
+def _(x: Mapping, copy=True):
     return {k: to_memory(v, copy=copy) for k, v in x.items()}
