@@ -28,6 +28,8 @@ from scipy.sparse import spmatrix
 
 from .anndata import AnnData
 from ..utils import asarray
+from ..compat import DaskArray
+from .index import _subset, make_slice
 
 T = TypeVar("T")
 
@@ -105,6 +107,21 @@ def equal(a, b) -> bool:
 @equal.register(pd.DataFrame)
 def equal_dataframe(a, b) -> bool:
     return a.equals(b)
+
+
+@equal.register(DaskArray)
+def equal_dask_array(a, b) -> bool:
+    import dask.array as da
+    from dask.base import tokenize
+
+    if a is b:
+        return True
+    if a.shape != b.shape:
+        return False
+    if isinstance(b, DaskArray):
+        if tokenize(a) == tokenize(b):
+            return True
+    return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
 @equal.register(np.ndarray)
@@ -330,7 +347,6 @@ class Reindexer(object):
     def __init__(self, old_idx, new_idx):
         self.old_idx = old_idx
         self.new_idx = new_idx
-
         self.no_change = new_idx.equals(old_idx)
 
         new_pos = new_idx.get_indexer(old_idx)
@@ -356,6 +372,8 @@ class Reindexer(object):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, DaskArray):
+            return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -363,6 +381,23 @@ class Reindexer(object):
         if fill_value is None:
             fill_value = np.NaN
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
+
+    def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
+        import dask.array as da
+
+        if fill_value is None:
+            fill_value = default_fill_value([el])
+        shape = list(el.shape)
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape[axis] = len(self.new_idx)
+            return da.broadcast_to(fill_value, tuple(shape))
+
+        indexer = self.old_idx.get_indexer(self.new_idx)
+
+        sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
+        sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+        return sub_el
 
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
