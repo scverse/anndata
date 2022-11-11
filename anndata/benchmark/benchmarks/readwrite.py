@@ -76,8 +76,6 @@ BM_43K_CSC_PATH = Path(__file__).parent.parent / "datasets/BM2_43k-cells_CSC.h5a
 #         return anndata.read_zarr(self.filepath, backed="r")
 
 
-
-
 class H5ADInMemorySizeSuite:
     params = [PBMC_3K_PATH]
     param_names = ["input_path"]
@@ -99,10 +97,8 @@ class H5ADInMemorySizeSuite:
         return adata_size
 
 
-
-
 class H5ADReadSuite:
-    #params = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
+    # params = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
     params = [PBMC_3K_PATH]
     param_names = ["input_path"]
 
@@ -133,10 +129,10 @@ class H5ADReadSuite:
 
     def mem_read_backed_object(self, input_path):
         return anndata.read_h5ad(self.filepath, backed="r")
-    
+
 
 class H5ADWriteSuite:
-    #params = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
+    # params = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
     params = [PBMC_3K_PATH]
     param_names = ["input_path"]
 
@@ -176,7 +172,7 @@ class H5ADWriteSuite:
 
 
 class H5ADBackedWriteSuite(H5ADWriteSuite):
-    #params = [PBMC_REDUCED_PATH, PBMC_3K_PATH]
+    # params = [PBMC_REDUCED_PATH, PBMC_3K_PATH]
     params = [PBMC_3K_PATH]
     param_names = ["input_path"]
 

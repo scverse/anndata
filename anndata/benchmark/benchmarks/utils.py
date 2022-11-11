@@ -12,9 +12,7 @@ import anndata
 from anndata import AnnData
 
 
-
 def get_actualsize(input_obj):
-
     """Using Python Garbage Collector to calculate the size of all elements attached to an object"""
 
     memory_size = 0
@@ -29,6 +27,7 @@ def get_actualsize(input_obj):
                 new.append(obj)
         objects = gc.get_referents(*new)
     return memory_size
+
 
 def get_anndata_memsize(adata):
     recording = memory_usage(
