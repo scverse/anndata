@@ -1,3 +1,5 @@
+from ctypes import Union
+from typing import Any, Callable
 import warnings
 from pathlib import Path
 from os import PathLike, fspath
@@ -6,13 +8,14 @@ import pandas as pd
 import math
 import numpy as np
 from scipy.sparse import issparse
+from anndata._core.anndata import StorageType
+
+from anndata._io.read import GroupType
 
 from .. import AnnData
 from ..logging import get_logger
 from anndata._warnings import WriteWarning
-
-# Exports
-from .h5ad import write_h5ad as _write_h5ad
+from anndata._io.specs.registry import _REGISTRY, IORegistry, IOSpec, write_elem
 
 from ..utils import import_function
 
@@ -20,6 +23,31 @@ logger = get_logger(__name__)
 
 write_zarr = import_function("anndata._io.zarr", "write_zarr")
 
+def write_dispatched(
+    group: GroupType,
+    adata: AnnData,
+    dispatch_element: Callable[[Callable[[GroupType, str, Any, dict], Any], GroupType, str, Any], Any],
+    add_element_dispatcher: Callable[[Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any] = lambda x: x,
+) -> AnnData:
+    """
+    Custom reading of `filename` via `dispatcher` - limited to zarr and h5ad.
+    group
+        Data group.
+    adata
+        AnnData object
+    dispatch_element
+        Function for writing data from AnnData slots onto disk.
+    add_element_dispatcher:
+        Function for adding your own custom writer to AnnData's core, including overriding current methods.
+    """
+    add_element_dispatcher(_REGISTRY.register_write)
+    keys = ["X", "raw", "uns", "layers", "var", "obs", "varm", "obsm", "varp", "obsp"]
+    dict_keys = set(["obsm", "varm", "obsp", "varp", "layers", "uns"])
+    for key in keys:
+        elem = getattr(adata, key)
+        if key in dict_keys:
+            elem = dict(elem)
+        dispatch_element(write_elem, group, key, elem)
 
 def write_csvs(
     dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ","
