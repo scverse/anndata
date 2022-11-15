@@ -22,4 +22,3 @@ if not within_flit():
 
     # backwards compat / shortcut for default format
     from ._io import read_h5ad as read
-    

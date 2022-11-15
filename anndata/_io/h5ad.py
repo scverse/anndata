@@ -73,6 +73,7 @@ def write_h5ad(
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
+
     def dispatch_element(write_elem, group, key, elem):
         if key == "X":
             if key in as_dense and isinstance(elem, (sparse.spmatrix, SparseDataset)):
@@ -95,12 +96,14 @@ def write_h5ad(
                 write_elem(group, key, elem, dataset_kwargs=dataset_kwargs)
         else:
             write_elem(group, key, elem, dataset_kwargs=dataset_kwargs)
+
     with h5py.File(filepath, mode) as f:
         # TODO: Use spec writing system for this
         f = f["/"]
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
         write_dispatched(f, adata, dispatch_element)
+
 
 @report_write_key_on_error
 def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
