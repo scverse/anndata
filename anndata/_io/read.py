@@ -4,8 +4,17 @@ from collections import OrderedDict
 from os import PathLike, fspath
 from pathlib import Path
 from types import MappingProxyType
-from typing import (Any, Callable, Generator, Iterable, Iterator, Mapping, Optional, Tuple,
-                    Union)
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+)
 from warnings import warn
 
 import h5py
@@ -22,11 +31,16 @@ from .utils import is_float
 StorageType = Union[ZarrArray, ZarrGroup, H5Group, H5Array]
 GroupType = Union[zarr.Group, h5py.Group]
 
+
 def read_dispatched(
     group: GroupType,
-    dispatch_element: Callable[[Callable[[StorageType], Any], StorageType, str, IOSpec], Any],
+    dispatch_element: Callable[
+        [Callable[[StorageType], Any], StorageType, str, IOSpec], Any
+    ],
     dispatch_anndata_args: Callable[[GroupType, dict], dict] = lambda x, y: x,
-    add_element_dispatcher: Callable[[Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any] = lambda x: x,
+    add_element_dispatcher: Callable[
+        [Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any
+    ] = lambda x: x,
 ) -> AnnData:
     """
     Custom reading of `filename` via `dispatcher` - limited to zarr and h5ad.
