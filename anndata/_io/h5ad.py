@@ -20,6 +20,7 @@ from ..compat import (
     _decode_structured_array,
     _clean_uns,
 )
+from .write import write_dispatched
 from .utils import (
     H5PY_V3,
     report_read_key_on_error,
@@ -72,38 +73,34 @@ def write_h5ad(
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
+    def dispatch_element(write_elem, group, key, elem):
+        if key == "X":
+            if key in as_dense and isinstance(elem, (sparse.spmatrix, SparseDataset)):
+                write_sparse_as_dense(group, key, elem, dataset_kwargs=dataset_kwargs)
+            elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+                # If adata.isbacked, X should already be up to date
+                write_elem(group, key, elem, dataset_kwargs=dataset_kwargs)
+        elif key == "raw":
+            if "raw/X" in as_dense and isinstance(
+                elem.X, (sparse.spmatrix, SparseDataset)
+            ):
+                write_sparse_as_dense(
+                    group, "raw/X", elem.X, dataset_kwargs=dataset_kwargs
+                )
+                write_elem(group, "raw/var", elem.var, dataset_kwargs=dataset_kwargs)
+                write_elem(
+                    group, "raw/varm", dict(elem.varm), dataset_kwargs=dataset_kwargs
+                )
+            elif elem is not None:
+                write_elem(group, key, elem, dataset_kwargs=dataset_kwargs)
+        else:
+            write_elem(group, key, elem, dataset_kwargs=dataset_kwargs)
     with h5py.File(filepath, mode) as f:
         # TODO: Use spec writing system for this
         f = f["/"]
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
-
-        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
-            # If adata.isbacked, X should already be up to date
-            write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        if "raw/X" in as_dense and isinstance(
-            adata.raw.X, (sparse.spmatrix, SparseDataset)
-        ):
-            write_sparse_as_dense(
-                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
-            )
-            write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_elem(
-                f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
-            )
-        elif adata.raw is not None:
-            write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
-
+        write_dispatched(f, adata, dispatch_element)
 
 @report_write_key_on_error
 def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):

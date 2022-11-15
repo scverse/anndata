@@ -1520,8 +1520,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 return self._mutated_copy()
         else:
-            from .._io import read_h5ad
-            from .._io.write import _write_h5ad
+            from .._io import read_h5ad, write_h5ad
 
             if filename is None:
                 raise ValueError(
@@ -1530,7 +1529,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     "To load the object into memory, use `.to_memory()`."
                 )
             mode = self.file._filemode
-            _write_h5ad(filename, self)
+            write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
     def concatenate(
@@ -1907,14 +1906,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Write sparse data as a dense matrix.
             Defaults to `True` if object is backed, otherwise to `False`.
         """
-        from .._io.write import _write_h5ad
+        from .._io import write_h5ad
 
         if filename is None and not self.isbacked:
             raise ValueError("Provide a filename!")
         if filename is None:
             filename = self.filename
 
-        _write_h5ad(
+        write_h5ad(
             Path(filename),
             self,
             compression=compression,

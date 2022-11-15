@@ -488,7 +488,7 @@ def test_write_csv_view(typ, tmp_path):
 @pytest.mark.parametrize(
     ["read", "write", "name"],
     [
-        pytest.param(ad.read_h5ad, ad._io.write._write_h5ad, "test_empty.h5ad"),
+        pytest.param(ad.read_h5ad, ad._io.write_h5ad, "test_empty.h5ad"),
         pytest.param(
             ad.read_loom,
             ad._io.write_loom,
