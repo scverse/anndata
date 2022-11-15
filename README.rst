@@ -17,15 +17,23 @@
 .. |Coverage| image:: https://codecov.io/gh/scverse/anndata/branch/master/graph/badge.svg?token=IN1mJN1Wi8
    :target: https://codecov.io/gh/scverse/anndata
 
+.. use URL instead of path here so PyPI can render it
+
+.. image:: https://raw.githubusercontent.com/scverse/anndata/master/docs/_static/img/anndata_schema.svg
+   :align: right
+   :width: 350px
+
+.. after image
 
 anndata - Annotated data
 ========================
 
 anndata is a Python package for handling annotated data matrices in memory and on disk, positioned between pandas and xarray. anndata offers a broad range of computationally efficient features including, among others, sparse data support, lazy operations, and a PyTorch interface.
 
+* Discuss development on `GitHub <https://github.com/scverse/anndata>`_.
 * Read the `documentation <https://anndata.readthedocs.io>`_.
 * Ask questions on the `scverse Discourse <https://discourse.scverse.org>`_.
 * Install via ``pip install anndata`` or ``conda install anndata -c conda-forge``.
-
-.. would be nice to have the schema also on GitHub, but it’s much too wide there, hence need to duplicate description
-.. GitHub doesn’t plan to resolve scaling images: https://github.com/github/markup/issues/295
+* Consider citing the `anndata paper <https://doi.org/10.1101/2021.12.16.473007>`__.
+* See `Scanpy's documentation <https://scanpy.readthedocs.io/>`__ for usage
+  related to single cell data. anndata was initially built for Scanpy.

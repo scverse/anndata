@@ -22,6 +22,7 @@ from anndata.compat import (
     OverloadedDict,
     ZarrArray,
     ZarrGroup,
+    DaskArray,
     _read_attr,
     _from_fixed_length_strings,
     _decode_structured_array,
@@ -291,7 +292,7 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
     write_elem(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
 
 
-# TODO: Is this the right behaviour for MaskedArrays?
+# TODO: Is this the right behavior for MaskedArrays?
 # It's in the `AnnData.concatenate` docstring, but should we keep it?
 @_REGISTRY.register_write(H5Group, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.ndarray, IOSpec("array", "0.2.0"))
@@ -302,8 +303,17 @@ def write_list(f, k, elem, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 def write_basic(f, k, elem, dataset_kwargs=MappingProxyType({})):
-    """Write methods which underlying library handles nativley."""
+    """Write methods which underlying library handles natively."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
+
+
+@_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
+def write_basic_dask(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    import dask.array as da
+
+    g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    da.store(elem, g)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
@@ -314,10 +324,14 @@ def read_array(elem):
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array_partial(elem, *, items=None, indices=(slice(None, None))):
     return elem[indices]
+
+
+@_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
+def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
+    return elem.oindex[indices]
 
 
 # arrays of strings
@@ -476,6 +490,8 @@ def read_sparse(elem):
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
     return SparseDataset(elem)[indices]
 
