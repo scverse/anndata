@@ -1,29 +1,32 @@
-from pathlib import Path
-from os import PathLike, fspath
-from types import MappingProxyType
-from typing import Callable, Union, Optional, Mapping, Tuple
-from typing import Iterable, Iterator, Generator
-from collections import OrderedDict
-import gzip
 import bz2
+import gzip
+from collections import OrderedDict
+from os import PathLike, fspath
+from pathlib import Path
+from types import MappingProxyType
+from typing import (Any, Callable, Generator, Iterable, Iterator, Mapping, Optional, Tuple,
+                    Union)
 from warnings import warn
 
 import h5py
-import zarr
 import numpy as np
 import pandas as pd
+import zarr
 from scipy import sparse
 
 from .. import AnnData
-from ..compat import _deprecate_positional_args
+from .._io.specs.registry import _REGISTRY, IORegistry, IOSpec, get_reader, get_spec
+from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _deprecate_positional_args
 from .utils import is_float
-from .._io.specs.registry import get_reader, get_spec
 
+StorageType = Union[ZarrArray, ZarrGroup, H5Group, H5Array]
+GroupType = Union[zarr.Group, h5py.Group]
 
 def read_dispatched(
-    group: Union[zarr.Group, h5py.Group],
-    dispatch_element: Callable,
-    dispatch_anndata_args: Callable = lambda x: x,
+    group: GroupType,
+    dispatch_element: Callable[[Callable[[StorageType], Any], StorageType, str, IOSpec], Any],
+    dispatch_anndata_args: Callable[[GroupType, dict], dict] = lambda x, y: x,
+    add_element_dispatcher: Callable[[Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any] = lambda x: x,
 ) -> AnnData:
     """
     Custom reading of `filename` via `dispatcher` - limited to zarr and h5ad.
@@ -33,7 +36,10 @@ def read_dispatched(
         Function for reading data into AnnData slots in a custom way.
     dispatch_anndata_args
         Function for doing any sort of cleanup needed on the args to the AnnData object, like data type changes.
+    add_element_dispatcher:
+        Function for adding your own custom reader to AnnData's core, including overriding current methods.
     """
+    add_element_dispatcher(_REGISTRY.register_read)
     d = {}
     for k in group.keys():
         v = dispatch_element(get_reader(group[k]), group, k, get_spec(group[k]))
