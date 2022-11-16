@@ -7,7 +7,13 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal, subset_func
+from anndata.tests.helpers import (
+    as_dense_dask_array,
+    GEN_ADATA_DASK_ARGS,
+    gen_adata,
+    assert_equal,
+    subset_func,
+)
 from anndata.utils import asarray
 
 subset_func2 = subset_func
@@ -47,8 +53,8 @@ def adata():
 
 
 @pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array],
-    ids=["scipy-csr", "scipy-csc", "np-array"],
+    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
+    ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
 )
 def mtx_format(request):
     return request.param
@@ -157,7 +163,7 @@ def test_backing_copy(adata, tmp_path, backing_h5ad):
 def test_backed_raw(tmp_path):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10))
+    mem_adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     mem_adata.raw = mem_adata
     mem_adata.write(backed_pth)
 
@@ -219,12 +225,13 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     [
         pytest.param(asarray, id="dense_array"),
         pytest.param(sparse.csr_matrix, id="csr_matrix"),
+        pytest.param(as_dense_dask_array, id="dask_array"),
     ],
 )
 def test_to_memory_full(tmp_path, array_type):
     backed_pth = tmp_path / "backed.h5ad"
-    mem_adata = gen_adata((15, 10), X_type=array_type)
-    mem_adata.raw = gen_adata((15, 12), X_type=array_type)
+    mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     mem_adata.write_h5ad(backed_pth, compression="lzf")
 
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
@@ -234,12 +241,6 @@ def test_to_memory_full(tmp_path, array_type):
     del backed_adata.raw
     del mem_adata.raw
     assert_equal(mem_adata, backed_adata.to_memory())
-
-
-def test_to_memory_error():
-    adata = gen_adata((5, 3))
-    with pytest.raises(ValueError):
-        adata.to_memory()
 
 
 def test_double_index(adata, backing_h5ad):

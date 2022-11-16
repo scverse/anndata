@@ -16,6 +16,19 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
+from anndata.compat import DaskArray
+
+# Give this to gen_adata when dask array support is expected.
+GEN_ADATA_DASK_ARGS = dict(
+    obsm_types=(
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+)
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -104,6 +117,8 @@ def gen_adata(
     layers_types
         What kinds of containers should be in `.layers`?
     """
+    import dask.array as da
+
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
@@ -121,16 +136,20 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
+        da=da.random.random((M, 50)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
+        da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
-        array=np.random.random((M, N)), sparse=sparse.random(M, N, format="csr")
+        array=np.random.random((M, N)),
+        sparse=sparse.random(M, N, format="csr"),
+        da=da.random.random((M, N)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
@@ -322,6 +341,17 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
+@assert_equal.register(DaskArray)
+def assert_equal_dask_array(a, b, exact=False, elem_name=None):
+    from dask.array.utils import assert_eq
+
+    if exact:
+        assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
+    else:
+        # TODO: Why does it fail when check_graph=True
+        assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
+
+
 @assert_equal.register(pd.DataFrame)
 def are_equal_dataframe(a, b, exact=False, elem_name=None):
     if not isinstance(b, pd.DataFrame):
@@ -452,3 +482,15 @@ def assert_adata_equal(
             exact,
             elem_name=fmt_name(attr),
         )
+
+
+@singledispatch
+def as_dense_dask_array(a):
+    import dask.array as da
+
+    return da.asarray(a)
+
+
+@as_dense_dask_array.register(sparse.spmatrix)
+def _(a):
+    return as_dense_dask_array(a.toarray())

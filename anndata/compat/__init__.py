@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 
 from ._overloaded_dict import _overloaded_uns, OverloadedDict
-from .._core.index import _subset
 
 
 class Empty:
@@ -59,23 +58,6 @@ except ImportError:
         @staticmethod
         def __repr__():
             return "mock dask.array.core.Array"
-
-
-try:
-    from typing import Literal
-except ImportError:
-    try:
-        from typing_extensions import Literal
-    except ImportError:
-
-        class LiteralMeta(type):
-            def __getitem__(cls, values):
-                if not isinstance(values, tuple):
-                    values = (values,)
-                return type("Literal_", (Literal,), dict(__args__=values))
-
-        class Literal(metaclass=LiteralMeta):
-            pass
 
 
 @singledispatch
@@ -249,6 +231,9 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
 
 def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs: int):
     """slice sparse spatrices of n_obs × n_obs in self.uns"""
+
+    from anndata._core.index import _subset
+
     if isinstance(oidx, slice) and len(range(*oidx.indices(orig_n_obs))) == orig_n_obs:
         return uns  # slice of entire dimension is a no-op
 

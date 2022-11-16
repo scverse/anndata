@@ -3,7 +3,7 @@ from functools import partial
 from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Type, TypeVar, Union
+from typing import Callable, Type, TypeVar, Union, Literal
 from typing import Collection, Sequence, Mapping
 
 import h5py
@@ -18,7 +18,6 @@ from ..compat import (
     _from_fixed_length_strings,
     _decode_structured_array,
     _clean_uns,
-    Literal,
 )
 from .utils import (
     H5PY_V3,
@@ -184,6 +183,13 @@ def read_h5ad(
         instead of fully loading it into memory (`memory` mode).
         If you want to modify backed attributes of the AnnData object,
         you need to choose `'r+'`.
+
+        Currently, `backed` only support updates to `X`. That means any
+        changes to other slots like `obs` will not be written to disk in
+        `backed` mode. If you would like save changes made to these slots
+        of a `backed` :class:`~anndata.AnnData`, write them to a new file
+        (see :meth:`~anndata.AnnData.write`). For an example, see
+        [here] (https://anndata-tutorials.readthedocs.io/en/latest/getting-started.html#Partial-reading-of-large-data).
     as_sparse
         If an array was saved as dense, passing its name here will read it as
         a sparse_matrix, by chunk of size `chunk_size`.
