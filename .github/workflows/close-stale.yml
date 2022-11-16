@@ -16,4 +16,4 @@ jobs:
           days-before-pr-stale: -1 # don't mark PRs as stale
           stale-issue-label: stale
           any-of-labels: "needs info"
-          debug-only: true # enable dry-run, remove when we know from the logs it's working.
+          debug-only: false # Set to `true` to enable dry-run
