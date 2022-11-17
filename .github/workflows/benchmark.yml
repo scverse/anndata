@@ -1,4 +1,4 @@
-name: check-benchmarks
+name: Benchmark
 
 on:
     push:
@@ -7,7 +7,7 @@ on:
         branches: [master]
 
 jobs:
-    check-benchmarks:
+    benchmark:
         runs-on: ${{ matrix.os }}
         defaults:
             run:
@@ -22,6 +22,7 @@ jobs:
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
+            ASV_DIR: "./benchmark"
 
         steps:
             - uses: actions/checkout@v2
@@ -48,6 +49,7 @@ jobs:
                   pip install asv
 
             - name: Quick benchmark run
-              working-directory: ./benchmark
+              working-directory: ${{ env.ASV_DIR }}
               run: |
+                  asv machine --yes
                   asv run -qev --strict
