@@ -48,5 +48,6 @@ jobs:
                   pip install asv
 
             - name: Quick benchmark run
+              working-directory: ./benchmark
               run: |
                   asv run -qev --strict
