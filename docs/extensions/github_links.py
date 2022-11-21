@@ -39,11 +39,11 @@ def register_links(app: Sphinx, config: Config):
     app.add_role("issue", AutoLink("issue", f"{gh_url}/issues/{{}}", "issue {}"))
     app.add_role("noteversion", AutoLink("noteversion", f"{gh_url}/releases/tag/{{}}"))
     # tutorial links
-    tutorials_url = "https://anndata-tutorials.readthedocs.io/en/latest/"
-    app.add_role(
-        "tutorial",
-        AutoLink("tutorial", f"{tutorials_url}{{}}.html", "→ tutorial: {}"),
-    )
+    # tutorials_url = "https://anndata-tutorials.readthedocs.io/en/latest/"
+    # app.add_role(
+    #     "tutorial",
+    #     AutoLink("tutorial", f"{tutorials_url}{{}}.html", "→ tutorial: {}"),
+    # )
 
 
 def setup(app: Sphinx):
