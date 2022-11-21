@@ -44,6 +44,7 @@ def test_read_dispatched_dask():
 
     def read_as_dask_array(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in ("dataframe", "csr_matrix", "csc_matrix"):
+            # Preventing recursing inside of these types
             return read_elem(elem)
         elif iospec.encoding_type == "array":
             return da.from_zarr(elem)
