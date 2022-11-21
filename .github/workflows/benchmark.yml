@@ -40,9 +40,9 @@ jobs:
               uses: actions/cache@v2
               with:
                   path: ${{ steps.pip-cache-dir.outputs.dir }}
-                  key: ${{ runner.os }}-pip-py${{ matrix.python}}-${{ hashFiles('**/pyproject.toml') }}
+                  key: ${{ runner.os }}-pip${{ matrix.python}}-${{ hashFiles('**/pyproject.toml') }}
                   restore-keys: |
-                      ${{ runner.os }}-pip-py${{ matrix.python }}-
+                      ${{ runner.os }}-pip${{ matrix.python }}-
 
             - name: Install dependencies
               run: |
