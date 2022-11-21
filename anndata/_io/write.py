@@ -24,8 +24,12 @@ logger = get_logger(__name__)
 def write_dispatched(
     group: GroupType,
     adata: AnnData,
-    dispatch_element: Callable[[Callable[[GroupType, str, Any, dict], Any], GroupType, str, Any], Any],
-    add_element_dispatcher: Callable[[Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any] = lambda x: x,
+    dispatch_element: Callable[
+        [Callable[[GroupType, str, Any, dict], Any], GroupType, str, Any], Any
+    ],
+    add_element_dispatcher: Callable[
+        [Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any
+    ] = lambda x: x,
 ) -> AnnData:
     """
     Custom reading of `filename` via `dispatcher` - limited to zarr and h5ad.
@@ -46,6 +50,7 @@ def write_dispatched(
         if key in dict_keys:
             elem = dict(elem)
         dispatch_element(write_elem, group, key, elem)
+
 
 def write_csvs(
     dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ","
