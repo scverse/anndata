@@ -21,8 +21,6 @@ from ..utils import import_function
 
 logger = get_logger(__name__)
 
-write_zarr = import_function("anndata._io.zarr", "write_zarr")
-
 def write_dispatched(
     group: GroupType,
     adata: AnnData,

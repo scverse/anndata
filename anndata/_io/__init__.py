@@ -12,3 +12,4 @@ from .zarr import read_zarr, write_zarr
 from .h5ad import read_h5ad, write_h5ad
 from .write import write_csvs, write_loom
 from . import h5ad
+from . import zarr

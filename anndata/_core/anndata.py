@@ -2005,7 +2005,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         chunks
             Chunk shape.
         """
-        from .._io.write import write_zarr
+        from .._io import write_zarr
 
         write_zarr(store, self, chunks=chunks)
 

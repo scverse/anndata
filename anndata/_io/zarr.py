@@ -9,6 +9,7 @@ import pandas as pd
 import zarr
 
 from .read import read_dispatched
+from .write import write_dispatched
 
 from .._core.anndata import AnnData
 from ..compat import (
@@ -41,21 +42,16 @@ def write_zarr(
     f = zarr.open(store, mode="w")
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
-    if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
-        write_elem(
-            f, "X", adata.X, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
-        )
-    else:
-        write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+
+    def dispatch_element(write_elem, group, key, elem):
+        if key == "X" and chunks is not None and not isinstance(elem, sparse.spmatrix):
+                write_elem(
+                    group, key, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
+                )
+        else:
+            write_elem(group, key, elem, dataset_kwargs=dataset_kwargs)
+
+    write_dispatched(f, adata, dispatch_element)
 
 
 def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
