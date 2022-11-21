@@ -23,10 +23,10 @@
     //
     // "install_command": ["python -mpip install {wheel_file}"],
     // "uninstall_command": ["return-code=any python -mpip uninstall -y {project}"],
-    "build_command": [
-        "python -m pip install build",
-        "python -m build --wheel -o {build_cache_dir} {build_dir}",
-    ],
+    // "build_command": [
+    //     "python -m pip install build",
+    //     "python -m build --wheel -o {build_cache_dir} {build_dir}",
+    // ],
 
 
     // List of branches to benchmark. If not provided, defaults to "master"
@@ -49,7 +49,7 @@
 
     // timeout in seconds for installing any dependencies in environment
     // defaults to 10 min
-    //"install_timeout": 600,
+    "install_timeout": 600,
 
     // the base URL to show a commit for the project.
     "show_commit_url": "https://github.com/theislab/anndata/commit/",
