@@ -16,7 +16,7 @@ from anndata.tests.helpers import gen_adata, assert_equal
 def test_read_dispatched_w_regex():
     def read_only_axis_dfs(func, elem_name: str, elem, iospec):
         if elem_name == "/":
-            # TODO: this case is only needed due to dtype
+            # TODO: this case is only complicated because of AnnData.__init__ dtype arg
             d = {}
             for k, v in elem.items():
                 v_read = read_dispatched(v, read_only_axis_dfs)
@@ -35,6 +35,33 @@ def test_read_dispatched_w_regex():
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
     actual = read_dispatched(z, read_only_axis_dfs)
+
+    assert_equal(expected, actual)
+
+
+def test_read_dispatched_dask():
+    import dask.array as da
+
+    def read_as_dask_array(func, elem_name: str, elem, iospec):
+        if iospec.encoding_type in ("dataframe", "csr_matrix", "csc_matrix"):
+            return read_elem(elem)
+        elif iospec.encoding_type == "array":
+            return da.from_zarr(elem)
+        else:
+            return func(elem)
+
+    adata = gen_adata((1000, 100))
+    z = zarr.group()
+    write_elem(z, "/", adata)
+
+    dask_adata = read_dispatched(z, read_as_dask_array)
+
+    assert isinstance(dask_adata.layers["array"], da.Array)
+    assert isinstance(dask_adata.obsm["array"], da.Array)
+    assert isinstance(dask_adata.uns["nested"]["nested_further"]["array"], da.Array)
+
+    expected = read_elem(z)
+    actual = dask_adata.to_memory(copy=False)
 
     assert_equal(expected, actual)
 
