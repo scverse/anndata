@@ -16,9 +16,9 @@ import zarr
 
 import anndata as ad
 from anndata.utils import asarray
-from anndata.compat import _read_attr
+from anndata.compat import _read_attr, DaskArray
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import gen_adata, assert_equal, as_dense_dask_array
 
 HERE = Path(__file__).parent
 
@@ -97,7 +97,7 @@ diskfmt2 = diskfmt
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
     pth1 = tmpdir / f"first.{diskfmt}"
@@ -118,7 +118,7 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     tmpdir = tempfile.TemporaryDirectory()
     tmpdirpth = Path(tmpdir.name)
@@ -142,20 +142,24 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert is_categorical_dtype(adata.raw.var["vanno2"])
     pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
     pd.testing.assert_frame_equal(adata.var, adata_src.var)
-    assert np.all(adata.var.index == adata_src.var.index)
+    assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
-    assert type(adata.raw.X) is type(adata_src.raw.X)
-    assert type(adata.raw.varm) is type(adata_src.raw.varm)
-    assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
+
+    assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
+    assert isinstance(
+        adata_src.uns["uns4"]["c"], (type(adata.uns["uns4"]["c"]), DaskArray)
+    )
+    assert isinstance(adata_src.varm, (type(adata.varm), DaskArray))
+
+    assert_equal(adata.raw.X, adata_src.raw.X)
     pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
-    assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
     assert_equal(adata, adata_src)
 
 
 @pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -172,18 +176,27 @@ def test_readwrite_zarr(typ, tmp_path):
     assert is_categorical_dtype(adata.raw.var["vanno2"])
     pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
     pd.testing.assert_frame_equal(adata.var, adata_src.var)
-    assert np.all(adata.var.index == adata_src.var.index)
+    assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
-    assert type(adata.raw.X) is type(adata_src.raw.X)
-    assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
-    assert np.all(adata.raw.var == adata_src.raw.var)
+
+    # Dev. Note:
+    # either load as same type or load the convert DaskArray to array
+    # since we tested if assigned types and loaded types are DaskArray
+    # this would also work if they work
+    assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
+    assert isinstance(
+        adata_src.uns["uns4"]["c"], (type(adata.uns["uns4"]["c"]), DaskArray)
+    )
+    assert isinstance(adata_src.varm, (type(adata.varm), DaskArray))
+
+    assert_equal(adata.raw.X, adata_src.raw.X)
+    assert_equal(adata.raw.var, adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
-    assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, dtype="int8")
@@ -216,7 +229,7 @@ def test_maintain_layers(rw):
     assert not np.any((orig.layers["sparse"] != curr.layers["sparse"]).toarray())
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -227,7 +240,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_backed(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
