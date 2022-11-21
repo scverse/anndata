@@ -104,7 +104,7 @@ qualname_overrides = {
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "scanpydoc"
+html_theme = "sphinx_book_theme"
 html_theme_options = dict(navigation_depth=4)
 html_context = dict(
     display_github=True,  # Integrate GitHub
@@ -115,6 +115,10 @@ html_context = dict(
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_show_sphinx = False
+html_theme_options = {
+    "repository_url": "https://github.com/scverse/anndata",
+    "use_repository_button": True,
+}
 
 
 # -- Options for other output formats ------------------------------------------

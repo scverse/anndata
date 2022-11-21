@@ -65,7 +65,7 @@ dev = [
 ]
 doc = [
     "sphinx>=4.4",
-    "sphinx-rtd-theme",
+    "sphinx-book-theme",
     "sphinx-autodoc-typehints>=1.11.0",
     "sphinx_issues",
     "nbsphinx",
