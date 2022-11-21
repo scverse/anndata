@@ -21,6 +21,7 @@ from ..utils import import_function
 
 logger = get_logger(__name__)
 
+
 def write_dispatched(
     group: GroupType,
     adata: AnnData,
