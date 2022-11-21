@@ -1,10 +1,16 @@
 import re
 
-import anndata as ad
-from anndata.experimental import read_dispatched, read_elem, write_elem
-from anndata.tests.helpers import gen_adata, assert_equal
-
+from scipy import sparse
 import zarr
+
+import anndata as ad
+from anndata.experimental import (
+    read_dispatched,
+    write_dispatched,
+    read_elem,
+    write_elem,
+)
+from anndata.tests.helpers import gen_adata, assert_equal
 
 
 def test_read_dispatched_w_regex():
@@ -42,3 +48,63 @@ def test_read_dispatched_null_case():
     actual = read_dispatched(z, lambda _, __, x, ___: read_elem(x))
 
     assert_equal(expected, actual)
+
+
+def test_write_dispatched_chunks():
+    from itertools import repeat, chain
+
+    def determine_chunks(elem_shape, specified_chunks):
+        chunk_iterator = chain(specified_chunks, repeat(None))
+        return tuple(e if c is None else c for e, c in zip(elem_shape, chunk_iterator))
+
+    adata = gen_adata((1000, 100))
+
+    def write_chunked(func, store, k, elem, dataset_kwargs):
+        M, N = 13, 42
+
+        def set_copy(d, **kwargs):
+            d = dict(d)
+            d.update(kwargs)
+            return d
+
+        # TODO: Should the passed path be absolute?
+        path = "/" + store.path + "/" + k
+        if hasattr(elem, "shape") and not isinstance(
+            elem, (sparse.spmatrix, ad.AnnData)
+        ):
+            if re.match(r"^/((X)|(layers)).*", path):
+                chunks = (M, N)
+            elif path.startswith("/obsp"):
+                chunks = (M, M)
+            elif path.startswith("/obs"):
+                chunks = (M,)
+            elif path.startswith("/varp"):
+                chunks = (N, N)
+            elif path.startswith("/var"):
+                chunks = (N,)
+            else:
+                chunks = dataset_kwargs.get("chunks", ())
+            func(
+                store,
+                k,
+                elem,
+                dataset_kwargs=set_copy(
+                    dataset_kwargs, chunks=determine_chunks(elem.shape, chunks)
+                ),
+            )
+        else:
+            func(store, k, elem, dataset_kwargs=dataset_kwargs)
+
+        z = zarr.group()
+
+        write_dispatched(z, "/", adata, callback=write_chunked)
+
+        def check_chunking(k, v):
+            if not isinstance(v, zarr.Array) or v.shape == ():
+                return
+            if re.match(r"obs[mp]?/\w+", k):
+                assert v.chunks[0] == 13
+            elif re.match(r"var[mp]?/\w+", k):
+                assert v.chunks[0] == 42
+
+        z.visititems(check_chunking)
