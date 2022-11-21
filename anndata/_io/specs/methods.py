@@ -337,7 +337,7 @@ def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
 # arrays of strings
 @_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_string_array(d, _reader):
-    return read_array(d.asstr())
+    return read_array(d.asstr(), _reader=_reader)
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("string-array", "0.2.0"))
