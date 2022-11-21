@@ -15,7 +15,6 @@ from typing import Iterable, Sequence, Mapping, MutableMapping  # Generic ABCs
 from typing import Tuple, List  # Generic
 
 import h5py
-import hdf5plugin
 from natsort import natsorted
 import numpy as np
 from numpy import ma
@@ -1903,7 +1902,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def write_h5ad(
         self,
         filename: Optional[PathLike] = None,
-        compression: Optional[Literal["gzip", "lzf", "zstd"]] = None,
+        compression: Optional[Literal["gzip", "lzf"]] = None,
         compression_opts: Union[int, Any] = None,
         force_dense: Optional[bool] = None,
         as_dense: Sequence[str] = (),
@@ -1928,14 +1927,40 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             Filename of data file. Defaults to backing file.
         compression
-            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
-            For [`zstd`], see the hdf5plugin :ref:`hdf5plugin:usage`. Experimental.
+            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.   
+            Alternative compression filters such as `zstd` can be used by
+            passing a compressor from the hdf5plugin library; see
+            :ref:hdf5plugin:`usage` for more information. Experimental.
+            Usage example:
+            ```
+            import hdf5plugin
+            adata.write_h5ad(
+                filename,
+                compression=hdf5plugin.FILTERS["zstd"]
+            )
+            ```
+            .. note::
+                Datasets written with hdf5plugin-provided compressors
+                cannot be opened without first loading the hdf5plugin
+                library using `import hdf5plugin`. When using alternative
+                compression filters such as `zstd`, consider writing to
+                `zarr` format instead of `h5ad`, as the `zarr` library
+                provides a more transparent compression pipeline. 
         compression_opts
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
-            For [`zstd`], see the hdf5plugin :ref:`hdf5plugin:usage`. Experimental.
-            Construct `compression_opts` using the helper functions provided
-            by the hdf5plugin package - for instance:
-            `hdf5plugin.Zstd(clevel=5).filter_options`
+            For alternative compressor filters provided by hdf5plugin,
+            `compression_opts` can be constructed using the instantiated
+             compressor's `filter_options` property; see :ref:hdf5plugin:`usage`
+            for more information. Experimental.
+            Usage example (setting `zstd` compression level to 5):
+            ```
+            import hdf5plugin
+            adata.write_h5ad(
+                filename, 
+                compression=hdf5plugin.FILTERS["zstd"],
+                compression_opts=hdf5plugin.Zstd(clevel=5).filter_options
+            )
+            ```
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
@@ -1949,8 +1974,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("Provide a filename!")
         if filename is None:
             filename = self.filename
-        if compression in ["zstd"]:
-            compression = hdf5plugin.FILTERS[compression]
 
         _write_h5ad(
             Path(filename),
