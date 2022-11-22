@@ -162,7 +162,22 @@ class Reader:
 
 
 class Writer:
-    def __init__(self, registry: IORegistry, callback: Union[Callable, None] = None):
+    def __init__(
+        self,
+        registry: IORegistry,
+        callback: Union[
+            Callable[
+                Tuple[
+                    Union[H5Group, ZarrGroup],
+                    str,
+                    Union[H5Array, H5Group, ZarrArray, ZarrGroup],
+                    dict,
+                ],
+                None,
+            ],
+            None,
+        ] = None,
+    ):
         self.registry = registry
         self.callback = callback
 
