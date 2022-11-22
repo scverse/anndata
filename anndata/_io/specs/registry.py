@@ -187,7 +187,8 @@ def read_elem(
     modifiers: frozenset(str) = frozenset(),
 ) -> Any:
     """Read an element from an on disk store."""
-    return get_reader(elem, modifiers)(elem)
+    reader = get_reader(elem, modifiers)
+    return reader(elem)
 
 
 # TODO: If all items would be read, just call normal read method

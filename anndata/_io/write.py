@@ -27,7 +27,7 @@ def write_dispatched(
     dispatch_element: Callable[
         [Callable[[GroupType, str, Any, dict], Any], GroupType, str, Any], Any
     ],
-    add_element_dispatcher: Callable[
+    register_element_dispatchers: Callable[
         [Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any
     ] = lambda x: x,
 ) -> AnnData:
@@ -39,10 +39,10 @@ def write_dispatched(
         AnnData object
     dispatch_element
         Function for writing data from AnnData slots onto disk.
-    add_element_dispatcher:
+    register_element_dispatchers:
         Function for adding your own custom writer to AnnData's core, including overriding current methods.
     """
-    add_element_dispatcher(_REGISTRY.register_write)
+    register_element_dispatchers(_REGISTRY.register_write)
     keys = ["X", "raw", "uns", "layers", "var", "obs", "varm", "obsm", "varp", "obsp"]
     dict_keys = set(["obsm", "varm", "obsp", "varp", "layers", "uns"])
     for key in keys:

@@ -531,7 +531,7 @@ def write_dataframe(f, key, df, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
-def read_dataframe(elem):
+def read_dataframe(elem: ZarrGroup):
     columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
@@ -681,10 +681,10 @@ def write_nullable_integer(f, k, v, dataset_kwargs=MappingProxyType({})):
 def read_nullable_integer(elem):
     if "mask" in elem:
         return pd.arrays.IntegerArray(
-            read_elem(elem["values"]), mask=read_elem(elem["mask"])
+            elem["values"][()], mask=elem["mask"][()]
         )
     else:
-        return pd.array(read_elem(elem["values"]))
+        return pd.array(elem["values"][()])
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
@@ -692,10 +692,10 @@ def read_nullable_integer(elem):
 def read_nullable_boolean(elem):
     if "mask" in elem:
         return pd.arrays.BooleanArray(
-            read_elem(elem["values"]), mask=read_elem(elem["mask"])
+            elem["values"][()], mask=elem["mask"][()]
         )
     else:
-        return pd.array(read_elem(elem["values"]))
+        return pd.array(elem["values"][()])
 
 
 ###########

@@ -36,10 +36,9 @@ def read_dispatched(
     group: GroupType,
     dispatch_element: Callable[
         [Callable[[StorageType], Any], StorageType, str, IOSpec], Any
-    ],
-    dispatch_anndata_args: Callable[[GroupType, dict], dict] = lambda x, y: x,
-    add_element_dispatcher: Callable[
-        [Callable[[IORegistry, StorageType, IOSpec, frozenset], Any]], Any
+    ] = lambda read_elem, group, key, iospec: read_elem(group[key]),
+    dispatch_anndata_args: Callable[[GroupType, dict], dict] = lambda x, y: y,
+    register_element_dispatchers: Callable[[Callable[[StorageType, IOSpec, Any], Callable[[Callable], Any]]], Any
     ] = lambda x: x,
 ) -> AnnData:
     """
@@ -50,10 +49,10 @@ def read_dispatched(
         Function for reading data into AnnData slots in a custom way.
     dispatch_anndata_args
         Function for doing any sort of cleanup needed on the args to the AnnData object, like data type changes.
-    add_element_dispatcher:
+    register_element_dispatchers:
         Function for adding your own custom reader to AnnData's core, including overriding current methods.
     """
-    add_element_dispatcher(_REGISTRY.register_read)
+    register_element_dispatchers(_REGISTRY.register_read)
     d = {}
     for k in group.keys():
         v = dispatch_element(get_reader(group[k]), group, k, get_spec(group[k]))
