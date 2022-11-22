@@ -1069,7 +1069,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 # change from memory to backing-mode
                 # write the content of self to disk
-                self.write(filename, force_dense=True)
+                if self.raw is not None:
+                    as_dense = ("X", "raw/X")
+                else:
+                    as_dense = ("X",)
+                self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
             # as the data is stored on disk, we can safely set self._X to None
@@ -1880,7 +1884,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         compression: Optional[Literal["gzip", "lzf"]] = None,
         compression_opts: Union[int, Any] = None,
-        force_dense: Optional[bool] = None,
         as_dense: Sequence[str] = (),
     ):
         """\
@@ -1909,9 +1912,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
-        force_dense
-            Write sparse data as a dense matrix.
-            Defaults to `True` if object is backed, otherwise to `False`.
         """
         from .._io.write import _write_h5ad
 
@@ -1925,7 +1925,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self,
             compression=compression,
             compression_opts=compression_opts,
-            force_dense=force_dense,
             as_dense=as_dense,
         )
 
