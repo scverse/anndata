@@ -204,22 +204,22 @@ def test_deprecated_neighbors_set_other(adata_neighbors):
 # This should break in 0.9
 def test_dtype_warning():
     # Tests a warning is thrown
-    with pytest.warns(FutureWarning):
-        a = AnnData(np.ones((3, 3), dtype=np.float64))
+    with pytest.warns(PendingDeprecationWarning):
+        a = AnnData(np.ones((3, 3)), dtype=np.float32)
     assert a.X.dtype == np.float32
 
     # This shouldn't warn, shouldn't copy
     with warnings.catch_warnings(record=True) as record:
         b_X = np.ones((3, 3), dtype=np.float64)
-        b = AnnData(b_X, dtype=np.float64)
+        b = AnnData(b_X)
         assert not record
     assert b_X is b.X
     assert b.X.dtype == np.float64
 
-    # Shouldn't warn, should copy
-    with warnings.catch_warnings(record=True) as record:
+    # Should warn, should copy
+    with pytest.warns(PendingDeprecationWarning):
         c_X = np.ones((3, 3), dtype=np.float32)
-        c = AnnData(np.ones((3, 3), dtype=np.float32), dtype=np.float64)
+        c = AnnData(c_X, dtype=np.float64)
         assert not record
     assert c_X is not c.X
     assert c.X.dtype == np.float64

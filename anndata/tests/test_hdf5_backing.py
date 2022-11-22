@@ -48,7 +48,6 @@ def adata():
         obsm=dict(o1=np.zeros((X.shape[0], 10))),
         varm=dict(v1=np.ones((X.shape[1], 20))),
         layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
-        dtype="int32",
     )
 
 

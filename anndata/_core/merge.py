@@ -507,7 +507,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
            [0., 1., 0.],
            [0., 0., 1.],
            [0., 1., 0.],
-           [1., 0., 0.]], dtype=float32)
+           [1., 0., 0.]])
     """
     return Reindexer(cur_var, new_var)
 
@@ -831,14 +831,14 @@ def concat(
 
     >>> ad.concat([a, b]).to_df()
         var1  var2
-    s1   0.0   1.0
-    s2   2.0   3.0
-    s3   4.0   5.0
-    s4   7.0   8.0
+    s1     0     1
+    s2     2     3
+    s3     4     5
+    s4     7     8
     >>> ad.concat([a, c], axis=1).to_df()
         var1  var2  var3  var4
-    s1   0.0   1.0  10.0  11.0
-    s2   2.0   3.0  12.0  13.0
+    s1     0     1    10    11
+    s2     2     3    12    13
 
     Inner and outer joins
 
@@ -857,10 +857,10 @@ def concat(
     Index(['var1', 'var2', 'var3'], dtype='object')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
         var1  var2  var3
-    s1   0.0   1.0   0.0
-    s2   2.0   3.0   0.0
-    s3   4.0   5.0   6.0
-    s4   7.0   8.0   9.0
+    s1     0     1     0
+    s2     2     3     0
+    s3     4     5     6
+    s4     7     8     9
 
     Keeping track of source objects
 
@@ -1026,7 +1026,6 @@ def concat(
             [
                 AnnData(
                     X=a.raw.X,
-                    dtype=a.raw.X.dtype,
                     obs=pd.DataFrame(index=a.obs_names),
                     var=a.raw.var,
                     varm=a.raw.varm,
@@ -1049,7 +1048,6 @@ def concat(
     return AnnData(
         **{
             "X": X,
-            "dtype": None if X is None else X.dtype,
             "layers": layers,
             dim: concat_annot,
             alt_dim: alt_annot,

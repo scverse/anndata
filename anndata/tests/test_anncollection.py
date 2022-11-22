@@ -12,13 +12,11 @@ _dense = lambda a: a.toarray() if issparse(a) else a
 
 @pytest.fixture
 def adatas(request):
-    adata1 = ad.AnnData(
-        X=request.param([[1, 2, 0], [4, 5, 0], [7, 8, 0]]), dtype="float32"
-    )
+    adata1 = ad.AnnData(X=request.param([[1, 2, 0], [4, 5, 0], [7, 8, 0]]))
     adata1.obs["a_test"] = ["a", "a", "b"]
     adata1.obsm["o_test"] = np.ones((adata1.n_obs, 2))
 
-    adata2 = ad.AnnData(X=request.param([[1, 3, 0], [9, 8, 0]]), dtype="float32")
+    adata2 = ad.AnnData(X=request.param([[1, 3, 0], [9, 8, 0]]))
     adata2.obs["a_test"] = ["c", "c"]
     adata2.obsm["o_test"] = np.zeros((adata2.n_obs, 2))
 
