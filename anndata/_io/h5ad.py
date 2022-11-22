@@ -40,6 +40,8 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
+    from anndata.experimental import write_dispatched
+
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -52,6 +54,14 @@ def write_h5ad(
     if "raw/X" in as_dense and adata.raw is None:
         raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
 
+    def writer(func, f, k, elem, dataset_kwargs):
+        print(k)
+        print(func)
+        if ("/" + k in as_dense) and isinstance(elem, (sparse.spmatrix, SparseDataset)):
+            write_sparse_as_dense(f, k, elem, dataset_kwargs=dataset_kwargs)
+        else:
+            func(f, k, elem, dataset_kwargs=dataset_kwargs)
+
     adata.strings_to_categoricals()
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
@@ -61,36 +71,37 @@ def write_h5ad(
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
     with h5py.File(filepath, mode) as f:
-        # TODO: Use spec writing system for this
-        f = f["/"]
-        f.attrs.setdefault("encoding-type", "anndata")
-        f.attrs.setdefault("encoding-version", "0.1.0")
+        write_dispatched(f, "/", adata, dataset_kwargs=dataset_kwargs, callback=writer)
+        # # TODO: Use spec writing system for this
+        # f = f["/"]
+        # f.attrs.setdefault("encoding-type", "anndata")
+        # f.attrs.setdefault("encoding-version", "0.1.0")
 
-        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
-            # If adata.isbacked, X should already be up to date
-            write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        if "raw/X" in as_dense and isinstance(
-            adata.raw.X, (sparse.spmatrix, SparseDataset)
-        ):
-            write_sparse_as_dense(
-                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
-            )
-            write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_elem(
-                f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
-            )
-        elif adata.raw is not None:
-            write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
+        # if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
+        #     write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+        # elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+        #     # If adata.isbacked, X should already be up to date
+        #     write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+        # if "raw/X" in as_dense and isinstance(
+        #     adata.raw.X, (sparse.spmatrix, SparseDataset)
+        # ):
+        #     write_sparse_as_dense(
+        #         f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+        #     )
+        #     write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
+        #     write_elem(
+        #         f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
+        #     )
+        # elif adata.raw is not None:
+        #     write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
+        # write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
 
 
 @report_write_key_on_error
