@@ -119,16 +119,20 @@ def test_write_dispatched_chunks():
         else:
             func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-        z = zarr.group()
+    z = zarr.group()
 
-        write_dispatched(z, "/", adata, callback=write_chunked)
+    write_dispatched(z, "/", adata, callback=write_chunked)
 
-        def check_chunking(k, v):
-            if not isinstance(v, zarr.Array) or v.shape == ():
-                return
-            if re.match(r"obs[mp]?/\w+", k):
-                assert v.chunks[0] == 13
-            elif re.match(r"var[mp]?/\w+", k):
-                assert v.chunks[0] == 42
+    def check_chunking(k, v):
+        if (
+            not isinstance(v, zarr.Array)
+            or v.shape == ()
+            or any(k.endswith(x) for x in ("data", "indices", "indptr"))
+        ):
+            return
+        if re.match(r"obs[mp]?/\w+", k):
+            assert v.chunks[0] == 13
+        elif re.match(r"var[mp]?/\w+", k):
+            assert v.chunks[0] == 42
 
-        z.visititems(check_chunking)
+    z.visititems(check_chunking)
