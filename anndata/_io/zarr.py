@@ -45,9 +45,9 @@ def write_zarr(
 
     def dispatch_element(write_elem, group, key, elem):
         if key == "X" and chunks is not None and not isinstance(elem, sparse.spmatrix):
-                write_elem(
-                    group, key, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
-                )
+            write_elem(
+                group, key, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
+            )
         else:
             write_elem(group, key, elem, dataset_kwargs=dataset_kwargs)
 
