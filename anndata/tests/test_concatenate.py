@@ -1241,11 +1241,9 @@ def test_concat_null_X():
 
 # https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
 def test_concat_X_dtype():
-    adatas_orig = {
-        k: AnnData(np.ones((20, 10), dtype=np.int8), dtype=np.int8) for k in list("abc")
-    }
+    adatas_orig = {k: AnnData(np.ones((20, 10), dtype=np.int8)) for k in list("abc")}
     for adata in adatas_orig.values():
-        adata.raw = AnnData(np.ones((20, 30), dtype=np.float64), dtype=np.float64)
+        adata.raw = AnnData(np.ones((20, 30), dtype=np.float64))
 
     result = concat(adatas_orig, index_unique="-")
 
@@ -1266,11 +1264,9 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
 
-    ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array}, dtype=np.float64)
-    ad1_other = ad.AnnData(
-        X=np.ones((5, 5)), varm={"a": array_type(varm_array)}, dtype=np.float64
-    )
-    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)}, dtype=np.float64)
+    ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array})
+    ad1_other = ad.AnnData(X=np.ones((5, 5)), varm={"a": array_type(varm_array)})
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)})
 
     result1 = ad.concat([ad1, ad2], merge=merge_strategy)
     target1 = ad.concat([ad1_other, ad2], merge=merge_strategy)

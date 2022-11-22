@@ -7,6 +7,10 @@
 * Expanded docstring more documentation for ``backed`` argument of :func:`anndata.read_h5ad` :pr:`812` :smaller:`jeskowagner`
 * Added support for dask arrays :pr:`813` :smaller:`syelman` :smaller:`rahulbshrestha`
 
+.. rubric:: Breaking changes
+
+* The `AnnData` `dtype`` argument no longer defaults to `float32` :pr:`854` :smaller:`ivirshup`
+
 .. rubric:: Bug fixes
 
 .. rubric:: Updates
@@ -16,3 +20,4 @@
 .. rubric:: Deprecations
 
 * :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :smaller:`ivirshup`
+* Previously deprecated `force_dense` arugment :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` has been removed.:pr:`855` :smaller:`ivirshup`

@@ -246,8 +246,6 @@ def read_anndata(elem, _reader):
     ]:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
-        if "X" in d:
-            d["dtype"] = d["X"].dtype
     return AnnData(**d)
 
 
