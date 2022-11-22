@@ -9,7 +9,7 @@
 
 .. rubric:: Breaking changes
 
-* Not `AnnData` `dtype`` argument no longer defaults to `float32`` :pr:`854` :smaller:`ivirshup`
+* The `AnnData` `dtype`` argument no longer defaults to `float32` :pr:`854` :smaller:`ivirshup`
 
 .. rubric:: Bug fixes
 

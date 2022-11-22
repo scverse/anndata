@@ -450,10 +450,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
             if dtype is not None:
-                # TODO: Decide on whether this should warn yet
                 warnings.warn(
-                    "The dtype argument is deprecated and will be removed in 0.10.0",
-                    DeprecationWarning,
+                    "The dtype argument will be deprecated in anndata 0.10.0",
+                    PendingDeprecationWarning,
                 )
                 if issparse(X) or isinstance(X, ma.MaskedArray):
                     # TODO: maybe use view on data attribute of sparse matrix
