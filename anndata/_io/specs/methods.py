@@ -680,9 +680,7 @@ def write_nullable_integer(f, k, v, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
 def read_nullable_integer(elem):
     if "mask" in elem:
-        return pd.arrays.IntegerArray(
-            elem["values"][()], mask=elem["mask"][()]
-        )
+        return pd.arrays.IntegerArray(elem["values"][()], mask=elem["mask"][()])
     else:
         return pd.array(elem["values"][()])
 
@@ -691,9 +689,7 @@ def read_nullable_integer(elem):
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))
 def read_nullable_boolean(elem):
     if "mask" in elem:
-        return pd.arrays.BooleanArray(
-            elem["values"][()], mask=elem["mask"][()]
-        )
+        return pd.arrays.BooleanArray(elem["values"][()], mask=elem["mask"][()])
     else:
         return pd.array(elem["values"][()])
 

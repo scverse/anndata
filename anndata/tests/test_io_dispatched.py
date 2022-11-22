@@ -5,24 +5,21 @@ from scipy import sparse
 import zarr
 
 import anndata as ad
-from anndata import (
-    read_dispatched,
-    write_dispatched
-)
+from anndata import read_dispatched, write_dispatched
 from anndata.tests.helpers import gen_adata, assert_equal
 
 
 def test_read_dispatched_w_regex():
     def read_only_axis_dfs(func, group, elem_name, iospec):
-        if elem_name in set(['var', 'obs']):
+        if elem_name in set(["var", "obs"]):
             return func(group[elem_name])
         else:
             return None
 
     adata = gen_adata((1000, 100))
-    adata.write_zarr('test.zarr')
+    adata.write_zarr("test.zarr")
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
-    z = zarr.open('test.zarr')
+    z = zarr.open("test.zarr")
     actual = read_dispatched(z, dispatch_element=read_only_axis_dfs)
 
     assert_equal(expected, actual)
@@ -35,11 +32,13 @@ def test_read_dispatched_dask():
         register(ZarrArray, IOSpec("array", "0.2.0"))(da.from_zarr)
 
     adata = gen_adata((1000, 100))
-    store = zarr.DirectoryStore('test.zarr')
+    store = zarr.DirectoryStore("test.zarr")
     z = zarr.group(store=store, overwrite=True)
     adata.write_zarr(store)
 
-    dask_adata = read_dispatched(z, register_element_dispatchers=register_element_dispatchers)
+    dask_adata = read_dispatched(
+        z, register_element_dispatchers=register_element_dispatchers
+    )
 
     assert isinstance(dask_adata.layers["array"], da.Array)
     assert isinstance(dask_adata.obsm["array"], da.Array)
@@ -53,7 +52,7 @@ def test_read_dispatched_dask():
 
 def test_read_dispatched_null_case():
     adata = gen_adata((100, 100))
-    store = zarr.DirectoryStore('test.zarr')
+    store = zarr.DirectoryStore("test.zarr")
     z = zarr.group(store=store, overwrite=True)
     adata.write_zarr(store)
     expected = adata
@@ -107,7 +106,7 @@ def test_write_dispatched_chunks():
         else:
             func(group, key, elem, dataset_kwargs=dataset_kwargs)
 
-        store = zarr.DirectoryStore('test.zarr')
+        store = zarr.DirectoryStore("test.zarr")
         z = zarr.group(store=store, overwrite=True)
 
         write_dispatched(z, adata, dispatch_element=write_chunked)

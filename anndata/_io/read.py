@@ -38,7 +38,8 @@ def read_dispatched(
         [Callable[[StorageType], Any], StorageType, str, IOSpec], Any
     ] = lambda read_elem, group, key, iospec: read_elem(group[key]),
     dispatch_anndata_args: Callable[[GroupType, dict], dict] = lambda x, y: y,
-    register_element_dispatchers: Callable[[Callable[[StorageType, IOSpec, Any], Callable[[Callable], Any]]], Any
+    register_element_dispatchers: Callable[
+        [Callable[[StorageType, IOSpec, Any], Callable[[Callable], Any]]], Any
     ] = lambda x: x,
 ) -> AnnData:
     """

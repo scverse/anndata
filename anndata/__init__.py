@@ -18,7 +18,7 @@ if not within_flit():
         read_mtx,
         read_zarr,
         read_dispatched,
-        write_dispatched
+        write_dispatched,
     )
     from ._warnings import OldFormatWarning, WriteWarning, ImplicitModificationWarning
 
