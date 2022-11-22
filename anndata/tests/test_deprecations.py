@@ -75,24 +75,6 @@ def test_obsvar_vector_Xlayer(adata):
         adata.obs_vector("a", layer="X")
 
 
-def test_force_dense_deprecated(tmp_path):
-    dense_pth = tmp_path / "dense.h5ad"
-    adata = AnnData(X=sparse.random(10, 10, format="csr"))
-    adata.raw = adata
-
-    with pytest.warns(FutureWarning):
-        adata.write_h5ad(dense_pth, force_dense=True)
-    with h5py.File(dense_pth, "r") as f:
-        assert isinstance(f["X"], h5py.Dataset)
-        assert isinstance(f["raw/X"], h5py.Dataset)
-
-    dense = ad.read_h5ad(dense_pth)
-
-    assert isinstance(dense.X, np.ndarray)
-    assert isinstance(dense.raw.X, np.ndarray)
-    assert_equal(adata, dense)
-
-
 #######################################
 # Dealing with uns adj matrices
 #######################################
