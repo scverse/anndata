@@ -197,8 +197,8 @@ def test_readwrite_zarr(typ, tmp_path):
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, dtype="int8")
+    X = typ(X_list).astype("int8")
+    adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read(backing_h5ad)
@@ -778,7 +778,7 @@ def test_io_dtype(tmp_path, diskfmt, dtype):
     read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
     write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
 
-    orig = ad.AnnData(np.ones((5, 8), dtype=dtype), dtype=dtype)
+    orig = ad.AnnData(np.ones((5, 8), dtype=dtype))
     write(orig, pth)
     curr = read(pth)
 
