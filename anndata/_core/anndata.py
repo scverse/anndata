@@ -1928,9 +1928,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Filename of data file. Defaults to backing file.
         compression
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.   
-            Alternative compression filters such as `zstd` can be used by
-            passing a compressor from the hdf5plugin library; see
-            :ref:hdf5plugin:`usage` for more information. Experimental.
+            
+            Alternative compression filters such as `zstd` can be passed
+            from the :doc:`hdf5plugin <hdf5plugin:usage>` library. 
+            Experimental.
+            
             Usage example::
 
                 import hdf5plugin
@@ -1949,10 +1951,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         compression_opts
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
-            For alternative compressor filters provided by hdf5plugin,
-            `compression_opts` can be constructed using the instantiated
-             compressor's `filter_options` property; see :ref:hdf5plugin:`usage`
-            for more information. Experimental.
+            
+            Alternative compression filters such as `zstd` can be configured
+            using helpers from the :doc:`hdf5plugin <hdf5plugin:usage>` 
+            library. Experimental. 
+            
             Usage example (setting `zstd` compression level to 5)::
             
                 import hdf5plugin
