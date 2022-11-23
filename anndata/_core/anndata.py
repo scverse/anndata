@@ -1927,12 +1927,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             Filename of data file. Defaults to backing file.
         compression
-            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.   
-            
+            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
+
             Alternative compression filters such as `zstd` can be passed
-            from the :doc:`hdf5plugin <hdf5plugin:usage>` library. 
+            from the :doc:`hdf5plugin <hdf5plugin:usage>` library.
             Experimental.
-            
+
             Usage example::
 
                 import hdf5plugin
@@ -1947,20 +1947,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 library using `import hdf5plugin`. When using alternative
                 compression filters such as `zstd`, consider writing to
                 `zarr` format instead of `h5ad`, as the `zarr` library
-                provides a more transparent compression pipeline. 
+                provides a more transparent compression pipeline.
 
         compression_opts
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
-            
+
             Alternative compression filters such as `zstd` can be configured
-            using helpers from the :doc:`hdf5plugin <hdf5plugin:usage>` 
-            library. Experimental. 
-            
+            using helpers from the :doc:`hdf5plugin <hdf5plugin:usage>`
+            library. Experimental.
+
             Usage example (setting `zstd` compression level to 5)::
 
                 import hdf5plugin
                 adata.write_h5ad(
-                    filename, 
+                    filename,
                     compression=hdf5plugin.FILTERS["zstd"],
                     compression_opts=hdf5plugin.Zstd(clevel=5).filter_options
                 )
