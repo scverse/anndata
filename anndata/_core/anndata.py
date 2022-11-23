@@ -1940,7 +1940,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     filename,
                     compression=hdf5plugin.FILTERS["zstd"]
                 )
-            
+
             .. note::
                 Datasets written with hdf5plugin-provided compressors
                 cannot be opened without first loading the hdf5plugin
@@ -1957,14 +1957,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             library. Experimental. 
             
             Usage example (setting `zstd` compression level to 5)::
-            
+
                 import hdf5plugin
                 adata.write_h5ad(
                     filename, 
                     compression=hdf5plugin.FILTERS["zstd"],
                     compression_opts=hdf5plugin.Zstd(clevel=5).filter_options
                 )
-            
+
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
