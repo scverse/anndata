@@ -30,6 +30,7 @@ Latest additions
    concatenation
    fileformat-prose
    interoperability
+   anndata_dask_array
    benchmarks
    contributing
    release-notes/index
