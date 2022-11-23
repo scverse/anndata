@@ -623,7 +623,7 @@ def read_categorical(elem):
     return pd.Categorical.from_codes(
         codes=read_elem(elem["codes"]),
         categories=read_elem(elem["categories"]),
-        ordered=_read_attr(elem.attrs, "ordered"),
+        ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
 
 
@@ -633,7 +633,7 @@ def read_categorical(elem, *, items=None, indices=(slice(None),)):
     return pd.Categorical.from_codes(
         codes=read_elem_partial(elem["codes"], indices=indices),
         categories=read_elem(elem["categories"]),
-        ordered=_read_attr(elem.attrs, "ordered"),
+        ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
 
 
