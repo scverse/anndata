@@ -13,7 +13,7 @@ from ..compat import (
     _from_fixed_length_strings,
     _clean_uns,
 )
-from ..experimental import read_dispatched
+from ..experimental import read_dispatched, write_dispatched
 from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
@@ -29,7 +29,7 @@ def write_zarr(
     store: Union[MutableMapping, str, Path],
     adata: AnnData,
     chunks=None,
-    **dataset_kwargs,
+    **ds_kwargs,
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
@@ -40,21 +40,21 @@ def write_zarr(
     f = zarr.open(store, mode="w")
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
-    if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
-        write_elem(
-            f, "X", adata.X, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
-        )
-    else:
-        write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+
+    def callback(func, s, k, elem, dataset_kwargs):
+        dict_paths = { "obsm", "varm", "obsp", "varp", "layers", "uns" }
+        if chunks is not None and not isinstance(elem, sparse.spmatrix) and k == "X":
+            func(
+                s, k, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
+            )
+        elif k == "X":
+            func(s, k, elem, dataset_kwargs=dataset_kwargs)
+        elif k in dict_paths:
+            func(s, k, dict(elem), dataset_kwargs=dataset_kwargs)
+        else:
+            func(s, k, elem, dataset_kwargs=dataset_kwargs)
+
+    write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
 
 
 def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
