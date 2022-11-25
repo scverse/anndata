@@ -19,6 +19,7 @@ from ..compat import (
     _decode_structured_array,
     _clean_uns,
 )
+from ..experimental import read_dispatched
 from .utils import (
     H5PY_V3,
     report_read_key_on_error,
@@ -209,28 +210,25 @@ def read_h5ad(
     )
 
     with h5py.File(filename, "r") as f:
-        d = {}
-        for k in f.keys():
-            # Backwards compat for old raw
-            if k == "raw" or k.startswith("raw."):
-                continue
-            if k == "X" and "X" in as_sparse:
-                d[k] = rdasp(f[k])
-            elif k == "raw":
-                assert False, "unexpected raw format"
-            elif k in {"obs", "var"}:
+        def callback(func, elem_name: str, elem, iospec):
+            if iospec.encoding_type == "anndata" or elem_name.endswith('/'):
+                return AnnData(
+                    **{k: read_dispatched(elem[k], callback) for k in elem.keys() if not k.startswith("raw.")}
+                )
+            elif elem_name.startswith("/raw."):
+                return None
+            elif elem_name == "/X" and "X" in as_sparse:
+                return rdasp(elem)
+            elif elem_name == "/raw":
+                return _read_raw(f, as_sparse, rdasp)
+            elif elem_name in {"/obs", "/var"}:
                 # Backwards compat
-                d[k] = read_dataframe(f[k])
-            else:  # Base case
-                d[k] = read_elem(f[k])
+                return read_dataframe(elem)
+            return func(elem)
 
-        d["raw"] = _read_raw(f, as_sparse, rdasp)
+        adata = read_dispatched(f, callback=callback)
 
-        # Backwards compat to <0.7
-        if isinstance(f["obs"], h5py.Dataset):
-            _clean_uns(d)
-
-    return AnnData(**d)
+    return adata
 
 
 def _read_raw(

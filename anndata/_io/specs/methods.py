@@ -41,6 +41,7 @@ from .registry import (
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group
+H5File = h5py.File
 
 
 ####################
@@ -74,6 +75,7 @@ H5Group = h5py.Group
 # Note: there is no need for writing in a backwards compatible format, maybe
 
 
+@_REGISTRY.register_read(H5File, IOSpec("", ""))
 @_REGISTRY.register_read(H5Group, IOSpec("", ""))
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(elem, _reader):
@@ -228,6 +230,8 @@ def write_anndata(f, k, adata, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(H5Group, IOSpec("raw", "0.1.0"))
+@_REGISTRY.register_read(H5File, IOSpec("anndata", "0.1.0"))
+@_REGISTRY.register_read(H5File, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("raw", "0.1.0"))
 def read_anndata(elem, _reader):
