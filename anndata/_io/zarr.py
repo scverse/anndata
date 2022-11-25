@@ -13,6 +13,7 @@ from ..compat import (
     _from_fixed_length_strings,
     _clean_uns,
 )
+from ..experimental import read_dispatched
 from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
@@ -70,26 +71,23 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     f = zarr.open(store, mode="r")
 
-    if "encoding-type" in f.attrs:
-        return read_elem(f[""])
+    def callback(func, elem_name: str, elem, iospec):
+        if iospec.encoding_type == "anndata" or elem_name.endswith('/'):
+            return AnnData(
+                **{k: read_dispatched(v, callback) for k, v in elem.items()}
+            )
+        elif elem_name.startswith("raw."):
+            return None
+        elif elem_name in {"obs", "var"}:
+            return read_dataframe(elem)
+        elif elem_name == "raw":
+            # Backwards compat
+            return _read_legacy_raw(f, func(elem), read_dataframe, func)
+        return func(elem)
 
-    # Backwards compat
-    d = {}
-    for k in f.keys():
-        if k.startswith("raw."):
-            continue
-        if k in {"obs", "var"}:
-            d[k] = read_dataframe(f[k])
-        else:  # Base case
-            d[k] = read_elem(f[k])
+    adata = read_dispatched(f, callback=callback)
 
-    d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_elem)
-
-    # Backwards compat to <0.7
-    if isinstance(f["obs"], zarr.Array):
-        _clean_uns(d)
-
-    return AnnData(**d)
+    return adata
 
 
 @report_read_key_on_error
