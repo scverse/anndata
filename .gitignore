@@ -28,3 +28,6 @@ test.h5ad
 # IDEs
 /.idea/
 
+docs/*.h5ad
+docs/*.zarr
+docs/mydask.html
