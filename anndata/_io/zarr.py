@@ -47,8 +47,6 @@ def write_zarr(
             func(
                 s, k, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
             )
-        elif k == "X":
-            func(s, k, elem, dataset_kwargs=dataset_kwargs)
         elif k in dict_paths:
             func(s, k, dict(elem), dataset_kwargs=dataset_kwargs)
         else:
