@@ -4,6 +4,7 @@ trigger:
 variables:
   PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
   RUN_COVERAGE: no
+  PYTEST_ADDOPTS: -v --color=yes --junitxml=junit/test-results.xml
 
 jobs:
 - job: PyTest
@@ -37,17 +38,14 @@ jobs:
       pip install .[dev,test]
     displayName: 'Install dependencies'
 
-  - script: |
-      pip list
+  - script: pip list
     displayName: 'Display installed versions'
 
-  - script: |
-      pytest --color=yes --junitxml=junit/test-results.xml
+  - script: pytest
     displayName: 'PyTest'
     condition: eq(variables['RUN_COVERAGE'], 'no')
 
-  - script: |
-      pytest --color=yes --junitxml=junit/test-results.xml --cov --cov-report=xml --cov-context=test
+  - script: pytest --cov --cov-report=xml --cov-context=test
     displayName: 'PyTest (coverage)'
     condition: eq(variables['RUN_COVERAGE'], 'yes')
 
