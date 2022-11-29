@@ -1,7 +1,8 @@
-from collections.abc import Hashable
+from collections.abc import Hashable, List, Callable
 from copy import deepcopy
 from itertools import chain, product
 from functools import partial, singledispatch
+from typing import Any
 import warnings
 
 import numpy as np

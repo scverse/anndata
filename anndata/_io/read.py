@@ -20,7 +20,8 @@ from .h5ad import read_h5ad
 
 try:
     from .zarr import read_zarr
-except ImportError as e:  # noqa: F841
+except ImportError as _e:
+    e = _e
 
     def read_zarr(*_, **__):
         raise e

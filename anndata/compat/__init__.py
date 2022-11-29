@@ -10,6 +10,7 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
+from .._core.index import Index1D
 from ._overloaded_dict import _overloaded_uns, OverloadedDict
 
 
@@ -22,7 +23,7 @@ H5Array = h5py.Dataset
 
 
 # try importing zarr, dask, and zappy
-from packaging import version
+from packaging import version as _v
 
 try:
     from zarr.core import Array as ZarrArray
@@ -229,7 +230,7 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
     return paths
 
 
-def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs: int):
+def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1D", orig_n_obs: int):
     """slice sparse spatrices of n_obs × n_obs in self.uns"""
 
     from anndata._core.index import _subset
