@@ -7,10 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-from ..compat import DaskArray
-
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
+from ..compat import DaskArray, Index, Index1D
 
 
 def _normalize_indices(

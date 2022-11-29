@@ -2,7 +2,7 @@ from copy import deepcopy
 from functools import reduce, singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
-from typing import Any, Collection, Union, Mapping, MutableMapping, Optional
+from typing import Any, Tuple, Union, Mapping, MutableMapping, Optional
 from warnings import warn
 
 import h5py
@@ -10,7 +10,6 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
-from .._core.index import Index1D
 from ._overloaded_dict import _overloaded_uns, OverloadedDict
 
 
@@ -18,6 +17,8 @@ class Empty:
     pass
 
 
+Index1D = Union[slice, int, str, np.int64, np.ndarray]
+Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
 H5Group = Union[h5py.Group, h5py.File]
 H5Array = h5py.Dataset
 
