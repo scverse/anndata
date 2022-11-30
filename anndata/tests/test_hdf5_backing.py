@@ -48,7 +48,6 @@ def adata():
         obsm=dict(o1=np.zeros((X.shape[0], 10))),
         varm=dict(v1=np.ones((X.shape[1], 20))),
         layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
-        dtype="int32",
     )
 
 
@@ -70,8 +69,8 @@ def backed_mode(request):
     return request.param
 
 
-@pytest.fixture(params=[True, False])
-def force_dense(request):
+@pytest.fixture(params=(("X",), ()))
+def as_dense(request):
     return request.param
 
 
@@ -80,7 +79,7 @@ def force_dense(request):
 # -------------------------------------------------------------------------------
 
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
-def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
+def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.h5ad"
     backed_pth = base_pth / "backed.h5ad"
@@ -89,7 +88,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
     orig.write(orig_pth)
 
     backed = ad.read(orig_pth, backed=backed_mode)
-    backed.write(backed_pth, as_dense=["X"])
+    backed.write(backed_pth, as_dense=as_dense)
     backed.file.close()
 
     from_backed = ad.read(backed_pth)

@@ -5,7 +5,6 @@ from scipy import sparse
 from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
-    subset_func,
     as_dense_dask_array,
 )
 from anndata.utils import asarray

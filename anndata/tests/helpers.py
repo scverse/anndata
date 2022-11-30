@@ -1,7 +1,7 @@
 from functools import singledispatch, wraps
 from string import ascii_letters
-from typing import Tuple, Optional
-from collections.abc import Mapping
+from typing import Tuple, Optional, Type
+from collections.abc import Mapping, Collection
 import warnings
 
 import h5py
@@ -177,7 +177,6 @@ def gen_adata(
         layers=layers,
         obsp=obsp,
         varp=varp,
-        dtype=X_dtype,
         uns=uns,
     )
     return adata
