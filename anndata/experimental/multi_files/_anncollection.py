@@ -979,7 +979,7 @@ class LazyAttrData(_IterateViewMixin):
             return _dtypes[self.attr][self.key]
 
         attr = self[:1]
-        if hasattr(attr, dtype):
+        if hasattr(attr, "dtype"):
             return attr.dtype
         else:
             return None

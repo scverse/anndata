@@ -34,7 +34,13 @@ html_static_path = ["_static"]
 source_suffix = ".rst"
 master_doc = "index"
 default_role = "literal"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "**.ipynb_checkpoints",
+    "tutorials/notebooks/*.rst",
+]
 pygments_style = "sphinx"
 
 extensions = [
@@ -46,14 +52,16 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
+    "sphinx_issues",
     "scanpydoc",
     "nbsphinx",
-    *[p.stem for p in (HERE / "extensions").glob("*.py")],
+    "IPython.sphinxext.ipython_console_highlighting",
 ]
 
 # Generate the API documentation when building
 autosummary_generate = True
 autodoc_member_order = "bysource"
+issues_github_path = "scverse/anndata"
 # autodoc_default_flags = ['members']
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True

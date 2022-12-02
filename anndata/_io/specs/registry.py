@@ -4,7 +4,6 @@ from collections.abc import Mapping
 from functools import singledispatch, wraps
 from typing import Any, NamedTuple, Tuple, Type, Callable, Union
 
-
 from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
 
@@ -125,7 +124,7 @@ def proc_spec_mapping(spec) -> IOSpec:
 
 
 def get_spec(
-    elem: "Union[h5py.Dataset, h5py.Group, zarr.Group, zarr.Dataset]",
+    elem: "Union[H5Group, H5Array, ZarrGroup, ZarrArray]",
 ) -> IOSpec:
     return proc_spec(
         {

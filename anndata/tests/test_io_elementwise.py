@@ -110,3 +110,15 @@ def test_write_to_root(store):
 
     assert "anndata" == _read_attr(store.attrs, "encoding-type")
     assert_equal(from_disk, adata)
+
+
+def test_categorical_order_type(store):
+    # https://github.com/scverse/anndata/issues/853
+    cat = pd.Categorical([0, 1], ordered=True)
+    write_elem(store, "ordered", cat)
+    write_elem(store, "unordered", cat.set_ordered(False))
+
+    assert read_elem(store["ordered"]).ordered is True
+    assert type(read_elem(store["ordered"]).ordered) == bool
+    assert read_elem(store["unordered"]).ordered is False
+    assert type(read_elem(store["unordered"]).ordered) == bool
