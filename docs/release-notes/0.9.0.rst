@@ -25,4 +25,4 @@
 
 * :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :smaller:`ivirshup`
 * Previously deprecated `force_dense` arugment :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` has been removed. :pr:`855` :smaller:`ivirshup`
-* Previously deprecate behaviour around storing adjacency matrices in `uns` has been removed :pr:`866` :smalled:`ivirshup`
+* Previously deprecate behaviour around storing adjacency matrices in `uns` has been removed :pr:`866` :smaller:`ivirshup`
