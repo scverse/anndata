@@ -51,7 +51,6 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
-    _slice_uns_sparse_matrices,
     _move_adj_mtx,
     _overloaded_uns,
     OverloadedDict,
@@ -337,17 +336,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # Special case for old neighbors, backwards compat. Remove in anndata 0.8.
-        uns_new = _slice_uns_sparse_matrices(
-            copy(adata_ref._uns), self._oidx, adata_ref.n_obs
-        )
         # fix categories
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
+        uns = copy(adata_ref._uns)
+        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
-        self._uns = uns_new
+        self._uns = uns
         self._n_obs = len(self.obs)
         self._n_vars = len(self.var)
 
