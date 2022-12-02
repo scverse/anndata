@@ -89,7 +89,7 @@ suppress_warnings = ["ref.citation"]
 
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = False
+    app.warningiserror = True
 
 
 intersphinx_mapping = dict(
