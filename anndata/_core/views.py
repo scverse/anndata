@@ -9,6 +9,7 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
+import anndata
 from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
 from ..compat import ZappyArray, DaskArray

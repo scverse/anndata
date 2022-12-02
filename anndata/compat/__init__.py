@@ -2,7 +2,7 @@ from copy import deepcopy
 from functools import reduce, singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
-from typing import Any, Collection, Union, Mapping, MutableMapping, Optional
+from typing import Any, Tuple, Union, Mapping, MutableMapping, Optional
 from warnings import warn
 
 import h5py
@@ -17,12 +17,14 @@ class Empty:
     pass
 
 
+Index1D = Union[slice, int, str, np.int64, np.ndarray]
+Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
 H5Group = Union[h5py.Group, h5py.File]
 H5Array = h5py.Dataset
 
 
 # try importing zarr, dask, and zappy
-from packaging import version
+from packaging import version as _v
 
 try:
     from zarr.core import Array as ZarrArray
@@ -229,7 +231,7 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
     return paths
 
 
-def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs: int):
+def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1D", orig_n_obs: int):
     """slice sparse spatrices of n_obs × n_obs in self.uns"""
 
     from anndata._core.index import _subset

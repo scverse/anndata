@@ -85,9 +85,6 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_elem)
 
-    if "X" in d:
-        d["dtype"] = d["X"].dtype
-
     # Backwards compat to <0.7
     if isinstance(f["obs"], zarr.Array):
         _clean_uns(d)

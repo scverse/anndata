@@ -36,21 +36,10 @@ def write_h5ad(
     filepath: Union[Path, str],
     adata: AnnData,
     *,
-    force_dense: bool = None,
     as_dense: Sequence[str] = (),
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
-    if force_dense is not None:
-        warn(
-            "The `force_dense` argument is deprecated. Use `as_dense` instead.",
-            FutureWarning,
-        )
-    if force_dense is True:
-        if adata.raw is not None:
-            as_dense = ("X", "raw/X")
-        else:
-            as_dense = ("X",)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -146,16 +135,6 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
 
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
-    X_dset = f.get("X", None)
-    if X_dset is None:
-        pass
-    elif isinstance(X_dset, h5py.Group):
-        d["dtype"] = X_dset["data"].dtype
-    elif hasattr(X_dset, "dtype"):
-        d["dtype"] = f["X"].dtype
-    else:
-        raise ValueError()
-
     # Backwards compat to <0.7
     if isinstance(f["obs"], h5py.Dataset):
         _clean_uns(d)
@@ -246,16 +225,6 @@ def read_h5ad(
                 d[k] = read_elem(f[k])
 
         d["raw"] = _read_raw(f, as_sparse, rdasp)
-
-        X_dset = f.get("X", None)
-        if X_dset is None:
-            pass
-        elif isinstance(X_dset, h5py.Group):
-            d["dtype"] = X_dset["data"].dtype
-        elif hasattr(X_dset, "dtype"):
-            d["dtype"] = f["X"].dtype
-        else:
-            raise ValueError()
 
         # Backwards compat to <0.7
         if isinstance(f["obs"], h5py.Dataset):
