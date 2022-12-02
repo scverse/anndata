@@ -71,7 +71,7 @@ doc = [
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",
-    "ipython", # For syntax highlighting in notebooks
+    "IPython", # For syntax highlighting in notebooks
 ]
 test = [
     "loompy>=3.0.5",
