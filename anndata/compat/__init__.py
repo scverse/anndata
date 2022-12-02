@@ -10,8 +10,6 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
-from ._overloaded_dict import _overloaded_uns, OverloadedDict
-
 
 class Empty:
     pass

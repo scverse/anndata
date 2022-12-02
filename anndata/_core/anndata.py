@@ -52,8 +52,6 @@ from ..compat import (
     ZappyArray,
     DaskArray,
     _move_adj_mtx,
-    _overloaded_uns,
-    OverloadedDict,
 )
 
 
@@ -887,7 +885,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         uns = self._uns
         if self.is_view:
             uns = DictView(uns, view_args=(self, "_uns"))
-        uns = _overloaded_uns(self, uns)
         return uns
 
     @uns.setter
@@ -896,7 +893,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
             )
-        if isinstance(value, (OverloadedDict, DictView)):
+        if isinstance(value, DictView):
             value = value.copy()
         if self.is_view:
             self._init_as_actual(self.copy())

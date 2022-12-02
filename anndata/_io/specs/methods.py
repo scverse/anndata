@@ -19,7 +19,6 @@ from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core import views
 from anndata.compat import (
-    OverloadedDict,
     ZarrArray,
     ZarrGroup,
     DaskArray,
@@ -269,9 +268,7 @@ def read_mapping(elem):
     return {k: read_elem(v) for k, v in elem.items()}
 
 
-@_REGISTRY.register_write(H5Group, OverloadedDict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, OverloadedDict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
 def write_mapping(f, k, v, dataset_kwargs=MappingProxyType({})):
     g = f.create_group(k)
