@@ -1899,9 +1899,44 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             Filename of data file. Defaults to backing file.
         compression
-            See the h5py :ref:`dataset_compression`.
+            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
+
+            Alternative compression filters such as `zstd` can be passed
+            from the :doc:`hdf5plugin <hdf5plugin:usage>` library.
+            Experimental.
+
+            Usage example::
+
+                import hdf5plugin
+                adata.write_h5ad(
+                    filename,
+                    compression=hdf5plugin.FILTERS["zstd"]
+                )
+
+            .. note::
+                Datasets written with hdf5plugin-provided compressors
+                cannot be opened without first loading the hdf5plugin
+                library using `import hdf5plugin`. When using alternative
+                compression filters such as `zstd`, consider writing to
+                `zarr` format instead of `h5ad`, as the `zarr` library
+                provides a more transparent compression pipeline.
+
         compression_opts
-            See the h5py :ref:`dataset_compression`.
+            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
+
+            Alternative compression filters such as `zstd` can be configured
+            using helpers from the :doc:`hdf5plugin <hdf5plugin:usage>`
+            library. Experimental.
+
+            Usage example (setting `zstd` compression level to 5)::
+
+                import hdf5plugin
+                adata.write_h5ad(
+                    filename,
+                    compression=hdf5plugin.FILTERS["zstd"],
+                    compression_opts=hdf5plugin.Zstd(clevel=5).filter_options
+                )
+
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.

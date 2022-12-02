@@ -94,6 +94,7 @@ def setup(app: Sphinx):
 
 intersphinx_mapping = dict(
     h5py=("https://docs.h5py.org/en/latest/", None),
+    hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest/", None),
     loompy=("https://linnarssonlab.org/loompy/", None),
     numpy=("https://numpy.org/doc/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
