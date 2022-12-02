@@ -34,7 +34,13 @@ html_static_path = ["_static"]
 source_suffix = ".rst"
 master_doc = "index"
 default_role = "literal"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "**.ipynb_checkpoints",
+    "tutorials/notebooks/*.rst",
+]
 pygments_style = "sphinx"
 
 extensions = [
@@ -48,6 +54,7 @@ extensions = [
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "scanpydoc",
     "nbsphinx",
+    "IPython.sphinxext.ipython_console_highlighting",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
