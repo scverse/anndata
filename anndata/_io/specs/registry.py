@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from abc import abstractmethod, ABC
-from collections.abc import Mapping, Callable, Iterable, Set
+from collections.abc import Mapping, Callable, Iterable
 from functools import singledispatch, wraps
-from typing import Any, Literal, NamedTuple, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import h5py
-    import zarr
+from typing import Any, NamedTuple, Union
 
 from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
@@ -200,8 +195,8 @@ def get_spec(
 
 @report_write_key_on_error
 def write_elem(
-    # should be “H5Group | ZarrGroup”, but weirdly that makes Sphinx error
-    f: h5py.Group | h5py.File | zarr.hierarchy.Group,
+    # Could be “H5Group | ZarrGroup”, but weirdly that makes Sphinx error on python 3.10
+    f: Union[H5Group, ZarrGroup],
     k: str,
     elem: Any,
     *args,
