@@ -95,9 +95,9 @@ class IORegistry:
         if dest_type is h5py.File:
             dest_type = h5py.Group
 
-        try:
+        if (dest_type, src_type, modifiers) in self.write:
             return self.write[(dest_type, src_type, modifiers)]
-        except KeyError:
+        else:
             raise NoSuchWrite._from_parts(dest_type, src_type, modifiers) from None
 
     def has_writer(
@@ -126,9 +126,9 @@ class IORegistry:
     def get_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
-        try:
+        if (src_type, spec, modifiers) in self.read:
             return self.read[(src_type, spec, modifiers)]
-        except KeyError:
+        else:
             raise NoSuchRead._from_parts(
                 "read", _REGISTRY.read, src_type, spec
             ) from None
@@ -156,9 +156,9 @@ class IORegistry:
     def get_partial_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
-        try:
+        if (src_type, spec, modifiers) in self.read_partial:
             return self.read_partial[(src_type, spec, modifiers)]
-        except KeyError:
+        else:
             raise NoSuchRead(
                 "read_partial", _REGISTRY.read_partial, src_type, spec
             ) from None
