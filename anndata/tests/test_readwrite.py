@@ -301,8 +301,8 @@ def test_read_full_io_error(tmp_path, name, read, write):
         AnnDataReadError, match=r"raised while reading key '/obs'"
     ) as exc_info:
         read(path)
-    assert re.match(
-        r"No such read function registered: Unknown encoding type “invalid”",
+    assert re.search(
+        r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
         str(exc_info.value.__cause__),
     )
 

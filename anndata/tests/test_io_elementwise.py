@@ -115,50 +115,40 @@ def test_write_to_root(store):
 
 
 @pytest.mark.parametrize(
-    ["mess_with", "modifiers", "pattern"],
+    ["attribute", "value"],
     [
-        # (lambda s: ???, r"Unknown source type"),
-        (
-            lambda s: s["obs"].attrs.__setitem__("encoding-type", "floob"),
-            (),
-            r"Unknown encoding type “floob”",
-        ),
-        (
-            lambda s: s["obs"].attrs.__setitem__("encoding-version", "10000.0"),
-            (),
-            r"Unknown encoding version 10000\.0",
-        ),
-        (lambda s: None, {"x"}, r"Unknown modifier set.+\{'x'\}"),
+        ("encoding-type", "floob"),
+        ("encoding-version", "10000.0"),
     ],
 )
-def test_read_io_error(store, mess_with, modifiers, pattern):
+def test_read_iospec_not_found(store, attribute, value):
     adata = gen_adata((3, 2))
 
     write_elem(store, "/", adata)
-    mess_with(store)
-    full_pattern = rf"No such read function registered: {pattern}.*try updating"
+    store["obs"].attrs.update({attribute: value})
+
     with pytest.raises(
         AnnDataReadError, match=r"while reading key '/(obs)?'"
     ) as exc_info:
-        read_elem(store, modifiers=frozenset(modifiers))
+        read_elem(store)
     msg = str(exc_info.value.__cause__)
-    assert re.match(full_pattern, msg)
+
+    assert "No read method registered for IOSpec" in msg
+    assert f"{attribute.replace('-', '_')}='{value}'" in msg
 
 
 @pytest.mark.parametrize(
-    ["obj", "modifiers", "pattern"],
-    [
-        (b"x", (), r"Source type <class 'bytes'> not found for dest.*Group"),
-        # (???, (), r"Dest.*not found for.*source.*asdfsdf"),
-        (np.ndarray([1]), {"x"}, r"Unknown modifier set.+\{'x'\}"),
-    ],
+    ["obj"],
+    [(b"x",)],
 )
-def test_write_io_error(store, obj, modifiers, pattern):
-    full_pattern = re.compile(rf"No such write function registered: {pattern}")
+def test_write_io_error(store, obj):
+    full_pattern = re.compile(
+        rf"No method registered for writing {type(obj)} into .*Group"
+    )
     with pytest.raises(AnnDataWriteError, match=r"while writing key '/el'") as exc_info:
-        write_elem(store, "/el", obj, modifiers=frozenset(modifiers))
+        write_elem(store, "/el", obj)
     msg = str(exc_info.value.__cause__)
-    assert re.match(full_pattern, msg)
+    assert re.search(full_pattern, msg)
 
 
 def test_categorical_order_type(store):
