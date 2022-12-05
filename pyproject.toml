@@ -79,7 +79,7 @@ test = [
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
-    "sklearn",
+    "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
