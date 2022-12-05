@@ -15,7 +15,8 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
-from anndata._io.utils import AnnDataReadError, AnnDataWriteError
+from anndata._io.utils import AnnDataReadError
+from anndata._io.specs.registry import IORegistryError
 from anndata.utils import asarray
 from anndata.compat import _read_attr, DaskArray
 
@@ -610,7 +611,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
-        with pytest.raises(AnnDataWriteError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
         assert colname in str(exc_info.value.__cause__)
     for colname in reserved:
@@ -618,7 +619,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         to_write.varm["df"] = pd.DataFrame(
             {colname: list("aabcd")}, index=to_write.var_names
         )
-        with pytest.raises(AnnDataWriteError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
         assert colname in str(exc_info.value.__cause__)
 
@@ -674,7 +675,7 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest.raises(AnnDataWriteError, match=r"writing key 'obs'") as exc_info:
+    with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
     assert str(b"c") in str(exc_info.value.__cause__)
 

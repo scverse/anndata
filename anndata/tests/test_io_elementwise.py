@@ -12,7 +12,8 @@ import pytest
 from scipy import sparse
 import zarr
 
-from anndata._io.utils import AnnDataReadError, AnnDataWriteError
+from anndata._io.specs.registry import IORegistryError
+from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -144,7 +145,7 @@ def test_write_io_error(store, obj):
     full_pattern = re.compile(
         rf"No method registered for writing {type(obj)} into .*Group"
     )
-    with pytest.raises(AnnDataWriteError, match=r"while writing key '/el'") as exc_info:
+    with pytest.raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
         write_elem(store, "/el", obj)
     msg = str(exc_info.value.__cause__)
     assert re.search(full_pattern, msg)

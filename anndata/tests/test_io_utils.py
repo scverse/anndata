@@ -11,7 +11,6 @@ from anndata.compat import _clean_uns
 from anndata._io.utils import (
     report_read_key_on_error,
     AnnDataReadError,
-    AnnDataWriteError,
 )
 
 
@@ -52,7 +51,7 @@ def test_write_error_info(diskfmt, tmp_path):
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
     with pytest.raises(
-        AnnDataWriteError, match=r"Above error raised while writing key 'c'"
+        IORegistryError, match=r"Above error raised while writing key 'c'"
     ):
         write(a)
 
