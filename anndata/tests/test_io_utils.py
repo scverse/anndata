@@ -6,7 +6,7 @@ import h5py
 import pandas as pd
 
 import anndata as ad
-from anndata._io.specs.registry import NoSuchWrite
+from anndata._io.specs.registry import IORegistryError
 from anndata.compat import _clean_uns
 from anndata._io.utils import (
     report_read_key_on_error,

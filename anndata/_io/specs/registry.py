@@ -16,33 +16,28 @@ class IOSpec(NamedTuple):
     encoding_version: str
 
 
-class NoSuchIO(KeyError):
-    pass
-
-
-class NoSuchWrite(NoSuchIO):
+# TODO: Should this subclass from LookupError?
+class IORegistryError(Exception):
     @classmethod
-    def _from_parts(cls, dest_type, typ, modifiers) -> NoSuchWrite:
+    def _from_write_parts(cls, dest_type, typ, modifiers) -> IORegistryError:
         msg = f"No method registered for writing {typ} into {dest_type}"
         if modifiers:
             msg += f" with {modifiers}"
         return cls(msg)
 
-
-class NoSuchRead(NoSuchIO):
     @classmethod
-    def _from_parts(
+    def _from_read_parts(
         cls,
         method: str,
         registry: Mapping,
         src_typ: H5Array | ZarrArray | H5Group | ZarrGroup,
         spec: IOSpec,
-    ) -> NoSuchRead:
+    ) -> IORegistryError:
+        # TODO: Improve error message if type exists, but version does not
         msg = (
             f"No {method} method registered for {spec} from {src_typ}. "
             "You may need to update your installation of anndata."
         )
-
         return cls(msg)
 
 
@@ -98,7 +93,7 @@ class IORegistry:
         if (dest_type, src_type, modifiers) in self.write:
             return self.write[(dest_type, src_type, modifiers)]
         else:
-            raise NoSuchWrite._from_parts(dest_type, src_type, modifiers) from None
+            raise IORegistryError._from_write_parts(dest_type, src_type, modifiers)
 
     def has_writer(
         self,
@@ -129,9 +124,9 @@ class IORegistry:
         if (src_type, spec, modifiers) in self.read:
             return self.read[(src_type, spec, modifiers)]
         else:
-            raise NoSuchRead._from_parts(
+            raise IORegistryError._from_read_parts(
                 "read", _REGISTRY.read, src_type, spec
-            ) from None
+            )
 
     def has_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
@@ -159,9 +154,9 @@ class IORegistry:
         if (src_type, spec, modifiers) in self.read_partial:
             return self.read_partial[(src_type, spec, modifiers)]
         else:
-            raise NoSuchRead(
+            raise IORegistryError._from_read_parts(
                 "read_partial", _REGISTRY.read_partial, src_type, spec
-            ) from None
+            )
 
 
 _REGISTRY = IORegistry()

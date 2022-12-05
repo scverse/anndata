@@ -15,7 +15,6 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
-from anndata._io.specs.registry import NoSuchRead
 from anndata._io.utils import AnnDataReadError, AnnDataWriteError
 from anndata.utils import asarray
 from anndata.compat import _read_attr, DaskArray
