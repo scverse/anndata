@@ -5,9 +5,8 @@ import numpy as np
 import pandas as pd
 import warnings
 
-from typing import Dict, Union, Optional, Sequence, Callable
+from typing import Dict, Union, Optional, Sequence, Callable, Literal
 
-from ...compat import Literal
 from ..._core.anndata import AnnData
 from ..._core.index import _normalize_indices, _normalize_index, Index
 from ..._core.views import _resolve_idx
@@ -980,7 +979,7 @@ class LazyAttrData(_IterateViewMixin):
             return _dtypes[self.attr][self.key]
 
         attr = self[:1]
-        if hasattr(attr, dtype):
+        if hasattr(attr, "dtype"):
             return attr.dtype
         else:
             return None

@@ -7,10 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-
-
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
+from ..compat import DaskArray, Index, Index1D
 
 
 def _normalize_indices(
@@ -124,6 +121,14 @@ def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
+    return a[subset_idx]
+
+
+@_subset.register(DaskArray)
+def _subset_dask(a: DaskArray, subset_idx: Index):
+    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+        return a.vindex[subset_idx]
     return a[subset_idx]
 
 

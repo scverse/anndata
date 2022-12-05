@@ -159,3 +159,15 @@ def test_write_io_error(store, obj, modifiers, pattern):
         write_elem(store, "/el", obj, modifiers=frozenset(modifiers))
     msg = str(exc_info.value.__cause__)
     assert re.match(full_pattern, msg)
+
+
+def test_categorical_order_type(store):
+    # https://github.com/scverse/anndata/issues/853
+    cat = pd.Categorical([0, 1], ordered=True)
+    write_elem(store, "ordered", cat)
+    write_elem(store, "unordered", cat.set_ordered(False))
+
+    assert read_elem(store["ordered"]).ordered is True
+    assert type(read_elem(store["ordered"]).ordered) == bool
+    assert read_elem(store["unordered"]).ordered is False
+    assert type(read_elem(store["unordered"]).ordered) == bool

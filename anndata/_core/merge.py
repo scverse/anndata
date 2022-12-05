@@ -6,18 +6,30 @@ from collections.abc import Mapping, MutableSet
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Any, Callable, Collection, Iterable, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Iterable,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    Literal,
+)
 import typing
 from warnings import warn
 
+from natsort import natsorted
 import numpy as np
 import pandas as pd
 from scipy import sparse
 from scipy.sparse import spmatrix
 
 from .anndata import AnnData
-from ..compat import Literal
 from ..utils import asarray
+from ..compat import DaskArray
+from .index import _subset, make_slice
 
 T = TypeVar("T")
 
@@ -97,6 +109,21 @@ def equal_dataframe(a, b) -> bool:
     return a.equals(b)
 
 
+@equal.register(DaskArray)
+def equal_dask_array(a, b) -> bool:
+    import dask.array as da
+    from dask.base import tokenize
+
+    if a is b:
+        return True
+    if a.shape != b.shape:
+        return False
+    if isinstance(b, DaskArray):
+        if tokenize(a) == tokenize(b):
+            return True
+    return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
+
+
 @equal.register(np.ndarray)
 def equal_array(a, b) -> bool:
     return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
@@ -132,6 +159,59 @@ def as_sparse(x):
         return sparse.csr_matrix(x)
     else:
         return x
+
+
+def unify_categorical_dtypes(dfs):
+    """
+    Attempts to unify categorical datatypes from multiple dataframes
+    """
+    # Get shared categorical columns
+    df_dtypes = [dict(df.dtypes) for df in dfs]
+    columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
+
+    dtypes = {col: list() for col in columns}
+    for col in columns:
+        for df in df_dtypes:
+            dtypes[col].append(df.get(col, None))
+
+    dtypes = {k: v for k, v in dtypes.items() if unifiable_dtype(v)}
+
+    if len(dtypes) == 0:
+        return dfs
+    else:
+        dfs = [df.copy(deep=False) for df in dfs]
+
+    new_dtypes = {}
+    for col in dtypes.keys():
+        categories = reduce(
+            lambda x, y: x.union(y),
+            [x.categories for x in dtypes[col] if not pd.isnull(x)],
+        )
+        new_dtypes[col] = pd.CategoricalDtype(natsorted(categories), ordered=False)
+
+    for df in dfs:
+        for col, dtype in new_dtypes.items():
+            if col in df:
+                df[col] = df[col].astype(dtype)
+
+    return dfs
+
+
+def unifiable_dtype(col: pd.Series) -> bool:
+    """
+    Check if dtypes are mergable categoricals.
+
+    Currently, this means they must be unordered categoricals.
+    """
+    dtypes = set()
+    ordered = False
+    for dtype in col:
+        if pd.api.types.is_categorical_dtype(dtype):
+            dtypes.add(dtype.categories.dtype)
+            ordered = ordered | dtype.ordered
+        elif not pd.isnull(dtype):
+            return False
+    return len(dtypes) == 1 and not ordered
 
 
 ###################
@@ -267,7 +347,6 @@ class Reindexer:
     def __init__(self, old_idx, new_idx):
         self.old_idx = old_idx
         self.new_idx = new_idx
-
         self.no_change = new_idx.equals(old_idx)
 
         new_pos = new_idx.get_indexer(old_idx)
@@ -293,6 +372,8 @@ class Reindexer:
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, DaskArray):
+            return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -300,6 +381,23 @@ class Reindexer:
         if fill_value is None:
             fill_value = np.NaN
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
+
+    def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
+        import dask.array as da
+
+        if fill_value is None:
+            fill_value = default_fill_value([el])
+        shape = list(el.shape)
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape[axis] = len(self.new_idx)
+            return da.broadcast_to(fill_value, tuple(shape))
+
+        indexer = self.old_idx.get_indexer(self.new_idx)
+
+        sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
+        sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+        return sub_el
 
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
@@ -409,7 +507,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
            [0., 1., 0.],
            [0., 0., 1.],
            [0., 1., 0.],
-           [1., 0., 0.]], dtype=float32)
+           [1., 0., 0.]])
     """
     return Reindexer(cur_var, new_var)
 
@@ -430,7 +528,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
-            [f(x) for f, x in zip(reindexers, arrays)], ignore_index=True, axis=axis
+            unify_categorical_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
+            ignore_index=True,
+            axis=axis,
         )
         df.index = index
         return df
@@ -731,14 +831,14 @@ def concat(
 
     >>> ad.concat([a, b]).to_df()
         var1  var2
-    s1   0.0   1.0
-    s2   2.0   3.0
-    s3   4.0   5.0
-    s4   7.0   8.0
+    s1     0     1
+    s2     2     3
+    s3     4     5
+    s4     7     8
     >>> ad.concat([a, c], axis=1).to_df()
         var1  var2  var3  var4
-    s1   0.0   1.0  10.0  11.0
-    s2   2.0   3.0  12.0  13.0
+    s1     0     1    10    11
+    s2     2     3    12    13
 
     Inner and outer joins
 
@@ -757,10 +857,10 @@ def concat(
     Index(['var1', 'var2', 'var3'], dtype='object')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
         var1  var2  var3
-    s1   0.0   1.0   0.0
-    s2   2.0   3.0   0.0
-    s3   4.0   5.0   6.0
-    s4   7.0   8.0   9.0
+    s1     0     1     0
+    s2     2     3     0
+    s3     4     5     6
+    s4     7     8     9
 
     Keeping track of source objects
 
@@ -856,7 +956,9 @@ def concat(
 
     # Annotation for concatenation axis
     concat_annot = pd.concat(
-        [getattr(a, dim) for a in adatas], join=join, ignore_index=True
+        unify_categorical_dtypes([getattr(a, dim) for a in adatas]),
+        join=join,
+        ignore_index=True,
     )
     concat_annot.index = concat_indices
     if label is not None:
@@ -924,7 +1026,6 @@ def concat(
             [
                 AnnData(
                     X=a.raw.X,
-                    dtype=a.raw.X.dtype,
                     obs=pd.DataFrame(index=a.obs_names),
                     var=a.raw.var,
                     varm=a.raw.varm,
@@ -947,7 +1048,6 @@ def concat(
     return AnnData(
         **{
             "X": X,
-            "dtype": None if X is None else X.dtype,
             "layers": layers,
             dim: concat_annot,
             alt_dim: alt_annot,
