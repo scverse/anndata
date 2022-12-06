@@ -94,8 +94,37 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
 # Same behavior as ArrayView
 # To show the type of the view
-class DaskArrayView(ArrayView):
-    pass
+class DaskArrayView(_ViewMixin, DaskArray):
+    def __new__(
+        cls,
+        input_array: Sequence[Any],
+        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+    ):
+        arr = input_array
+        # TODO: Did I skip anything by not doing below line?
+        # arr = np.asanyarray(input_array).view(cls)
+
+        if view_args is not None:
+            view_args = ElementRef(*view_args)
+        arr._view_args = view_args
+        return arr
+
+    def __array_finalize__(self, obj: Optional[np.ndarray]):
+        if obj is not None:
+            self._view_args = getattr(obj, "_view_args", None)
+
+    def keys(self) -> KeysView[str]:
+        # it’s a structured array
+        return self.dtype.names
+
+    def copy(self, order: str = "C") -> np.ndarray:
+        # we want a conventional array
+        # np.array(self)
+        # TODO: What should this do?
+        return self.copy()
+
+    def toarray(self) -> np.ndarray:
+        return self.copy()
 
 
 # Unlike array views, SparseCSRView and SparseCSCView
