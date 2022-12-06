@@ -4,8 +4,12 @@
 .. rubric:: Features
 
 * Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
-* Expanded docstring more documentation for ``backed`` argument of :func:`anndata.read_h5ad` :pr:`812` :smaller:`jeskowagner`
 * Added support for dask arrays :pr:`813` :smaller:`syelman` :smaller:`rahulbshrestha`
+
+.. rubric:: Documentation
+
+* Expanded docstring more documentation for ``backed`` argument of :func:`anndata.read_h5ad` :pr:`812` :smaller:`jeskowagner`
+* Documented how to use alternative compression methods for the `h5ad` file format, see :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` :pr:`857` :smaller:`nigeil`
 
 .. rubric:: Breaking changes
 
@@ -20,4 +24,4 @@
 .. rubric:: Deprecations
 
 * :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :smaller:`ivirshup`
-* Previously deprecated `force_dense` arugment :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` has been removed.:pr:`855` :smaller:`ivirshup`
+* Previously deprecated `force_dense` arugment :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` has been removed. :pr:`855` :smaller:`ivirshup`
