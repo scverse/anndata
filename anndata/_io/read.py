@@ -227,7 +227,7 @@ def read_loom(
         )
         if obsm_mapping != {}:
             raise ValueError(
-                "Recieved values for both `obsm_names` and `obsm_mapping`. This is "
+                "Received values for both `obsm_names` and `obsm_mapping`. This is "
                 "ambiguous, only pass `obsm_mapping`."
             )
         obsm_mapping = obsm_names
@@ -239,7 +239,7 @@ def read_loom(
         )
         if varm_mapping != {}:
             raise ValueError(
-                "Recieved values for both `varm_names` and `varm_mapping`. This is "
+                "Received values for both `varm_names` and `varm_mapping`. This is "
                 "ambiguous, only pass `varm_mapping`."
             )
         varm_mapping = varm_names
