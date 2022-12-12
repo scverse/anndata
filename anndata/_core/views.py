@@ -22,7 +22,7 @@ class _SetItemMixin:
     This implements copy-on-modify semantics for views of AnnData objects.
     """
 
-    def __setitem__(self, idx, value):
+    def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
