@@ -92,17 +92,17 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
-# Same behavior as ArrayView
-# To show the type of the view
+# Extends DaskArray
+# Call's parent __new__ constructor since
+# even calling astype on a dask array
+# needs a .compute() call to actually happen.
+# So no construction by view casting like ArrayView
 class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
         view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
     ):
-        # TODO: Clean up style and comments
-        # TODO: Check if copy works properly
-
         arr = super().__new__(
             cls,
             dask=input_array.dask,
@@ -118,7 +118,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
 
         return arr
 
-    def __array_finalize__(self, obj: Optional[np.ndarray]):
+    def __array_finalize__(self, obj: Optional[DaskArray]):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
 
