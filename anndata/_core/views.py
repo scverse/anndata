@@ -14,7 +14,6 @@ from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
 from ..compat import ZappyArray, DaskArray
 
-
 class _SetItemMixin:
     """\
     Class which (when values are being set) lets their parent AnnData view know,
@@ -22,7 +21,7 @@ class _SetItemMixin:
     This implements copy-on-modify semantics for views of AnnData objects.
     """
 
-    def __setitem__(self, idx: Any, value: Any):
+    def __setitem__(self, idx, value):
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
@@ -94,19 +93,28 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
 # Same behavior as ArrayView
 # To show the type of the view
-class DaskArrayView(_ViewMixin, DaskArray):
+class DaskArrayView(_SetItemMixin,DaskArray):
     def __new__(
         cls,
-        input_array: Sequence[Any],
+        input_array: DaskArray,
         view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
     ):
-        arr = input_array
-        # TODO: Did I skip anything by not doing below line?
-        # arr = np.asanyarray(input_array).view(cls)
+        # TODO: Clean up style and comments
+        # TODO: Check if copy works properly
 
+        arr = super().__new__(
+            cls,
+            dask=input_array.dask,
+            name=input_array.name,
+            chunks=input_array.chunks,
+            dtype=input_array.dtype,
+            meta=input_array._meta,
+            shape=input_array.shape
+        )
         if view_args is not None:
             view_args = ElementRef(*view_args)
         arr._view_args = view_args
+
         return arr
 
     def __array_finalize__(self, obj: Optional[np.ndarray]):
@@ -116,15 +124,6 @@ class DaskArrayView(_ViewMixin, DaskArray):
     def keys(self) -> KeysView[str]:
         # it’s a structured array
         return self.dtype.names
-
-    def copy(self, order: str = "C") -> np.ndarray:
-        # we want a conventional array
-        # np.array(self)
-        # TODO: What should this do?
-        return self.copy()
-
-    def toarray(self) -> np.ndarray:
-        return self.copy()
 
 
 # Unlike array views, SparseCSRView and SparseCSCView
