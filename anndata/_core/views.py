@@ -14,6 +14,7 @@ from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
 from ..compat import ZappyArray, DaskArray
 
+
 class _SetItemMixin:
     """\
     Class which (when values are being set) lets their parent AnnData view know,
@@ -93,7 +94,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
 # Same behavior as ArrayView
 # To show the type of the view
-class DaskArrayView(_SetItemMixin,DaskArray):
+class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
@@ -109,7 +110,7 @@ class DaskArrayView(_SetItemMixin,DaskArray):
             chunks=input_array.chunks,
             dtype=input_array.dtype,
             meta=input_array._meta,
-            shape=input_array.shape
+            shape=input_array.shape,
         )
         if view_args is not None:
             view_args = ElementRef(*view_args)
