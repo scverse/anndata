@@ -7,7 +7,13 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal, subset_func
+from anndata.tests.helpers import (
+    as_dense_dask_array,
+    GEN_ADATA_DASK_ARGS,
+    gen_adata,
+    assert_equal,
+    subset_func,
+)
 from anndata.utils import asarray
 
 subset_func2 = subset_func
@@ -42,13 +48,12 @@ def adata():
         obsm=dict(o1=np.zeros((X.shape[0], 10))),
         varm=dict(v1=np.ones((X.shape[1], 20))),
         layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
-        dtype="int32",
     )
 
 
 @pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array],
-    ids=["scipy-csr", "scipy-csc", "np-array"],
+    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
+    ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
 )
 def mtx_format(request):
     return request.param
@@ -64,8 +69,8 @@ def backed_mode(request):
     return request.param
 
 
-@pytest.fixture(params=[True, False])
-def force_dense(request):
+@pytest.fixture(params=(("X",), ()))
+def as_dense(request):
     return request.param
 
 
@@ -74,7 +79,7 @@ def force_dense(request):
 # -------------------------------------------------------------------------------
 
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
-def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
+def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.h5ad"
     backed_pth = base_pth / "backed.h5ad"
@@ -83,7 +88,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
     orig.write(orig_pth)
 
     backed = ad.read(orig_pth, backed=backed_mode)
-    backed.write(backed_pth, as_dense=["X"])
+    backed.write(backed_pth, as_dense=as_dense)
     backed.file.close()
 
     from_backed = ad.read(backed_pth)
@@ -157,7 +162,7 @@ def test_backing_copy(adata, tmp_path, backing_h5ad):
 def test_backed_raw(tmp_path):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10))
+    mem_adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     mem_adata.raw = mem_adata
     mem_adata.write(backed_pth)
 
@@ -219,12 +224,13 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     [
         pytest.param(asarray, id="dense_array"),
         pytest.param(sparse.csr_matrix, id="csr_matrix"),
+        pytest.param(as_dense_dask_array, id="dask_array"),
     ],
 )
 def test_to_memory_full(tmp_path, array_type):
     backed_pth = tmp_path / "backed.h5ad"
-    mem_adata = gen_adata((15, 10), X_type=array_type)
-    mem_adata.raw = gen_adata((15, 12), X_type=array_type)
+    mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     mem_adata.write_h5ad(backed_pth, compression="lzf")
 
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
@@ -234,12 +240,6 @@ def test_to_memory_full(tmp_path, array_type):
     del backed_adata.raw
     del mem_adata.raw
     assert_equal(mem_adata, backed_adata.to_memory())
-
-
-def test_to_memory_error():
-    adata = gen_adata((5, 3))
-    with pytest.raises(ValueError):
-        adata.to_memory()
 
 
 def test_double_index(adata, backing_h5ad):

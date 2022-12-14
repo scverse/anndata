@@ -1,10 +1,6 @@
 Concatenation
 =============
 
-.. warning::
-
-    The :func:`~anndata.concat` function is marked as experimental for the `0.7` release series, and will supercede the :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` method in future releases. While the current API is not likely to change much, this gives us a bit of freedom to make sure we've got the arguments and feature set right.
-
 With :func:`~anndata.concat`, :class:`~anndata.AnnData` objects can be combined via a composition of two operations: concatenation and merging.
 
 * Concatenation is when we keep all sub elements of each object, and stack these elements in an ordered way.
@@ -65,13 +61,13 @@ For example, given two anndata objects with differing variables:
            [0., 1.],
            [0., 0.],
            [0., 1.],
-           [1., 0.]], dtype=float32)
+           [1., 0.]])
     >>> ad.concat([a, b], join="outer").X.toarray()
     array([[1., 0., 0.],
            [0., 1., 0.],
            [0., 0., 1.],
            [0., 1., 0.],
-           [1., 0., 0.]], dtype=float32)
+           [1., 0., 0.]])
 
 The join argument is used for any element which has both (1) an axis being concatenated and (2) has an axis not being concatenated.
 When concatenating along the `obs` dimension, this means elements of `.X`, `obs`, `.layers`, and `.obsm` will be affected by the choice of `join`.

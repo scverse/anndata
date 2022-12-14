@@ -20,7 +20,8 @@ from .h5ad import read_h5ad
 
 try:
     from .zarr import read_zarr
-except ImportError as e:  # noqa: F841
+except ImportError as _e:
+    e = _e
 
     def read_zarr(*_, **__):
         raise e
@@ -76,7 +77,7 @@ def read_excel(
     X = df.values[:, 1:]
     row = dict(row_names=df.iloc[:, 0].values.astype(str))
     col = dict(col_names=np.array(df.columns[1:], dtype=str))
-    return AnnData(X, row, col, dtype=dtype)
+    return AnnData(X, row, col)
 
 
 def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
@@ -93,15 +94,13 @@ def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
     table = pd.read_table(filename, dtype={"gene": "category", "cell": "category"})
 
     X = sparse.csr_matrix(
-        (table["count"], (table["cell"].cat.codes, table["gene"].cat.codes))
+        (table["count"], (table["cell"].cat.codes, table["gene"].cat.codes)),
+        dtype=dtype,
     )
     obs = pd.DataFrame(index=pd.Index(table["cell"].cat.categories, name="cell"))
     var = pd.DataFrame(index=pd.Index(table["gene"].cat.categories, name="gene"))
 
-    if dtype is None:
-        dtype = X.dtype
-
-    return AnnData(X=X, obs=obs, var=var, dtype=dtype)
+    return AnnData(X=X, obs=obs, var=var)
 
 
 def read_hdf(filename: PathLike, key: str) -> AnnData:
@@ -133,7 +132,7 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
         for iname, name in enumerate(["row_names", "col_names"]):
             if name in keys:
                 rows_cols[iname][name] = f[name][()]
-    adata = AnnData(X, rows_cols[0], rows_cols[1], dtype=X.dtype.name)
+    adata = AnnData(X, rows_cols[0], rows_cols[1])
     return adata
 
 
@@ -252,6 +251,7 @@ def read_loom(
         if X_name not in lc.layers.keys():
             X_name = ""
         X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
+        X = X.astype(dtype, copy=False)
 
         layers = OrderedDict()
         if X_name != "":
@@ -295,7 +295,6 @@ def read_loom(
             obsm=obsm if obsm else None,
             varm=varm if varm else None,
             uns=uns,
-            dtype=dtype,
         )
     return adata
 
@@ -318,7 +317,7 @@ def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
     from scipy.sparse import csr_matrix
 
     X = csr_matrix(X)
-    return AnnData(X, dtype=dtype)
+    return AnnData(X)
 
 
 def read_text(
@@ -472,7 +471,6 @@ def _read_text(
         data,
         obs=dict(obs_names=row_names),
         var=dict(var_names=col_names),
-        dtype=dtype,
     )
 
 

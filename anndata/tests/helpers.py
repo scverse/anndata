@@ -1,7 +1,7 @@
 from functools import singledispatch, wraps
 from string import ascii_letters
-from typing import Tuple, Optional
-from collections.abc import Mapping
+from typing import Tuple, Optional, Type
+from collections.abc import Mapping, Collection
 import warnings
 
 import h5py
@@ -19,7 +19,19 @@ from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray, dim_len
 
-from anndata.compat import AwkArray
+from anndata.compat import AwkArray, DaskArray
+
+# Give this to gen_adata when dask array support is expected.
+GEN_ADATA_DASK_ARGS = dict(
+    obsm_types=(
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+)
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -175,6 +187,8 @@ def gen_adata(
     layers_types
         What kinds of containers should be in `.layers`?
     """
+    import dask.array as da
+
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
@@ -196,6 +210,7 @@ def gen_adata(
         awk_2d=gen_awkward((M, 20)),
         awk_2d_ragged=gen_awkward((M, None)),
         awk_3d_ragged=gen_awkward((M, 20, None)),
+        da=da.random.random((M, 50)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
@@ -206,10 +221,13 @@ def gen_adata(
         awk_2d=gen_awkward((N, 20)),
         awk_2d_ragged=gen_awkward((N, None)),
         awk_3d_ragged=gen_awkward((N, 20, None)),
+        da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
-        array=np.random.random((M, N)), sparse=sparse.random(M, N, format="csr")
+        array=np.random.random((M, N)),
+        sparse=sparse.random(M, N, format="csr"),
+        da=da.random.random((M, N)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
@@ -239,7 +257,6 @@ def gen_adata(
         layers=layers,
         obsp=obsp,
         varp=varp,
-        dtype=X_dtype,
         uns=uns,
     )
     return adata
@@ -403,6 +420,17 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
+@assert_equal.register(DaskArray)
+def assert_equal_dask_array(a, b, exact=False, elem_name=None):
+    from dask.array.utils import assert_eq
+
+    if exact:
+        assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
+    else:
+        # TODO: Why does it fail when check_graph=True
+        assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
+
+
 @assert_equal.register(pd.DataFrame)
 def are_equal_dataframe(a, b, exact=False, elem_name=None):
     if not isinstance(b, pd.DataFrame):
@@ -542,3 +570,15 @@ def assert_adata_equal(
             exact,
             elem_name=fmt_name(attr),
         )
+
+
+@singledispatch
+def as_dense_dask_array(a):
+    import dask.array as da
+
+    return da.asarray(a)
+
+
+@as_dense_dask_array.register(sparse.spmatrix)
+def _(a):
+    return as_dense_dask_array(a.toarray())

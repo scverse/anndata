@@ -27,8 +27,9 @@ from scipy import sparse
 from scipy.sparse import spmatrix
 
 from .anndata import AnnData
-from ..compat import AwkArray
+from ..compat import AwkArray, DaskArray
 from ..utils import asarray, dim_len
+from .index import _subset, make_slice
 
 T = TypeVar("T")
 
@@ -106,6 +107,21 @@ def equal(a, b) -> bool:
 @equal.register(pd.DataFrame)
 def equal_dataframe(a, b) -> bool:
     return a.equals(b)
+
+
+@equal.register(DaskArray)
+def equal_dask_array(a, b) -> bool:
+    import dask.array as da
+    from dask.base import tokenize
+
+    if a is b:
+        return True
+    if a.shape != b.shape:
+        return False
+    if isinstance(b, DaskArray):
+        if tokenize(a) == tokenize(b):
+            return True
+    return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
 @equal.register(np.ndarray)
@@ -341,7 +357,6 @@ class Reindexer(object):
     def __init__(self, old_idx, new_idx):
         self.old_idx = old_idx
         self.new_idx = new_idx
-
         self.no_change = new_idx.equals(old_idx)
 
         new_pos = new_idx.get_indexer(old_idx)
@@ -369,6 +384,8 @@ class Reindexer(object):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, DaskArray):
+            return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -376,6 +393,23 @@ class Reindexer(object):
         if fill_value is None:
             fill_value = np.NaN
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
+
+    def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
+        import dask.array as da
+
+        if fill_value is None:
+            fill_value = default_fill_value([el])
+        shape = list(el.shape)
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape[axis] = len(self.new_idx)
+            return da.broadcast_to(fill_value, tuple(shape))
+
+        indexer = self.old_idx.get_indexer(self.new_idx)
+
+        sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
+        sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+        return sub_el
 
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
@@ -500,7 +534,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
            [0., 1., 0.],
            [0., 0., 1.],
            [0., 1., 0.],
-           [1., 0., 0.]], dtype=float32)
+           [1., 0., 0.]])
     """
     return Reindexer(cur_var, new_var)
 
@@ -853,14 +887,14 @@ def concat(
 
     >>> ad.concat([a, b]).to_df()
         var1  var2
-    s1   0.0   1.0
-    s2   2.0   3.0
-    s3   4.0   5.0
-    s4   7.0   8.0
+    s1     0     1
+    s2     2     3
+    s3     4     5
+    s4     7     8
     >>> ad.concat([a, c], axis=1).to_df()
         var1  var2  var3  var4
-    s1   0.0   1.0  10.0  11.0
-    s2   2.0   3.0  12.0  13.0
+    s1     0     1    10    11
+    s2     2     3    12    13
 
     Inner and outer joins
 
@@ -879,10 +913,10 @@ def concat(
     Index(['var1', 'var2', 'var3'], dtype='object')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
         var1  var2  var3
-    s1   0.0   1.0   0.0
-    s2   2.0   3.0   0.0
-    s3   4.0   5.0   6.0
-    s4   7.0   8.0   9.0
+    s1     0     1     0
+    s2     2     3     0
+    s3     4     5     6
+    s4     7     8     9
 
     Keeping track of source objects
 
@@ -1048,7 +1082,6 @@ def concat(
             [
                 AnnData(
                     X=a.raw.X,
-                    dtype=a.raw.X.dtype,
                     obs=pd.DataFrame(index=a.obs_names),
                     var=a.raw.var,
                     varm=a.raw.varm,
@@ -1071,7 +1104,6 @@ def concat(
     return AnnData(
         **{
             "X": X,
-            "dtype": None if X is None else X.dtype,
             "layers": layers,
             dim: concat_annot,
             alt_dim: alt_annot,
