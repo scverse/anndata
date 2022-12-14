@@ -6,7 +6,13 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import assert_equal, gen_awkward, report_name, gen_adata, asarray
+from anndata.tests.helpers import (
+    assert_equal,
+    gen_awkward,
+    report_name,
+    gen_adata,
+    asarray,
+)
 from anndata.utils import dim_len
 
 # Testing to see if all error types can have the key name appended.
