@@ -93,7 +93,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
 
 # Extends DaskArray
-# Call's parent __new__ constructor since
+# Calls parent __new__ constructor since
 # even calling astype on a dask array
 # needs a .compute() call to actually happen.
 # So no construction by view casting like ArrayView
