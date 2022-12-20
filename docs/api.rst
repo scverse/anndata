@@ -20,6 +20,18 @@ Combining AnnData objects. See also the section on concatenation.
 
    concat
 
+
+Splitting
+---------
+
+Splitting an AnnData object.
+
+.. autosummary::
+   :toctree: .
+
+   split
+
+
 Reading
 -------
 

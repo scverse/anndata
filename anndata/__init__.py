@@ -6,6 +6,7 @@ if not within_flit():
     del within_flit
     from ._core.anndata import AnnData
     from ._core.merge import concat
+    from ._core.split import split
     from ._core.raw import Raw
     from ._io import (
         read_h5ad,
