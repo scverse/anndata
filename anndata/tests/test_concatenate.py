@@ -25,7 +25,7 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray
+from anndata.compat import DaskArray, AwkArray
 
 
 @singledispatch
@@ -444,20 +444,27 @@ def test_concatenate_fill_value(fill_val):
 
     adata1 = gen_adata((10, 10))
     adata1.obsm = {
-        k: v for k, v in adata1.obsm.items() if not isinstance(v, pd.DataFrame)
+        k: v
+        for k, v in adata1.obsm.items()
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
+    # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
+    for tmp_ad in [adata1, adata2, adata3]:
+        for k in [k for k, v in tmp_ad.varm.items() if isinstance(v, AwkArray)]:
+            del tmp_ad.varm[k]
+
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 
     ptr = 0
