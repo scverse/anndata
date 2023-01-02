@@ -9,9 +9,6 @@ import pandas as pd
 from scipy.sparse import spmatrix, issparse
 from ..compat import AwkArray, DaskArray, Index, Index1D
 
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
-
 
 def _normalize_indices(
     index: Optional[Index], names0: pd.Index, names1: pd.Index

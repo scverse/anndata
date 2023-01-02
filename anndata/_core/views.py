@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from copy import copy, deepcopy
+from copy import deepcopy
 from enum import Enum
 from functools import reduce, singledispatch, wraps
 from typing import Any, KeysView, Optional, Sequence, Tuple
