@@ -506,7 +506,7 @@ def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
     from anndata.compat import awkward as ak
 
     group = f.create_group(k)
-    form, length, container = ak.to_buffers(ak.packed(v))
+    form, length, container = ak.to_buffers(ak.to_packed(v))
     group.attrs["length"] = length
     group.attrs["form"] = form.to_json()
     write_elem(group, "container", container, dataset_kwargs=dataset_kwargs)

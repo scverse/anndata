@@ -161,7 +161,7 @@ function:
 
 .. code:: python
 
-   >>> import awkward._v2 as ak
+   >>> import awkward as ak
    >>> from anndata.experimental import read_elem
    >>> ak.from_buffers(
    ...     awkward_group.attrs["form"],

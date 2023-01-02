@@ -681,7 +681,7 @@ def test_concatenate_with_raw():
 
 
 def test_concatenate_awkward():
-    import awkward._v2 as ak
+    import awkward as ak
 
     a = ak.Array([[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
     b = ak.Array(

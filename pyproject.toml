@@ -71,7 +71,7 @@ doc = [
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",
-    "awkward>=1.10.0rc2,<2",
+    "awkward>=2.0.5",
     "IPython", # For syntax highlighting in notebooks
 ]
 test = [
@@ -86,7 +86,7 @@ test = [
     "boltons",
     "scanpy",
     "dask[array]",
-    "awkward>=1.10.0rc2,<2",
+    "awkward>=2.0.5",
 ]
 
 [tool.flit.sdist]

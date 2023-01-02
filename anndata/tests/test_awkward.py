@@ -4,7 +4,7 @@ import numpy as np
 import numpy.testing as npt
 
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
-from anndata.compat import awkward as ak, awkward_version
+from anndata.compat import awkward as ak
 from anndata import ImplicitModificationWarning
 from anndata.utils import dim_len
 from anndata import AnnData, read_h5ad
@@ -102,30 +102,6 @@ def test_set_awkward(field, value, valid):
             _assign()
     else:
         _assign()
-
-
-@pytest.mark.parametrize(
-    "key",
-    [
-        "obsm",
-        "varm",
-        pytest.param(
-            "uns", marks=pytest.mark.xfail(reason="No checks for `uns` are implemented")
-        ),
-    ],
-)
-@pytest.mark.skipif(
-    awkward_version >= 2, reason="This test is only applies for awkward versions 1.x"
-)
-def test_no_awkward_v1(key):
-    """Assigning an awkward v1 array to anndata should fail"""
-    import awkward as akv1
-
-    v1arr = akv1.Array([1, 2, 3, 4])
-
-    adata = AnnData(np.ones((4, 4)))
-    with pytest.raises(AttributeError):
-        getattr(adata, key)["test"] = v1arr
 
 
 @pytest.mark.parametrize("key", ["obsm", "varm", "uns"])

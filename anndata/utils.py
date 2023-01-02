@@ -74,10 +74,10 @@ try:
 
     def _size_at_depth(layout, depth, lateral_context, **kwargs):
         """Callback function for dim_len_awkward, resolving the dim_len for a given level"""
-        if layout.is_NumpyType:
+        if layout.is_numpy:
             # if it's an embedded rectilinear array, we have to deal with its shape
             # which might not be 1-dimensional
-            if layout.is_UnknownType:
+            if layout.is_unknown:
                 shape = (0,)
             else:
                 shape = layout.shape
@@ -85,46 +85,48 @@ try:
             if not (1 <= numpy_axis < len(shape)):
                 raise TypeError(f"axis={lateral_context['axis']} is too deep")
             lateral_context["out"] = shape[numpy_axis]
-            return layout.nplike.empty(1)
+            return ak.contents.EmptyArray()
 
-        elif layout.is_ListType and depth == lateral_context["axis"]:
+        elif layout.is_list and depth == lateral_context["axis"]:
             if layout.parameter("__array__") in ("string", "bytestring"):
                 # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
                 # which results in an extra hierarchy-level that shouldn't show up in dim_len
                 # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
                 raise TypeError(f"axis={lateral_context['axis']} is too deep")
 
-            if layout.is_RegularType:
+            if layout.is_regular:
                 # if it's a regular list, you want the size
                 lateral_context["out"] = layout.size
             else:
                 # if it's an irregular list, you want a null token
                 lateral_context["out"] = -1
-            return layout.nplike.empty(1)
+            return ak.contents.EmptyArray()
 
-        elif layout.is_RecordType:
+        elif layout.is_record:
             # if it's a record, you want to stop descent with an error
             raise TypeError(
                 f"axis={lateral_context['axis']} is too deep, reaches record"
             )
 
-        elif layout.is_UnionType:
+        elif layout.is_union:
             # if it's a union, you could get the result of each union branch
             # separately and see if they're all the same; if not, it's an error
             result = None
             for content in layout.contents:
                 context = {"axis": lateral_context["axis"]}
                 ak.transform(
-                    _size_at_depth, content, lateral_context=context, return_array=False
+                    _size_at_depth,
+                    content,
+                    lateral_context=context,
                 )
                 if result is None:
                     result = context["out"]
                 elif result != context["out"]:
                     # Union branches have different lengths -> return null token
                     lateral_context["out"] = -1
-                    return layout.nplike.empty(1)
+                    return ak.contents.EmptyArray()
             lateral_context["out"] = result
-            return layout.nplike.empty(1)
+            return ak.contents.EmptyArray()
 
     @dim_len.register(ak.Array)
     def dim_len_awkward(array, axis):
@@ -148,7 +150,6 @@ try:
                 _size_at_depth,
                 array,
                 lateral_context=context,
-                return_array=False,
             )
 
             # Use `None` as null token.
