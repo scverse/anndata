@@ -13,6 +13,9 @@ This allows us to have very similar structures in disk and on memory.
 As an example we’ll look into a typical `.h5ad` object that’s been through an analysis.
 This structure should be largely equivalent to Zarr structure, though there are a few minor differences.
 
+## Elements
+
+
 % I’ve started using h5py since I couldn’t figure out a nice way to print attributes from bash.
 
 ```python
@@ -45,6 +48,24 @@ For example, we can this file represents an `AnnData` object from this metadata:
 
 Using this information, we're able to dispatch onto readers for the different element types that you'd find in an anndata.
 
+### Element Specification
+
+* An element can be any object within the storage hierarchy (typically an array or group) with associated metadata
+* An element MUST have a string valued field `"encoding-type"` in it's metadata
+* An element MUST have a string valued field `"encoding-version"` in it's metadata that can be evaluated to a version
+
+### AnnData specification (v0.1.0)
+
+* An `AnnData` object MUST be a group. 
+* The group's metadata MUST include `{ "encoding-type": "anndata", "encoding-version": "0.1.0" }.
+* An `AnnData` group MUST contain entries `"obs"` and `"var"`, which MUST be dataframes.
+* The group MAY contain an entry `X`, which MUST be either a dense or sparse array and whose shape MUST be (`n_obs`, `n_var`)
+* The group MAY contain a mapping `layers`. Entries in `layers` MUST be dense or sparse arrays which have shapes (`n_obs`, `n_var`)
+* The group MAY contain a mapping `obsm`. Entries in `obsm` MUST be sparse arrays, dense arrays, or dataframes. These entries MUST have a first dimension of size `n_obs`
+* The group MAY contain a mapping `varm`. Entries in `varm` MUST be sparse arrays, dense arrays, or dataframes. These entries MUST have a first dimension of size `n_var`
+* The group MAY contain a mapping `obsp`. Entries in `obsp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_obs`
+* The group MAY contain a mapping `varp`. Entries in `varp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_var`
+* The group MAY contain a mapping `uns`. Entries in `uns` MUST be an anndata encoded type.
 ## Dense arrays
 
 Dense numeric arrays have the most simple representation on disk,
@@ -65,6 +86,11 @@ $ h5ls 02_processed.h5ad/obsm
 X_pca                    Dataset {38410, 50}
 X_umap                   Dataset {38410, 2}
 ``` -->
+
+### Dense arrays specification (v0.2.0)
+
+* Dense arrays MUST be stored in an Array object
+* Dense arrays MUST have the entries `'encoding-type': 'array'` and `'encoding-version': '0.2.0'` in their metadata
 
 ## Sparse arrays
 
@@ -105,6 +131,15 @@ data                     Dataset {41459314/Inf}
 indices                  Dataset {41459314/Inf}
 indptr                   Dataset {38411/Inf}
 ``` -->
+
+### Sparse array specification
+
+* Each sparse array MUST be it's own group
+* The group MUST contain arrays `indices`, `indptr`, and `data`
+* The group's metadata MUST contain:
+    * `"encoding-type"`, which is set to `"csr_matrix"` or `"csc_matrix"` for compressed sparse row and compressed sparse column, respectively.
+    * `"encoding-version"`, which is set to `"0.1.0"`
+    * `"shape"` which is an integer array of length 2 giving the shape of the densified array.
 
 ## DataFrames
 
