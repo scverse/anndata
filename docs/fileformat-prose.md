@@ -66,6 +66,7 @@ Using this information, we're able to dispatch onto readers for the different el
 * The group MAY contain a mapping `obsp`. Entries in `obsp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_obs`
 * The group MAY contain a mapping `varp`. Entries in `varp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_var`
 * The group MAY contain a mapping `uns`. Entries in `uns` MUST be an anndata encoded type.
+
 ## Dense arrays
 
 Dense numeric arrays have the most simple representation on disk,
@@ -132,14 +133,14 @@ indices                  Dataset {41459314/Inf}
 indptr                   Dataset {38411/Inf}
 ``` -->
 
-### Sparse array specification
+### Sparse array specification (v0.1.0)
 
 * Each sparse array MUST be it's own group
 * The group MUST contain arrays `indices`, `indptr`, and `data`
 * The group's metadata MUST contain:
     * `"encoding-type"`, which is set to `"csr_matrix"` or `"csc_matrix"` for compressed sparse row and compressed sparse column, respectively.
     * `"encoding-version"`, which is set to `"0.1.0"`
-    * `"shape"` which is an integer array of length 2 giving the shape of the densified array.
+    * `"shape"` which is an integer array of length 2 whose values are the sizes of the array's dimensions
 
 ## DataFrames
 
@@ -170,6 +171,17 @@ Each column in this dataframe is encoded as it's own array.
 {'encoding-type': 'categorical', 'encoding-version': '0.2.0', 'ordered': False}
 ```
 
+### Dataframe Specification (v0.2.0)
+
+* A dataframe MUST be stored as a group
+* The group's metadata
+    * MUST contain the field `"_index"`, which is the name of the column to be used as an index
+    * MUST contain encoding metadata `"encoding-type: "dataframe"`, `"encoding-version": "0.2.0"`
+    * MUST contain `"column-order"` a string valued array denoting the order of column entries
+* The group MUST contain a column for the index
+* Each entry in the group MUST correspond to an array with equivalent first dimensions
+* Each entry SHOULD share chunk sizes
+
 ## Mappings
 
 Mappings are simply stored as `Group` s on disk.
@@ -186,6 +198,11 @@ pca/variance <HDF5 dataset "variance": shape (50,), type "<f4">
 pca/variance_ratio <HDF5 dataset "variance_ratio": shape (50,), type "<f4">
 [...]
 ```
+
+### Mapping specifications (v0.1.0)
+
+* Each mapping MUST be it's own group
+* The groups metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
 
 ## Scalars
 
@@ -220,6 +237,14 @@ We store these two arrays separately.
 categories <HDF5 dataset "categories": shape (22,), type "|O">
 codes <HDF5 dataset "codes": shape (38410,), type "|i1">
 ```
+
+### Categorical array specifcation (v0.2.0)
+
+* Categorical arrays MUST be stored as a group
+* The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
+* The group's metadata MUST contain the boolean valued field `"ordered"`, which indicates whether the categories are ordered
+* The group MUST contain an integer valued array named `"codes"`
+* The group MUST contain an array called `"categories"`
 
 ## String arrays
 
