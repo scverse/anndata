@@ -57,7 +57,7 @@ Using this information, we're able to dispatch onto readers for the different el
 ### AnnData specification (v0.1.0)
 
 * An `AnnData` object MUST be a group. 
-* The group's metadata MUST include `{ "encoding-type": "anndata", "encoding-version": "0.1.0" }.
+* The group's metadata MUST include entries: `"encoding-type": "anndata"`, `"encoding-version": "0.1.0"`.
 * An `AnnData` group MUST contain entries `"obs"` and `"var"`, which MUST be dataframes.
 * The group MAY contain an entry `X`, which MUST be either a dense or sparse array and whose shape MUST be (`n_obs`, `n_var`)
 * The group MAY contain a mapping `layers`. Entries in `layers` MUST be dense or sparse arrays which have shapes (`n_obs`, `n_var`)
@@ -252,9 +252,10 @@ codes <HDF5 dataset "codes": shape (38410,), type "|i1">
 ### Categorical array specifcation (v0.2.0)
 
 * Categorical arrays MUST be stored as a group
-* The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
+* The group's metadata MUST contain the encoding metadata `"encoding-type": "categorical"`, `"encoding-version": "0.2.0"`
 * The group's metadata MUST contain the boolean valued field `"ordered"`, which indicates whether the categories are ordered
 * The group MUST contain an integer valued array named `"codes"`
+    * The `"codes"` array MAY contain signed integer values. If so, the code `-1` denotes a missing value.
 * The group MUST contain an array called `"categories"`
 
 ## String arrays
