@@ -249,7 +249,7 @@ categories <HDF5 dataset "categories": shape (22,), type "|O">
 codes <HDF5 dataset "codes": shape (38410,), type "|i1">
 ```
 
-### Categorical array specifcation (v0.2.0)
+### Categorical array specification (v0.2.0)
 
 * Categorical arrays MUST be stored as a group
 * The group's metadata MUST contain the encoding metadata `"encoding-type": "categorical"`, `"encoding-version": "0.2.0"`
