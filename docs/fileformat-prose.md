@@ -117,7 +117,7 @@ where the kind and shape of the sparse array is defined in the `Group`'s attribu
  'shape': array([38410, 27899])}
 ```
 
-Inside the group are the three constituent arrays:
+The group contains three arrays:
 
 ```python
 >>> f["X"].visititems(print)
@@ -261,7 +261,7 @@ codes <HDF5 dataset "codes": shape (38410,), type "|i1">
 ## String arrays
 
 Arrays of strings are handled differently than numeric arrays since numpy doesn't really have a good way of representing arrays of unicode strings.
-`anndata` assumes strings are text like data, so are variable length.
+`anndata` assumes strings are text-like data, so uses a variable length encoding.
 
 ```python
 >>> dict(categorical["categories"].attrs)
@@ -272,8 +272,8 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 
 * String arrays MUST be stored in arrays
 * The arrays's metadata MUST contain the encoding metadata `"encoding-type": "string-array"`, `"encoding-version": "0.2.0"`
-* In `zarr`, string arrays MUST be stored using `numcodecs`' `VLenUTF8` codec.
-* In `HDF5`, string arrays MUST be stored using the variable length string data type, with a utf-8 encoding.
+* In `zarr`, string arrays MUST be stored using `numcodecs`' `VLenUTF8` codec
+* In `HDF5`, string arrays MUST be stored using the variable length string data type, with a utf-8 encoding
 
 ## Nullable integers and booleans
 
@@ -311,7 +311,7 @@ values <HDF5 dataset "values": shape (4,), type "<i8">
 * The group's attributes MUST have contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
 * The group MUST contain an boolean valued array under the key `"values"`
 * The group MUST contain an boolean valued array under the key `"mask"`
-* The `"values"` and `"mask"` array MUST be the same shape
+* The `"values"` and `"mask"` arrays MUST be the same shape
 
 
 [easy to find]: https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_row_(CSR,_CRS_or_Yale_format)
