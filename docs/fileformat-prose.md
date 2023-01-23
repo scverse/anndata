@@ -207,7 +207,7 @@ pca/variance_ratio <HDF5 dataset "variance_ratio": shape (50,), type "<f4">
 ## Scalars
 
 Zero dimensional arrays are used for scalar values (i.e. single values like strings, numbers or booleans).
-These should only occur inside of `uns`, and are common inside of saved parameters:
+These should only occur inside of `uns`, and are commonly saved parameters:
 
 ```python
 >>> f["uns/neighbors/params"].visititems(print)
@@ -219,6 +219,17 @@ n_neighbors <HDF5 dataset "n_neighbors": shape (), type "<i8">
 >>> dict(f["uns/neighbors/params/metric"].attrs)
 {'encoding-type': 'string', 'encoding-version': '0.2.0'}
 ```
+
+### Scalar specification (v0.2.0)
+
+* Scalars MUST be written as a 0 dimensional array
+* Numeric scalars
+    * MUST have `"encoding-type": "numeric-scalar"`, `"encoding-version": "0.2.0"` in their metadata
+    * MUST be a single numeric value, including boolean, unsigned integer, signed integer,  floating point, or complex floating point.
+* String scalars
+    * MUST have `"encoding-type": "string"`, `"encoding-version": "0.2.0"` in their metadata
+    * In zarr, scalar strings MUST be stored as a fixed length unicode dtype
+    * In HDF5, scalar strings MUST be stored as a variable length utf-8 encoded string dtype
 
 ## Categorical arrays
 
