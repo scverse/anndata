@@ -4,8 +4,9 @@
 .. rubric:: Features
 
 * Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
-* `obsm`, `varm` and `uns` can now hold `AwkwardArrays <https://awkward-array.org/quickstart.html>`__ :pr:`647` :smaller:`giovp, grst, ivirshup`
-* Added support for dask arrays :pr:`813` :smaller:`syelman, rahulbshrestha`
+* `obsm`, `varm` and `uns` can now hold `AwkwardArrays <https://awkward-array.org/quickstart.html>`__ :pr:`647` :user:`giovp`, :user:`grst`, :user:`ivirshup`
+* Added support for dask arrays :pr:`813` :user:`syelman` :user:`rahulbshrestha`
+* Better error messages during IO :pr:`734` :user:`flying-sheep`, :user:`ivirshup`
 
 .. rubric:: Documentation
 

@@ -188,7 +188,7 @@ def report_read_key_on_error(func):
                 raise AnnDataReadError(
                     f"Above error raised while reading key {elem.name!r} of "
                     f"type {type(elem)} from {parent}."
-                )
+                ) from e
 
     return func_wrapper
 

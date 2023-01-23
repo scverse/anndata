@@ -337,7 +337,7 @@ def resolve_merge_strategy(
 #####################
 
 
-class Reindexer(object):
+class Reindexer:
     """
     Indexing to be applied to axis of 2d array orthogonal to the axis being concatenated.
 
