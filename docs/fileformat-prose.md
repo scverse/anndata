@@ -51,8 +51,8 @@ Using this information, we're able to dispatch onto readers for the different el
 ### Element Specification
 
 * An element can be any object within the storage hierarchy (typically an array or group) with associated metadata
-* An element MUST have a string valued field `"encoding-type"` in it's metadata
-* An element MUST have a string valued field `"encoding-version"` in it's metadata that can be evaluated to a version
+* An element MUST have a string-valued field `"encoding-type"` in its metadata
+* An element MUST have a string-valued field `"encoding-version"` in its metadata that can be evaluated to a version
 
 ### AnnData specification (v0.1.0)
 
@@ -135,7 +135,7 @@ indptr                   Dataset {38411/Inf}
 
 ### Sparse array specification (v0.1.0)
 
-* Each sparse array MUST be it's own group
+* Each sparse array MUST be its own group
 * The group MUST contain arrays `indices`, `indptr`, and `data`
 * The group's metadata MUST contain:
     * `"encoding-type"`, which is set to `"csr_matrix"` or `"csc_matrix"` for compressed sparse row and compressed sparse column, respectively.
@@ -161,7 +161,7 @@ We save a little more information in the attributes here.
 ```
 
 These attributes identify the index of the dataframe, as well as the original order of the columns.
-Each column in this dataframe is encoded as it's own array.
+Each column in this dataframe is encoded as its own array.
 
 ```python
 >>> dict(f["obs"]["total_counts"].attrs)
@@ -174,17 +174,17 @@ Each column in this dataframe is encoded as it's own array.
 ### Dataframe Specification (v0.2.0)
 
 * A dataframe MUST be stored as a group
-* The group's metadata
+* The group's metadata:
     * MUST contain the field `"_index"`, which is the name of the column to be used as an index
     * MUST contain encoding metadata `"encoding-type: "dataframe"`, `"encoding-version": "0.2.0"`
-    * MUST contain `"column-order"` a string valued array denoting the order of column entries
+    * MUST contain `"column-order"` an array of strings denoting the order of column entries
 * The group MUST contain a column for the index
 * Each entry in the group MUST correspond to an array with equivalent first dimensions
 * Each entry SHOULD share chunk sizes
 
 ## Mappings
 
-Mappings are simply stored as `Group` s on disk.
+Mappings are simply stored as `Group`s on disk.
 These are distinct from DataFrames and sparse arrays since they don’t have any special attributes.
 A `Group` is created for any `Mapping` in the AnnData object,
 including the standard `obsm`, `varm`, `layers`, and `uns`.
@@ -201,7 +201,7 @@ pca/variance_ratio <HDF5 dataset "variance_ratio": shape (50,), type "<f4">
 
 ### Mapping specifications (v0.1.0)
 
-* Each mapping MUST be it's own group
+* Each mapping MUST be its own group
 * The groups metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
 
 ## Scalars
@@ -225,7 +225,7 @@ n_neighbors <HDF5 dataset "n_neighbors": shape (), type "<i8">
 * Scalars MUST be written as a 0 dimensional array
 * Numeric scalars
     * MUST have `"encoding-type": "numeric-scalar"`, `"encoding-version": "0.2.0"` in their metadata
-    * MUST be a single numeric value, including boolean, unsigned integer, signed integer,  floating point, or complex floating point.
+    * MUST be a single numeric value, including boolean, unsigned integer, signed integer,  floating point, or complex floating point
 * String scalars
     * MUST have `"encoding-type": "string"`, `"encoding-version": "0.2.0"` in their metadata
     * In zarr, scalar strings MUST be stored as a fixed length unicode dtype
@@ -255,7 +255,7 @@ codes <HDF5 dataset "codes": shape (38410,), type "|i1">
 * The group's metadata MUST contain the encoding metadata `"encoding-type": "categorical"`, `"encoding-version": "0.2.0"`
 * The group's metadata MUST contain the boolean valued field `"ordered"`, which indicates whether the categories are ordered
 * The group MUST contain an integer valued array named `"codes"`
-    * The `"codes"` array MAY contain signed integer values. If so, the code `-1` denotes a missing value.
+    * The `"codes"` array MAY contain signed integer values. If so, the code `-1` denotes a missing value
 * The group MUST contain an array called `"categories"`
 
 ## String arrays
@@ -279,7 +279,7 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 
 We support IO with Pandas nullable integer and boolean arrays.
 We represent these on disk similar to `numpy` masked arrays, `julia` nullable arrays, or `arrow` validity bitmaps (see {issue}`504` for more discussion).
-That is, we store a indicator array (or mask) of null values alongside the array of all values.
+That is, we store an indicator array (or mask) of null values alongside the array of all values.
 
 ```python
 >>> h5_file = h5py.File("anndata_format.h5", "a")
