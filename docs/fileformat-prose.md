@@ -256,6 +256,13 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 {'encoding-type': 'string-array', 'encoding-version': '0.2.0'}
 ```
 
+### String array specifications (v0.2.0)
+
+* String arrays MUST be stored in arrays
+* The arrays's metadata MUST contain the encoding metadata `"encoding-type": "string-array"`, `"encoding-version": "0.2.0"`
+* In `zarr`, string arrays MUST be stored using `numcodecs`' `VLenUTF8` codec.
+* In `HDF5`, string arrays MUST be stored using the variable length string data type, with a utf-8 encoding.
+
 ## Nullable integers and booleans
 
 We support IO with Pandas nullable integer and boolean arrays.
@@ -278,6 +285,22 @@ values <HDF5 dataset "values": shape (4,), type "<i8">
 >>> dict(h5_file["nullable_integer"].attrs)
 {'encoding-type': 'nullable-integer', 'encoding-version': '0.1.0'}
 ```
+
+### Nullable integer specifications (v0.1.0)
+
+* Nullable integers MUST be stored as a group
+* The group's attributes MUST have contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
+* The group MUST contain an integer valued array under the key `"values"`
+* The group MUST contain an boolean valued array under the key `"mask"`
+
+### Nullable boolean specifications (v0.1.0)
+
+* Nullable booleans MUST be stored as a group
+* The group's attributes MUST have contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
+* The group MUST contain an boolean valued array under the key `"values"`
+* The group MUST contain an boolean valued array under the key `"mask"`
+* The `"values"` and `"mask"` array MUST be the same shape
+
 
 [easy to find]: https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_row_(CSR,_CRS_or_Yale_format)
 [hdf5]: https://en.wikipedia.org/wiki/Hierarchical_Data_Format
