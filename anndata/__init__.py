@@ -17,6 +17,8 @@ if not within_flit():
         read_text,
         read_mtx,
         read_zarr,
+        read_10x_h5,
+        read_10x_mtx,
     )
     from ._warnings import OldFormatWarning, WriteWarning, ImplicitModificationWarning
 

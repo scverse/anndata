@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 from os import PathLike, fspath
 from types import MappingProxyType
-from typing import Union, Optional, Mapping, Tuple
+from typing import Union, Optional, Literal, Mapping, Tuple
 from typing import Iterable, Iterator, Generator
 from collections import OrderedDict
 import gzip
@@ -491,3 +493,280 @@ def del_sparse_matrix_keys(mapping, key_csr):
     del mapping[f"{key_csr}_indices"]
     del mapping[f"{key_csr}_indptr"]
     del mapping[f"{key_csr}_shape"]
+
+
+# Reading 10x formats
+
+
+def read_10x_h5(
+    filename: Union[str, Path],
+    *,
+    genome: Optional[str] = None,
+    feature_types: str | list[str] | None = None,
+) -> AnnData:
+    """\
+    Read 10x-Genomics-formatted hdf5 file.
+
+    Parameters
+    ----------
+    filename
+        Path to a 10x hdf5 file.
+    genome
+        Filter expression to genes within this genome. For legacy 10x h5
+        files, this must be provided if the data contains more than one genome.
+    Feature types
+        Which feature types to read in. Reads all in by default.
+
+    Returns
+    -------
+    Annotated data matrix, where observations/cells are named by their
+    barcode and variables/genes by gene name. Stores the following information:
+
+    :attr:`~anndata.AnnData.X`
+        The data matrix is stored
+    :attr:`~anndata.AnnData.obs_names`
+        Cell names
+    :attr:`~anndata.AnnData.var_names`
+        Gene names
+    :attr:`~anndata.AnnData.var`\\ `['gene_ids']`
+        Gene IDs
+    :attr:`~anndata.AnnData.var`\\ `['feature_types']`
+        Feature types
+    """
+    # Coerce feature_type to be either list of string or None
+    if feature_types is not None:
+        if isinstance(feature_types, str):
+            feature_types = [feature_types]
+
+    with h5py.File(str(filename), "r") as f:
+        v3 = "/matrix" in f
+    if v3:
+        adata = _read_v3_10x_h5(filename)
+        if genome:
+            if genome not in adata.var["genome"].values:
+                raise ValueError(
+                    f"Could not find data corresponding to genome '{genome}' in '{filename}'. "
+                    f'Available genomes are: {list(adata.var["genome"].unique())}.'
+                )
+            adata = adata[:, adata.var["genome"] == genome]
+        if feature_types is not None:
+            adata = adata[:, adata.var["feature_types"].isin(feature_types)]
+        if adata.is_view:
+            adata = adata.copy()
+    else:
+        adata = _read_legacy_10x_h5(filename, genome=genome)
+    return adata
+
+
+def _read_v3_10x_h5(filename):
+    """
+    Read hdf5 file from Cell Ranger v3 or later versions.
+    """
+    with h5py.File(str(filename), "r") as f:
+        dsets = {}
+        _collect_datasets(dsets, f["matrix"])
+
+        from scipy.sparse import csr_matrix
+
+        M, N = dsets["shape"]
+        data = dsets["data"]
+        if dsets["data"].dtype == np.dtype("int32"):
+            data = dsets["data"].view("float32")
+            data[:] = dsets["data"]
+        matrix = csr_matrix(
+            (data, dsets["indices"], dsets["indptr"]),
+            shape=(N, M),
+        )
+        adata = AnnData(
+            matrix,
+            obs=dict(obs_names=dsets["barcodes"].astype(str)),
+            var=dict(
+                var_names=dsets["name"].astype(str),
+                gene_ids=dsets["id"].astype(str),
+                feature_types=dsets["feature_type"].astype(str),
+                genome=dsets["genome"].astype(str),
+            ),
+        )
+    return adata
+
+
+def _read_legacy_10x_h5(filename, *, genome=None):
+    """
+    Read hdf5 file from Cell Ranger v2 or earlier versions.
+    """
+    with h5py.File(str(filename), "r") as f:
+        children = list(f.keys())
+        if not genome:
+            if len(children) > 1:
+                raise ValueError(
+                    f"'{filename}' contains more than one genome. For legacy 10x h5 "
+                    "files you must specify the genome if more than one is present. "
+                    f"Available genomes are: {children}"
+                )
+            genome = children[0]
+        elif genome not in children:
+            raise ValueError(
+                f"Could not find genome '{genome}' in '{filename}'. "
+                f"Available genomes are: {children}"
+            )
+
+        dsets = {}
+        _collect_datasets(dsets, f[genome])
+
+        # AnnData works with csr matrices
+        # 10x stores the transposed data, so we do the transposition right away
+        from scipy.sparse import csr_matrix
+
+        M, N = dsets["shape"]
+        data = dsets["data"]
+        if dsets["data"].dtype == np.dtype("int32"):
+            data = dsets["data"].view("float32")
+            data[:] = dsets["data"]
+        matrix = csr_matrix(
+            (data, dsets["indices"], dsets["indptr"]),
+            shape=(N, M),
+        )
+        # the csc matrix is automatically the transposed csr matrix
+        # as scanpy expects it, so, no need for a further transpostion
+        adata = AnnData(
+            matrix,
+            obs=dict(obs_names=dsets["barcodes"].astype(str)),
+            var=dict(
+                var_names=dsets["gene_names"].astype(str),
+                gene_ids=dsets["genes"].astype(str),
+            ),
+        )
+        return adata
+
+
+def _collect_datasets(dsets: dict, group: h5py.Group):
+    for k, v in group.items():
+        if isinstance(v, h5py.Dataset):
+            dsets[k] = v[()]
+        else:
+            _collect_datasets(dsets, v)
+
+
+def read_10x_mtx(
+    path: Union[Path, str],
+    *,
+    var_names: Literal["gene_symbols", "gene_ids"] = "gene_symbols",
+    make_unique: bool = True,
+    gex_only: bool = True,
+    prefix: str = None,
+) -> AnnData:
+    """\
+    Read 10x-Genomics-formatted mtx directory.
+
+    Parameters
+    ----------
+    path
+        Path to directory for `.mtx` and `.tsv` files,
+        e.g. './filtered_gene_bc_matrices/hg19/'.
+    var_names
+        The variables index.
+    make_unique
+        Whether to make the variables index unique by appending '-1',
+        '-2' etc. or not.
+    cache
+        If `False`, read from source, if `True`, read from fast 'h5ad' cache.
+    cache_compression
+        See the h5py :ref:`dataset_compression`.
+        (Default: `settings.cache_compression`)
+    gex_only
+        Only keep 'Gene Expression' data and ignore other feature types,
+        e.g. 'Antibody Capture', 'CRISPR Guide Capture', or 'Custom'
+    prefix
+        Any prefix before `matrix.mtx`, `genes.tsv` and `barcodes.tsv`. For instance,
+        if the files are named `patientA_matrix.mtx`, `patientA_genes.tsv` and
+        `patientA_barcodes.tsv` the prefix is `patientA_`.
+        (Default: no prefix)
+
+    Returns
+    -------
+    An :class:`~anndata.AnnData` object
+    """
+    path = Path(path)
+    prefix = "" if prefix is None else prefix
+    genefile_exists = (path / f"{prefix}genes.tsv").is_file()
+    read = _read_legacy_10x_mtx if genefile_exists else _read_v3_10x_mtx
+    adata = read(
+        str(path),
+        var_names=var_names,
+        make_unique=make_unique,
+        prefix=prefix,
+    )
+    if genefile_exists or not gex_only:
+        return adata
+    else:
+        gex_rows = list(
+            map(lambda x: x == "Gene Expression", adata.var["feature_types"])
+        )
+        return adata[:, gex_rows].copy()
+
+
+def _read_legacy_10x_mtx(
+    path,
+    var_names="gene_symbols",
+    make_unique=True,
+    *,
+    prefix="",
+):
+    """
+    Read mex from output from Cell Ranger v2 or earlier versions
+    """
+    from anndata.utils import make_index_unique
+
+    path = Path(path)
+    adata = read_mtx(
+        path / f"{prefix}matrix.mtx",
+    ).T  # transpose the data
+    genes = pd.read_csv(path / f"{prefix}genes.tsv", header=None, sep="\t")
+    if var_names == "gene_symbols":
+        var_names = genes[1].values
+        if make_unique:
+            var_names = make_index_unique(pd.Index(var_names))
+        adata.var_names = var_names
+        adata.var["gene_ids"] = genes[0].values
+    elif var_names == "gene_ids":
+        adata.var_names = genes[0].values
+        adata.var["gene_symbols"] = genes[1].values
+    else:
+        raise ValueError("`var_names` needs to be 'gene_symbols' or 'gene_ids'")
+    adata.obs_names = pd.read_csv(path / f"{prefix}barcodes.tsv", header=None)[0].values
+    return adata
+
+
+def _read_v3_10x_mtx(
+    path,
+    *,
+    var_names="gene_symbols",
+    make_unique=True,
+    prefix="",
+):
+    """
+    Read mtx from output from Cell Ranger v3 or later versions
+    """
+    from anndata.utils import make_index_unique
+
+    path = Path(path)
+    adata = read_mtx(
+        path / f"{prefix}matrix.mtx.gz",
+    ).T  # transpose the data
+    genes = pd.read_csv(path / f"{prefix}features.tsv.gz", header=None, sep="\t")
+    if var_names == "gene_symbols":
+        var_names = genes[1].values
+        if make_unique:
+            var_names = make_index_unique(pd.Index(var_names))
+        adata.var_names = var_names
+        adata.var["gene_ids"] = genes[0].values
+    elif var_names == "gene_ids":
+        adata.var_names = genes[0].values
+        adata.var["gene_symbols"] = genes[1].values
+    else:
+        raise ValueError("`var_names` needs to be 'gene_symbols' or 'gene_ids'")
+    adata.var["feature_types"] = genes[2].values
+    adata.obs_names = pd.read_csv(path / f"{prefix}barcodes.tsv.gz", header=None)[
+        0
+    ].values
+    return adata

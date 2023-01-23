@@ -7,8 +7,7 @@ from anndata.tests.helpers import assert_equal
 import shutil
 
 
-ROOT = Path(__file__).parent
-ROOT = ROOT / "data" / "10x_data"
+ROOT = Path(__file__).parent / "data" / "10x"
 
 
 @pytest.mark.parametrize(
@@ -112,17 +111,10 @@ def test_error_missing_genome():
         ad.read_10x_h5(v3_pth, genome="not a genome")
 
 
-def test_read_visium_counts():
-    # Test that checks the read_visium function
-    visium_pth = ROOT / "../visium_data/1.0.0"
-    spec_genome_v3 = ad.read_visium(visium_pth, genome="GRCh38")
-    nospec_genome_v3 = ad.read_visium(visium_pth)
-    assert_equal(spec_genome_v3, nospec_genome_v3)
-
-
-def test_10x_h5_gex():
+def test_10x_h5_feature_types():
     # Tests that gex option doesn't, say, make the function return None
     h5_pth = ROOT / "3.0.0" / "filtered_feature_bc_matrix.h5"
     assert_equal(
-        ad.read_10x_h5(h5_pth, gex_only=True), ad.read_10x_h5(h5_pth, gex_only=False)
+        ad.read_10x_h5(h5_pth, feature_types="Gene Expression"),
+        ad.read_10x_h5(h5_pth, feature_types=["Gene Expression"]),
     )
