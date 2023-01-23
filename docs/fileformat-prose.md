@@ -16,7 +16,7 @@ This structure should be largely equivalent to Zarr structure, though there are 
 ## Elements
 
 
-% I’ve started using h5py since I couldn’t figure out a nice way to print attributes from bash.
+ <!-- I’ve started using h5py since I couldn’t figure out a nice way to print attributes from bash. -->
 
 ```python
 >>> import h5py
