@@ -5,6 +5,7 @@
 
 * Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
 * Added support for dask arrays :pr:`813` :smaller:`syelman` :smaller:`rahulbshrestha`
+* Better error messages during IO :pr:`734` :user:`flying-sheep`, :user:`ivirshup`
 
 .. rubric:: Documentation
 
