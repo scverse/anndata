@@ -196,6 +196,7 @@ class Reader:
         self.registry = registry
         self.callback = callback
 
+    @report_read_key_on_error
     def read_elem(
         self,
         elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
@@ -234,6 +235,7 @@ class Writer:
         self.registry = registry
         self.callback = callback
 
+    @report_write_key_on_error
     def write_elem(
         self,
         store: Union[ZarrGroup, H5Group],
@@ -266,7 +268,7 @@ class Writer:
                 self.registry.get_writer(dest_type, t, modifiers),
                 _writer=self,
             )
-        write_func = report_write_key_on_error(write_func)
+
         if self.callback is not None:
             return self.callback(
                 write_func, store, k, elem, dataset_kwargs=dataset_kwargs
