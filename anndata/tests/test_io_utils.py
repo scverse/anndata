@@ -46,7 +46,7 @@ def test_write_error_info(diskfmt, tmp_path):
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
-    with pytest.raises(Exception, match=r"Above error raised while writing key 'b'"):
+    with pytest.raises(Exception, match=r"Above error raised while writing key 'c'"):
         write(a)
 
 
