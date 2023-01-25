@@ -42,11 +42,9 @@ def write_zarr(
     f.attrs.setdefault("encoding-version", "0.1.0")
 
     def callback(func, s, k, elem, dataset_kwargs):
-        dict_paths = { "obsm", "varm", "obsp", "varp", "layers", "uns" }
+        dict_paths = {"obsm", "varm", "obsp", "varp", "layers", "uns"}
         if chunks is not None and not isinstance(elem, sparse.spmatrix) and k == "X":
-            func(
-                s, k, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
-            )
+            func(s, k, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs))
         elif k in dict_paths:
             func(s, k, dict(elem), dataset_kwargs=dataset_kwargs)
         else:
@@ -70,10 +68,8 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     f = zarr.open(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
-        if iospec.encoding_type == "anndata" or elem_name.endswith('/'):
-            return AnnData(
-                **{k: read_dispatched(v, callback) for k, v in elem.items()}
-            )
+        if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+            return AnnData(**{k: read_dispatched(v, callback) for k, v in elem.items()})
         elif elem_name.startswith("raw."):
             return None
         elif elem_name in {"obs", "var"}:

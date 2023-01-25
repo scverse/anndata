@@ -210,10 +210,15 @@ def read_h5ad(
     )
 
     with h5py.File(filename, "r") as f:
+
         def callback(func, elem_name: str, elem, iospec):
-            if iospec.encoding_type == "anndata" or elem_name.endswith('/'):
+            if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                 return AnnData(
-                    **{k: read_dispatched(elem[k], callback) for k in elem.keys() if not k.startswith("raw.")}
+                    **{
+                        k: read_dispatched(elem[k], callback)
+                        for k in elem.keys()
+                        if not k.startswith("raw.")
+                    }
                 )
             elif elem_name.startswith("/raw."):
                 return None
