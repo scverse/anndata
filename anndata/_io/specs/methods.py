@@ -343,7 +343,7 @@ def read_string_array(d, _reader):
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("string-array", "0.2.0"))
-def read_array_partial(d, items=None, indices=slice(None)):
+def read_string_array_partial(d, items=None, indices=slice(None)):
     return read_array_partial(d.asstr(), items=items, indices=indices)
 
 
@@ -658,17 +658,17 @@ def read_categorical(elem, _reader):
     return pd.Categorical.from_codes(
         codes=_reader.read_elem(elem["codes"]),
         categories=_reader.read_elem(elem["categories"]),
-        ordered=_read_attr(elem.attrs, "ordered"),
+        ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("categorical", "0.2.0"))
-def read_categorical(elem, *, items=None, indices=(slice(None),)):
+def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
     return pd.Categorical.from_codes(
         codes=read_elem_partial(elem["codes"], indices=indices),
         categories=read_elem(elem["categories"]),
-        ordered=_read_attr(elem.attrs, "ordered"),
+        ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
 
 

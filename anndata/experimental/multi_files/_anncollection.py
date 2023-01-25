@@ -150,7 +150,7 @@ class _IterateViewMixin:
                 batch = self[:, idx]
             else:
                 batch = self[idx]
-            # only happens if the last batch is smaller then batch_size
+            # only happens if the last batch is smaller than batch_size
             if len(batch) < batch_size and drop_last:
                 continue
 
@@ -482,7 +482,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         A function or a Mapping of functions which will be applied
         to the values of attributes (`.X`) or to specific keys of these attributes
         (`.obs`, `.obsm`, `.layers`).
-        The keys of the the Mapping should correspond to the attributes or keys of the
+        The keys of the Mapping should correspond to the attributes or keys of the
         attributes (hierarchically) and the values should be functions used for conversion.
 
         Examples
@@ -806,7 +806,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         (`.obs`, `.obsm`, `.layers`) of subset objects. The converters are not
         applied to `.obs` and `.obsm` (if present) of this object, only to the attributes
         of subset objects.
-        The keys of the the Mapping should correspond to the attributes or keys of the
+        The keys of the Mapping should correspond to the attributes or keys of the
         attributes (hierarchically) and the values should be functions used for conversion.
 
         Examples
@@ -979,7 +979,7 @@ class LazyAttrData(_IterateViewMixin):
             return _dtypes[self.attr][self.key]
 
         attr = self[:1]
-        if hasattr(attr, dtype):
+        if hasattr(attr, "dtype"):
             return attr.dtype
         else:
             return None
