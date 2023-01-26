@@ -180,7 +180,7 @@ Each column in this dataframe is encoded as its own array.
     * MUST contain `"column-order"` an array of strings denoting the order of column entries
 * The group MUST contain a column for the index
 * Each entry in the group MUST correspond to an array with equivalent first dimensions
-* Each entry SHOULD share chunk sizes
+* Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
 
 ## Mappings
 
