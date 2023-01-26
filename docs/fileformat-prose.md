@@ -256,7 +256,7 @@ codes <HDF5 dataset "codes": shape (38410,), type "|i1">
 * Categorical arrays MUST be stored as a group
 * The group's metadata MUST contain the encoding metadata `"encoding-type": "categorical"`, `"encoding-version": "0.2.0"`
 * The group's metadata MUST contain the boolean valued field `"ordered"`, which indicates whether the categories are ordered
-* The group MUST contain an integer valued array named `"codes"`
+* The group MUST contain an integer valued array named `"codes"` whose maximum value is the number of categories - 1
     * The `"codes"` array MAY contain signed integer values. If so, the code `-1` denotes a missing value
 * The group MUST contain an array called `"categories"`
 
