@@ -175,10 +175,10 @@ Each column in this dataframe is encoded as its own array.
 
 * A dataframe MUST be stored as a group
 * The group's metadata:
-    * MUST contain the field `"_index"`, which is the name of the column to be used as an index
-    * MUST contain encoding metadata `"encoding-type: "dataframe"`, `"encoding-version": "0.2.0"`
+    * MUST contain the field `"_index"`, whose value is the key of the array to be used as an index
+    * MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.2.0"`
     * MUST contain `"column-order"` an array of strings denoting the order of column entries
-* The group MUST contain a column for the index
+* The group MUST contain an array for the index
 * Each entry in the group MUST correspond to an array with equivalent first dimensions
 * Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
 
