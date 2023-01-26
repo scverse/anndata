@@ -239,8 +239,10 @@ n_neighbors <HDF5 dataset "n_neighbors": shape (), type "<i8">
 {'encoding-type': 'categorical', 'encoding-version': '0.2.0', 'ordered': False}
 ```
 
-Discrete labels can be efficiently represented with categorical arrays (similar to `factors` in `R`).
-These arrays encode the labels as small width integers (`codes`), which map to the original label set (`categories`).
+Discrete values can be efficiently represented with categorical arrays (similar to `factors` in `R`).
+These arrays encode the values as small width integers (`codes`), which map to the original label set (`categories`).
+Each entry in the `codes` array is the zero-based index of the encoded value in the `categories` array. 
+To represent a missing value, a code of `-1` is used.
 We store these two arrays separately.
 
 ```python
