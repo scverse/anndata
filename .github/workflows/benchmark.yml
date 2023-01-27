@@ -1,0 +1,55 @@
+name: Benchmark
+
+on:
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
+
+jobs:
+    benchmark:
+        runs-on: ${{ matrix.os }}
+        defaults:
+            run:
+                shell: bash -e {0} # -e to fail on error
+
+        strategy:
+            fail-fast: false
+            matrix:
+                python: ["3.10"]
+                os: [ubuntu-latest]
+
+        env:
+            OS: ${{ matrix.os }}
+            PYTHON: ${{ matrix.python }}
+            ASV_DIR: "./benchmark"
+
+        steps:
+            - uses: actions/checkout@v2
+            - name: Set up Python ${{ matrix.python }}
+              uses: actions/setup-python@v2
+              with:
+                  python-version: ${{ matrix.python }}
+
+            - name: Get pip cache dir
+              id: pip-cache-dir
+              run: |
+                  echo "::set-output name=dir::$(pip cache dir)"
+
+            - name: Restore pip cache
+              uses: actions/cache@v2
+              with:
+                  path: ${{ steps.pip-cache-dir.outputs.dir }}
+                  key: ${{ runner.os }}-pip${{ matrix.python}}-${{ hashFiles('**/pyproject.toml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-pip${{ matrix.python }}-
+
+            - name: Install dependencies
+              run: |
+                  pip install asv
+
+            - name: Quick benchmark run
+              working-directory: ${{ env.ASV_DIR }}
+              run: |
+                  asv machine --yes
+                  asv run -qev --strict

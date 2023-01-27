@@ -9,3 +9,4 @@ Below follows a simple benchmark showing read-write efficiency.
    :maxdepth: 1
 
    benchmark-read-write
+   benchmark-comparitive
