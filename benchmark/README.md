@@ -8,7 +8,7 @@ I definitley recommend reading through the asv docs. Currently, this assumes the
 
 ### Data
 
-Data will need to be retrieved for these benchmarks. Currently this is can be done via the script `fetch_datasets.py`. This downloads and caches some files for each dataset. The set of datasets retrieved can be limited via the `--pattern` argument.
+Data will need to be retrieved for these benchmarks. This can be downloaded using the script fetch_datasets.py.
 
 Note that the `h5ad` format has changed since it's inception. While the `anndata` package maintains backwards compatability, older versions of `anndata` will not be able to read files written by more recent versions. To get around this for the benchmarks, datasets have to be able to be read by all versions which can require a setup function that creates the anndata object.
 
@@ -46,13 +46,13 @@ Commit: 0ebe187e <views-of-views>
 views.SubsetMemorySuite.track_repeated_subset_memratio [mimir.mobility.unimelb.net.au/conda-py3.7-h5py-memory_profiler-natsort-numpy-pandas-scipy]
   ok
   ======= ======= ========== ============ ===================== ====================== ======================
-  --                                                                   index_kind                            
+  --                                                                   index_kind                        
   --------------------------------------- -------------------------------------------------------------------
-   n_obs   n_var   attr_set   subset_dim         intarray             boolarray                slice         
+   n_obs   n_var   attr_set   subset_dim         intarray             boolarray                slice     
   ======= ======= ========== ============ ===================== ====================== ======================
-    100     100     X-csr        obs               2.84           1.7916666666666667            0.5          
+    100     100     X-csr        obs               2.84           1.7916666666666667            0.5      
     100     100     X-csr        var        2.5357142857142856    1.8695652173913044     0.5652173913043478  
-    100     100    X-dense       obs        3.1739130434782608    1.6538461538461537            0.6          
+    100     100    X-dense       obs        3.1739130434782608    1.6538461538461537            0.6      
 ...
 ```
 
@@ -74,11 +74,3 @@ All benchmarks:
 ### View in the browser:
 
 You can view the benchmarks in the browser with `asv publish` followed by `asv preview`. If you want to include benchmarks of a local branch, I think you'll have to add that branch to the `"branches"` list in `asv.conf.json`.
-
-## TODO:
-
-* What's the right way to measure memory usage?
-* Choose datasets to use for benchmarks
-* Write script which downloads and prepares datasets to benchmark on
-* Add script to select which commits to run benchmarks at
-* More benchmarks
