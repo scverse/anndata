@@ -71,7 +71,7 @@ doc = [
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",
-    "awkward>=2.0.5",
+    "awkward>=2.0.6",
     "IPython", # For syntax highlighting in notebooks
 ]
 test = [

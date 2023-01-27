@@ -174,6 +174,35 @@ def test_view(key):
         # categorical array
         ak.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
         ak.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
+        # tyical record type with AIRR data consisting of different dtypes
+        ak.Array(
+            [
+                [
+                    {
+                        "v_call": "TRV1",
+                        "junction_aa": "ADDEEKK",
+                        "productive": True,
+                        "locus": None,
+                        "consensus_count": 3,
+                    },
+                    {
+                        "v_call": "TRV2",
+                        "productive": False,
+                        "locus": "TRA",
+                        "consensus_count": 4,
+                    },
+                ],
+                [
+                    {
+                        "v_call": None,
+                        "junction_aa": "ADDEKK",
+                        "productive": None,
+                        "locus": "IGK",
+                        "consensus_count": 3,
+                    }
+                ],
+            ]
+        ),
     ],
 )
 def test_awkward_io(tmp_path, array):
