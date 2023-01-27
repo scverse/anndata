@@ -30,5 +30,6 @@ test.zarr
 # IDEs
 /.idea/
 
-#Benchmark
+# Benchmark
 .asv
+benchmark/benchmarks/data
