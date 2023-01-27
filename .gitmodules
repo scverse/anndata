@@ -1,3 +1,4 @@
 [submodule "docs/tutorials/notebooks"]
 	path = docs/tutorials/notebooks
-	url = https://github.com/scverse/anndata-tutorials
+	url = https://github.com/syelman/anndata-tutorials.git
+	branch = dask-array
