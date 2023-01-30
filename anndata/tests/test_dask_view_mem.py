@@ -110,6 +110,7 @@ def test_modify_view_X_memory(mapping_name):
     m = subset.X
     m[0, 0] = 100
 
+
 # Normally should expect something around 80 kbs
 # Pandas does some indexing stuff that requires 256kb sometimes
 # since the array we allocated would be 4mb this should be ok
