@@ -481,19 +481,21 @@ class Reindexer:
         return out
 
     def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
-        if dim_len(el, axis) is None:
-            # Do not reindex variable-length dimensions
+        import awkward as ak
+
+        if self.no_change:
             return el
+        elif axis == 1:  # Indexing by field
+            if self.new_idx.isin(self.old_idx).all():  # inner join
+                return el[self.new_idx]
+            else:  # outer join
+                for field in self.new_idx.difference(self.old_idx):
+                    el = ak.with_field(el, None, field)
+                return el
         else:
-            indexer = self.old_idx.get_indexer(self.new_idx)
-            if -1 in indexer:
-                raise NotImplementedError(
-                    "Outer join operations are currently not supported with AwkwardArrays"
-                )
-            if axis == 0:
-                return el[indexer]
-            if axis == 1:
-                return el[:, indexer]
+            raise NotImplementedError(
+                "Reindexing along axis 0 is not yet implemented for Awkward Arrays"
+            )
 
 
 def merge_indices(
@@ -624,9 +626,10 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
             )
-        # do not reindex awkward arrays
-        # TODO unintended behaviour?
-        reindexers = [lambda *args, **kwargs: args[0] for _ in els]
+        common_keys = intersect_keys(el.fields for el in els)
+        reindexers = [
+            Reindexer(pd.Index(el.fields), pd.Index(list(common_keys))) for el in els
+        ]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
         reindexers = [
@@ -649,9 +652,10 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
             )
-        # do not reindex awkward arrays
-        # TODO unintended behaviour?
-        reindexers = [lambda *args, **kwargs: args[0] for _ in els]
+        all_keys = union_keys(el.fields for el in els)
+        reindexers = [
+            Reindexer(pd.Index(el.fields), pd.Index(list(all_keys))) for el in els
+        ]
     else:
         # if fill_value is None:
         # fill_value = default_fill_value(els)
