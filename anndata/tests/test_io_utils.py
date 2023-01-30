@@ -6,8 +6,12 @@ import h5py
 import pandas as pd
 
 import anndata as ad
+from anndata._io.specs.registry import IORegistryError
 from anndata.compat import _clean_uns
-from anndata._io.utils import report_read_key_on_error, AnnDataReadError
+from anndata._io.utils import (
+    report_read_key_on_error,
+    AnnDataReadError,
+)
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -46,7 +50,9 @@ def test_write_error_info(diskfmt, tmp_path):
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
-    with pytest.raises(Exception, match=r"Above error raised while writing key 'c'"):
+    with pytest.raises(
+        IORegistryError, match=r"Above error raised while writing key 'c'"
+    ):
         write(a)
 
 
