@@ -31,7 +31,7 @@ release = version
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = ".rst"
+source_suffix = [".rst", ".md"]
 master_doc = "index"
 default_role = "literal"
 exclude_patterns = [
@@ -44,6 +44,7 @@ exclude_patterns = [
 pygments_style = "sphinx"
 
 extensions = [
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
@@ -84,7 +85,10 @@ nitpick_ignore = [
         for kind in ["", "View"]
     ],
 ]
-suppress_warnings = ["ref.citation"]
+suppress_warnings = [
+    "ref.citation",
+    "myst.header",  # https://github.com/executablebooks/MyST-Parser/issues/262
+]
 
 
 def setup(app: Sphinx):

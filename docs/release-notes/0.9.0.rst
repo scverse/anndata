@@ -10,6 +10,7 @@
 
 .. rubric:: Documentation
 
+* :doc:`New tutorial <../tutorials/notebooks/anndata_dask_array>` on using `dask.array` with `AnnData` :pr:`886` :smaller:`syelman`
 * Expanded docstring more documentation for ``backed`` argument of :func:`anndata.read_h5ad` :pr:`812` :smaller:`jeskowagner`
 * Documented how to use alternative compression methods for the `h5ad` file format, see :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` :pr:`857` :smaller:`nigeil`
 
