@@ -3,27 +3,28 @@
 
 .. rubric:: Features
 
-* Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :smaller:`ivirshup`
-* Added support for dask arrays :pr:`813` :smaller:`syelman` :smaller:`rahulbshrestha`
+* Unordered categorical columns are no longer cast to object during :func:`anndata.concat` :pr:`763` :user:`ivirshup`
+* Added support for dask arrays :pr:`813` :user:`syelman` :user:`rahulbshrestha`
 * Better error messages during IO :pr:`734` :user:`flying-sheep`, :user:`ivirshup`
 
 .. rubric:: Documentation
 
-* :doc:`New tutorial <../tutorials/notebooks/anndata_dask_array>` on using `dask.array` with `AnnData` :pr:`886` :smaller:`syelman`
-* Expanded docstring more documentation for ``backed`` argument of :func:`anndata.read_h5ad` :pr:`812` :smaller:`jeskowagner`
-* Documented how to use alternative compression methods for the `h5ad` file format, see :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` :pr:`857` :smaller:`nigeil`
+* :doc:`New tutorial <../tutorials/notebooks/anndata_dask_array>` on using `dask.array` with `AnnData` :pr:`886` :user:`syelman`
+* :doc:`File format description </fileformat-prose>` now includes a more formal specification :pr:`882` :user:`ivirshup`
+* Expanded docstring more documentation for ``backed`` argument of :func:`anndata.read_h5ad` :pr:`812` :user:`jeskowagner`
+* Documented how to use alternative compression methods for the `h5ad` file format, see :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` :pr:`857` :user:`nigeil`
 
 .. rubric:: Breaking changes
 
-* The `AnnData` `dtype`` argument no longer defaults to `float32` :pr:`854` :smaller:`ivirshup`
+* The `AnnData` `dtype` argument no longer defaults to `float32` :pr:`854` :user:`ivirshup`
 
 .. rubric:: Bug fixes
 
 .. rubric:: Updates
 
-* Bump minimum python version to 3.8 :pr:`820` :smaller:`ivirshup`
+* Bump minimum python version to 3.8 :pr:`820` :user:`ivirshup`
 
 .. rubric:: Deprecations
 
-* :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :smaller:`ivirshup`
-* Previously deprecated `force_dense` arugment :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` has been removed. :pr:`855` :smaller:`ivirshup`
+* :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` is now deprecated in favour of :func:`anndata.concat` :pr:`845` :user:`ivirshup`
+* Previously deprecated `force_dense` arugment :meth:`AnnData.write_h5ad() <anndata.AnnData.write_h5ad>` has been removed. :pr:`855` :user:`ivirshup`
