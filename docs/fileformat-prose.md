@@ -321,7 +321,7 @@ values <HDF5 dataset "values": shape (4,), type "<i8">
 **Experimental**
 
 Support for ragged arrays via awkward array is considered experimental under the 0.9.0 release series.
-Please direct feedback on it's implementation to [https://github.com/scverse/anndata]().
+Please direct feedback on it's implementation to [https://github.com/scverse/anndata](https://github.com/scverse/anndata).
 ```
 
 Ragged arrays are supported in `anndata` through the [Awkward
