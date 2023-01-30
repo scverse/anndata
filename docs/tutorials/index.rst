@@ -12,3 +12,4 @@ For working with the experimental data loaders also see :ref:`experimental_api`.
    notebooks/annloader
    notebooks/anncollection
    notebooks/anncollection-annloader
+   notebooks/anndata_dask_array
