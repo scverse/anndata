@@ -59,11 +59,11 @@ def alloc_cache():
 # This tests our assumption which is used on test_modify_view_mapping_component_memory
 @pytest.mark.usefixtures("alloc_cache")
 @pytest.mark.limit_memory("90 KB")
-def test_size_of_view(mapping_name,give_chunks):
+def test_size_of_view(mapping_name, give_chunks):
     import dask.array as da
 
     N = 2**6
-    size = ((N, N), (N, N)) if give_chunks else ((N,N),"auto")
+    size = ((N, N), (N, N)) if give_chunks else ((N, N), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
@@ -83,7 +83,7 @@ def test_modify_view_mapping_component_memory(mapping_name):
     N = 2**6
     M = 2**9
 
-    size = ((M, M), (M, M)) if give_chunks else ((M,M),"auto")
+    size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
@@ -106,7 +106,7 @@ def test_modify_view_X_memory(mapping_name):
     N = 2**6
     M = 2**9
 
-    size = ((M, M), (M, M)) if give_chunks else ((M,M),"auto")
+    size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
@@ -129,7 +129,7 @@ def test_modify_view_mapping_obs_var_memory(attr_name):
     N = 2**6
     M = 2**9
 
-    size = ((M, M), (M, M)) if give_chunks else ((M,M),"auto")
+    size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
