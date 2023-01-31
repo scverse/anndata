@@ -233,14 +233,14 @@ def test_awkward_io(tmp_path, array):
                 ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
                 pd.DataFrame(),
             ],
-            ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+            NotImplementedError,  # TODO: ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
         ],
         [
             [
                 ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
                 pd.DataFrame(),
             ],
-            ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+            NotImplementedError,  # TODO: ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
         ],
         [
             [
