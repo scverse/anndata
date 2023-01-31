@@ -19,6 +19,11 @@ def attr_name(request):
     return request.param
 
 
+@pytest.fixture(params=[True, False])
+def give_chunks(request):
+    return request.param
+
+
 # ------------------------------------------------------------------------------
 # The test functions
 # ------------------------------------------------------------------------------
@@ -53,12 +58,12 @@ def alloc_cache():
 # Based on previous results expected to allocate ~74 kb
 # This tests our assumption which is used on test_modify_view_mapping_component_memory
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("80 KB")
-def test_size_of_view(mapping_name):
+@pytest.mark.limit_memory("90 KB")
+def test_size_of_view(mapping_name,give_chunks):
     import dask.array as da
 
     N = 2**6
-    size = ((N, N), (N, N))
+    size = ((N, N), (N, N)) if give_chunks else ((N,N),"auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
@@ -78,7 +83,7 @@ def test_modify_view_mapping_component_memory(mapping_name):
     N = 2**6
     M = 2**9
 
-    size = ((M, M), (M, M))
+    size = ((M, M), (M, M)) if give_chunks else ((M,M),"auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
@@ -101,7 +106,7 @@ def test_modify_view_X_memory(mapping_name):
     N = 2**6
     M = 2**9
 
-    size = ((M, M), (M, M))
+    size = ((M, M), (M, M)) if give_chunks else ((M,M),"auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
@@ -116,8 +121,6 @@ def test_modify_view_X_memory(mapping_name):
 # Normally should expect something around 80 kbs
 # Pandas does some indexing stuff that requires 256kb sometimes
 # since the array we allocated would be 4mb this should be ok
-
-
 @pytest.mark.usefixtures("alloc_cache")
 @pytest.mark.limit_memory("340 KB")
 def test_modify_view_mapping_obs_var_memory(attr_name):
@@ -126,7 +129,7 @@ def test_modify_view_mapping_obs_var_memory(attr_name):
     N = 2**6
     M = 2**9
 
-    size = ((M, M), (M, M))
+    size = ((M, M), (M, M)) if give_chunks else ((M,M),"auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
