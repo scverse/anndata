@@ -77,7 +77,7 @@ def test_size_of_view(mapping_name, give_chunks):
 # since the array we allocated would be 4mb this should be ok
 @pytest.mark.usefixtures("alloc_cache")
 @pytest.mark.limit_memory("340 KB")
-def test_modify_view_mapping_component_memory(mapping_name):
+def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
     import dask.array as da
 
     N = 2**6
@@ -100,7 +100,7 @@ def test_modify_view_mapping_component_memory(mapping_name):
 # since the array we allocated would be 4mb this should be ok
 @pytest.mark.usefixtures("alloc_cache")
 @pytest.mark.limit_memory("340 KB")
-def test_modify_view_X_memory(mapping_name):
+def test_modify_view_X_memory(mapping_name, give_chunks):
     import dask.array as da
 
     N = 2**6
@@ -123,7 +123,7 @@ def test_modify_view_X_memory(mapping_name):
 # since the array we allocated would be 4mb this should be ok
 @pytest.mark.usefixtures("alloc_cache")
 @pytest.mark.limit_memory("340 KB")
-def test_modify_view_mapping_obs_var_memory(attr_name):
+def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
     import dask.array as da
 
     N = 2**6
