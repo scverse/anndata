@@ -134,5 +134,5 @@ def test_modify_view_mapping_obs_var_memory(attr_name):
     )
     subset = adata[:N, :][:, :N]
     assert subset.is_view
-    m = getattr(subset, attr_name)
-    m[0, 0] = 100
+    m = getattr(subset, attr_name)['m']
+    m[0] = 100

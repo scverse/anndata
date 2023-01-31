@@ -86,6 +86,7 @@ test = [
     "boltons",
     "scanpy",
     "dask[array]",
+    "pytest_memray",
 ]
 
 [tool.flit.sdist]
