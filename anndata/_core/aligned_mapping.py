@@ -4,6 +4,7 @@ from copy import copy
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -14,8 +15,8 @@ from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
 from .index import _subset
-from ..logging import anndata_logger as logger
 from anndata.compat import AwkArray
+from anndata._warnings import ExperimentalFeatureWarning
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -50,9 +51,18 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         if isinstance(val, AwkArray):
-            logger.warn(
+            warnings.warn(
                 "Support for Awkward Arrays is currently experimental. "
-                "Behavior may change in the future. Please report any issues you may encounter!"
+                "Behavior may change in the future. Please report any issues you may encounter!",
+                ExperimentalFeatureWarning,
+                # stacklevel=3,
+            )
+            # Prevent from showing up every time an awkward array is used
+            # You'd think `once` works, but it doesn't at the repl and in notebooks
+            warnings.filterwarnings(
+                "ignore",
+                category=ExperimentalFeatureWarning,
+                message="Support for Awkward Arrays is currently experimental.*",
             )
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] != dim_len(val, i):

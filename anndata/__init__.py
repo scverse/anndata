@@ -18,7 +18,12 @@ if not within_flit():
         read_mtx,
         read_zarr,
     )
-    from ._warnings import OldFormatWarning, WriteWarning, ImplicitModificationWarning
+    from ._warnings import (
+        OldFormatWarning,
+        WriteWarning,
+        ImplicitModificationWarning,
+        ExperimentalFeatureWarning,
+    )
 
     # backwards compat / shortcut for default format
     from ._io import read_h5ad as read
