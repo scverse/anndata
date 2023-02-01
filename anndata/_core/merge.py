@@ -648,13 +648,25 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             for el, shape in zip(els, shapes)
         ]
     elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
+        import awkward as ak
+
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
             )
-        all_keys = union_keys(el.fields for el in els)
+        all_keys = union_keys(el.fields for el in els if not_missing(el))
         reindexers = [
-            Reindexer(pd.Index(el.fields), pd.Index(list(all_keys))) for el in els
+            (lambda x: x)
+            if not_missing(el)
+            else (
+                lambda x: ak.pad_none(
+                    # TODO: Do we need to specify the fields?
+                    ak.Array({k: None for k in all_keys})[0:0],
+                    shape,
+                    0,
+                )
+            )
+            for el, shape in zip(els, shapes)
         ]
     else:
         # if fill_value is None:
