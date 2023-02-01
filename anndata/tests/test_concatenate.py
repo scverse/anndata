@@ -724,6 +724,7 @@ def test_concatenate_awkward(join_type):
         )
 
     result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
+    # Currently failing while https://github.com/scikit-hep/awkward/issues/2182 is resolved
     assert_equal(expected, result)
 
 

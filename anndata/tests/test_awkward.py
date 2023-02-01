@@ -227,56 +227,92 @@ def test_awkward_io(tmp_path, array):
     assert_equal(adata.uns["awk"], adata2.uns["awk"], exact=True)
 
 
+# @pytest.mark.parametrize("join", ["outer", "inner"])
 @pytest.mark.parametrize(
-    "arrays,expected",
+    "arrays,join,expected",
     [
-        [
+        pytest.param(
             [ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]), None],
-            ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}, {}, {}, {}]),
-        ],
-        [
+            "inner",
+            None,
+            id="awk:recordoflists_null-inner",
+        ),
+        pytest.param(
+            [ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]), None],
+            "outer",
+            ak.Array(
+                [{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}, None, None, None]
+            ),
+            # maybe should return: ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}, {}, {}, {}]),
+            id="awk:recordoflists_null-outer",
+        ),
+        pytest.param(
+            [ak.Array([[{"a": 1}, {"a": 2}], []]), None],
+            "outer",
+            ak.Array([[{"a": 1}, {"a": 2}], [], None, None, None]),
+            # maybe should return: ak.Array([[{"a": 1}, {"a": 2}], [], [], []]),
+            id="awk:listofrecords_null-outer",
+        ),
+        pytest.param(
             [None, ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}])],
-            ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
-        ],
-        [
+            "inner",
+            None,
+            id="null_awk-inner",
+        ),
+        pytest.param(
+            [None, ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}])],
+            "outer",
+            ak.Array(
+                [None, None, None, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]
+            ),
+            # maybe should return: ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
+            id="null_awk:recordoflists-outer",
+        ),
+        pytest.param(
             [
                 None,
                 ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
                 pd.DataFrame(),
             ],
+            "outer",
             NotImplementedError,  # TODO: ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
-        ],
-        [
+            id="null_awk_empty-pd",
+        ),
+        pytest.param(
             [
                 ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
                 pd.DataFrame(),
             ],
+            "outer",
             NotImplementedError,  # TODO: ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
-        ],
-        [
+            id="awk_empty-pd",
+        ),
+        pytest.param(
             [
                 ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
                 pd.DataFrame().assign(a=[3, 4], b=[5, 6]),
             ],
+            "outer",  # TODO: Should try inner too if implemented
             NotImplementedError,
-        ],
-        [
+        ),
+        pytest.param(
             [
                 ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
                 np.ones((3, 2)),
             ],
+            "outer",
             NotImplementedError,
-        ],
+        ),
     ],
 )
 @pytest.mark.parametrize("key", ["obsm", "varm"])
-@pytest.mark.parametrize("join", ["outer", "inner"])
 def test_concat_mixed_types(key, arrays, expected, join):
     """Test that concatenation of AwkwardArrays with arbitrary types, but zero length dimension
     or missing values works."""
     axis = 0 if key == "obsm" else 1
 
     to_concat = []
+    cell_id, gene_id = 0, 0
     for a in arrays:
         shape = np.array([3, 3])  # default shape (in case of missing array)
         if a is not None:
@@ -286,7 +322,10 @@ def test_concat_mixed_types(key, arrays, expected, join):
         tmp_adata = gen_adata(
             tuple(shape), varm_types=(), obsm_types=(), layers_types=()
         )
-
+        prev_cell_id, prev_gene_id = cell_id, gene_id
+        cell_id, gene_id = cell_id + shape[0], gene_id + shape[1]
+        tmp_adata.obs_names = pd.RangeIndex(prev_cell_id, cell_id).astype(str)
+        tmp_adata.var_names = pd.RangeIndex(prev_gene_id, gene_id).astype(str)
         if a is not None:
             if isinstance(a, pd.DataFrame):
                 a.set_index(
@@ -301,5 +340,7 @@ def test_concat_mixed_types(key, arrays, expected, join):
         with pytest.raises(expected):
             anndata.concat(to_concat, axis=axis, join=join)
     else:
-        result = anndata.concat(to_concat, axis=axis, join=join)
-        assert_equal(getattr(result, key)["test"], expected, exact=True)
+        print(to_concat)
+        result_adata = anndata.concat(to_concat, axis=axis, join=join)
+        result = getattr(result_adata, key).get("test", None)
+        assert_equal(expected, result, exact=True)

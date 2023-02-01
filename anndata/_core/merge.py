@@ -573,9 +573,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
                 "Cannot concatenate an AwkwardArray with other array types."
             )
 
-        return ak.concatenate(
-            [f(a, axis=1 - axis) for f, a in zip(reindexers, arrays)], axis=axis
-        )
+        return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)], axis=axis)
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
@@ -654,24 +652,20 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
             )
-        all_keys = union_keys(el.fields for el in els if not_missing(el))
-        reindexers = [
-            (lambda x: x)
-            if not_missing(el)
-            else (
-                lambda x: ak.pad_none(
-                    # TODO: Do we need to specify the fields?
-                    ak.Array({k: None for k in all_keys})[0:0],
-                    shape,
-                    0,
+        # all_keys = union_keys(el.fields for el in els if not_missing(el))
+        reindexers = []
+        for el in els:
+            if not_missing(el):
+                reindexers.append(lambda x: x)
+            else:
+                reindexers.append(
+                    lambda x: ak.pad_none(
+                        ak.Array([]),
+                        len(x),
+                        0,
+                    )
                 )
-            )
-            for el, shape in zip(els, shapes)
-        ]
     else:
-        # if fill_value is None:
-        # fill_value = default_fill_value(els)
-
         max_col = max(el.shape[1] for el in els if not_missing(el))
         orig_cols = [el.shape[1] if not_missing(el) else 0 for el in els]
         reindexers = [
