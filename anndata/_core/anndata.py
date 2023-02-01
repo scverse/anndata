@@ -814,7 +814,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # fmt: off
         if (
             not isinstance(value, pd.RangeIndex)
-            and not infer_dtype(value) in ("string", "bytes")
+            and infer_dtype(value) not in ("string", "bytes")
         ):
             sample = list(value[: min(len(value), 5)])
             warnings.warn(dedent(
