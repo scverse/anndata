@@ -14,6 +14,7 @@ from . import raw, anndata
 from .views import as_view
 from .access import ElementRef
 from .index import _subset
+from ..logging import anndata_logger as logger
 from anndata.compat import AwkArray
 
 
@@ -48,6 +49,11 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
+        if isinstance(val, AwkArray):
+            logger.warn(
+                "Support for Awkward Arrays is currently experimental. "
+                "Behavior may change in the future. Please report any issues you may encounter!"
+            )
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
