@@ -215,7 +215,7 @@ try:
             array = self
             # makes a shallow copy and removes the reference to the original AnnData object
             array = ak.with_parameter(self, _PARAM_NAME, None)
-            array = ak.with_name(array, None)
+            array = ak.with_parameter(array, "__array__", None)
             return array
 
     @as_view.register(AwkArray)
@@ -223,10 +223,18 @@ try:
         parent, attrname, keys = view_args
         parent_key = f"target-{id(parent)}"
         _registry[parent_key] = parent
+        # TODO: See https://github.com/scverse/anndata/pull/647#discussion_r963494798_ for more details and
+        # possible strategies to stack behaviors.
+        if type(array).__name__ != "Array":
+            raise NotImplementedError(
+                "Cannot create a view of an awkward array with __array__ parameter. "
+                "Please open an issue in the AnnData repo and describe your use-case."
+            )
         array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
-        return ak.with_name(array, name="AwkwardArrayView")
+        array = ak.with_parameter(array, "__array__", "AwkwardArrayView")
+        return array
 
-    ak.behavior["*", "AwkwardArrayView"] = AwkwardArrayView
+    ak.behavior["AwkwardArrayView"] = AwkwardArrayView
 
 except ImportError:
     pass
