@@ -93,10 +93,39 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
-# Same behavior as ArrayView
-# To show the type of the view
-class DaskArrayView(ArrayView):
-    pass
+# Extends DaskArray
+# Calls parent __new__ constructor since
+# even calling astype on a dask array
+# needs a .compute() call to actually happen.
+# So no construction by view casting like ArrayView
+class DaskArrayView(_SetItemMixin, DaskArray):
+    def __new__(
+        cls,
+        input_array: DaskArray,
+        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+    ):
+        arr = super().__new__(
+            cls,
+            dask=input_array.dask,
+            name=input_array.name,
+            chunks=input_array.chunks,
+            dtype=input_array.dtype,
+            meta=input_array._meta,
+            shape=input_array.shape,
+        )
+        if view_args is not None:
+            view_args = ElementRef(*view_args)
+        arr._view_args = view_args
+
+        return arr
+
+    def __array_finalize__(self, obj: Optional[DaskArray]):
+        if obj is not None:
+            self._view_args = getattr(obj, "_view_args", None)
+
+    def keys(self) -> KeysView[str]:
+        # it’s a structured array
+        return self.dtype.names
 
 
 # Unlike array views, SparseCSRView and SparseCSCView
