@@ -748,6 +748,39 @@ def test_concatenate_awkward(join_type):
     assert_equal(expected, result)
 
 
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]}, index=list("cde")),
+        np.ones((3, 2)),
+        sparse.random(3, 100, format="csr"),
+    ],
+)
+def test_awkward_does_not_mix(join_type, other):
+    import awkward as ak
+
+    awk = ak.Array(
+        [[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]]
+    )
+
+    adata_a = AnnData(
+        np.zeros((2, 3), dtype=float),
+        obs=pd.DataFrame(index=list("ab")),
+        obsm={"val": awk},
+    )
+    adata_b = AnnData(
+        np.zeros((3, 3), dtype=float),
+        obs=pd.DataFrame(index=list("cde")),
+        obsm={"val": other},
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Cannot concatenate an AwkwardArray with other array types",
+    ):
+        concat([adata_a, adata_b], join=join_type)
+
+
 def test_pairwise_concat(axis, array_type):
     dim_sizes = [[100, 200, 50], [50, 50, 50]]
     if axis:
