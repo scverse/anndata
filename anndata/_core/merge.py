@@ -158,10 +158,21 @@ def equal_sparse(a, b) -> bool:
 def equal_awkward(a, b) -> bool:
     from ..compat import awkward as ak
 
-    if dim_len(a, 0) == dim_len(b, 0):
-        return ak.all(a == b)
-    else:
+    if dim_len(a, 0) != dim_len(b, 0):
         return False
+
+    a_form, _, a_buffers = ak.to_buffers(ak.to_packed(a))
+    b_form, _, b_buffers = ak.to_buffers(ak.to_packed(b))
+
+    if a_form != b_form:
+        return False
+    if set(a_buffers.keys()) != set(b_buffers.keys()):
+        return False
+    for k in a_buffers.keys():
+        if not np.array_equal(a_buffers[k], b_buffers[k], equal_nan=True):
+            return False
+
+    return True
 
 
 def as_sparse(x):
