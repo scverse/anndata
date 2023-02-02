@@ -489,13 +489,12 @@ class Reindexer:
             if self.new_idx.isin(self.old_idx).all():  # inner join
                 return el[self.new_idx]
             else:  # outer join
-                for field in self.new_idx.difference(self.old_idx):
-                    el = ak.with_field(el, None, field)
-                return el
+                # TODO: this code isn't actually hit, we should refactor
+                raise Exception("This should be unreachable, please open an issue.")
         else:
-            raise NotImplementedError(
-                "Reindexing along axis 0 is not yet implemented for Awkward Arrays"
-            )
+            if len(self.new_idx) > len(self.old_idx):
+                el = ak.pad_none(el, 1, axis=axis)  # axis == 0
+            return el[self.old_idx.get_indexer(self.new_idx)]
 
 
 def merge_indices(
