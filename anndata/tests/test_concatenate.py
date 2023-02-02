@@ -713,18 +713,38 @@ def test_concatenate_awkward(join_type):
             ]
         )
     elif join_type == "outer":
-        expected = ak.Array(
-            [
-                [{"a": 1, "b": "foo"}],
-                [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
-                [{"a": 4, "b": None}, {"a": 5, "b": None}],
-                [{"a": 6, "b": None}],
-                [{"a": 7, "b": None}],
+        # TODO: This is what we would like to return, but waiting on:
+        # * https://github.com/scikit-hep/awkward/issues/2182 and awkward 2.1.0
+        # * https://github.com/scikit-hep/awkward/issues/2173
+        # expected = ak.Array(
+        #     [
+        #         [{"a": 1, "b": "foo"}],
+        #         [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+        #         [{"a": 4, "b": None}, {"a": 5, "b": None}],
+        #         [{"a": 6, "b": None}],
+        #         [{"a": 7, "b": None}],
+        #     ]
+        # )
+        expected = ak.concatenate(
+            [  # I don't think I can construct a UnionArray directly
+                ak.Array(
+                    [
+                        [{"a": 1, "b": "foo"}],
+                        [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+                    ]
+                ),
+                ak.Array(
+                    [
+                        [{"a": 4}, {"a": 5}],
+                        [{"a": 6}],
+                        [{"a": 7}],
+                    ]
+                ),
             ]
         )
 
     result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
-    # Currently failing while https://github.com/scikit-hep/awkward/issues/2182 is resolved
+
     assert_equal(expected, result)
 
 
