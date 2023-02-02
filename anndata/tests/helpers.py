@@ -109,16 +109,16 @@ def gen_awkward(shape, dtype=np.int32):
     shape = np.array(shape)
 
     if np.any(shape == 0):
-        # use empty numpy array, to pass the correct dimensions to
-        # ak.Array when one of the dimensions is 0 (the list-of-list approach
-        # does not work in that case because the list in the 0-dimension would be empty and all
-        # following dimensions would be lost).
-        # The size of the variable-length dimension is irrelevant in that case, we arbitrarily set it to 1
-        np_arr = np.empty([1 if x is None else x for x in shape], dtype=dtype)
-        arr = AwkArray(np_arr)
+        # use empty numpy array for fixed dimensions, then add empty singletons for ragged dimensions
+        var_dims = [i for i, s in enumerate(shape) if s is None]
+        shape = [s for s in shape if s is not None]
+        arr = ak.Array(np.empty(shape, dtype=dtype))
+        for d in var_dims:
+            arr = ak.singletons(arr, axis=d - 1)
+        return arr
     else:
         lil = _gen_awkward_inner(shape, rng, dtype)
-        arr = AwkArray(lil)
+        arr = ak.values_astype(AwkArray(lil), dtype)
 
     # make fixed-length dimensions regular
     for i, d in enumerate(shape):

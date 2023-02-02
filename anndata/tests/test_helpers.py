@@ -48,25 +48,30 @@ def reusable_adata():
 
 
 @pytest.mark.parametrize(
-    "shape",
+    "shape, datashape",
     [
-        (4, 2),
-        (100, 200, None),
-        (4, None),
-        (0, 4),
-        (4, 0),
-        (8, None, None),
-        (8, None, None, None),
-        (4, None, 8),
-        (100, 200, 4),
-        (4, 0, 0),
-        (0, 0, 0),
+        [(4, 2), "4 * 2 * int32"],
+        [(100, 200, None), "100 * 200 * var * int32"],
+        [(4, None), "4 * var * int32"],
+        [(0, 4), "0 * 4 * int32"],
+        [(4, 0), "4 * 0 * int32"],
+        [(8, None, None), "8 * var * var * int32"],
+        [(8, None, None, None), "8 * var * var * var * int32"],
+        [(4, None, 8), "4 * var * 8 * int32"],
+        [(100, 200, 4), "100 * 200 * 4 * int32"],
+        [(4, 0, 0), "4 * 0 * 0 * int32"],
+        [(0, 0, 0), "0 * 0 * 0 * int32"],
+        [(0, None), "0 * var * int32"],
     ],
 )
-def test_gen_awkward(shape):
+def test_gen_awkward(shape, datashape):
+    import awkward as ak
+
     arr = gen_awkward(shape)
     for i, s in enumerate(shape):
         assert dim_len(arr, i) == s
+    arr_type = ak.types.from_datashape(datashape)
+    assert arr.type == arr_type
 
 
 # Does this work for every warning?
