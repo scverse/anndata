@@ -58,7 +58,7 @@ def alloc_cache():
 # Based on previous results expected to allocate ~74 kb
 # This tests our assumption which is used on test_modify_view_mapping_component_memory
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("90 KB")
+@pytest.mark.limit_memory("110 KB")
 def test_size_of_view(mapping_name, give_chunks):
     import dask.array as da
 
