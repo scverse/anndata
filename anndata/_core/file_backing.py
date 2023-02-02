@@ -16,11 +16,9 @@ class AnnDataFileManager:
 
     def __init__(
         self,
-        adata: "anndata.AnnData",
         filename: Optional[PathLike] = None,
         filemode: Optional[Literal["r", "r+"]] = None,
     ):
-        self._adata = adata
         self.filename = filename
         self._filemode = filemode
         self._file = None
@@ -76,9 +74,9 @@ class AnnDataFileManager:
         if self._file is not None:
             self._file.close()
 
-    def _to_memory_mode(self):
+    def _to_memory_mode(self, adata: "anndata.AnnData"):
         """Close the backing file, forget filename, *do* change to memory mode."""
-        self._adata.__X = self._adata.X[()]
+        adata.__X = adata.X[()]
         self._file.close()
         self._file = None
         self._filename = None

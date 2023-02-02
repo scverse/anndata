@@ -395,9 +395,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # init from file
         if filename is not None:
-            self.file = AnnDataFileManager(self, filename, filemode)
+            self.file = AnnDataFileManager(filename, filemode)
         else:
-            self.file = AnnDataFileManager(self, None)
+            self.file = AnnDataFileManager(None)
 
             # init from AnnData
             if isinstance(X, AnnData):
@@ -1051,7 +1051,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # change from backing-mode back to full loading into memory
         if filename is None:
             if self.filename is not None:
-                self.file._to_memory_mode()
+                self.file._to_memory_mode(self)
             else:
                 # both filename and self.filename are None
                 # do nothing
