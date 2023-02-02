@@ -254,6 +254,8 @@ try:
         _registry[parent_key] = parent
         # TODO: See https://github.com/scverse/anndata/pull/647#discussion_r963494798_ for more details and
         # possible strategies to stack behaviors.
+        # A better solution might be based on xarray-style "attrs", once this is implemented
+        # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
         if type(array).__name__ != "Array":
             raise NotImplementedError(
                 "Cannot create a view of an awkward array with __array__ parameter. "
