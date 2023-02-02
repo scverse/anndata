@@ -206,10 +206,7 @@ def gen_adata(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format="csr"),
         df=gen_typed_df(M, obs_names),
-        awk=gen_awkward((M,)),
-        awk_2d=gen_awkward((M, 20)),
         awk_2d_ragged=gen_awkward((M, None)),
-        awk_3d_ragged=gen_awkward((M, 20, None)),
         da=da.random.random((M, 50)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
@@ -217,10 +214,7 @@ def gen_adata(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format="csr"),
         df=gen_typed_df(N, var_names),
-        awk=gen_awkward((N,)),
-        awk_2d=gen_awkward((N, 20)),
         awk_2d_ragged=gen_awkward((N, None)),
-        awk_3d_ragged=gen_awkward((N, 20, None)),
         da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
