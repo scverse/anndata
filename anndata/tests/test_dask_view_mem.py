@@ -131,7 +131,6 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
     m[0, 0] = 100
 
 
-
 # Normally should expect something around 90 kbs
 # Pandas does some indexing stuff that requires more sometimes
 # since the array we allocated would be 4mb for both arrays + 2mb
