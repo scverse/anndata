@@ -327,7 +327,7 @@ def resolve_merge_strategy(
 #####################
 
 
-class Reindexer(object):
+class Reindexer:
     """
     Indexing to be applied to axis of 2d array orthogonal to the axis being concatenated.
 
@@ -718,7 +718,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
     elif any(X is None for X in Xs):
         raise NotImplementedError(
             "Some (but not all) of the AnnData's to be concatenated had no .X value. "
-            "Concatenation is currently only implmented for cases where all or none of"
+            "Concatenation is currently only implemented for cases where all or none of"
             " the AnnData's have .X assigned."
         )
     else:

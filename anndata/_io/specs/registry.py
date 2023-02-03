@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Callable, Iterable
 from functools import singledispatch, wraps
-from typing import Any, NamedTuple, Tuple, Type, Callable, Union
+from typing import Any, NamedTuple, Union
 
 from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
@@ -14,6 +14,31 @@ from anndata._io.utils import report_write_key_on_error, report_read_key_on_erro
 class IOSpec(NamedTuple):
     encoding_type: str
     encoding_version: str
+
+
+# TODO: Should this subclass from LookupError?
+class IORegistryError(Exception):
+    @classmethod
+    def _from_write_parts(cls, dest_type, typ, modifiers) -> IORegistryError:
+        msg = f"No method registered for writing {typ} into {dest_type}"
+        if modifiers:
+            msg += f" with {modifiers}"
+        return cls(msg)
+
+    @classmethod
+    def _from_read_parts(
+        cls,
+        method: str,
+        registry: Mapping,
+        src_typ: H5Array | ZarrArray | H5Group | ZarrGroup,
+        spec: IOSpec,
+    ) -> IORegistryError:
+        # TODO: Improve error message if type exists, but version does not
+        msg = (
+            f"No {method} method registered for {spec} from {src_typ}. "
+            "You may need to update your installation of anndata."
+        )
+        return cls(msg)
 
 
 def write_spec(spec: IOSpec):
@@ -30,47 +55,60 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-class IORegistry(object):
+class IORegistry:
     def __init__(self):
-        self.read: Mapping[tuple[str, IOSpec], Callable] = {}
-        self.read_partial: Mapping[Tuple[str, IOSpec], Callable] = {}
-        self.write: Mapping[Union[Type, Tuple[Type, str]], Callable] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
+        self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
+        self.write: dict[
+            tuple[type, type | tuple[type, str], frozenset[str]], Callable
+        ] = {}
 
     def register_write(
         self,
-        dest_type,
-        typ: Union[type, tuple[type, str]],
-        spec,
-        modifiers: frozenset(str) = frozenset(),
+        dest_type: type,
+        src_type: type | tuple[type, str],
+        spec: IOSpec | Mapping[str, str],
+        modifiers: Iterable[str] = frozenset(),
     ):
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
         def _register(func):
-            self.write[(dest_type, typ, modifiers)] = write_spec(spec)(func)
+            self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 
         return _register
 
-    def get_writer(self, dest_type, typ, modifiers=frozenset()):
+    def get_writer(
+        self,
+        dest_type: type,
+        src_type: type | tuple[type, str],
+        modifiers: frozenset[str] = frozenset(),
+    ):
         import h5py
 
         if dest_type is h5py.File:
             dest_type = h5py.Group
-        modifiers = frozenset(modifiers)
 
-        if (dest_type, typ, modifiers) not in self.write:
-            raise TypeError(
-                f"No method has been defined for writing {typ} elements to {dest_type}"
-            )
+        if (dest_type, src_type, modifiers) in self.write:
+            return self.write[(dest_type, src_type, modifiers)]
+        else:
+            raise IORegistryError._from_write_parts(dest_type, src_type, modifiers)
 
-        return self.write[(dest_type, typ, modifiers)]
+    def has_writer(
+        self,
+        dest_type: type,
+        src_type: type | tuple[type, str],
+        modifiers: frozenset[str],
+    ):
+        return (dest_type, src_type, modifiers) in self.write
 
-    def has_writer(self, dest_type, typ, modifiers):
-        modifiers = frozenset(modifiers)
-        return (dest_type, typ, modifiers) in self.write
-
-    def register_read(self, src_type, spec, modifiers: frozenset[str] = frozenset()):
+    def register_read(
+        self,
+        src_type: type,
+        spec: IOSpec | Mapping[str, str],
+        modifiers: Iterable[str] = frozenset(),
+    ):
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -80,16 +118,26 @@ class IORegistry(object):
 
         return _register
 
-    def get_reader(self, src_type, spec, modifiers=frozenset()):
-        modifiers = frozenset(modifiers)
-        return self.read[(src_type, spec, modifiers)]
+    def get_reader(
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
+    ):
+        if (src_type, spec, modifiers) in self.read:
+            return self.read[(src_type, spec, modifiers)]
+        else:
+            raise IORegistryError._from_read_parts(
+                "read", _REGISTRY.read, src_type, spec
+            )
 
-    def has_reader(self, src_type, spec, modifiers=frozenset()):
-        modifiers = frozenset(modifiers)
+    def has_reader(
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
+    ):
         return (src_type, spec, modifiers) in self.read
 
     def register_read_partial(
-        self, src_type, spec, modifiers: frozenset[str] = frozenset()
+        self,
+        src_type: type,
+        spec: IOSpec | Mapping[str, str],
+        modifiers: Iterable[str] = frozenset(),
     ):
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
@@ -100,9 +148,15 @@ class IORegistry(object):
 
         return _register
 
-    def get_partial_reader(self, src_type, spec, modifiers=frozenset()):
-        modifiers = frozenset(modifiers)
-        return self.read_partial[(src_type, spec, modifiers)]
+    def get_partial_reader(
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
+    ):
+        if (src_type, spec, modifiers) in self.read_partial:
+            return self.read_partial[(src_type, spec, modifiers)]
+        else:
+            raise IORegistryError._from_read_parts(
+                "read_partial", _REGISTRY.read_partial, src_type, spec
+            )
 
 
 _REGISTRY = IORegistry()
@@ -124,7 +178,7 @@ def proc_spec_mapping(spec) -> IOSpec:
 
 
 def get_spec(
-    elem: "Union[H5Group, H5Array, ZarrGroup, ZarrArray]",
+    elem: H5Array | H5Group | ZarrArray | ZarrGroup,
 ) -> IOSpec:
     return proc_spec(
         {
@@ -136,7 +190,8 @@ def get_spec(
 
 @report_write_key_on_error
 def write_elem(
-    f: "Union[H5Group, ZarrGroup]",
+    # Could be “H5Group | ZarrGroup”, but weirdly that makes Sphinx error on python 3.10
+    f: Union[H5Group, ZarrGroup],
     k: str,
     elem: Any,
     *args,
@@ -144,7 +199,7 @@ def write_elem(
     **kwargs,
 ):
     """
-    Write an element to a disk store using it's anndata encoding.
+    Write an element to a disk store using its anndata encoding.
 
     Params
     ------
@@ -174,9 +229,11 @@ def write_elem(
         _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
 
 
+@report_read_key_on_error
 def read_elem(
-    elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
-    modifiers: frozenset(str) = frozenset(),
+    elem: H5Array | H5Group | ZarrArray | ZarrGroup,
+    *,
+    modifiers: frozenset[str] = frozenset(),
 ) -> Any:
     """Read an element from an on disk store."""
     return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))(elem)
