@@ -18,7 +18,7 @@ from typing import (
     Literal,
 )
 import typing
-from warnings import warn
+from warnings import warn, filterwarnings
 
 from natsort import natsorted
 import numpy as np
@@ -30,6 +30,7 @@ from .anndata import AnnData
 from ..compat import AwkArray, DaskArray
 from ..utils import asarray, dim_len
 from .index import _subset, make_slice
+from anndata._warnings import ExperimentalFeatureWarning
 
 T = TypeVar("T")
 
@@ -662,6 +663,17 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
             )
+        warn(
+            "Outer joins on awkward.Arrays will have different return values in the future."
+            "For details, and to offer input, please see:\n\n\t"
+            "https://github.com/scverse/anndata/issues/898",
+            ExperimentalFeatureWarning,
+        )
+        filterwarnings(
+            "ignore",
+            category=ExperimentalFeatureWarning,
+            message=r"Outer joins on awkward.Arrays will have different return values.*",
+        )
         # all_keys = union_keys(el.fields for el in els if not_missing(el))
         reindexers = []
         for el in els:
