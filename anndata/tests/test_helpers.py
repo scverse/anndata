@@ -191,7 +191,6 @@ def test_assert_equal_aligned_mapping_empty():
 
 
 def test_assert_equal_dask_arrays():
-
     import dask.array as da
 
     a = da.from_array([[1, 2, 3], [4, 5, 6]])
@@ -205,7 +204,6 @@ def test_assert_equal_dask_arrays():
 
 
 def test_assert_equal_dask_sparse_arrays():
-
     import dask.array as da
     from scipy import sparse
 

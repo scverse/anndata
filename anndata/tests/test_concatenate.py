@@ -1257,6 +1257,7 @@ def test_concat_X_dtype():
 #     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE
 #     assert set(UNS_STRATEGIES.keys()) == set(UNS_STRATEGIES_TYPE.__args__)
 
+
 # Tests how dask plays with other types on concatenation.
 def test_concat_different_types_dask(merge_strategy, array_type):
     from scipy import sparse
