@@ -1276,3 +1276,22 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     assert_equal(result1, target1)
     assert_equal(result2, target2)
+
+
+def test_outer_concat_with_missing_value_for_df():
+    # https://github.com/scverse/anndata/issues/901
+    # TODO: Extend this test to cover all cases of missing values
+    # TODO: Check values
+    a_idx = ["a", "b", "c", "d", "e"]
+    b_idx = ["f", "g", "h", "i", "j", "k", "l", "m"]
+    a = AnnData(
+        np.ones((5, 5)),
+        obs=pd.DataFrame(index=a_idx),
+    )
+    b = AnnData(
+        np.zeros((8, 9)),
+        obs=pd.DataFrame(index=b_idx),
+        obsm={"df": pd.DataFrame({"col": np.arange(8)}, index=b_idx)},
+    )
+
+    concat([a, b], join="outer")

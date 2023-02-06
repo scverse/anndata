@@ -593,7 +593,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         reindexers = [
             (lambda x: x)
             if not_missing(el)
-            else (lambda x: pd.DataFrame(index=range(shape)))
+            else (lambda _, shape=shape: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
     else:
