@@ -86,11 +86,11 @@ def test_size_of_view(mapping_name, give_chunks):
 # experimentally we should at least have 10mb
 # for index this should be ok
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("4 MB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     M = 2**9
 
     size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
@@ -99,7 +99,7 @@ def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
         da.random.random(*size),
         **{mapping_name: dict(m=da.random.random(*size))},
     )
-    subset = adata[:N, :][:, :N]
+    subset = adata[:N, :N]
     assert subset.is_view
     m = getattr(subset, mapping_name)["m"]
     m[0, 0] = 100
@@ -112,11 +112,11 @@ def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
 # experimentally we should at least have 10mb
 # for index this should be ok
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("4 MB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_X_memory(mapping_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     M = 2**9
 
     size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
@@ -125,7 +125,7 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
         da.random.random(*size),
         **{mapping_name: dict(m=da.random.random(*size))},
     )
-    subset = adata[:N, :][:, :N]
+    subset = adata[:N, :N]
     assert subset.is_view
     m = subset.X
     m[0, 0] = 100
@@ -138,11 +138,11 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
 # experimentally we should at least have 10mb
 # for index this should be ok
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("3 MB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     M = 2**9
 
     size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
@@ -151,7 +151,7 @@ def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
         da.random.random(*size),
         **{attr_name: dict(m=da.random.random(M))},
     )
-    subset = adata[:N, :][:, :N]
+    subset = adata[:N, :N]
     assert subset.is_view
     m = getattr(subset, attr_name)["m"]
     m[0] = 100
