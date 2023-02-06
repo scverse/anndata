@@ -14,14 +14,14 @@ import pandas as pd
 from ..._core import AnnData, AxisArrays
 from .utils import read_dispatched
 
-class AxisArraysRemote(AxisArrays):
+class SingleDimensionAxisArraysRemote(AxisArrays):
     def __getitem__(self, key: str):
         return self._data[key][()]
     
     def __getattr__(self, __name: str):
         # If we a method has been accessed that is not here, try the pandas implementation
         if hasattr(pd.DataFrame, __name):
-            return self.to_df().__getattribute(__name)
+            return self.to_df().__getattribute__(__name)
         return object.__getattribute__(self, __name)
 
 
