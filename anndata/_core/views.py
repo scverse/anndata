@@ -220,19 +220,8 @@ try:
             reference.
             """
             parent_key, attrname, keys = self.layout.parameter(_PARAM_NAME)
-            if parent_key is None or attrname is None or keys is None:
-                raise KeyError(
-                    "AwkwardArrayView does not hold reference to original AnnData object."
-                )
-            else:
-                try:
-                    parent = _registry[parent_key]
-                except KeyError:
-                    raise KeyError(
-                        "AwkwardArrayView has invalid reference to original AnnData object."
-                    )
-                else:
-                    return ElementRef(parent, attrname, keys)
+            parent = _registry[parent_key]
+            return ElementRef(parent, attrname, keys)
 
         def __copy__(self) -> AwkArray:
             """
