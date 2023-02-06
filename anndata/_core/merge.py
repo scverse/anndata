@@ -159,7 +159,7 @@ def equal_sparse(a, b) -> bool:
 def equal_awkward(a, b) -> bool:
     from ..compat import awkward as ak
 
-    return ak._util.arrays_approx_equal(a, b)
+    return ak.almost_equal(a, b)
 
 
 def as_sparse(x):
