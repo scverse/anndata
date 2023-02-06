@@ -65,11 +65,11 @@ def alloc_cache():
 # The results seems more accurate with the experimental results
 # For example from dask.random we allocate 64kb
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("110 KB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_size_of_view(mapping_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     size = ((N, N), (N, N)) if give_chunks else ((N, N), "auto")
 
     adata = ad.AnnData(
