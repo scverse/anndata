@@ -55,14 +55,21 @@ def alloc_cache():
     _ = adata.to_memory(copy=False)
 
 
-# Based on previous results expected to allocate ~74 kb
-# This tests our assumption which is used on test_modify_view_mapping_component_memory
+# Theoretically this is expected to allocate:
+# N*N*4 bytes per matrix (we have 2).
+# N*4 bytes per index (we have 1).
+# N*N*(2**3) + N*(2**2) bytes
+# N*N*(2**3) + N*(2**2) bytes
+# 2**19 + 2**10
+# if we put a 2 factor on 2**19
+# the results seems more accurate with the experimental results
+# For example from dask.random we allocate 1mb
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("110 KB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_size_of_view(mapping_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     size = ((N, N), (N, N)) if give_chunks else ((N, N), "auto")
 
     adata = ad.AnnData(
@@ -72,15 +79,18 @@ def test_size_of_view(mapping_name, give_chunks):
     _ = adata.to_memory(copy=False)
 
 
-# Normally should expect something around 80 kbs
-# Pandas does some indexing stuff that requires 256kb sometimes
-# since the array we allocated would be 4mb this should be ok
+# Normally should expect something around 90 kbs
+# Pandas does some indexing stuff that requires more sometimes
+# since the array we allocated would be 4mb for both arrays + 2mb
+# Thus, if we allocated it all it should at least have 6mb
+# experimentally we should at least have 10mb
+# for index this should be ok
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("340 KB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     M = 2**9
 
     size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
@@ -89,21 +99,24 @@ def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
         da.random.random(*size),
         **{mapping_name: dict(m=da.random.random(*size))},
     )
-    subset = adata[:N, :][:, :N]
+    subset = adata[:N, :N]
     assert subset.is_view
     m = getattr(subset, mapping_name)["m"]
     m[0, 0] = 100
 
 
-# Normally should expect something around 80 kbs
-# Pandas does some indexing stuff that requires 256kb sometimes
-# since the array we allocated would be 4mb this should be ok
+# Normally should expect something around 90 kbs
+# Pandas does some indexing stuff that requires more sometimes
+# since the array we allocated would be 4mb for both arrays + 2mb
+# Thus, if we allocated it all it should at least have 6mb
+# experimentally we should at least have 10mb
+# for index this should be ok
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("340 KB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_X_memory(mapping_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     M = 2**9
 
     size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
@@ -112,21 +125,24 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
         da.random.random(*size),
         **{mapping_name: dict(m=da.random.random(*size))},
     )
-    subset = adata[:N, :][:, :N]
+    subset = adata[:N, :N]
     assert subset.is_view
     m = subset.X
     m[0, 0] = 100
 
 
-# Normally should expect something around 80 kbs
-# Pandas does some indexing stuff that requires 256kb sometimes
-# since the array we allocated would be 4mb this should be ok
+# Normally should expect something around 90 kbs
+# Pandas does some indexing stuff that requires more sometimes
+# since the array we allocated would be 4mb for both arrays + 2mb
+# Thus, if we allocated it all it should at least have 6mb
+# experimentally we should at least have 10mb
+# for index this should be ok
 @pytest.mark.usefixtures("alloc_cache")
-@pytest.mark.limit_memory("340 KB")
+@pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
     import dask.array as da
 
-    N = 2**6
+    N = 2**8
     M = 2**9
 
     size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
@@ -135,7 +151,7 @@ def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
         da.random.random(*size),
         **{attr_name: dict(m=da.random.random(M))},
     )
-    subset = adata[:N, :][:, :N]
+    subset = adata[:N, :N]
     assert subset.is_view
     m = getattr(subset, attr_name)["m"]
     m[0] = 100
