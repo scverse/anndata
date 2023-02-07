@@ -60,10 +60,10 @@ def alloc_cache():
 # N*4 bytes per index (we have 1).
 # N*N*(2**3) + N*(2**2) bytes
 # N*N*(2**3) + N*(2**2) bytes
-# 2**15 + 2**8 =~ 32 kb
-# if we put a 2 factor on 2**15
-# The results seems more accurate with the experimental results
-# For example from dask.random we allocate 64kb
+# 2**19 + 2**10
+# if we put a 2 factor on 2**19
+# the results seems more accurate with the experimental results
+# For example from dask.random we allocate 1mb
 @pytest.mark.usefixtures("alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
 def test_size_of_view(mapping_name, give_chunks):
