@@ -21,3 +21,9 @@ class ImplicitModificationWarning(UserWarning):
     """
 
     pass
+
+
+class ExperimentalFeatureWarning(Warning):
+    """Raised when an unstable experimental feature is used."""
+
+    pass

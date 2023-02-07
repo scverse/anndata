@@ -43,6 +43,19 @@ except ImportError:
 
 
 try:
+    import awkward
+
+    AwkArray = awkward.Array
+
+except ImportError:
+
+    class AwkArray:
+        @staticmethod
+        def __repr__():
+            return "mock awkward.highlevel.Array"
+
+
+try:
     from zappy.base import ZappyArray
 except ImportError:
 

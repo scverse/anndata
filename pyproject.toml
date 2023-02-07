@@ -71,6 +71,7 @@ doc = [
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",
+    "awkward>=2.0.7",
     "IPython", # For syntax highlighting in notebooks
     "myst_parser",
 ]
@@ -86,6 +87,7 @@ test = [
     "boltons",
     "scanpy",
     "dask[array]",
+    "awkward>=2.0.6",
     "pytest_memray",
 ]
 

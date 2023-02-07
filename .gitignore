@@ -27,4 +27,5 @@ test.h5ad
 
 # IDEs
 /.idea/
+/.vscode/
 

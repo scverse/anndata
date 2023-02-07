@@ -25,7 +25,7 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray
+from anndata.compat import DaskArray, AwkArray
 
 
 @singledispatch
@@ -444,20 +444,27 @@ def test_concatenate_fill_value(fill_val):
 
     adata1 = gen_adata((10, 10))
     adata1.obsm = {
-        k: v for k, v in adata1.obsm.items() if not isinstance(v, pd.DataFrame)
+        k: v
+        for k, v in adata1.obsm.items()
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
+    # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
+    for tmp_ad in [adata1, adata2, adata3]:
+        for k in [k for k, v in tmp_ad.varm.items() if isinstance(v, AwkArray)]:
+            del tmp_ad.varm[k]
+
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 
     ptr = 0
@@ -678,6 +685,100 @@ def test_concatenate_with_raw():
     assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert adata_all.raw is None
+
+
+def test_concatenate_awkward(join_type):
+    import awkward as ak
+
+    a = ak.Array([[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
+    b = ak.Array(
+        [
+            [{"a": 4}, {"a": 5}],
+            [{"a": 6}],
+            [{"a": 7}],
+        ]
+    )
+
+    adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
+    adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
+
+    if join_type == "inner":
+        expected = ak.Array(
+            [
+                [{"a": 1}],
+                [{"a": 2}, {"a": 3}],
+                [{"a": 4}, {"a": 5}],
+                [{"a": 6}],
+                [{"a": 7}],
+            ]
+        )
+    elif join_type == "outer":
+        # TODO: This is what we would like to return, but waiting on:
+        # * https://github.com/scikit-hep/awkward/issues/2182 and awkward 2.1.0
+        # * https://github.com/scikit-hep/awkward/issues/2173
+        # expected = ak.Array(
+        #     [
+        #         [{"a": 1, "b": "foo"}],
+        #         [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+        #         [{"a": 4, "b": None}, {"a": 5, "b": None}],
+        #         [{"a": 6, "b": None}],
+        #         [{"a": 7, "b": None}],
+        #     ]
+        # )
+        expected = ak.concatenate(
+            [  # I don't think I can construct a UnionArray directly
+                ak.Array(
+                    [
+                        [{"a": 1, "b": "foo"}],
+                        [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+                    ]
+                ),
+                ak.Array(
+                    [
+                        [{"a": 4}, {"a": 5}],
+                        [{"a": 6}],
+                        [{"a": 7}],
+                    ]
+                ),
+            ]
+        )
+
+    result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
+
+    assert_equal(expected, result)
+
+
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]}, index=list("cde")),
+        np.ones((3, 2)),
+        sparse.random(3, 100, format="csr"),
+    ],
+)
+def test_awkward_does_not_mix(join_type, other):
+    import awkward as ak
+
+    awk = ak.Array(
+        [[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]]
+    )
+
+    adata_a = AnnData(
+        np.zeros((2, 3), dtype=float),
+        obs=pd.DataFrame(index=list("ab")),
+        obsm={"val": awk},
+    )
+    adata_b = AnnData(
+        np.zeros((3, 3), dtype=float),
+        obs=pd.DataFrame(index=list("cde")),
+        obsm={"val": other},
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Cannot concatenate an AwkwardArray with other array types",
+    ):
+        concat([adata_a, adata_b], join=join_type)
 
 
 def test_pairwise_concat(axis, array_type):
@@ -1156,6 +1257,23 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     b = gen_adata(shape)
     alt_axis = 1 - axis
     dim = ("obs", "var")[axis]
+
+    # TODO: Remove, see: https://github.com/scverse/anndata/issues/905
+    import awkward as ak
+
+    if (
+        (join_type == "inner")
+        and (merge_strategy in ("same", "unique"))
+        and ((axis, shape.index(0)) in [(0, 1), (1, 0)])
+        and ak.__version__ == "2.0.7"  # indicates if a release has happened
+    ):
+        aligned_mapping = (b.obsm, b.varm)[1 - axis]
+        to_remove = []
+        for k, v in aligned_mapping.items():
+            if isinstance(v, ak.Array):
+                to_remove.append(k)
+        for k in to_remove:
+            aligned_mapping.pop(k)
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
