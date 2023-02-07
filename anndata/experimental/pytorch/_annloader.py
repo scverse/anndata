@@ -132,7 +132,6 @@ class AnnLoader(DataLoader):
         use_cuda: bool = False,
         **kwargs,
     ):
-
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
