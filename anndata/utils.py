@@ -141,7 +141,6 @@ try:
         elif axis == 0:
             return len(array)
         else:
-
             # communicate with the recursive function using a context (lateral)
             context = {"axis": axis}
 
