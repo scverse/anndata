@@ -390,7 +390,7 @@ function:
 >>> ak.from_buffers(
 ...     awkward_group.attrs["form"],
 ...     awkward_group.attrs["length"],
-...     {k: read_elem(v) for k, v in awkward_group["container"].items()}
+...     {k: read_elem(v) for k, v in awkward_group.items()}
 ... )
 ```
 

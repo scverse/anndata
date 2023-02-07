@@ -515,7 +515,8 @@ def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
     form, length, container = ak.to_buffers(ak.to_packed(v))
     group.attrs["length"] = length
     group.attrs["form"] = form.to_json()
-    write_elem(group, "container", container, dataset_kwargs=dataset_kwargs)
+    for k, v in container.items():
+        write_elem(group, k, v, dataset_kwargs=dataset_kwargs)
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
@@ -525,7 +526,7 @@ def read_awkward(elem):
 
     form = _read_attr(elem.attrs, "form")
     length = _read_attr(elem.attrs, "length")
-    container = read_elem(elem["container"])
+    container = {k: read_elem(elem[k]) for k in elem.keys()}
 
     return ak.from_buffers(form, length, container)
 
