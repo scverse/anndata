@@ -233,6 +233,12 @@ def read_h5ad(
 
         adata = read_dispatched(f, callback=callback)
 
+        # Backwards compat (should figure out which version)
+        if "raw.X" in f:
+            raw = AnnData(**_read_raw(f, as_sparse, rdasp))
+            raw.obs_names = adata.obs_names
+            adata.raw = raw
+
         # Backwards compat to <0.7
         if isinstance(f["obs"], h5py.Dataset):
             _clean_uns(adata)
@@ -246,7 +252,7 @@ def _read_raw(
     rdasp: Callable[[h5py.Dataset], sparse.spmatrix] = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
-):
+) -> dict:
     if as_sparse:
         assert rdasp is not None, "must supply rdasp if as_sparse is supplied"
     raw = {}

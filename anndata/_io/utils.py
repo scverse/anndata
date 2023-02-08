@@ -1,11 +1,13 @@
 from enum import Enum
 from functools import wraps, singledispatch
+from typing import Callable
 from warnings import warn
 
 from packaging import version
 import h5py
 
 from .._core.sparse_dataset import SparseDataset
+from anndata.compat import H5Group, ZarrGroup
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
@@ -275,7 +277,14 @@ def report_write_key_on_error(func):
 # -------------------------------------------------------------------------------
 
 
-def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "varm")):
+def _read_legacy_raw(
+    f: ZarrGroup | H5Group,
+    modern_raw,  # TODO: type
+    read_df: Callable,
+    read_attr: Callable,
+    *,
+    attrs=("X", "var", "varm"),
+) -> dict:
     """\
     Backwards compat for reading legacy raw.
     Makes sure that no modern raw group coexists with legacy raw.* groups.

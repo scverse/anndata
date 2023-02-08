@@ -67,19 +67,32 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     f = zarr.open(store, mode="r")
 
+    # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            return AnnData(**{k: read_dispatched(v, callback) for k, v in elem.items()})
-        elif elem_name.startswith("raw."):
+            return AnnData(
+                **{
+                    k: read_dispatched(v, callback)
+                    for k, v in elem.items()
+                    if not k.startswith("raw.")
+                }
+            )
+        elif elem_name.startswith("/raw."):
             return None
-        elif elem_name in {"obs", "var"}:
+        elif elem_name in {"/obs", "/var"}:
             return read_dataframe(elem)
-        elif elem_name == "raw":
+        elif elem_name == "/raw":
             # Backwards compat
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
     adata = read_dispatched(f, callback=callback)
+
+    # Backwards compat (should figure out which version)
+    if "raw.X" in f:
+        raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+        raw.obs_names = adata.obs_names
+        adata.raw = raw
 
     # Backwards compat for <0.7
     if isinstance(f["obs"], zarr.Array):
