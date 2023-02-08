@@ -7,10 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-from ..compat import DaskArray
-
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
+from ..compat import AwkArray, DaskArray, Index, Index1D
 
 
 def _normalize_indices(
@@ -146,6 +143,13 @@ def _subset_spmatrix(a: spmatrix, subset_idx: Index):
 @_subset.register(pd.DataFrame)
 def _subset_df(df: pd.DataFrame, subset_idx: Index):
     return df.iloc[subset_idx]
+
+
+@_subset.register(AwkArray)
+def _subset_awkarray(a: AwkArray, subset_idx: Index):
+    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+    return a[subset_idx]
 
 
 # Registration for SparseDataset occurs in sparse_dataset.py

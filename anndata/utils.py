@@ -59,6 +59,109 @@ def convert_to_dict_nonetype(obj: None):
     return dict()
 
 
+@singledispatch
+def dim_len(x, axis):
+    """\
+    Return the size of an array in dimension `axis`.
+
+    Returns None if `x` is an awkward array with variable length in the requested dimension.
+    """
+    return x.shape[axis]
+
+
+try:
+    from .compat import awkward as ak
+
+    def _size_at_depth(layout, depth, lateral_context, **kwargs):
+        """Callback function for dim_len_awkward, resolving the dim_len for a given level"""
+        if layout.is_numpy:
+            # if it's an embedded rectilinear array, we have to deal with its shape
+            # which might not be 1-dimensional
+            if layout.is_unknown:
+                shape = (0,)
+            else:
+                shape = layout.shape
+            numpy_axis = lateral_context["axis"] - depth + 1
+            if not (1 <= numpy_axis < len(shape)):
+                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+            lateral_context["out"] = shape[numpy_axis]
+            return ak.contents.EmptyArray()
+
+        elif layout.is_list and depth == lateral_context["axis"]:
+            if layout.parameter("__array__") in ("string", "bytestring"):
+                # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
+                # which results in an extra hierarchy-level that shouldn't show up in dim_len
+                # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
+                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+
+            if layout.is_regular:
+                # if it's a regular list, you want the size
+                lateral_context["out"] = layout.size
+            else:
+                # if it's an irregular list, you want a null token
+                lateral_context["out"] = -1
+            return ak.contents.EmptyArray()
+
+        elif layout.is_record:
+            # if it's a record, you want to stop descent with an error
+            raise TypeError(
+                f"axis={lateral_context['axis']} is too deep, reaches record"
+            )
+
+        elif layout.is_union:
+            # if it's a union, you could get the result of each union branch
+            # separately and see if they're all the same; if not, it's an error
+            result = None
+            for content in layout.contents:
+                context = {"axis": lateral_context["axis"]}
+                ak.transform(
+                    _size_at_depth,
+                    content,
+                    lateral_context=context,
+                )
+                if result is None:
+                    result = context["out"]
+                elif result != context["out"]:
+                    # Union branches have different lengths -> return null token
+                    lateral_context["out"] = -1
+                    return ak.contents.EmptyArray()
+            lateral_context["out"] = result
+            return ak.contents.EmptyArray()
+
+    @dim_len.register(ak.Array)
+    def dim_len_awkward(array, axis):
+        """Get the length of an awkward array in a given dimension
+
+        Returns None if the dimension is of variable length.
+
+        Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
+        """
+        if axis < 0:  # negative axis is another can of worms... maybe later
+            raise NotImplementedError("Does not support negative axis")
+        elif axis == 0:
+            return len(array)
+        else:
+            # communicate with the recursive function using a context (lateral)
+            context = {"axis": axis}
+
+            # "transform" but we don't care what kind of array it returns
+            ak.transform(
+                _size_at_depth,
+                array,
+                lateral_context=context,
+            )
+
+            # Use `None` as null token.
+            return None if context["out"] == -1 else context["out"]
+
+    @asarray.register(ak.Array)
+    def asarray_awkward(x):
+        return x
+
+except ImportError:
+    pass
+
+
 def make_index_unique(index: pd.Index, join: str = "-"):
     """
     Makes the index unique by appending a number string to each duplicate index element:

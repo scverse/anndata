@@ -31,13 +31,20 @@ release = version
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = ".rst"
+source_suffix = [".rst", ".md"]
 master_doc = "index"
 default_role = "literal"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "**.ipynb_checkpoints",
+    "tutorials/notebooks/*.rst",
+]
 pygments_style = "sphinx"
 
 extensions = [
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
@@ -46,14 +53,16 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
+    "sphinx_issues",
     "scanpydoc",
     "nbsphinx",
-    *[p.stem for p in (HERE / "extensions").glob("*.py")],
+    "IPython.sphinxext.ipython_console_highlighting",
 ]
 
 # Generate the API documentation when building
 autosummary_generate = True
 autodoc_member_order = "bysource"
+issues_github_path = "scverse/anndata"
 # autodoc_default_flags = ['members']
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -76,7 +85,10 @@ nitpick_ignore = [
         for kind in ["", "View"]
     ],
 ]
-suppress_warnings = ["ref.citation"]
+suppress_warnings = [
+    "ref.citation",
+    "myst.header",  # https://github.com/executablebooks/MyST-Parser/issues/262
+]
 
 
 def setup(app: Sphinx):
@@ -86,6 +98,7 @@ def setup(app: Sphinx):
 
 intersphinx_mapping = dict(
     h5py=("https://docs.h5py.org/en/latest/", None),
+    hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest/", None),
     loompy=("https://linnarssonlab.org/loompy/", None),
     numpy=("https://numpy.org/doc/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),

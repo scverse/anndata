@@ -19,7 +19,6 @@ from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._core import views
 from anndata.compat import (
-    OverloadedDict,
     ZarrArray,
     ZarrGroup,
     DaskArray,
@@ -29,6 +28,7 @@ from anndata.compat import (
 )
 from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
 from anndata._warnings import OldFormatWarning
+from anndata.compat import AwkArray
 
 from .registry import (
     _REGISTRY,
@@ -246,8 +246,6 @@ def read_anndata(elem):
     ]:
         if k in elem:
             d[k] = read_elem(elem[k])
-        if "X" in d:
-            d["dtype"] = d["X"].dtype
     return AnnData(**d)
 
 
@@ -271,9 +269,7 @@ def read_mapping(elem):
     return {k: read_elem(v) for k, v in elem.items()}
 
 
-@_REGISTRY.register_write(H5Group, OverloadedDict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, OverloadedDict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
 def write_mapping(f, k, v, dataset_kwargs=MappingProxyType({})):
     g = f.create_group(k)
@@ -341,7 +337,7 @@ def read_string_array(d):
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("string-array", "0.2.0"))
-def read_array_partial(d, items=None, indices=slice(None)):
+def read_string_array_partial(d, items=None, indices=slice(None)):
     return read_array_partial(d.asstr(), items=items, indices=indices)
 
 
@@ -498,6 +494,42 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
     return sparse_dataset(elem)[indices]
 
 
+#################
+# Awkward array #
+#################
+
+
+@_REGISTRY.register_write(H5Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, AwkArray, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_write(
+    H5Group, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
+)
+def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
+    from anndata.compat import awkward as ak
+
+    group = f.create_group(k)
+    form, length, container = ak.to_buffers(ak.to_packed(v))
+    group.attrs["length"] = length
+    group.attrs["form"] = form.to_json()
+    for k, v in container.items():
+        write_elem(group, k, v, dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
+def read_awkward(elem):
+    from anndata.compat import awkward as ak
+
+    form = _read_attr(elem.attrs, "form")
+    length = _read_attr(elem.attrs, "length")
+    container = {k: read_elem(elem[k]) for k in elem.keys()}
+
+    return ak.from_buffers(form, length, container)
+
+
 ##############
 # DataFrames #
 ##############
@@ -640,17 +672,17 @@ def read_categorical(elem):
     return pd.Categorical.from_codes(
         codes=read_elem(elem["codes"]),
         categories=read_elem(elem["categories"]),
-        ordered=_read_attr(elem.attrs, "ordered"),
+        ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("categorical", "0.2.0"))
-def read_categorical(elem, *, items=None, indices=(slice(None),)):
+def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
     return pd.Categorical.from_codes(
         codes=read_elem_partial(elem["codes"], indices=indices),
         categories=read_elem(elem["categories"]),
-        ordered=_read_attr(elem.attrs, "ordered"),
+        ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
 
 

@@ -2,7 +2,7 @@ from copy import deepcopy
 from functools import reduce, singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
-from typing import Any, Collection, Union, Mapping, MutableMapping, Optional
+from typing import Any, Tuple, Union, Mapping, MutableMapping, Optional
 from warnings import warn
 
 import h5py
@@ -10,19 +10,19 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
-from ._overloaded_dict import _overloaded_uns, OverloadedDict
-
 
 class Empty:
     pass
 
 
+Index1D = Union[slice, int, str, np.int64, np.ndarray]
+Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
 H5Group = Union[h5py.Group, h5py.File]
 H5Array = h5py.Dataset
 
 
 # try importing zarr, dask, and zappy
-from packaging import version
+from packaging import version as _v
 
 try:
     from zarr.core import Array as ZarrArray
@@ -38,6 +38,19 @@ except ImportError:
         @staticmethod
         def __repr__():
             return "mock zarr.core.Group"
+
+
+try:
+    import awkward
+
+    AwkArray = awkward.Array
+
+except ImportError:
+
+    class AwkArray:
+        @staticmethod
+        def __repr__():
+            return "mock awkward.highlevel.Array"
 
 
 try:
@@ -227,34 +240,6 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
         elif isinstance(v, spmatrix) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
-
-
-def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1d", orig_n_obs: int):
-    """slice sparse spatrices of n_obs × n_obs in self.uns"""
-
-    from anndata._core.index import _subset
-
-    if isinstance(oidx, slice) and len(range(*oidx.indices(orig_n_obs))) == orig_n_obs:
-        return uns  # slice of entire dimension is a no-op
-
-    paths = _find_sparse_matrices(uns, orig_n_obs, (), [])
-
-    if not paths:
-        return uns
-
-    uns = deepcopy(uns)
-    for path in paths:
-        str_path = "".join(f"['{key}']" for key in path)
-        warn(
-            f"During AnnData slicing, found matrix at .uns{str_path} that happens"
-            f" to be dimensioned at n_obs×n_obs ({orig_n_obs}×{orig_n_obs}).\n\n"
-            "These matrices should now be stored in the .obsp attribute.\n"
-            "This slicing behavior will be removed in anndata 0.8.",
-            FutureWarning,
-        )
-        d = reduce(lambda d, k: d[k], path[:-1], uns)
-        d[path[-1]] = _subset(d[path[-1]], (oidx, oidx))
-    return uns
 
 
 # This function was adapted from scikit-learn
