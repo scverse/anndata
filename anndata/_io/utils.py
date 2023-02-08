@@ -199,7 +199,6 @@ def report_read_key_on_error(func):
         return method_wrapper
 
     else:
-
         # TODO: sometimes, something that looks an awful lot like a method is reaching here
         # It's being passed an instance of a Reader, has a signature Reader.read_elem, but is a function
         @wraps(func)
@@ -245,23 +244,28 @@ def report_write_key_on_error(func):
             ) from e
 
     # Need to specialize for method signature
-    if ismethod(func):
+    # if ismethod(func):
 
-        @wraps(func)
-        def func_wrapper(self, elem, key, val, *args, **kwargs):
-            try:
-                return func(self, elem, key, val, *args, **kwargs)
-            except Exception as e:
-                re_raise_error(e, elem, key)
+    #     @wraps(func)
+    #     def func_wrapper(self, elem, key, val, *args, **kwargs):
+    #         try:
+    #             return func(self, elem, key, val, *args, **kwargs)
+    #         except Exception as e:
+    #             re_raise_error(e, elem, key)
 
-    else:
+    @wraps(func)
+    def func_wrapper(*args, **kwargs):
+        from anndata._io.specs import Writer
 
-        @wraps(func)
-        def func_wrapper(elem, key, val, *args, **kwargs):
-            try:
-                return func(elem, key, val, *args, **kwargs)
-            except Exception as e:
-                re_raise_error(e, elem, key)
+        for i in range(len(args)):
+            elem = args[i]
+            key = args[i + 1]
+            if not isinstance(elem, Writer):
+                break
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            re_raise_error(e, elem, key)
 
     return func_wrapper
 

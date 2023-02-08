@@ -521,7 +521,7 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 @_REGISTRY.register_write(
     ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
 )
-def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
+def write_awkward(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
     from anndata.compat import awkward as ak
 
     group = f.create_group(k)
@@ -529,17 +529,17 @@ def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
     group.attrs["length"] = length
     group.attrs["form"] = form.to_json()
     for k, v in container.items():
-        write_elem(group, k, v, dataset_kwargs=dataset_kwargs)
+        _writer.write_elem(group, k, v, dataset_kwargs=dataset_kwargs)
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
-def read_awkward(elem):
+def read_awkward(elem, _reader):
     from anndata.compat import awkward as ak
 
     form = _read_attr(elem.attrs, "form")
     length = _read_attr(elem.attrs, "length")
-    container = {k: read_elem(elem[k]) for k in elem.keys()}
+    container = {k: _reader.read_elem(elem[k]) for k in elem.keys()}
 
     return ak.from_buffers(form, length, container)
 
