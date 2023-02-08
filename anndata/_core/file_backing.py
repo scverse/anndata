@@ -8,7 +8,7 @@ import h5py
 
 from . import anndata
 from .sparse_dataset import SparseDataset
-from ..compat import ZarrArray, DaskArray
+from ..compat import ZarrArray, DaskArray, AwkArray
 
 
 class AnnDataFileManager:
@@ -123,3 +123,13 @@ def _(x, copy=True):
 @to_memory.register(Mapping)
 def _(x: Mapping, copy=True):
     return {k: to_memory(v, copy=copy) for k, v in x.items()}
+
+
+@to_memory.register(AwkArray)
+def _(x, copy=True):
+    from copy import copy
+
+    if copy:
+        return copy(x)
+    else:
+        return x

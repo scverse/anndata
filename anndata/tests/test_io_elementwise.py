@@ -1,8 +1,9 @@
 """
 Tests that each element in an anndata is written correctly
 """
-from tempfile import TemporaryDirectory
-from pathlib import Path
+from __future__ import annotations
+
+import re
 
 import h5py
 import numpy as np
@@ -11,9 +12,9 @@ import pytest
 from scipy import sparse
 import zarr
 
-
-import anndata as ad
-from anndata.compat import _read_attr
+from anndata._io.specs.registry import IORegistryError
+from anndata._io.utils import AnnDataReadError
+from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
 from anndata.tests.helpers import assert_equal, gen_adata
 
@@ -24,17 +25,18 @@ def diskfmt(request):
 
 
 @pytest.fixture(scope="function", params=["h5", "zarr"])
-def store(request):
-    with TemporaryDirectory() as tmpdir:
+def store(request, tmp_path) -> H5Group | ZarrGroup:
+    if request.param == "h5":
+        file = h5py.File(tmp_path / "test.h5", "w")
+        store = file["/"]
+    elif request.param == "zarr":
+        store = zarr.open(tmp_path / "test.zarr", "w")
+    else:
+        assert False
 
-        if request.param == "h5":
-            file = h5py.File(Path(tmpdir) / "test.h5", "w")
-            store = file["/"]
-        elif request.param == "zarr":
-            store = zarr.open(Path(tmpdir) / "test.zarr")
-
+    try:
         yield store
-
+    finally:
         if request.param == "h5":
             file.close()
 
@@ -110,6 +112,43 @@ def test_write_to_root(store):
 
     assert "anndata" == _read_attr(store.attrs, "encoding-type")
     assert_equal(from_disk, adata)
+
+
+@pytest.mark.parametrize(
+    ["attribute", "value"],
+    [
+        ("encoding-type", "floob"),
+        ("encoding-version", "10000.0"),
+    ],
+)
+def test_read_iospec_not_found(store, attribute, value):
+    adata = gen_adata((3, 2))
+
+    write_elem(store, "/", adata)
+    store["obs"].attrs.update({attribute: value})
+
+    with pytest.raises(
+        AnnDataReadError, match=r"while reading key '/(obs)?'"
+    ) as exc_info:
+        read_elem(store)
+    msg = str(exc_info.value.__cause__)
+
+    assert "No read method registered for IOSpec" in msg
+    assert f"{attribute.replace('-', '_')}='{value}'" in msg
+
+
+@pytest.mark.parametrize(
+    ["obj"],
+    [(b"x",)],
+)
+def test_write_io_error(store, obj):
+    full_pattern = re.compile(
+        rf"No method registered for writing {type(obj)} into .*Group"
+    )
+    with pytest.raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
+        write_elem(store, "/el", obj)
+    msg = str(exc_info.value.__cause__)
+    assert re.search(full_pattern, msg)
 
 
 def test_categorical_order_type(store):
