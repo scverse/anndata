@@ -216,7 +216,6 @@ def report_read_key_on_error(func):
         return method_wrapper
 
     else:
-
         # TODO: sometimes, something that looks an awful lot like a method is reaching here
         # It's being passed an instance of a Reader, has a signature Reader.read_elem, but is a function
         @wraps(func)
