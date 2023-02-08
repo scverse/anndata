@@ -10,8 +10,6 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
-from ._overloaded_dict import _overloaded_uns, OverloadedDict
-
 
 class Empty:
     pass
@@ -242,34 +240,6 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
         elif isinstance(v, spmatrix) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
-
-
-def _slice_uns_sparse_matrices(uns: MutableMapping, oidx: "Index1D", orig_n_obs: int):
-    """slice sparse spatrices of n_obs × n_obs in self.uns"""
-
-    from anndata._core.index import _subset
-
-    if isinstance(oidx, slice) and len(range(*oidx.indices(orig_n_obs))) == orig_n_obs:
-        return uns  # slice of entire dimension is a no-op
-
-    paths = _find_sparse_matrices(uns, orig_n_obs, (), [])
-
-    if not paths:
-        return uns
-
-    uns = deepcopy(uns)
-    for path in paths:
-        str_path = "".join(f"['{key}']" for key in path)
-        warn(
-            f"During AnnData slicing, found matrix at .uns{str_path} that happens"
-            f" to be dimensioned at n_obs×n_obs ({orig_n_obs}×{orig_n_obs}).\n\n"
-            "These matrices should now be stored in the .obsp attribute.\n"
-            "This slicing behavior will be removed in anndata 0.8.",
-            FutureWarning,
-        )
-        d = reduce(lambda d, k: d[k], path[:-1], uns)
-        d[path[-1]] = _subset(d[path[-1]], (oidx, oidx))
-    return uns
 
 
 # This function was adapted from scikit-learn
