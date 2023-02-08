@@ -549,7 +549,6 @@ class CSCDataset(BaseCompressedSparseDataset):
 
 
 def sparse_dataset(group) -> BaseCompressedSparseDataset:
-
     # encoding_type = _read_attr(group, "encoding-type")
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
