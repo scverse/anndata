@@ -19,7 +19,6 @@ from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core import views
 from anndata.compat import (
-    OverloadedDict,
     ZarrArray,
     ZarrGroup,
     DaskArray,
@@ -29,6 +28,7 @@ from anndata.compat import (
 )
 from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
 from anndata._warnings import OldFormatWarning
+from anndata.compat import AwkArray
 
 from .registry import (
     _REGISTRY,
@@ -273,9 +273,7 @@ def read_mapping(elem, _reader):
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
 
-@_REGISTRY.register_write(H5Group, OverloadedDict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, OverloadedDict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
 def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
     g = f.create_group(k)
@@ -508,6 +506,42 @@ def read_sparse(elem, _reader):
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
     return SparseDataset(elem)[indices]
+
+
+#################
+# Awkward array #
+#################
+
+
+@_REGISTRY.register_write(H5Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, AwkArray, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_write(
+    H5Group, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
+)
+def write_awkward(f, k, v, dataset_kwargs=MappingProxyType({})):
+    from anndata.compat import awkward as ak
+
+    group = f.create_group(k)
+    form, length, container = ak.to_buffers(ak.to_packed(v))
+    group.attrs["length"] = length
+    group.attrs["form"] = form.to_json()
+    for k, v in container.items():
+        write_elem(group, k, v, dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
+def read_awkward(elem):
+    from anndata.compat import awkward as ak
+
+    form = _read_attr(elem.attrs, "form")
+    length = _read_attr(elem.attrs, "length")
+    container = {k: read_elem(elem[k]) for k in elem.keys()}
+
+    return ak.from_buffers(form, length, container)
 
 
 ##############

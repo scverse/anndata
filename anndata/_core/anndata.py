@@ -45,16 +45,13 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous
+from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
-    _slice_uns_sparse_matrices,
     _move_adj_mtx,
-    _overloaded_uns,
-    OverloadedDict,
 )
 
 
@@ -337,17 +334,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # Special case for old neighbors, backwards compat. Remove in anndata 0.8.
-        uns_new = _slice_uns_sparse_matrices(
-            copy(adata_ref._uns), self._oidx, adata_ref.n_obs
-        )
         # fix categories
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
+        uns = copy(adata_ref._uns)
+        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
-        self._uns = uns_new
+        self._uns = uns
         self._n_obs = len(self.obs)
         self._n_vars = len(self.var)
 
@@ -814,7 +808,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # fmt: off
         if (
             not isinstance(value, pd.RangeIndex)
-            and not infer_dtype(value) in ("string", "bytes")
+            and infer_dtype(value) not in ("string", "bytes")
         ):
             sample = list(value[: min(len(value), 5)])
             warnings.warn(dedent(
@@ -891,7 +885,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         uns = self._uns
         if self.is_view:
             uns = DictView(uns, view_args=(self, "_uns"))
-        uns = _overloaded_uns(self, uns)
         return uns
 
     @uns.setter
@@ -900,7 +893,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
             )
-        if isinstance(value, (OverloadedDict, DictView)):
+        if isinstance(value, DictView):
             value = value.copy()
         if self.is_view:
             self._init_as_actual(self.copy())
@@ -1861,7 +1854,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([o.shape[0] == self._n_obs for o in obsm.values()])
+                not all([dim_len(o, 0) == self._n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self._n_obs
             ):
                 raise ValueError(
@@ -1871,7 +1864,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "varm" in key:
             varm = self._varm
             if (
-                not all([v.shape[0] == self._n_vars for v in varm.values()])
+                not all([dim_len(v, 0) == self._n_vars for v in varm.values()])
                 and len(varm.dim_names) != self._n_vars
             ):
                 raise ValueError(

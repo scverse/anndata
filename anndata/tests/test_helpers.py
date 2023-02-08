@@ -6,7 +6,14 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import assert_equal, report_name, gen_adata, asarray
+from anndata.tests.helpers import (
+    assert_equal,
+    gen_awkward,
+    report_name,
+    gen_adata,
+    asarray,
+)
+from anndata.utils import dim_len
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -38,6 +45,33 @@ from anndata.tests.helpers import assert_equal, report_name, gen_adata, asarray
 def reusable_adata():
     """Reusable anndata for when tests shouldn’t mutate it"""
     return gen_adata((10, 10))
+
+
+@pytest.mark.parametrize(
+    "shape, datashape",
+    [
+        [(4, 2), "4 * 2 * int32"],
+        [(100, 200, None), "100 * 200 * var * int32"],
+        [(4, None), "4 * var * int32"],
+        [(0, 4), "0 * 4 * int32"],
+        [(4, 0), "4 * 0 * int32"],
+        [(8, None, None), "8 * var * var * int32"],
+        [(8, None, None, None), "8 * var * var * var * int32"],
+        [(4, None, 8), "4 * var * 8 * int32"],
+        [(100, 200, 4), "100 * 200 * 4 * int32"],
+        [(4, 0, 0), "4 * 0 * 0 * int32"],
+        [(0, 0, 0), "0 * 0 * 0 * int32"],
+        [(0, None), "0 * var * int32"],
+    ],
+)
+def test_gen_awkward(shape, datashape):
+    import awkward as ak
+
+    arr = gen_awkward(shape)
+    for i, s in enumerate(shape):
+        assert dim_len(arr, i) == s
+    arr_type = ak.types.from_datashape(datashape)
+    assert arr.type == arr_type
 
 
 # Does this work for every warning?
@@ -191,7 +225,6 @@ def test_assert_equal_aligned_mapping_empty():
 
 
 def test_assert_equal_dask_arrays():
-
     import dask.array as da
 
     a = da.from_array([[1, 2, 3], [4, 5, 6]])
@@ -205,7 +238,6 @@ def test_assert_equal_dask_arrays():
 
 
 def test_assert_equal_dask_sparse_arrays():
-
     import dask.array as da
     from scipy import sparse
 
