@@ -81,6 +81,10 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     adata = read_dispatched(f, callback=callback)
 
+    # Backwards compat for <0.7
+    if isinstance(f["obs"], zarr.Array):
+        _clean_uns(adata)
+
     return adata
 
 

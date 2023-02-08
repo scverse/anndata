@@ -233,6 +233,10 @@ def read_h5ad(
 
         adata = read_dispatched(f, callback=callback)
 
+        # Backwards compat to <0.7
+        if isinstance(f["obs"], h5py.Dataset):
+            _clean_uns(adata)
+
     return adata
 
 
