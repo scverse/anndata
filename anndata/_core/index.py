@@ -15,7 +15,7 @@ def _normalize_indices(
     names0: pd.Index,
     names1: pd.Index,
     axis: Literal["obs", "vars"] = "obs",
-) -> tuple[slice, slice]:
+) -> Tuple[slice, slice]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
