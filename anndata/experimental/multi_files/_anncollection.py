@@ -66,20 +66,34 @@ def _harmonize_types(attrs_keys, adatas):
 
 
 class _ConcatViewMixin:
-    def _resolve_idx(self, oidx, vidx):
+    def _resolve_idx(self, oidx, vidx, axis: Literal["obs", "vars"] = "obs"):
         adatas_oidx = []
         reverse = None
 
-        old_oidx = getattr(self, "oidx", None)
-        if old_oidx is not None:
-            oidx = _resolve_idx(old_oidx, oidx, self.limits[-1])
+        if axis == "obs":
+            old_oidx = getattr(self, "oidx", None)
+            if old_oidx is not None:
+                oidx = _resolve_idx(old_oidx, oidx, self.limits[-1])
 
-        if isinstance(oidx, slice):
-            start, stop, step = oidx.indices(self.limits[-1])
-            oidx = np.arange(start, stop, step)
+            if isinstance(oidx, slice):
+                start, stop, step = oidx.indices(self.limits[-1])
+                oidx = np.arange(start, stop, step)
+            else:
+                oidx = np.array([oidx]) if isinstance(oidx, int) else oidx
+
         else:
-            oidx = np.array([oidx]) if isinstance(oidx, int) else oidx
+            old_vidx = getattr(self, "vidx", None)
+            if old_vidx is not None:
+                vidx = _resolve_idx(old_vidx, vidx, self.limits[-1])
+
+            if isinstance(vidx, slice):
+                start, stop, step = vidx.indices(self.limits[-1])
+                vidx = np.arange(start, stop, step)
+            else:
+                vidx = np.array([vidx]) if isinstance(vidx, int) else vidx
+
         u_oidx = oidx
+        u_vidx = vidx
 
         if len(self.adatas) == 1:
             return [u_oidx], oidx, vidx, reverse
@@ -169,6 +183,7 @@ class MapView:
         reverse=None,
         dtypes=None,
         obs_names=None,
+        var_names=None,
     ):
         self.adatas = adatas
         self._keys = keys
@@ -179,6 +194,7 @@ class MapView:
         self.reverse = reverse
         self.dtypes = dtypes
         self.obs_names = obs_names
+        self.var_names = var_names
 
     def __getitem__(self, key, use_convert=True):
         if self._keys is not None and key not in self._keys:
@@ -205,7 +221,11 @@ class MapView:
                 arrs.append(arr.iloc[idx])
             else:
                 if vidx is not None:
-                    idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
+                    idx = (
+                        np.ix_(*idx)
+                        if not any([isinstance(i, slice) for i in idx])
+                        else idx
+                    )
                 if isinstance(idx, tuple):
                     idx = idx[1]
                 if isinstance(idx, np.ndarray):
@@ -325,6 +345,11 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         else:
             obs_names = None
 
+        if attr == "var":
+            var_names = self.var_names
+        else:
+            var_names = None
+
         setattr(
             self,
             f"_{attr}_view",
@@ -338,6 +363,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 reverse,
                 attr_dtypes,
                 obs_names,
+                var_names,
             ),
         )
 
@@ -375,7 +401,11 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
             else:
                 # if vidx is present it is less memory efficient
                 idx = oidx, vidx
-                idx = np.ix_(*idx) if not isinstance(vidx, slice) else idx
+                idx = (
+                    np.ix_(*idx)
+                    if not any([isinstance(i, slice) for i in idx])
+                    else idx
+                )
                 Xs.append(X[idx])
 
         if len(Xs) > 1:
@@ -533,7 +563,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(
             index, self.obs_names, self.var_names, self.reference.axis
         )
-        resolved_idx = self._resolve_idx(oidx, vidx)
+        resolved_idx = self._resolve_idx(oidx, vidx, self.reference.axis)
 
         return AnnCollectionView(self.reference, self.convert, resolved_idx)
 
@@ -823,7 +853,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         oidx, vidx = _normalize_indices(
             index, self.obs_names, self.var_names, self.axis
         )
-        resolved_idx = self._resolve_idx(oidx, vidx)
+        resolved_idx = self._resolve_idx(oidx, vidx, self.axis)
 
         return AnnCollectionView(self, self.convert, resolved_idx)
 
