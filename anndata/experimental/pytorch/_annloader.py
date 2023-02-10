@@ -152,6 +152,11 @@ class AnnLoader(DataLoader):
             harmonize_dtypes = kwargs.pop("harmonize_dtypes", True)
             indices_strict = kwargs.pop("indices_strict", True)
 
+            if axis == "vars" and len(adatas) > 1:
+                raise NotImplementedError(
+                    "Batching over `vars` not implemented for multiple `AnnData`"
+                )
+
             dataset = AnnCollection(
                 adatas,
                 join_obs=join_obs,
