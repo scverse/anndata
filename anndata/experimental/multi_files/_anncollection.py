@@ -93,7 +93,6 @@ class _ConcatViewMixin:
                 vidx = np.array([vidx]) if isinstance(vidx, int) else vidx
 
         u_oidx = oidx
-        u_vidx = vidx
 
         if len(self.adatas) == 1:
             return [u_oidx], oidx, vidx, reverse
