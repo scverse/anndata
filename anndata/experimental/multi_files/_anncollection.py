@@ -14,7 +14,7 @@ from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import SparseDataset
 from ..._core.aligned_mapping import AxisArrays
 
-ATTRS = ["obs", "obsm", "layers"]
+ATTRS = ["obs", "var", "obsm", "layers"]
 
 
 def _merge(arrs):
@@ -157,7 +157,7 @@ class _IterateViewMixin:
             yield batch, idx
 
 
-class MapObsView:
+class MapView:
     def __init__(
         self,
         attr,
@@ -206,6 +206,10 @@ class MapObsView:
             else:
                 if vidx is not None:
                     idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
+                if isinstance(idx, tuple):
+                    idx = idx[1]
+                if isinstance(idx, np.ndarray):
+                    idx = idx.flatten()
                 arrs.append(arr[idx])
 
         if len(arrs) > 1:
@@ -237,9 +241,10 @@ class MapObsView:
 
     @property
     def df(self):
-        if self.attr != "obs":
-            return None
-        return pd.DataFrame(self.to_dict(use_convert=False), index=self.obs_names)
+        return pd.DataFrame(
+            self.to_dict(use_convert=False),
+            index=self.obs_names if self.attr == "obs" else self.var_names,
+        )
 
     def __repr__(self):
         descr = f"View of {self.attr} with keys: {str(self.keys())[1:-1]}"
@@ -283,7 +288,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
         self._dtypes = self.reference._dtypes
 
-        self._layers_view, self._obsm_view, self._obs_view = None, None, None
+        self._layers_view, self._obsm_view = None, None
+        self._obs_view, self._var_view = None, None
         self._X = None
 
         self._convert = None
@@ -322,7 +328,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         setattr(
             self,
             f"_{attr}_view",
-            MapObsView(
+            MapView(
                 attr,
                 adatas,
                 keys,
@@ -451,6 +457,22 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self._obs_view
 
     @property
+    def var(self):
+        """Lazy suset of one-dimensional annotation of variables.
+
+        Points to the `.var` attributes of the underlying adatas ot to `.var` of the parent
+        AnnCollection object depending on the `join_var` option of the AnnCollection object.
+        Copy rules are the same as for `.layers`, i.e. everything is lazy.
+
+        To get `.var` as a DataFrame, use `.var.df`.
+        To get `.var` as a dictionary, use `.var.to_dict()`. You can also specify keys
+        to include in the dict `.var.to_dict(keys=['key1', 'key2'])` and if you want
+        converters to be truned off when copying to dict `.var.to_dict(use_convert=False)`.
+        """
+        self._lazy_init_attr("var", set_vidx=True)
+        return self._var_view
+
+    @property
     def obs_names(self):
         """Names of observations of this subset object."""
         return self.reference.obs_names[self.oidx]
@@ -508,7 +530,9 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return len(self.obs_names)
 
     def __getitem__(self, index: Index):
-        oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
+        oidx, vidx = _normalize_indices(
+            index, self.obs_names, self.var_names, self.reference.axis
+        )
         resolved_idx = self._resolve_idx(oidx, vidx)
 
         return AnnCollectionView(self.reference, self.convert, resolved_idx)
@@ -637,6 +661,8 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         This parameter can be set to `False` if the order in the returned arrays
         is not important, for example, when using them for stochastic gradient descent.
         In this case the performance of subsetting can be a bit better.
+    axis
+        Whether to iterate through batches along `obs` or `vars` axis. Defaults to `obs`
 
     Examples
     ----------
@@ -675,6 +701,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         convert: Optional[ConvertType] = None,
         harmonize_dtypes: bool = True,
         indices_strict: bool = True,
+        axis: Literal["obs", "vars"] = "obs",
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:
@@ -777,10 +804,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 self._view_attrs_keys[attr] = new_keys
 
         self.adatas = adatas
+        self.axis = axis
 
-        self.limits = [adatas[0].n_obs]
+        self.limits = [getattr(adatas[0], f"n_{axis}")]
         for i in range(len(adatas) - 1):
-            self.limits.append(self.limits[i] + adatas[i + 1].n_obs)
+            self.limits.append(self.limits[i] + getattr(adatas[i + 1], f"n_{axis}"))
 
         # init converter
         self._convert = convert
@@ -792,7 +820,9 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         self.indices_strict = indices_strict
 
     def __getitem__(self, index: Index):
-        oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
+        oidx, vidx = _normalize_indices(
+            index, self.obs_names, self.var_names, self.axis
+        )
         resolved_idx = self._resolve_idx(oidx, vidx)
 
         return AnnCollectionView(self, self.convert, resolved_idx)
@@ -847,7 +877,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     @property
     def shape(self):
         """Shape of the lazily concatenated data matrix"""
-        return self.limits[-1], len(self.var_names)
+        return len(self.obs_names), len(self.var_names)
 
     @property
     def n_obs(self):

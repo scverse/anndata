@@ -2,7 +2,7 @@ from scipy.sparse import issparse
 from math import ceil
 from copy import copy
 from functools import partial
-from typing import Dict, Union, Sequence
+from typing import Dict, Union, Sequence, Literal
 
 import numpy as np
 import warnings
@@ -118,6 +118,8 @@ class AnnLoader(DataLoader):
     use_cuda
         Transfer pytorch tensors to the default cuda device after conversion.
         Only works if `use_default_converter=True`
+    axis
+        Whether to iterate through batches along `obs` or `vars` axis. Defaults to `obs`
     **kwargs
         Arguments for PyTorch DataLoader. If `adatas` is not an `AnnCollection` object, then also
         arguments for `AnnCollection` initialization.
@@ -130,6 +132,7 @@ class AnnLoader(DataLoader):
         shuffle: bool = False,
         use_default_converter: bool = True,
         use_cuda: bool = False,
+        axis: Literal["obs", "vars"] = "obs",
         **kwargs,
     ):
         if isinstance(adatas, AnnData):
@@ -155,6 +158,7 @@ class AnnLoader(DataLoader):
                 join_obsm=join_obsm,
                 label=label,
                 keys=keys,
+                axis=axis,
                 index_unique=index_unique,
                 convert=convert,
                 harmonize_dtypes=harmonize_dtypes,

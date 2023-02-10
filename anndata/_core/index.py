@@ -1,7 +1,7 @@
 import collections.abc as cabc
 from functools import singledispatch
 from itertools import repeat
-from typing import Union, Sequence, Optional, Tuple
+from typing import Union, Sequence, Optional, Tuple, Literal
 
 import h5py
 import numpy as np
@@ -11,8 +11,11 @@ from ..compat import AwkArray, DaskArray, Index, Index1D
 
 
 def _normalize_indices(
-    index: Optional[Index], names0: pd.Index, names1: pd.Index
-) -> Tuple[slice, slice]:
+    index: Optional[Index],
+    names0: pd.Index,
+    names1: pd.Index,
+    axis: Literal["obs", "vars"] = "obs",
+) -> tuple[slice, slice]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
@@ -28,7 +31,7 @@ def _normalize_indices(
             index = index[0], index[1].values
         if isinstance(index[0], pd.Series):
             index = index[0].values, index[1]
-    ax0, ax1 = unpack_index(index)
+    ax0, ax1 = unpack_index(index, axis)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
     return ax0, ax1
@@ -104,13 +107,13 @@ def _normalize_index(
         raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
-def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
+def unpack_index(index: Index, axis: Literal["obs", "vars"] = "obs"):
     if not isinstance(index, tuple):
-        return index, slice(None)
+        return (index, slice(None)) if axis == "obs" else (slice(None), index)
     elif len(index) == 2:
         return index
     elif len(index) == 1:
-        return index[0], slice(None)
+        return (index[0], slice(None)) if axis == "obs" else (slice(None), index[0])
     else:
         raise IndexError("invalid number of indices")
 
