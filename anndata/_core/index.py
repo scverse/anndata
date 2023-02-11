@@ -107,7 +107,9 @@ def _normalize_index(
         raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
-def unpack_index(index: Index, axis: Literal["obs", "vars"] = "obs"):
+def unpack_index(
+    index: Index, axis: Literal["obs", "vars"] = "obs"
+) -> Tuple[Index1D, Index1D]:
     if not isinstance(index, tuple):
         return (index, slice(None)) if axis == "obs" else (slice(None), index)
     elif len(index) == 2:

@@ -226,9 +226,7 @@ class MapView:
                         else idx
                     )
                 if isinstance(idx, tuple):
-                    idx = idx[1]
-                if isinstance(idx, np.ndarray):
-                    idx = idx.flatten()
+                    idx = idx[0 if self.attr == "obs" else 1]
                 arrs.append(arr[idx])
 
         if len(arrs) > 1:
