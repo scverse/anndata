@@ -97,7 +97,7 @@ class _ConcatViewMixin:
         if len(self.adatas) == 1:
             return [u_oidx], oidx, vidx, reverse
 
-        # TODO: implement iteration along axis == "obs" when len(self.adatas) > 1
+        # TODO: implement iteration along axis == "vars" when len(self.adatas) > 1
         iter_limits = list(zip([0] + self.limits, self.limits))
 
         n_adatas_used = 0
