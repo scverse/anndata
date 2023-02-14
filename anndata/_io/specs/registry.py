@@ -277,54 +277,8 @@ class Writer:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
 
-# @report_write_key_on_error
-# def write_elem(
-#     f: "Union[H5Group, ZarrGroup]",
-#     k: str,
-#     elem: Any,
-#     *args,
-#     modifiers=frozenset(),
-#     **kwargs,
-# ):
-#     """
-#     Write an element to a disk store using it's anndata encoding.
-
-#     Params
-#     ------
-#     f
-#         The store to write to.
-#     k
-#         The key to write for this value.
-#     elem
-#         The element to write as k to f.
-#     """
-#     dest_type = type(f)
-#     if elem is None:
-#         return
-#     t = type(elem)
-#     if k == "/":
-#         f.clear()
-#     elif k in f:
-#         del f[k]
-#     if (
-#         hasattr(elem, "dtype")
-#         and (dest_type, (t, elem.dtype.kind), modifiers) in _REGISTRY.write
-#     ):
-#         _REGISTRY.get_writer(dest_type, (t, elem.dtype.kind), modifiers)(
-#             f, k, elem, *args, **kwargs
-#         )
-#     else:
-#         _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
-
-
 read_elem = Reader(_REGISTRY).read_elem
 write_elem = Writer(_REGISTRY).write_elem
-# def read_elem(
-#     elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
-#     modifiers: frozenset(str) = frozenset(),
-# ) -> Any:
-#     """Read an element from an on disk store."""
-#     return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))(elem)
 
 
 # TODO: If all items would be read, just call normal read method

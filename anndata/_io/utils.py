@@ -179,7 +179,6 @@ def report_read_key_on_error(func):
     >>> z["X"] = [1, 2, 3]
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
-    from inspect import ismethod
 
     def re_raise_error(e, elem):
         if isinstance(e, AnnDataReadError):
@@ -191,33 +190,20 @@ def report_read_key_on_error(func):
                 f"type {type(elem)} from {parent}."
             ) from e
 
-    if ismethod(func):
+    @wraps(func)
+    def func_wrapper(*args, **kwargs):
+        from anndata._io.specs import Reader
 
-        @wraps(func)
-        def method_wrapper(self, elem, *args, **kwargs):
-            try:
-                return func(self, elem, *args, **kwargs)
-            except Exception as e:
-                re_raise_error(e, elem)
+        # Figure out signature (method vs function) by going through args
+        for elem in args:
+            if not isinstance(elem, Reader):
+                break
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            re_raise_error(e, elem)
 
-        return method_wrapper
-
-    else:
-        # TODO: sometimes, something that looks an awful lot like a method is reaching here
-        # It's being passed an instance of a Reader, has a signature Reader.read_elem, but is a function
-        @wraps(func)
-        def func_wrapper(*args, **kwargs):
-            from anndata._io.specs import Reader
-
-            for elem in args:
-                if not isinstance(elem, Reader):
-                    break
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                re_raise_error(e, elem)
-
-        return func_wrapper
+    return func_wrapper
 
 
 def report_write_key_on_error(func):
@@ -234,7 +220,6 @@ def report_write_key_on_error(func):
     >>> X = [1, 2, 3]
     >>> write_arr(z, "X", X)  # doctest: +SKIP
     """
-    from inspect import ismethod
 
     def re_raise_error(e, elem, key):
         if "Above error raised while writing key" in format(e):
@@ -247,20 +232,11 @@ def report_write_key_on_error(func):
                 f"to {parent}"
             ) from e
 
-    # Need to specialize for method signature
-    # if ismethod(func):
-
-    #     @wraps(func)
-    #     def func_wrapper(self, elem, key, val, *args, **kwargs):
-    #         try:
-    #             return func(self, elem, key, val, *args, **kwargs)
-    #         except Exception as e:
-    #             re_raise_error(e, elem, key)
-
     @wraps(func)
     def func_wrapper(*args, **kwargs):
         from anndata._io.specs import Writer
 
+        # Figure out signature (method vs function) by going through args
         for i in range(len(args)):
             elem = args[i]
             key = args[i + 1]
