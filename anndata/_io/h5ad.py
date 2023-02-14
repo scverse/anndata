@@ -141,11 +141,13 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
 
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
+    adata = AnnData(**d)
+
     # Backwards compat to <0.7
     if isinstance(f["obs"], h5py.Dataset):
-        _clean_uns(d)
+        _clean_uns(adata)
 
-    return AnnData(**d)
+    return adata
 
 
 def read_h5ad(
