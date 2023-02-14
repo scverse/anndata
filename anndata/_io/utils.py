@@ -179,7 +179,6 @@ def report_read_key_on_error(func):
     >>> z["X"] = [1, 2, 3]
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
-    from inspect import ismethod
 
     def re_raise_error(e, elem):
         if isinstance(e, AnnDataReadError):
@@ -222,15 +221,16 @@ def report_read_key_on_error(func):
         def func_wrapper(*args, **kwargs):
             from anndata._io.specs import Reader
 
-            for elem in args:
-                if not isinstance(elem, Reader):
-                    break
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                re_raise_error(e, elem)
+        # Figure out signature (method vs function) by going through args
+        for elem in args:
+            if not isinstance(elem, Reader):
+                break
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            re_raise_error(e, elem)
 
-        return func_wrapper
+    return func_wrapper
 
 
 def report_write_key_on_error(func):
@@ -247,7 +247,6 @@ def report_write_key_on_error(func):
     >>> X = [1, 2, 3]
     >>> write_arr(z, "X", X)  # doctest: +SKIP
     """
-    from inspect import ismethod
 
     def re_raise_error(e, elem, key):
         if "Above error raised while writing key" in format(e):
