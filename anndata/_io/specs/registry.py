@@ -246,11 +246,18 @@ class Writer:
         modifiers=frozenset(),
     ):
         from functools import partial
+        from pathlib import PurePath
 
         dest_type = type(store)
         t = type(elem)
+
         if elem is None:
             return lambda *_, **__: None
+
+        # Normalize k to abosulte path
+        if not PurePath(k).is_absolute():
+            k = str(PurePath(store.name) / k)
+
         if k == "/":
             store.clear()
         elif k in store:

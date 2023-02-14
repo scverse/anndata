@@ -1,6 +1,7 @@
 import re
 
 from scipy import sparse
+import h5py
 import zarr
 
 import anndata as ad
@@ -141,3 +142,44 @@ def test_write_dispatched_chunks():
             assert v.chunks[0] == 42
 
     z.visititems(check_chunking)
+
+
+def test_io_dispatched_keys(tmp_path):
+    h5ad_write_keys = []
+    zarr_write_keys = []
+    h5ad_read_keys = []
+    zarr_read_keys = []
+
+    h5ad_path = tmp_path / "test.h5ad"
+    zarr_path = tmp_path / "test.zarr"
+
+    def h5ad_writer(func, store, k, elem, dataset_kwargs):
+        h5ad_write_keys.append(k)
+        func(store, k, elem, dataset_kwargs=dataset_kwargs)
+
+    def zarr_writer(func, store, k, elem, dataset_kwargs):
+        zarr_write_keys.append(k)
+        func(store, k, elem, dataset_kwargs=dataset_kwargs)
+
+    def h5ad_reader(func, elem_name: str, elem, iospec):
+        h5ad_read_keys.append(elem_name)
+        return func(elem)
+
+    def zarr_reader(func, elem_name: str, elem, iospec):
+        zarr_read_keys.append(elem_name)
+        return func(elem)
+
+    adata = gen_adata((50, 100))
+
+    with h5py.File(h5ad_path, "w") as f:
+        write_dispatched(f, "/", adata, callback=h5ad_writer)
+        _ = read_dispatched(f, h5ad_reader)
+
+    with zarr.open_group(zarr_path, "w") as f:
+        write_dispatched(f, "/", adata, callback=zarr_writer)
+        _ = read_dispatched(f, zarr_reader)
+
+    assert h5ad_write_keys == zarr_write_keys
+    assert h5ad_read_keys == zarr_read_keys
+
+    assert sorted(h5ad_write_keys) == sorted(h5ad_read_keys)

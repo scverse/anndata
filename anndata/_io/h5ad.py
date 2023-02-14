@@ -41,6 +41,8 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
+    from anndata.experimental import write_dispatched
+
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -61,8 +63,11 @@ def write_h5ad(
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
+
     with h5py.File(filepath, mode) as f:
         # TODO: Use spec writing system for this
+        # Currently can't use write_dispatched here because this function is also called to do an
+        # inplace update of a backed object, which would delete "/"
         f = f["/"]
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
