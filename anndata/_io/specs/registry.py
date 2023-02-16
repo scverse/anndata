@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Callable, Iterable
+from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
 from typing import Any, NamedTuple, Tuple, Union
@@ -12,7 +13,8 @@ from anndata._io.utils import report_write_key_on_error, report_read_key_on_erro
 # TODO: Should filetype be included in the IOSpec if it changes the encoding? Or does the intent that these things be "the same" overrule that?
 
 
-class IOSpec(NamedTuple):
+@dataclass(frozen=True)
+class IOSpec:
     encoding_type: str
     encoding_version: str
 
