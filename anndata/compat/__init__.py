@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from copy import deepcopy
 from functools import reduce, singledispatch, wraps
 from codecs import decode
@@ -184,31 +186,31 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
 #############################
 
 
-def _clean_uns(d: Mapping[str, MutableMapping[str, Union[pd.Series, str, int]]]):
+def _clean_uns(adata: "AnnData"):  # noqa: F821
     """
     Compat function for when categorical keys were stored in uns.
     This used to be buggy because when storing categorical columns in obs and var with
     the same column name, only one `<colname>_categories` is retained.
     """
     k_to_delete = set()
-    for cats_name, cats in d.get("uns", {}).items():
+    for cats_name, cats in adata.uns.items():
         if not cats_name.endswith("_categories"):
             continue
         name = cats_name.replace("_categories", "")
         # fix categories with a single category
         if isinstance(cats, (str, int)):
             cats = [cats]
-        for ann in ["obs", "var"]:
-            if name not in d[ann]:
+        for ann in [adata.obs, adata.var]:
+            if name not in ann:
                 continue
-            codes: np.ndarray = d[ann][name].values
+            codes: np.ndarray = ann[name].values
             # hack to maybe find the axis the categories were for
             if not np.all(codes < len(cats)):
                 continue
-            d[ann][name] = pd.Categorical.from_codes(codes, cats)
+            ann[name] = pd.Categorical.from_codes(codes, cats)
             k_to_delete.add(cats_name)
     for cats_name in k_to_delete:
-        del d["uns"][cats_name]
+        del adata.uns[cats_name]
 
 
 def _move_adj_mtx(d):

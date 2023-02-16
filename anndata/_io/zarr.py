@@ -13,6 +13,7 @@ from ..compat import (
     _from_fixed_length_strings,
     _clean_uns,
 )
+from ..experimental import read_dispatched, write_dispatched
 from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
@@ -28,7 +29,7 @@ def write_zarr(
     store: Union[MutableMapping, str, Path],
     adata: AnnData,
     chunks=None,
-    **dataset_kwargs,
+    **ds_kwargs,
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
@@ -39,21 +40,14 @@ def write_zarr(
     f = zarr.open(store, mode="w")
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
-    if chunks is not None and not isinstance(adata.X, sparse.spmatrix):
-        write_elem(
-            f, "X", adata.X, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs)
-        )
-    else:
-        write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
-    write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+
+    def callback(func, s, k, elem, dataset_kwargs):
+        if chunks is not None and not isinstance(elem, sparse.spmatrix) and k == "/X":
+            func(s, k, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs))
+        else:
+            func(s, k, elem, dataset_kwargs=dataset_kwargs)
+
+    write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
 
 
 def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
@@ -70,26 +64,38 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
 
     f = zarr.open(store, mode="r")
 
-    if "encoding-type" in f.attrs:
-        return read_elem(f[""])
+    # Read with handling for backwards compat
+    def callback(func, elem_name: str, elem, iospec):
+        if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+            return AnnData(
+                **{
+                    k: read_dispatched(v, callback)
+                    for k, v in elem.items()
+                    if not k.startswith("raw.")
+                }
+            )
+        elif elem_name.startswith("/raw."):
+            return None
+        elif elem_name in {"/obs", "/var"}:
+            return read_dataframe(elem)
+        elif elem_name == "/raw":
+            # Backwards compat
+            return _read_legacy_raw(f, func(elem), read_dataframe, func)
+        return func(elem)
 
-    # Backwards compat
-    d = {}
-    for k in f.keys():
-        if k.startswith("raw."):
-            continue
-        if k in {"obs", "var"}:
-            d[k] = read_dataframe(f[k])
-        else:  # Base case
-            d[k] = read_elem(f[k])
+    adata = read_dispatched(f, callback=callback)
 
-    d["raw"] = _read_legacy_raw(f, d.get("raw"), read_dataframe, read_elem)
+    # Backwards compat (should figure out which version)
+    if "raw.X" in f:
+        raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+        raw.obs_names = adata.obs_names
+        adata.raw = raw
 
-    # Backwards compat to <0.7
+    # Backwards compat for <0.7
     if isinstance(f["obs"], zarr.Array):
-        _clean_uns(d)
+        _clean_uns(adata)
 
-    return AnnData(**d)
+    return adata
 
 
 @report_read_key_on_error

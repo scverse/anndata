@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Callable, Iterable
+from dataclasses import dataclass
 from functools import singledispatch, wraps
-from typing import Any, NamedTuple, Union
+from types import MappingProxyType
+from typing import Any, NamedTuple, Tuple, Union
 
 from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
@@ -11,7 +13,8 @@ from anndata._io.utils import report_write_key_on_error, report_read_key_on_erro
 # TODO: Should filetype be included in the IOSpec if it changes the encoding? Or does the intent that these things be "the same" overrule that?
 
 
-class IOSpec(NamedTuple):
+@dataclass(frozen=True)
+class IOSpec:
     encoding_type: str
     encoding_version: str
 
@@ -188,55 +191,103 @@ def get_spec(
     )
 
 
-@report_write_key_on_error
-def write_elem(
-    # Could be “H5Group | ZarrGroup”, but weirdly that makes Sphinx error on python 3.10
-    f: Union[H5Group, ZarrGroup],
-    k: str,
-    elem: Any,
-    *args,
-    modifiers=frozenset(),
-    **kwargs,
-):
-    """
-    Write an element to a disk store using its anndata encoding.
+class Reader:
+    def __init__(
+        self, registry: IORegistry, callback: Union[Callable, None] = None
+    ) -> None:
+        self.registry = registry
+        self.callback = callback
 
-    Params
-    ------
-    f
-        The store to write to.
-    k
-        The key to write for this value.
-    elem
-        The element to write as k to f.
-    """
-    dest_type = type(f)
-    if elem is None:
-        return
-    t = type(elem)
-    if k == "/":
-        f.clear()
-    elif k in f:
-        del f[k]
-    if (
-        hasattr(elem, "dtype")
-        and (dest_type, (t, elem.dtype.kind), modifiers) in _REGISTRY.write
-    ):
-        _REGISTRY.get_writer(dest_type, (t, elem.dtype.kind), modifiers)(
-            f, k, elem, *args, **kwargs
+    @report_read_key_on_error
+    def read_elem(
+        self,
+        elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
+        modifiers: frozenset(str) = frozenset(),
+    ) -> Any:
+        """Read an element from an on disk store."""
+        from functools import partial
+
+        read_func = self.registry.get_reader(
+            type(elem), get_spec(elem), frozenset(modifiers)
         )
-    else:
-        _REGISTRY.get_writer(dest_type, t, modifiers)(f, k, elem, *args, **kwargs)
+        read_func = partial(read_func, _reader=self)
+        if self.callback is not None:
+            return self.callback(read_func, elem.name, elem, get_spec(elem))
+        else:
+            return read_func(elem)
 
 
-@report_read_key_on_error
-def read_elem(
-    elem: H5Array | H5Group | ZarrArray | ZarrGroup,
-    *,
-    modifiers: frozenset[str] = frozenset(),
-) -> Any:
-    """Read an element from an on disk store."""
-    return _REGISTRY.get_reader(type(elem), get_spec(elem), frozenset(modifiers))(elem)
+class Writer:
+    def __init__(
+        self,
+        registry: IORegistry,
+        callback: Union[
+            Callable[
+                Tuple[
+                    Union[H5Group, ZarrGroup],
+                    str,
+                    Union[H5Array, H5Group, ZarrArray, ZarrGroup],
+                    dict,
+                ],
+                None,
+            ],
+            None,
+        ] = None,
+    ):
+        self.registry = registry
+        self.callback = callback
+
+    @report_write_key_on_error
+    def write_elem(
+        self,
+        store: Union[ZarrGroup, H5Group],
+        k: str,
+        elem,
+        *,
+        dataset_kwargs=MappingProxyType({}),
+        modifiers=frozenset(),
+    ):
+        from functools import partial
+        from pathlib import PurePath
+
+        dest_type = type(store)
+        t = type(elem)
+
+        if elem is None:
+            return lambda *_, **__: None
+
+        # Normalize k to abosulte path
+        if not PurePath(k).is_absolute():
+            k = str(PurePath(store.name) / k)
+
+        if k == "/":
+            store.clear()
+        elif k in store:
+            del store[k]
+        if (
+            hasattr(elem, "dtype")
+            and (dest_type, (t, elem.dtype.kind), modifiers) in self.registry.write
+        ):
+            write_func = partial(
+                self.registry.get_writer(dest_type, (t, elem.dtype.kind), modifiers),
+                _writer=self,
+            )
+        else:
+            write_func = partial(
+                self.registry.get_writer(dest_type, t, modifiers),
+                _writer=self,
+            )
+
+        if self.callback is not None:
+            return self.callback(
+                write_func, store, k, elem, dataset_kwargs=dataset_kwargs
+            )
+        else:
+            return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+
+
+read_elem = Reader(_REGISTRY).read_elem
+write_elem = Writer(_REGISTRY).write_elem
 
 
 # TODO: If all items would be read, just call normal read method
@@ -251,3 +302,21 @@ def read_elem_partial(
     return _REGISTRY.get_partial_reader(
         type(elem), get_spec(elem), frozenset(modifiers)
     )(elem, items=items, indices=indices)
+
+
+@singledispatch
+def elem_key(elem) -> str:
+    return elem.name
+
+
+#     raise NotImplementedError()
+
+# @elem_key.register(ZarrGroup)
+# @elem_key.register(ZarrArray)
+# def _(elem):
+#     return elem.name
+
+# @elem_key.register(H5Array)
+# @elem_key.register(H5Group)
+# def _(elem):
+#     re

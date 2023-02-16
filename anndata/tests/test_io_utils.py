@@ -57,15 +57,15 @@ def test_write_error_info(diskfmt, tmp_path):
 
 
 def test_clean_uns():
-    d = dict(
+    adata = ad.AnnData(
         uns=dict(species_categories=["a", "b"]),
-        obs=dict(species=pd.Series([0, 1, 0])),
-        var=dict(species=pd.Series([0, 1, 0, 2])),
+        obs=pd.DataFrame({"species": [0, 1, 0]}, index=["a", "b", "c"]),
+        var=pd.DataFrame({"species": [0, 1, 0, 2]}, index=["a", "b", "c", "d"]),
     )
-    _clean_uns(d)
-    assert "species_categories" not in d["uns"]
-    assert isinstance(d["obs"]["species"], pd.Categorical)
-    assert d["obs"]["species"].tolist() == ["a", "b", "a"]
+    _clean_uns(adata)
+    assert "species_categories" not in adata.uns
+    assert pd.api.types.is_categorical_dtype(adata.obs["species"])
+    assert adata.obs["species"].tolist() == ["a", "b", "a"]
     # var’s categories were overwritten by obs’s,
     # which we can detect here because var has too high codes
-    assert isinstance(d["var"]["species"], pd.Series)
+    assert pd.api.types.is_integer_dtype(adata.var["species"])
