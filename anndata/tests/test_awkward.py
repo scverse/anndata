@@ -269,6 +269,21 @@ def test_awkward_io(tmp_path, array):
             id="null_awk:recordoflists-outer",
         ),
         pytest.param(
+            [ak.Array([{"a": 1}, {"a": 2}]), ak.Array([{"a": 3}, {"a": 4}])],
+            "inner",
+            ak.Array([{"a": i} for i in range(1, 5)]),
+            id="awk-simple-record",
+        ),
+        pytest.param(
+            [
+                ak.Array([{"a": 1, "b": 1}, {"a": 2, "b": 2}]),
+                ak.Array([{"a": 3}, {"a": 4}]),
+            ],
+            "inner",
+            ak.Array([{"a": i} for i in range(1, 5)]),
+            id="awk-simple-record-inner",
+        ),
+        pytest.param(
             [
                 None,
                 ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
