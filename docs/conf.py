@@ -111,6 +111,7 @@ intersphinx_mapping = dict(
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
+    "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
 }
 

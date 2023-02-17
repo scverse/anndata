@@ -90,6 +90,15 @@ Low level methods for reading and writing elements of an `AnnData`` object to a 
    experimental.read_elem
    experimental.write_elem
 
+Utilities for customizing the IO process:
+
+.. autosummary::
+   :toctree: generated/
+
+   experimental.read_dispatched
+   experimental.write_dispatched
+   experimental.IOSpec
+
 
 Errors and warnings
 -------------------
