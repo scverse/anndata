@@ -1,8 +1,9 @@
 from collections import OrderedDict, abc as cabc
 from pathlib import Path
-from typing import Any, MutableMapping, Union, List
+from typing import Any, MutableMapping, Union, List, Sequence
 from anndata._core.aligned_mapping import Layers, PairwiseArrays
-from anndata._core.anndata import StorageType, _check_2d_shape
+from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
+from anndata._core.file_backing import AnnDataFileManager
 from anndata._core.index import Index
 from anndata._core.raw import Raw
 from anndata.compat import _move_adj_mtx
@@ -44,10 +45,10 @@ class AnnDataRemote(AnnData):
         filemode = None,
         asview = False,
         *,
-        obsp,
-        varp,
-        oidx,
-        vidx,
+        obsp = None,
+        varp = None,
+        oidx = None,
+        vidx = None,
     ):
 
         # view attributes
@@ -61,6 +62,11 @@ class AnnDataRemote(AnnData):
         # ----------------------------------------------------------------------
 
         # check data type of X
+        if filename is not None:
+            self.file = AnnDataFileManager(self, filename, filemode)
+        else:
+            self.file = AnnDataFileManager(self, None)
+
         if X is not None:
             for s_type in StorageType:
                 if isinstance(X, s_type.value):
@@ -96,9 +102,11 @@ class AnnDataRemote(AnnData):
                     if self._n_vars != shape[1]:
                         raise ValueError("`shape` is inconsistent with `var`")
 
-        # annotations
+        # annotations - need names already for AxisArrays to work.
+        self.obs_names = pd.Index(obs['index'][()])
+        self.var_names = pd.Index(var['index'][()])
         self._obs = AxisArrays(self, 0, vals=convert_to_dict(obs))
-        self._var = AxisArrays(self, 0, vals=convert_to_dict(var))
+        self._var = AxisArrays(self, 1, vals=convert_to_dict(var))
 
         # now we can verify if indices match!
         # for attr_name, x_name, idx in x_indices:
@@ -151,16 +159,6 @@ class AnnDataRemote(AnnData):
             "instead compare the desired attributes."
         )
 
-    @property
-    def obs_names(self) -> pd.Index:
-        """Names of observations (alias for `.obs.index`)."""
-        return pd.Index(self.obs['_index'])
-
-    @property
-    def var_names(self) -> pd.Index:
-        """Names of variables (alias for `.var.index`)."""
-        return pd.Index(self.var['_index'])
-
     def obs_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys()
@@ -179,6 +177,22 @@ class AnnDataRemote(AnnData):
             X = self.file["X"]
             del X[obs, var]
             self._set_backed("X", X)
+
+    @property
+    def obs_names(self) -> pd.Index:
+        return self._obs_names
+    
+    @property
+    def var_names(self) -> pd.Index:
+        return self._var_names
+    
+    @obs_names.setter
+    def obs_names(self, names: Sequence[str]):
+        self._obs_names = names
+
+    @var_names.setter
+    def var_names(self, names: Sequence[str]):
+        self._var_names = names
 
     # def obs_vector(self, k: str, *, layer: Optional[str] = None) -> np.ndarray:
     #     """\
@@ -631,18 +645,19 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     if isinstance(store, Path):
         store = str(store)
 
-    f = zarr.open(store, mode="r")
+    f = zarr.open_consolidated(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
+        print(elem_name)
         if iospec.encoding_type == "anndata" or elem_name.endswith('/'):
-            return AnnData(
+            return AnnDataRemote(
                 **{k: read_dispatched(v, callback) for k, v in elem.items()}
             )
         elif elem_name.startswith("raw."):
             return None
-        elif elem_name in {"obs", "var"}:
+        elif elem_name in {"/obs", "/var"}:
             # override to only return AxisArray that will be accessed specially via our special AnnData object
-            return {k: func(v) for k, v in elem.items()}
+            return {k: read_dispatched(v, callback) for k, v in elem.items()}
         return func(elem)
 
     adata = read_dispatched(f, callback=callback)
