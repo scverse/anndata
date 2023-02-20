@@ -44,7 +44,7 @@ def read_dispatched(
       It will call this callback again at the next element encoding it sees.
     * `key` (`str`): They absolute key of the element in the store. This will be an absolute key.
     * `elem` (`StorageType`): The encoded element.
-    * `spec` (`IOSpec`): The specification of the element.
+    * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
     """
     from anndata._io.specs import Reader, _REGISTRY
 
@@ -88,7 +88,8 @@ def write_dispatched(
     * `store` (`GroupStorageType`): The store to write to.
     * `key` (`str`): The key to write elem into store at. This will be an absolute key.
     * `elem` (`Any`): The element to write.
-    * `dataset_kwargs` (`dict`): Keyword arguments to pass to the dataset creation function.
+    * `dataset_kwargs` (`dict`): Keyword arguments to pass to the dataset creation function. This is passed as a keyword argument.
+    * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
     """
     from anndata._io.specs import Writer, _REGISTRY
 

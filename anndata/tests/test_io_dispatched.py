@@ -73,7 +73,7 @@ def test_read_dispatched_null_case():
     write_elem(z, "/", adata)
 
     expected = read_elem(z)
-    actual = read_dispatched(z, lambda _, __, x, ___: read_elem(x))
+    actual = read_dispatched(z, lambda _, __, x, **___: read_elem(x))
 
     assert_equal(expected, actual)
 
@@ -87,7 +87,7 @@ def test_write_dispatched_chunks():
 
     adata = gen_adata((1000, 100))
 
-    def write_chunked(func, store, k, elem, dataset_kwargs):
+    def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
         M, N = 13, 42
 
         def set_copy(d, **kwargs):
@@ -151,11 +151,11 @@ def test_io_dispatched_keys(tmp_path):
     h5ad_path = tmp_path / "test.h5ad"
     zarr_path = tmp_path / "test.zarr"
 
-    def h5ad_writer(func, store, k, elem, dataset_kwargs):
+    def h5ad_writer(func, store, k, elem, dataset_kwargs, iospec):
         h5ad_write_keys.append(k)
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def zarr_writer(func, store, k, elem, dataset_kwargs):
+    def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
         zarr_write_keys.append(k)
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 

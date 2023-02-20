@@ -232,7 +232,7 @@ class Reader:
         )
         read_func = partial(read_func, _reader=self)
         if self.callback is not None:
-            return self.callback(read_func, elem.name, elem, get_spec(elem))
+            return self.callback(read_func, elem.name, elem, iospec=get_spec(elem))
         else:
             return read_func(elem)
 
@@ -300,7 +300,12 @@ class Writer:
 
         if self.callback is not None:
             return self.callback(
-                write_func, store, k, elem, dataset_kwargs=dataset_kwargs
+                write_func,
+                store,
+                k,
+                elem,
+                dataset_kwargs=dataset_kwargs,
+                iospec=self.registry.get_spec(elem),
             )
         else:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
