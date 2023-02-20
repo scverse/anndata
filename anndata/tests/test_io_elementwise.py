@@ -12,7 +12,7 @@ import pytest
 from scipy import sparse
 import zarr
 
-from anndata._io.specs.registry import IORegistryError
+from anndata._io.specs.registry import IORegistryError, _REGISTRY, get_spec
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
@@ -90,6 +90,7 @@ def test_io_spec(store, value, encoding_type):
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
+    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
 def test_io_spec_raw(store):

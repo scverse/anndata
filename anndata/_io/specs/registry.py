@@ -66,6 +66,7 @@ class IORegistry:
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
         ] = {}
+        self.write_specs: dict[Union[type, tuple[type, str]], IOSpec] = {}
 
     def register_write(
         self,
@@ -76,6 +77,17 @@ class IORegistry:
     ):
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
+
+        # Record specification for src_type
+        if src_type in self.write_specs and (spec != self.write_specs[src_type]):
+            # First check for consistency
+            current_spec = self.write_specs[src_type]
+            raise TypeError(
+                "Cannot overwrite IO specifications. Attempted to overwrite encoding "
+                f"for {src_type} from {current_spec} to {spec}"
+            )
+        else:
+            self.write_specs[src_type] = spec
 
         def _register(func):
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
@@ -162,6 +174,13 @@ class IORegistry:
                 "read_partial", _REGISTRY.read_partial, src_type, spec
             )
 
+    def get_spec(self, elem: Any) -> IOSpec:
+        if hasattr(elem, "dtype"):
+            typ = (type(elem), elem.dtype.kind)
+            if typ in self.write_specs:
+                return self.write_specs[typ]
+        return self.write_specs[type(elem)]
+
 
 _REGISTRY = IORegistry()
 
@@ -205,7 +224,7 @@ class Reader:
         elem: StorageType,
         modifiers: frozenset(str) = frozenset(),
     ) -> Any:
-        """Read an element from an on disk store."""
+        """Read an element from a store. See exported function for more details."""
         from functools import partial
 
         read_func = self.registry.get_reader(
