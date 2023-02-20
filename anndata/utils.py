@@ -107,8 +107,10 @@ try:
             return ak.contents.EmptyArray()
 
         elif layout.is_record:
-            # if it's a record, you want to stop descent with an error
-            raise NotImplementedError(
+            # currently, we don't recurse into records
+            # in theory we could, just not sure how to do it at the moment
+            # Would need to consider cases like: scalars, unevenly sized values
+            raise TypeError(
                 f"Cannot recurse into record type found at axis={lateral_context['axis']}"
             )
 
