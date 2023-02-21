@@ -45,6 +45,11 @@ def read_dispatched(
     * `key` (`str`): They absolute key of the element in the store. This will be an absolute key.
     * `elem` (`StorageType`): The encoded element.
     * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
+
+    See Also
+    --------
+
+    :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
     from anndata._io.specs import Reader, _REGISTRY
 
@@ -90,6 +95,12 @@ def write_dispatched(
     * `elem` (`Any`): The element to write.
     * `dataset_kwargs` (`dict`): Keyword arguments to pass to the dataset creation function. This is passed as a keyword argument.
     * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
+
+
+    See Also
+    --------
+
+    :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
     from anndata._io.specs import Writer, _REGISTRY
 
