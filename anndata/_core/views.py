@@ -257,7 +257,9 @@ try:
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView
 
 except ImportError:
-    pass
+
+    class AwkwardArrayView:
+        pass
 
 
 def _resolve_idxs(old, new, adata):
