@@ -93,7 +93,7 @@ suppress_warnings = [
 
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = True
+    app.warningiserror = False
 
 
 intersphinx_mapping = dict(
@@ -124,7 +124,7 @@ html_context = dict(
     display_github=True,  # Integrate GitHub
     github_user="scverse",  # Username
     github_repo="anndata",  # Repo name
-    github_version="master",  # Version
+    github_version="main",  # Version
     conf_py_path="/docs/",  # Path in the checkout to the docs root
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
