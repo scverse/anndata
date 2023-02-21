@@ -12,14 +12,14 @@
    :target: https://anaconda.org/conda-forge/anndata
 .. |Docs| image:: https://readthedocs.com/projects/icb-anndata/badge/?version=latest
    :target: https://anndata.readthedocs.io
-.. |Build Status| image:: https://dev.azure.com/scverse/anndata/_apis/build/status/scverse.anndata?branchName=master
+.. |Build Status| image:: https://dev.azure.com/scverse/anndata/_apis/build/status/scverse.anndata?branchName=main
    :target: https://dev.azure.com/scverse/anndata/_build
-.. |Coverage| image:: https://codecov.io/gh/scverse/anndata/branch/master/graph/badge.svg?token=IN1mJN1Wi8
+.. |Coverage| image:: https://codecov.io/gh/scverse/anndata/branch/main/graph/badge.svg?token=IN1mJN1Wi8
    :target: https://codecov.io/gh/scverse/anndata
 
 .. use URL instead of path here so PyPI can render it
 
-.. image:: https://raw.githubusercontent.com/scverse/anndata/master/docs/_static/img/anndata_schema.svg
+.. image:: https://raw.githubusercontent.com/scverse/anndata/main/docs/_static/img/anndata_schema.svg
    :align: right
    :width: 350px
 
