@@ -12,7 +12,8 @@ import pytest
 from scipy import sparse
 import zarr
 
-from anndata._io.specs.registry import IORegistryError
+import anndata as ad
+from anndata._io.specs.registry import IORegistryError, _REGISTRY, get_spec, IOSpec
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
@@ -90,6 +91,7 @@ def test_io_spec(store, value, encoding_type):
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
+    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
 def test_io_spec_raw(store):
@@ -161,3 +163,20 @@ def test_categorical_order_type(store):
     assert type(read_elem(store["ordered"]).ordered) == bool
     assert read_elem(store["unordered"]).ordered is False
     assert type(read_elem(store["unordered"]).ordered) == bool
+
+
+def test_override_specification():
+    """
+    Test that trying to overwrite an existing encoding raises an error.
+    """
+    from copy import deepcopy
+
+    registry = deepcopy(_REGISTRY)
+
+    with pytest.raises(TypeError):
+
+        @registry.register_write(
+            ZarrGroup, ad.AnnData, IOSpec("some new type", "0.1.0")
+        )
+        def _(store, key, adata):
+            pass

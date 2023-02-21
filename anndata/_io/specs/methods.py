@@ -439,8 +439,8 @@ def write_sparse_compressed(
     g = f.create_group(key)
     g.attrs["shape"] = value.shape
 
-    # Allow resizing
-    if "maxshape" not in dataset_kwargs:
+    # Allow resizing for hdf5
+    if isinstance(f, H5Group) and "maxshape" not in dataset_kwargs:
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
 
     g.create_dataset("data", data=value.data, **dataset_kwargs)

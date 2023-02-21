@@ -4,9 +4,10 @@ from collections.abc import Mapping, Callable, Iterable
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import Any, NamedTuple, Tuple, Union
+from typing import Any, Union
 
-from anndata.compat import _read_attr, ZarrArray, ZarrGroup, H5Group, H5Array
+from anndata.compat import _read_attr
+from anndata._types import StorageType, GroupStorageType
 from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -33,7 +34,7 @@ class IORegistryError(Exception):
         cls,
         method: str,
         registry: Mapping,
-        src_typ: H5Array | ZarrArray | H5Group | ZarrGroup,
+        src_typ: StorageType,
         spec: IOSpec,
     ) -> IORegistryError:
         # TODO: Improve error message if type exists, but version does not
@@ -65,6 +66,7 @@ class IORegistry:
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
         ] = {}
+        self.write_specs: dict[Union[type, tuple[type, str]], IOSpec] = {}
 
     def register_write(
         self,
@@ -75,6 +77,17 @@ class IORegistry:
     ):
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
+
+        # Record specification for src_type
+        if src_type in self.write_specs and (spec != self.write_specs[src_type]):
+            # First check for consistency
+            current_spec = self.write_specs[src_type]
+            raise TypeError(
+                "Cannot overwrite IO specifications. Attempted to overwrite encoding "
+                f"for {src_type} from {current_spec} to {spec}"
+            )
+        else:
+            self.write_specs[src_type] = spec
 
         def _register(func):
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
@@ -161,6 +174,13 @@ class IORegistry:
                 "read_partial", _REGISTRY.read_partial, src_type, spec
             )
 
+    def get_spec(self, elem: Any) -> IOSpec:
+        if hasattr(elem, "dtype"):
+            typ = (type(elem), elem.dtype.kind)
+            if typ in self.write_specs:
+                return self.write_specs[typ]
+        return self.write_specs[type(elem)]
+
 
 _REGISTRY = IORegistry()
 
@@ -181,7 +201,7 @@ def proc_spec_mapping(spec) -> IOSpec:
 
 
 def get_spec(
-    elem: H5Array | H5Group | ZarrArray | ZarrGroup,
+    elem: StorageType,
 ) -> IOSpec:
     return proc_spec(
         {
@@ -201,10 +221,10 @@ class Reader:
     @report_read_key_on_error
     def read_elem(
         self,
-        elem: Union[H5Array, H5Group, ZarrGroup, ZarrArray],
+        elem: StorageType,
         modifiers: frozenset(str) = frozenset(),
     ) -> Any:
-        """Read an element from an on disk store."""
+        """Read an element from a store. See exported function for more details."""
         from functools import partial
 
         read_func = self.registry.get_reader(
@@ -212,7 +232,7 @@ class Reader:
         )
         read_func = partial(read_func, _reader=self)
         if self.callback is not None:
-            return self.callback(read_func, elem.name, elem, get_spec(elem))
+            return self.callback(read_func, elem.name, elem, iospec=get_spec(elem))
         else:
             return read_func(elem)
 
@@ -223,10 +243,10 @@ class Writer:
         registry: IORegistry,
         callback: Union[
             Callable[
-                Tuple[
-                    Union[H5Group, ZarrGroup],
+                [
+                    GroupStorageType,
                     str,
-                    Union[H5Array, H5Group, ZarrArray, ZarrGroup],
+                    StorageType,
                     dict,
                 ],
                 None,
@@ -240,7 +260,7 @@ class Writer:
     @report_write_key_on_error
     def write_elem(
         self,
-        store: Union[ZarrGroup, H5Group],
+        store: GroupStorageType,
         k: str,
         elem,
         *,
@@ -280,14 +300,57 @@ class Writer:
 
         if self.callback is not None:
             return self.callback(
-                write_func, store, k, elem, dataset_kwargs=dataset_kwargs
+                write_func,
+                store,
+                k,
+                elem,
+                dataset_kwargs=dataset_kwargs,
+                iospec=self.registry.get_spec(elem),
             )
         else:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
 
-read_elem = Reader(_REGISTRY).read_elem
-write_elem = Writer(_REGISTRY).write_elem
+def read_elem(elem: StorageType) -> Any:
+    """
+    Read an element from a store.
+
+    Assumes that the element is encoded using the anndata encoding. This function will
+    determine the encoded type using the encoding metadata stored in elem's attributes.
+
+    Params
+    ------
+    elem
+        The stored element.
+    """
+    return Reader(_REGISTRY).read_elem(elem)
+
+
+def write_elem(
+    store: GroupStorageType,
+    k: str,
+    elem: Any,
+    *,
+    dataset_kwargs: Mapping = MappingProxyType({}),
+) -> None:
+    """
+    Write an element to a storage group using anndata encoding.
+
+    Params
+    ------
+    store
+        The group to write to.
+    k
+        The key to write to in the group. Note that absolute paths will be written
+        from the root.
+    elem
+        The element to write. Typically an in-memory object, e.g. an AnnData, pandas
+        dataframe, scipy sparse matrix, etc.
+    dataset_kwargs
+        Keyword arguments to pass to the stores dataset creation function.
+        E.g. for zarr this would be `chunks`, `compressor`.
+    """
+    Writer(_REGISTRY).write_elem(store, k, elem, dataset_kwargs=dataset_kwargs)
 
 
 # TODO: If all items would be read, just call normal read method

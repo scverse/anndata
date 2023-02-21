@@ -19,7 +19,7 @@ class Empty:
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
 Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
-H5Group = Union[h5py.Group, h5py.File]
+H5Group = h5py.Group
 H5Array = h5py.Dataset
 
 

@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Callable, Any, Union
+from typing import Callable, Any
 
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
 
 from anndata._io.specs import read_elem, write_elem, IOSpec
-from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup
-
-StorageType = Union[H5Array, H5Group, ZarrArray, ZarrGroup]
-StorageGroupType = Union[H5Group, ZarrGroup]
+from anndata._types import StorageType, GroupStorageType
 
 __all__ = [
     "AnnCollection",
@@ -24,15 +21,15 @@ __all__ = [
 
 
 def read_dispatched(
-    store: StorageType,
+    elem: StorageType,
     callback: Callable[[Callable[[StorageType], Any], str, StorageType, IOSpec], Any],
 ) -> Any:
     """
-    Read store, calling the callback at each element.
+    Read elem, calling the callback at each sub-element.
 
     Params
     ------
-    store
+    elem
         Storage container (e.g. `h5py.Group`, `zarr.Group`). This must have anndata
         element specifications.
     callback
@@ -47,21 +44,26 @@ def read_dispatched(
       It will call this callback again at the next element encoding it sees.
     * `key` (`str`): They absolute key of the element in the store. This will be an absolute key.
     * `elem` (`StorageType`): The encoded element.
-    * `spec` (`IOSpec`): The specification of the element.
+    * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
+
+    See Also
+    --------
+
+    :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
     from anndata._io.specs import Reader, _REGISTRY
 
     reader = Reader(_REGISTRY, callback=callback)
 
-    return reader.read_elem(store)
+    return reader.read_elem(elem)
 
 
 def write_dispatched(
-    store: StorageGroupType,
+    store: GroupStorageType,
     key: str,
     elem: Any,
     callback: Callable[
-        [Callable[[StorageType, str, Any], None], StorageGroupType, str, Any, dict],
+        [Callable[[StorageType, str, Any], None], GroupStorageType, str, Any, dict],
         None,
     ],
     *,
@@ -88,10 +90,17 @@ def write_dispatched(
 
     * `write_func` (`Callable`): A callable which takes the in memory element and writes it to the store.
       This is the default encoding function, and what to call if you don't want to change behaviour at this level.
-    * `store` (`StorageGroupType`): The store to write to.
+    * `store` (`GroupStorageType`): The store to write to.
     * `key` (`str`): The key to write elem into store at. This will be an absolute key.
     * `elem` (`Any`): The element to write.
-    * `dataset_kwargs` (`dict`): Keyword arguments to pass to the dataset creation function.
+    * `dataset_kwargs` (`dict`): Keyword arguments to pass to the dataset creation function. This is passed as a keyword argument.
+    * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
+
+
+    See Also
+    --------
+
+    :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
     from anndata._io.specs import Writer, _REGISTRY
 

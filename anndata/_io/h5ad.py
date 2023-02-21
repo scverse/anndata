@@ -222,6 +222,8 @@ def read_h5ad(
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                 return AnnData(
                     **{
+                        # This is covering up backwards compat in the anndata initializer
+                        # In most cases we should be able to call `func(elen[k])` instead
                         k: read_dispatched(elem[k], callback)
                         for k in elem.keys()
                         if not k.startswith("raw.")
