@@ -1,5 +1,5 @@
 trigger:
-- master
+- main
 
 variables:
   PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
