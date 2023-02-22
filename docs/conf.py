@@ -58,6 +58,9 @@ extensions = [
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
+myst_enable_extensions = [
+    "html_image",  # So README.md can be used on github and sphinx docs
+]
 
 # Generate the API documentation when building
 autosummary_generate = True
