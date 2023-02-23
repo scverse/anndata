@@ -103,8 +103,8 @@ class AnnDataRemote(AnnData):
                         raise ValueError("`shape` is inconsistent with `var`")
 
         # annotations - need names already for AxisArrays to work.
-        self.obs_names = pd.Index(obs['index'][()])
-        self.var_names = pd.Index(var['index'][()])
+        self.obs_names = pd.Index((obs['index'] if 'index' in obs else obs['_index'])[()])
+        self.var_names = pd.Index((var['index'] if 'index' in var else var['_index'])[()])
         self._obs = AxisArrays(self, 0, vals=convert_to_dict(obs))
         self._var = AxisArrays(self, 1, vals=convert_to_dict(var))
 
@@ -648,12 +648,11 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     f = zarr.open_consolidated(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
-        print(elem_name)
         if iospec.encoding_type == "anndata" or elem_name.endswith('/'):
             return AnnDataRemote(
                 **{k: read_dispatched(v, callback) for k, v in elem.items()}
             )
-        elif elem_name.startswith("raw."):
+        elif elem_name.startswith("/raw"):
             return None
         elif elem_name in {"/obs", "/var"}:
             # override to only return AxisArray that will be accessed specially via our special AnnData object
