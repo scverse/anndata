@@ -47,6 +47,7 @@ class AnnDataRemote(AnnData):
     # 2. Get a better sparse access pattern
     # 3. Re-write dataset with better chunking
     # 4. Custom Zarr Group for categorical data?
+    # 5. a `head` method
 
     def __init__(
         self,
