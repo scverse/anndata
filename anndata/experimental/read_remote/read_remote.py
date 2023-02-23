@@ -6,7 +6,8 @@ from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
 from anndata._core.file_backing import AnnDataFileManager
 from anndata._core.index import Index
 from anndata._core.raw import Raw
-from anndata.compat import _move_adj_mtx
+from anndata._io.specs.registry import read_elem
+from anndata.compat import _move_adj_mtx, _read_attr
 from anndata.utils import convert_to_dict
 
 import zarr
@@ -17,9 +18,6 @@ from .utils import read_dispatched
 
 
 class AxisArraysRemote(AxisArrays):
-    def __getitem__(self, key: str):
-        return self._data[key]
-
     def __getattr__(self, __name: str):
         # If we a method has been accessed that is not here, try the pandas implementation
         if hasattr(pd.DataFrame, __name):
@@ -30,7 +28,15 @@ class AxisArraysRemote(AxisArrays):
         """Convert to pandas dataframe."""
         df = pd.DataFrame(index=self.dim_names)
         for key in self.keys():
-            value = self[key][()]
+            z = self[key]
+            if isinstance(z, zarr.Group):
+                value = pd.Categorical.from_codes(
+                    codes=read_elem(z["codes"]),
+                    categories=read_elem(z["categories"]),
+                    ordered=bool(_read_attr(z.attrs, "ordered")),
+                )
+            else:
+                value = z[()]
             df[key] = value
         return df
 

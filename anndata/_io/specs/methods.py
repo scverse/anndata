@@ -689,11 +689,7 @@ def write_categorical(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
 def read_categorical(elem, _reader):  # TODO: Going to need a lazy version of this
-    return pd.Categorical.from_codes(
-        codes=_reader.read_elem(elem["codes"]),
-        categories=_reader.read_elem(elem["categories"]),
-        ordered=bool(_read_attr(elem.attrs, "ordered")),
-    )
+    return elem
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("categorical", "0.2.0"))
