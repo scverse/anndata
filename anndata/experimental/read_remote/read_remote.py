@@ -15,42 +15,48 @@ import pandas as pd
 from ..._core import AnnData, AxisArrays
 from .utils import read_dispatched
 
-class SingleDimensionAxisArraysRemote(AxisArrays):
+
+class AxisArraysRemote(AxisArrays):
     def __getitem__(self, key: str):
-        return self._data[key][()]
-    
+        return self._data[key]
+
     def __getattr__(self, __name: str):
         # If we a method has been accessed that is not here, try the pandas implementation
         if hasattr(pd.DataFrame, __name):
             return self.to_df().__getattribute__(__name)
         return object.__getattribute__(self, __name)
 
+    def to_df(self) -> pd.DataFrame:
+        """Convert to pandas dataframe."""
+        df = pd.DataFrame(index=self.dim_names)
+        for key in self.keys():
+            value = self[key][()]
+            df[key] = value
+        return df
 
 
 class AnnDataRemote(AnnData):
-
     def __init__(
         self,
-        X = None,
-        obs = None,
-        var = None,
-        uns = None,
-        obsm = None,
-        varm = None,
-        layers = None,
-        raw = None,
-        dtype = None,
-        shape = None,
-        filename = None,
-        filemode = None,
-        asview = False,
+        X=None,
+        obs=None,
+        var=None,
+        uns=None,
+        obsm=None,
+        varm=None,
+        layers=None,
+        raw=None,
+        dtype=None,
+        shape=None,
+        filename=None,
+        filemode=None,
+        asview=False,
         *,
-        obsp = None,
-        varp = None,
-        oidx = None,
-        vidx = None,
+        obsp=None,
+        varp=None,
+        oidx=None,
+        vidx=None,
     ):
-
         # view attributes
         self._is_view = False
         self._adata_ref = None
@@ -103,10 +109,14 @@ class AnnDataRemote(AnnData):
                         raise ValueError("`shape` is inconsistent with `var`")
 
         # annotations - need names already for AxisArrays to work.
-        self.obs_names = pd.Index((obs['index'] if 'index' in obs else obs['_index'])[()])
-        self.var_names = pd.Index((var['index'] if 'index' in var else var['_index'])[()])
-        self._obs = AxisArrays(self, 0, vals=convert_to_dict(obs))
-        self._var = AxisArrays(self, 1, vals=convert_to_dict(var))
+        self.obs_names = pd.Index(
+            (obs["index"] if "index" in obs else obs["_index"])[()]
+        )
+        self.var_names = pd.Index(
+            (var["index"] if "index" in var else var["_index"])[()]
+        )
+        self._obs = AxisArraysRemote(self, 0, vals=convert_to_dict(obs))
+        self._var = AxisArraysRemote(self, 1, vals=convert_to_dict(var))
 
         # now we can verify if indices match!
         # for attr_name, x_name, idx in x_indices:
@@ -120,8 +130,8 @@ class AnnDataRemote(AnnData):
         self.uns = uns or OrderedDict()
 
         # TODO: Think about consequences of making obsm a group in hdf
-        self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
-        self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
+        self._obsm = AxisArraysRemote(self, 0, vals=convert_to_dict(obsm))
+        self._varm = AxisArraysRemote(self, 1, vals=convert_to_dict(varm))
 
         self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
         self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
@@ -150,7 +160,6 @@ class AnnDataRemote(AnnData):
 
         # layers
         self._layers = Layers(self, layers)
-
 
     def __eq__(self, other):
         """Equality testing"""
@@ -181,11 +190,11 @@ class AnnDataRemote(AnnData):
     @property
     def obs_names(self) -> pd.Index:
         return self._obs_names
-    
+
     @property
     def var_names(self) -> pd.Index:
         return self._var_names
-    
+
     @obs_names.setter
     def obs_names(self, names: Sequence[str]):
         self._obs_names = names
@@ -648,7 +657,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     f = zarr.open_consolidated(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
-        if iospec.encoding_type == "anndata" or elem_name.endswith('/'):
+        if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             return AnnDataRemote(
                 **{k: read_dispatched(v, callback) for k, v in elem.items()}
             )
