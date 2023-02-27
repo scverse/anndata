@@ -2,6 +2,7 @@ from types import MappingProxyType
 
 from anndata._io.specs import read_elem, write_elem
 
+
 def read_dispatched(store, callback):
     from anndata._io.specs import Reader, _REGISTRY
 
