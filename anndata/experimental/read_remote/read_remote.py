@@ -17,6 +17,34 @@ from ..._core import AnnData, AxisArrays
 from .utils import read_dispatched
 
 
+# Initialization from something like
+# CategoricalZarrArray(adata_local.obs['cell_type']['codes'].store, 'obs/cell_type/codes')
+# Will need to work out the API better once I understand what the best practice here is.
+class CategoricalZarrArray(zarr.core.Array):
+    def __init__(self, store, path, *args, **kwargs):
+        super().__init__(store.store, path, *args, **kwargs)
+        root_path = (store.store.path + "/" + path).replace("/codes", "")
+        self.categories = zarr.open(root_path + "/categories")[()]
+        root = zarr.open(root_path)
+        self.ordered = bool(
+            _read_attr(root.attrs, "ordered") if "ordered" in root.attrs else False
+        )
+
+    def __array__(self, *args):  # may need to override this, copied for now
+        a = self[...]
+        if args:
+            a = a.astype(args[0])
+        return a
+
+    def __getitem__(self, selection):
+        result = super().__getitem__(selection)
+        return pd.Categorical.from_codes(
+            codes=result,
+            categories=self.categories,
+            ordered=self.ordered,
+        )
+
+
 class AxisArraysRemote(AxisArrays):
     def __getattr__(self, __name: str):
         # If we a method has been accessed that is not here, try the pandas implementation
