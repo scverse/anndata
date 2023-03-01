@@ -6,9 +6,6 @@ import h5py
 import pandas as pd
 import numpy as np
 from scipy import sparse
-import zarr
-
-from anndata.experimental.read_remote.read_remote import CategoricalZarrArray
 
 from .logging import get_logger
 from ._core.sparse_dataset import SparseDataset
