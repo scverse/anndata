@@ -68,6 +68,7 @@ doc = [
     "sphinx-rtd-theme>=1.1.1",
     "sphinx-autodoc-typehints>=1.11.0",
     "sphinx_issues",
+    "sphinxext.opengraph",
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",
