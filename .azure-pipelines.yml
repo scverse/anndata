@@ -39,9 +39,12 @@ jobs:
       pip install pytest-cov wheel
       pip install .[dev,test]
     displayName: 'Install dependencies'
+    condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'no')
 
   - script: |
-      pip install -U --pre ".[dev,test]"
+      python -m pip install --pre --upgrade pip
+      pip install --pre pytest-cov wheel
+      pip install --pre .[dev,test]
     displayName: 'Install dependencies release candidates'
     condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'yes')
 
