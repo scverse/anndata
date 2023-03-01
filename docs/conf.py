@@ -54,6 +54,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
+    "sphinxext.opengraph",
     "scanpydoc",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
@@ -114,6 +115,11 @@ qualname_overrides = {
     "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
 }
+
+# -- Social cards ---------------------------------------------------------
+
+ogp_site_url = "https://anndata.readthedocs.io/"
+ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema.svg"
 
 # -- Options for HTML output ----------------------------------------------
 
