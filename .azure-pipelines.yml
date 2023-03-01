@@ -16,6 +16,9 @@ jobs:
         RUN_COVERAGE: yes
       Python38:
         python.version: '3.8'
+      PreRelease:
+        python.version: '3.10'
+        PRERELEASE_DEPENDENCIES: yes
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -36,6 +39,11 @@ jobs:
       pip install pytest-cov wheel
       pip install .[dev,test]
     displayName: 'Install dependencies'
+
+  - script: |
+      pip install -U --pre ".[dev,test]"
+    displayName: 'Install dependencies release candidates'
+    condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'yes')
 
   - script: |
       pip list
