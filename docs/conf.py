@@ -121,6 +121,7 @@ qualname_overrides = {
 
 # -- Social cards ---------------------------------------------------------
 
+ogp_site_url = "https://anndata.readthedocs.io/"
 ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema.svg"
 
 # -- Options for HTML output ----------------------------------------------
