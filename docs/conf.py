@@ -119,6 +119,12 @@ qualname_overrides = {
     "anndata._core.anndata.AnnData": "anndata.AnnData",
 }
 
+# -- Social cards ---------------------------------------------------------
+
+ogp_social_cards = {
+    "image": "_static/img/anndata_schema.png",
+}
+
 # -- Options for HTML output ----------------------------------------------
 
 
