@@ -198,22 +198,7 @@ class AnnDataRemote(AnnData):
         # layers
         self._layers = Layers(self, layers)
 
-    def __eq__(self, other):
-        """Equality testing"""
-        raise NotImplementedError(
-            "Equality comparisons are not supported for AnnData objects, "
-            "instead compare the desired attributes."
-        )
-
-    def obs_keys(self) -> List[str]:
-        """List keys of observation annotation :attr:`obs`."""
-        return self._obs.keys()
-
-    def var_keys(self) -> List[str]:
-        """List keys of variable annotation :attr:`var`."""
-        return self._var.keys()
-
-    # TODO: this is not quite complete...
+    # TODO: this is not quite complete in the original but also here, what do we do about this?
     def __delitem__(self, index: Index):
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
