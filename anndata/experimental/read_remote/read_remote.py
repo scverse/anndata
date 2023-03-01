@@ -244,6 +244,8 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
             return {k: read_dispatched(v, callback) for k, v in elem.items()}
         elif iospec.encoding_type == "categorical":
             return CategoricalZarrArray(elem)
+        elif iospec.encoding_type in {"array", "string_array"}:
+            return elem
         return func(elem)
 
     adata = read_dispatched(f, callback=callback)

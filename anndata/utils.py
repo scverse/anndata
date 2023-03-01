@@ -8,6 +8,8 @@ import numpy as np
 from scipy import sparse
 import zarr
 
+from anndata.experimental.read_remote.read_remote import CategoricalZarrArray
+
 from .logging import get_logger
 from ._core.sparse_dataset import SparseDataset
 
@@ -67,8 +69,6 @@ def dim_len(x, axis):
 
     Returns None if `x` is an awkward array with variable length in the requested dimension.
     """
-    if isinstance(x, zarr.Group):
-        return x["codes"].shape[axis]
     return x.shape[axis]
 
 
