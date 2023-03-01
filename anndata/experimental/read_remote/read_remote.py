@@ -21,14 +21,11 @@ from .utils import read_dispatched
 # CategoricalZarrArray(adata_local.obs['cell_type']['codes'].store, 'obs/cell_type/codes')
 # Will need to work out the API better once I understand what the best practice here is.
 class CategoricalZarrArray(zarr.core.Array):
-    def __init__(self, store, path, *args, **kwargs):
-        super().__init__(store.store, path, *args, **kwargs)
-        root_path = (store.store.path + "/" + path).replace("/codes", "")
-        self.categories = zarr.open(root_path + "/categories")[()]
-        root = zarr.open(root_path)
-        self.ordered = bool(
-            _read_attr(root.attrs, "ordered") if "ordered" in root.attrs else False
-        )
+    def __init__(self, group, *args, **kwargs):
+        codes_path = group.path + "/codes"
+        super().__init__(group.store.store, codes_path, *args, **kwargs)
+        self.categories = group["categories"][()]
+        self.ordered = bool(_read_attr(group.attrs, "ordered"))
 
     def __array__(self, *args):  # may need to override this, copied for now
         a = self[...]
@@ -707,6 +704,8 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif elem_name in {"/obs", "/var"}:
             # override to only return AxisArray that will be accessed specially via our special AnnData object
             return {k: read_dispatched(v, callback) for k, v in elem.items()}
+        elif iospec.encoding_type == "categorical":
+            return CategoricalZarrArray(elem)
         return func(elem)
 
     adata = read_dispatched(f, callback=callback)
