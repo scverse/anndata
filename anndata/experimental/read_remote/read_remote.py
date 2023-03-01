@@ -1,4 +1,5 @@
 from collections import OrderedDict, abc as cabc
+from functools import cached_property
 from pathlib import Path
 from typing import Any, MutableMapping, Union, List, Sequence
 from anndata._core.aligned_mapping import Layers, PairwiseArrays
@@ -17,15 +18,23 @@ from ..._core import AnnData, AxisArrays
 from .utils import read_dispatched
 
 
-# Initialization from something like
-# CategoricalZarrArray(adata_local.obs['cell_type']['codes'].store, 'obs/cell_type/codes')
-# Will need to work out the API better once I understand what the best practice here is.
+# TODO: Do we really need to subclass the Array class here?  Ryan Abernathy seems to say "no"
+# but I don't really want to mess with the methods.  The downside is that (for some reason), it's
+# reading the `zarray` of the `codes` path which should not have to happen, but I can't figure out a way around it.
 class CategoricalZarrArray(zarr.core.Array):
     def __init__(self, group, *args, **kwargs):
         codes_path = group.path + "/codes"
         super().__init__(group.store.store, codes_path, *args, **kwargs)
-        self.categories = group["categories"][()]
-        self.ordered = bool(_read_attr(group.attrs, "ordered"))
+        self._categories = group["categories"]
+        self._group_attrs = group.attrs
+
+    @cached_property
+    def categories(self):
+        return self._categories[()]
+
+    @cached_property
+    def ordered(self):
+        return bool(_read_attr(self._group_attrs, "ordered"))
 
     def __array__(self, *args):  # may need to override this, copied for now
         a = self[...]
