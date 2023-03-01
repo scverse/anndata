@@ -71,7 +71,6 @@ class AnnDataRemote(AnnData):
     # 1. Get an in-place copying system running
     # 2. Get a better sparse access pattern
     # 3. Re-write dataset with better chunking
-    # 4. Custom Zarr Group for categorical data?
     # 5. a `head` method
 
     def __init__(
