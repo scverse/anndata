@@ -15,7 +15,6 @@ try:
     import torch
     from torch.utils.data import Sampler, BatchSampler, Dataset, DataLoader
 except ImportError:
-    warnings.warn("Сould not load pytorch.")
     Sampler, BatchSampler, Dataset, DataLoader = object, object, object, object
 
 
