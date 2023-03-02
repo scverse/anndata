@@ -591,7 +591,7 @@ def test_write_categorical(tmp_path, diskfmt):
 def test_write_categorical_index(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        uns={"df": pd.DataFrame(index=pd.Categorical(list("aabcd")))},
+        uns={"df": pd.DataFrame({}, index=pd.Categorical(list("aabcd")))},
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
     curr = getattr(ad, f"read_{diskfmt}")(adata_pth)

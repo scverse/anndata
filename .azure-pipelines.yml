@@ -4,6 +4,7 @@ trigger:
 variables:
   PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
   RUN_COVERAGE: no
+  PRERELEASE_DEPENDENCIES: no
 
 jobs:
 - job: PyTest
@@ -16,6 +17,9 @@ jobs:
         RUN_COVERAGE: yes
       Python38:
         python.version: '3.8'
+      PreRelease:
+        python.version: '3.10'
+        PRERELEASE_DEPENDENCIES: yes
   steps:
   - task: UsePythonVersion@0
     inputs:
@@ -36,6 +40,14 @@ jobs:
       pip install pytest-cov wheel
       pip install .[dev,test]
     displayName: 'Install dependencies'
+    condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'no')
+
+  - script: |
+      python -m pip install --pre --upgrade pip
+      pip install --pre pytest-cov wheel
+      pip install --pre .[dev,test]
+    displayName: 'Install dependencies release candidates'
+    condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'yes')
 
   - script: |
       pip list
