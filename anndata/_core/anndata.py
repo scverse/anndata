@@ -99,7 +99,7 @@ def _check_2d_shape(X):
 @singledispatch
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
-        return pd.DataFrame(index=pd.RangeIndex(0, length, name=None).astype(str))
+        return pd.DataFrame({}, index=pd.RangeIndex(0, length, name=None).astype(str))
     for index_name in index_names:
         if index_name in anno:
             return pd.DataFrame(
@@ -844,7 +844,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.deleter
     def obs(self):
-        self.obs = pd.DataFrame(index=self.obs_names)
+        self.obs = pd.DataFrame({}, index=self.obs_names)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -867,7 +867,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.deleter
     def var(self):
-        self.var = pd.DataFrame(index=self.var_names)
+        self.var = pd.DataFrame({}, index=self.var_names)
 
     @property
     def var_names(self) -> pd.Index:
