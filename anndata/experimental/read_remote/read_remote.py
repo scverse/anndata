@@ -15,7 +15,7 @@ import zarr
 import pandas as pd
 
 from ..._core import AnnData, AxisArrays
-from .utils import read_dispatched
+from .. import read_dispatched
 
 
 # TODO: Do we really need to subclass the Array class here?  Ryan Abernathy seems to say "no"
