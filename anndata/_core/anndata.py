@@ -1457,7 +1457,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self, copy=True) -> "AnnData":
+    def to_memory(self, copy=False) -> "AnnData":
         """Return a new AnnData object with all backed arrays loaded into memory.
 
         Params
