@@ -208,7 +208,7 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     # Value equivalent
     assert_equal(mem_v, backed_v)
     # Type and value equivalent
-    assert_equal(mem_v.copy(), backed_v.to_memory(), exact=True)
+    assert_equal(mem_v.copy(), backed_v.to_memory(copy=True), exact=True)
     assert backed_v.is_view
     assert backed_v.isbacked
 
