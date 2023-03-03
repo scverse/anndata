@@ -1,1 +1,1 @@
-from .utils import read_dispatched, write_dispatched
+from read_remote import read_remote
