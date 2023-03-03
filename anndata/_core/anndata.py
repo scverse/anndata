@@ -28,6 +28,7 @@ from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
+from .anndata_base import AnnDataBase
 from .aligned_mapping import (
     AxisArrays,
     AxisArraysView,
@@ -125,7 +126,7 @@ def _(anno, length, index_names):
     raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
 
 
-class AnnData(metaclass=utils.DeprecationMixinMeta):
+class AnnData(AnnDataBase):
     """\
     An annotated data matrix.
 
@@ -580,11 +581,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             "Equality comparisons are not supported for AnnData objects, "
             "instead compare the desired attributes."
         )
-
-    @property
-    def shape(self) -> Tuple[int, int]:
-        """Shape of data matrix (:attr:`n_obs`, :attr:`n_vars`)."""
-        return self.n_obs, self.n_vars
 
     @property
     def X(self) -> Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]]:
