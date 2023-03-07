@@ -1,5 +1,7 @@
 from abc import abstractmethod
 from typing import Tuple
+
+from .file_backing import AnnDataFileManager
 from ..utils import DeprecationMixinMeta
 
 
@@ -21,33 +23,33 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
         filename=None,
         filemode=None,
     ):
-        (
-            X,
-            obs,
-            var,
-            uns,
-            obsm,
-            varm,
-            obsp,
-            varp,
-            layers,
-            raw,
-        ) = self._reformat_axes_args_from_X(
-            self,
-            X,
-            obs,
-            var,
-            uns,
-            obsm,
-            varm,
-            obsp,
-            varp,
-            layers,
-            raw,
-        )
+        # view attributes
+        self._is_view = False
+        self._adata_ref = None
+        self._oidx = None
+        self._vidx = None
+        if filename is not None:
+            self.file = AnnDataFileManager(self, filename, filemode)
+        else:
+            self.file = AnnDataFileManager(self, None)
+            (
+                X,
+                obs,
+                var,
+                uns,
+                obsm,
+                varm,
+                obsp,
+                varp,
+                layers,
+                raw,
+                x_indices,
+            ) = self._reformat_axes_args_from_X(
+                self, X, obs, var, uns, obsm, varm, obsp, varp, layers, raw
+            )
         self._assign_X(self, X, shape, dtype)
 
-        self._initialize_indices()
+        self._initialize_indices(shape, obs, var)
         assert self.n_obs == len(
             self.obs_names
         )  # after initializing indices, these should be True
@@ -60,13 +62,22 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
 
         self._assign_obs(obs)
         self._assign_var(var)
+        # now we can verify if indices match!
+        for attr_name, x_name, idx in x_indices:
+            attr = getattr(self, attr_name)
+            if isinstance(attr.index, pd.RangeIndex):
+                attr.index = idx
+            elif not idx.equals(attr.index):
+                raise ValueError(f"Index of {attr_name} must match {x_name} of X.")
+
+        self._assign_uns(uns)
         self._assign_obsm(obsm)
         self._assign_varm(varm)
         self._assign_obsp(obsp)
         self._assign_varp(varp)
         self._assign_layers(layers)
         self._run_checks()
-        self._cleanup()
+        self._cleanup_raw_and_uns(raw, uns)
 
     @abstractmethod
     def _init_as_view(self, *args, **kwargs):
@@ -93,6 +104,14 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
 
     @abstractmethod
     def _assign_var(self, var):
+        pass
+
+    @abstractmethod
+    def _assign_layers(self, layers):
+        pass
+
+    @abstractmethod
+    def _assign_uns(self, uns):
         pass
 
     @abstractmethod
