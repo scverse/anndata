@@ -147,3 +147,18 @@ def test_to_adata():
     del adata.layers, adata.varp
 
     assert_equal(adata, with_raw.raw.to_adata())
+
+
+def test_to_adata_populates_obs():
+    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
+
+    del adata.layers, adata.uns, adata.varp
+    adata_w_raw = adata.copy()
+
+    raw = adata.copy()
+    del raw.obs, raw.obsm, raw.obsp, raw.uns
+
+    adata_w_raw.raw = raw
+    from_raw = adata_w_raw.raw.to_adata()
+
+    assert_equal(adata, from_raw)
