@@ -279,7 +279,7 @@ class AnnData(AnnDataBase):
         vidx: Index1D = None,
     ):
         if asview:
-            if not isinstance(X, AnnData):
+            if not issubclass(type(X), AnnData):
                 raise ValueError("`X` has to be an AnnData object.")
             self._init_as_view(X, oidx, vidx)
         else:

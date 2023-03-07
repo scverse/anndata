@@ -1,4 +1,5 @@
 from collections import OrderedDict, abc as cabc
+from copy import copy
 from functools import cached_property
 from pathlib import Path
 from typing import Any, MutableMapping, Union, List, Sequence
@@ -7,12 +8,14 @@ from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
 from anndata._core.file_backing import AnnDataFileManager
 from anndata._core.index import Index
 from anndata._core.raw import Raw
+from anndata._core.views import _resolve_idxs
 from anndata._io.specs.registry import read_elem
 from anndata.compat import _move_adj_mtx, _read_attr
 from anndata.utils import convert_to_dict
 
 import zarr
 import pandas as pd
+import numpy as np
 
 from ..._core import AnnData, AxisArrays
 from .. import read_dispatched
@@ -74,6 +77,14 @@ class AxisArraysRemote(AxisArrays):
             df[key] = value
         return df
 
+    @property
+    def iloc(self):
+        class IlocDispatch:
+            def __getitem__(self_iloc, idx):
+                return self._view(self.parent, (idx,))
+
+        return IlocDispatch()
+
 
 class AnnDataRemote(AnnData):
     # TODO's here:
@@ -82,7 +93,7 @@ class AnnDataRemote(AnnData):
     # 3. Re-write dataset with better chunking
     # 5. a `head` method
 
-    def __init__(
+    def _init_as_actual(
         self,
         X=None,
         obs=None,
@@ -90,18 +101,14 @@ class AnnDataRemote(AnnData):
         uns=None,
         obsm=None,
         varm=None,
-        layers=None,
+        varp=None,
+        obsp=None,
         raw=None,
+        layers=None,
         dtype=None,
         shape=None,
         filename=None,
         filemode=None,
-        asview=False,
-        *,
-        obsp=None,
-        varp=None,
-        oidx=None,
-        vidx=None,
     ):
         # view attributes
         self._is_view = False
@@ -207,6 +214,68 @@ class AnnDataRemote(AnnData):
         # layers
         self._layers = Layers(self, layers)
 
+    def _init_as_view(self, adata_ref: "AnnData", oidx: Index, vidx: Index):
+        if adata_ref.isbacked and adata_ref.is_view:
+            raise ValueError(
+                "Currently, you cannot index repeatedly into a backed AnnData, "
+                "that is, you cannot make a view of a view."
+            )
+        self._is_view = True
+        if isinstance(oidx, (int, np.integer)):
+            if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
+                raise IndexError(f"Observation index `{oidx}` is out of range.")
+            oidx += adata_ref.n_obs * (oidx < 0)
+            oidx = slice(oidx, oidx + 1, 1)
+        if isinstance(vidx, (int, np.integer)):
+            if not (-adata_ref.n_vars <= vidx < adata_ref.n_vars):
+                raise IndexError(f"Variable index `{vidx}` is out of range.")
+            vidx += adata_ref.n_vars * (vidx < 0)
+            vidx = slice(vidx, vidx + 1, 1)
+        if adata_ref.is_view:
+            prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
+            adata_ref = adata_ref._adata_ref
+            oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
+        # self._adata_ref is never a view
+        self._adata_ref = adata_ref
+        self._oidx = oidx
+        self._vidx = vidx
+        # the file is the same as of the reference object
+        self.file = adata_ref.file
+        # views on attributes of adata_ref
+        obs_sub = adata_ref.obs.iloc[oidx]
+        var_sub = adata_ref.var.iloc[vidx]
+        self._obsm = adata_ref.obsm._view(self, (oidx,))
+        self._varm = adata_ref.varm._view(self, (vidx,))
+        self._layers = adata_ref.layers._view(self, (oidx, vidx))
+        self._obsp = adata_ref.obsp._view(self, oidx)
+        self._varp = adata_ref.varp._view(self, vidx)
+        # fix categories
+        uns = copy(adata_ref._uns)
+        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        self._remove_unused_categories(adata_ref.var, var_sub, uns)
+        # set attributes
+        self._obs = adata_ref.obs._view(self, (oidx,))
+        self._var = adata_ref.var._view(self, (vidx,))
+        self._uns = uns
+        self._n_obs = len(
+            self.obs["index"] if "index" in self.obs else self.obs["_index"]
+        )
+        self._n_vars = len(
+            self.var["index"] if "index" in self.var else self.var["_index"]
+        )
+
+        # set data
+        if self.isbacked:
+            self._X = None
+
+        # set raw, easy, as it’s immutable anyways...
+        if adata_ref._raw is not None:
+            # slicing along variables axis is ignored
+            self._raw = adata_ref.raw[oidx]
+            self._raw._adata = self
+        else:
+            self._raw = None
+
     # TODO: this is not quite complete in the original but also here, what do we do about this?
     def __delitem__(self, index: Index):
         obs, var = self._normalize_indices(index)
@@ -217,6 +286,11 @@ class AnnDataRemote(AnnData):
             X = self.file["X"]
             del X[obs, var]
             self._set_backed("X", X)
+
+    def __getitem__(self, index: Index) -> "AnnData":
+        """Returns a sliced view of the object."""
+        oidx, vidx = self._normalize_indices(index)
+        return AnnDataRemote(self, oidx=oidx, vidx=vidx, asview=True)
 
     @property
     def obs_names(self) -> pd.Index:
