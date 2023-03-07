@@ -88,7 +88,6 @@ class AxisArraysRemote(AxisArrays):
 
 class AnnDataRemote(AnnData):
     # TODO's here:
-    # 1. Get an in-place copying system running
     # 2. Get a better sparse access pattern
     # 3. Re-write dataset with better chunking
     # 5. a `head` method
