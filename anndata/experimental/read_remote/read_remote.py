@@ -74,16 +74,7 @@ class AxisArraysRemote(AxisArrays):
         """Convert to pandas dataframe."""
         df = pd.DataFrame(index=self.dim_names)
         for key in self.keys():
-            z = self[key]
-            if isinstance(z, zarr.Group) and "codes" in z:  # catrgoricql
-                value = pd.Categorical.from_codes(
-                    codes=read_elem(z["codes"]),
-                    categories=read_elem(z["categories"]),
-                    ordered=bool(_read_attr(z.attrs, "ordered")),
-                )
-            else:
-                value = z[()]
-            df[key] = value
+            df[key] = self[key][()]
         return df
 
     @property
