@@ -816,12 +816,6 @@ def concat(
 
     See the :doc:`concatenation <../concatenation>` section in the docs for a more in-depth description.
 
-    .. warning::
-
-        This function is marked as experimental for the `0.7` release series, and will
-        supercede the :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` method
-        in future releases.
-
     Params
     ------
     adatas
