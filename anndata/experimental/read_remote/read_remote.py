@@ -2,7 +2,7 @@ from collections import OrderedDict, abc as cabc
 from copy import copy
 from functools import cached_property
 from pathlib import Path
-from typing import Any, MutableMapping, Union, List, Sequence
+from typing import Any, MutableMapping, Union, List, Sequence, Tuple
 from anndata._core.aligned_mapping import Layers, PairwiseArrays
 from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
 from anndata._core.file_backing import AnnDataFileManager
@@ -16,42 +16,51 @@ from anndata.utils import convert_to_dict
 import zarr
 import pandas as pd
 import numpy as np
+from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin
 
 from ..._core import AnnData, AxisArrays
 from .. import read_dispatched
 
 
-# TODO: Do we really need to subclass the Array class here?  Ryan Abernathy seems to say "no"
-# but I don't really want to mess with the methods.  The downside is that (for some reason), it's
-# reading the `zarray` of the `codes` path which should not have to happen, but I can't figure out a way around it.
-class CategoricalZarrArray(zarr.core.Array):
+class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
+    __slots__ = ("codes", "categories", "attrs")
+
     def __init__(self, group, *args, **kwargs):
-        codes_path = group.path + "/codes"
-        super().__init__(group.store.store, codes_path, *args, **kwargs)
-        self._categories = group["categories"]
-        self._group_attrs = group.attrs
+        self.codes = group["codes"]
+        self.categories = group["categories"][
+            ...
+        ]  # slots don't mix with cached_property, ExpicitlyIndexedArray uses slots
+        self.attrs = dict(group.attrs)
 
-    @cached_property
-    def categories(self):
-        return self._categories[()]
+    @property
+    def dtype(self) -> pd.CategoricalDtype:
+        return pd.CategoricalDtype(self.categories, self.ordered)
 
-    @cached_property
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        return self.codes.shape
+
+    @property
     def ordered(self):
-        return bool(_read_attr(self._group_attrs, "ordered"))
+        return bool(self.attrs["ordered"])
 
-    def __array__(self, *args):  # may need to override this, copied for now
+    def __array__(
+        self, *args
+    ) -> np.ndarray:  # may need to override this, copied for now
         a = self[...]
         if args:
             a = a.astype(args[0])
         return a
 
-    def __getitem__(self, selection):
-        result = super().__getitem__(selection)
+    def __getitem__(self, selection) -> pd.Categorical:
         return pd.Categorical.from_codes(
-            codes=result,
+            codes=self.codes.oindex[selection],
             categories=self.categories,
             ordered=self.ordered,
         )
+
+    def __repr__(self) -> str:
+        return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
 
 
 class AxisArraysRemote(AxisArrays):
@@ -325,7 +334,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
             # override to only return AxisArray that will be accessed specially via our special AnnData object
             return {k: read_dispatched(v, callback) for k, v in elem.items()}
         elif iospec.encoding_type == "categorical":
-            return CategoricalZarrArray(elem)
+            return LazyCategoricalArray(elem)
         elif iospec.encoding_type in {"array", "string_array"}:
             return elem
         return func(elem)
