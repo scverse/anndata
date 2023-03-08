@@ -29,6 +29,7 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
         self._adata_ref = None
         self._oidx = None
         self._vidx = None
+        x_indices = []
         if filename is not None:
             self.file = AnnDataFileManager(self, filename, filemode)
         else:
