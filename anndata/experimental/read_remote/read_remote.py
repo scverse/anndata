@@ -87,44 +87,7 @@ class AxisArraysRemote(AxisArrays):
 
 
 class AnnDataRemote(AnnData):
-    # TODO's here:
-    # 2. Get a better sparse access pattern
-    # 3. Re-write dataset with better chunking
-    # 5. a `head` method
-
-    def _init_as_actual(
-        self,
-        X=None,
-        obs=None,
-        var=None,
-        uns=None,
-        obsm=None,
-        varm=None,
-        varp=None,
-        obsp=None,
-        raw=None,
-        layers=None,
-        dtype=None,
-        shape=None,
-        filename=None,
-        filemode=None,
-    ):
-        # view attributes
-        self._is_view = False
-        self._adata_ref = None
-        self._oidx = None
-        self._vidx = None
-
-        # ----------------------------------------------------------------------
-        # various ways of initializing the data
-        # ----------------------------------------------------------------------
-
-        # check data type of X
-        if filename is not None:
-            self.file = AnnDataFileManager(self, filename, filemode)
-        else:
-            self.file = AnnDataFileManager(self, None)
-
+    def _assign_X(self, X, shape, dtype):
         if X is not None:
             for s_type in StorageType:
                 if isinstance(X, s_type.value):
@@ -145,8 +108,20 @@ class AnnDataRemote(AnnData):
             self._n_obs, self._n_vars = self._X.shape
         else:
             self._X = None
-            self._n_obs = len([] if obs is None else obs)
-            self._n_vars = len([] if var is None else var)
+
+    def _initialize_indices(self, shape, obs, var):
+        # annotations - need names already for AxisArrays to work.
+        self.obs_names = pd.Index(
+            (obs["index"] if "index" in obs else obs["_index"])[()]
+        )
+        self.var_names = pd.Index(
+            (var["index"] if "index" in var else var["_index"])[()]
+        )
+        if self._X is not None:
+            self._n_obs, self._n_vars = self._X.shape
+        else:
+            self._n_obs = len([] if obs is None else self.obs_names)
+            self._n_vars = len([] if var is None else self.var_names)
             # check consistency with shape
             if shape is not None:
                 if self._n_obs == 0:
@@ -160,58 +135,21 @@ class AnnDataRemote(AnnData):
                     if self._n_vars != shape[1]:
                         raise ValueError("`shape` is inconsistent with `var`")
 
-        # annotations - need names already for AxisArrays to work.
-        self.obs_names = pd.Index(
-            (obs["index"] if "index" in obs else obs["_index"])[()]
-        )
-        self.var_names = pd.Index(
-            (var["index"] if "index" in var else var["_index"])[()]
-        )
+    # annotations
+    def _assign_obs(self, obs):
         self._obs = AxisArraysRemote(self, 0, vals=convert_to_dict(obs))
+
+    def _assign_var(self, var):
         self._var = AxisArraysRemote(self, 1, vals=convert_to_dict(var))
 
-        # now we can verify if indices match!
-        # for attr_name, x_name, idx in x_indices:
-        #     attr = getattr(self, attr_name)
-        #     if isinstance(attr.index, pd.RangeIndex):
-        #         attr.index = idx
-        #     elif not idx.equals(attr.index):
-        #         raise ValueError(f"Index of {attr_name} must match {x_name} of X.")
-
-        # unstructured annotations
-        self.uns = uns or OrderedDict()
-
-        # TODO: Think about consequences of making obsm a group in hdf
+    def _assign_obsm(self, obsm):
         self._obsm = AxisArraysRemote(self, 0, vals=convert_to_dict(obsm))
+
+    def _assign_varm(self, varm):
         self._varm = AxisArraysRemote(self, 1, vals=convert_to_dict(varm))
 
-        self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
-        self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
-
-        # Backwards compat for connectivities matrices in uns["neighbors"]
-        _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
-
-        # self._check_dimensions()
-        # self._check_uniqueness()
-
-        if self.filename:
-            assert not isinstance(
-                raw, Raw
-            ), "got raw from other adata but also filename?"
-            if {"raw", "raw.X"} & set(self.file):
-                raw = dict(X=None, **raw)
-        if not raw:
-            self._raw = None
-        elif isinstance(raw, cabc.Mapping):
-            self._raw = Raw(self, **raw)
-        else:  # is a Raw from another AnnData
-            self._raw = Raw(self, raw._X, raw.var, raw.varm)
-
-        # clean up old formats
-        self._clean_up_old_format(uns)
-
-        # layers
-        self._layers = Layers(self, layers)
+    def _run_checks(self):
+        pass  # for now
 
     def _init_as_view(self, adata_ref: "AnnData", oidx: Index, vidx: Index):
         if adata_ref.isbacked and adata_ref.is_view:
