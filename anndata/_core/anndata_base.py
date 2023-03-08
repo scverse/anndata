@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from typing import Tuple
+import pandas as pd
 
 from .file_backing import AnnDataFileManager
 from ..utils import DeprecationMixinMeta
@@ -45,16 +46,12 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
                 raw,
                 x_indices,
             ) = self._reformat_axes_args_from_X(
-                self, X, obs, var, uns, obsm, varm, obsp, varp, layers, raw
+                X, obs, var, uns, obsm, varm, obsp, varp, layers, raw
             )
-        self._assign_X(self, X, shape, dtype)
+        self._assign_X(X, shape, dtype)
 
         self._initialize_indices(shape, obs, var)
-        assert self.n_obs == len(
-            self.obs_names
-        )  # after initializing indices, these should be True
         assert self.n_obs == self.shape[0]
-        assert self.n_vars == len(self.var_names)
         assert self.n_vars == self.shape[1]
         if self.X is not None:
             assert self.n_obs == self.X.shape[0]
@@ -89,10 +86,6 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
 
     def _reformat_axes_args_from_X(self, *args):
         return args
-
-    @abstractmethod
-    def _initialize_indices(self, *args):
-        pass
 
     @abstractmethod
     def _initialize_indices(self, *args):
