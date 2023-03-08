@@ -439,7 +439,7 @@ class AnnData(AnnDataBase):
         # ----------------------------------------------------------------------
 
         # check data type of X
-        if self.X is not None:
+        if self._X is not None:
             self._n_obs, self._n_vars = self._X.shape
         else:
             self._n_obs = len([] if obs is None else obs)
