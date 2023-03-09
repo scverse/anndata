@@ -44,7 +44,7 @@ class Raw:
 
     @property
     def X(self) -> Union[SparseDataset, np.ndarray, sparse.spmatrix]:
-        # w Handle unsorted array of integer indices for h5py.Datasets
+        # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
         if not self._adata.file.is_open:
