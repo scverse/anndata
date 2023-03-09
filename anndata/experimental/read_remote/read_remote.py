@@ -75,7 +75,8 @@ class AxisArraysRemote(AxisArrays):
         """Convert to pandas dataframe."""
         df = pd.DataFrame(index=self.dim_names)
         for key in self.keys():
-            df[key] = self[key][()]
+            if "index" not in key:
+                df[key] = self[key][()]
         return df
 
     @property
