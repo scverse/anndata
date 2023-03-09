@@ -738,7 +738,7 @@ class AnnData(AnnDataBase):
         else:
             if self.is_view:
                 self._init_as_actual(self.copy())
-            self._raw = Raw(value)
+            self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
 
     @raw.deleter
     def raw(self):
@@ -1437,7 +1437,7 @@ class AnnData(AnnDataBase):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self, copy=True) -> "AnnData":
+    def to_memory(self, copy=False) -> "AnnData":
         """Return a new AnnData object with all backed arrays loaded into memory.
 
         Params
