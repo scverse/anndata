@@ -48,6 +48,8 @@ def write_zarr(
             func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    print(f)
+    zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
