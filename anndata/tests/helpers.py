@@ -445,7 +445,7 @@ def assert_equal_awkarray(a, b, exact=False, elem_name=None):
     from anndata.compat import awkward as ak
 
     if exact:
-        assert a.type == b.type, format_msg(elem_name)
+        assert a.type == b.type, f"{a.type} != {b.type}, {format_msg(elem_name)}"
     assert ak.to_list(a) == ak.to_list(b), format_msg(elem_name)
 
 
