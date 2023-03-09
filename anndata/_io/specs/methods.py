@@ -90,7 +90,7 @@ def read_basic(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_backed()
+            return SparseDataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, h5py.Dataset):
         return h5ad.read_dataset(elem)  # TODO: Handle legacy
@@ -110,7 +110,7 @@ def read_basic_zarr(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_backed()
+            return SparseDataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, ZarrArray):
         return zarr.read_dataset(elem)  # TODO: Handle legacy
@@ -497,7 +497,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse(elem, _reader):
-    return SparseDataset(elem).to_backed()
+    return SparseDataset(elem).to_memory()
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
