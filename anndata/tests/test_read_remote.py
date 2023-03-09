@@ -77,3 +77,15 @@ def test_read_write_X(tmp_path, mtx_format):
     # remote.write_zarr(remote_pth) # need to implement writing!
 
     assert np.all(asarray(orig.X) == asarray(remote.X))
+    assert (orig.obs == remote.obs.to_df()).all().all()
+    assert (orig.var == remote.var.to_df()).all().all()
+
+
+def test_read_write_full(adata, tmp_path):
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.zarr"
+    adata.write_zarr(orig_pth)
+    remote = read_remote(orig_pth)
+    assert np.all(asarray(adata.X) == asarray(remote.X))
+    assert (adata.obs == remote.obs.to_df()).all().all()
+    assert (adata.var == remote.var.to_df()).all().all()
