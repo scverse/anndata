@@ -190,8 +190,8 @@ class AnnDataRemote(AnnData):
         # the file is the same as of the reference object
         self.file = adata_ref.file
         # views on attributes of adata_ref
-        obs_sub = adata_ref.obs.iloc[oidx]
-        var_sub = adata_ref.var.iloc[vidx]
+        adata_ref.obs.iloc[oidx]
+        adata_ref.var.iloc[vidx]
         self._obsm = adata_ref.obsm._view(self, (oidx,))
         self._varm = adata_ref.varm._view(self, (vidx,))
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
