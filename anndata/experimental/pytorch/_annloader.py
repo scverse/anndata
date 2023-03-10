@@ -2,7 +2,7 @@ from scipy.sparse import issparse
 from math import ceil
 from copy import copy
 from functools import partial
-from typing import Dict, Union, Sequence
+from typing import Dict, Union, Sequence, Optional
 
 import numpy as np
 import warnings
@@ -14,8 +14,11 @@ from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 try:
     import torch
     from torch.utils.data import Sampler, BatchSampler, Dataset, DataLoader
-except ImportError:
+except ImportError as e:
+    _error: Optional[str] = str(e)
     Sampler, BatchSampler, Dataset, DataLoader = object, object, object, object
+else:
+    _error = None
 
 
 # Custom sampler to get proper batches instead of joined separate indices
@@ -131,6 +134,11 @@ class AnnLoader(DataLoader):
         use_cuda: bool = False,
         **kwargs,
     ):
+        if _error is not None:
+            raise ImportError(
+                f"Unable to import the interactive viewer. Reason `{_error}`."
+            )
+
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
