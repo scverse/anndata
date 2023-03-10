@@ -1,20 +1,17 @@
 from pathlib import Path
-import re
 
-import joblib
 import pytest
 import numpy as np
+import pandas as pd
 from scipy import sparse
+import zarr
 
 import anndata as ad
 from anndata.tests.helpers import (
     as_dense_dask_array,
-    GEN_ADATA_DASK_ARGS,
-    gen_adata,
-    assert_equal,
     subset_func,
 )
-from anndata.experimental.read_remote import read_remote
+from anndata.experimental.read_remote import read_remote, LazyCategoricalArray
 from anndata.utils import asarray
 
 subset_func2 = subset_func
@@ -65,6 +62,17 @@ def sparse_format(request):
     return request.param
 
 
+@pytest.fixture()
+def categorical_zarr_group(tmp_path_factory):
+    base_path = tmp_path_factory.getbasetemp()
+    z = zarr.open_group(base_path, mode="w")
+    z["codes"] = [0, 1, 0, 1, 1, 2, 2]
+    z["categories"] = ["foo", "bar", "jazz"]
+    z.attrs["ordered"] = False
+    z = zarr.open(base_path)
+    return z
+
+
 def test_read_write_X(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
@@ -89,3 +97,13 @@ def test_read_write_full(adata, tmp_path):
     assert np.all(asarray(adata.X) == asarray(remote.X))
     assert (adata.obs == remote.obs.to_df()).all().all()
     assert (adata.var == remote.var.to_df()).all().all()
+
+
+def test_lazy_categorical_array(categorical_zarr_group):
+    arr = LazyCategoricalArray(categorical_zarr_group)
+    assert len(arr[0:3]) == 3
+    assert type(arr[0:3]) == pd.Categorical
+    assert len(arr[()]) == len(arr)
+    assert type(arr[()]) == pd.Categorical
+    assert (arr[0] == "foo").all()
+    assert (arr[3:5] == "bar").all()

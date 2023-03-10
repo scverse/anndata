@@ -27,6 +27,11 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
     __slots__ = ("codes", "categories", "attrs")
 
     def __init__(self, group, *args, **kwargs):
+        """Class for lazily reading categorical data from formatted zarr group
+
+        Args:
+            group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
+        """
         self.codes = group["codes"]
         self.categories = group["categories"][
             ...
@@ -54,8 +59,11 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
         return a
 
     def __getitem__(self, selection) -> pd.Categorical:
+        codes = self.codes.oindex[selection]
+        if codes.shape == ():  # handle 0d case
+            codes = np.array([codes])
         return pd.Categorical.from_codes(
-            codes=self.codes.oindex[selection],
+            codes=codes,
             categories=self.categories,
             ordered=self.ordered,
         )
