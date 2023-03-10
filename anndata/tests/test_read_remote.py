@@ -99,12 +99,16 @@ def test_read_write_full(adata, tmp_path):
     assert (adata.var == remote.var.to_df()).all().all()
 
 
-def test_lazy_categorical_array(categorical_zarr_group):
+def test_lazy_categorical_array_properties(categorical_zarr_group):
     arr = LazyCategoricalArray(categorical_zarr_group)
     assert len(arr[0:3]) == 3
     assert type(arr[0:3]) == pd.Categorical
     assert len(arr[()]) == len(arr)
     assert type(arr[()]) == pd.Categorical
+
+
+def test_lazy_categorical_array_equality(categorical_zarr_group):
+    arr = LazyCategoricalArray(categorical_zarr_group)
     assert (arr[0] == "foo").all()
     assert (arr[3:5] == "bar").all()
     assert (arr == "foo").some()
