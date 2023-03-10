@@ -8,7 +8,6 @@ sys.path.append(str(Path(__file__).parent))
 
 
 def download_dataset():
-
     adata = sc.read_10x_mtx(
         # the directory with the `.mtx` file
         "filtered_gene_bc_matrices/hg19/",

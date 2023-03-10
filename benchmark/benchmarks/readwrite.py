@@ -31,7 +31,8 @@ import pandas as pd
 from scipy import sparse
 
 from .utils import get_anndata_memsize, sedate, get_peak_mem, get_actualsize
-#from . import datasets
+
+# from . import datasets
 
 import anndata
 
@@ -90,7 +91,6 @@ class H5ADInMemorySizeSuite:
         return adata_size
 
     def track_actual_in_memory_size(self, input_path):
-
         adata = anndata.read_h5ad(self.filepath)
         adata_size = get_actualsize(adata)
 
