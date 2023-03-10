@@ -25,10 +25,6 @@ jobs:
             ASV_DIR: "./benchmark"
 
         steps:
-            - name: Checkout the repo
-              uses: actions/checkout@v2
-              with:
-                  ref: master
             - uses: actions/checkout@v2
             - name: Set up Python ${{ matrix.python }}
               uses: actions/setup-python@v2

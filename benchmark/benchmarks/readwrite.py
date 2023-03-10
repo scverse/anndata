@@ -31,7 +31,7 @@ import pandas as pd
 from scipy import sparse
 
 from .utils import get_anndata_memsize, sedate, get_peak_mem, get_actualsize
-from . import datasets
+#from . import datasets
 
 import anndata
 
