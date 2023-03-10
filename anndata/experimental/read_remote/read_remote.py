@@ -69,7 +69,7 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
 
-    def __eq__(self, __o: object) -> bool:
+    def __eq__(self, __o) -> bool:
         return self[()] == __o
 
 
