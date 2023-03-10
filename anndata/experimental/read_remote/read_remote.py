@@ -33,7 +33,9 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
             group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
         """
         self.codes = group["codes"]
-        self.categories = group["categories"]
+        self.categories = group["categories"][
+            ...
+        ]  # slots don't mix with cached_property, ExpicitlyIndexedArray uses slots
         self.attrs = dict(group.attrs)
 
     @property
