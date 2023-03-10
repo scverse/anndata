@@ -1305,7 +1305,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         index, and :attr:`var_names` the columns.
 
         * No annotations are maintained in the returned object.
-        * The data matrix is densified in case it is sparse.
+        * If the data matrix is sparse, the series contained in the returned
+        * :class:`~pandas.DataFrame` are instances of :class:`~pandas.arrays.SparseArray`
 
         Params
         ------
@@ -1318,9 +1319,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("X is None, cannot convert to dataframe.")
         else:
             X = self.X
-        if issparse(X):
-            X = X.toarray()
-        return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
+        return (
+            pd.DataFrame.sparse.from_spmatrix(
+                X, index=self.obs_names, columns=self.var_names
+            )
+            if issparse(X)
+            else pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
+        )
 
     def _get_X(self, use_raw=False, layer=None):
         """\
