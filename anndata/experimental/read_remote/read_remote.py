@@ -33,9 +33,7 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
             group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
         """
         self.codes = group["codes"]
-        self.categories = group["categories"][
-            ...
-        ]  # slots don't mix with cached_property, ExpicitlyIndexedArray uses slots
+        self.categories = group["categories"]
         self.attrs = dict(group.attrs)
 
     @property
@@ -70,6 +68,9 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
 
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
+
+    def __eq__(self, __o: object) -> bool:
+        return self[()] == __o
 
 
 class AxisArraysRemote(AxisArrays):
@@ -198,8 +199,6 @@ class AnnDataRemote(AnnData):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = adata_ref.obs._view(self, (oidx,))
         self._var = adata_ref.var._view(self, (vidx,))

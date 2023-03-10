@@ -107,3 +107,4 @@ def test_lazy_categorical_array(categorical_zarr_group):
     assert type(arr[()]) == pd.Categorical
     assert (arr[0] == "foo").all()
     assert (arr[3:5] == "bar").all()
+    assert (arr == "foo").some()
