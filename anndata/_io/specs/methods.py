@@ -587,10 +587,12 @@ def read_dataframe(elem, _reader):
     columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
-        {k: _reader.read_elem(elem[k]) for k in columns},
+        {},
         index=_reader.read_elem(elem[idx_key]),
         columns=list(columns),
     )
+    for k in columns:
+        df[k] = _reader.read_elem(elem[k])
     if idx_key != "_index":
         df.index.name = idx_key
     return df
@@ -610,10 +612,12 @@ def read_dataframe_partial(
         columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
-        {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
+        {},
         index=read_elem_partial(elem[idx_key], indices=indices[0]),
         columns=list(columns),
     )
+    for k in columns:
+        df[k] = read_elem_partial(elem[k], indices=indices[0])
     if idx_key != "_index":
         df.index.name = idx_key
     return df
