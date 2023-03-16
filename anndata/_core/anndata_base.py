@@ -6,7 +6,7 @@ from .file_backing import AnnDataFileManager
 from ..utils import DeprecationMixinMeta
 
 
-class AnnDataBase(metaclass=DeprecationMixinMeta):
+class AbstractAnnData(metaclass=DeprecationMixinMeta):
     def _init_as_actual(
         self,
         X=None,
@@ -177,9 +177,8 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
         pass
 
     @property
-    @abstractmethod
     def n_obs(self) -> int:
-        pass
+        return len(self.obs_names)
 
     @property
     @abstractmethod
@@ -187,9 +186,8 @@ class AnnDataBase(metaclass=DeprecationMixinMeta):
         pass
 
     @property
-    @abstractmethod
-    def n_vars(self) -> int:
-        pass
+    def n_obs(self) -> int:
+        return len(self.var_names)
 
     @property
     @abstractmethod
