@@ -111,4 +111,4 @@ def test_lazy_categorical_array_equality(categorical_zarr_group):
     arr = LazyCategoricalArray(categorical_zarr_group)
     assert (arr[0] == "foo").all()
     assert (arr[3:5] == "bar").all()
-    assert (arr == "foo").some()
+    assert (arr == "foo").any()
