@@ -38,7 +38,7 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
         self.attrs = dict(group.attrs)
 
     @property
-    def categories(self): # __slots__ and cached_property are incompatible
+    def categories(self):  # __slots__ and cached_property are incompatible
         if self._categories_cache is None:
             self._categories_cache = self._categories[...]
         return self._categories_cache
