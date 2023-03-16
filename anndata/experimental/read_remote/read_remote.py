@@ -24,7 +24,7 @@ from .. import read_dispatched
 
 
 class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
-    __slots__ = ("codes", "categories", "attrs")
+    __slots__ = ("codes", "attrs", "_categories", "_categories_cache")
 
     def __init__(self, group, *args, **kwargs):
         """Class for lazily reading categorical data from formatted zarr group
@@ -33,10 +33,15 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
             group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
         """
         self.codes = group["codes"]
-        self.categories = group["categories"][
-            ...
-        ]  # slots don't mix with cached_property, ExpicitlyIndexedArray uses slots
+        self._categories = group["categories"]
+        self._categories_cache = None
         self.attrs = dict(group.attrs)
+
+    @property
+    def categories(self): # __slots__ and cached_property are incompatible
+        if self._categories_cache is None:
+            self._categories_cache = self._categories[...]
+        return self._categories_cache
 
     @property
     def dtype(self) -> pd.CategoricalDtype:
@@ -49,14 +54,6 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
     @property
     def ordered(self):
         return bool(self.attrs["ordered"])
-
-    def __array__(
-        self, *args
-    ) -> np.ndarray:  # may need to override this, copied for now
-        a = self[...]
-        if args:
-            a = a.astype(args[0])
-        return a
 
     def __getitem__(self, selection) -> pd.Categorical:
         codes = self.codes.oindex[selection]
