@@ -2,7 +2,7 @@ from collections import OrderedDict, abc as cabc
 from copy import copy
 from functools import cached_property
 from pathlib import Path
-from typing import Any, MutableMapping, Union, List, Sequence
+from typing import Any, MutableMapping, Union, List, Sequence, Tuple
 from anndata._core.aligned_mapping import Layers, PairwiseArrays
 from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
 from anndata._core.file_backing import AnnDataFileManager
@@ -17,42 +17,59 @@ from anndata.utils import convert_to_dict
 import zarr
 import pandas as pd
 import numpy as np
+from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin
 
 from ..._core import AnnData, AxisArrays
 from .. import read_dispatched
 
 
-# TODO: Do we really need to subclass the Array class here?  Ryan Abernathy seems to say "no"
-# but I don't really want to mess with the methods.  The downside is that (for some reason), it's
-# reading the `zarray` of the `codes` path which should not have to happen, but I can't figure out a way around it.
-class CategoricalZarrArray(zarr.core.Array):
+class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
+    __slots__ = ("codes", "attrs", "_categories", "_categories_cache")
+
     def __init__(self, group, *args, **kwargs):
-        codes_path = group.path + "/codes"
-        super().__init__(group.store.store, codes_path, *args, **kwargs)
+        """Class for lazily reading categorical data from formatted zarr group
+
+        Args:
+            group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
+        """
+        self.codes = group["codes"]
         self._categories = group["categories"]
-        self._group_attrs = group.attrs
+        self._categories_cache = None
+        self.attrs = dict(group.attrs)
 
-    @cached_property
-    def categories(self):
-        return self._categories[()]
+    @property
+    def categories(self):  # __slots__ and cached_property are incompatible
+        if self._categories_cache is None:
+            self._categories_cache = self._categories[...]
+        return self._categories_cache
 
-    @cached_property
+    @property
+    def dtype(self) -> pd.CategoricalDtype:
+        return pd.CategoricalDtype(self.categories, self.ordered)
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        return self.codes.shape
+
+    @property
     def ordered(self):
-        return bool(_read_attr(self._group_attrs, "ordered"))
+        return bool(self.attrs["ordered"])
 
-    def __array__(self, *args):  # may need to override this, copied for now
-        a = self[...]
-        if args:
-            a = a.astype(args[0])
-        return a
-
-    def __getitem__(self, selection):
-        result = super().__getitem__(selection)
+    def __getitem__(self, selection) -> pd.Categorical:
+        codes = self.codes.oindex[selection]
+        if codes.shape == ():  # handle 0d case
+            codes = np.array([codes])
         return pd.Categorical.from_codes(
-            codes=result,
+            codes=codes,
             categories=self.categories,
             ordered=self.ordered,
         )
+
+    def __repr__(self) -> str:
+        return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
+
+    def __eq__(self, __o) -> bool:
+        return self[()] == __o
 
 
 class AxisArraysRemote(AxisArrays):
@@ -67,16 +84,7 @@ class AxisArraysRemote(AxisArrays):
         df = pd.DataFrame(index=self.dim_names)
         for key in self.keys():
             if "index" not in key:
-                z = self[key]
-                if isinstance(z, zarr.Group) and "codes" in z:  # catrgoricql
-                    value = pd.Categorical.from_codes(
-                        codes=read_elem(z["codes"]),
-                        categories=read_elem(z["categories"]),
-                        ordered=bool(_read_attr(z.attrs, "ordered")),
-                    )
-                else:
-                    value = z[()]
-                df[key] = value
+                df[key] = self[key][()]
         return df
 
     @property
@@ -181,8 +189,6 @@ class AnnDataRemote(AnnData):
         # the file is the same as of the reference object
         self.file = adata_ref.file
         # views on attributes of adata_ref
-        obs_sub = adata_ref.obs.iloc[oidx]
-        var_sub = adata_ref.var.iloc[vidx]
         self._obsm = adata_ref.obsm._view(self, (oidx,))
         self._varm = adata_ref.varm._view(self, (vidx,))
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
@@ -190,8 +196,6 @@ class AnnDataRemote(AnnData):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = adata_ref.obs._view(self, (oidx,))
         self._var = adata_ref.var._view(self, (vidx,))
@@ -265,7 +269,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
             # override to only return AxisArray that will be accessed specially via our special AnnData object
             return {k: read_dispatched(v, callback) for k, v in elem.items()}
         elif iospec.encoding_type == "categorical":
-            return CategoricalZarrArray(elem)
+            return LazyCategoricalArray(elem)
         elif iospec.encoding_type in {"array", "string_array"}:
             return elem
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
