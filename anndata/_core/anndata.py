@@ -28,7 +28,7 @@ from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
-from .anndata_base import AnnDataBase
+from .anndata_base import AbstractAnnData
 from .aligned_mapping import (
     AxisArrays,
     AxisArraysView,
@@ -126,7 +126,7 @@ def _(anno, length, index_names):
     raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
 
 
-class AnnData(AnnDataBase):
+class AnnData(AbstractAnnData):
     """\
     An annotated data matrix.
 

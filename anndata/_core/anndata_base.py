@@ -6,7 +6,7 @@ from .file_backing import AnnDataFileManager
 from ..utils import DeprecationMixinMeta
 
 
-class AnnDataBase(metaclass=DeprecationMixinMeta):
+class AbstractAnnData(metaclass=DeprecationMixinMeta):
     def _init_as_actual(
         self,
         X=None,
