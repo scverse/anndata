@@ -177,9 +177,8 @@ class AbstractAnnData(metaclass=DeprecationMixinMeta):
         pass
 
     @property
-    @abstractmethod
     def n_obs(self) -> int:
-        pass
+        return len(self.obs_names)
 
     @property
     @abstractmethod
@@ -187,9 +186,8 @@ class AbstractAnnData(metaclass=DeprecationMixinMeta):
         pass
 
     @property
-    @abstractmethod
-    def n_vars(self) -> int:
-        pass
+    def n_obs(self) -> int:
+        return len(self.var_names)
 
     @property
     @abstractmethod
