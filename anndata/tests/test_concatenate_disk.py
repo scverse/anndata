@@ -63,8 +63,7 @@ def check_filled_like(x, fill_value=None, elem_name=None):
     if fill_value is None:
         assert_equal(x, filled_like(x), elem_name=elem_name)
     else:
-        assert_equal(x, filled_like(x, fill_value=fill_value),
-                     elem_name=elem_name)
+        assert_equal(x, filled_like(x, fill_value=fill_value), elem_name=elem_name)
 
 
 def make_idx_tuple(idx, axis):
@@ -76,8 +75,7 @@ def make_idx_tuple(idx, axis):
 # Will call func(sparse_matrix) so these types should be sparse compatible
 # See array_type if only dense arrays are expected as input.
 @pytest.fixture(
-    params=[asarray, sparse.csr_matrix,
-            sparse.csc_matrix, as_dense_dask_array],
+    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
     ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def array_type(request):
@@ -144,13 +142,13 @@ def adatas_to_zarr_paths(adatas, tmp_path):
     if isinstance(adatas, typing.Mapping):
         paths = {}
         for k, v in adatas.items():
-            p = tmp_path/f"{k}.zarr"
+            p = tmp_path / f"{k}.zarr"
             v.write_zarr(p)
             paths[k] = p
     else:
         paths = []
         for i, a in enumerate(adatas):
-            p = tmp_path/f"{i}.zarr"
+            p = tmp_path / f"{i}.zarr"
             a.write_zarr(p)
             paths += [p]
     return paths
@@ -161,20 +159,19 @@ def test_concat_interface_errors_disk(tmp_path):
     paths = adatas_to_zarr_paths(adatas, tmp_path)
 
     with pytest.raises(ValueError):
-        concat_on_disk(paths, out_file=tmp_path/'test', axis=3)
+        concat_on_disk(paths, out_file=tmp_path / "test", axis=3)
     with pytest.raises(ValueError):
-        concat_on_disk(paths, out_file=tmp_path/'test', join="not implemented")
+        concat_on_disk(paths, out_file=tmp_path / "test", join="not implemented")
     with pytest.raises(ValueError):
-        concat_on_disk([], tmp_path/"test")
+        concat_on_disk([], tmp_path / "test")
 
 
 def assert_eq_concat_on_disk(adatas, tmp_path, *args, **kwargs):
-
     # create one from the concat function
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
     paths = adatas_to_zarr_paths(adatas, tmp_path)
-    out_name = tmp_path/"out.zarr"
+    out_name = tmp_path / "out.zarr"
     res_path = concat_on_disk(paths, out_name, *args, **kwargs)
     res2 = read_zarr(res_path)
     assert_equal(res1, res2)
@@ -208,8 +205,7 @@ def test_concatenate_dense(join_type, tmp_path):
         layers=dict(Xs=X3),
     )
 
-    assert_eq_concat_on_disk([adata1, adata2, adata3],
-                             tmp_path, join=join_type)
+    assert_eq_concat_on_disk([adata1, adata2, adata3], tmp_path, join=join_type)
 
 
 def test_concatenate_layers(array_type, join_type, tmp_path):
@@ -280,8 +276,7 @@ def test_concatenate_layers_misaligned(array_type, join_type, tmp_path):
         a = array_type(sparse.random(100, 200, format="csr"))
         adata = AnnData(X=a, layers={"a": a})
         adatas.append(
-            adata[:, np.random.choice(
-                adata.var_names, 150, replace=False)].copy()
+            adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()
         )
 
     assert_eq_concat_on_disk(adatas, tmp_path, join=join_type)
@@ -295,8 +290,7 @@ def test_concatenate_layers_outer(array_type, fill_val, tmp_path):
     )
     b = AnnData(X=np.ones((10, 20)))
 
-    assert_eq_concat_on_disk(
-        [a, b], tmp_path, join="outer", fill_value=fill_val)
+    assert_eq_concat_on_disk([a, b], tmp_path, join="outer", fill_value=fill_val)
 
 
 def test_concatenate_dense_duplicates(tmp_path):
@@ -407,8 +401,7 @@ def test_concatenate_mixed(tmp_path):
 def test_concatenate_awkward(join_type, tmp_path):
     import awkward as ak
 
-    a = ak.Array([[{"a": 1, "b": "foo"}], [
-                 {"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
+    a = ak.Array([[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
     b = ak.Array(
         [
             [{"a": 4}, {"a": 5}],
@@ -426,8 +419,7 @@ def test_concatenate_awkward(join_type, tmp_path):
 @pytest.mark.parametrize(
     "other",
     [
-        pd.DataFrame(
-            {"a": [4, 5, 6], "b": ["foo", "bar", "baz"]}, index=list("cde")),
+        pd.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]}, index=list("cde")),
         np.ones((3, 2)),
         sparse.random(3, 100, format="csr"),
     ],
@@ -455,8 +447,8 @@ def test_awkward_does_not_mix(join_type, other, tmp_path):
         match="Cannot concatenate an AwkwardArray with other array types",
     ):
         adatas = [adata_a, adata_b]
-        paths = adatas_to_zarr_paths(adatas, tmp_path/"awk")
-        concat_on_disk(paths, tmp_path/"out", join=join_type)
+        paths = adatas_to_zarr_paths(adatas, tmp_path / "awk")
+        concat_on_disk(paths, tmp_path / "out", join=join_type)
 
 
 def test_pairwise_concat(axis, array_type, tmp_path):
@@ -478,10 +470,8 @@ def test_pairwise_concat(axis, array_type, tmp_path):
         )
         for k, m, n in zip("abc", Ms, Ns)
     }
-    assert_eq_concat_on_disk(
-        adatas, tmp_path, axis=axis, label="orig", pairwise=True)
-    assert_eq_concat_on_disk(adatas, tmp_path, axis=axis,
-                             label="orig", pairwise=False)
+    assert_eq_concat_on_disk(adatas, tmp_path, axis=axis, label="orig", pairwise=True)
+    assert_eq_concat_on_disk(adatas, tmp_path, axis=axis, label="orig", pairwise=False)
 
 
 def test_nan_merge(axis, join_type, array_type, tmp_path):
@@ -495,24 +485,20 @@ def test_nan_merge(axis, join_type, array_type, tmp_path):
     )
     arr_nan = arr.copy()
     with warnings.catch_warnings():
-        warnings.simplefilter(
-            "ignore", category=sparse.SparseEfficiencyWarning)
+        warnings.simplefilter("ignore", category=sparse.SparseEfficiencyWarning)
         for _ in range(10):
             arr_nan[
                 np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])
             ] = np.nan
 
-    _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {
-        "arr": arr_nan}}
+    _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)
     orig2 = AnnData(**_data)
     orig_nonan = AnnData(
         **{"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr}}
     )
-    assert_eq_concat_on_disk(
-        [orig1, orig2], tmp_path, axis=axis, merge="same")
-    assert_eq_concat_on_disk(
-        [orig1, orig_nonan], tmp_path, axis=axis, merge="same")
+    assert_eq_concat_on_disk([orig1, orig2], tmp_path, axis=axis, merge="same")
+    assert_eq_concat_on_disk([orig1, orig_nonan], tmp_path, axis=axis, merge="same")
 
 
 # Helpers for test_concatenate_uns
@@ -662,14 +648,15 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, tmp_path
     lhs = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     rhs = gen_adata((10, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
 
-    assert_eq_concat_on_disk([lhs, rhs],
-                             tmp_path,
-                             axis=axis,
-                             join=join_type, merge=merge_strategy)
+    assert_eq_concat_on_disk(
+        [lhs, rhs], tmp_path, axis=axis, join=join_type, merge=merge_strategy
+    )
     assert_eq_concat_on_disk(
         [lhs.T, rhs.T],
         tmp_path,
-        axis=abs(axis - 1), join=join_type, merge=merge_strategy
+        axis=abs(axis - 1),
+        join=join_type,
+        merge=merge_strategy,
     )
 
 
@@ -762,18 +749,15 @@ def test_concat_ordered_categoricals_retained(tmp_path):
 
 
 def test_concat_names(axis, tmp_path):
-
     lhs = gen_adata((10, 10))
     rhs = gen_adata((10, 10))
 
     assert_eq_concat_on_disk([lhs, rhs], tmp_path, axis=axis)
-    assert_eq_concat_on_disk([lhs, rhs], tmp_path,
-                             axis=axis, index_unique="-")
+    assert_eq_concat_on_disk([lhs, rhs], tmp_path, axis=axis, index_unique="-")
 
 
 @pytest.mark.parametrize(
-    "shape", [pytest.param((8, 0), id="no_var"),
-              pytest.param((0, 10), id="no_obs")]
+    "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
 def test_concat_size_0_dim(axis, join_type, merge_strategy, shape, tmp_path):
     # https://github.com/scverse/anndata/issues/526
@@ -797,8 +781,7 @@ def test_concat_outer_aligned_mapping(elem, tmp_path):
     b = gen_adata((3, 5), **GEN_ADATA_DASK_ARGS)
     del b.obsm[elem]
 
-    assert_eq_concat_on_disk(
-        {"a": a, "b": b}, tmp_path, join="outer", label="group")
+    assert_eq_concat_on_disk({"a": a, "b": b}, tmp_path, join="outer", label="group")
 
 
 def test_concatenate_size_0_dim(tmp_path):
@@ -825,8 +808,7 @@ def test_concat_null_X(tmp_path):
 
 # https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
 def test_concat_X_dtype(tmp_path):
-    adatas_orig = {k: AnnData(np.ones((20, 10), dtype=np.int8))
-                   for k in list("abc")}
+    adatas_orig = {k: AnnData(np.ones((20, 10), dtype=np.int8)) for k in list("abc")}
     for adata in adatas_orig.values():
         adata.raw = AnnData(np.ones((20, 30), dtype=np.float64))
 
@@ -842,8 +824,7 @@ def test_concat_different_types_dask(merge_strategy, array_type, tmp_path):
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
 
     ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array})
-    ad1_other = ad.AnnData(X=np.ones((5, 5)), varm={
-                           "a": array_type(varm_array)})
+    ad1_other = ad.AnnData(X=np.ones((5, 5)), varm={"a": array_type(varm_array)})
     ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)})
 
     assert_eq_concat_on_disk([ad1, ad2], tmp_path, merge=merge_strategy)
