@@ -278,7 +278,7 @@ class Writer:
 
         # Normalize k to abosulte path
         if not PurePath(k).is_absolute():
-            k = str(PurePath(store.name) / k)
+            k = (PurePath(store.name) / k).as_posix()
 
         if k == "/":
             store.clear()
