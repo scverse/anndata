@@ -5,7 +5,7 @@ from ._metadata import __version__, within_flit
 if not within_flit():
     del within_flit
     from ._core.anndata import AnnData
-    from ._core.merge import concat
+    from ._core.merge import concat, concat_on_disk
     from ._core.raw import Raw
     from ._io import (
         read_h5ad,
