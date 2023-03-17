@@ -161,9 +161,9 @@ def test_concat_interface_errors_disk(tmp_path):
     paths = adatas_to_zarr_paths(adatas, tmp_path)
 
     with pytest.raises(ValueError):
-        concat_on_disk(paths, out_path=tmp_path/'test', axis=3)
+        concat_on_disk(paths, out_file=tmp_path/'test', axis=3)
     with pytest.raises(ValueError):
-        concat_on_disk(paths, out_path=tmp_path/'test', join="not implemented")
+        concat_on_disk(paths, out_file=tmp_path/'test', join="not implemented")
     with pytest.raises(ValueError):
         concat_on_disk([], tmp_path/"test")
 

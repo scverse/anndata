@@ -1130,8 +1130,10 @@ def concat(
 
 
 def concat_on_disk(
-    paths: Union[Collection[str], typing.MutableMapping],
-    out_path: Union[str, typing.MutableMapping],
+    in_files: Union[Collection[str], typing.MutableMapping],
+    out_file: Union[str, typing.MutableMapping],
+    overwrite: bool = False,
+    format: Literal["zarr", "h5ad"] = "zarr",
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
@@ -1143,15 +1145,32 @@ def concat_on_disk(
     fill_value: Optional[Any] = None,
     pairwise: bool = False,
 ):
-    """Concatenates AnnData objects along an axis on disk
-    given their stores or paths.
+    """Concatenates multiple AnnData objects along a specified axis using their
+    corresponding stores or paths, and writes the resulting AnnData object
+    to a target location on disk.
+
+    Unlike the `concat` function, this method does not require
+    loading the input AnnData objects into memory,
+    making it a memory-efficient alternative for large datasets.
+    The resulting object written to disk should be equivalent
+    to the concatenation of the loaded AnnData objects using
+    the `concat` function.
+
 
 
     Params
     ------
-    paths
-        The objects to be concatenated. If a Mapping is passed, keys are used for the `keys`
+    in_files
+        The corresponding stores or paths of AnnData objects to
+        be concatenated. If a Mapping is passed, keys are used for the `keys`
         argument and values are concatenated.
+    out_file
+        The target path or store to write the result in.
+    overwrite
+        If False the and if a file already exists it will raise an error,
+        otherwise it will overwrite.
+    format
+        TODO
     axis
         Which axis to concatenate along.
     join
@@ -1202,18 +1221,18 @@ def concat_on_disk(
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
-    if isinstance(paths, Mapping):
+    if isinstance(in_files, Mapping):
         if keys is not None:
             raise TypeError(
                 "Cannot specify categories in both mapping keys and using `keys`. "
                 "Only specify this once."
             )
-        keys, paths = list(paths.keys()), list(paths.values())
+        keys, in_files = list(in_files.keys()), list(in_files.values())
     else:
-        paths = list(paths)
+        in_files = list(in_files)
 
     if keys is None:
-        keys = np.arange(len(paths)).astype(str)
+        keys = np.arange(len(in_files)).astype(str)
 
     raise NotImplementedError()
     # axis, dim = _resolve_dim(axis=axis)
