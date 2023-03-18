@@ -268,7 +268,7 @@ class Writer:
         modifiers=frozenset(),
     ):
         from functools import partial
-        from pathlib import PurePath
+        from pathlib import PurePosixPath
 
         dest_type = type(store)
         t = type(elem)
@@ -277,8 +277,8 @@ class Writer:
             return lambda *_, **__: None
 
         # Normalize k to abosulte path
-        if not PurePath(k).is_absolute():
-            k = (PurePath(store.name) / k).as_posix()
+        if not PurePosixPath(k).is_absolute():
+            k = str(PurePosixPath(store.name) / k)
 
         if k == "/":
             store.clear()
