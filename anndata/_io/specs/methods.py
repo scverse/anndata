@@ -471,7 +471,7 @@ _REGISTRY.register_write(ZarrGroup, views.SparseCSCView, IOSpec("csc_matrix", "0
 @_REGISTRY.register_write(ZarrGroup, CSCDataset, IOSpec("", "0.1.0"))
 def write_sparse_dataset(f, k, elem, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
-        f, k, elem._to_backed(), fmt=elem.format_str, dataset_kwargs=dataset_kwargs
+        f, k, elem.to_backed(), fmt=elem.format_str, dataset_kwargs=dataset_kwargs
     )
     # TODO: Cleaner way to do this
     f[k].attrs["encoding-type"] = f"{elem.format_str}_matrix"
