@@ -4,8 +4,13 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
+from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
+from anndata._io.zarr import read_dataframe
 from anndata.tests.helpers import assert_equal, subset_func
+from anndata.experimental import read_dispatched
+
+import zarr
 
 subset_func2 = subset_func
 
@@ -21,7 +26,6 @@ def ondisk_equivalent_adata(tmp_path, diskfmt):
     csc_path = tmp_path / f"csc.{diskfmt}"
     dense_path = tmp_path / f"dense.{diskfmt}"
 
-    read = lambda x, **kwargs: getattr(ad, f"read_{diskfmt}")(x, **kwargs)
     write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
     csr_mem = ad.AnnData(X=sparse.random(50, 50, format="csr", density=0.1))
@@ -32,10 +36,36 @@ def ondisk_equivalent_adata(tmp_path, diskfmt):
     write(csc_mem, csc_path)
     # write(csr_mem, dense_path, as_dense="X")
     write(dense_mem, dense_path)
+    if diskfmt == "h5ad":
+        csr_disk = ad.read_h5ad(csr_path, backed="r")
+        csc_disk = ad.read_h5ad(csc_path, backed="r")
+        dense_disk = ad.read_h5ad(dense_path, backed="r")
+    else:
+        def read_zarr_backed(path):
+            path = str(path)
 
-    csr_disk = read(csr_path, backed="r")
-    csc_disk = read(csc_path, backed="r")
-    dense_disk = read(dense_path, backed="r")
+            f = zarr.open(path, mode="r")
+
+            # Read with handling for backwards compat
+            def callback(func, elem_name, elem, iospec):
+                if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+                    return AnnData(
+                        **{
+                            k: read_dispatched(v, callback)
+                            for k, v in elem.items()
+                        }
+                    )
+                if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
+                    return sparse_dataset(elem).to_backed()
+                return func(elem)
+
+            adata = read_dispatched(f, callback=callback)
+
+            return adata
+
+        csr_disk = read_zarr_backed(csr_path)
+        csc_disk = read_zarr_backed(csc_path)
+        dense_disk = read_zarr_backed(dense_path)
 
     return csr_mem, csr_disk, csc_disk, dense_disk
 
