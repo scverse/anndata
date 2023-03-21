@@ -123,12 +123,8 @@ class AnnDataRemote(AnnData):
 
     def _initialize_indices(self, shape, obs, var):
         # annotations - need names already for AxisArrays to work.
-        self.obs_names = pd.Index(
-            (obs["index"] if "index" in obs else obs["_index"])[()]
-        )
-        self.var_names = pd.Index(
-            (var["index"] if "index" in var else var["_index"])[()]
-        )
+        self.obs_names = obs["index"] if "index" in obs else obs["_index"]
+        self.var_names = var["index"] if "index" in var else var["_index"]
         if self._X is not None:
             self._n_obs, self._n_vars = self._X.shape
         else:
