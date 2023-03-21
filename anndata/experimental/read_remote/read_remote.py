@@ -68,9 +68,11 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
 
-    def __eq__(self, __o) -> bool:
+    def __eq__(self, __o) -> np.ndarray:
         return self[()] == __o
-
+    
+    def __ne__(self, __o) -> np.ndarray:
+        return  ~(self == __o)
 
 class AxisArraysRemote(AxisArrays):
     def __getattr__(self, __name: str):
