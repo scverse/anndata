@@ -41,6 +41,7 @@ def ondisk_equivalent_adata(tmp_path, diskfmt):
         csc_disk = ad.read_h5ad(csc_path, backed="r")
         dense_disk = ad.read_h5ad(dense_path, backed="r")
     else:
+
         def read_zarr_backed(path):
             path = str(path)
 
@@ -50,10 +51,7 @@ def ondisk_equivalent_adata(tmp_path, diskfmt):
             def callback(func, elem_name, elem, iospec):
                 if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                     return AnnData(
-                        **{
-                            k: read_dispatched(v, callback)
-                            for k, v in elem.items()
-                        }
+                        **{k: read_dispatched(v, callback) for k, v in elem.items()}
                     )
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
                     return sparse_dataset(elem).to_backed()
