@@ -310,7 +310,10 @@ def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
     dtype
         Numpy data type.
     """
-    from scipy.io import mmread
+    try:
+        from fast_matrix_market import mmread
+    except ImportError:
+        from scipy.io import mmread
 
     # could be rewritten accounting for dtype to be more performant
     X = mmread(fspath(filename)).astype(dtype)
