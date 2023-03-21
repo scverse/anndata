@@ -21,7 +21,7 @@ maintainers = [
     {name = "Philipp Angerer", email = "philipp.angerer@helmholtz-muenchen.de"},
     {name = "Alex Wolf", email = "f.alex.wolf@gmx.de"},
 ]
-readme = {file = "README.rst", content-type="text/x-rst"}
+readme = {file = "README.md", content-type="text/markdown"}
 classifiers = [
     "License :: OSI Approved :: BSD License",
     "Environment :: Console",
@@ -68,6 +68,7 @@ doc = [
     "sphinx-rtd-theme>=1.1.1",
     "sphinx-autodoc-typehints>=1.11.0",
     "sphinx_issues",
+    "sphinxext.opengraph",
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",

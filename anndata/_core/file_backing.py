@@ -97,7 +97,7 @@ class AnnDataFileManager:
 
 
 @singledispatch
-def to_memory(x, copy=True):
+def to_memory(x, copy=False):
     """Permissivley convert objects to in-memory representation.
 
     If they already are in-memory, (or are just unrecognized) pass a copy through.
@@ -110,7 +110,7 @@ def to_memory(x, copy=True):
 
 @to_memory.register(ZarrArray)
 @to_memory.register(h5py.Dataset)
-def _(x, copy=True):
+def _(x, copy=False):
     return x[...]
 
 
@@ -120,21 +120,21 @@ def _(x: BaseCompressedSparseDataset, copy=True):
 
 
 @to_memory.register(DaskArray)
-def _(x, copy=True):
+def _(x, copy=False):
     return x.compute()
 
 
 @to_memory.register(Mapping)
-def _(x: Mapping, copy=True):
+def _(x: Mapping, copy=False):
     return {k: to_memory(v, copy=copy) for k, v in x.items()}
 
 
 @to_memory.register(AwkArray)
-def _(x, copy=True):
-    from copy import copy
+def _(x, copy=False):
+    from copy import copy as _copy
 
     if copy:
-        return copy(x)
+        return _copy(x)
     else:
         return x
 

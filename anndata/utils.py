@@ -102,10 +102,16 @@ try:
                 lateral_context["out"] = -1
             return ak.contents.EmptyArray()
 
+        elif layout.is_record and depth == lateral_context["axis"]:
+            lateral_context["out"] = len(layout.fields)
+            return ak.contents.EmptyArray()
+
         elif layout.is_record:
-            # if it's a record, you want to stop descent with an error
+            # currently, we don't recurse into records
+            # in theory we could, just not sure how to do it at the moment
+            # Would need to consider cases like: scalars, unevenly sized values
             raise TypeError(
-                f"axis={lateral_context['axis']} is too deep, reaches record"
+                f"Cannot recurse into record type found at axis={lateral_context['axis']}"
             )
 
         elif layout.is_union:

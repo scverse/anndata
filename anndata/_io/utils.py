@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 from enum import Enum
 from functools import wraps, singledispatch
+from typing import Callable
 from warnings import warn
 
 from packaging import version
 import h5py
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from anndata.compat import H5Group, ZarrGroup
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
@@ -176,19 +180,28 @@ def report_read_key_on_error(func):
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
 
+    def re_raise_error(e, elem):
+        if isinstance(e, AnnDataReadError):
+            raise e
+        else:
+            parent = _get_parent(elem)
+            raise AnnDataReadError(
+                f"Above error raised while reading key {elem.name!r} of "
+                f"type {type(elem)} from {parent}."
+            ) from e
+
     @wraps(func)
-    def func_wrapper(elem, *args, **kwargs):
+    def func_wrapper(*args, **kwargs):
+        from anndata._io.specs import Reader
+
+        # Figure out signature (method vs function) by going through args
+        for elem in args:
+            if not isinstance(elem, Reader):
+                break
         try:
-            return func(elem, *args, **kwargs)
+            return func(*args, **kwargs)
         except Exception as e:
-            if isinstance(e, AnnDataReadError):
-                raise e
-            else:
-                parent = _get_parent(elem)
-                raise AnnDataReadError(
-                    f"Above error raised while reading key {elem.name!r} of "
-                    f"type {type(elem)} from {parent}."
-                ) from e
+            re_raise_error(e, elem)
 
     return func_wrapper
 
@@ -208,20 +221,31 @@ def report_write_key_on_error(func):
     >>> write_arr(z, "X", X)  # doctest: +SKIP
     """
 
+    def re_raise_error(e, elem, key):
+        if "Above error raised while writing key" in format(e):
+            raise
+        else:
+            parent = _get_parent(elem)
+            raise type(e)(
+                f"{e}\n\n"
+                f"Above error raised while writing key {key!r} of {type(elem)} "
+                f"to {parent}"
+            ) from e
+
     @wraps(func)
-    def func_wrapper(elem, key, val, *args, **kwargs):
+    def func_wrapper(*args, **kwargs):
+        from anndata._io.specs import Writer
+
+        # Figure out signature (method vs function) by going through args
+        for i in range(len(args)):
+            elem = args[i]
+            key = args[i + 1]
+            if not isinstance(elem, Writer):
+                break
         try:
-            return func(elem, key, val, *args, **kwargs)
+            return func(*args, **kwargs)
         except Exception as e:
-            if "Above error raised while writing key" in format(e):
-                raise
-            else:
-                parent = _get_parent(elem)
-                raise type(e)(
-                    f"{e}\n\n"
-                    f"Above error raised while writing key {key!r} of {type(elem)} "
-                    f"to {parent}"
-                ) from e
+            re_raise_error(e, elem, key)
 
     return func_wrapper
 
@@ -231,7 +255,14 @@ def report_write_key_on_error(func):
 # -------------------------------------------------------------------------------
 
 
-def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "varm")):
+def _read_legacy_raw(
+    f: ZarrGroup | H5Group,
+    modern_raw,  # TODO: type
+    read_df: Callable,
+    read_attr: Callable,
+    *,
+    attrs=("X", "var", "varm"),
+) -> dict:
     """\
     Backwards compat for reading legacy raw.
     Makes sure that no modern raw group coexists with legacy raw.* groups.

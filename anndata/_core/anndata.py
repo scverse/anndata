@@ -99,7 +99,7 @@ def _check_2d_shape(X):
 @singledispatch
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
-        return pd.DataFrame(index=pd.RangeIndex(0, length, name=None).astype(str))
+        return pd.DataFrame({}, index=pd.RangeIndex(0, length, name=None).astype(str))
     for index_name in index_names:
         if index_name in anno:
             return pd.DataFrame(
@@ -758,7 +758,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             if self.is_view:
                 self._init_as_actual(self.copy())
-            self._raw = Raw(value)
+            self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
 
     @raw.deleter
     def raw(self):
@@ -844,7 +844,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.deleter
     def obs(self):
-        self.obs = pd.DataFrame(index=self.obs_names)
+        self.obs = pd.DataFrame({}, index=self.obs_names)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -867,7 +867,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.deleter
     def var(self):
-        self.var = pd.DataFrame(index=self.var_names)
+        self.var = pd.DataFrame({}, index=self.var_names)
 
     @property
     def var_names(self) -> pd.Index:
@@ -1457,7 +1457,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self, copy=True) -> "AnnData":
+    def to_memory(self, copy=False) -> "AnnData":
         """Return a new AnnData object with all backed arrays loaded into memory.
 
         Params

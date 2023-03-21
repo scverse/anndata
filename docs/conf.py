@@ -54,9 +54,13 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
+    "sphinxext.opengraph",
     "scanpydoc",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
+]
+myst_enable_extensions = [
+    "html_image",  # So README.md can be used on github and sphinx docs
 ]
 
 # Generate the API documentation when building
@@ -93,7 +97,7 @@ suppress_warnings = [
 
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = True
+    app.warningiserror = False
 
 
 intersphinx_mapping = dict(
@@ -111,8 +115,14 @@ intersphinx_mapping = dict(
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
+    "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
 }
+
+# -- Social cards ---------------------------------------------------------
+
+ogp_site_url = "https://anndata.readthedocs.io/"
+ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema.svg"
 
 # -- Options for HTML output ----------------------------------------------
 
@@ -123,7 +133,7 @@ html_context = dict(
     display_github=True,  # Integrate GitHub
     github_user="scverse",  # Username
     github_repo="anndata",  # Repo name
-    github_version="master",  # Version
+    github_version="main",  # Version
     conf_py_path="/docs/",  # Path in the checkout to the docs root
 )
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)

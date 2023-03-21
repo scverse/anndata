@@ -18,7 +18,7 @@ import pandas as pd
         # numpy array
         [ak.Array(np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))), (2, 3, 4, 5)],
         # record
-        [ak.Array([{"a": 1, "b": 2}, {"a": 1, "b": 3}]), (2,)],
+        [ak.Array([{"a": 1, "b": 2}, {"a": 1, "b": 3}]), (2, 2)],
         # ListType, variable length
         [ak.Array([[1], [2, 3], [4, 5, 6]]), (3, None)],
         # ListType, happens to have the same length, but is not regular
@@ -28,7 +28,7 @@ import pandas as pd
         # nested record
         [
             ak.to_regular(ak.Array([[{"a": 0}, {"b": 1}], [{"c": 2}, {"d": 3}]]), 1),
-            (2, 2),
+            (2, 2, 4),
         ],
         # mixed types (variable length)
         [ak.Array([[1, 2], ["a"]]), (2, None)],
@@ -268,6 +268,31 @@ def test_awkward_io(tmp_path, array):
             # maybe should return: ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
             id="null_awk:recordoflists-outer",
         ),
+        pytest.param(
+            [ak.Array([{"a": 1}, {"a": 2}]), ak.Array([{"a": 3}, {"a": 4}])],
+            "inner",
+            ak.Array([{"a": i} for i in range(1, 5)]),
+            id="awk-simple-record",
+        ),
+        pytest.param(
+            [
+                ak.Array([{"a": 1, "b": 1}, {"a": 2, "b": 2}]),
+                ak.Array([{"a": 3}, {"a": 4}]),
+            ],
+            "inner",
+            ak.Array([{"a": i} for i in range(1, 5)]),
+            id="awk-simple-record-inner",
+        ),
+        # TODO:
+        # pytest.param(
+        #     [
+        #         ak.Array([{"a": 1, "b": 1}, {"a": 2, "b": 2}]),
+        #         ak.Array([{"a": 3}, {"a": 4}]),
+        #     ],
+        #     "outer",
+        #     ak.Array([{"a": 1, "b": 1}, {"a": 2, "b": 2}, {"a": 3}, {"a": 4},]),
+        #     id="awk-simple-record-outer",
+        # ),
         pytest.param(
             [
                 None,
