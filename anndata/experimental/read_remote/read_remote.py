@@ -268,7 +268,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
             return {k: read_dispatched(v, callback) for k, v in elem.items()}
         elif iospec.encoding_type == "categorical":
             return LazyCategoricalArray(elem)
-        elif iospec.encoding_type in {"array", "string_array"}:
+        elif iospec.encoding_type in {"array", "string-array"}:
             return elem
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
             return SparseDataset(elem).to_backed()
