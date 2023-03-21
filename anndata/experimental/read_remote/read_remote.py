@@ -70,9 +70,10 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
 
     def __eq__(self, __o) -> np.ndarray:
         return self[()] == __o
-    
+
     def __ne__(self, __o) -> np.ndarray:
-        return  ~(self == __o)
+        return ~(self == __o)
+
 
 class AxisArraysRemote(AxisArrays):
     def __getattr__(self, __name: str):
