@@ -255,18 +255,35 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     if isinstance(store, Path):
         store = str(store)
 
-    f = zarr.open_consolidated(store, mode="r")
+    is_consolidated = True
+    try:
+        f = zarr.open_consolidated(store, mode="r")
+    except KeyError:
+        is_consolidated = False
+        f = zarr.open(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+            cols = ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "X", "raw"]
+            iter_object = (
+                elem.items()
+                if is_consolidated
+                else [(k, elem[k]) for k in cols if k in elem]
+            )
             return AnnDataRemote(
-                **{k: read_dispatched(v, callback) for k, v in elem.items()}
+                **{k: read_dispatched(v, callback) for k, v in iter_object}
             )
         elif elem_name.startswith("/raw"):
             return None
         elif elem_name in {"/obs", "/var"}:
             # override to only return AxisArray that will be accessed specially via our special AnnData object
-            return {k: read_dispatched(v, callback) for k, v in elem.items()}
+            iter_object = (
+                elem.items()
+                if is_consolidated
+                else [(k, elem[k]) for k in elem.attrs["column-order"]]
+                + [(elem.attrs["_index"], elem[elem.attrs["_index"]])]
+            )
+            return {k: read_dispatched(v, callback) for k, v in iter_object}
         elif iospec.encoding_type == "categorical":
             return LazyCategoricalArray(elem)
         elif iospec.encoding_type in {"array", "string-array"}:
