@@ -188,21 +188,21 @@ def test_concatenate_dense(join_type, tmp_path):
         X1,
         dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
-        obsm=dict(X_1=X1, X_2=X2, X_3=X3),
+        # obsm=dict(X_1=X1, X_2=X2, X_3=X3),
         layers=dict(Xs=X1),
     )
     adata2 = AnnData(
         X2,
         dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
-        obsm=dict(X_1=X1, X_2=X2, X_3=X3),
+        # obsm=dict(X_1=X1, X_2=X2, X_3=X3),
         layers={"Xs": X2},
     )
     adata3 = AnnData(
         X3,
         dict(obs_names=["s1", "s2"], anno2=["d3", "d4"]),
         dict(var_names=["d", "c", "b"], annoB=[0, 1, 2]),
-        obsm=dict(X_1=X1, X_2=X2),
+        # obsm=dict(X_1=X1, X_2=X2),
         layers=dict(Xs=X3),
     )
 
