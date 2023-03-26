@@ -1,6 +1,6 @@
 from .specs import read_elem, write_elem
 import zarr
-from .._core.merge import _resolve_dim
+from .._core.merge import _resolve_dim, StrategiesLiteral, intersect_keys
 from .._core.sparse_dataset import SparseDataset
 from .specs.registry import read_groups
 
@@ -94,7 +94,7 @@ def _index_equal(groups: list[zarr.Group], path) -> bool:
 
 @singledispatch
 def append_items(elem1, elem2, axis=0):
-    raise NotImplementedError(f"Not implemented for type {type(elems),elems}")
+    raise NotImplementedError(f"Not implemented for type {type(elem1),elem1}")
 
 
 @append_items.register
@@ -113,17 +113,52 @@ def _(elem1: SparseDataset, elem2: SparseDataset,  axis=0):
 
 @append_items.register
 def _(elem1: zarr.Array, elem2: zarr.Array, axis=0):
-    # write_elem(output_group, path, elems[0])
-    # written_elem: zarr.Array = output_group[path]
-    # for e in elems[1:]:
     elem1.append(elem2, axis=axis)
 
 
-def _write_concat(elems, output_group: zarr.Group, path, axis=0):
-    write_elem(output_group, path, elems[0])
-    written_elem = SparseDataset(output_group[path])
-    for g in elems[1:]:
-        append_items(written_elem, g, axis=axis)
+def _inner_concat_aligned_mapping(mappings, axis=0):
+    result = {}
+
+    for k in intersect_keys(mappings):
+        els = [m[k] for m in mappings]
+
+        result[k] = concat_arrays(els, cur_reindexers, index=index, axis=axis)
+    return result
+
+
+@singledispatch
+def _write_concat_elem(elem, output_group, path, axis=0):
+    raise NotImplementedError(f"Not implemented for type {type(elem),elem}")
+
+
+@_write_concat_elem.register
+def _(elem: SparseDataset, output_group, path, axis=0):
+    write_elem(output_group, path, elem)
+    return SparseDataset(output_group[path])
+
+
+@_write_concat_elem.register
+def _(elem: zarr.Array, output_group: zarr.Group, path, axis=0):
+    res = output_group.create_dataset(path, data=elem)
+    return res
+
+
+def _write_concat_list(elems, output_group: zarr.Group, path, axis=0):
+    written_elem = _write_concat_elem(
+        elems[0], output_group=output_group, path=path, axis=axis)
+    for e in elems[1:]:
+        append_items(written_elem, e, axis=axis)
+
+
+def _write_concat_mappings(mappings, output_group: zarr.Group, keys, path, axis=0):
+    mapping_group = output_group.create_group(path)
+    mapping_group.attrs.update({
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0",
+    })
+    for k in keys:
+        elems = [m[k] for m in mappings]
+        _write_concat_list(elems, mapping_group, k, axis)
 
 
 def _write_dim(groups, dim, output_group, same_names=False):
@@ -143,7 +178,6 @@ def _write_dim(groups, dim, output_group, same_names=False):
         dim_names = np.concatenate([_df_index(g[dim]) for g in groups])
 
     write_elem(dim_group, dim_names_key, dim_names)
-
 
 
 def concat_on_disk_zarr(
@@ -174,140 +208,126 @@ def concat_on_disk_zarr(
     # Write dim names
     _write_dim(groups, dim, output_group, same_names=False)
     _write_dim(groups, alt_dim, output_group, same_names=True)
-
-    
-    # dim_names_key = groups[0][dim].attrs["_index"]
-    # dim_group = output_group.create_group(dim)
-    # dim_names = _df_index(groups[0][dim])
-    # dim_group.attrs.update({
-    #     "_index": dim_names_key,
-    #     "column-order": [],
-    #     "encoding-type": "dataframe",
-    #     "encoding-version": "0.2.0",
-    # })
-    # write_elem(dim_group, dim_names_key, dim_names)
-
-    # # Write alt-dim names
-    # alt_names_key = groups[0][alt_dim].attrs["_index"]
-    # alt_dim_group = output_group.create_group(alt_dim)
-    # alt_dim_group.attrs.update({
-    #     "_index": alt_names_key,
-    #     "column-order": [],
-    #     "encoding-type": "dataframe",
-    #     "encoding-version": "0.2.0",
-    # })
-    # write_elem(alt_dim_group, alt_names_key, np.concatenate(
-    #     [_df_index(g[alt_dim]) for g in groups]))
-
-    # Get on disk representation of X
     Xs = [read_groups(g["X"]) for g in groups]
-    _write_concat(Xs, output_group, "X", axis=axis)
+    _write_concat_list(elems=Xs, output_group=output_group,
+                       path="X", axis=axis)
+
+    layers = [read_groups(g["layers"]) for g in groups]
+
+    _write_concat_mappings(layers, output_group,
+                           intersect_keys(layers), "layers", axis=axis)
+
+
+def concat_on_disk(
+    in_files: Union[Collection[str], typing.MutableMapping],
+    out_file: Union[str, typing.MutableMapping],
+    overwrite: bool = False,
+    *,
+    axis: Literal[0, 1] = 0,
+    join: Literal["inner", "outer"] = "inner",
+    merge: Union[StrategiesLiteral, Callable, None] = None,
+    uns_merge: Union[StrategiesLiteral, Callable, None] = None,
+    label: Optional[str] = None,
+    keys: Optional[Collection] = None,
+    index_unique: Optional[str] = None,
+    fill_value: Optional[Any] = None,
+    pairwise: bool = False,
+):
+    """Concatenates multiple AnnData objects along a specified axis using their
+    corresponding stores or paths, and writes the resulting AnnData object
+    to a target location on disk.
+
+    Unlike the `concat` function, this method does not require
+    loading the input AnnData objects into memory,
+    making it a memory-efficient alternative for large datasets.
+    The resulting object written to disk should be equivalent
+    to the concatenation of the loaded AnnData objects using
+    the `concat` function.
 
 
 
-# def concat_on_disk(
-#     in_files: Union[Collection[str], typing.MutableMapping],
-#     out_file: Union[str, typing.MutableMapping],
-#     overwrite: bool = False,
-#     *,
-#     axis: Literal[0, 1] = 0,
-#     join: Literal["inner", "outer"] = "inner",
-#     merge: Union[StrategiesLiteral, Callable, None] = None,
-#     uns_merge: Union[StrategiesLiteral, Callable, None] = None,
-#     label: Optional[str] = None,
-#     keys: Optional[Collection] = None,
-#     index_unique: Optional[str] = None,
-#     fill_value: Optional[Any] = None,
-#     pairwise: bool = False,
-# ):
-#     """Concatenates multiple AnnData objects along a specified axis using their
-#     corresponding stores or paths, and writes the resulting AnnData object
-#     to a target location on disk.
+    Params
+    ------
+    in_files
+        The corresponding stores or paths of AnnData objects to
+        be concatenated. If a Mapping is passed, keys are used for the `keys`
+        argument and values are concatenated.
+    out_file
+        The target path or store to write the result in.
+    overwrite
+        If False the and if a file already exists it will raise an error,
+        otherwise it will overwrite.
+    axis
+        Which axis to concatenate along.
+    join
+        How to align values when concatenating. If "outer", the union of the other axis
+        is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
+        for more.
+    merge
+        How elements not aligned to the axis being concatenated along are selected.
+        Currently implemented strategies include:
 
-#     Unlike the `concat` function, this method does not require
-#     loading the input AnnData objects into memory,
-#     making it a memory-efficient alternative for large datasets.
-#     The resulting object written to disk should be equivalent
-#     to the concatenation of the loaded AnnData objects using
-#     the `concat` function.
+        * `None`: No elements are kept.
+        * `"same"`: Elements that are the same in each of the objects.
+        * `"unique"`: Elements for which there is only one possible value.
+        * `"first"`: The first element seen at each from each position.
+        * `"only"`: Elements that show up in only one of the objects.
+    uns_merge
+        How the elements of `.uns` are selected. Uses the same set of strategies as
+        the `merge` argument, except applied recursively.
+    label
+        Column in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
+        If it's None, no column is added.
+    keys
+        Names for each object being added. These values are used for column values for
+        `label` or appended to the index if `index_unique` is not `None`. Defaults to
+        incrementing integer labels.
+    index_unique
+        Whether to make the index unique by using the keys. If provided, this
+        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
+        the original indices are kept.
+    fill_value
+        When `join="outer"`, this is the value that will be used to fill the introduced
+        indices. By default, sparse arrays are padded with zeros, while dense arrays and
+        DataFrames are padded with missing values.
+    pairwise
+        Whether pairwise elements along the concatenated dimension should be included.
+        This is False by default, since the resulting arrays are often not meaningful.
 
+    Notes
+    -----
 
+    .. warning::
 
-#     Params
-#     ------
-#     in_files
-#         The corresponding stores or paths of AnnData objects to
-#         be concatenated. If a Mapping is passed, keys are used for the `keys`
-#         argument and values are concatenated.
-#     out_file
-#         The target path or store to write the result in.
-#     overwrite
-#         If False the and if a file already exists it will raise an error,
-#         otherwise it will overwrite.
-#     format
-#         TODO
-#     axis
-#         Which axis to concatenate along.
-#     join
-#         How to align values when concatenating. If "outer", the union of the other axis
-#         is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
-#         for more.
-#     merge
-#         How elements not aligned to the axis being concatenated along are selected.
-#         Currently implemented strategies include:
+        If you use `join='outer'` this fills 0s for sparse data when
+        variables are absent in a batch. Use this with care. Dense data is
+        filled with `NaN`.
+    """
+    # Argument normalization
+    # merge = resolve_merge_strategy(merge)
+    # uns_merge = resolve_merge_strategy(uns_merge)
 
-#         * `None`: No elements are kept.
-#         * `"same"`: Elements that are the same in each of the objects.
-#         * `"unique"`: Elements for which there is only one possible value.
-#         * `"first"`: The first element seen at each from each position.
-#         * `"only"`: Elements that show up in only one of the objects.
-#     uns_merge
-#         How the elements of `.uns` are selected. Uses the same set of strategies as
-#         the `merge` argument, except applied recursively.
-#     label
-#         Column in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
-#         If it's None, no column is added.
-#     keys
-#         Names for each object being added. These values are used for column values for
-#         `label` or appended to the index if `index_unique` is not `None`. Defaults to
-#         incrementing integer labels.
-#     index_unique
-#         Whether to make the index unique by using the keys. If provided, this
-#         is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
-#         the original indices are kept.
-#     fill_value
-#         When `join="outer"`, this is the value that will be used to fill the introduced
-#         indices. By default, sparse arrays are padded with zeros, while dense arrays and
-#         DataFrames are padded with missing values.
-#     pairwise
-#         Whether pairwise elements along the concatenated dimension should be included.
-#         This is False by default, since the resulting arrays are often not meaningful.
+    if isinstance(in_files, Mapping):
+        raise NotImplementedError("Not implemented just give path list")
+        # if keys is not None:
+        #     raise TypeError(
+        #         "Cannot specify categories in both mapping keys and using `keys`. "
+        #         "Only specify this once."
+        #     )
+        # keys, in_files = list(in_files.keys()), list(in_files.values())
+    else:
+        in_files = list(in_files)
 
-#     Notes
-#     -----
+    if join != "inner":
+        raise NotImplementedError("Only inner is implemented")
 
-#     .. warning::
+    groups = [zarr.open(store=p) for p in in_files]
+    output_group = zarr.open(store=out_file)
+    concat_on_disk_zarr(groups=groups, output_group=output_group, axis=axis)
 
-#         If you use `join='outer'` this fills 0s for sparse data when
-#         variables are absent in a batch. Use this with care. Dense data is
-#         filled with `NaN`.
-#     """
-#     # Argument normalization
-#     # merge = resolve_merge_strategy(merge)
-#     # uns_merge = resolve_merge_strategy(uns_merge)
+    # if keys is None:
+    #     keys = np.arange(len(in_files)).astype(str)
 
-#     # if isinstance(in_files, Mapping):
-#     #     if keys is not None:
-#     #         raise TypeError(
-#     #             "Cannot specify categories in both mapping keys and using `keys`. "
-#     #             "Only specify this once."
-#     #         )
-#     #     keys, in_files = list(in_files.keys()), list(in_files.values())
-#     # else:
-#     #     in_files = list(in_files)
-
-#     # if keys is None:
-#     #     keys = np.arange(len(in_files)).astype(str)
 
 #     # axis, dim = _resolve_dim(axis=axis)
 #     # alt_axis, alt_dim = _resolve_dim(axis=1 - axis)

@@ -270,6 +270,7 @@ def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_read_groups(ZarrGroup, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("dict", "0.1.0"))
 def read_mapping(elem, _reader):
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
