@@ -1127,4 +1127,3 @@ def concat(
             "raw": raw,
         }
     )
-

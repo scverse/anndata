@@ -21,7 +21,7 @@ from typing import (
     TypeVar,
     Union,
     Literal,
-    MutableMapping
+    MutableMapping,
 )
 import typing
 
@@ -37,50 +37,27 @@ def _df_index(df: zarr.Group) -> np.ndarray:
 
 
 def _has_same_attrs(groups: list[zarr.Group], path: str, attrs: Set[str]) -> bool:
-
     if len(groups) == 0:
         return True
 
     init_g = groups[0][path]
 
-    return all(all(g[path].attrs[attr] == init_g.attrs[attr] for attr in attrs) for g in groups)
+    return all(
+        all(g[path].attrs[attr] == init_g.attrs[attr] for attr in attrs) for g in groups
+    )
 
 
-def _attrs_equal(groups: list[zarr.Group], path: str, attrs_map: Mapping[str, str]) -> bool:
-
+def _attrs_equal(
+    groups: list[zarr.Group], path: str, attrs_map: Mapping[str, str]
+) -> bool:
     if len(groups) == 0:
         raise ValueError("List should not be empty")
 
     init_g = groups[0][path]
 
-    return all(init_g.attrs[attr] == val for attr, val in attrs_map.items()) and \
-        _has_same_attrs(groups, path, attrs_map.keys())
-
-
-# def _attrs_is_in(groups: list[zarr.Group], path: str, attrs_map: Mapping[str, Set[str]]) -> bool:
-
-#     if len(groups) == 0:
-#         raise ValueError("List should not be empty")
-
-#     return all(g[path].attrs[attr] in val for attr, val in attrs_map.items()
-#                for g in groups)
-
-
-# def _encoding_type_in(groups: list[zarr.Group], attr: str, ) -> bool:
-#     init_encoding_type = groups[0][attr].attrs["encoding-type"]
-#     init_encoding_version = groups[0][attr].attrs["encoding-version"]
-
-#     return all(g[attr].attrs["encoding-type"] == init_encoding_type and
-#                g[attr].attrs["encoding-version"] == init_encoding_version
-#                for g in groups)
-
-
-# def _assert_same_encoding_type_n_version(groups: list[zarr.Group], attr: str):
-#     init_encoding_type = groups[0][attr].attrs["encoding-type"]
-#     init_encoding_version = groups[0][attr].attrs["encoding-version"]
-#     for g in groups:
-#         assert g[attr].attrs["encoding-type"] == init_encoding_type
-#         assert g[attr].attrs["encoding-version"] == init_encoding_version
+    return all(
+        init_g.attrs[attr] == val for attr, val in attrs_map.items()
+    ) and _has_same_attrs(groups, path, attrs_map.keys())
 
 
 def _index_equal(groups: list[zarr.Group], path) -> bool:
@@ -98,32 +75,23 @@ def append_items(elem1, elem2, axis=0):
 
 
 @append_items.register
-def _(elem1: SparseDataset, elem2: SparseDataset,  axis=0):
+def _(elem1: SparseDataset, elem2: SparseDataset, axis=0):
     supported_fmt = ["csr", "csc"][axis]
 
     if elem1.format_str != supported_fmt:
         raise ValueError(
-            f"{elem1.format_str} not supported for axis={axis} concatenation.")
+            f"{elem1.format_str} not supported for axis={axis} concatenation."
+        )
     # write_elem(output_group, path, elems[0])
     # written_elem = SparseDataset(output_group[path])
     # for e in elems[1:]:
-        # written_elem.append(e)
+    # written_elem.append(e)
     elem1.append(elem2)
 
 
 @append_items.register
 def _(elem1: zarr.Array, elem2: zarr.Array, axis=0):
     elem1.append(elem2, axis=axis)
-
-
-def _inner_concat_aligned_mapping(mappings, axis=0):
-    result = {}
-
-    for k in intersect_keys(mappings):
-        els = [m[k] for m in mappings]
-
-        result[k] = concat_arrays(els, cur_reindexers, index=index, axis=axis)
-    return result
 
 
 @singledispatch
@@ -162,15 +130,16 @@ def _write_concat_mappings(mappings, output_group: zarr.Group, keys, path, axis=
 
 
 def _write_dim(groups, dim, output_group, same_names=False):
-
     dim_names_key = groups[0][dim].attrs["_index"]
     dim_group = output_group.create_group(dim)
-    dim_group.attrs.update({
-        "_index": dim_names_key,
-        "column-order": [],
-        "encoding-type": "dataframe",
-        "encoding-version": "0.2.0",
-    })
+    dim_group.attrs.update(
+        {
+            "_index": dim_names_key,
+            "column-order": [],
+            "encoding-type": "dataframe",
+            "encoding-version": "0.2.0",
+        }
+    )
     dim_names = None
     if same_names:
         dim_names = _df_index(groups[0][dim])
@@ -328,133 +297,132 @@ def concat_on_disk(
     # if keys is None:
     #     keys = np.arange(len(in_files)).astype(str)
 
+    # axis, dim = _resolve_dim(axis=axis)
+    # alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
-#     # axis, dim = _resolve_dim(axis=axis)
-#     # alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
+    # # Label column
+    # label_col = pd.Categorical.from_codes(
+    #     np.repeat(np.arange(len(paths)), [a.shape[axis] for a in paths]),
+    #     categories=keys,
+    # )
 
-#     # # Label column
-#     # label_col = pd.Categorical.from_codes(
-#     #     np.repeat(np.arange(len(paths)), [a.shape[axis] for a in paths]),
-#     #     categories=keys,
-#     # )
+    # # Combining indexes
+    # concat_indices = pd.concat(
+    #     [pd.Series(dim_indices(a, axis=axis)) for a in paths], ignore_index=True
+    # )
+    # if index_unique is not None:
+    #     concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+    # concat_indices = pd.Index(concat_indices)
 
-#     # # Combining indexes
-#     # concat_indices = pd.concat(
-#     #     [pd.Series(dim_indices(a, axis=axis)) for a in paths], ignore_index=True
-#     # )
-#     # if index_unique is not None:
-#     #     concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
-#     # concat_indices = pd.Index(concat_indices)
+    # alt_indices = merge_indices(
+    #     [dim_indices(a, axis=alt_axis) for a in paths], join=join
+    # )
+    # reindexers = [
+    #     gen_reindexer(alt_indices, dim_indices(a, axis=alt_axis)) for a in adatas
+    # ]
 
-#     # alt_indices = merge_indices(
-#     #     [dim_indices(a, axis=alt_axis) for a in paths], join=join
-#     # )
-#     # reindexers = [
-#     #     gen_reindexer(alt_indices, dim_indices(a, axis=alt_axis)) for a in adatas
-#     # ]
+    # # Annotation for concatenation axis
+    # concat_annot = pd.concat(
+    #     unify_categorical_dtypes([getattr(a, dim) for a in adatas]),
+    #     join=join,
+    #     ignore_index=True,
+    # )
+    # concat_annot.index = concat_indices
+    # if label is not None:
+    #     concat_annot[label] = label_col
 
-#     # # Annotation for concatenation axis
-#     # concat_annot = pd.concat(
-#     #     unify_categorical_dtypes([getattr(a, dim) for a in adatas]),
-#     #     join=join,
-#     #     ignore_index=True,
-#     # )
-#     # concat_annot.index = concat_indices
-#     # if label is not None:
-#     #     concat_annot[label] = label_col
+    # # Annotation for other axis
+    # alt_annot = merge_dataframes(
+    #     [getattr(a, alt_dim) for a in adatas], alt_indices, merge
+    # )
 
-#     # # Annotation for other axis
-#     # alt_annot = merge_dataframes(
-#     #     [getattr(a, alt_dim) for a in adatas], alt_indices, merge
-#     # )
+    # X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
-#     # X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
+    # if join == "inner":
+    #     layers = inner_concat_aligned_mapping(
+    #         [a.layers for a in adatas], axis=axis, reindexers=reindexers
+    #     )
+    #     concat_mapping = inner_concat_aligned_mapping(
+    #         [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
+    #     )
+    #     if pairwise:
+    #         concat_pairwise = concat_pairwise_mapping(
+    #             mappings=[getattr(a, f"{dim}p") for a in adatas],
+    #             shapes=[a.shape[axis] for a in adatas],
+    #             join_keys=intersect_keys,
+    #         )
+    #     else:
+    #         concat_pairwise = {}
+    # elif join == "outer":
+    #     layers = outer_concat_aligned_mapping(
+    #         [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
+    #     )
+    #     concat_mapping = outer_concat_aligned_mapping(
+    #         [getattr(a, f"{dim}m") for a in adatas],
+    #         index=concat_indices,
+    #         fill_value=fill_value,
+    #     )
+    #     if pairwise:
+    #         concat_pairwise = concat_pairwise_mapping(
+    #             mappings=[getattr(a, f"{dim}p") for a in adatas],
+    #             shapes=[a.shape[axis] for a in adatas],
+    #             join_keys=union_keys,
+    #         )
+    #     else:
+    #         concat_pairwise = {}
 
-#     # if join == "inner":
-#     #     layers = inner_concat_aligned_mapping(
-#     #         [a.layers for a in adatas], axis=axis, reindexers=reindexers
-#     #     )
-#     #     concat_mapping = inner_concat_aligned_mapping(
-#     #         [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
-#     #     )
-#     #     if pairwise:
-#     #         concat_pairwise = concat_pairwise_mapping(
-#     #             mappings=[getattr(a, f"{dim}p") for a in adatas],
-#     #             shapes=[a.shape[axis] for a in adatas],
-#     #             join_keys=intersect_keys,
-#     #         )
-#     #     else:
-#     #         concat_pairwise = {}
-#     # elif join == "outer":
-#     #     layers = outer_concat_aligned_mapping(
-#     #         [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
-#     #     )
-#     #     concat_mapping = outer_concat_aligned_mapping(
-#     #         [getattr(a, f"{dim}m") for a in adatas],
-#     #         index=concat_indices,
-#     #         fill_value=fill_value,
-#     #     )
-#     #     if pairwise:
-#     #         concat_pairwise = concat_pairwise_mapping(
-#     #             mappings=[getattr(a, f"{dim}p") for a in adatas],
-#     #             shapes=[a.shape[axis] for a in adatas],
-#     #             join_keys=union_keys,
-#     #         )
-#     #     else:
-#     #         concat_pairwise = {}
+    # # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
+    # alt_mapping = merge(
+    #     [
+    #         {k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()}
+    #         for r, a in zip(reindexers, adatas)
+    #     ],
+    # )
+    # alt_pairwise = merge(
+    #     [
+    #         {k: r(r(v, axis=0), axis=1) for k, v in getattr(a, f"{alt_dim}p").items()}
+    #         for r, a in zip(reindexers, adatas)
+    #     ]
+    # )
+    # uns = uns_merge([a.uns for a in adatas])
 
-#     # # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
-#     # alt_mapping = merge(
-#     #     [
-#     #         {k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()}
-#     #         for r, a in zip(reindexers, adatas)
-#     #     ],
-#     # )
-#     # alt_pairwise = merge(
-#     #     [
-#     #         {k: r(r(v, axis=0), axis=1) for k, v in getattr(a, f"{alt_dim}p").items()}
-#     #         for r, a in zip(reindexers, adatas)
-#     #     ]
-#     # )
-#     # uns = uns_merge([a.uns for a in adatas])
-
-#     # raw = None
-#     # has_raw = [a.raw is not None for a in adatas]
-#     # if all(has_raw):
-#     #     raw = concat(
-#     #         [
-#     #             AnnData(
-#     #                 X=a.raw.X,
-#     #                 obs=pd.DataFrame(index=a.obs_names),
-#     #                 var=a.raw.var,
-#     #                 varm=a.raw.varm,
-#     #             )
-#     #             for a in adatas
-#     #         ],
-#     #         join=join,
-#     #         label=label,
-#     #         keys=keys,
-#     #         index_unique=index_unique,
-#     #         fill_value=fill_value,
-#     #         axis=axis,
-#     #     )
-#     # elif any(has_raw):
-#     #     warn(
-#     #         "Only some AnnData objects have `.raw` attribute, "
-#     #         "not concatenating `.raw` attributes.",
-#     #         UserWarning,
-#     #     )
-#     # return AnnData(
-#     #     **{
-#     #         "X": X,
-#     #         "layers": layers,
-#     #         dim: concat_annot,
-#     #         alt_dim: alt_annot,
-#     #         f"{dim}m": concat_mapping,
-#     #         f"{alt_dim}m": alt_mapping,
-#     #         f"{dim}p": concat_pairwise,
-#     #         f"{alt_dim}p": alt_pairwise,
-#     #         "uns": uns,
-#     #         "raw": raw,
-#     #     }
-#     # )
+    # raw = None
+    # has_raw = [a.raw is not None for a in adatas]
+    # if all(has_raw):
+    #     raw = concat(
+    #         [
+    #             AnnData(
+    #                 X=a.raw.X,
+    #                 obs=pd.DataFrame(index=a.obs_names),
+    #                 var=a.raw.var,
+    #                 varm=a.raw.varm,
+    #             )
+    #             for a in adatas
+    #         ],
+    #         join=join,
+    #         label=label,
+    #         keys=keys,
+    #         index_unique=index_unique,
+    #         fill_value=fill_value,
+    #         axis=axis,
+    #     )
+    # elif any(has_raw):
+    #     warn(
+    #         "Only some AnnData objects have `.raw` attribute, "
+    #         "not concatenating `.raw` attributes.",
+    #         UserWarning,
+    #     )
+    # return AnnData(
+    #     **{
+    #         "X": X,
+    #         "layers": layers,
+    #         dim: concat_annot,
+    #         alt_dim: alt_annot,
+    #         f"{dim}m": concat_mapping,
+    #         f"{alt_dim}m": alt_mapping,
+    #         f"{dim}p": concat_pairwise,
+    #         f"{alt_dim}p": alt_pairwise,
+    #         "uns": uns,
+    #         "raw": raw,
+    #     }
+    # )
