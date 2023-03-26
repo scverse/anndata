@@ -113,17 +113,20 @@ def _(elem: zarr.Array, output_group: zarr.Group, path, axis=0):
 
 def _write_concat_list(elems, output_group: zarr.Group, path, axis=0):
     written_elem = _write_concat_elem(
-        elems[0], output_group=output_group, path=path, axis=axis)
+        elems[0], output_group=output_group, path=path, axis=axis
+    )
     for e in elems[1:]:
         append_items(written_elem, e, axis=axis)
 
 
 def _write_concat_mappings(mappings, output_group: zarr.Group, keys, path, axis=0):
     mapping_group = output_group.create_group(path)
-    mapping_group.attrs.update({
-        "encoding-type": "dict",
-        "encoding-version": "0.1.0",
-    })
+    mapping_group.attrs.update(
+        {
+            "encoding-type": "dict",
+            "encoding-version": "0.1.0",
+        }
+    )
     for k in keys:
         elems = [m[k] for m in mappings]
         _write_concat_list(elems, mapping_group, k, axis)
@@ -149,12 +152,7 @@ def _write_dim(groups, dim, output_group, same_names=False):
     write_elem(dim_group, dim_names_key, dim_names)
 
 
-def concat_on_disk_zarr(
-    groups: list[zarr.Group],
-    output_group: zarr.Group,
-    axis=0
-):
-
+def concat_on_disk_zarr(groups: list[zarr.Group], output_group: zarr.Group, axis=0):
     assert len(groups) > 1
 
     # var or obs
@@ -171,20 +169,19 @@ def concat_on_disk_zarr(
         raise ValueError("All groups must be anndata")
 
     # Write metadata
-    output_group.attrs.update(
-        {"encoding-type": "anndata", "encoding-version": "0.1.0"})
+    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # Write dim names
     _write_dim(groups, dim, output_group, same_names=False)
     _write_dim(groups, alt_dim, output_group, same_names=True)
     Xs = [read_groups(g["X"]) for g in groups]
-    _write_concat_list(elems=Xs, output_group=output_group,
-                       path="X", axis=axis)
+    _write_concat_list(elems=Xs, output_group=output_group, path="X", axis=axis)
 
     layers = [read_groups(g["layers"]) for g in groups]
 
-    _write_concat_mappings(layers, output_group,
-                           intersect_keys(layers), "layers", axis=axis)
+    _write_concat_mappings(
+        layers, output_group, intersect_keys(layers), "layers", axis=axis
+    )
 
 
 def concat_on_disk(
