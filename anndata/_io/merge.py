@@ -1,6 +1,14 @@
 from .specs import read_elem, write_elem
 import zarr
-from .._core.merge import _resolve_dim, StrategiesLiteral, intersect_keys, unify_categorical_dtypes, merge_indices, merge_dataframes, resolve_merge_strategy
+from .._core.merge import (
+    _resolve_dim,
+    StrategiesLiteral,
+    intersect_keys,
+    unify_categorical_dtypes,
+    merge_indices,
+    merge_dataframes,
+    resolve_merge_strategy,
+)
 from .._core.sparse_dataset import SparseDataset
 from .specs.registry import read_groups
 
@@ -318,9 +326,7 @@ def concat_on_disk(
         raise ValueError("All groups must be anndata")
 
     # Write metadata
-    output_group.attrs.update(
-        {"encoding-type": "anndata", "encoding-version": "0.1.0"}
-    )
+    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # # Label column
     # label_col = pd.Categorical.from_codes(
@@ -336,16 +342,13 @@ def concat_on_disk(
     #     concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = merge_indices(
-        [_df_index(g[alt_dim]) for g in groups], join=join
-    )
+    alt_indices = merge_indices([_df_index(g[alt_dim]) for g in groups], join=join)
 
     # Write dims
     # _write_concat_dfs(groups, dim, output_group, axis=axis, join=join)
     # _write_concat_dfs(groups, alt_dim, output_group, axis=axis, join=join)
     Xs = [read_groups(g["X"]) for g in groups]
-    _write_concat_list(elems=Xs, output_group=output_group,
-                       path="X", axis=axis)
+    _write_concat_list(elems=Xs, output_group=output_group, path="X", axis=axis)
 
     layers = [read_groups(g["layers"]) for g in groups]
     _write_concat_mappings(
