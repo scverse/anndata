@@ -1,13 +1,13 @@
 from .specs import read_elem, write_elem
 import zarr
-from .._core.merge import _resolve_dim, StrategiesLiteral, intersect_keys
+from .._core.merge import _resolve_dim, StrategiesLiteral, intersect_keys, unify_categorical_dtypes, merge_indices, merge_dataframes, resolve_merge_strategy
 from .._core.sparse_dataset import SparseDataset
 from .specs.registry import read_groups
 
 from collections import OrderedDict
 from collections.abc import Mapping, MutableSet
 from functools import reduce, singledispatch
-
+import pandas as pd
 from pathlib import Path
 from typing import (
     Any,
@@ -31,9 +31,9 @@ from scipy.sparse import spmatrix
 from ..compat import AwkArray, DaskArray
 
 
-def _df_index(df: zarr.Group) -> np.ndarray:
+def _df_index(df: zarr.Group) -> pd.Index:
     index_key = df.attrs["_index"]
-    return read_elem(df[index_key])
+    return pd.Index(read_elem(df[index_key]))
 
 
 def _has_same_attrs(groups: list[zarr.Group], path: str, attrs: Set[str]) -> bool:
@@ -132,56 +132,68 @@ def _write_concat_mappings(mappings, output_group: zarr.Group, keys, path, axis=
         _write_concat_list(elems, mapping_group, k, axis)
 
 
-def _write_dim(groups, dim, output_group, same_names=False):
-    dim_names_key = groups[0][dim].attrs["_index"]
-    dim_group = output_group.create_group(dim)
-    dim_group.attrs.update(
-        {
-            "_index": dim_names_key,
-            "column-order": [],
-            "encoding-type": "dataframe",
-            "encoding-version": "0.2.0",
-        }
-    )
-    dim_names = None
-    if same_names:
-        dim_names = _df_index(groups[0][dim])
-    else:
-        dim_names = np.concatenate([_df_index(g[dim]) for g in groups])
+# def _write_concat_dfs(groups, path, output_group, axis, join='inner'):
+#     dfs = [read_groups(g[path]) for g in groups]
 
-    write_elem(dim_group, dim_names_key, dim_names)
+#     res_rf = pd.concat(dfs)
+#     write_elem(output_group, path, res_rf)
 
 
-def concat_on_disk_zarr(groups: list[zarr.Group], output_group: zarr.Group, axis=0):
-    assert len(groups) > 1
+#     dim_names_key = groups[0][dim].attrs["_index"]
+#     dim_group = output_group.create_group(dim)
+#     dim_group.attrs.update(
+#         {
+#             "_index": dim_names_key,
+#             "column-order": [],
+#             "encoding-type": "dataframe",
+#             "encoding-version": "0.2.0",
+#         }
+#     )
+#     dim_names = None
+#     if same_names:
+#         dim_names = _df_index(groups[0][dim])
+#     else:
+#         dim_names = np.concatenate([_df_index(g[dim]) for g in groups])
 
-    # var or obs
-    _, dim = _resolve_dim(axis=axis)
-    alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
+#     write_elem(dim_group, dim_names_key, dim_names)
 
-    # TODO: This is just a temporary assertion
-    # All dim_names must be equal
-    if not _index_equal(groups, alt_dim):
-        raise ValueError(f"{alt_dim}_names must be equal")
 
-    # All groups must be anndata
-    if not _attrs_equal(groups, path="", attrs_map={"encoding-type": "anndata"}):
-        raise ValueError("All groups must be anndata")
+# def concat_on_disk_zarr(groups: list[zarr.Group], output_group: zarr.Group, axis=0):
+#     assert len(groups) > 1
 
-    # Write metadata
-    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
+#     # var or obs
+#     _, dim = _resolve_dim(axis=axis)
+#     alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
-    # Write dim names
-    _write_dim(groups, dim, output_group, same_names=False)
-    _write_dim(groups, alt_dim, output_group, same_names=True)
-    Xs = [read_groups(g["X"]) for g in groups]
-    _write_concat_list(elems=Xs, output_group=output_group, path="X", axis=axis)
+#     # TODO: This is just a temporary assertion
+#     # All dim_names must be equal
+#     if not _index_equal(groups, alt_dim):
+#         raise ValueError(f"{alt_dim}_names must be equal")
 
-    layers = [read_groups(g["layers"]) for g in groups]
+#     # All groups must be anndata
+#     if not _attrs_equal(groups, path="", attrs_map={"encoding-type": "anndata"}):
+#         raise ValueError("All groups must be anndata")
 
-    _write_concat_mappings(
-        layers, output_group, intersect_keys(layers), "layers", axis=axis
-    )
+#     # Write metadata
+#     output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
+
+#     # Write dim names
+#     # _write_concat_dfs(groups, dim, output_group, axis=axis, join='inner')
+#     # _write_concat_dfs(groups, alt_dim, output_group, axis=axis, join='inner')
+#     Xs = [read_groups(g["X"]) for g in groups]
+#     _write_concat_list(elems=Xs, output_group=output_group, path="X", axis=axis)
+
+#     layers = [read_groups(g["layers"]) for g in groups]
+
+#     _write_concat_mappings(
+#         layers, output_group, intersect_keys(layers), "layers", axis=axis
+#     )
+
+
+def dim_indices(group: zarr.Group, *, axis=None, dim=None) -> pd.Index:
+    """Helper function to get adata.{dim}_names."""
+    _, dim = _resolve_dim(axis=axis, dim=dim)
+    return group[dim].attrs["_index"]
 
 
 def concat_on_disk(
@@ -270,8 +282,8 @@ def concat_on_disk(
         filled with `NaN`.
     """
     # Argument normalization
-    # merge = resolve_merge_strategy(merge)
-    # uns_merge = resolve_merge_strategy(uns_merge)
+    merge = resolve_merge_strategy(merge)
+    uns_merge = resolve_merge_strategy(uns_merge)
 
     if isinstance(in_files, Mapping):
         raise NotImplementedError("Not implemented just give path list")
@@ -287,9 +299,75 @@ def concat_on_disk(
     if join != "inner":
         raise NotImplementedError("Only inner is implemented")
 
+    # TODO: Generalize this to more than zarr
     groups = [zarr.open(store=p) for p in in_files]
     output_group = zarr.open(store=out_file)
-    concat_on_disk_zarr(groups=groups, output_group=output_group, axis=axis)
+    assert len(groups) > 1
+
+    # var or obs
+    _, dim = _resolve_dim(axis=axis)
+    alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
+
+    # TODO: This is just a temporary assertion
+    # All dim_names must be equal
+    if not _index_equal(groups, alt_dim):
+        raise ValueError(f"{alt_dim}_names must be equal")
+
+    # All groups must be anndata
+    if not _attrs_equal(groups, path="", attrs_map={"encoding-type": "anndata"}):
+        raise ValueError("All groups must be anndata")
+
+    # Write metadata
+    output_group.attrs.update(
+        {"encoding-type": "anndata", "encoding-version": "0.1.0"}
+    )
+
+    # # Label column
+    # label_col = pd.Categorical.from_codes(
+    #     np.repeat(np.arange(len(adatas)), [a.shape[axis] for a in adatas]),
+    #     categories=keys,
+    # )
+
+    # Combining indexes
+    concat_indices = pd.concat(
+        [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
+    )
+    # if index_unique is not None:
+    #     concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+    concat_indices = pd.Index(concat_indices)
+
+    alt_indices = merge_indices(
+        [_df_index(g[alt_dim]) for g in groups], join=join
+    )
+
+    # Write dims
+    # _write_concat_dfs(groups, dim, output_group, axis=axis, join=join)
+    # _write_concat_dfs(groups, alt_dim, output_group, axis=axis, join=join)
+    Xs = [read_groups(g["X"]) for g in groups]
+    _write_concat_list(elems=Xs, output_group=output_group,
+                       path="X", axis=axis)
+
+    layers = [read_groups(g["layers"]) for g in groups]
+    _write_concat_mappings(
+        layers, output_group, intersect_keys(layers), "layers", axis=axis
+    )
+
+    # Annotation for concatenation axis
+    concat_annot = pd.concat(
+        unify_categorical_dtypes([read_elem(g[dim]) for g in groups]),
+        join=join,
+        ignore_index=True,
+    )
+    concat_annot.index = concat_indices
+    # if label is not None:
+    #     concat_annot[label] = label_col
+    write_elem(output_group, dim, concat_annot)
+
+    # Annotation for other axis
+    alt_annot = merge_dataframes(
+        [read_elem(g[alt_dim]) for g in groups], alt_indices, merge
+    )
+    write_elem(output_group, alt_dim, alt_annot)
 
     # if keys is None:
     #     keys = np.arange(len(in_files)).astype(str)
