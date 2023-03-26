@@ -21,7 +21,7 @@ from typing import (
     TypeVar,
     Union,
     Literal,
-    MutableMapping
+    MutableMapping,
 )
 import typing
 
@@ -37,24 +37,27 @@ def _df_index(df: zarr.Group) -> np.ndarray:
 
 
 def _has_same_attrs(groups: list[zarr.Group], path: str, attrs: Set[str]) -> bool:
-
     if len(groups) == 0:
         return True
 
     init_g = groups[0][path]
 
-    return all(all(g[path].attrs[attr] == init_g.attrs[attr] for attr in attrs) for g in groups)
+    return all(
+        all(g[path].attrs[attr] == init_g.attrs[attr] for attr in attrs) for g in groups
+    )
 
 
-def _attrs_equal(groups: list[zarr.Group], path: str, attrs_map: Mapping[str, str]) -> bool:
-
+def _attrs_equal(
+    groups: list[zarr.Group], path: str, attrs_map: Mapping[str, str]
+) -> bool:
     if len(groups) == 0:
         raise ValueError("List should not be empty")
 
     init_g = groups[0][path]
 
-    return all(init_g.attrs[attr] == val for attr, val in attrs_map.items()) and \
-        _has_same_attrs(groups, path, attrs_map.keys())
+    return all(
+        init_g.attrs[attr] == val for attr, val in attrs_map.items()
+    ) and _has_same_attrs(groups, path, attrs_map.keys())
 
 
 # def _attrs_is_in(groups: list[zarr.Group], path: str, attrs_map: Mapping[str, Set[str]]) -> bool:
@@ -98,16 +101,17 @@ def append_items(elem1, elem2, axis=0):
 
 
 @append_items.register
-def _(elem1: SparseDataset, elem2: SparseDataset,  axis=0):
+def _(elem1: SparseDataset, elem2: SparseDataset, axis=0):
     supported_fmt = ["csr", "csc"][axis]
 
     if elem1.format_str != supported_fmt:
         raise ValueError(
-            f"{elem1.format_str} not supported for axis={axis} concatenation.")
+            f"{elem1.format_str} not supported for axis={axis} concatenation."
+        )
     # write_elem(output_group, path, elems[0])
     # written_elem = SparseDataset(output_group[path])
     # for e in elems[1:]:
-        # written_elem.append(e)
+    # written_elem.append(e)
     elem1.append(elem2)
 
 
@@ -127,15 +131,16 @@ def _write_concat(elems, output_group: zarr.Group, path, axis=0):
 
 
 def _write_dim(groups, dim, output_group, same_names=False):
-
     dim_names_key = groups[0][dim].attrs["_index"]
     dim_group = output_group.create_group(dim)
-    dim_group.attrs.update({
-        "_index": dim_names_key,
-        "column-order": [],
-        "encoding-type": "dataframe",
-        "encoding-version": "0.2.0",
-    })
+    dim_group.attrs.update(
+        {
+            "_index": dim_names_key,
+            "column-order": [],
+            "encoding-type": "dataframe",
+            "encoding-version": "0.2.0",
+        }
+    )
     dim_names = None
     if same_names:
         dim_names = _df_index(groups[0][dim])
@@ -145,13 +150,7 @@ def _write_dim(groups, dim, output_group, same_names=False):
     write_elem(dim_group, dim_names_key, dim_names)
 
 
-
-def concat_on_disk_zarr(
-    groups: list[zarr.Group],
-    output_group: zarr.Group,
-    axis=0
-):
-
+def concat_on_disk_zarr(groups: list[zarr.Group], output_group: zarr.Group, axis=0):
     assert len(groups) > 1
 
     # var or obs
@@ -168,14 +167,12 @@ def concat_on_disk_zarr(
         raise ValueError("All groups must be anndata")
 
     # Write metadata
-    output_group.attrs.update(
-        {"encoding-type": "anndata", "encoding-version": "0.1.0"})
+    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # Write dim names
     _write_dim(groups, dim, output_group, same_names=False)
     _write_dim(groups, alt_dim, output_group, same_names=True)
 
-    
     # dim_names_key = groups[0][dim].attrs["_index"]
     # dim_group = output_group.create_group(dim)
     # dim_names = _df_index(groups[0][dim])
@@ -204,7 +201,6 @@ def concat_on_disk_zarr(
     _write_concat(Xs, output_group, "X", axis=axis)
 
 
-
 # def concat_on_disk(
 #     in_files: Union[Collection[str], typing.MutableMapping],
 #     out_file: Union[str, typing.MutableMapping],
@@ -230,7 +226,6 @@ def concat_on_disk_zarr(
 #     The resulting object written to disk should be equivalent
 #     to the concatenation of the loaded AnnData objects using
 #     the `concat` function.
-
 
 
 #     Params

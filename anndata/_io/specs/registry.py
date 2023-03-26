@@ -267,6 +267,7 @@ class Reader:
         else:
             return read_func(elem)
 
+
 class GroupReader:
     def __init__(
         self, registry: IORegistry, callback: Union[Callable, None] = None
@@ -391,9 +392,9 @@ def read_groups(
     """
 
     reader = GroupReader(_REGISTRY)
-    return _REGISTRY.get_read_groups(
-        type(elem), get_spec(elem), frozenset(modifiers)
-    )(elem, _reader=reader)
+    return _REGISTRY.get_read_groups(type(elem), get_spec(elem), frozenset(modifiers))(
+        elem, _reader=reader
+    )
 
 
 def write_elem(
