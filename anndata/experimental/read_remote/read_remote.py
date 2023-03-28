@@ -2,14 +2,26 @@ from collections import OrderedDict, abc as cabc
 from copy import copy
 from functools import cached_property
 from pathlib import Path
-from typing import Any, MutableMapping, Union, List, Sequence, Tuple
+from typing import (
+    Any,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Union,
+    List,
+    Sequence,
+    Tuple,
+)
+from anndata._core.access import ElementRef
 from anndata._core.aligned_mapping import Layers, PairwiseArrays
 from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
+from anndata._core.anndata_base import AbstractAnnData
 from anndata._core.file_backing import AnnDataFileManager
-from anndata._core.index import Index
+from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
 from anndata._core.sparse_dataset import SparseDataset
-from anndata._core.views import _resolve_idxs
+from anndata._core.views import _resolve_idxs, as_view
 from anndata._io.specs.registry import read_elem
 from anndata.compat import _move_adj_mtx, _read_attr
 from anndata.utils import convert_to_dict
@@ -99,8 +111,51 @@ class AxisArraysRemote(AxisArrays):
         return IlocDispatch()
 
 
-class AnnDataRemote(AnnData):
-    def _assign_X(self, X, shape, dtype):
+class AnnDataRemote(AbstractAnnData):
+    def __init__(
+        self,
+        X=None,
+        obs=None,
+        var=None,
+        uns=None,
+        obsm=None,
+        varm=None,
+        layers=None,
+        raw=None,
+        dtype=None,
+        shape=None,
+        filename=None,
+        filemode=None,
+        *,
+        obsp=None,
+        varp=None,
+        oidx=None,
+        vidx=None,
+    ):
+        self._oidx = oidx
+        self._vidx = vidx
+        self._is_view = False
+        if oidx is not None and vidx is not None:  # and or or?
+            self._is_view = True  # hack needed for clean use of views below
+        # init from AnnData
+        if issubclass(type(X), AbstractAnnData):
+            if any((obs, var, uns, obsm, varm, obsp, varp)):
+                raise ValueError(
+                    "If `X` is a dict no further arguments must be provided."
+                )
+            X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
+                X._X,
+                X.obs,
+                X.var,
+                X.uns,
+                X.obsm,
+                X.varm,
+                X.obsp,
+                X.varp,
+                X.layers,
+                X.raw,
+            )
+
         if X is not None:
             for s_type in StorageType:
                 if isinstance(X, s_type.value):
@@ -118,121 +173,51 @@ class AnnDataRemote(AnnData):
                 X = X.astype(dtype)
             # data matrix and shape
             self._X = X
-            self._n_obs, self._n_vars = self._X.shape
         else:
             self._X = None
 
-    def _initialize_indices(self, shape, obs, var):
         # annotations - need names already for AxisArrays to work.
         self.obs_names = obs["index"] if "index" in obs else obs["_index"]
+        if oidx is not None:
+            self.obs_names = self.obs_names[oidx]
         self.var_names = var["index"] if "index" in var else var["_index"]
-        if self._X is not None:
-            self._n_obs, self._n_vars = self._X.shape
-        else:
-            self._n_obs = len([] if obs is None else self.obs_names)
-            self._n_vars = len([] if var is None else self.var_names)
-            # check consistency with shape
-            if shape is not None:
-                if self._n_obs == 0:
-                    self._n_obs = shape[0]
-                else:
-                    if self._n_obs != shape[0]:
-                        raise ValueError("`shape` is inconsistent with `obs`")
-                if self._n_vars == 0:
-                    self._n_vars = shape[1]
-                else:
-                    if self._n_vars != shape[1]:
-                        raise ValueError("`shape` is inconsistent with `var`")
+        if vidx is not None:
+            self.var_names = self.var_names[vidx]
 
-    # annotations
-    def _assign_obs(self, obs):
-        self._obs = AxisArraysRemote(self, 0, vals=convert_to_dict(obs))
-
-    def _assign_var(self, var):
-        self._var = AxisArraysRemote(self, 1, vals=convert_to_dict(var))
-
-    def _assign_obsm(self, obsm):
-        self._obsm = AxisArraysRemote(self, 0, vals=convert_to_dict(obsm))
-
-    def _assign_varm(self, varm):
-        self._varm = AxisArraysRemote(self, 1, vals=convert_to_dict(varm))
-
-    def _run_checks(self):
-        pass  # for now
-
-    def _init_as_view(self, adata_ref: "AnnData", oidx: Index, vidx: Index):
-        if adata_ref.isbacked and adata_ref.is_view:
-            raise ValueError(
-                "Currently, you cannot index repeatedly into a backed AnnData, "
-                "that is, you cannot make a view of a view."
-            )
-        self._is_view = True
-        if isinstance(oidx, (int, np.integer)):
-            if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
-                raise IndexError(f"Observation index `{oidx}` is out of range.")
-            oidx += adata_ref.n_obs * (oidx < 0)
-            oidx = slice(oidx, oidx + 1, 1)
-        if isinstance(vidx, (int, np.integer)):
-            if not (-adata_ref.n_vars <= vidx < adata_ref.n_vars):
-                raise IndexError(f"Variable index `{vidx}` is out of range.")
-            vidx += adata_ref.n_vars * (vidx < 0)
-            vidx = slice(vidx, vidx + 1, 1)
-        if adata_ref.is_view:
-            prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
-            adata_ref = adata_ref._adata_ref
-            oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
-        # self._adata_ref is never a view
-        self._adata_ref = adata_ref
-        self._oidx = oidx
-        self._vidx = vidx
-        # the file is the same as of the reference object
-        self.file = adata_ref.file
-        # views on attributes of adata_ref
-        self._obsm = adata_ref.obsm._view(self, (oidx,))
-        self._varm = adata_ref.varm._view(self, (vidx,))
-        self._layers = adata_ref.layers._view(self, (oidx, vidx))
-        self._obsp = adata_ref.obsp._view(self, oidx)
-        self._varp = adata_ref.varp._view(self, vidx)
-        # fix categories
-        uns = copy(adata_ref._uns)
-        # set attributes
-        self._obs = adata_ref.obs._view(self, (oidx,))
-        self._var = adata_ref.var._view(self, (vidx,))
-        self._uns = uns
-        self._n_obs = len(
-            self.obs["index"] if "index" in self.obs else self.obs["_index"]
+        adata_ref = self
+        if self._is_view:
+            adata_ref = X  # seems to work
+        self.obs = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obs))._view(
+            self, (oidx,)
         )
-        self._n_vars = len(
-            self.var["index"] if "index" in self.var else self.var["_index"]
+        self.var = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(var))._view(
+            self, (vidx,)
         )
 
-        # set data
-        if self.isbacked:
-            self._X = None
+        self.obsm = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obsm))._view(
+            self, (oidx,)
+        )
+        self.varm = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(varm))._view(
+            self, (vidx,)
+        )
 
-        # set raw, easy, as it’s immutable anyways...
-        if adata_ref._raw is not None:
-            # slicing along variables axis is ignored
-            self._raw = adata_ref.raw[oidx]
-            self._raw._adata = self
-        else:
-            self._raw = None
+        self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))._view(
+            self, oidx
+        )
+        self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))._view(
+            self, vidx
+        )
 
-    # TODO: this is not quite complete in the original but also here, what do we do about this?
-    def __delitem__(self, index: Index):
-        obs, var = self._normalize_indices(index)
-        # TODO: does this really work?
-        if not self.isbacked:
-            del self._X[obs, var]
-        else:
-            X = self.file["X"]
-            del X[obs, var]
-            self._set_backed("X", X)
+        self.layers = Layers(layers)._view(self, (oidx, vidx))
+        self.uns = uns or OrderedDict()
 
     def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
-        return AnnDataRemote(self, oidx=oidx, vidx=vidx, asview=True)
+        return AnnDataRemote(self, oidx=oidx, vidx=vidx)
+
+    def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
+        return _normalize_indices(index, self.obs_names, self.var_names)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -249,6 +234,130 @@ class AnnDataRemote(AnnData):
     @var_names.setter
     def var_names(self, names: Sequence[str]):
         self._var_names = names
+
+    @property
+    def X(self):
+        if hasattr(self, f"_X"):
+            if self.is_view:
+                return self._X[self._oidx, self._vidx]
+            return self._X
+        return None
+
+    @X.setter
+    def X(self, X):
+        self._X = X
+
+    @property
+    def obs(self):
+        if hasattr(self, f"_obs"):
+            return self._obs
+        return None
+
+    @obs.setter
+    def obs(self, obs):
+        self._obs = obs
+
+    @property
+    def obsm(self):
+        if hasattr(self, f"_obsm"):
+            return self._obsm
+        return None
+
+    @obsm.setter
+    def obsm(self, obsm):
+        self._obsm = obsm
+
+    @property
+    def obsp(self):
+        if hasattr(self, f"_obsp"):
+            return self._obsp
+        return None
+
+    @obsp.setter
+    def obsp(self, obsp):
+        self._obsp = obsp
+
+    @property
+    def var(self):
+        if hasattr(self, f"_var"):
+            return self._var
+        return None
+
+    @var.setter
+    def var(self, var):
+        self._var = var
+
+    @property
+    def uns(self):
+        if hasattr(self, f"_uns"):
+            return self._uns
+        return None
+
+    @uns.setter
+    def uns(self, uns):
+        self._uns = uns
+
+    @property
+    def varm(self):
+        if hasattr(self, f"_varm"):
+            return self._varm
+        return None
+
+    @varm.setter
+    def varm(self, varm):
+        self._varm = varm
+
+    @property
+    def varp(self):
+        if hasattr(self, f"_varp"):
+            return self._varp
+        return None
+
+    @varp.setter
+    def varp(self, varp):
+        self._varp = varp
+
+    @property
+    def raw(self):
+        if hasattr(self, f"_raw"):
+            return self._raw
+        return None
+
+    @raw.setter
+    def raw(self, raw):
+        self._raw = raw
+
+    @property
+    def is_view(self) -> bool:
+        """`True` if object is view of another AnnData object, `False` otherwise."""
+        return self._is_view
+
+    @property
+    def n_vars(self) -> int:
+        """Number of variables/features."""
+        return len(self.var_names)
+
+    @property
+    def n_obs(self) -> int:
+        """Number of observations."""
+        return len(self.obs_names)
+
+    def __repr__(self):
+        descr = f"AnnData object with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
+        for attr in [
+            "obs",
+            "var",
+            "uns",
+            "obsm",
+            "varm",
+            "layers",
+            "obsp",
+            "varp",
+        ]:
+            keys = getattr(self, attr).keys()
+            if len(keys) > 0:
+                descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
+        return descr
 
 
 def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:

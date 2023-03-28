@@ -22,13 +22,13 @@ import pandas as pd
 from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
 from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
+from anndata._core.anndata_base import AbstractAnnData
 
 from anndata._warnings import ImplicitModificationWarning
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
 from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
-from .anndata_base import AbstractAnnData
 from .aligned_mapping import (
     AxisArrays,
     AxisArraysView,
@@ -279,7 +279,7 @@ class AnnData(AbstractAnnData):
         vidx: Index1D = None,
     ):
         if asview:
-            if not issubclass(type(X), AnnData):
+            if not issubclass(type(X), AbstractAnnData):
                 raise ValueError("`X` has to be an AnnData object.")
             self._init_as_view(X, oidx, vidx)
         else:
@@ -358,44 +358,74 @@ class AnnData(AbstractAnnData):
         else:
             self._raw = None
 
-    def _reformat_axes_args_from_X(
-        self, X, obs, var, uns, obsm, varm, obsp, varp, layers, raw
+    def _init_as_actual(
+        self,
+        X=None,
+        obs=None,
+        var=None,
+        uns=None,
+        obsm=None,
+        varm=None,
+        varp=None,
+        obsp=None,
+        raw=None,
+        layers=None,
+        dtype=None,
+        shape=None,
+        filename=None,
+        filemode=None,
     ):
+        # view attributes
+        self._is_view = False
+        self._adata_ref = None
+        self._oidx = None
+        self._vidx = None
+
+        # ----------------------------------------------------------------------
+        # various ways of initializing the data
+        # ----------------------------------------------------------------------
+
+        # If X is a data frame, we store its indices for verification
         x_indices = []
-        # init from AnnData
-        if isinstance(X, AnnData):
-            if any((obs, var, uns, obsm, varm, obsp, varp)):
-                raise ValueError(
-                    "If `X` is a dict no further arguments must be provided."
+
+        # init from file
+        if filename is not None:
+            self.file = AnnDataFileManager(self, filename, filemode)
+        else:
+            self.file = AnnDataFileManager(self, None)
+
+            # init from AnnData
+            if issubclass(type(X), AbstractAnnData):
+                if any((obs, var, uns, obsm, varm, obsp, varp)):
+                    raise ValueError(
+                        "If `X` is a dict no further arguments must be provided."
+                    )
+                X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
+                    X._X,
+                    X.obs,
+                    X.var,
+                    X.uns,
+                    X.obsm,
+                    X.varm,
+                    X.obsp,
+                    X.varp,
+                    X.layers,
+                    X.raw,
                 )
-            X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
-                X._X,
-                X.obs,
-                X.var,
-                X.uns,
-                X.obsm,
-                X.varm,
-                X.obsp,
-                X.varp,
-                X.layers,
-                X.raw,
-            )
 
-        # init from DataFrame
-        elif isinstance(X, pd.DataFrame):
-            # to verify index matching, we wait until obs and var are DataFrames
-            if obs is None:
-                obs = pd.DataFrame(index=X.index)
-            elif not isinstance(X.index, pd.RangeIndex):
-                x_indices.append(("obs", "index", X.index))
-            if var is None:
-                var = pd.DataFrame(index=X.columns)
-            elif not isinstance(X.columns, pd.RangeIndex):
-                x_indices.append(("var", "columns", X.columns))
-            X = ensure_df_homogeneous(X, "X")
-        return (X, obs, var, uns, obsm, varm, obsp, varp, layers, raw, x_indices)
+            # init from DataFrame
+            elif isinstance(X, pd.DataFrame):
+                # to verify index matching, we wait until obs and var are DataFrames
+                if obs is None:
+                    obs = pd.DataFrame(index=X.index)
+                elif not isinstance(X.index, pd.RangeIndex):
+                    x_indices.append(("obs", "index", X.index))
+                if var is None:
+                    var = pd.DataFrame(index=X.columns)
+                elif not isinstance(X.columns, pd.RangeIndex):
+                    x_indices.append(("var", "columns", X.columns))
+                X = ensure_df_homogeneous(X, "X")
 
-    def _assign_X(self, X, shape, dtype):
         # ----------------------------------------------------------------------
         # actually process the data
         # ----------------------------------------------------------------------
@@ -430,18 +460,9 @@ class AnnData(AbstractAnnData):
                     X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X
-        else:
-            self._X = None
-
-    def _initialize_indices(self, shape, obs, var):
-        # ----------------------------------------------------------------------
-        # actually process the data
-        # ----------------------------------------------------------------------
-
-        # check data type of X
-        if self._X is not None:
             self._n_obs, self._n_vars = self._X.shape
         else:
+            self._X = None
             self._n_obs = len([] if obs is None else obs)
             self._n_vars = len([] if var is None else var)
             # check consistency with shape
@@ -457,38 +478,34 @@ class AnnData(AbstractAnnData):
                     if self._n_vars != shape[1]:
                         raise ValueError("`shape` is inconsistent with `var`")
 
-    # annotations
-    def _assign_obs(self, obs):
+        # annotations
         self._obs = _gen_dataframe(obs, self._n_obs, ["obs_names", "row_names"])
-
-    def _assign_var(self, var):
         self._var = _gen_dataframe(var, self._n_vars, ["var_names", "col_names"])
 
-    # unstructured annotations
-    def _assign_uns(self, uns):
+        # now we can verify if indices match!
+        for attr_name, x_name, idx in x_indices:
+            attr = getattr(self, attr_name)
+            if isinstance(attr.index, pd.RangeIndex):
+                attr.index = idx
+            elif not idx.equals(attr.index):
+                raise ValueError(f"Index of {attr_name} must match {x_name} of X.")
+
+        # unstructured annotations
         self.uns = uns or OrderedDict()
 
-    # TODO: Think about consequences of making obsm a group in hdf
-    def _assign_obsm(self, obsm):
+        # TODO: Think about consequences of making obsm a group in hdf
         self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
-
-    def _assign_varm(self, varm):
         self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
 
-    def _assign_obsp(self, obsp):
         self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
-
-    def _assign_varp(self, varp):
         self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
 
-    def _run_checks(self):
         # Backwards compat for connectivities matrices in uns["neighbors"]
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
 
         self._check_dimensions()
         self._check_uniqueness()
 
-    def _cleanup_raw_and_uns(self, raw, uns):
         if self.filename:
             assert not isinstance(
                 raw, Raw
@@ -505,7 +522,6 @@ class AnnData(AbstractAnnData):
         # clean up old formats
         self._clean_up_old_format(uns)
 
-    def _assign_layers(self, layers):
         # layers
         self._layers = Layers(self, layers)
 
@@ -565,6 +581,11 @@ class AnnData(AbstractAnnData):
             "Equality comparisons are not supported for AnnData objects, "
             "instead compare the desired attributes."
         )
+
+    @property
+    def shape(self) -> Tuple[int, int]:
+        """Shape of data matrix (:attr:`n_obs`, :attr:`n_vars`)."""
+        return self.n_obs, self.n_vars
 
     @property
     def X(self) -> Optional[Union[np.ndarray, sparse.spmatrix, ArrayView]]:

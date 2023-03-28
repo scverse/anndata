@@ -181,6 +181,7 @@ class _RawViewHack:
     def __init__(self, raw: Raw, vidx: Union[slice, np.ndarray]):
         self.parent_raw = raw
         self.vidx = vidx
+        self.is_view = True
 
     @property
     def shape(self) -> Tuple[int, int]:
