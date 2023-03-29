@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-from ..compat import AwkArray, DaskArray, Index, Index1D
+from ..compat import AwkArray, DaskArray, Index, Index1D, ZarrArray
 
 
 def _normalize_indices(
@@ -121,6 +121,8 @@ def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
+    if isinstance(a, ZarrArray):
+        return a.oindex[subset_idx]
     return a[subset_idx]
 
 

@@ -14,7 +14,7 @@ from typing import (
     Tuple,
 )
 from anndata._core.access import ElementRef
-from anndata._core.aligned_mapping import Layers, PairwiseArrays
+from anndata._core.aligned_mapping import AlignedMapping, Layers, PairwiseArrays
 from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
 from anndata._core.anndata_base import AbstractAnnData
 from anndata._core.file_backing import AnnDataFileManager
@@ -142,17 +142,26 @@ class AnnDataRemote(AbstractAnnData):
         oidx=None,
         vidx=None,
     ):
-        self._oidx = oidx
-        self._vidx = vidx
         self._is_view = False
         if oidx is not None and vidx is not None:  # and or or?
             self._is_view = True  # hack needed for clean use of views below
+        adata_ref = self
         # init from AnnData
         if issubclass(type(X), AbstractAnnData):
             if any((obs, var, uns, obsm, varm, obsp, varp)):
                 raise ValueError(
                     "If `X` is a dict no further arguments must be provided."
                 )
+            if X.is_view:
+                prev_oidx, prev_vidx = X._oidx, X._vidx
+                self._oidx, self._vidx = _resolve_idxs(
+                    (prev_oidx, prev_vidx), (oidx, vidx), X._X
+                )
+            else:
+                self._oidx = oidx
+                self._vidx = vidx
+            if self._is_view:
+                adata_ref = X  # seems to work
             X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                 X._X,
                 X.obs,
@@ -165,6 +174,9 @@ class AnnDataRemote(AbstractAnnData):
                 X.layers,
                 X.raw,
             )
+        else:
+            self._oidx = oidx
+            self._vidx = vidx
 
         if X is not None:
             for s_type in StorageType:
@@ -193,32 +205,30 @@ class AnnDataRemote(AbstractAnnData):
         self.var_names = var["index"] if "index" in var else var["_index"]
         if vidx is not None:
             self.var_names = self.var_names[vidx]
+        self.obs = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obs))
+        if self.is_view:
+            self.obs = self.obs._view(self, (oidx,))
+        self.var = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(var))
+        if self.is_view:
+            self.var = self.var._view(self, (vidx,))
 
-        adata_ref = self
-        if self._is_view:
-            adata_ref = X  # seems to work
-        self.obs = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obs))._view(
-            self, (oidx,)
-        )
-        self.var = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(var))._view(
-            self, (vidx,)
-        )
+        self.obsm = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obsm))
+        if self.is_view:
+            self.obsm = self.obsm._view(self, (oidx,))
+        self.varm = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(varm))
+        if self.is_view:
+            self.varm = self.varm._view(self, (vidx,))
 
-        self.obsm = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obsm))._view(
-            self, (oidx,)
-        )
-        self.varm = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(varm))._view(
-            self, (vidx,)
-        )
+        self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))
+        if self.is_view:
+            self.obsp = self.obsp._view(self, oidx)
+        self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))
+        if self.is_view:
+            self.varp = self.varp._view(self, vidx)
 
-        self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))._view(
-            self, oidx
-        )
-        self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))._view(
-            self, vidx
-        )
-
-        self.layers = Layers(layers)._view(self, (oidx, vidx))
+        self.layers = Layers(layers)
+        if self.is_view:
+            self.layers = self.layers._view(self, (oidx, vidx))
         self.uns = uns or OrderedDict()
 
     def __getitem__(self, index: Index) -> "AnnData":
