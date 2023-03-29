@@ -87,6 +87,16 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
         return ~(self == __o)
 
 
+@_subset.register(LazyCategoricalArray)
+def _subset_lazy_cat(a: LazyCategoricalArray, subset_idx: Index):
+    return a[subset_idx]
+
+
+@as_view.register(pd.Categorical)
+def _subset_lazy_cat(a: pd.Categorical, view_args):
+    return a
+
+
 class AxisArraysRemote(AxisArrays):
     def __getattr__(self, __name: str):
         # If we a method has been accessed that is not here, try the pandas implementation
