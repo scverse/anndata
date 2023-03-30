@@ -224,6 +224,13 @@ class AnnDataRemote(AbstractAnnData):
             self.layers = self.layers._view(self, (oidx, vidx))
         self.uns = uns or OrderedDict()
 
+        if not raw:
+            self.raw = None
+        elif isinstance(raw, cabc.Mapping):
+            self.raw = Raw(self, **raw)
+        else:  # is a Raw from another AnnData
+            self.raw = Raw(self, raw._X, raw.var, raw.varm)
+
     def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
@@ -329,6 +336,16 @@ class AnnDataRemote(AbstractAnnData):
     @varp.setter
     def varp(self, varp):
         self._varp = varp
+
+    @property
+    def raw(self):
+        if hasattr(self, f"_raw"):
+            return self._raw
+        return None
+
+    @raw.setter
+    def raw(self, raw):
+        self._raw = raw
 
     @property
     def raw(self):

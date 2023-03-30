@@ -88,6 +88,16 @@ class AbstractAnnData(metaclass=DeprecationMixinMeta):
         pass
 
     @property
+    @abstractmethod
+    def raw(self):
+        pass
+
+    @raw.setter
+    @abstractmethod
+    def raw(self, raw):
+        pass
+
+    @property
     def n_obs(self) -> int:
         return len(self.obs_names)
 
