@@ -16,7 +16,7 @@ import anndata as ad
 from anndata import AnnData, Raw
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
-from anndata._core.sparse_dataset import SparseDataset
+from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._core import views
 from anndata.compat import (
     ZarrArray,
@@ -90,7 +90,7 @@ def read_basic(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_memory()
+            return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, h5py.Dataset):
         return h5ad.read_dataset(elem)  # TODO: Handle legacy
@@ -110,7 +110,7 @@ def read_basic_zarr(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_memory()
+            return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, ZarrArray):
         return zarr.read_dataset(elem)  # TODO: Handle legacy
@@ -476,8 +476,10 @@ _REGISTRY.register_write(ZarrGroup, views.SparseCSCView, IOSpec("csc_matrix", "0
 )
 
 
-@_REGISTRY.register_write(H5Group, SparseDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, SparseDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, CSCDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, CSCDataset, IOSpec("", "0.1.0"))
 def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
         f,
@@ -497,7 +499,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse(elem, _reader):
-    return SparseDataset(elem).to_memory()
+    return sparse_dataset(elem).to_memory()
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -505,7 +507,7 @@ def read_sparse(elem, _reader):
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
-    return SparseDataset(elem)[indices]
+    return sparse_dataset(elem)[indices]
 
 
 #################

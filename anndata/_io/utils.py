@@ -8,7 +8,7 @@ from warnings import warn
 from packaging import version
 import h5py
 
-from .._core.sparse_dataset import SparseDataset
+from .._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata.compat import H5Group, ZarrGroup
 
 # For allowing h5py v3
@@ -158,7 +158,7 @@ def _get_parent(elem):
         zarr = None
     if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
         parent = elem.store  # Not sure how to always get a name out of this
-    elif isinstance(elem, SparseDataset):
+    elif isinstance(elem, BaseCompressedSparseDataset):
         parent = elem.group.file.name
     else:
         parent = elem.file.name
