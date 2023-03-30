@@ -271,7 +271,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def X(self):
-        if hasattr(self, f"_X"):
+        if hasattr(self, "_X"):
             if self.is_view:
                 return self._X[self._oidx, self._vidx]
             return self._X
@@ -283,7 +283,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def obs(self):
-        if hasattr(self, f"_obs"):
+        if hasattr(self, "_obs"):
             return self._obs
         return None
 
@@ -293,7 +293,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def obsm(self):
-        if hasattr(self, f"_obsm"):
+        if hasattr(self, "_obsm"):
             return self._obsm
         return None
 
@@ -303,7 +303,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def obsp(self):
-        if hasattr(self, f"_obsp"):
+        if hasattr(self, "_obsp"):
             return self._obsp
         return None
 
@@ -313,7 +313,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def var(self):
-        if hasattr(self, f"_var"):
+        if hasattr(self, "_var"):
             return self._var
         return None
 
@@ -323,7 +323,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def uns(self):
-        if hasattr(self, f"_uns"):
+        if hasattr(self, "_uns"):
             return self._uns
         return None
 
@@ -333,7 +333,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def varm(self):
-        if hasattr(self, f"_varm"):
+        if hasattr(self, "_varm"):
             return self._varm
         return None
 
@@ -343,7 +343,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def varp(self):
-        if hasattr(self, f"_varp"):
+        if hasattr(self, "_varp"):
             return self._varp
         return None
 
@@ -353,7 +353,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def raw(self):
-        if hasattr(self, f"_raw"):
+        if hasattr(self, "_raw"):
             return self._raw
         return None
 
@@ -363,7 +363,7 @@ class AnnDataRemote(AbstractAnnData):
 
     @property
     def raw(self):
-        if hasattr(self, f"_raw"):
+        if hasattr(self, "_raw"):
             return self._raw
         return None
 
