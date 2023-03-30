@@ -46,6 +46,8 @@ class BackedSparseMatrix(_cs_matrix):
     since that calls copy on `.data`, `.indices`, and `.indptr`.
     """
 
+    _cached_indptr = None
+
     def copy(self) -> ss.spmatrix:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
@@ -115,6 +117,17 @@ class BackedSparseMatrix(_cs_matrix):
                 M, N, self.indptr, self.indices, n_samples, i, j, offsets
             )
         return offsets
+
+    @property
+    def indptr(self):
+        if self._cached_indptr is None:
+            self._cached_indptr = self._indptr[:]
+        return self._cached_indptr
+
+    @indptr.setter
+    def indptr(self, indptr):
+        self._indptr = indptr
+        self._cached_indptr = None
 
 
 class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
@@ -373,7 +386,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.group["indptr"][:]
+        mtx.indptr = self.group["indptr"]
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
@@ -391,6 +404,7 @@ class CSRDataset(BaseCompressedSparseDataset):
 
 class CSCDataset(BaseCompressedSparseDataset):
     format_str = "csc"
+
 
 def sparse_dataset(group) -> BaseCompressedSparseDataset:
     # encoding_type = _read_attr(group, "encoding-type")
