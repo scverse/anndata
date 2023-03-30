@@ -161,6 +161,8 @@ class AnnDataRemote(AbstractAnnData):
                 self._vidx = vidx
             if self._is_view:
                 adata_ref = X  # seems to work
+            if file is None:
+                file = X.file
             X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                 X._X,
                 X.obs,
@@ -198,10 +200,11 @@ class AnnDataRemote(AbstractAnnData):
             self._X = None
 
         # annotations - need names already for AxisArrays to work.
-        self.obs_names = obs[file["obs"].attrs["_index"]]
+        self.file = file
+        self.obs_names = obs[self.file["obs"].attrs["_index"]]
         if oidx is not None:
             self.obs_names = self.obs_names[oidx]
-        self.var_names = var[file["var"].attrs["_index"]]
+        self.var_names = var[self.file["var"].attrs["_index"]]
         if vidx is not None:
             self.var_names = self.var_names[vidx]
         self.obs = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obs))
