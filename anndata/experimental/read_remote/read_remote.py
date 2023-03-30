@@ -206,28 +206,22 @@ class AnnDataRemote(AbstractAnnData):
         if vidx is not None:
             self.var_names = self.var_names[vidx]
         self.obs = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obs))
-        if self.is_view:
-            self.obs = self.obs._view(self, (oidx,))
         self.var = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(var))
-        if self.is_view:
-            self.var = self.var._view(self, (vidx,))
 
         self.obsm = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obsm))
-        if self.is_view:
-            self.obsm = self.obsm._view(self, (oidx,))
         self.varm = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(varm))
-        if self.is_view:
-            self.varm = self.varm._view(self, (vidx,))
 
         self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))
-        if self.is_view:
-            self.obsp = self.obsp._view(self, oidx)
         self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))
-        if self.is_view:
-            self.varp = self.varp._view(self, vidx)
 
         self.layers = Layers(layers)
         if self.is_view:
+            self.obs = self.obs._view(self, (oidx,))
+            self.var = self.var._view(self, (vidx,))
+            self.obsm = self.obsm._view(self, (oidx,))
+            self.varm = self.varm._view(self, (vidx,))
+            self.obsp = self.obsp._view(self, oidx)
+            self.varp = self.varp._view(self, vidx)
             self.layers = self.layers._view(self, (oidx, vidx))
         self.uns = uns or OrderedDict()
 
