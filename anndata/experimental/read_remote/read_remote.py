@@ -134,8 +134,7 @@ class AnnDataRemote(AbstractAnnData):
         raw=None,
         dtype=None,
         shape=None,
-        filename=None,
-        filemode=None,
+        file=None,
         *,
         obsp=None,
         varp=None,
@@ -199,10 +198,10 @@ class AnnDataRemote(AbstractAnnData):
             self._X = None
 
         # annotations - need names already for AxisArrays to work.
-        self.obs_names = obs["index"] if "index" in obs else obs["_index"]
+        self.obs_names = obs[file["obs"].attrs["_index"]]
         if oidx is not None:
             self.obs_names = self.obs_names[oidx]
-        self.var_names = var["index"] if "index" in var else var["_index"]
+        self.var_names = var[file["var"].attrs["_index"]]
         if vidx is not None:
             self.var_names = self.var_names[vidx]
         self.obs = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obs))
@@ -394,7 +393,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
                 else [(k, elem[k]) for k in cols if k in elem]
             )
             return AnnDataRemote(
-                **{k: read_dispatched(v, callback) for k, v in iter_object}
+                **{k: read_dispatched(v, callback) for k, v in iter_object}, file=elem
             )
         elif elem_name.startswith("/raw"):
             return None
