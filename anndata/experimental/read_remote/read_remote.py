@@ -20,7 +20,7 @@ from anndata._core.anndata_base import AbstractAnnData
 from anndata._core.file_backing import AnnDataFileManager
 from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
-from anndata._core.sparse_dataset import SparseDataset
+from anndata._core.sparse_dataset import sparse_dataset
 from anndata._core.views import _resolve_idxs, as_view
 from anndata._io.specs.registry import read_elem
 from anndata.compat import _move_adj_mtx, _read_attr
@@ -412,7 +412,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif iospec.encoding_type in {"array", "string-array"}:
             return elem
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
-            return SparseDataset(elem).to_backed()
+            return sparse_dataset(elem).to_backed()
         return func(elem)
 
     adata = read_dispatched(f, callback=callback)
