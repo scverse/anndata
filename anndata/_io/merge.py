@@ -304,6 +304,7 @@ def concat_on_disk(
     # Argument normalization
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
+
     if isinstance(in_files, Mapping):
         if keys is not None:
             raise TypeError(
@@ -317,14 +318,13 @@ def concat_on_disk(
     if keys is None:
         keys = np.arange(len(in_files)).astype(str)
 
+    _, dim = _resolve_dim(axis=axis)
+    alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
+
     # TODO: Generalize this to more than zarr
     groups = [zarr.open(store=p) for p in in_files]
     output_group = zarr.open(store=out_file)
     assert len(groups) > 1
-
-    # var or obs
-    _, dim = _resolve_dim(axis=axis)
-    alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
     # TODO: This is just a temporary assertion
     # All dim_names must be equal
@@ -348,7 +348,8 @@ def concat_on_disk(
 
     # Combining indexes
     concat_indices = pd.concat(
-        [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
+        [pd.Series(_df_index(g[dim])) for g in groups],
+        ignore_index=True
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
@@ -358,11 +359,9 @@ def concat_on_disk(
     alt_indices = merge_indices([_df_index(g[alt_dim])
                                 for g in groups], join=join)
 
-    # Write X
     Xs = [g["X"] for g in groups]
     write_concat_sequence_aligned(
         groups=Xs, output_group=output_group, out_path="X", axis=axis)
-
 
     # Annotation for concatenation axis
     concat_annot = pd.concat(
@@ -390,114 +389,10 @@ def concat_on_disk(
         write_concat_mappings_aligned(
             maps, output_group, intersect_keys(maps), m, axis=m_axis, index=m_index)
 
-
     alt_mapping = merge(
         [read_group(g[alt_dim]) for g in groups]
     )
     write_elem(output_group, alt_dim, alt_mapping)
-
-    # # Annotation for concatenation axis
-    # concat_annot = pd.concat(
-    #     unify_categorical_dtypes([getattr(a, dim) for a in adatas]),
-    #     join=join,
-    #     ignore_index=True,
-    # )
-    # concat_annot.index = concat_indices
-    # if label is not None:
-    #     concat_annot[label] = label_col
-
-    # # Annotation for other axis
-    # alt_annot = merge_dataframes(
-    #     [getattr(a, alt_dim) for a in adatas], alt_indices, merge
-    # )
-
-    # X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
-
-    # if join == "inner":
-    #     layers = inner_concat_aligned_mapping(
-    #         [a.layers for a in adatas], axis=axis, reindexers=reindexers
-    #     )
-    #     concat_mapping = inner_concat_aligned_mapping(
-    #         [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
-    #     )
-    #     if pairwise:
-    #         concat_pairwise = concat_pairwise_mapping(
-    #             mappings=[getattr(a, f"{dim}p") for a in adatas],
-    #             shapes=[a.shape[axis] for a in adatas],
-    #             join_keys=intersect_keys,
-    #         )
-    #     else:
-    #         concat_pairwise = {}
-    # elif join == "outer":
-    #     layers = outer_concat_aligned_mapping(
-    #         [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
-    #     )
-    #     concat_mapping = outer_concat_aligned_mapping(
-    #         [getattr(a, f"{dim}m") for a in adatas],
-    #         index=concat_indices,
-    #         fill_value=fill_value,
-    #     )
-    #     if pairwise:
-    #         concat_pairwise = concat_pairwise_mapping(
-    #             mappings=[getattr(a, f"{dim}p") for a in adatas],
-    #             shapes=[a.shape[axis] for a in adatas],
-    #             join_keys=union_keys,
-    #         )
-    #     else:
-    #         concat_pairwise = {}
-
-    # # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
-    # alt_mapping = merge(
-    #     [
-    #         {k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()}
-    #         for r, a in zip(reindexers, adatas)
-    #     ],
-    # )
-    # alt_pairwise = merge(
-    #     [
-    #         {k: r(r(v, axis=0), axis=1) for k, v in getattr(a, f"{alt_dim}p").items()}
-    #         for r, a in zip(reindexers, adatas)
-    #     ]
-    # )
-    # uns = uns_merge([a.uns for a in adatas])
-
-    # raw = None
-    # has_raw = [a.raw is not None for a in adatas]
-    # if all(has_raw):
-    #     raw = concat(
-    #         [
-    #             AnnData(
-    #                 X=a.raw.X,
-    #                 obs=pd.DataFrame(index=a.obs_names),
-    #                 var=a.raw.var,
-    #                 varm=a.raw.varm,
-    #             )
-    #             for a in adatas
-    #         ],
-    #         join=join,
-    #         label=label,
-    #         keys=keys,
-    #         index_unique=index_unique,
-    #         fill_value=fill_value,
-    #         axis=axis,
-    #     )
-    # elif any(has_raw):
-    #     warn(
-    #         "Only some AnnData objects have `.raw` attribute, "
-    #         "not concatenating `.raw` attributes.",
-    #         UserWarning,
-    #     )
-    # return AnnData(
-    #     **{
-    #         "X": X,
-    #         "layers": layers,
-    #         dim: concat_annot,
-    #         alt_dim: alt_annot,
-    #         f"{dim}m": concat_mapping,
-    #         f"{alt_dim}m": alt_mapping,
-    #         f"{dim}p": concat_pairwise,
-    #         f"{alt_dim}p": alt_pairwise,
-    #         "uns": uns,
-    #         "raw": raw,
-    #     }
-    # )
+    if not alt_mapping:
+        alt_df = pd.DataFrame(index=alt_indices)
+        write_elem(output_group, alt_dim, alt_df)
