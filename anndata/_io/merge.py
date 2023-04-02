@@ -78,57 +78,7 @@ def _index_equal(groups: list[ZarrGroup], path) -> bool:
     return True
 
 
-# @singledispatch
-# def append_items(elem1, elem2, axis=0):
-#     raise NotImplementedError(f"Not implemented for type {type(elem1),elem1}")
-
-
-# @append_items.register
-# def _(elem1: SparseDataset, elem2: SparseDataset, axis=0):
-#     supported_fmt = ["csr", "csc"][axis]
-
-#     if elem1.format_str != supported_fmt:
-#         raise ValueError(
-#             f"{elem1.format_str} not supported for axis={axis} concatenation."
-#         )
-#     # write_elem(output_group, path, elems[0])
-#     # written_elem = SparseDataset(output_group[path])
-#     # for e in elems[1:]:
-#     # written_elem.append(e)
-#     elem1.append(elem2)
-
-
-# @append_items.register
-# def _(elem1: ZarrArray, elem2: ZarrArray, axis=0):
-#     elem1.append(elem2, axis=axis)
-
-
-# @singledispatch
-# def _write_concat_elem(elem, output_group, path, axis=0):
-#     raise NotImplementedError(f"Not implemented for type {type(elem),elem}")
-
-
-# @_write_concat_elem.register
-# def _(elem: SparseDataset, output_group, path, axis=0):
-#     write_elem(output_group, path, elem)
-#     return SparseDataset(output_group[path])
-
-
-# @_write_concat_elem.register
-# def _(elem: ZarrArray, output_group: ZarrGroup, path, axis=0):
-#     res = output_group.create_dataset(path, data=elem)
-#     return res
-
-
-# def _write_concat_list(elems, output_group: ZarrGroup, path, axis=0):
-#     written_elem = _write_concat_elem(
-#         elems[0], output_group=output_group, path=path, axis=axis
-#     )
-#     for e in elems[1:]:
-#         append_items(written_elem, e, axis=axis)
-
-
-def write_concat_mappings_aligned(mappings, output_group: ZarrGroup, keys, path, axis=0):
+def write_concat_mappings_aligned(mappings, output_group: ZarrGroup, keys, path, axis=0, index=None):
     mapping_group = output_group.create_group(path)
     mapping_group.attrs.update(
         {
@@ -139,7 +89,7 @@ def write_concat_mappings_aligned(mappings, output_group: ZarrGroup, keys, path,
     for k in keys:
         elems = [m[k] for m in mappings]
         write_concat_sequence_aligned(
-            elems, out_group=mapping_group, out_path=k, axis=axis)
+            elems, output_group=mapping_group, out_path=k, axis=axis, index=index)
 
 
 ARRAY_LIKE = {
@@ -170,6 +120,17 @@ def read_group(group: ZarrGroup):
     return read_dispatched(group, callback=callback)
 
 
+def read_only_dict(group: ZarrGroup):
+    def callback(func, elem_name: str, elem, iospec):
+        if iospec.encoding_type == "dict":
+            return {
+                k: v for k, v in elem.items()
+            }
+        else:
+            return elem
+    return read_dispatched(group, callback=callback)
+
+
 def dim_indices(group: ZarrGroup, *, axis=None, dim=None) -> pd.Index:
     """Helper function to get adata.{dim}_names."""
     _, dim = _resolve_dim(axis=axis, dim=dim)
@@ -197,9 +158,9 @@ def default_fill_value_group(groups: Sequence[ZarrGroup]):
 
 
 def write_concat_sequence_aligned(groups: Sequence[ZarrGroup], output_group,
-                                  out_path, axis=0):
+                                  out_path, axis=0, index=None):
     """
-    array, dataframe, csc_matrix, crc_matrix, awkward-array
+    array, dataframe, csc_matrix, csc_matrix, awkward-array
     """
 
     if any(get_encoding_type(g) == "dataframe" for g in groups):
@@ -218,6 +179,7 @@ def write_concat_sequence_aligned(groups: Sequence[ZarrGroup], output_group,
             ignore_index=True,
             axis=axis,
         )
+        df.index = index
         write_elem(output_group, out_path, df)
 
     elif any(get_encoding_type(g) == "awkard-array" for g in groups):
@@ -243,13 +205,14 @@ def write_concat_sequence_aligned(groups: Sequence[ZarrGroup], output_group,
             out_dataset.append(ds)
     # If all are arrays
     elif all(get_encoding_type(g) == "array" for g in groups):
-        arrays: Sequence[ZarrArray] = [read_group(g) for g in groups]
+        arrays: Sequence[ZarrArray] = [g for g in groups]
+        output_group.create_dataset(out_path, data=arrays[0])
         out_array: ZarrArray = output_group[out_path]
-        for arr in arrays:
+        for arr in arrays[1:]:
             out_array.append(arr)
     else:
         raise NotImplementedError(
-            "Concatenation of these types is not yet implemented."
+            f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups],axis}."
         )
 
 
@@ -379,7 +342,7 @@ def concat_on_disk(
     # Label column
     label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(groups)), [
-                  g.attrs["shape"][axis] for g in groups]),
+                  g["X"].attrs["shape"][axis] for g in groups]),
         categories=keys,
     )
 
@@ -398,12 +361,8 @@ def concat_on_disk(
     # Write X
     Xs = [g["X"] for g in groups]
     write_concat_sequence_aligned(
-        elems=Xs, output_group=output_group, path="X", axis=axis)
+        groups=Xs, output_group=output_group, out_path="X", axis=axis)
 
-    layers = [g["layers"] for g in groups]
-    write_concat_mappings_aligned(
-        layers, output_group, intersect_keys(layers), "layers", axis=axis
-    )
 
     # Annotation for concatenation axis
     concat_annot = pd.concat(
@@ -421,6 +380,21 @@ def concat_on_disk(
         [read_elem(g[alt_dim]) for g in groups], alt_indices, merge
     )
     write_elem(output_group, alt_dim, alt_annot)
+
+    mapping_names = [
+        ("layers", None, axis),
+        (f"{dim}m", concat_indices, 0),
+    ]
+    for m, m_index, m_axis in mapping_names:
+        maps = [read_only_dict(g[m]) for g in groups]
+        write_concat_mappings_aligned(
+            maps, output_group, intersect_keys(maps), m, axis=m_axis, index=m_index)
+
+
+    alt_mapping = merge(
+        [read_group(g[alt_dim]) for g in groups]
+    )
+    write_elem(output_group, alt_dim, alt_mapping)
 
     # # Annotation for concatenation axis
     # concat_annot = pd.concat(
