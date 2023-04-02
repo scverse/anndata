@@ -9,34 +9,24 @@ from .._core.merge import (
     resolve_merge_strategy,
 )
 from .._core.sparse_dataset import SparseDataset
-from ..experimental import write_dispatched, read_dispatched
-from scipy import sparse
-from scipy.sparse import spmatrix
-from collections import OrderedDict
-from collections.abc import Mapping, MutableSet
-from functools import reduce, singledispatch
+from ..experimental import read_dispatched
+from collections.abc import Mapping
 import pandas as pd
-from pathlib import Path
 from typing import (
     Any,
     Callable,
     Collection,
-    Iterable,
     Optional,
-    Tuple,
     Set,
     Sequence,
-    TypeVar,
     Union,
     Literal,
-    MutableMapping,
 )
 import typing
 
 import numpy as np
-from scipy.sparse import spmatrix
 
-from ..compat import AwkArray, DaskArray, ZarrGroup, ZarrArray
+from ..compat import ZarrGroup, ZarrArray
 
 
 def _df_index(df: ZarrGroup) -> pd.Index:
@@ -78,6 +68,9 @@ def _index_equal(groups: list[ZarrGroup], path) -> bool:
 
 
 def write_concat_mappings_aligned(mappings, output_group: ZarrGroup, keys, path, axis=0, index=None):
+    """
+    Write a list of mappings to a zarr group.
+    """
     mapping_group = output_group.create_group(path)
     mapping_group.attrs.update(
         {
@@ -90,14 +83,6 @@ def write_concat_mappings_aligned(mappings, output_group: ZarrGroup, keys, path,
         write_concat_sequence_aligned(
             elems, output_group=mapping_group, out_path=k, axis=axis, index=index)
 
-
-ARRAY_LIKE = {
-    "array",
-    "dataframe",
-    "csc_matrix",
-    "csr_matrix",
-    "awkward-array",
-}
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
@@ -328,7 +313,7 @@ def concat_on_disk(
         keys = np.arange(len(in_files)).astype(str)
 
     _, dim = _resolve_dim(axis=axis)
-    alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
+    _, alt_dim = _resolve_dim(axis=1 - axis)
 
     groups = None
     formats = [_format_from_filename(p) == "h5ad" for p in in_files]
