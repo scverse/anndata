@@ -1,5 +1,4 @@
 from .specs import read_elem, write_elem
-import zarr
 from .._core.merge import (
     _resolve_dim,
     StrategiesLiteral,
@@ -216,6 +215,14 @@ def write_concat_sequence_aligned(groups: Sequence[ZarrGroup], output_group,
         )
 
 
+def _format_from_filename(filename: str) -> str:
+    """Returns the format from the filename based on 
+    our assumtion that zarr doesn't have to have .zarr suffix."""
+    if filename.lower().endswith(".h5ad"):
+        return "h5ad"
+    return "zarr"
+
+
 def concat_on_disk(
     in_files: Union[Collection[str], typing.MutableMapping],
     out_file: Union[str, typing.MutableMapping],
@@ -305,6 +312,8 @@ def concat_on_disk(
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
+    if len(in_files) <= 1:
+        raise ValueError("Must pass at least two files to concatenate.")
     if isinstance(in_files, Mapping):
         if keys is not None:
             raise TypeError(
@@ -321,15 +330,27 @@ def concat_on_disk(
     _, dim = _resolve_dim(axis=axis)
     alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
-    # TODO: Generalize this to more than zarr
-    groups = [zarr.open(store=p) for p in in_files]
-    output_group = zarr.open(store=out_file)
-    assert len(groups) > 1
+    groups = None
+    formats = [_format_from_filename(p) == "h5ad" for p in in_files]
+    if all(formats):
+        import h5py
+        groups = [h5py.File(p, mode='r') for p in in_files]
+    elif not any(formats):
+        import zarr
+        groups = [zarr.open(store=p) for p in in_files]
+    else:
+        raise ValueError("All files must be either h5ad or zarr")
+    output_group = None
+    if _format_from_filename(out_file) == "h5ad":
+        import h5py
+        output_group = h5py.File(out_file, mode='w')
+    else:
+        import zarr
+        output_group = zarr.open(store=out_file, mode='w')
 
-    # TODO: This is just a temporary assertion
     # All dim_names must be equal
     if not _index_equal(groups, alt_dim):
-        raise ValueError(f"{alt_dim}_names must be equal")
+        raise NotImplementedError(f"{alt_dim}_names must be equal")
 
     # All groups must be anndata
     if not _attrs_equal(groups, path="", attrs_map={"encoding-type": "anndata"}):
@@ -358,10 +379,6 @@ def concat_on_disk(
 
     alt_indices = merge_indices([_df_index(g[alt_dim])
                                 for g in groups], join=join)
-
-    Xs = [g["X"] for g in groups]
-    write_concat_sequence_aligned(
-        groups=Xs, output_group=output_group, out_path="X", axis=axis)
 
     # Annotation for concatenation axis
     concat_annot = pd.concat(
@@ -392,7 +409,14 @@ def concat_on_disk(
     alt_mapping = merge(
         [read_group(g[alt_dim]) for g in groups]
     )
-    write_elem(output_group, alt_dim, alt_mapping)
+    # If its empty, we need to write an empty dataframe with the correct index
     if not alt_mapping:
         alt_df = pd.DataFrame(index=alt_indices)
         write_elem(output_group, alt_dim, alt_df)
+    else:
+        write_elem(output_group, alt_dim, alt_mapping)
+
+    # Write X
+    Xs = [g["X"] for g in groups]
+    write_concat_sequence_aligned(
+        groups=Xs, output_group=output_group, out_path="X", axis=axis)
