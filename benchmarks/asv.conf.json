@@ -85,6 +85,7 @@
         "flit": [""],
         "pytoml": [""],
         "pytest": [""],
+        "pooch": [""],
         // "scanpy": [""],
         // "psutil": [""]
     },
