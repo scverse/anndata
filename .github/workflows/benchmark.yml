@@ -26,10 +26,18 @@ jobs:
 
         steps:
             - uses: actions/checkout@v2
+
             - name: Set up Python ${{ matrix.python }}
               uses: actions/setup-python@v2
               with:
                   python-version: ${{ matrix.python }}
+
+            - name: Cache datasets
+              uses: actions/cache@v3
+              with:
+                path: |
+                  ~/.cache
+              key: benchmark-state-${{ hashFiles('benchmarks/**') }}
 
             - name: Get pip cache dir
               id: pip-cache-dir
