@@ -2,9 +2,9 @@ name: Benchmark
 
 on:
     push:
-        branches: [master]
+        branches: [main]
     pull_request:
-        branches: [master]
+        branches: [main]
 
 jobs:
     benchmark:
@@ -22,7 +22,7 @@ jobs:
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
-            ASV_DIR: "./benchmark"
+            ASV_DIR: "./benchmarks"
 
         steps:
             - uses: actions/checkout@v2
