@@ -37,7 +37,7 @@ jobs:
               with:
                 path: |
                   ~/.cache
-              key: benchmark-state-${{ hashFiles('benchmarks/**') }}
+                key: benchmark-state-${{ hashFiles('benchmarks/**') }}
 
             - name: Get pip cache dir
               id: pip-cache-dir
