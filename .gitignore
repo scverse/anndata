@@ -29,6 +29,7 @@ test.zarr
 
 # IDEs
 /.idea/
+/.vscode/
 
 # Benchmark
 .asv

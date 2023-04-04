@@ -15,7 +15,6 @@ try:
     import torch
     from torch.utils.data import Sampler, BatchSampler, Dataset, DataLoader
 except ImportError:
-    warnings.warn("Сould not load pytorch.")
     Sampler, BatchSampler, Dataset, DataLoader = object, object, object, object
 
 
@@ -37,7 +36,7 @@ class BatchIndexSampler(Sampler):
         for i in range(0, self.n_obs, self.batch_size):
             batch = indices[i : min(i + self.batch_size, self.n_obs)]
 
-            # only happens if the last batch is smaller then batch_size
+            # only happens if the last batch is smaller than batch_size
             if len(batch) < self.batch_size and self.drop_last:
                 continue
 
@@ -132,7 +131,6 @@ class AnnLoader(DataLoader):
         use_cuda: bool = False,
         **kwargs,
     ):
-
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
