@@ -163,6 +163,7 @@ def gen_adata(
         AwkArray,
     ),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    sparse_fmt: str = "csr",
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -186,6 +187,9 @@ def gen_adata(
         What kinds of containers should be in `.varm`?
     layers_types
         What kinds of containers should be in `.layers`?
+    sparse_fmt
+        What sparse format should be used for sparse matrices?
+        (csr, csc)
     """
     import dask.array as da
 
@@ -204,7 +208,7 @@ def gen_adata(
         X = X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype))
     obsm = dict(
         array=np.random.random((M, 50)),
-        sparse=sparse.random(M, 100, format="csr"),
+        sparse=sparse.random(M, 100, format=sparse_fmt),
         df=gen_typed_df(M, obs_names),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
@@ -212,7 +216,7 @@ def gen_adata(
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format="csr"),
+        sparse=sparse.random(N, 100, format=sparse_fmt),
         df=gen_typed_df(N, var_names),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
@@ -220,15 +224,15 @@ def gen_adata(
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
         array=np.random.random((M, N)),
-        sparse=sparse.random(M, N, format="csr"),
+        sparse=sparse.random(M, N, format=sparse_fmt),
         da=da.random.random((M, N)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)), sparse=sparse.random(M, M, format="csr")
+        array=np.random.random((M, M)), sparse=sparse.random(M, M, format=sparse_fmt)
     )
     varp = dict(
-        array=np.random.random((N, N)), sparse=sparse.random(N, N, format="csr")
+        array=np.random.random((N, N)), sparse=sparse.random(N, N, format=sparse_fmt)
     )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),

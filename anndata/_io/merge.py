@@ -1,3 +1,4 @@
+from functools import singledispatch
 from .specs import read_elem, write_elem
 from .._core.merge import (
     _resolve_dim,
@@ -23,10 +24,10 @@ from typing import (
     Literal,
 )
 import typing
-
+from pathlib import Path
 import numpy as np
 
-from ..compat import ZarrGroup, ZarrArray, H5Group
+from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
 
 
 def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
@@ -34,14 +35,20 @@ def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
     return pd.Index(read_elem(df[index_key]))
 
 
+def _get_to_path(group: Union[ZarrGroup, H5Group], path: str) -> Union[ZarrGroup, H5Group]:
+    if path:
+        return group[path]
+    return group
+
+
 def _has_same_attrs(groups: list[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]) -> bool:
     if len(groups) == 0:
         return True
 
-    init_g = groups[0][path]
+    init_g = _get_to_path(groups[0], path)
 
     return all(
-        all(g[path].attrs[attr] == init_g.attrs[attr] for attr in attrs) for g in groups
+        all(_get_to_path(g, path).attrs[attr] == init_g.attrs[attr] for attr in attrs) for g in groups
     )
 
 
@@ -51,7 +58,7 @@ def _attrs_equal(
     if len(groups) == 0:
         raise ValueError("List should not be empty")
 
-    init_g = groups[0][path]
+    init_g = _get_to_path(groups[0], path)
 
     return all(
         init_g.attrs[attr] == val for attr, val in attrs_map.items()
@@ -59,9 +66,9 @@ def _attrs_equal(
 
 
 def _index_equal(groups: list[Union[ZarrGroup, H5Group]], path) -> bool:
-    names = _df_index(groups[0][path])
+    names = _df_index(_get_to_path(groups[0], path))
     for g in groups[1:]:
-        curr_names = _df_index(g[path])
+        curr_names = _df_index(_get_to_path(g, path))
         if not np.array_equal(names, curr_names):
             return False
     return True
@@ -90,7 +97,7 @@ EAGER_TYPES = {"dataframe", "awkward-array"}
 
 
 def read_group(group: Union[ZarrGroup, H5Group]):
-    """Read the group until 
+    """Read the group until
     SparseDataset, Array or EAGER_TYPES are encountered."""
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in SPARSE_MATRIX:
@@ -124,29 +131,21 @@ def get_encoding_type(group: Union[ZarrGroup, H5Group]) -> str:
 
 def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
     """Get the shape of a group (array, sparse matrix, etc.)"""
-    return group.attrs.get("shape")
-
-
-def default_fill_value_group(groups: Sequence[Union[ZarrGroup, H5Group]]):
-    # TODO refer to original one
-    """Given some arrays, returns what the default fill value should be.
-
-    This is largely due to backwards compat, and might not be the ideal solution.
-    """
-    if any(get_encoding_type(g) in SPARSE_MATRIX for g in groups):
-        return 0
-    else:
-        return np.nan
+    if group.attrs["encoding-type"] == "array":
+        return group.shape
+    elif group.attrs["encoding-type"] in SPARSE_MATRIX:
+        return group.attrs.get("shape")
+    raise NotImplementedError(
+        f"Cannot get shape of {group.attrs['encoding-type']}")
 
 
 def write_concat_sequence_no_reindex(groups: Sequence[Union[ZarrGroup, H5Group]], output_group,
                                      out_path, axis=0, index=None):
     """
-    array, dataframe, csc_matrix, csc_matrix, awkward-array
+    array, dataframe, csc_matrix, csc_matrix
     """
 
     if any(get_encoding_type(g) == "dataframe" for g in groups):
-        # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
         # TODO: what is missing val thing?
         if not all(
             get_encoding_type(g) == "dataframe" or 0 in get_shape(g)
@@ -155,7 +154,6 @@ def write_concat_sequence_no_reindex(groups: Sequence[Union[ZarrGroup, H5Group]]
             raise NotImplementedError(
                 "Cannot concatenate a dataframe with other array types."
             )
-        # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
             unify_categorical_dtypes([read_group(g) for g in groups]),
             ignore_index=True,
@@ -163,19 +161,6 @@ def write_concat_sequence_no_reindex(groups: Sequence[Union[ZarrGroup, H5Group]]
         )
         df.index = index
         write_elem(output_group, out_path, df)
-
-    elif any(get_encoding_type(g) == "awkard-array" for g in groups):
-        from ..compat import awkward as ak
-
-        if not all(
-            get_encoding_type(g) == "awkard-array" or 0 in get_shape(g) for g in groups
-        ):
-            raise NotImplementedError(
-                "Cannot concatenate an AwkwardArray with other array types."
-            )
-
-        res = ak.concatenate([read_group(g) for g in groups], axis=axis)
-        write_elem(output_group, out_path, res)
     # If all are compatible sparse matrices
     elif (all(get_encoding_type(g) == "csc_matrix" for g in groups) and axis == 1) or \
             (all(get_encoding_type(g) == "csr_matrix" for g in groups) and axis == 0):
@@ -187,21 +172,48 @@ def write_concat_sequence_no_reindex(groups: Sequence[Union[ZarrGroup, H5Group]]
             out_dataset.append(ds)
     # If all are arrays
     elif all(get_encoding_type(g) == "array" for g in groups):
-        arrays: Sequence[ZarrArray] = [g for g in groups]
-        output_group.create_dataset(out_path, data=arrays[0])
-        out_array: ZarrArray = output_group[out_path]
-        for arr in arrays[1:]:
-            out_array.append(arr)
+        arrays: Sequence = [g for g in groups]
+        if isinstance(arrays[0], (ZarrArray, ZarrGroup)):
+            out_array = output_group.create_dataset(out_path, data=arrays[0])
+            for arr in arrays[1:]:
+                out_array.append(arr, axis=axis)
+        else:
+            output_group: H5Group
+            arrays: Sequence[H5Array]
+            shapes = [a.shape[axis] for a in arrays]
+            new_shape = (sum(shapes), arrays[0].shape[1 - axis])[::1-2*axis]
+            out_array:H5Array = output_group.create_dataset(out_path, shape=new_shape)
+
+            # TODO: Is this efficient?
+            idx = 0
+            for shape,arr in zip(shapes,arrays):
+                if axis == 0:
+                    out_array[idx:idx+shape, :] = arr[:, :]
+                else:
+                    out_array[:, idx:idx+shape] = arr[:, :]
+                idx += shape
+                
     else:
         raise NotImplementedError(
             f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups],axis}."
         )
 
 
-def _format_from_filename(filename: str) -> str:
-    """Returns the format from the filename based on
-    our assumtion that zarr doesn't have to have .zarr suffix."""
-    if filename.lower().endswith(".h5ad"):
+@singledispatch
+def _get_format_from_path(path) -> str:
+    raise NotImplementedError("This is not yet implemented.")
+
+
+@_get_format_from_path.register
+def _(path: Path) -> str:
+    if path.suffix == ".h5ad":
+        return "h5ad"
+    return "zarr"
+
+
+@_get_format_from_path.register
+def _(path: str) -> str:
+    if path.endswith(".h5ad"):
         return "h5ad"
     return "zarr"
 
@@ -213,27 +225,24 @@ def _get_groups_from_paths(
 ) -> typing.Tuple[Sequence[Union[ZarrGroup, H5Group]], Union[ZarrGroup, H5Group]]:
     """Returns the groups to be concatenated and the output group."""
     groups = None
-
+    mode = "w" if overwrite else "w-"
     if isinstance(out_file, (ZarrGroup, H5Group)) and \
             isinstance(in_files, typing.Iterable) and all(isinstance(g, (ZarrGroup, H5Group)) for g in in_files):
         return in_files, out_file
 
-    formats = [_format_from_filename(p) == "h5ad" for p in in_files]
-    if all(formats):
+    formats = [_get_format_from_path(p) == "h5ad" for p in in_files]
+    if all(formats) and _get_format_from_path(out_file) == "h5ad":
         import h5py
         groups = [h5py.File(p, mode='r') for p in in_files]
-    elif not any(formats):
+        output_group = h5py.File(out_file, mode=mode)
+
+    elif not any(formats) and _get_format_from_path(out_file) != "h5ad":
         import zarr
         groups = [zarr.open(store=p) for p in in_files]
+        output_group = zarr.open(store=out_file, mode=mode)
+
     else:
         raise ValueError("All files must be either h5ad or zarr")
-    output_group = None
-    if _format_from_filename(out_file) == "h5ad":
-        import h5py
-        output_group = h5py.File(out_file, mode='w', overwrite=overwrite)
-    else:
-        import zarr
-        output_group = zarr.open(store=out_file, mode='w', overwrite=overwrite)
     return groups, output_group
 
 
@@ -395,7 +404,7 @@ def concat_on_disk(
     # Label column
     label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(groups)), [
-                  g["X"].attrs["shape"][axis] for g in groups]),
+                  get_shape(g["X"])[axis] for g in groups]),
         categories=keys,
     )
 
