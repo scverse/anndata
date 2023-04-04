@@ -35,7 +35,9 @@ def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
     return pd.Index(read_elem(df[index_key]))
 
 
-def _get_to_path(group: Union[ZarrGroup, H5Group], path: str) -> Union[ZarrGroup, H5Group]:
+def _get_to_path(
+    group: Union[ZarrGroup, H5Group], path: str
+) -> Union[ZarrGroup, H5Group]:
     if path:
         return group[path]
     return group
@@ -50,7 +52,8 @@ def _has_same_attrs(
     init_g = _get_to_path(groups[0], path)
 
     return all(
-        all(_get_to_path(g, path).attrs[attr] == init_g.attrs[attr] for attr in attrs) for g in groups
+        all(_get_to_path(g, path).attrs[attr] == init_g.attrs[attr] for attr in attrs)
+        for g in groups
     )
 
 
@@ -141,8 +144,7 @@ def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
         return group.shape
     elif group.attrs["encoding-type"] in SPARSE_MATRIX:
         return group.attrs.get("shape")
-    raise NotImplementedError(
-        f"Cannot get shape of {group.attrs['encoding-type']}")
+    raise NotImplementedError(f"Cannot get shape of {group.attrs['encoding-type']}")
 
 
 def write_concat_sequence_no_reindex(
@@ -191,17 +193,16 @@ def write_concat_sequence_no_reindex(
             output_group: H5Group
             arrays: Sequence[H5Array]
             shapes = [a.shape[axis] for a in arrays]
-            new_shape = (sum(shapes), arrays[0].shape[1 - axis])[::1-2*axis]
-            out_array: H5Array = output_group.create_dataset(
-                out_path, shape=new_shape)
+            new_shape = (sum(shapes), arrays[0].shape[1 - axis])[:: 1 - 2 * axis]
+            out_array: H5Array = output_group.create_dataset(out_path, shape=new_shape)
 
             # TODO: Is this efficient?
             idx = 0
             for shape, arr in zip(shapes, arrays):
                 if axis == 0:
-                    out_array[idx:idx+shape, :] = arr[:, :]
+                    out_array[idx : idx + shape, :] = arr[:, :]
                 else:
-                    out_array[:, idx:idx+shape] = arr[:, :]
+                    out_array[:, idx : idx + shape] = arr[:, :]
                 idx += shape
 
     else:
@@ -253,11 +254,13 @@ def _get_groups_from_paths(
     formats = [_get_format_from_path(p) == "h5ad" for p in in_files]
     if all(formats) and _get_format_from_path(out_file) == "h5ad":
         import h5py
-        groups = [h5py.File(p, mode='r') for p in in_files]
+
+        groups = [h5py.File(p, mode="r") for p in in_files]
         output_group = h5py.File(out_file, mode=mode)
 
     elif not any(formats) and _get_format_from_path(out_file) != "h5ad":
         import zarr
+
         groups = [zarr.open(store=p) for p in in_files]
         output_group = zarr.open(store=out_file, mode=mode)
 
@@ -421,13 +424,11 @@ def concat_on_disk(
         raise ValueError("All groups must be anndata")
 
     # Write metadata
-    output_group.attrs.update(
-        {"encoding-type": "anndata", "encoding-version": "0.1.0"})
+    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # Label column
     label_col = pd.Categorical.from_codes(
-        np.repeat(np.arange(len(groups)), [
-                  get_shape(g["X"])[axis] for g in groups]),
+        np.repeat(np.arange(len(groups)), [get_shape(g["X"])[axis] for g in groups]),
         categories=keys,
     )
 
@@ -436,25 +437,21 @@ def concat_on_disk(
         [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(
-            label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
 
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = merge_indices([_df_index(g[alt_dim])
-                                for g in groups], join=join)
+    alt_indices = merge_indices([_df_index(g[alt_dim]) for g in groups], join=join)
     # Write {dim}
     _write_dim_annot_no_reindex(
         groups, output_group, dim, concat_indices, label, label_col, join
     )
 
     # Write {alt_dim}
-    _write_alt_annot_no_reindex(
-        groups, output_group, alt_dim, alt_indices, merge)
+    _write_alt_annot_no_reindex(groups, output_group, alt_dim, alt_indices, merge)
 
     # Write {alt_dim}m
-    _write_alt_mapping_no_reindex(
-        groups, output_group, alt_dim, alt_indices, merge)
+    _write_alt_mapping_no_reindex(groups, output_group, alt_dim, alt_indices, merge)
 
     # Write Layers and {dim}m
     mapping_names = [
