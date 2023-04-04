@@ -82,7 +82,7 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
     else:
         paths = []
         for i, a in enumerate(adatas):
-            p = tmp_path / (f"{i}."+file_format)
+            p = tmp_path / (f"{i}." + file_format)
             write_func(a, p)
             paths += [p]
     return paths
@@ -98,7 +98,7 @@ def assert_eq_concat_on_disk(adatas, tmp_path, file_format, *args, **kwargs):
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / ("out."+file_format)
+    out_name = tmp_path / ("out." + file_format)
     concat_on_disk(paths, out_name, *args, **kwargs)
     res2 = read_func(out_name)
     assert_equal(res1, res2)
@@ -127,10 +127,12 @@ def test_anndatas_without_reindex(axis, array_type, join_type, tmp_path, file_fo
             N = np.random.randint(1, 100)
             sparse_fmt = "csc"
 
-        a = gen_adata((M, N), X_type=get_array_type(
-            array_type, axis), sparse_fmt=sparse_fmt,
-            **GEN_ADATA_OOC_CONCAT_ARGS)
+        a = gen_adata(
+            (M, N),
+            X_type=get_array_type(array_type, axis),
+            sparse_fmt=sparse_fmt,
+            **GEN_ADATA_OOC_CONCAT_ARGS,
+        )
         adatas.append(a)
 
-    assert_eq_concat_on_disk(
-        adatas, tmp_path, file_format, axis=axis, join=join_type)
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format, axis=axis, join=join_type)
