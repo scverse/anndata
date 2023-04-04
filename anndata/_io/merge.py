@@ -42,6 +42,9 @@ def _get_to_path(group: Union[ZarrGroup, H5Group], path: str) -> Union[ZarrGroup
 
 
 def _has_same_attrs(groups: list[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]) -> bool:
+def _has_same_attrs(
+    groups: list[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]
+) -> bool:
     if len(groups) == 0:
         return True
 
@@ -74,7 +77,9 @@ def _index_equal(groups: list[Union[ZarrGroup, H5Group]], path) -> bool:
     return True
 
 
-def write_concat_mappings_no_reindex(mappings, output_group: Union[ZarrGroup, H5Group], keys, path, axis=0, index=None):
+def write_concat_mappings_no_reindex(
+    mappings, output_group: Union[ZarrGroup, H5Group], keys, path, axis=0, index=None
+):
     """
     Write a list of mappings to a zarr group.
     """
@@ -88,7 +93,8 @@ def write_concat_mappings_no_reindex(mappings, output_group: Union[ZarrGroup, H5
     for k in keys:
         elems = [m[k] for m in mappings]
         write_concat_sequence_no_reindex(
-            elems, output_group=mapping_group, out_path=k, axis=axis, index=index)
+            elems, output_group=mapping_group, out_path=k, axis=axis, index=index
+        )
 
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
@@ -99,6 +105,7 @@ EAGER_TYPES = {"dataframe", "awkward-array"}
 def read_group(group: Union[ZarrGroup, H5Group]):
     """Read the group until
     SparseDataset, Array or EAGER_TYPES are encountered."""
+
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in SPARSE_MATRIX:
             return SparseDataset(elem)
@@ -114,13 +121,13 @@ def read_group(group: Union[ZarrGroup, H5Group]):
 
 def read_only_dict(group: ZarrGroup):
     """Read the dict and leave the rest of the group alone."""
+
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "dict":
-            return {
-                k: v for k, v in elem.items()
-            }
+            return {k: v for k, v in elem.items()}
         else:
             return elem
+
     return read_dispatched(group, callback=callback)
 
 
@@ -139,8 +146,13 @@ def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
         f"Cannot get shape of {group.attrs['encoding-type']}")
 
 
-def write_concat_sequence_no_reindex(groups: Sequence[Union[ZarrGroup, H5Group]], output_group,
-                                     out_path, axis=0, index=None):
+def write_concat_sequence_no_reindex(
+    groups: Sequence[Union[ZarrGroup, H5Group]],
+    output_group,
+    out_path,
+    axis=0,
+    index=None,
+):
     """
     array, dataframe, csc_matrix, csc_matrix
     """
@@ -148,8 +160,7 @@ def write_concat_sequence_no_reindex(groups: Sequence[Union[ZarrGroup, H5Group]]
     if any(get_encoding_type(g) == "dataframe" for g in groups):
         # TODO: what is missing val thing?
         if not all(
-            get_encoding_type(g) == "dataframe" or 0 in get_shape(g)
-            for g in groups
+            get_encoding_type(g) == "dataframe" or 0 in get_shape(g) for g in groups
         ):
             raise NotImplementedError(
                 "Cannot concatenate a dataframe with other array types."
@@ -162,9 +173,9 @@ def write_concat_sequence_no_reindex(groups: Sequence[Union[ZarrGroup, H5Group]]
         df.index = index
         write_elem(output_group, out_path, df)
     # If all are compatible sparse matrices
-    elif (all(get_encoding_type(g) == "csc_matrix" for g in groups) and axis == 1) or \
-            (all(get_encoding_type(g) == "csr_matrix" for g in groups) and axis == 0):
-
+    elif (all(get_encoding_type(g) == "csc_matrix" for g in groups) and axis == 1) or (
+        all(get_encoding_type(g) == "csr_matrix" for g in groups) and axis == 0
+    ):
         datasets: Sequence[SparseDataset] = [read_group(g) for g in groups]
         write_elem(output_group, out_path, datasets[0])
         out_dataset: SparseDataset = read_group(output_group[out_path])
@@ -219,15 +230,26 @@ def _(path: str) -> str:
 
 
 def _get_groups_from_paths(
-    in_files: Union[Collection[str], typing.MutableMapping, Collection[ZarrGroup], Collection[H5Group]],
+    in_files: Union[
+        Collection[str],
+        typing.MutableMapping,
+        Collection[ZarrGroup],
+        Collection[H5Group],
+    ],
     out_file: Union[str, typing.MutableMapping, ZarrGroup, H5Group],
-    overwrite: bool
+    overwrite: bool,
 ) -> typing.Tuple[Sequence[Union[ZarrGroup, H5Group]], Union[ZarrGroup, H5Group]]:
     """Returns the groups to be concatenated and the output group."""
     groups = None
     mode = "w" if overwrite else "w-"
     if isinstance(out_file, (ZarrGroup, H5Group)) and \
             isinstance(in_files, typing.Iterable) and all(isinstance(g, (ZarrGroup, H5Group)) for g in in_files):
+
+    if (
+        isinstance(out_file, (ZarrGroup, H5Group))
+        and isinstance(in_files, typing.Iterable)
+        and all(isinstance(g, (ZarrGroup, H5Group)) for g in in_files)
+    ):
         return in_files, out_file
 
     formats = [_get_format_from_path(p) == "h5ad" for p in in_files]
@@ -237,19 +259,30 @@ def _get_groups_from_paths(
         output_group = h5py.File(out_file, mode=mode)
 
     elif not any(formats) and _get_format_from_path(out_file) != "h5ad":
+
+        groups = [h5py.File(p, mode="r") for p in in_files]
+    elif not any(formats):
         import zarr
+
         groups = [zarr.open(store=p) for p in in_files]
         output_group = zarr.open(store=out_file, mode=mode)
 
     else:
         raise ValueError("All files must be either h5ad or zarr")
+    output_group = None
+    if _format_from_filename(out_file) == "h5ad":
+        import h5py
+
+        output_group = h5py.File(out_file, mode="w", overwrite=overwrite)
+    else:
+        import zarr
+
+        output_group = zarr.open(store=out_file, mode="w", overwrite=overwrite)
     return groups, output_group
 
 
 def _write_alt_mapping_no_reindex(groups, output_group, alt_dim, alt_indices, merge):
-    alt_mapping = merge(
-        [read_group(g[alt_dim]) for g in groups]
-    )
+    alt_mapping = merge([read_group(g[alt_dim]) for g in groups])
     # If its empty, we need to write an empty dataframe with the correct index
     if not alt_mapping:
         alt_df = pd.DataFrame(index=alt_indices)
@@ -266,7 +299,9 @@ def _write_alt_annot_no_reindex(groups, output_group, alt_dim, alt_indices, merg
     write_elem(output_group, alt_dim, alt_annot)
 
 
-def _write_dim_annot_no_reindex(groups, output_group, dim, concat_indices, label, label_col, join):
+def _write_dim_annot_no_reindex(
+    groups, output_group, dim, concat_indices, label, label_col, join
+):
     concat_annot = pd.concat(
         unify_categorical_dtypes([read_elem(g[dim]) for g in groups]),
         join=join,
@@ -279,7 +314,12 @@ def _write_dim_annot_no_reindex(groups, output_group, dim, concat_indices, label
 
 
 def concat_on_disk(
-    in_files: Union[Collection[str], typing.MutableMapping, Collection[ZarrGroup], Collection[H5Group]],
+    in_files: Union[
+        Collection[str],
+        typing.MutableMapping,
+        Collection[ZarrGroup],
+        Collection[H5Group],
+    ],
     out_file: Union[str, typing.MutableMapping, ZarrGroup, H5Group],
     overwrite: bool = False,
     *,
@@ -386,52 +426,50 @@ def concat_on_disk(
     _, alt_dim = _resolve_dim(axis=1 - axis)
 
     groups, output_group = _get_groups_from_paths(
-        in_files, out_file, overwrite=overwrite)
+        in_files, out_file, overwrite=overwrite
+    )
 
     # All dim_names must be equal
     if not _index_equal(groups, alt_dim):
         raise NotImplementedError(f"{alt_dim}_names must be equal")
 
     # All groups must be anndata
-    if not _attrs_equal(groups, path="",
-                        attrs_map={"encoding-type": "anndata"}):
+    if not _attrs_equal(groups, path="", attrs_map={"encoding-type": "anndata"}):
         raise ValueError("All groups must be anndata")
 
     # Write metadata
-    output_group.attrs.update(
-        {"encoding-type": "anndata", "encoding-version": "0.1.0"})
+    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # Label column
     label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(groups)), [
                   get_shape(g["X"])[axis] for g in groups]),
+        np.repeat(
+            np.arange(len(groups)), [g["X"].attrs["shape"][axis] for g in groups]
+        ),
         categories=keys,
     )
 
     # Combining indexes
     concat_indices = pd.concat(
-        [pd.Series(_df_index(g[dim])) for g in groups],
-        ignore_index=True
+        [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(
-            label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
 
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = merge_indices([_df_index(g[alt_dim])
-                                for g in groups], join=join)
+    alt_indices = merge_indices([_df_index(g[alt_dim]) for g in groups], join=join)
     # Write {dim}
     _write_dim_annot_no_reindex(
-        groups, output_group, dim, concat_indices, label, label_col, join)
+        groups, output_group, dim, concat_indices, label, label_col, join
+    )
 
     # Write {alt_dim}
-    _write_alt_annot_no_reindex(
-        groups, output_group, alt_dim, alt_indices, merge)
+    _write_alt_annot_no_reindex(groups, output_group, alt_dim, alt_indices, merge)
 
     # Write {alt_dim}m
-    _write_alt_mapping_no_reindex(
-        groups, output_group, alt_dim, alt_indices, merge)
+    _write_alt_mapping_no_reindex(groups, output_group, alt_dim, alt_indices, merge)
 
     # Write Layers and {dim}m
     mapping_names = [
@@ -441,10 +479,11 @@ def concat_on_disk(
     for m, m_index, m_axis in mapping_names:
         maps = [read_only_dict(g[m]) for g in groups]
         write_concat_mappings_no_reindex(
-            maps, output_group, intersect_keys(maps), m,
-            axis=m_axis, index=m_index)
+            maps, output_group, intersect_keys(maps), m, axis=m_axis, index=m_index
+        )
 
     # Write X
     Xs = [g["X"] for g in groups]
     write_concat_sequence_no_reindex(
-        groups=Xs, output_group=output_group, out_path="X", axis=axis)
+        groups=Xs, output_group=output_group, out_path="X", axis=axis
+    )
