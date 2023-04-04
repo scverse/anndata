@@ -41,7 +41,6 @@ def _get_to_path(group: Union[ZarrGroup, H5Group], path: str) -> Union[ZarrGroup
     return group
 
 
-def _has_same_attrs(groups: list[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]) -> bool:
 def _has_same_attrs(
     groups: list[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]
 ) -> bool:
@@ -193,17 +192,18 @@ def write_concat_sequence_no_reindex(
             arrays: Sequence[H5Array]
             shapes = [a.shape[axis] for a in arrays]
             new_shape = (sum(shapes), arrays[0].shape[1 - axis])[::1-2*axis]
-            out_array:H5Array = output_group.create_dataset(out_path, shape=new_shape)
+            out_array: H5Array = output_group.create_dataset(
+                out_path, shape=new_shape)
 
             # TODO: Is this efficient?
             idx = 0
-            for shape,arr in zip(shapes,arrays):
+            for shape, arr in zip(shapes, arrays):
                 if axis == 0:
                     out_array[idx:idx+shape, :] = arr[:, :]
                 else:
                     out_array[:, idx:idx+shape] = arr[:, :]
                 idx += shape
-                
+
     else:
         raise NotImplementedError(
             f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups],axis}."
@@ -242,8 +242,6 @@ def _get_groups_from_paths(
     """Returns the groups to be concatenated and the output group."""
     groups = None
     mode = "w" if overwrite else "w-"
-    if isinstance(out_file, (ZarrGroup, H5Group)) and \
-            isinstance(in_files, typing.Iterable) and all(isinstance(g, (ZarrGroup, H5Group)) for g in in_files):
 
     if (
         isinstance(out_file, (ZarrGroup, H5Group))
@@ -259,25 +257,10 @@ def _get_groups_from_paths(
         output_group = h5py.File(out_file, mode=mode)
 
     elif not any(formats) and _get_format_from_path(out_file) != "h5ad":
-
-        groups = [h5py.File(p, mode="r") for p in in_files]
-    elif not any(formats):
         import zarr
-
         groups = [zarr.open(store=p) for p in in_files]
         output_group = zarr.open(store=out_file, mode=mode)
 
-    else:
-        raise ValueError("All files must be either h5ad or zarr")
-    output_group = None
-    if _format_from_filename(out_file) == "h5ad":
-        import h5py
-
-        output_group = h5py.File(out_file, mode="w", overwrite=overwrite)
-    else:
-        import zarr
-
-        output_group = zarr.open(store=out_file, mode="w", overwrite=overwrite)
     return groups, output_group
 
 
@@ -438,15 +421,13 @@ def concat_on_disk(
         raise ValueError("All groups must be anndata")
 
     # Write metadata
-    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
+    output_group.attrs.update(
+        {"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # Label column
     label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(groups)), [
                   get_shape(g["X"])[axis] for g in groups]),
-        np.repeat(
-            np.arange(len(groups)), [g["X"].attrs["shape"][axis] for g in groups]
-        ),
         categories=keys,
     )
 
@@ -455,21 +436,25 @@ def concat_on_disk(
         [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(
+            label_col.map(str), sep=index_unique)
 
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = merge_indices([_df_index(g[alt_dim]) for g in groups], join=join)
+    alt_indices = merge_indices([_df_index(g[alt_dim])
+                                for g in groups], join=join)
     # Write {dim}
     _write_dim_annot_no_reindex(
         groups, output_group, dim, concat_indices, label, label_col, join
     )
 
     # Write {alt_dim}
-    _write_alt_annot_no_reindex(groups, output_group, alt_dim, alt_indices, merge)
+    _write_alt_annot_no_reindex(
+        groups, output_group, alt_dim, alt_indices, merge)
 
     # Write {alt_dim}m
-    _write_alt_mapping_no_reindex(groups, output_group, alt_dim, alt_indices, merge)
+    _write_alt_mapping_no_reindex(
+        groups, output_group, alt_dim, alt_indices, merge)
 
     # Write Layers and {dim}m
     mapping_names = [
