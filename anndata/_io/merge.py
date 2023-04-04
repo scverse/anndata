@@ -203,7 +203,7 @@ def write_concat_sequence_no_reindex(
                 else:
                     out_array[:, idx:idx+shape] = arr[:, :]
                 idx += shape
-                
+
     else:
         raise NotImplementedError(
             f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups],axis}."
