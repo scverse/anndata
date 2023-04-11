@@ -34,9 +34,11 @@ jobs:
               # Errors on main branch
 
             - name: Set up Python ${{ matrix.python }}
-              uses: actions/setup-python@v2
+              uses: actions/setup-python@v4
               with:
                   python-version: ${{ matrix.python }}
+                  cache: 'pip'
+                  cache-dependency-path: "**/pyproject.toml"
 
             - name: Cache datasets
               uses: actions/cache@v3
@@ -44,19 +46,6 @@ jobs:
                 path: |
                   ~/.cache
                 key: benchmark-state-${{ hashFiles('benchmarks/**') }}
-
-            - name: Get pip cache dir
-              id: pip-cache-dir
-              run: |
-                  echo "::set-output name=dir::$(pip cache dir)"
-
-            - name: Restore pip cache
-              uses: actions/cache@v2
-              with:
-                  path: ${{ steps.pip-cache-dir.outputs.dir }}
-                  key: ${{ runner.os }}-pip${{ matrix.python}}-${{ hashFiles('**/pyproject.toml') }}
-                  restore-keys: |
-                      ${{ runner.os }}-pip${{ matrix.python }}-
 
             - name: Install dependencies
               run: |
