@@ -10,7 +10,6 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
-from anndata.compat import awkward as ak
 import random
 
 from anndata import AnnData, Raw
@@ -18,7 +17,6 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray, dim_len
-
 from anndata.compat import AwkArray, DaskArray
 
 # Give this to gen_adata when dask array support is expected.
@@ -102,6 +100,8 @@ def gen_awkward(shape, dtype=np.int32):
     shape
         shape of the array to be generated. Any dimension specified as `None` will be simulated as ragged.
     """
+    from anndata.compat import awkward as ak
+
     if shape[0] is None:
         raise ValueError("The first dimension must be fixed-length.")
 
