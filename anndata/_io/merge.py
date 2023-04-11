@@ -33,6 +33,10 @@ from pathlib import Path
 import numpy as np
 
 from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
+from kerchunk.hdf import SingleHdf5ToZarr
+from typing import MutableMapping
+import zarr
+from fsspec.implementations.reference import ReferenceFileSystem
 
 
 # TODO: Not good
@@ -112,14 +116,12 @@ def write_concat_mappings_no_reindex(
         )
 
 
-
-
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
 EAGER_TYPES = {"dataframe", "awkward-array"}
 
 
-def read_group(group: Union[ZarrGroup, H5Group]):
+def read_group(group: ZarrGroup):
     """Read the group until
     SparseDataset, Array or EAGER_TYPES are encountered."""
 
@@ -163,17 +165,20 @@ def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
         f"Cannot get shape of {group.attrs['encoding-type']}")
 
 
-def get_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):    
+def get_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
     for elem, ri in zip(elems, reindexers):
-        yield ri(elem, axis=axis, fill_value=fill_value)
+        if ri.no_change:
+            yield elem
+        else:
+            yield ri(elem, axis=axis, fill_value=fill_value)
 
 
 def gen_reindexers_df_inner(
-        dfs:Sequence[pd.DataFrame], axis: Literal[0, 1] = 0):
+        dfs: Sequence[pd.DataFrame], axis: Literal[0, 1] = 0):
     if axis == 0:
-        df_indices = lambda x: x.columns
+        def df_indices(x): return x.columns
     elif axis == 1:
-        df_indices = lambda x: x.indices
+        def df_indices(x): return x.indices
 
     # TODO Handle empty later
     common_ind = reduce(
@@ -182,17 +187,18 @@ def gen_reindexers_df_inner(
     reindexers = [Reindexer(df_indices(df), common_ind) for df in dfs]
     return reindexers
 
+
 def gen_reindexers_array_inner(
-        groups:Sequence[Union[ZarrGroup, H5Group]], axis: Literal[0, 1] = 0):
-    
+        groups: Sequence[Union[ZarrGroup, H5Group]], axis: Literal[0, 1] = 0):
+
     min_ind = min(get_shape(g)[1-axis] for g in groups)
     reindexers = [
-        gen_reindexer(pd.RangeIndex(min_ind), pd.RangeIndex(get_shape(g)[1-axis]))
+        gen_reindexer(pd.RangeIndex(min_ind),
+                      pd.RangeIndex(get_shape(g)[1-axis]))
         for g in groups
     ]
 
     return reindexers
-
 
 
 def write_concat_sequence(
@@ -208,7 +214,6 @@ def write_concat_sequence(
     """
     array, dataframe, csc_matrix, csc_matrix
     """
-
     if any(get_encoding_type(g) == "dataframe" for g in groups):
         # TODO: what is missing val thing?
         if not all(
@@ -225,7 +230,7 @@ def write_concat_sequence(
                 raise NotImplementedError(
                     "Cannot reindex dataframes with outer join."
                 )
-            
+
         df = pd.concat(
             unify_categorical_dtypes([f(d) for f, d in zip(reindexers, dfs)]),
             ignore_index=True,
@@ -238,14 +243,28 @@ def write_concat_sequence(
         all(get_encoding_type(g) == "csr_matrix" for g in groups) and axis == 0
     ):
         datasets: Sequence[SparseDataset] = [read_group(g) for g in groups]
-        write_elem(output_group, out_path, reindexers[0](datasets[0], axis=axis, fill_value=fill_value))
-        out_dataset: SparseDataset = read_group(output_group[out_path])
-        for ds,ri in zip(datasets[1:], reindexers[1:]):
-            out_dataset.append(ri(ds, axis=axis, fill_value=fill_value))
+        if all(ri.no_change for ri in reindexers):
+            write_elem(output_group, out_path, datasets[0])
+            out_dataset: SparseDataset = read_group(output_group[out_path])
+            for ds in datasets[1:]:
+                out_dataset.append(ds)
+        else:
+            # TODO: should we give performance warning here?
+            init_elem = reindexers[0](
+                datasets[0].to_memory(), axis=1-axis, fill_value=fill_value)
+            write_elem(output_group, out_path, init_elem)
+            del init_elem
+            out_dataset: SparseDataset = read_group(output_group[out_path])
+            for ds, ri in zip(datasets[1:], reindexers[1:]):
+                temp_elem = ri(ds.to_memory(), axis=1 -
+                               axis, fill_value=fill_value)
+                out_dataset.append(temp_elem)
+                del temp_elem
+
     # If all are arrays
     elif all(get_encoding_type(g) == "array" for g in groups):
-        out_array = None
-        
+        # out_array = None
+
         if reindexers is None:
             if join == "inner":
                 reindexers = gen_reindexers_array_inner(groups, axis=axis)
@@ -253,101 +272,113 @@ def write_concat_sequence(
                 raise NotImplementedError(
                     "Cannot reindex arrays with outer join."
                 )
-        arrays: Sequence = groups
-        init_elem = arrays[0]
-        if isinstance(init_elem, (ZarrArray, ZarrGroup)):
-            init_elem = reindexers[0](init_elem, axis=axis, fill_value=fill_value)
-            out_array = output_group.create_dataset(out_path, data=init_elem)
-            for arr in get_elem_to_append(arrays[1:], axis=axis, reindexers=reindexers[1:],fill_value=fill_value):
-                out_array.append(arr, axis=axis)
-        elif isinstance(init_elem, (H5Array, H5Group)):
-            output_group: H5Group
-            arrays: Sequence[H5Array]
-            dim_shapes = [a.shape[axis] for a in arrays]
-            dim_res_len = sum(dim_shapes)
-            
-            alt_dim_res_len = None
-            if all(r.no_change for r in reindexers):
-                alt_dim_res_len = arrays[0].shape[1-axis]
-            else:
-                alt_dim_res_len = len(reindexers[0].new_idx)
+        arrays: Sequence = [read_group(g) for g in groups]
+        # init_elem = arrays[0]
+        # if isinstance(init_elem, (H5Array, H5Group)):
+        #     arrays =
 
-            new_shape = (dim_res_len, alt_dim_res_len)[::1-2*axis]
-            out_array: H5Array = output_group.create_dataset(
-                out_path, shape=new_shape)
+        # if isinstance(init_elem, (ZarrArray, ZarrGroup)):
+        import dask.array as da
+        darrays = (da.from_zarr(a) for a in arrays)
+        res = da.concatenate(
+            get_elem_to_append(darrays, axis=1-axis, reindexers=reindexers, fill_value=fill_value), axis=axis)
 
-            # TODO: Is this efficient?
-            idx = 0
-            for shape, arr in zip(dim_shapes, get_elem_to_append(arrays, axis=axis, reindexers=reindexers, fill_value=fill_value)):
-                if axis == 0:
-                    out_array[idx:idx+shape, :] = arr
-                else:
-                    out_array[:, idx:idx+shape] = arr
-                idx += shape
-        else:
-            # TODO: More detail
-            raise NotImplementedError("This is not yet implemented.")
-        out_array.attrs.update({"encoding-type": "array", "encoding-version": "0.2.0"})
+        write_elem(output_group, out_path, res)
+
+        # init_elem = reindexers[0](init_elem, axis=axis, fill_value=fill_value)
+        # out_array = output_group.create_dataset(out_path, data=init_elem)
+        # for arr in get_elem_to_append(arrays[1:], axis=axis, reindexers=reindexers[1:],fill_value=fill_value):
+        #     out_array.append(arr, axis=axis)
+        # elif isinstance(init_elem, (H5Array, H5Group)):
+        #     output_group: H5Group
+        #     arrays: Sequence[H5Array]
+        #     dim_shapes = [a.shape[axis] for a in arrays]
+        #     dim_res_len = sum(dim_shapes)
+
+        #     alt_dim_res_len = None
+        #     if all(r.no_change for r in reindexers):
+        #         alt_dim_res_len = arrays[0].shape[1-axis]
+        #     else:
+        #         alt_dim_res_len = len(reindexers[0].new_idx)
+        #         assert all(len(ri.new_idx) == alt_dim_res_len for ri in reindexers)
+
+        #     new_shape = (dim_res_len, alt_dim_res_len)[::1-2*axis]
+        #     out_array: H5Array = output_group.create_dataset(
+        #         out_path, shape=new_shape)
+
+        #     # TODO: Is this efficient?
+        #     idx = 0
+        #     for shape, arr in zip(dim_shapes, get_elem_to_append(arrays, axis=1-axis, reindexers=reindexers, fill_value=fill_value)):
+        #         if axis == 0:
+        #             out_array[idx:idx+shape, :] = arr
+        #         else:
+        #             out_array[:, idx:idx+shape] = arr
+        #         idx += shape
+        # else:
+        # TODO: More detail
+        # raise NotImplementedError("This is not yet implemented.")
+        output_group[out_path].attrs.update(
+            {"encoding-type": "array", "encoding-version": "0.2.0"})
     else:
         raise NotImplementedError(
             f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups],axis}."
         )
 
 
+def _get_zarr_group_from_hdf5(store, *args, **kwargs) -> ZarrGroup:
+    new_store = SingleHdf5ToZarr(store)
+    rfs = ReferenceFileSystem(new_store.translate())
+    return zarr.open_group(rfs.get_mapper(), *args, **kwargs)
 
 
 @singledispatch
-def _get_format_from_path(path) -> str:
+def _get_group(store, *args, **kwargs) -> ZarrGroup:
     raise NotImplementedError("This is not yet implemented.")
 
 
-@_get_format_from_path.register
-def _(path: Path) -> str:
-    if path.suffix == ".h5ad":
-        return "h5ad"
-    return "zarr"
+@_get_group.register
+def _(store: Path, *args, **kwargs) -> ZarrGroup:
+    if store.suffix == ".h5ad":
+        return _get_zarr_group_from_hdf5(str(store), *args, **kwargs)
+    return zarr.open_group(store, *args, **kwargs)
 
 
-@_get_format_from_path.register
-def _(path: str) -> str:
-    if path.endswith(".h5ad"):
-        return "h5ad"
-    return "zarr"
+@_get_group.register
+def _(store: str, *args, **kwargs) -> ZarrGroup:
+    if store.endswith(".h5ad"):
+        return _get_zarr_group_from_hdf5(store, *args, **kwargs)
+    return zarr.open_group(store, *args, **kwargs)
+
+
+@_get_group.register
+def _(store: dict, *args, **kwargs) -> ZarrGroup:
+    return zarr.open_group(store, *args, **kwargs)
+
+
+@_get_group.register
+def _(store: ZarrGroup, *args, **kwargs) -> ZarrGroup:
+    return store
 
 
 def _get_groups_from_paths(
     in_files: Union[
         Collection[str],
-        typing.MutableMapping,
+        Collection[Path],
+        MutableMapping,
         Collection[ZarrGroup],
-        Collection[H5Group],
     ],
-    out_file: Union[str, typing.MutableMapping, ZarrGroup, H5Group],
+    out_file: Union[str, MutableMapping, ZarrGroup, Path],
     overwrite: bool,
-) -> typing.Tuple[Sequence[Union[ZarrGroup, H5Group]], Union[ZarrGroup, H5Group]]:
+) -> typing.Tuple[Sequence[ZarrGroup], ZarrGroup]:
     """Returns the groups to be concatenated and the output group."""
-    groups = None
     mode = "w" if overwrite else "w-"
 
-    if (
-        isinstance(out_file, (ZarrGroup, H5Group))
-        and isinstance(in_files, typing.Iterable)
-        and all(isinstance(g, (ZarrGroup, H5Group)) for g in in_files)
-    ):
-        return in_files, out_file
-
-    formats = [_get_format_from_path(p) == "h5ad" for p in in_files]
-    if all(formats) and _get_format_from_path(out_file) == "h5ad":
-        import h5py
-        groups = [h5py.File(p, mode='r') for p in in_files]
-        output_group = h5py.File(out_file, mode=mode)
-
-    elif not any(formats) and _get_format_from_path(out_file) != "h5ad":
-        import zarr
-        groups = [zarr.open(store=p) for p in in_files]
-        output_group = zarr.open(store=out_file, mode=mode)
-
-    return groups, output_group
+    if isinstance(out_file, ZarrGroup):
+        res_out_file = out_file
+    else:
+        res_out_file = zarr.open_group(out_file, mode=mode)
+    res_in_files = [_get_group(f) for f in in_files]
+    return res_in_files, res_out_file
 
 
 def _write_alt_mapping_no_reindex(groups, output_group, alt_dim, alt_indices, merge):
@@ -380,8 +411,6 @@ def _write_dim_annot(
     if label is not None:
         concat_annot[label] = label_col
     write_elem(output_group, dim, concat_annot)
-
-
 
 
 def concat_on_disk(
@@ -504,7 +533,7 @@ def concat_on_disk(
     # All dim_names must be equal
     if not _index_equal(groups, alt_dim):
         use_reindexing = True
-        raise RuntimeWarning("All dim_names must be equal for efficient concatenation")
+        # raise RuntimeWarning("All dim_names must be equal for efficient concatenation")
         # raise NotImplementedError(f"{alt_dim}_names must be equal")
 
     # TODO: Save read indices
@@ -537,7 +566,6 @@ def concat_on_disk(
     alt_indices = merge_indices([_df_index(g[alt_dim])
                                 for g in groups], join=join)
 
-
     reindexers = None
     if use_reindexing:
         reindexers = [
@@ -545,7 +573,6 @@ def concat_on_disk(
         ]
     else:
         reindexers = [IdentityReindexer()] * len(groups)
-
 
     # Write {dim}
     _write_dim_annot(
@@ -563,7 +590,8 @@ def concat_on_disk(
     # Write Layers and {dim}m
     mapping_names = [
         ("layers", None, axis, reindexers),
-        (f"{dim}m", concat_indices, 0, None if use_reindexing else [IdentityReindexer()] * len(groups)),
+        (f"{dim}m", concat_indices, 0, None if use_reindexing else [
+         IdentityReindexer()] * len(groups)),
     ]
     for m, m_index, m_axis, m_reindexers in mapping_names:
         maps = [read_only_dict(g[m]) for g in groups]

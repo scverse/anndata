@@ -98,7 +98,7 @@ def assert_eq_concat_on_disk(adatas, tmp_path, file_format, *args, **kwargs):
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / ("out." + file_format)
+    out_name = tmp_path / ("out.zarr")
     concat_on_disk(paths, out_name, *args, **kwargs)
     res2 = read_func(out_name)
     assert_equal(res1, res2)
@@ -136,3 +136,81 @@ def test_anndatas_without_reindex(axis, array_type, join_type, tmp_path, file_fo
         adatas.append(a)
 
     assert_eq_concat_on_disk(adatas, tmp_path, file_format, axis=axis, join=join_type)
+
+
+def test_concat_ordered_categoricals_retained(tmp_path, file_format):
+    a = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("aabcd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5)],
+        ),
+    )
+    b = AnnData(
+        X=np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {
+                "cat_ordered": pd.Categorical(list("abcdd"), ordered=True),
+            },
+            index=[f"cell{i:02}" for i in range(5, 10)],
+        ),
+    )
+
+    adatas = [a,b]
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
+
+
+@pytest.fixture
+def obsm_adatas():
+    def gen_index(n):
+        return [f"cell{i}" for i in range(n)]
+
+    return [
+        AnnData(
+            X=sparse.csr_matrix((3, 5)),
+            obs=pd.DataFrame(index=gen_index(3)),
+            obsm={
+                "dense": np.arange(6).reshape(3, 2),
+                "sparse": sparse.csr_matrix(np.arange(6).reshape(3, 2)),
+                "df": pd.DataFrame(
+                    {
+                        "a": np.arange(3),
+                        "b": list("abc"),
+                        "c": pd.Categorical(list("aab")),
+                    },
+                    index=gen_index(3),
+                ),
+            },
+        ),
+        AnnData(
+            X=sparse.csr_matrix((4, 10)),
+            obs=pd.DataFrame(index=gen_index(4)),
+            obsm=dict(
+                dense=np.arange(12).reshape(4, 3),
+                df=pd.DataFrame(dict(a=np.arange(3, 7)), index=gen_index(4)),
+            ),
+        ),
+        AnnData(
+            X=sparse.csr_matrix((2, 100)),
+            obs=pd.DataFrame(index=gen_index(2)),
+            obsm={
+                "sparse": np.arange(8).reshape(2, 4),
+                "dense": np.arange(4, 8).reshape(2, 2),
+                "df": pd.DataFrame(
+                    {
+                        "a": np.arange(7, 9),
+                        "b": list("cd"),
+                        "c": pd.Categorical(list("ab")),
+                    },
+                    index=gen_index(2),
+                ),
+            },
+        ),
+    ]
+
+
+def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
+
+    assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
