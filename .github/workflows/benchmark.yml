@@ -38,6 +38,7 @@ jobs:
               with:
                   python-version: ${{ matrix.python }}
                   cache: 'pip'
+                  cache-dependency-path: "**/pyproject.toml"
 
             - name: Cache datasets
               uses: actions/cache@v3
