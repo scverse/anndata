@@ -20,6 +20,20 @@ anndata is a Python package for handling annotated data matrices in memory and o
 - Read the [documentation](https://anndata.readthedocs.io).
 - Ask questions on the [scverse Discourse](https://discourse.scverse.org).
 - Install via `pip install anndata` or `conda install anndata -c conda-forge`.
-- Consider citing the [anndata paper](https://doi.org/10.1101/2021.12.16.473007).
-- See [Scanpy's documentation](https://scanpy.readthedocs.io/) for usage
-  related to single cell data. anndata was initially built for Scanpy.
+- See [Scanpy's documentation](https://scanpy.readthedocs.io/) for usage related to single cell data. anndata was initially built for Scanpy.
+  
+If you use `anndata` in your work, please cite the `anndata` pre-print as follows:
+
+> **anndata: Annotated data**
+>
+> Isaac Virshup, Sergei Rybakov, Fabian J. Theis, Philipp Angerer, F. Alexander Wolf
+>
+> _bioRxiv_ 2021 Dec 19. doi: [10.1101/2021.12.16.473007](https://doi.org/10.1101/2021.12.16.473007).
+
+You can cite the scverse publication as follows:
+
+> **The scverse project provides a computational ecosystem for single-cell omics data analysis**
+>
+> Isaac Virshup, Danila Bredikhin, Lukas Heumos, Giovanni Palla, Gregor Sturm, Adam Gayoso, Ilia Kats, Mikaela Koutrouli, Scverse Community, Bonnie Berger, Dana Pe’er, Aviv Regev, Sarah A. Teichmann, Francesca Finotello, F. Alexander Wolf, Nir Yosef, Oliver Stegle & Fabian J. Theis
+>
+> _Nat Biotechnol._ 2022 Apr 10. doi: [10.1038/s41587-023-01733-8](https://doi.org/10.1038/s41587-023-01733-8).
