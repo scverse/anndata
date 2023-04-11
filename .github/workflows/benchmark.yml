@@ -30,6 +30,8 @@ jobs:
                 fetch-depth: 0
 
             - run: git fetch origin main:main
+              if: ${{ github.ref_name != 'main' }}
+              # Errors on main branch
 
             - name: Set up Python ${{ matrix.python }}
               uses: actions/setup-python@v2
