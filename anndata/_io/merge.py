@@ -135,10 +135,7 @@ def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
 
 def get_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
     for elem, ri in zip(elems, reindexers):
-        if ri.no_change:
-            yield elem
-        else:
-            yield ri(elem, axis=axis, fill_value=fill_value)
+        yield ri(elem, axis=axis, fill_value=fill_value)
 
 
 def gen_reindexers_df_inner(dfs: Sequence[pd.DataFrame], axis: Literal[0, 1] = 0):
