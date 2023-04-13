@@ -98,7 +98,7 @@ def assert_eq_concat_on_disk(adatas, tmp_path, file_format, *args, **kwargs):
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / ("out.zarr")
+    out_name = tmp_path / ("out." + file_format)
     concat_on_disk(paths, out_name, *args, **kwargs)
     res2 = read_func(out_name)
     assert_equal(res1, res2)
