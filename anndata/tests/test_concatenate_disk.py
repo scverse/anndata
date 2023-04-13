@@ -79,12 +79,12 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
     return paths
 
 
+
 def assert_eq_concat_on_disk(adatas, tmp_path, file_format, *args, **kwargs):
     def read_func(path):
         if file_format == "h5ad":
             return read_h5ad(path)
         return read_zarr(path)
-
     # create one from the concat function
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
