@@ -154,17 +154,16 @@ def adatas_to_zarr_paths(adatas, tmp_path):
             paths += [p]
     return paths
 
+    # def test_concat_interface_errors_disk(tmp_path):
+    #     adatas = [gen_adata((5, 10)), gen_adata((5, 10))]
+    #     paths = adatas_to_zarr_paths(adatas, tmp_path)
 
-# def test_concat_interface_errors_disk(tmp_path):
-#     adatas = [gen_adata((5, 10)), gen_adata((5, 10))]
-#     paths = adatas_to_zarr_paths(adatas, tmp_path)
-
     with pytest.raises(ValueError):
-        concat_on_disk(paths, out_path=tmp_path/'test', axis=3)
+        concat_on_disk(paths, out_path=tmp_path / "test", axis=3)
     with pytest.raises(ValueError):
-        concat_on_disk(paths, out_path=tmp_path/'test', join="not implemented")
+        concat_on_disk(paths, out_path=tmp_path / "test", join="not implemented")
     with pytest.raises(ValueError):
-        concat_on_disk([], tmp_path/"test")
+        concat_on_disk([], tmp_path / "test")
 
 
 def assert_eq_concat_on_disk(adatas, tmp_path, *args, **kwargs):
