@@ -49,41 +49,6 @@ def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
     return pd.Index(read_elem(df[index_key]))
 
 
-def _get_to_path(
-    group: Union[ZarrGroup, H5Group], path: str
-) -> Union[ZarrGroup, H5Group]:
-    if path:
-        return group[path]
-    return group
-
-
-def _has_same_attrs(
-    groups: List[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]
-) -> bool:
-    if len(groups) == 0:
-        return True
-
-    init_g = _get_to_path(groups[0], path)
-
-    return all(
-        all(_get_to_path(g, path).attrs[attr] == init_g.attrs[attr] for attr in attrs)
-        for g in groups
-    )
-
-
-def _attrs_equal(
-    groups: List[Union[ZarrGroup, H5Group]], path: str, attrs_map: Mapping[str, str]
-) -> bool:
-    if len(groups) == 0:
-        raise ValueError("List should not be empty")
-
-    init_g = _get_to_path(groups[0], path)
-
-    return all(
-        init_g.attrs[attr] == val for attr, val in attrs_map.items()
-    ) and _has_same_attrs(groups, path, attrs_map.keys())
-
-
 def _requires_reindexing(indices) -> bool:
     init_elem = indices[0]
     return any(not np.array_equal(init_elem, elem) for elem in indices[1:])
@@ -557,7 +522,7 @@ def concat_on_disk(
         use_reindexing = True
 
     # All groups must be anndata
-    if not _attrs_equal(groups, path="", attrs_map={"encoding-type": "anndata"}):
+    if not all(get_encoding_type(g) == "anndata" for g in groups):
         raise ValueError("All groups must be anndata")
 
     # Write metadata
