@@ -546,7 +546,9 @@ def concat_on_disk(
 
     reindexers = None
     if use_reindexing:
-        reindexers = [gen_reindexer(alt_indices, alt_old_index) for alt_old_index in alt_dims]
+        reindexers = [
+            gen_reindexer(alt_indices, alt_old_index) for alt_old_index in alt_dims
+        ]
     else:
         reindexers = [IdentityReindexer()] * len(groups)
 
