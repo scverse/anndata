@@ -542,11 +542,11 @@ def concat_on_disk(
     # Resulting indices for {dim} and {alt_dim}
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = merge_indices([_df_index(g[alt_dim]) for g in groups], join=join)
+    alt_indices = merge_indices(alt_dims, join=join)
 
     reindexers = None
     if use_reindexing:
-        reindexers = [gen_reindexer(alt_indices, _df_index(g[alt_dim])) for g in groups]
+        reindexers = [gen_reindexer(alt_indices, alt_old_index) for alt_old_index in alt_dims]
     else:
         reindexers = [IdentityReindexer()] * len(groups)
 
