@@ -54,7 +54,7 @@ def _requires_reindexing(indices) -> bool:
     return any(not np.array_equal(init_elem, elem) for elem in indices[1:])
 
 
-def write_concat_mappings_no_reindex(
+def write_concat_mappings(
     mappings,
     output_group: Union[ZarrGroup, H5Group],
     keys,
@@ -574,7 +574,7 @@ def concat_on_disk(
     for m, m_index, m_axis, m_reindexers in mapping_names:
         maps = [read_only_dict(g[m]) for g in groups]
 
-        write_concat_mappings_no_reindex(
+        write_concat_mappings(
             maps,
             output_group,
             intersect_keys(maps),
