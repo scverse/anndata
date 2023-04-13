@@ -85,13 +85,11 @@ def _attrs_equal(
     ) and _has_same_attrs(groups, path, attrs_map.keys())
 
 
-def _index_equal(groups: list[Union[ZarrGroup, H5Group]], path) -> bool:
-    names = _df_index(_get_to_path(groups[0], path))
-    for g in groups[1:]:
-        curr_names = _df_index(_get_to_path(g, path))
-        if not np.array_equal(names, curr_names):
-            return False
-    return True
+def _requires_reindexing(
+    indices
+) -> bool:
+    init_elem = indices[0]
+    return any(not np.array_equal(init_elem, elem) for elem in indices[1:])
 
 
 def write_concat_mappings_no_reindex(
@@ -272,8 +270,6 @@ def write_concat_sequence(
 
     # If all are arrays
     elif all(get_encoding_type(g) == "array" for g in groups):
-        # out_array = None
-
         if reindexers is None:
             if join == "inner":
                 reindexers = gen_reindexers_array_inner(groups, axis=axis)
@@ -438,6 +434,7 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
     write_elem(output_group, dim, concat_annot)
 
 
+
 def concat_on_disk(
     in_files: Union[
         Collection[str],
@@ -555,13 +552,12 @@ def concat_on_disk(
     )
 
     use_reindexing = False
-    # All dim_names must be equal
-    if not _index_equal(groups, alt_dim):
-        use_reindexing = True
-        # raise RuntimeWarning("All dim_names must be equal for efficient concatenation")
-        # raise NotImplementedError(f"{alt_dim}_names must be equal")
 
-    # TODO: Save read indices
+    alt_dims = [_df_index(g[alt_dim]) for g in groups]
+    # All dim_names must be equal if reindexing not applied
+    if _requires_reindexing(alt_dims):
+        use_reindexing = True
+
     # All groups must be anndata
     if not _attrs_equal(groups, path="", attrs_map={"encoding-type": "anndata"}):
         raise ValueError("All groups must be anndata")

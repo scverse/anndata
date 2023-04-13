@@ -22,11 +22,14 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
 )
+
+
 from anndata.utils import asarray
 from anndata.compat import DaskArray, AwkArray
 
 
 from anndata import read_h5ad, read_zarr
+
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
     obsm_types=(
@@ -51,7 +54,7 @@ def array_type(request):
     return request.param
 
 
-@pytest.fixture(params=["inner"])
+@pytest.fixture(params=["inner", "outer"])
 def join_type(request):
     return request.param
 
@@ -69,7 +72,7 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
 
     def write_func(adata, path):
         if file_format == "h5ad":
-            adata.write_h5ad(path)
+            adata.write(path)
         else:
             adata.write_zarr(path)
 
@@ -158,7 +161,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
         ),
     )
 
-    adatas = [a,b]
+    adatas = [a, b]
     assert_eq_concat_on_disk(adatas, tmp_path, file_format)
 
 
@@ -212,5 +215,18 @@ def obsm_adatas():
 
 
 def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
-
     assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
+
+
+@pytest.mark.parametrize("elem", ["sparse", "array", "df"])
+def test_concat_outer_aligned_mapping(elem, tmp_path, file_format):
+    a = gen_adata((5, 5), **GEN_ADATA_OOC_CONCAT_ARGS)
+    b = gen_adata((3, 5), **GEN_ADATA_OOC_CONCAT_ARGS)
+
+    del b.obsm[elem]
+    if elem == "df":
+        del a.obsm[elem]["bool"]
+
+    adatas = concat({"a": a, "b": b}, join="outer", label="group")
+
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
