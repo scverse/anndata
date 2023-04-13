@@ -127,7 +127,7 @@ SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 EAGER_TYPES = {"dataframe", "awkward-array"}
 
 
-def read_group(group: ZarrGroup):
+def read_group(group: Union[ZarrGroup, H5Group]):
     """Read the group until
     SparseDataset, Array or EAGER_TYPES are encountered."""
 
@@ -144,7 +144,7 @@ def read_group(group: ZarrGroup):
     return read_dispatched(group, callback=callback)
 
 
-def read_only_dict(group: ZarrGroup):
+def read_only_dict(group: Union[ZarrGroup, H5Group]):
     """Read the dict and leave the rest of the group alone."""
 
     def callback(func, elem_name: str, elem, iospec):
@@ -339,19 +339,19 @@ def write_concat_sequence(
         )
 
 
-def _get_group_from_hdf5(store, *args, **kwargs) -> ZarrGroup:
+def _get_group_from_hdf5(store, *args, **kwargs) -> H5Group:
     import h5py
 
     return h5py.File(store, *args, **kwargs)
 
 
 @singledispatch
-def _get_group(store, *args, **kwargs) -> ZarrGroup:
+def _get_group(store, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     raise NotImplementedError("This is not yet implemented.")
 
 
 @_get_group.register
-def _(store: Path, *args, **kwargs) -> ZarrGroup:
+def _(store: Path, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     if store.suffix == ".h5ad":
         return _get_group_from_hdf5(store, *args, **kwargs)
     import zarr
@@ -360,7 +360,7 @@ def _(store: Path, *args, **kwargs) -> ZarrGroup:
 
 
 @_get_group.register
-def _(store: str, *args, **kwargs) -> ZarrGroup:
+def _(store: str, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     if store.endswith(".h5ad"):
         return _get_group_from_hdf5(store, *args, **kwargs)
     import zarr
@@ -380,12 +380,17 @@ def _(store: ZarrGroup, *args, **kwargs) -> ZarrGroup:
     return store
 
 
+@_get_group.register
+def _(store: H5Group, *args, **kwargs) -> H5Group:
+    return store
+
+
 def _get_groups_from_paths(
     in_files: Union[
         Collection[str],
         Collection[Path],
         MutableMapping,
-        Collection[ZarrGroup],
+        Collection[Union[ZarrGroup, H5Group]],
     ],
     out_file: Union[str, MutableMapping, ZarrGroup, Path],
     overwrite: bool,
@@ -393,15 +398,12 @@ def _get_groups_from_paths(
     """Returns the groups to be concatenated and the output group."""
     mode = "w" if overwrite else "w-"
 
-    if isinstance(out_file, ZarrGroup):
-        res_out_file = out_file
-    else:
-        res_out_file = _get_group(out_file, mode=mode)
+    res_out_file = _get_group(out_file, mode=mode)
     res_in_files = [_get_group(f) for f in in_files]
     return res_in_files, res_out_file
 
 
-def _write_alt_mapping_no_reindex(groups, output_group, alt_dim, alt_indices, merge):
+def _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge):
     alt_mapping = merge([read_group(g[alt_dim]) for g in groups])
     # If its empty, we need to write an empty dataframe with the correct index
     if not alt_mapping:
@@ -592,7 +594,7 @@ def concat_on_disk(
     _write_alt_annot(groups, output_group, alt_dim, alt_indices, merge)
 
     # Write {alt_dim}m
-    _write_alt_mapping_no_reindex(groups, output_group, alt_dim, alt_indices, merge)
+    _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge)
 
     # Write Layers and {dim}m
     mapping_names = [
