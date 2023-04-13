@@ -16,6 +16,8 @@ __pycache__/
 /data/
 /tmp.zarr/
 test.h5ad
+test.loom
+test.zarr
 .coverage
 
 # jupyter
@@ -29,3 +31,6 @@ test.h5ad
 /.idea/
 /.vscode/
 
+# Benchmark
+.asv
+benchmark/benchmarks/data
