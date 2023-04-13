@@ -14,7 +14,6 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import SparseDataset
 from ..experimental import read_dispatched
-from collections.abc import Mapping
 import pandas as pd
 from typing import (
     Any,
@@ -26,13 +25,14 @@ from typing import (
     Union,
     Literal,
     List,
+    MutableMapping,
+    Mapping,
 )
 import typing
 from pathlib import Path
 import numpy as np
 
 from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
-from typing import MutableMapping
 
 
 # TODO: Not good
