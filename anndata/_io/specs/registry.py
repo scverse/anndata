@@ -63,6 +63,7 @@ class IORegistry:
     def __init__(self):
         self.read: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
+        self.read_groups: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
         ] = {}
@@ -134,6 +135,21 @@ class IORegistry:
 
         return _register
 
+    def register_read_groups(
+        self,
+        src_type: type,
+        spec: IOSpec | Mapping[str, str],
+        modifiers: Iterable[str] = frozenset(),
+    ):
+        spec = proc_spec(spec)
+        modifiers = frozenset(modifiers)
+
+        def _register(func):
+            self.read_groups[(src_type, spec, modifiers)] = func
+            return func
+
+        return _register
+
     def get_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
@@ -144,10 +160,25 @@ class IORegistry:
                 "read", _REGISTRY.read, src_type, spec
             )
 
+    def get_read_groups(
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
+    ):
+        if (src_type, spec, modifiers) in self.read:
+            return self.read_groups[(src_type, spec, modifiers)]
+        else:
+            raise IORegistryError._from_read_parts(
+                "read_groups", _REGISTRY.read_groups, src_type, spec
+            )
+
     def has_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
         return (src_type, spec, modifiers) in self.read
+
+    def has_read_groups(
+        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
+    ):
+        return (src_type, spec, modifiers) in self.read_groups
 
     def register_read_partial(
         self,
@@ -228,6 +259,32 @@ class Reader:
         from functools import partial
 
         read_func = self.registry.get_reader(
+            type(elem), get_spec(elem), frozenset(modifiers)
+        )
+        read_func = partial(read_func, _reader=self)
+        if self.callback is not None:
+            return self.callback(read_func, elem.name, elem, iospec=get_spec(elem))
+        else:
+            return read_func(elem)
+
+
+class GroupReader:
+    def __init__(
+        self, registry: IORegistry, callback: Union[Callable, None] = None
+    ) -> None:
+        self.registry = registry
+        self.callback = callback
+
+    @report_read_key_on_error
+    def read_elem(
+        self,
+        elem: StorageType,
+        modifiers: frozenset(str) = frozenset(),
+    ) -> Any:
+        """Read an element from a store. See exported function for more details."""
+        from functools import partial
+
+        read_func = self.registry.get_read_groups(
             type(elem), get_spec(elem), frozenset(modifiers)
         )
         read_func = partial(read_func, _reader=self)
@@ -324,6 +381,20 @@ def read_elem(elem: StorageType) -> Any:
         The stored element.
     """
     return Reader(_REGISTRY).read_elem(elem)
+
+
+def read_groups(
+    elem: StorageType,
+    modifiers: frozenset(str) = frozenset(),
+) -> Any:
+    """
+    Read an element from as Zarr group
+    """
+
+    reader = GroupReader(_REGISTRY)
+    return _REGISTRY.get_read_groups(type(elem), get_spec(elem), frozenset(modifiers))(
+        elem, _reader=reader
+    )
 
 
 def write_elem(

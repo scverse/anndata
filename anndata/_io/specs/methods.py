@@ -267,8 +267,10 @@ def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
 ############
 
 
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("dict", "0.1.0"))
 def read_mapping(elem, _reader):
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
@@ -321,6 +323,12 @@ def write_basic_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array(elem, _reader):
     return elem[()]
+
+
+@_REGISTRY.register_read_groups(ZarrArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_read_groups(ZarrArray, IOSpec("string-array", "0.2.0"))
+def read_array_as_zarr(elem, _reader):
+    return elem
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
@@ -500,6 +508,12 @@ def read_sparse(elem, _reader):
     return SparseDataset(elem).to_memory()
 
 
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
+def read_sparse(elem, _reader):
+    return SparseDataset(elem)
+
+
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
@@ -583,6 +597,7 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("dataframe", "0.2.0"))
 def read_dataframe(elem, _reader):
     columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
@@ -624,6 +639,7 @@ def read_dataframe_partial(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.1.0"))
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("dataframe", "0.1.0"))
 def read_dataframe_0_1_0(elem, _reader):
     columns = _read_attr(elem.attrs, "column-order")
     idx_key = _read_attr(elem.attrs, "_index")
@@ -694,6 +710,11 @@ def read_categorical(elem, _reader):
         categories=_reader.read_elem(elem["categories"]),
         ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
+
+
+@_REGISTRY.register_read_groups(ZarrGroup, IOSpec("categorical", "0.2.0"))
+def read_categorical_groups(elem, _reader):
+    return elem
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("categorical", "0.2.0"))
