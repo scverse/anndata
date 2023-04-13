@@ -25,7 +25,7 @@ from typing import (
     Sequence,
     Union,
     Literal,
-    List
+    List,
 )
 import typing
 from pathlib import Path
