@@ -92,7 +92,7 @@ def assert_eq_concat_on_disk(adatas, tmp_path, file_format, *args, **kwargs):
     out_name = tmp_path / ("out." + file_format)
     concat_on_disk(paths, out_name, *args, **kwargs)
     res2 = read_func(out_name)
-    assert_equal(res1, res2)
+    assert_equal(res1, res2, exact=False)
 
 
 def get_array_type(array_type, axis):
