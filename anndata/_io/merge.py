@@ -25,6 +25,7 @@ from typing import (
     Sequence,
     Union,
     Literal,
+    List
 )
 import typing
 from pathlib import Path
@@ -57,7 +58,7 @@ def _get_to_path(
 
 
 def _has_same_attrs(
-    groups: list[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]
+    groups: List[Union[ZarrGroup, H5Group]], path: str, attrs: Set[str]
 ) -> bool:
     if len(groups) == 0:
         return True
@@ -71,7 +72,7 @@ def _has_same_attrs(
 
 
 def _attrs_equal(
-    groups: list[Union[ZarrGroup, H5Group]], path: str, attrs_map: Mapping[str, str]
+    groups: List[Union[ZarrGroup, H5Group]], path: str, attrs_map: Mapping[str, str]
 ) -> bool:
     if len(groups) == 0:
         raise ValueError("List should not be empty")
