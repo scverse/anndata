@@ -1,23 +1,12 @@
-from collections.abc import Hashable
-from copy import deepcopy
-from itertools import chain, product
-from functools import partial, singledispatch
-from typing import Any, List, Callable, Mapping
-import warnings
+from typing import Mapping
 
 import numpy as np
-from numpy import ma
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy import sparse
-from boltons.iterutils import research, remap, default_exit
 
 from anndata._io.merge import concat_on_disk
-from anndata import AnnData, Raw, concat
-from anndata._core.index import _subset
-from anndata._core import merge
-from anndata.tests import helpers
+from anndata import AnnData, concat
 from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
@@ -25,7 +14,6 @@ from anndata.tests.helpers import (
 
 
 from anndata.utils import asarray
-from anndata.compat import DaskArray, AwkArray
 
 
 from anndata import read_h5ad, read_zarr

@@ -9,8 +9,6 @@ from .._core.merge import (
     merge_dataframes,
     resolve_merge_strategy,
     gen_reindexer,
-    not_missing,
-    MissingVal,
     reduce,
     Reindexer,
 )
@@ -85,9 +83,7 @@ def _attrs_equal(
     ) and _has_same_attrs(groups, path, attrs_map.keys())
 
 
-def _requires_reindexing(
-    indices
-) -> bool:
+def _requires_reindexing(indices) -> bool:
     init_elem = indices[0]
     return any(not np.array_equal(init_elem, elem) for elem in indices[1:])
 
@@ -432,7 +428,6 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
     if label is not None:
         concat_annot[label] = label_col
     write_elem(output_group, dim, concat_annot)
-
 
 
 def concat_on_disk(
