@@ -24,6 +24,7 @@ from anndata.tests.helpers import (
 )
 
 
+
 from anndata.utils import asarray
 from anndata.compat import DaskArray, AwkArray
 
@@ -161,7 +162,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
         ),
     )
 
-    adatas = [a, b]
+    adatas = [a,b]
     assert_eq_concat_on_disk(adatas, tmp_path, file_format)
 
 
@@ -215,6 +216,7 @@ def obsm_adatas():
 
 
 def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
+
     assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
 
 
@@ -222,11 +224,10 @@ def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
 def test_concat_outer_aligned_mapping(elem, tmp_path, file_format):
     a = gen_adata((5, 5), **GEN_ADATA_OOC_CONCAT_ARGS)
     b = gen_adata((3, 5), **GEN_ADATA_OOC_CONCAT_ARGS)
-
     del b.obsm[elem]
-    if elem == "df":
-        del a.obsm[elem]["bool"]
+    
+    
 
     adatas = concat({"a": a, "b": b}, join="outer", label="group")
-
     assert_eq_concat_on_disk(adatas, tmp_path, file_format)
+
