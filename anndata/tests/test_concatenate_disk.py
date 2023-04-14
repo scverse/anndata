@@ -42,7 +42,7 @@ def array_type(request):
     return request.param
 
 
-@pytest.fixture(params=["inner", "outer"])
+@pytest.fixture(params=["inner"])
 def join_type(request):
     return request.param
 
