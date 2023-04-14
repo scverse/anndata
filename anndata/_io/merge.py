@@ -484,9 +484,13 @@ def concat_on_disk(
         filled with `NaN`.
     """
     # Argument normalization
+    if pairwise:
+        raise NotImplementedError("pairwise concatenation not yet implemented")
+    if join != "inner":
+        raise NotImplementedError("only inner join is currently supported")
+
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
-
     if len(in_files) <= 1:
         raise ValueError("Must pass at least two files to concatenate.")
     if isinstance(in_files, Mapping):
