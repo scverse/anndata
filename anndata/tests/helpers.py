@@ -437,8 +437,9 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
     report_name(pd.testing.assert_frame_equal)(
         a,
         b,
-        check_index_type=exact,
         check_exact=exact,
+        check_column_type=exact,
+        check_index_type=exact,
         _elem_name=elem_name,
         check_frame_type=False,
     )
