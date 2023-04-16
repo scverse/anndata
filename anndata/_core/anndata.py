@@ -26,7 +26,7 @@ from scipy.sparse import issparse, csr_matrix
 from anndata._warnings import ImplicitModificationWarning
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
-from .file_backing import AnnDataFileManager, to_memory, HDF5DataFrame
+from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -44,6 +44,7 @@ from .views import (
     _resolve_idxs,
 )
 from .sparse_dataset import SparseDataset
+from .dataframe import DataFrame
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
@@ -839,7 +840,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             if not self.file.is_open:
                 self.file.open()
-            obs = HDF5DataFrame(self.file["obs"])
+            obs = DataFrame(self.file["obs"])
         else:
             obs = self._obs
         return obs
