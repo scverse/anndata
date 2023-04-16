@@ -17,6 +17,7 @@ from anndata import AnnData, Raw
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import SparseDataset
+from anndata._core.dataframe import DataFrame
 from anndata._core import views
 from anndata.compat import (
     ZarrArray,
