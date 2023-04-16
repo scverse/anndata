@@ -26,7 +26,7 @@ from scipy.sparse import issparse, csr_matrix
 from anndata._warnings import ImplicitModificationWarning
 from .raw import Raw
 from .index import _normalize_indices, _subset, Index, Index1D, get_vector
-from .file_backing import AnnDataFileManager, to_memory
+from .file_backing import AnnDataFileManager, to_memory, HDF5DataFrame
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -836,7 +836,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def obs(self) -> pd.DataFrame:
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
-        return self._obs
+        if self.isbacked:
+            if not self.file.is_open:
+                self.file.open()
+            obs = HDF5DataFrame(self.file["obs"])
+        else:
+            obs = self._obs
+        return obs
 
     @obs.setter
     def obs(self, value: pd.DataFrame):
