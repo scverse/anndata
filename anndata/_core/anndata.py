@@ -348,7 +348,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # set data
         if self.isbacked:
-            self._X = None
+            self._X = self._obs = None
 
         # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
@@ -837,13 +837,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def obs(self) -> pd.DataFrame:
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
-        if self.isbacked:
-            if not self.file.is_open:
-                self.file.open()
-            obs = DataFrame(self.file["obs"])
-        else:
-            obs = self._obs
-        return obs
+        return self._obs
 
     @obs.setter
     def obs(self, value: pd.DataFrame):
