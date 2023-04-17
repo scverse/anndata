@@ -816,3 +816,17 @@ def test_io_dtype(tmp_path, diskfmt, dtype):
     curr = read(pth)
 
     assert curr.X.dtype == dtype
+
+
+def test_column_dataframe(tmp_path, diskfmt):
+    pth = tmp_path / f"adata.{diskfmt}"
+    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+    def gen_index(n):
+        return [f"cell{i}" for i in range(n)]
+    orig = ad.AnnData(np.ones((2, 8)),
+            obs=pd.DataFrame(index=gen_index(2)))
+
+    write(orig, pth)
+    curr = read(pth)
+    assert_equal(orig, curr)
