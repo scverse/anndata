@@ -434,6 +434,7 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
         a,
         b,
         check_index_type=exact,
+        check_column_type=exact,
         check_exact=exact,
         _elem_name=elem_name,
         check_frame_type=False,
