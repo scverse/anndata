@@ -30,6 +30,7 @@ import zarr
 import pandas as pd
 import numpy as np
 from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin
+import dask.array as da
 
 from ..._core import AnnData, AxisArrays
 from .. import read_dispatched
@@ -438,7 +439,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif iospec.encoding_type == "categorical":
             return LazyCategoricalArray(elem)
         elif iospec.encoding_type in {"array", "string-array"}:
-            return elem
+            return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
             return sparse_dataset(elem).to_backed()
         return func(elem)
