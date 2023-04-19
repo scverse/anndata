@@ -76,7 +76,7 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
             codes=codes,
             categories=self.categories,
             ordered=self.ordered,
-        )
+        ).remove_unused_categories()
 
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
