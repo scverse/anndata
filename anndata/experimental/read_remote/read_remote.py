@@ -14,7 +14,12 @@ from typing import (
     Tuple,
 )
 from anndata._core.access import ElementRef
-from anndata._core.aligned_mapping import AlignedMapping, Layers, PairwiseArrays
+from anndata._core.aligned_mapping import (
+    AlignedMapping,
+    Layers,
+    PairwiseArrays,
+    AxisArraysView,
+)
 from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
 from anndata._core.anndata_base import AbstractAnnData
 from anndata._core.file_backing import AnnDataFileManager
@@ -105,14 +110,6 @@ class AxisArraysRemote(AxisArrays):
             return self.to_df().__getattribute__(__name)
         return object.__getattribute__(self, __name)
 
-    def to_df(self) -> pd.DataFrame:
-        """Convert to pandas dataframe."""
-        df = pd.DataFrame(index=self.dim_names)
-        for key in self.keys():
-            if "index" not in key:
-                df[key] = self[key][()]
-        return df
-
     @property
     def iloc(self):
         class IlocDispatch:
@@ -120,6 +117,28 @@ class AxisArraysRemote(AxisArrays):
                 return self._view(self.parent, (idx,))
 
         return IlocDispatch()
+
+
+def to_df_1d_axis_arrays(axis_arrays):
+    """Convert to pandas dataframe."""
+    df = pd.DataFrame(index=axis_arrays.dim_names)
+    for key in axis_arrays.keys():
+        if "index" not in key:
+            df[key] = axis_arrays[key][()]
+    return df
+
+
+class AxisArrays1dRemote(AxisArraysRemote):
+    def to_df(self) -> pd.DataFrame:
+        return to_df_1d_axis_arrays(self)
+
+
+class AxisArraysRemoteView(AxisArraysView):
+    def to_df(self) -> pd.DataFrame:
+        return to_df_1d_axis_arrays(self)
+
+
+AxisArrays1dRemote._view_class = AxisArraysRemoteView
 
 
 class AnnDataRemote(AbstractAnnData):
@@ -208,8 +227,8 @@ class AnnDataRemote(AbstractAnnData):
         self.var_names = var[self.file["var"].attrs["_index"]]
         if vidx is not None:
             self.var_names = self.var_names[vidx]
-        self.obs = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obs))
-        self.var = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(var))
+        self.obs = AxisArrays1dRemote(adata_ref, 0, vals=convert_to_dict(obs))
+        self.var = AxisArrays1dRemote(adata_ref, 1, vals=convert_to_dict(var))
 
         self.obsm = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obsm))
         self.varm = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(varm))
