@@ -239,8 +239,6 @@ class AnnDataRemote(AbstractAnnData):
     def _run_checks(self):
         assert len(self.obs_names) == self.shape[0]
         assert len(self.var_names) == self.shape[1]
-        assert len(self.obs_names) == self.X.shape[0]
-        assert len(self.var_names) == self.X.shape[1]
         for layer in self.layers:
             assert len(self.obs_names) == layer.shape[0]
             assert len(self.var_names) == layer.shape[1]
@@ -273,7 +271,7 @@ class AnnDataRemote(AbstractAnnData):
     def X(self):
         if hasattr(self, "_X"):
             if self.is_view:
-                return self._X[self._oidx, self._vidx]
+                return _subset(self._X, (self._oidx, self._vidx))
             return self._X
         return None
 
