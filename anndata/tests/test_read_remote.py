@@ -99,6 +99,17 @@ def test_read_write_full(adata, tmp_path):
     assert (adata.var == remote.var.to_df()).all().all()
 
 
+def test_read_write_view(adata, tmp_path):
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.zarr"
+    adata.write_zarr(orig_pth)
+    remote = read_remote(orig_pth)
+    subset = adata.obs["oanno1"] == "cat1"
+    assert np.all(asarray(adata[subset, :].X) == asarray(remote[subset, :].X))
+    assert (adata[subset, :].obs == remote[subset, :].obs.to_df()).all().all()
+    assert (adata[subset, :].var == remote[subset, :].var.to_df()).all().all()
+
+
 def test_lazy_categorical_array_properties(categorical_zarr_group):
     arr = LazyCategoricalArray(categorical_zarr_group)
     assert len(arr[0:3]) == 3
