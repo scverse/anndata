@@ -274,8 +274,8 @@ def test_not_set_subset_X(matrix_type, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
     assert not np.any(asarray(init_adata.X != orig_X_val))
 
-    assert_equal(init_adata, adata) # passes
-    assert init_hash == joblib.hash(adata) # fails
+    assert_equal(init_adata, adata)  # passes
+    assert init_hash == joblib.hash(adata)  # fails
 
 
 def test_set_scalar_subset_X(matrix_type, subset_func):
