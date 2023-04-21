@@ -254,7 +254,8 @@ def test_set_varm(adata):
 #       or just the behaviour we’ve had for a while
 def test_not_set_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
-    init_hash = joblib.hash(adata)
+    init_adata = adata.to_memory(copy=True)
+    init_hash = joblib.hash(init_adata)
     orig_X_val = adata.X.copy()
     while True:
         subset_idx = slice_subset(adata.obs_names)
@@ -272,7 +273,8 @@ def test_not_set_subset_X(matrix_type, subset_func):
     assert not subset.is_view
     assert not np.any(asarray(adata.X != orig_X_val))
 
-    assert init_hash == joblib.hash(adata)
+    assert_equal(init_adata, adata) # passes
+    assert init_hash == joblib.hash(adata) # fails
 
 
 def test_set_scalar_subset_X(matrix_type, subset_func):
