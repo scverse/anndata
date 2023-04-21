@@ -406,8 +406,8 @@ class Reindexer:
         indexer = self.old_idx.get_indexer(self.new_idx)
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
-        # if any(indexer == -1):
-        sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+        if any(indexer == -1):
+            sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
 
         return sub_el
 
