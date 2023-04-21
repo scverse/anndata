@@ -408,7 +408,7 @@ class Reindexer:
 
         # if any(indexer == -1):
         sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
-        
+
         return sub_el
 
     def _apply_to_array(self, el, *, axis, fill_value=None):
