@@ -825,7 +825,7 @@ def test_column_dataframe(tmp_path, diskfmt):
     def gen_index(n):
         return [f"cell{i}" for i in range(n)]
     orig = ad.AnnData(np.ones((2, 8)),
-            obs=pd.DataFrame(index=gen_index(2)))
+            obs=pd.DataFrame({}, index=gen_index(2)))
 
     write(orig, pth)
     curr = read(pth)
