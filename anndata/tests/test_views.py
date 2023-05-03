@@ -11,6 +11,7 @@ import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
 from anndata.compat import DaskArray
+from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -68,6 +69,12 @@ def adata_parameterized(request):
 def matrix_type(request):
     return request.param
 
+@pytest.fixture(
+    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
+    ids=["np_array", "scipy_csr", "scipy_csc",],
+)
+def matrix_type_no_dask(request):
+    return request.param
 
 @pytest.fixture(params=["layers", "obsm", "varm"])
 def mapping_name(request):
@@ -252,8 +259,8 @@ def test_set_varm(adata):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X(matrix_type_no_dask, subset_func):
+    adata = ad.AnnData(matrix_type_no_dask(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -274,6 +281,51 @@ def test_not_set_subset_X(matrix_type, subset_func):
 
     assert init_hash == joblib.hash(adata)
 
+@normalize_token.register(ad.AnnData)
+def tokenize_anndata(adata: ad.AnnData):
+    res = []
+    for attr in ["X", "obs", "var"]:
+        elem = getattr(adata, attr, None)
+        if elem is not None:
+            if isinstance(elem, DaskArray):
+                res.append(tokenize(elem))
+            else:
+                res.append(joblib.hash(elem))
+        else:
+            res.append(None)
+    for attr in ["obsm", "varm", "obsp", "varp", "layers", "uns"]:
+        elem = getattr(adata, attr, None)
+        if elem.keys():
+            res.append(joblib.hash(elem))
+        else:
+            res.append(None)
+
+    return tuple(res)
+
+
+# TODO: Determine if this is the intended behavior,
+#       or just the behaviour we’ve had for a while
+def test_not_set_subset_X_dask(matrix_type, subset_func):
+    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+    init_hash = tokenize(adata)
+    orig_X_val = adata.X.copy()
+    while True:
+        subset_idx = slice_subset(adata.obs_names)
+        if len(adata[subset_idx, :]) > 2:
+            break
+    subset = adata[subset_idx, :]
+
+    subset = adata[:, subset_idx]
+
+    internal_idx = _normalize_index(
+        subset_func(np.arange(subset.X.shape[1])), subset.var_names
+    )
+    assert subset.is_view
+    subset.X[:, internal_idx] = 1
+    assert not subset.is_view
+    assert not np.any(asarray(adata.X != orig_X_val))
+
+    assert init_hash == tokenize(adata)
 
 def test_set_scalar_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
