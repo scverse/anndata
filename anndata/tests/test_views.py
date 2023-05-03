@@ -69,12 +69,18 @@ def adata_parameterized(request):
 def matrix_type(request):
     return request.param
 
+
 @pytest.fixture(
     params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
-    ids=["np_array", "scipy_csr", "scipy_csc",],
+    ids=[
+        "np_array",
+        "scipy_csr",
+        "scipy_csc",
+    ],
 )
 def matrix_type_no_dask(request):
     return request.param
+
 
 @pytest.fixture(params=["layers", "obsm", "varm"])
 def mapping_name(request):
@@ -281,6 +287,7 @@ def test_not_set_subset_X(matrix_type_no_dask, subset_func):
 
     assert init_hash == joblib.hash(adata)
 
+
 @normalize_token.register(ad.AnnData)
 def tokenize_anndata(adata: ad.AnnData):
     res = []
@@ -326,6 +333,7 @@ def test_not_set_subset_X_dask(matrix_type, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == tokenize(adata)
+
 
 def test_set_scalar_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
