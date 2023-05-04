@@ -157,9 +157,9 @@ class LazyMaskedArray(MaskedArrayMixIn):
 
     def __repr__(self) -> str:
         if self._dtype_str == "nullable-integer":
-            return f"LazyNullableIntegerArray"
+            return "LazyNullableIntegerArray"
         elif self._dtype_str == "nullable-boolean":
-            return f"LazyNullableBooleanArray"
+            return "LazyNullableBooleanArray"
 
 
 @_subset.register(MaskedArrayMixIn)
