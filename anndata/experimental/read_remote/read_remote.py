@@ -1,5 +1,5 @@
 from collections import OrderedDict, abc as cabc
-from copy import copy
+from copy import copy, deepcopy
 from functools import cached_property
 from pathlib import Path
 from typing import (
@@ -26,7 +26,7 @@ from anndata._core.file_backing import AnnDataFileManager
 from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata._core.views import _resolve_idxs, as_view
+from anndata._core.views import _resolve_idx, as_view, _resolve_idxs
 from anndata._io.specs.registry import read_elem
 from anndata.compat import _move_adj_mtx, _read_attr
 from anndata.utils import convert_to_dict
@@ -42,7 +42,7 @@ from .. import read_dispatched
 
 
 class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
-    __slots__ = ("codes", "attrs", "_categories", "_categories_cache")
+    __slots__ = ("codes", "attrs", "_categories", "_categories_cache", "_subset_idx")
 
     def __init__(self, group, *args, **kwargs):
         """Class for lazily reading categorical data from formatted zarr group
@@ -53,6 +53,7 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
         self.codes = group["codes"]
         self._categories = group["categories"]
         self._categories_cache = None
+        self._subset_idx = None
         self.attrs = dict(group.attrs)
 
     @property
@@ -62,19 +63,44 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
         return self._categories_cache
 
     @property
+    def subset_idx(self):
+        return self._subset_idx
+
+    @subset_idx.setter
+    def subset_idx(self, new_idx):
+        idx = (
+            new_idx
+            if self._subset_idx is None
+            else _resolve_idx(self._subset_idx, new_idx, self.shape[0])
+        )
+        self._subset_idx = idx
+
+    @property
     def dtype(self) -> pd.CategoricalDtype:
         return pd.CategoricalDtype(self.categories, self.ordered)
 
     @property
     def shape(self) -> Tuple[int, ...]:
-        return self.codes.shape
+        if self.subset_idx is None:
+            return self.codes.shape
+        if isinstance(self.subset_idx, slice):
+            if self.subset_idx == slice(None, None, None):
+                return self.codes.shape
+            return (slice.stop - slice.start,)
+        else:
+            return (len(self.subset_idx),)
 
     @property
     def ordered(self):
         return bool(self.attrs["ordered"])
 
     def __getitem__(self, selection) -> pd.Categorical:
-        codes = self.codes.oindex[selection]
+        idx = (
+            selection
+            if self.subset_idx is None
+            else _resolve_idx(self.subset_idx, selection, self.shape[0])
+        )
+        codes = self.codes.oindex[idx]
         if codes.shape == ():  # handle 0d case
             codes = np.array([codes])
         return pd.Categorical.from_codes(
@@ -95,11 +121,18 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
 
 @_subset.register(LazyCategoricalArray)
 def _subset_lazy_cat(a: LazyCategoricalArray, subset_idx: Index):
-    return a[subset_idx]
+    a_copy = deepcopy(a)
+    a_copy.subset_idx = subset_idx[0]  # this is a tuple?
+    return a_copy
 
 
 @as_view.register(pd.Categorical)
 def _subset_lazy_cat(a: pd.Categorical, view_args):
+    return a
+
+
+@as_view.register(LazyCategoricalArray)
+def _subset_lazy_cat(a: LazyCategoricalArray, view_args):
     return a
 
 
