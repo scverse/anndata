@@ -13,15 +13,17 @@ See the copyright and license note in this directory source code.
 from abc import ABC
 import collections.abc as cabc
 from itertools import accumulate, chain
+from pathlib import Path
 from typing import Union, NamedTuple, Tuple, Sequence, Iterable, Type
 from warnings import warn
 
 import h5py
+import zarr
 import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from ..compat import _read_attr
+from ..compat import _read_attr, ZarrArray
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -51,6 +53,12 @@ class BackedSparseMatrix(_cs_matrix):
     def copy(self) -> ss.spmatrix:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
+        if isinstance(self.data, ZarrArray):
+            return sparse_dataset(
+                zarr.open(
+                    store=self.data.store, path=Path(self.data.path).parent, mode="r"
+                )
+            ).to_memory()
         else:
             return super().copy()
 

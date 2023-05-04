@@ -6,47 +6,13 @@ import pandas as pd
 from scipy import sparse
 import zarr
 
-import anndata as ad
 from anndata.tests.helpers import (
     as_dense_dask_array,
+    gen_adata,
     subset_func,
 )
 from anndata.experimental.read_remote import read_remote, LazyCategoricalArray
 from anndata.utils import asarray
-
-subset_func2 = subset_func
-# -------------------------------------------------------------------------------
-# Some test data
-# -------------------------------------------------------------------------------
-
-
-@pytest.fixture
-def adata():
-    X_list = [
-        [1, 2, 3],
-        [4, 5, 6],
-        [7, 8, 9],
-    ]  # data matrix of shape n_obs x n_vars
-    X = np.array(X_list)
-    obs_dict = dict(  # annotation of observations / rows
-        row_names=["name1", "name2", "name3"],  # row annotation
-        oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
-        oanno2=["o1", "o2", "o3"],  # string annotation
-        oanno3=[2.1, 2.2, 2.3],  # float annotation
-    )
-    var_dict = dict(vanno1=[3.1, 3.2, 3.3])  # annotation of variables / columns
-    uns_dict = dict(  # unstructured annotation
-        oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"]
-    )
-    return ad.AnnData(
-        X,
-        obs=obs_dict,
-        var=var_dict,
-        uns=uns_dict,
-        obsm=dict(o1=np.zeros((X.shape[0], 10))),
-        varm=dict(v1=np.ones((X.shape[1], 20))),
-        layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
-    )
 
 
 @pytest.fixture(
@@ -66,7 +32,7 @@ def sparse_format(request):
 def categorical_zarr_group(tmp_path_factory):
     base_path = tmp_path_factory.getbasetemp()
     z = zarr.open_group(base_path, mode="w")
-    z["codes"] = [0, 1, 0, 1, 1, 2, 2]
+    z["codes"] = [0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2]
     z["categories"] = ["foo", "bar", "jazz"]
     z.attrs["ordered"] = False
     z = zarr.open(base_path)
@@ -78,36 +44,87 @@ def test_read_write_X(tmp_path, mtx_format):
     orig_pth = base_pth / "orig.zarr"
     # remote_pth = base_pth / "backed.zarr"
 
-    orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
+    orig = gen_adata((1000, 1000), mtx_format)
     orig.write_zarr(orig_pth)
 
     remote = read_remote(orig_pth)
     # remote.write_zarr(remote_pth) # need to implement writing!
 
     assert np.all(asarray(orig.X) == asarray(remote.X))
-    assert (orig.obs == remote.obs.to_df()).all().all()
-    assert (orig.var == remote.var.to_df()).all().all()
+    assert (orig.obs == remote.obs.to_df()[orig.obs.columns]).all().all()
+    assert (orig.var == remote.var.to_df()[orig.var.columns]).all().all()
+    assert (orig.obsm["array"] == remote.obsm["array"].compute()).all()
 
 
-def test_read_write_full(adata, tmp_path):
+def test_read_write_full(tmp_path, mtx_format):
+    adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
     adata.write_zarr(orig_pth)
     remote = read_remote(orig_pth)
     assert np.all(asarray(adata.X) == asarray(remote.X))
-    assert (adata.obs == remote.obs.to_df()).all().all()
-    assert (adata.var == remote.var.to_df()).all().all()
+    assert (adata.obs == remote.obs.to_df()[adata.obs.columns]).all().all()
+    assert (adata.var == remote.var.to_df()[adata.var.columns]).all().all()
+    assert (adata.obsm["array"] == remote.obsm["array"].compute()).all()
 
 
-def test_read_write_view(adata, tmp_path):
+def test_read_write_view(tmp_path, mtx_format):
+    adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
     adata.write_zarr(orig_pth)
     remote = read_remote(orig_pth)
-    subset = adata.obs["oanno1"] == "cat1"
+    subset = adata.obs["obs_cat"] == "a"
     assert np.all(asarray(adata[subset, :].X) == asarray(remote[subset, :].X))
-    assert (adata[subset, :].obs == remote[subset, :].obs.to_df()).all().all()
-    assert (adata[subset, :].var == remote[subset, :].var.to_df()).all().all()
+    assert (
+        (adata[subset, :].obs == remote[subset, :].obs.to_df()[adata.obs.columns])
+        .all()
+        .all()
+    )
+    assert (
+        (adata[subset, :].var == remote[subset, :].var.to_df()[adata.var.columns])
+        .all()
+        .all()
+    )
+    assert (
+        adata[subset, :].obsm["array"] == remote[subset, :].obsm["array"].compute()
+    ).all()
+
+
+def test_read_write_view_of_view(tmp_path, mtx_format):
+    adata = gen_adata((1000, 1000), mtx_format)
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.zarr"
+    adata.write_zarr(orig_pth)
+    remote = read_remote(orig_pth)
+    subset = (adata.obs["obs_cat"] == "a") | (adata.obs["obs_cat"] == "b")
+    subsetted_adata = adata[subset, :]
+    subset_subset = subsetted_adata.obs["obs_cat"] == "b"
+    subsetted_subsetted_adata = subsetted_adata[subset_subset, :]
+    assert np.all(
+        asarray(subsetted_subsetted_adata.X)
+        == asarray(remote[subset, :][subset_subset, :].X)
+    )
+    assert (
+        (
+            subsetted_subsetted_adata.obs
+            == remote[subset, :][subset_subset, :].obs.to_df()[adata.obs.columns]
+        )
+        .all()
+        .all()
+    )
+    assert (
+        (
+            subsetted_subsetted_adata.var
+            == remote[subset, :][subset_subset, :].var.to_df()[adata.var.columns]
+        )
+        .all()
+        .all()
+    )
+    assert (
+        subsetted_subsetted_adata.obsm["array"]
+        == remote[subset, :][subset_subset, :].obsm["array"].compute()
+    ).all()
 
 
 def test_lazy_categorical_array_properties(categorical_zarr_group):
@@ -123,3 +140,18 @@ def test_lazy_categorical_array_equality(categorical_zarr_group):
     assert (arr[0] == "foo").all()
     assert (arr[3:5] == "bar").all()
     assert (arr == "foo").any()
+
+
+def test_lazy_categorical_array_subset_subset(categorical_zarr_group):
+    arr = LazyCategoricalArray(categorical_zarr_group)
+    subset_susbet = arr[0:10][5:10]
+    assert len(subset_susbet) == 5
+    assert type(subset_susbet) == pd.Categorical
+    assert (
+        subset_susbet[()]
+        == pd.Categorical.from_codes(
+            codes=[2, 2, 1, 2, 0],
+            categories=["foo", "bar", "jazz"],
+            ordered=False,
+        ).remove_unused_categories()
+    ).all()

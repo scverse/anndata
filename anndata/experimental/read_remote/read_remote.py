@@ -1,5 +1,6 @@
 from collections import OrderedDict, abc as cabc
 from copy import copy, deepcopy
+from enum import Enum
 from functools import cached_property
 from pathlib import Path
 from typing import (
@@ -41,8 +42,42 @@ from ..._core import AnnData, AxisArrays
 from .. import read_dispatched
 
 
-class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
-    __slots__ = ("codes", "attrs", "_categories", "_categories_cache", "_subset_idx")
+class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
+    def _resolve_idx(self, new_idx):
+        return (
+            new_idx
+            if self.subset_idx is None
+            else _resolve_idx(self.subset_idx, new_idx, self.shape[0])
+        )
+
+    @property
+    def subset_idx(self):
+        return self._subset_idx
+
+    @subset_idx.setter
+    def subset_idx(self, new_idx):
+        self._subset_idx = self._resolve_idx(new_idx)
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        if self.subset_idx is None:
+            return self.values.shape
+        if isinstance(self.subset_idx, slice):
+            if self.subset_idx == slice(None, None, None):
+                return self.values.shape
+            return (self.subset_idx.stop - self.subset_idx.start,)
+        else:
+            return (len(self.subset_idx),)
+
+    def __eq__(self, __o) -> np.ndarray:
+        return self[()] == __o
+
+    def __ne__(self, __o) -> np.ndarray:
+        return ~(self == __o)
+
+
+class LazyCategoricalArray(MaskedArrayMixIn):
+    __slots__ = ("values", "attrs", "_categories", "_categories_cache", "_subset_idx")
 
     def __init__(self, group, *args, **kwargs):
         """Class for lazily reading categorical data from formatted zarr group
@@ -50,7 +85,7 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
         Args:
             group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
         """
-        self.codes = group["codes"]
+        self.values = group["codes"]
         self._categories = group["categories"]
         self._categories_cache = None
         self._subset_idx = None
@@ -63,44 +98,16 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
         return self._categories_cache
 
     @property
-    def subset_idx(self):
-        return self._subset_idx
-
-    @subset_idx.setter
-    def subset_idx(self, new_idx):
-        idx = (
-            new_idx
-            if self._subset_idx is None
-            else _resolve_idx(self._subset_idx, new_idx, self.shape[0])
-        )
-        self._subset_idx = idx
-
-    @property
     def dtype(self) -> pd.CategoricalDtype:
         return pd.CategoricalDtype(self.categories, self.ordered)
-
-    @property
-    def shape(self) -> Tuple[int, ...]:
-        if self.subset_idx is None:
-            return self.codes.shape
-        if isinstance(self.subset_idx, slice):
-            if self.subset_idx == slice(None, None, None):
-                return self.codes.shape
-            return (slice.stop - slice.start,)
-        else:
-            return (len(self.subset_idx),)
 
     @property
     def ordered(self):
         return bool(self.attrs["ordered"])
 
     def __getitem__(self, selection) -> pd.Categorical:
-        idx = (
-            selection
-            if self.subset_idx is None
-            else _resolve_idx(self.subset_idx, selection, self.shape[0])
-        )
-        codes = self.codes.oindex[idx]
+        idx = self._resolve_idx(selection)
+        codes = self.values.oindex[idx]
         if codes.shape == ():  # handle 0d case
             codes = np.array([codes])
         return pd.Categorical.from_codes(
@@ -112,27 +119,78 @@ class LazyCategoricalArray(ExplicitlyIndexedNDArrayMixin):
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
 
-    def __eq__(self, __o) -> np.ndarray:
-        return self[()] == __o
 
-    def __ne__(self, __o) -> np.ndarray:
-        return ~(self == __o)
+class LazyMaskedArray(MaskedArrayMixIn):
+    __slots__ = ("mask", "values", "_subset_idx", "_dtype_str")
+
+    def __init__(self, group, dtype_str, *args, **kwargs):
+        """Class for lazily reading categorical data from formatted zarr group
+
+        Args:
+            group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
+            dtype_str (Nullable): group containing "codes" and "categories" key as well as "ordered" attr
+        """
+        self.values = group["values"]
+        self.mask = group["mask"] if "mask" in group else None
+        self._subset_idx = None
+        self._dtype_str = dtype_str
+
+    @property
+    def dtype(self) -> pd.CategoricalDtype:
+        if self.mask is not None:
+            if self._dtype_str == "nullable-integer":
+                return pd.arrays.IntegerArray
+            elif self._dtype_str == "nullable-boolean":
+                return pd.arrays.BooleanArray
+        return pd.array
+
+    def __getitem__(self, selection) -> pd.Categorical:
+        idx = self._resolve_idx(selection)
+        values = self.values[idx]
+        if self.mask is not None:
+            mask = self.mask[idx]
+            if self._dtype_str == "nullable-integer":
+                return pd.arrays.IntegerArray(values, mask=mask)
+            elif self._dtype_str == "nullable-boolean":
+                return pd.arrays.BooleanArray(values, mask=mask)
+        return pd.array(values)
+
+    def __repr__(self) -> str:
+        if self._dtype_str == "nullable-integer":
+            return f"LazyNullableIntegerArray"
+        elif self._dtype_str == "nullable-boolean":
+            return f"LazyNullableBooleanArray"
 
 
-@_subset.register(LazyCategoricalArray)
-def _subset_lazy_cat(a: LazyCategoricalArray, subset_idx: Index):
+@_subset.register(MaskedArrayMixIn)
+def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
     a_copy = deepcopy(a)
     a_copy.subset_idx = subset_idx[0]  # this is a tuple?
     return a_copy
 
 
-@as_view.register(pd.Categorical)
-def _subset_lazy_cat(a: pd.Categorical, view_args):
+@as_view.register(MaskedArrayMixIn)
+def _view_masked(a: MaskedArrayMixIn, view_args):
     return a
 
 
-@as_view.register(LazyCategoricalArray)
-def _subset_lazy_cat(a: LazyCategoricalArray, view_args):
+@as_view.register(pd.Categorical)
+def _view_pd_categorical(a: pd.Categorical, view_args):
+    return a
+
+
+@as_view.register(pd.api.extensions.ExtensionArray)
+def _view_pd_array(a: pd.api.extensions.ExtensionArray, view_args):
+    return a
+
+
+@as_view.register(pd.arrays.IntegerArray)
+def _view_pd_integer_array(a: pd.arrays.IntegerArray, view_args):
+    return a
+
+
+@as_view.register(pd.arrays.BooleanArray)
+def _view_pd_boolean_array(a: pd.arrays.BooleanArray, view_args):
     return a
 
 
@@ -150,6 +208,10 @@ class AxisArraysRemote(AxisArrays):
                 return self._view(self.parent, (idx,))
 
         return IlocDispatch()
+
+    @property
+    def dim_names(self) -> pd.Index:
+        return (self.parent.obs_names, self.parent.var_names)[self._axis].compute()
 
 
 def to_df_1d_axis_arrays(axis_arrays):
@@ -490,10 +552,16 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
             return {k: read_dispatched(v, callback) for k, v in iter_object}
         elif iospec.encoding_type == "categorical":
             return LazyCategoricalArray(elem)
+        elif "nullable" in iospec.encoding_type:
+            return LazyMaskedArray(elem, iospec.encoding_type)
         elif iospec.encoding_type in {"array", "string-array"}:
             return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
             return sparse_dataset(elem).to_backed()
+        elif iospec.encoding_type in {"awkward-array"}:
+            return read_dispatched(elem, None)
+        elif iospec.encoding_type in {"dataframe"}:
+            return read_dispatched(elem, None)
         return func(elem)
 
     adata = read_dispatched(f, callback=callback)
