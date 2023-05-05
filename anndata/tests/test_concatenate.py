@@ -1417,11 +1417,10 @@ def test_outer_concat_with_missing_value_for_df():
 
 
 def test_outer_concat_outputs_nullable_bool_writable(tmp_path):
-
     a = gen_adata((5, 5), obsm_types=(pd.DataFrame,))
     b = gen_adata((3, 5), obsm_types=(pd.DataFrame,))
 
-    del b.obsm["df"]     
+    del b.obsm["df"]
 
     adatas = concat({"a": a, "b": b}, join="outer", label="group")
-    adatas.write(tmp_path/"test.h5ad")
+    adatas.write(tmp_path / "test.h5ad")

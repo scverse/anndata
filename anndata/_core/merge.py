@@ -537,11 +537,13 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
     """
     return Reindexer(cur_var, new_var)
 
-def np_bool_to_pd_bool_array(df:pd.DataFrame):
-    for col_name,col_type in dict(df.dtypes).items():
+
+def np_bool_to_pd_bool_array(df: pd.DataFrame):
+    for col_name, col_type in dict(df.dtypes).items():
         if col_type is np.dtype(bool):
             df[col_name] = pd.array(df[col_name].values)
     return df
+
 
 def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     arrays = list(arrays)
