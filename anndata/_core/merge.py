@@ -537,6 +537,11 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
     """
     return Reindexer(cur_var, new_var)
 
+def np_bool_to_pd_bool_array(df:pd.DataFrame):
+    for col_name,col_type in dict(df.dtypes).items():
+        if col_type is np.dtype(bool):
+            df[col_name] = pd.array(df[col_name].values)
+    return df
 
 def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     arrays = list(arrays)
@@ -553,8 +558,10 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
                 "Cannot concatenate a dataframe with other array types."
             )
         # TODO: behaviour here should be chosen through a merge strategy
+        elems = [f(x) for f, x in zip(reindexers, arrays)]
+        elems = [np_bool_to_pd_bool_array(el) for el in elems]
         df = pd.concat(
-            unify_categorical_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
+            unify_categorical_dtypes(elems),
             ignore_index=True,
             axis=axis,
         )
