@@ -291,22 +291,15 @@ def test_not_set_subset_X(matrix_type_no_dask, subset_func):
 @normalize_token.register(ad.AnnData)
 def tokenize_anndata(adata: ad.AnnData):
     res = []
-    for attr in ["X", "obs", "var"]:
-        elem = getattr(adata, attr, None)
-        if elem is not None:
-            if isinstance(elem, DaskArray):
-                res.append(tokenize(elem))
-            else:
-                res.append(joblib.hash(elem))
-        else:
-            res.append(None)
-    for attr in ["obsm", "varm", "obsp", "varp", "layers", "uns"]:
-        elem = getattr(adata, attr, None)
-        if elem.keys():
-            res.append(joblib.hash(elem))
-        else:
-            res.append(None)
-
+    if adata.X is not None:
+        res.append(tokenize(adata.X))
+    res.extend([tokenize(adata.obs), tokenize(adata.var)])
+    for attr in ["obsm", "varm", "obsp", "varp", "layers"]:
+        elem = getattr(adata, attr)
+        res.append(tokenize(list(elem.items())))
+    res.append(joblib.hash(adata.uns))
+    if adata.raw is not None:
+        res.append(tokenize(adata.raw.to_adata()))
     return tuple(res)
 
 
@@ -434,7 +427,7 @@ def test_view_delitem(attr):
 )
 def test_view_delattr(attr, subset_func):
     base = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
-    orig_hash = joblib.hash(base)
+    orig_hash = tokenize(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
     empty = ad.AnnData(obs=subset.obs[[]], var=subset.var[[]])
 
@@ -443,7 +436,7 @@ def test_view_delattr(attr, subset_func):
     assert not subset.is_view
     # Should now have same value as default
     assert_equal(getattr(subset, attr), getattr(empty, attr))
-    assert orig_hash == joblib.hash(base)  # Original should not be modified
+    assert orig_hash == tokenize(base)  # Original should not be modified
 
 
 @pytest.mark.parametrize(
