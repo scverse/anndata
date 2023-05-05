@@ -11,6 +11,7 @@ import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
 from anndata.compat import DaskArray
+from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -66,6 +67,18 @@ def adata_parameterized(request):
     ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def matrix_type(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
+    ids=[
+        "np_array",
+        "scipy_csr",
+        "scipy_csc",
+    ],
+)
+def matrix_type_no_dask(request):
     return request.param
 
 
@@ -252,8 +265,8 @@ def test_set_varm(adata):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X(matrix_type_no_dask, subset_func):
+    adata = ad.AnnData(matrix_type_no_dask(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -273,6 +286,46 @@ def test_not_set_subset_X(matrix_type, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == joblib.hash(adata)
+
+
+@normalize_token.register(ad.AnnData)
+def tokenize_anndata(adata: ad.AnnData):
+    res = []
+    if adata.X is not None:
+        res.append(tokenize(adata.X))
+    res.extend([tokenize(adata.obs), tokenize(adata.var)])
+    for attr in ["obsm", "varm", "obsp", "varp", "layers"]:
+        elem = getattr(adata, attr)
+        res.append(tokenize(list(elem.items())))
+    res.append(joblib.hash(adata.uns))
+    if adata.raw is not None:
+        res.append(tokenize(adata.raw.to_adata()))
+    return tuple(res)
+
+
+# TODO: Determine if this is the intended behavior,
+#       or just the behaviour we’ve had for a while
+def test_not_set_subset_X_dask(matrix_type, subset_func):
+    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+    init_hash = tokenize(adata)
+    orig_X_val = adata.X.copy()
+    while True:
+        subset_idx = slice_subset(adata.obs_names)
+        if len(adata[subset_idx, :]) > 2:
+            break
+    subset = adata[subset_idx, :]
+
+    subset = adata[:, subset_idx]
+
+    internal_idx = _normalize_index(
+        subset_func(np.arange(subset.X.shape[1])), subset.var_names
+    )
+    assert subset.is_view
+    subset.X[:, internal_idx] = 1
+    assert not subset.is_view
+    assert not np.any(asarray(adata.X != orig_X_val))
+
+    assert init_hash == tokenize(adata)
 
 
 def test_set_scalar_subset_X(matrix_type, subset_func):
@@ -374,7 +427,7 @@ def test_view_delitem(attr):
 )
 def test_view_delattr(attr, subset_func):
     base = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
-    orig_hash = joblib.hash(base)
+    orig_hash = tokenize(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
     empty = ad.AnnData(obs=subset.obs[[]], var=subset.var[[]])
 
@@ -383,7 +436,7 @@ def test_view_delattr(attr, subset_func):
     assert not subset.is_view
     # Should now have same value as default
     assert_equal(getattr(subset, attr), getattr(empty, attr))
-    assert orig_hash == joblib.hash(base)  # Original should not be modified
+    assert orig_hash == tokenize(base)  # Original should not be modified
 
 
 @pytest.mark.parametrize(
