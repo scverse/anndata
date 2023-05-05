@@ -157,9 +157,9 @@ class LazyMaskedArray(MaskedArrayMixIn):
 
     def __repr__(self) -> str:
         if self._dtype_str == "nullable-integer":
-            return f"LazyNullableIntegerArray"
+            return "LazyNullableIntegerArray"
         elif self._dtype_str == "nullable-boolean":
-            return f"LazyNullableBooleanArray"
+            return "LazyNullableBooleanArray"
 
 
 @_subset.register(MaskedArrayMixIn)
@@ -557,7 +557,7 @@ def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif iospec.encoding_type in {"array", "string-array"}:
             return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
-            return sparse_dataset(elem).to_backed()
+            return sparse_dataset(elem)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         elif iospec.encoding_type in {"dataframe"}:

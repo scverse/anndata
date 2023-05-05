@@ -54,6 +54,7 @@ from ..compat import (
     DaskArray,
     _move_adj_mtx,
 )
+from .sparse_dataset import BaseCompressedSparseDataset
 
 
 class StorageType(Enum):
@@ -63,6 +64,7 @@ class StorageType(Enum):
     ZarrArray = ZarrArray
     ZappyArray = ZappyArray
     DaskArray = DaskArray
+    BaseCompressedSparseDataset = BaseCompressedSparseDataset
 
     @classmethod
     def classes(cls):
