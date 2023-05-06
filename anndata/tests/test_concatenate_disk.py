@@ -204,4 +204,3 @@ def obsm_adatas():
 
 def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
     assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
-
