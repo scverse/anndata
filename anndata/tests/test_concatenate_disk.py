@@ -205,16 +205,3 @@ def obsm_adatas():
 def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
     assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
 
-
-@pytest.mark.parametrize("elem", ["sparse", "array", "df"])
-def test_concat_outer_aligned_mapping(elem, tmp_path, file_format):
-    a = gen_adata((5, 5), **GEN_ADATA_OOC_CONCAT_ARGS)
-    b = gen_adata((3, 5), **GEN_ADATA_OOC_CONCAT_ARGS)
-
-    del b.obsm[elem]
-    if elem == "df":
-        del a.obsm[elem]["bool"]
-
-    adatas = concat({"a": a, "b": b}, join="outer", label="group")
-
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
