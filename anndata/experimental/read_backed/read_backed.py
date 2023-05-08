@@ -517,7 +517,7 @@ class AnnDataRemote(AbstractAnnData):
         return descr
 
 
-def read_remote(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
+def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     if isinstance(store, Path):
         store = str(store)
 

@@ -11,7 +11,7 @@ from anndata.tests.helpers import (
     gen_adata,
     subset_func,
 )
-from anndata.experimental.read_remote import read_remote, LazyCategoricalArray
+from anndata.experimental.read_backed import read_backed, LazyCategoricalArray
 from anndata.utils import asarray
 
 
@@ -47,7 +47,7 @@ def test_read_write_X(tmp_path, mtx_format):
     orig = gen_adata((1000, 1000), mtx_format)
     orig.write_zarr(orig_pth)
 
-    remote = read_remote(orig_pth)
+    remote = read_backed(orig_pth)
     # remote.write_zarr(remote_pth) # need to implement writing!
 
     assert np.all(asarray(orig.X) == asarray(remote.X))
@@ -61,7 +61,7 @@ def test_read_write_full(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
     adata.write_zarr(orig_pth)
-    remote = read_remote(orig_pth)
+    remote = read_backed(orig_pth)
     assert np.all(asarray(adata.X) == asarray(remote.X))
     assert (adata.obs == remote.obs.to_df()[adata.obs.columns]).all().all()
     assert (adata.var == remote.var.to_df()[adata.var.columns]).all().all()
@@ -73,7 +73,7 @@ def test_read_write_view(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
     adata.write_zarr(orig_pth)
-    remote = read_remote(orig_pth)
+    remote = read_backed(orig_pth)
     subset = adata.obs["obs_cat"] == "a"
     assert np.all(asarray(adata[subset, :].X) == asarray(remote[subset, :].X))
     assert (
@@ -96,7 +96,7 @@ def test_read_write_view_of_view(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
     adata.write_zarr(orig_pth)
-    remote = read_remote(orig_pth)
+    remote = read_backed(orig_pth)
     subset = (adata.obs["obs_cat"] == "a") | (adata.obs["obs_cat"] == "b")
     subsetted_adata = adata[subset, :]
     subset_subset = subsetted_adata.obs["obs_cat"] == "b"
