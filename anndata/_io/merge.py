@@ -241,7 +241,7 @@ def write_concat_sequence(
                 write_elem(output_group, out_path, init_elem)
                 out_array: ZarrArray = read_group(output_group[out_path])
                 for a in arrays[1:]:
-                    out_array.append(a)
+                    out_array.append(a, axis=axis)
             else:
                 import dask.array as da
 
