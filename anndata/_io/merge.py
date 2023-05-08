@@ -248,13 +248,15 @@ def write_concat_sequence(
                 darrays = (da.from_zarr(a) for a in arrays)
                 res = da.concatenate(
                     get_elem_to_append(
-                        darrays, axis=1 - axis, reindexers=reindexers, fill_value=fill_value
+                        darrays,
+                        axis=1 - axis,
+                        reindexers=reindexers,
+                        fill_value=fill_value,
                     ),
                     axis=axis,
                 )
                 write_elem(output_group, out_path, res)
 
-            
         elif isinstance(init_elem, (H5Array, H5Group)):
             dim_shapes = [a.shape[axis] for a in arrays]
             dim_res_len = sum(dim_shapes)
