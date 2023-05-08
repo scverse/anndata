@@ -11,7 +11,7 @@ from anndata.tests.helpers import (
     gen_adata,
     subset_func,
 )
-from anndata.experimental.read_backed import read_backed, LazyCategoricalArray
+from anndata.experimental.read_backed import read_backed, LazyCategoricalArray, LazyMaskedArray
 from anndata.utils import asarray
 
 
@@ -32,9 +32,43 @@ def sparse_format(request):
 def categorical_zarr_group(tmp_path_factory):
     base_path = tmp_path_factory.getbasetemp()
     z = zarr.open_group(base_path, mode="w")
-    z["codes"] = [0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2]
-    z["categories"] = ["foo", "bar", "jazz"]
+    z["codes"] =np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
+    z["categories"] = np.array(["foo", "bar", "jazz"])
     z.attrs["ordered"] = False
+    z = zarr.open(base_path)
+    return z
+
+@pytest.fixture()
+def nullable_boolean_zarr_group(tmp_path_factory):
+    base_path = tmp_path_factory.getbasetemp()
+    z = zarr.open_group(base_path, mode="w")
+    z["values"] =np.array([True, False, True, False, False, True, False, False, True, True, False, False, False, True, False, True])
+    z["mask"] = np.array([True, True, True, True, True, False, False, True, False, True, True, True, True, False, True, False])
+    z = zarr.open(base_path)
+    return z
+
+@pytest.fixture()
+def nullable_boolean_zarr_group_no_mask(tmp_path_factory):
+    base_path = tmp_path_factory.getbasetemp()
+    z = zarr.open_group(base_path, mode="w")
+    z["values"] = np.array([True, False, True, False, False, True, False, False, True, True, False, False, False, True, False, True])
+    z = zarr.open(base_path)
+    return z
+
+@pytest.fixture()
+def nullable_integer_zarr_group(tmp_path_factory):
+    base_path = tmp_path_factory.getbasetemp()
+    z = zarr.open_group(base_path, mode="w")
+    z["values"] = np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
+    z["mask"] = np.array([True, True, True, True, True, False, False, True, False, True, True, True, True, False, True, False])
+    z = zarr.open(base_path)
+    return z
+
+@pytest.fixture()
+def nullable_integer_zarr_group_no_mask(tmp_path_factory):
+    base_path = tmp_path_factory.getbasetemp()
+    z = zarr.open_group(base_path, mode="w")
+    z["values"] = np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
     z = zarr.open(base_path)
     return z
 
@@ -155,3 +189,98 @@ def test_lazy_categorical_array_subset_subset(categorical_zarr_group):
             ordered=False,
         ).remove_unused_categories()
     ).all()
+
+
+def test_nullable_boolean_array_properties(nullable_boolean_zarr_group):
+    arr = LazyMaskedArray(nullable_boolean_zarr_group, 'nullable-boolean')
+    assert len(arr[0:3]) == 3
+    assert type(arr[0:3]) == pd.arrays.BooleanArray
+    assert len(arr[()]) == len(arr)
+    assert type(arr[()]) == pd.arrays.BooleanArray
+
+
+def test_nullable_boolean_array_equality(nullable_boolean_zarr_group):
+    arr = LazyMaskedArray(nullable_boolean_zarr_group, 'nullable-boolean')
+    assert (arr[0] == pd.NA).all()
+    assert (arr[3:5] == pd.NA).all()
+    assert (arr[5:7] == np.array([True, False])).all()
+
+
+def test_nullable_boolean_array_subset_subset(nullable_boolean_zarr_group):
+    arr = LazyMaskedArray(nullable_boolean_zarr_group, 'nullable-boolean')
+    subset_susbet = arr[0:10][5:10]
+    assert len(subset_susbet) == 5
+    assert type(subset_susbet) == pd.arrays.BooleanArray
+    assert (
+        subset_susbet[()]
+        == pd.arrays.BooleanArray(
+            values=np.array([True, False, False, True, True]),
+            mask=np.array([False, False, True, False, True]),
+        )
+    ).all()
+
+def test_nullable_boolean_array_no_mask_equality(nullable_boolean_zarr_group_no_mask):
+    arr = LazyMaskedArray(nullable_boolean_zarr_group_no_mask, 'nullable-boolean')
+    assert (arr[0] == True).all()
+    assert (arr[3:5] == False).all()
+    assert (arr[5:7] == np.array([True, False])).all()
+
+
+def test_nullable_boolean_array_no_mask_subset_subset(nullable_boolean_zarr_group_no_mask):
+    arr = LazyMaskedArray(nullable_boolean_zarr_group_no_mask, 'nullable-boolean')
+    subset_susbet = arr[0:10][5:10]
+    assert len(subset_susbet) == 5
+    assert type(subset_susbet) == pd.arrays.BooleanArray
+    assert (
+        subset_susbet[()]
+        == pd.array(np.array([True, False, False, True, True]),)
+    ).all()
+
+def test_nullable_integer_array_properties(nullable_integer_zarr_group):
+    arr = LazyMaskedArray(nullable_integer_zarr_group, 'nullable-integer')
+    assert len(arr[0:3]) == 3
+    assert type(arr[0:3]) == pd.arrays.IntegerArray
+    assert len(arr[()]) == len(arr)
+    assert type(arr[()]) == pd.arrays.IntegerArray
+
+
+def test_nullable_integer_array_equality(nullable_integer_zarr_group):
+    arr = LazyMaskedArray(nullable_integer_zarr_group, 'nullable-integer')
+    assert (arr[0] == pd.NA).all()
+    assert (arr[3:5] == pd.NA).all()
+    assert (arr[5:7] == np.array([2, 2])).all()
+
+
+def test_nullable_integer_array_subset_subset(nullable_integer_zarr_group):
+    arr = LazyMaskedArray(nullable_integer_zarr_group, 'nullable-integer')
+    subset_susbet = arr[0:10][5:10]
+    assert len(subset_susbet) == 5
+    assert type(subset_susbet) == pd.arrays.IntegerArray
+    assert (
+        subset_susbet[()]
+        == pd.arrays.IntegerArray(
+            values=np.array([2, 2, 1, 2, 0]),
+            mask=np.array([False, False, True, False, True]),
+        )
+    ).all()
+
+def test_nullable_integer_array_no_mask_equality(nullable_integer_zarr_group_no_mask):
+    arr = LazyMaskedArray(nullable_integer_zarr_group_no_mask, 'nullable-integer')
+    assert (arr[0] == pd.NA).all()
+    assert (arr[3:5] == 1).all()
+    assert (arr[5:7] == np.array([2, 2])).all()
+
+
+def test_nullable_integer_array_no_mask_subset_subset(nullable_integer_zarr_group_no_mask):
+    arr = LazyMaskedArray(nullable_integer_zarr_group_no_mask, 'nullable-integer')
+    subset_susbet = arr[0:10][5:10]
+    assert len(subset_susbet) == 5
+    assert type(subset_susbet) == pd.arrays.IntegerArray
+    assert (
+        subset_susbet[()]
+        == pd.array(np.array([2, 2, 1, 2, 0]),)
+    ).all()
+
+
+
+    

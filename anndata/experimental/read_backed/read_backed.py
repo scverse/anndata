@@ -128,7 +128,7 @@ class LazyMaskedArray(MaskedArrayMixIn):
 
         Args:
             group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
-            dtype_str (Nullable): group containing "codes" and "categories" key as well as "ordered" attr
+            dtype_str (Nullable): one of `nullable-integer` or `nullable-boolean`
         """
         self.values = group["values"]
         self.mask = group["mask"] if "mask" in group else None
@@ -146,9 +146,11 @@ class LazyMaskedArray(MaskedArrayMixIn):
 
     def __getitem__(self, selection) -> pd.Categorical:
         idx = self._resolve_idx(selection)
-        values = self.values[idx]
+        if type(idx) == int:
+            idx = slice(idx, idx + 1)
+        values = np.array(self.values[idx])
         if self.mask is not None:
-            mask = self.mask[idx]
+            mask = np.array(self.mask[idx])
             if self._dtype_str == "nullable-integer":
                 return pd.arrays.IntegerArray(values, mask=mask)
             elif self._dtype_str == "nullable-boolean":
