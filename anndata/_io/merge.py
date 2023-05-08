@@ -237,17 +237,24 @@ def write_concat_sequence(
         init_elem = arrays[0]
 
         if isinstance(init_elem, (ZarrArray, ZarrGroup)):
-            import dask.array as da
+            if all(r.no_change for r in reindexers):
+                write_elem(output_group, out_path, init_elem)
+                out_array: ZarrArray = read_group(output_group[out_path])
+                for a in arrays[1:]:
+                    out_array.append(a)
+            else:
+                import dask.array as da
 
-            darrays = (da.from_zarr(a) for a in arrays)
-            res = da.concatenate(
-                get_elem_to_append(
-                    darrays, axis=1 - axis, reindexers=reindexers, fill_value=fill_value
-                ),
-                axis=axis,
-            )
-            write_elem(output_group, out_path, res)
+                darrays = (da.from_zarr(a) for a in arrays)
+                res = da.concatenate(
+                    get_elem_to_append(
+                        darrays, axis=1 - axis, reindexers=reindexers, fill_value=fill_value
+                    ),
+                    axis=axis,
+                )
+                write_elem(output_group, out_path, res)
 
+            
         elif isinstance(init_elem, (H5Array, H5Group)):
             dim_shapes = [a.shape[axis] for a in arrays]
             dim_res_len = sum(dim_shapes)
