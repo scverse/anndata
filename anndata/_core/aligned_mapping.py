@@ -43,7 +43,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     """The actual class (which has it’s own data) for this aligned mapping."""
 
     def __repr__(self):
-        return f"{type(self).__name__} with keys: {', '.join(self.keys())}"
+        return f"{type(self).__name__} with keys: {', '.join([k + f'[{str(self[k].dtype)}]' for k in self.keys()])}"
 
     def _ipython_key_completions_(self) -> List[str]:
         return list(self.keys())
