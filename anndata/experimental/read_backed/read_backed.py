@@ -292,7 +292,9 @@ class AnnDataBacked(AbstractAnnData):
         return len(self.obs_names)
 
     def __repr__(self):
-        descr = f"AnnDataBacked object with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
+        descr = (
+            f"AnnDataBacked object with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
+        )
         for attr in [
             "obs",
             "var",

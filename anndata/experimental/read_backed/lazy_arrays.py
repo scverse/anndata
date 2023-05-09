@@ -129,6 +129,7 @@ class LazyMaskedArray(MaskedArrayMixIn):
         elif self._dtype_str == "nullable-boolean":
             return "LazyNullableBooleanArray"
 
+
 @_subset.register(MaskedArrayMixIn)
 def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
     a_copy = deepcopy(a)
