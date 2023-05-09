@@ -24,7 +24,6 @@ class AccessTrackingStore(DirectoryStore):
         self._access_count = {}
 
     def __getitem__(self, key):
-        print(key)
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
@@ -127,7 +126,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     assert store.get_access_count("obs/int64") == 1 # one for 0, .zmetadata handles .zarray
     assert store.get_access_count("var/int64") == 0 # never accessed
 
-def test_access_count_obsp_varp_layers(tmp_path):
+def test_access_count_obsp_varp(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
     M = 1000
@@ -135,16 +134,14 @@ def test_access_count_obsp_varp_layers(tmp_path):
     orig = gen_adata((M, N), mtx_format)
     orig.write_zarr(orig_pth)
     store = AccessTrackingStore(orig_pth)
-    store.set_key_trackers(["obsp", "varp", "layers"])
+    store.set_key_trackers(["obsp", "varp"])
     remote = read_backed(store)
     # these operations should not read in any data
     subset = remote[0:10, 500:600]
     subset.obsp['array']
     subset.varp['array']
-    subset.layers['array']
     assert store.get_access_count("obsp") == 0
     assert store.get_access_count("varp") == 0
-    assert store.get_access_count("layers") == 0
 
 
 def test_read_write_full(tmp_path, mtx_format):

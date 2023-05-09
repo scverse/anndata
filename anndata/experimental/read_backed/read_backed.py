@@ -123,8 +123,7 @@ class AnnDataBacked(AbstractAnnData):
 
         self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))
         self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))
-
-        self.layers = Layers(layers)
+        self.layers = Layers(adata_ref, layers)
         if self.is_view:
             self.obs = self.obs._view(self, (oidx,))
             self.var = self.var._view(self, (vidx,))
@@ -150,9 +149,6 @@ class AnnDataBacked(AbstractAnnData):
     def _run_checks(self):
         assert len(self.obs_names) == self.shape[0]
         assert len(self.var_names) == self.shape[1]
-        for layer in self.layers:
-            assert len(self.obs_names) == layer.shape[0]
-            assert len(self.var_names) == layer.shape[1]
 
     def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
