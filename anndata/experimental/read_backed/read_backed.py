@@ -7,13 +7,14 @@ from typing import (
     Sequence,
     Tuple,
 )
+
 from anndata._core.aligned_mapping import (
     Layers,
     PairwiseArrays,
 )
 from anndata._core.anndata import StorageType, _check_2d_shape
 from anndata._core.anndata_base import AbstractAnnData
-from anndata._core.index import Index, _normalize_indices, _subset, get_vector
+from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._core.views import _resolve_idxs
@@ -22,7 +23,6 @@ from anndata.utils import convert_to_dict
 import zarr
 import pandas as pd
 import dask.array as da
-from xarray import DataArray
 from ..._core import AnnData
 from .. import read_dispatched
 from .lazy_arrays import LazyCategoricalArray, LazyMaskedArray

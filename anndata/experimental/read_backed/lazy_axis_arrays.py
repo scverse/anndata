@@ -1,4 +1,4 @@
-from typing import Mapping, Union
+from typing import Mapping, Union, List
 from anndata._core import anndata, raw
 from anndata._core.aligned_mapping import AxisArraysBase, AxisArraysView
 
@@ -13,6 +13,10 @@ class AxisArraysRemote(AxisArrays):
     @property
     def dim_names(self) -> pd.Index:
         return (self.parent.obs_names, self.parent.var_names)[self._axis].compute()
+    
+    @property
+    def columns(self) -> List:
+        return list(self.keys())
 
 
 
