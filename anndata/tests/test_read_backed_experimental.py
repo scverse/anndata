@@ -96,7 +96,7 @@ def nullable_integer_zarr_group_no_mask(tmp_path_factory):
     return z
 
 
-def test_access_count_tracked(tmp_path, mtx_format):
+def test_access_count_obs_var(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
     M = 1000000 # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
@@ -108,7 +108,7 @@ def test_access_count_tracked(tmp_path, mtx_format):
     orig = AnnData(obs=obs, var=var, X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)))
     orig.write_zarr(orig_pth)
     store = AccessTrackingStore(orig_pth)
-    store.set_key_trackers(["obs/int64", "var/int64"])
+    store.set_key_trackers(["obs/int64", "var/int64", "obs/cat/codes"])
     remote = read_backed(store)
     # a series of methods that should __not__ read in any data
     remote.X
@@ -117,12 +117,34 @@ def test_access_count_tracked(tmp_path, mtx_format):
     remote.obs
     remote.obs['int64']
     remote.var['int64']
+    # only the `cat` should be read in
+    subset = remote[remote.obs['cat'] == 'a', :]
+    subset.obs['int64']
     assert store.get_access_count("obs/int64") == 0
     assert store.get_access_count("var/int64") == 0
+    assert store.get_access_count("obs/cat/codes") == 4 # entire thing needs to be read in for subset
     remote[0:10, :].obs['int64'][0:10].compute()
     assert store.get_access_count("obs/int64") == 1 # one for 0, .zmetadata handles .zarray
     assert store.get_access_count("var/int64") == 0 # never accessed
-    
+
+def test_access_count_obsp_varp_layers(tmp_path):
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.zarr"
+    M = 1000
+    N = 1000
+    orig = gen_adata((M, N), mtx_format)
+    orig.write_zarr(orig_pth)
+    store = AccessTrackingStore(orig_pth)
+    store.set_key_trackers(["obsp", "varp", "layers"])
+    remote = read_backed(store)
+    # these operations should not read in any data
+    subset = remote[0:10, 500:600]
+    subset.obsp['array']
+    subset.varp['array']
+    subset.layers['array']
+    assert store.get_access_count("obsp") == 0
+    assert store.get_access_count("varp") == 0
+    assert store.get_access_count("layers") == 0
 
 
 def test_read_write_full(tmp_path, mtx_format):
