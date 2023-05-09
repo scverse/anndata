@@ -1,244 +1,35 @@
 from collections import OrderedDict, abc as cabc
-from copy import copy, deepcopy
-from enum import Enum
-from functools import cached_property
 from pathlib import Path
 from typing import (
-    Any,
-    Iterable,
-    Mapping,
     MutableMapping,
     Optional,
     Union,
-    List,
     Sequence,
     Tuple,
 )
-from anndata._core.access import ElementRef
 from anndata._core.aligned_mapping import (
-    AlignedMapping,
     Layers,
     PairwiseArrays,
-    AxisArraysView,
 )
-from anndata._core.anndata import StorageType, _check_2d_shape, _gen_dataframe
+from anndata._core.anndata import StorageType, _check_2d_shape
 from anndata._core.anndata_base import AbstractAnnData
-from anndata._core.file_backing import AnnDataFileManager
-from anndata._core.index import Index, _normalize_indices, _subset
+from anndata._core.index import Index, _normalize_indices, _subset, get_vector
 from anndata._core.raw import Raw
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata._core.views import _resolve_idx, as_view, _resolve_idxs
-from anndata._io.specs.registry import read_elem
-from anndata.compat import _move_adj_mtx, _read_attr
+from anndata._core.views import _resolve_idxs
 from anndata.utils import convert_to_dict
 
 import zarr
 import pandas as pd
-import numpy as np
-from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin
 import dask.array as da
-
-from ..._core import AnnData, AxisArrays
+from xarray import DataArray
+from ..._core import AnnData
 from .. import read_dispatched
+from .lazy_arrays import LazyCategoricalArray, LazyMaskedArray
+from .lazy_axis_arrays import AxisArrays1dRemote, AxisArraysRemote
 
 
-class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
-    def _resolve_idx(self, new_idx):
-        return (
-            new_idx
-            if self.subset_idx is None
-            else _resolve_idx(self.subset_idx, new_idx, self.shape[0])
-        )
-
-    @property
-    def subset_idx(self):
-        return self._subset_idx
-
-    @subset_idx.setter
-    def subset_idx(self, new_idx):
-        self._subset_idx = self._resolve_idx(new_idx)
-
-    @property
-    def shape(self) -> Tuple[int, ...]:
-        if self.subset_idx is None:
-            return self.values.shape
-        if isinstance(self.subset_idx, slice):
-            if self.subset_idx == slice(None, None, None):
-                return self.values.shape
-            return (self.subset_idx.stop - self.subset_idx.start,)
-        else:
-            return (len(self.subset_idx),)
-
-    def __eq__(self, __o) -> np.ndarray:
-        return self[()] == __o
-
-    def __ne__(self, __o) -> np.ndarray:
-        return ~(self == __o)
-
-
-class LazyCategoricalArray(MaskedArrayMixIn):
-    __slots__ = ("values", "attrs", "_categories", "_categories_cache", "_subset_idx")
-
-    def __init__(self, group, *args, **kwargs):
-        """Class for lazily reading categorical data from formatted zarr group
-
-        Args:
-            group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
-        """
-        self.values = group["codes"]
-        self._categories = group["categories"]
-        self._categories_cache = None
-        self._subset_idx = None
-        self.attrs = dict(group.attrs)
-
-    @property
-    def categories(self):  # __slots__ and cached_property are incompatible
-        if self._categories_cache is None:
-            self._categories_cache = self._categories[...]
-        return self._categories_cache
-
-    @property
-    def dtype(self) -> pd.CategoricalDtype:
-        return pd.CategoricalDtype(self.categories, self.ordered)
-
-    @property
-    def ordered(self):
-        return bool(self.attrs["ordered"])
-
-    def __getitem__(self, selection) -> pd.Categorical:
-        idx = self._resolve_idx(selection)
-        codes = self.values.oindex[idx]
-        if codes.shape == ():  # handle 0d case
-            codes = np.array([codes])
-        return pd.Categorical.from_codes(
-            codes=codes,
-            categories=self.categories,
-            ordered=self.ordered,
-        ).remove_unused_categories()
-
-    def __repr__(self) -> str:
-        return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
-
-
-class LazyMaskedArray(MaskedArrayMixIn):
-    __slots__ = ("mask", "values", "_subset_idx", "_dtype_str")
-
-    def __init__(self, group, dtype_str, *args, **kwargs):
-        """Class for lazily reading categorical data from formatted zarr group
-
-        Args:
-            group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
-            dtype_str (Nullable): one of `nullable-integer` or `nullable-boolean`
-        """
-        self.values = group["values"]
-        self.mask = group["mask"] if "mask" in group else None
-        self._subset_idx = None
-        self._dtype_str = dtype_str
-
-    @property
-    def dtype(self) -> pd.CategoricalDtype:
-        if self.mask is not None:
-            if self._dtype_str == "nullable-integer":
-                return pd.arrays.IntegerArray
-            elif self._dtype_str == "nullable-boolean":
-                return pd.arrays.BooleanArray
-        return pd.array
-
-    def __getitem__(self, selection) -> pd.Categorical:
-        idx = self._resolve_idx(selection)
-        if type(idx) == int:
-            idx = slice(idx, idx + 1)
-        values = np.array(self.values[idx])
-        if self.mask is not None:
-            mask = np.array(self.mask[idx])
-            if self._dtype_str == "nullable-integer":
-                return pd.arrays.IntegerArray(values, mask=mask)
-            elif self._dtype_str == "nullable-boolean":
-                return pd.arrays.BooleanArray(values, mask=mask)
-        return pd.array(values)
-
-    def __repr__(self) -> str:
-        if self._dtype_str == "nullable-integer":
-            return "LazyNullableIntegerArray"
-        elif self._dtype_str == "nullable-boolean":
-            return "LazyNullableBooleanArray"
-
-
-@_subset.register(MaskedArrayMixIn)
-def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
-    a_copy = deepcopy(a)
-    a_copy.subset_idx = subset_idx[0]  # this is a tuple?
-    return a_copy
-
-
-@as_view.register(MaskedArrayMixIn)
-def _view_masked(a: MaskedArrayMixIn, view_args):
-    return a
-
-
-@as_view.register(pd.Categorical)
-def _view_pd_categorical(a: pd.Categorical, view_args):
-    return a
-
-
-@as_view.register(pd.api.extensions.ExtensionArray)
-def _view_pd_array(a: pd.api.extensions.ExtensionArray, view_args):
-    return a
-
-
-@as_view.register(pd.arrays.IntegerArray)
-def _view_pd_integer_array(a: pd.arrays.IntegerArray, view_args):
-    return a
-
-
-@as_view.register(pd.arrays.BooleanArray)
-def _view_pd_boolean_array(a: pd.arrays.BooleanArray, view_args):
-    return a
-
-
-class AxisArraysRemote(AxisArrays):
-    def __getattr__(self, __name: str):
-        # If we a method has been accessed that is not here, try the pandas implementation
-        if hasattr(pd.DataFrame, __name):
-            return self.to_df().__getattribute__(__name)
-        return object.__getattribute__(self, __name)
-
-    @property
-    def iloc(self):
-        class IlocDispatch:
-            def __getitem__(self_iloc, idx):
-                return self._view(self.parent, (idx,))
-
-        return IlocDispatch()
-
-    @property
-    def dim_names(self) -> pd.Index:
-        return (self.parent.obs_names, self.parent.var_names)[self._axis].compute()
-
-
-def to_df_1d_axis_arrays(axis_arrays):
-    """Convert to pandas dataframe."""
-    df = pd.DataFrame(index=axis_arrays.dim_names)
-    for key in axis_arrays.keys():
-        if "index" not in key:
-            df[key] = axis_arrays[key][()]
-    return df
-
-
-class AxisArrays1dRemote(AxisArraysRemote):
-    def to_df(self) -> pd.DataFrame:
-        return to_df_1d_axis_arrays(self)
-
-
-class AxisArraysRemoteView(AxisArraysView):
-    def to_df(self) -> pd.DataFrame:
-        return to_df_1d_axis_arrays(self)
-
-
-AxisArrays1dRemote._view_class = AxisArraysRemoteView
-
-
-class AnnDataRemote(AbstractAnnData):
+class AnnDataBacked(AbstractAnnData):
     def __init__(
         self,
         X=None,
@@ -353,6 +144,9 @@ class AnnDataRemote(AbstractAnnData):
 
         self._run_checks()
 
+    def _sanitize(self):
+        pass
+
     def _run_checks(self):
         assert len(self.obs_names) == self.shape[0]
         assert len(self.var_names) == self.shape[1]
@@ -363,7 +157,7 @@ class AnnDataRemote(AbstractAnnData):
     def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
-        return AnnDataRemote(self, oidx=oidx, vidx=vidx)
+        return AnnDataBacked(self, oidx=oidx, vidx=vidx)
 
     def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
         return _normalize_indices(index, self.obs_names, self.var_names)
@@ -502,7 +296,7 @@ class AnnDataRemote(AbstractAnnData):
         return len(self.obs_names)
 
     def __repr__(self):
-        descr = f"AnnData object with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
+        descr = f"AnnDataBacked object with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
         for attr in [
             "obs",
             "var",
@@ -538,7 +332,7 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
                 if is_consolidated
                 else [(k, elem[k]) for k in cols if k in elem]
             )
-            return AnnDataRemote(
+            return AnnDataBacked(
                 **{k: read_dispatched(v, callback) for k, v in iter_object}, file=elem
             )
         elif elem_name.startswith("/raw"):
