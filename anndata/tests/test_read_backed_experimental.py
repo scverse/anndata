@@ -5,14 +5,37 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 import zarr
+from anndata._core.anndata import AnnData
 
 from anndata.tests.helpers import (
     as_dense_dask_array,
     gen_adata,
-    subset_func,
+    gen_typed_df,
 )
 from anndata.experimental.read_backed import read_backed, LazyCategoricalArray, LazyMaskedArray
 from anndata.utils import asarray
+
+from zarr import DirectoryStore
+import traceback
+class AccessTrackingStore(DirectoryStore):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._access_count = {}
+
+    def __getitem__(self, key):
+        print(key)
+        for tracked in self._access_count:
+            if tracked in key:
+                self._access_count[tracked] += 1
+        return super().__getitem__(key)
+
+    def get_access_count(self, key):
+        return self._access_count[key]
+
+    def set_key_trackers(self, keys_to_track):
+        for k in keys_to_track:
+            self._access_count[k] = 0
 
 
 @pytest.fixture(
@@ -73,21 +96,33 @@ def nullable_integer_zarr_group_no_mask(tmp_path_factory):
     return z
 
 
-def test_read_write_X(tmp_path, mtx_format):
+def test_access_count_tracked(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
-    # remote_pth = base_pth / "backed.zarr"
-
-    orig = gen_adata((1000, 1000), mtx_format)
+    M = 1000000 # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
+    N = 5
+    obs_names = pd.Index(f"cell{i}" for i in range(M))
+    var_names = pd.Index(f"gene{i}" for i in range(N))
+    obs = gen_typed_df(M, obs_names)
+    var = gen_typed_df(N, var_names)
+    orig = AnnData(obs=obs, var=var, X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)))
     orig.write_zarr(orig_pth)
-
-    remote = read_backed(orig_pth)
-    # remote.write_zarr(remote_pth) # need to implement writing!
-
-    assert np.all(asarray(orig.X) == asarray(remote.X))
-    assert (orig.obs == remote.obs.to_df()[orig.obs.columns]).all().all()
-    assert (orig.var == remote.var.to_df()[orig.var.columns]).all().all()
-    assert (orig.obsm["array"] == remote.obsm["array"].compute()).all()
+    store = AccessTrackingStore(orig_pth)
+    store.set_key_trackers(["obs/int64", "var/int64"])
+    remote = read_backed(store)
+    # a series of methods that should __not__ read in any data
+    remote.X
+    remote.shape
+    remote.var
+    remote.obs
+    remote.obs['int64']
+    remote.var['int64']
+    assert store.get_access_count("obs/int64") == 0
+    assert store.get_access_count("var/int64") == 0
+    remote[0:10, :].obs['int64'][0:10].compute()
+    assert store.get_access_count("obs/int64") == 1 # one for 0, .zmetadata handles .zarray
+    assert store.get_access_count("var/int64") == 0 # never accessed
+    
 
 
 def test_read_write_full(tmp_path, mtx_format):
