@@ -138,6 +138,7 @@ class LazyMaskedArray(MaskedArrayMixIn):
         arr.subset_idx = self.subset_idx
         return arr
 
+
 @_subset.register(MaskedArrayMixIn)
 def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
     a_copy = a.copy()
