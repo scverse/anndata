@@ -11,12 +11,13 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     gen_adata,
     gen_typed_df,
+    assert_equal
 )
 from anndata.experimental.read_backed import read_backed, LazyCategoricalArray, LazyMaskedArray
 from anndata.utils import asarray
 
 from zarr import DirectoryStore
-import traceback
+
 class AccessTrackingStore(DirectoryStore):
 
     def __init__(self, *args, **kwargs):
@@ -144,7 +145,7 @@ def test_access_count_obsp_varp(tmp_path, mtx_format):
     assert store.get_access_count("varp") == 0
 
 
-def test_read_write_full(tmp_path, mtx_format):
+def test_read_full(tmp_path, mtx_format):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
@@ -155,8 +156,17 @@ def test_read_write_full(tmp_path, mtx_format):
     assert (adata.var == remote.var.to_df()[adata.var.columns]).all().all()
     assert (adata.obsm["array"] == remote.obsm["array"].compute()).all()
 
+def test_to_memory(tmp_path, mtx_format):
+    adata = gen_adata((1000, 1000), mtx_format)
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.zarr"
+    adata.write_zarr(orig_pth)
+    remote = read_backed(orig_pth)
+    remote_to_memory = remote.to_memory()
+    assert_equal(remote_to_memory, adata)
 
-def test_read_write_view(tmp_path, mtx_format):
+
+def test_read_view(tmp_path, mtx_format):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
@@ -179,7 +189,7 @@ def test_read_write_view(tmp_path, mtx_format):
     ).all()
 
 
-def test_read_write_view_of_view(tmp_path, mtx_format):
+def test_read_view_of_view(tmp_path, mtx_format):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"

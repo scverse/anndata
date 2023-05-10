@@ -20,12 +20,12 @@ class AxisArraysRemote(AxisArrays):
 
 
 
-def to_df_1d_axis_arrays(axis_arrays, idx=None):
+def to_df_1d_axis_arrays(axis_arrays):
     """Convert to pandas dataframe."""
-    df = pd.DataFrame(index=axis_arrays.dim_names[() if idx is None else idx])
+    df = pd.DataFrame(index=axis_arrays.dim_names[()])
     for key in axis_arrays.keys():
         if "index" not in key:
-            df[key] = axis_arrays[key][() if idx is None else idx]
+            df[key] = axis_arrays[key][()]
     return df
 
 class AxisArraysRemote1dMixin():

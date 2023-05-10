@@ -16,10 +16,10 @@ from anndata._core.anndata import StorageType, _check_2d_shape
 from anndata._core.anndata_base import AbstractAnnData
 from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
-from anndata._core.sparse_dataset import sparse_dataset
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from anndata._core.views import _resolve_idxs
 from anndata.compat import DaskArray
-from anndata.utils import convert_to_dict
+from anndata.utils import asarray, convert_to_dict
 
 import zarr
 import pandas as pd
@@ -167,16 +167,16 @@ class AnnDataBacked(AbstractAnnData):
         def backed_dict_to_memory(d):
             res = {}
             for k, v in d.items():
-                if isinstance(v, DaskArray):
-                    res[k] = v[...].compute()
-                else:
+                if isinstance(v, DaskArray) or isinstance(v, BaseCompressedSparseDataset):
+                    res[k] = asarray(v)
+                elif isinstance(v, LazyCategoricalArray) or isinstance(v, LazyMaskedArray):
                     res[k] = v[...]
+                else:
+                    res[k] = v
             return res
 
-        obs_dict = backed_dict_to_memory(dict(self.obs))
-        obs = pd.DataFrame(obs_dict, index=obs_dict[self.file["obs"].attrs["_index"]])
-        var_dict = backed_dict_to_memory(dict(self.var))
-        var = pd.DataFrame(var_dict, index=var_dict[self.file["var"].attrs["_index"]])
+        obs = self.obs.to_df()
+        var = self.var.to_df()
         obsm = backed_dict_to_memory(dict(self.obsm))
         varm = backed_dict_to_memory(dict(self.varm))
         varp = backed_dict_to_memory(dict(self.varp))
@@ -184,7 +184,7 @@ class AnnDataBacked(AbstractAnnData):
         layers = backed_dict_to_memory(dict(self.layers))
         X = None
         if not exclude_X:
-            X = self.X[...].compute() if isinstance(self.X, DaskArray) else self.X[...]
+            X = asarray(self.X)
         return AnnData(
             X=X,
             obs=obs,
@@ -375,11 +375,8 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif elem_name.startswith("/raw"):
             return None
         elif elem_name in {"/obs", "/var"}:
-            # override to only return AxisArray that will be accessed specially via our special AnnData object
             iter_object = (
-                elem.items()
-                if is_consolidated
-                else [(k, elem[k]) for k in elem.attrs["column-order"]]
+                [(k, elem[k]) for k in elem.attrs["column-order"]]
                 + [(elem.attrs["_index"], elem[elem.attrs["_index"]])]
             )
             return {k: read_dispatched(v, callback) for k, v in iter_object}
