@@ -11,7 +11,7 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     gen_adata,
     gen_typed_df,
-    assert_equal
+    assert_equal,
 )
 from anndata.experimental.read_backed import (
     read_backed,
@@ -21,6 +21,7 @@ from anndata.experimental.read_backed import (
 from anndata.utils import asarray
 
 from zarr import DirectoryStore
+
 
 class AccessTrackingStore(DirectoryStore):
     def __init__(self, *args, **kwargs):
@@ -62,7 +63,7 @@ def categorical_lazy_arr(tmp_path_factory):
     z["categories"] = np.array(["foo", "bar", "jazz"])
     z.attrs["ordered"] = False
     z = zarr.open(base_path)
-    return LazyCategoricalArray(z['codes'], z['categories'], z.attrs)
+    return LazyCategoricalArray(z["codes"], z["categories"], z.attrs)
 
 
 @pytest.fixture()
@@ -110,7 +111,7 @@ def nullable_boolean_lazy_arr(tmp_path_factory):
         ]
     )
     z = zarr.open(base_path)
-    return LazyMaskedArray(z['values'], z['mask'], 'nullable-boolean')
+    return LazyMaskedArray(z["values"], z["mask"], "nullable-boolean")
 
 
 @pytest.fixture()
@@ -138,7 +139,7 @@ def nullable_boolean_lazy_arr_no_mask(tmp_path_factory):
         ]
     )
     z = zarr.open(base_path)
-    return LazyMaskedArray(z['values'], None, 'nullable-boolean')
+    return LazyMaskedArray(z["values"], None, "nullable-boolean")
 
 
 @pytest.fixture()
@@ -167,7 +168,7 @@ def nullable_integer_lazy_arr(tmp_path_factory):
         ]
     )
     z = zarr.open(base_path)
-    return LazyMaskedArray(z['values'], z['mask'], 'nullable-integer')
+    return LazyMaskedArray(z["values"], z["mask"], "nullable-integer")
 
 
 @pytest.fixture()
@@ -176,7 +177,7 @@ def nullable_integer_lazy_arr_no_mask(tmp_path_factory):
     z = zarr.open_group(base_path, mode="w")
     z["values"] = np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
     z = zarr.open(base_path)
-    return LazyMaskedArray(z['values'], None, 'nullable-integer')
+    return LazyMaskedArray(z["values"], None, "nullable-integer")
 
 
 def test_access_count_obs_var(tmp_path, mtx_format):
@@ -247,6 +248,7 @@ def test_read_full(tmp_path, mtx_format):
     assert (adata.obs == remote.obs.to_df()[adata.obs.columns]).all().all()
     assert (adata.var == remote.var.to_df()[adata.var.columns]).all().all()
     assert (adata.obsm["array"] == remote.obsm["array"].compute()).all()
+
 
 def test_to_memory(tmp_path, mtx_format):
     adata = gen_adata((1000, 1000), mtx_format)
@@ -369,13 +371,16 @@ def test_nullable_boolean_array_subset_subset(nullable_boolean_lazy_arr):
         )
     ).all()
 
+
 def test_nullable_boolean_array_no_mask_equality(nullable_boolean_lazy_arr_no_mask):
-    assert (nullable_boolean_lazy_arr_no_mask[0] == True).all()
-    assert (nullable_boolean_lazy_arr_no_mask[3:5] == False).all()
+    assert (nullable_boolean_lazy_arr_no_mask[0] is True).all()
+    assert (nullable_boolean_lazy_arr_no_mask[3:5] is False).all()
     assert (nullable_boolean_lazy_arr_no_mask[5:7] == np.array([True, False])).all()
 
 
-def test_nullable_boolean_array_no_mask_subset_subset(nullable_boolean_lazy_arr_no_mask):
+def test_nullable_boolean_array_no_mask_subset_subset(
+    nullable_boolean_lazy_arr_no_mask,
+):
     subset_susbet = nullable_boolean_lazy_arr_no_mask[0:10][5:10]
     assert len(subset_susbet) == 5
     assert type(subset_susbet) == pd.arrays.BooleanArray
@@ -385,6 +390,7 @@ def test_nullable_boolean_array_no_mask_subset_subset(nullable_boolean_lazy_arr_
             np.array([True, False, False, True, True]),
         )
     ).all()
+
 
 def test_nullable_integer_array_properties(nullable_integer_lazy_arr):
     assert len(nullable_integer_lazy_arr[0:3]) == 3
@@ -411,13 +417,16 @@ def test_nullable_integer_array_subset_subset(nullable_integer_lazy_arr):
         )
     ).all()
 
+
 def test_nullable_integer_array_no_mask_equality(nullable_integer_lazy_arr_no_mask):
     assert (nullable_integer_lazy_arr_no_mask[0] == pd.NA).all()
     assert (nullable_integer_lazy_arr_no_mask[3:5] == 1).all()
     assert (nullable_integer_lazy_arr_no_mask[5:7] == np.array([2, 2])).all()
 
 
-def test_nullable_integer_array_no_mask_subset_subset(nullable_integer_lazy_arr_no_mask):
+def test_nullable_integer_array_no_mask_subset_subset(
+    nullable_integer_lazy_arr_no_mask,
+):
     subset_susbet = nullable_integer_lazy_arr_no_mask[0:10][5:10]
     assert len(subset_susbet) == 5
     assert type(subset_susbet) == pd.arrays.IntegerArray

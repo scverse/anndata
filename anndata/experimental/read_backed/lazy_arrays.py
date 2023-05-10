@@ -42,7 +42,14 @@ class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
 
 
 class LazyCategoricalArray(MaskedArrayMixIn):
-    __slots__ = ("values", "attrs", "_categories", "_categories_cache", "_subset_idx", "group")
+    __slots__ = (
+        "values",
+        "attrs",
+        "_categories",
+        "_categories_cache",
+        "_subset_idx",
+        "group",
+    )
 
     def __init__(self, codes, categories, attrs, *args, **kwargs):
         """Class for lazily reading categorical data from formatted zarr group
@@ -83,7 +90,7 @@ class LazyCategoricalArray(MaskedArrayMixIn):
 
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
-    
+
     def copy(self):
         arr = LazyCategoricalArray(self.values, self.categories, self.attrs)
         arr.subset_idx = self.subset_idx
@@ -132,7 +139,7 @@ class LazyMaskedArray(MaskedArrayMixIn):
             return "LazyNullableIntegerArray"
         elif self._dtype_str == "nullable-boolean":
             return "LazyNullableBooleanArray"
-        
+
     def copy(self):
         arr = LazyMaskedArray(self.values, self.mask, self._dtype_str)
         arr.subset_idx = self.subset_idx

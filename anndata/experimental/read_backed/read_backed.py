@@ -167,9 +167,13 @@ class AnnDataBacked(AbstractAnnData):
         def backed_dict_to_memory(d):
             res = {}
             for k, v in d.items():
-                if isinstance(v, DaskArray) or isinstance(v, BaseCompressedSparseDataset):
+                if isinstance(v, DaskArray) or isinstance(
+                    v, BaseCompressedSparseDataset
+                ):
                     res[k] = asarray(v)
-                elif isinstance(v, LazyCategoricalArray) or isinstance(v, LazyMaskedArray):
+                elif isinstance(v, LazyCategoricalArray) or isinstance(
+                    v, LazyMaskedArray
+                ):
                     res[k] = v[...]
                 else:
                     res[k] = v
@@ -375,15 +379,18 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif elem_name.startswith("/raw"):
             return None
         elif elem_name in {"/obs", "/var"}:
-            iter_object = (
-                [(k, elem[k]) for k in elem.attrs["column-order"]]
-                + [(elem.attrs["_index"], elem[elem.attrs["_index"]])]
-            )
+            iter_object = [(k, elem[k]) for k in elem.attrs["column-order"]] + [
+                (elem.attrs["_index"], elem[elem.attrs["_index"]])
+            ]
             return {k: read_dispatched(v, callback) for k, v in iter_object}
         elif iospec.encoding_type == "categorical":
-            return LazyCategoricalArray(elem['codes'], elem['categories'], elem.attrs)
+            return LazyCategoricalArray(elem["codes"], elem["categories"], elem.attrs)
         elif "nullable" in iospec.encoding_type:
-            return LazyMaskedArray(elem['values'], elem['mask'] if 'mask' in elem else None, iospec.encoding_type)
+            return LazyMaskedArray(
+                elem["values"],
+                elem["mask"] if "mask" in elem else None,
+                iospec.encoding_type,
+            )
         elif iospec.encoding_type in {"array", "string-array"}:
             return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
