@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Tuple
 from anndata._core.index import Index, _subset
 from anndata._core.views import _resolve_idx, as_view
@@ -43,19 +42,19 @@ class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
 
 
 class LazyCategoricalArray(MaskedArrayMixIn):
-    __slots__ = ("values", "attrs", "_categories", "_categories_cache", "_subset_idx")
+    __slots__ = ("values", "attrs", "_categories", "_categories_cache", "_subset_idx", "group")
 
-    def __init__(self, group, *args, **kwargs):
+    def __init__(self, codes, categories, attrs, *args, **kwargs):
         """Class for lazily reading categorical data from formatted zarr group
 
         Args:
             group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
         """
-        self.values = group["codes"]
-        self._categories = group["categories"]
+        self.values = codes
+        self._categories = categories
         self._categories_cache = None
         self._subset_idx = None
-        self.attrs = dict(group.attrs)
+        self.attrs = dict(attrs)
 
     @property
     def categories(self):  # __slots__ and cached_property are incompatible
@@ -84,20 +83,25 @@ class LazyCategoricalArray(MaskedArrayMixIn):
 
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
+    
+    def copy(self):
+        arr = LazyCategoricalArray(self.values, self.categories, self.attrs)
+        arr.subset_idx = self.subset_idx
+        return arr
 
 
 class LazyMaskedArray(MaskedArrayMixIn):
     __slots__ = ("mask", "values", "_subset_idx", "_dtype_str")
 
-    def __init__(self, group, dtype_str, *args, **kwargs):
+    def __init__(self, values, mask, dtype_str, *args, **kwargs):
         """Class for lazily reading categorical data from formatted zarr group
 
         Args:
             group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
             dtype_str (Nullable): one of `nullable-integer` or `nullable-boolean`
         """
-        self.values = group["values"]
-        self.mask = group["mask"] if "mask" in group else None
+        self.values = values
+        self.mask = mask
         self._subset_idx = None
         self._dtype_str = dtype_str
 
@@ -128,10 +132,15 @@ class LazyMaskedArray(MaskedArrayMixIn):
             return "LazyNullableIntegerArray"
         elif self._dtype_str == "nullable-boolean":
             return "LazyNullableBooleanArray"
+        
+    def copy(self):
+        arr = LazyMaskedArray(self.values, self.mask, self._dtype_str)
+        arr.subset_idx = self.subset_idx
+        return arr
 
 @_subset.register(MaskedArrayMixIn)
 def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
-    a_copy = deepcopy(a)
+    a_copy = a.copy()
     a_copy.subset_idx = subset_idx[0]  # this is a tuple?
     return a_copy
 

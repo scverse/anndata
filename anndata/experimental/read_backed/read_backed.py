@@ -343,9 +343,9 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
             )
             return {k: read_dispatched(v, callback) for k, v in iter_object}
         elif iospec.encoding_type == "categorical":
-            return LazyCategoricalArray(elem)
+            return LazyCategoricalArray(elem['codes'], elem['categories'], elem.attrs)
         elif "nullable" in iospec.encoding_type:
-            return LazyMaskedArray(elem, iospec.encoding_type)
+            return LazyMaskedArray(elem['values'], elem['mask'] if 'mask' in elem else None, iospec.encoding_type)
         elif iospec.encoding_type in {"array", "string-array"}:
             return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
