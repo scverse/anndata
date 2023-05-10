@@ -18,6 +18,7 @@ from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._core.views import _resolve_idxs
+from anndata.compat import DaskArray
 from anndata.utils import convert_to_dict
 
 import zarr
@@ -156,7 +157,45 @@ class AnnDataBacked(AbstractAnnData):
         return AnnDataBacked(self, oidx=oidx, vidx=vidx)
 
     def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
-        return _normalize_indices(index, self.obs_names, self.var_names)
+        return _normalize_indices(
+            index,
+            pd.Index(self.obs_names.compute()),
+            pd.Index(self.var_names.compute()),
+        )
+
+    def to_memory(self, exclude_X=False):
+        def backed_dict_to_memory(d):
+            res = {}
+            for k, v in d.items():
+                if isinstance(v, DaskArray):
+                    res[k] = v[...].compute()
+                else:
+                    res[k] = v[...]
+            return res
+
+        obs_dict = backed_dict_to_memory(dict(self.obs))
+        obs = pd.DataFrame(obs_dict, index=obs_dict[self.file["obs"].attrs["_index"]])
+        var_dict = backed_dict_to_memory(dict(self.var))
+        var = pd.DataFrame(var_dict, index=var_dict[self.file["var"].attrs["_index"]])
+        obsm = backed_dict_to_memory(dict(self.obsm))
+        varm = backed_dict_to_memory(dict(self.varm))
+        varp = backed_dict_to_memory(dict(self.varp))
+        obsp = backed_dict_to_memory(dict(self.obsp))
+        layers = backed_dict_to_memory(dict(self.layers))
+        X = None
+        if not exclude_X:
+            X = self.X[...].compute() if isinstance(self.X, DaskArray) else self.X[...]
+        return AnnData(
+            X=X,
+            obs=obs,
+            var=var,
+            obsm=obsm,
+            varm=varm,
+            obsp=obsp,
+            varp=varp,
+            layers=layers,
+            uns=self.uns,
+        )
 
     @property
     def obs_names(self) -> pd.Index:
@@ -292,7 +331,9 @@ class AnnDataBacked(AbstractAnnData):
         return len(self.obs_names)
 
     def __repr__(self):
-        descr = f"AnnDataBacked object with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
+        descr = (
+            f"AnnDataBacked object with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
+        )
         for attr in [
             "obs",
             "var",
