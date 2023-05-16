@@ -4,7 +4,7 @@ from .._core.merge import (
     _resolve_dim,
     StrategiesLiteral,
     intersect_keys,
-    unify_categorical_dtypes,
+    unify_dtypes,
     merge_indices,
     merge_dataframes,
     resolve_merge_strategy,
@@ -196,7 +196,7 @@ def write_concat_sequence(
                 raise NotImplementedError("Cannot reindex dataframes with outer join.")
 
         df = pd.concat(
-            unify_categorical_dtypes([f(d) for f, d in zip(reindexers, dfs)]),
+            unify_dtypes([f(d) for f, d in zip(reindexers, dfs)]),
             ignore_index=True,
             axis=axis,
         )
@@ -392,7 +392,7 @@ def _write_alt_annot(groups, output_group, alt_dim, alt_indices, merge):
 
 def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col, join):
     concat_annot = pd.concat(
-        unify_categorical_dtypes([read_elem(g[dim]) for g in groups]),
+        unify_dtypes([read_elem(g[dim]) for g in groups]),
         join=join,
         ignore_index=True,
     )
