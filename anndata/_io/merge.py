@@ -33,6 +33,9 @@ import numpy as np
 from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
 
 
+
+MAX_LOAD_SIZE = 60_000_000
+
 # TODO: Not good
 class IdentityReindexer:
     def __init__(self):
@@ -167,6 +170,46 @@ def gen_reindexers_array_inner(
     return reindexers
 
 
+
+def _write_concat_sparse_reindexing_inner(
+        datasets:Sequence[SparseDataset],
+        output_group,
+        out_path,
+        axis=0,
+        reindexers=None,
+        fill_value=None,
+):
+    def _gen_chunks_to_append(datasets,reindexers):
+        for ds, ri in zip(datasets, reindexers):
+            n_slices = ds.shape[axis]*ds.shape[1-axis]//MAX_LOAD_SIZE
+            if n_slices < 2:
+                yield ri(ds.to_memory(), axis=1 - axis, fill_value=fill_value)
+            else:
+                slice_size = MAX_LOAD_SIZE//ds.shape[1-axis]
+                if slice_size == 0:
+                    slice_size = 1
+                rem_slices = ds.shape[axis]
+                idx = 0
+                while rem_slices > 0:
+                    ds_part = None
+                    if axis == 0:
+                        ds_part = ds[idx:idx+slice_size,:]
+                    elif axis == 1:
+                        ds_part = ds[:,idx:idx+slice_size]
+                    yield ri(ds_part, axis=1 - axis, fill_value=fill_value)
+                    rem_slices -= slice_size
+                    idx += slice_size
+
+    elems = _gen_chunks_to_append(datasets,reindexers)
+    init_elem = next(elems)
+    write_elem(output_group, out_path, init_elem)
+    del init_elem
+    out_dataset: SparseDataset = read_group(output_group[out_path])
+    for temp_elem in elems:
+        out_dataset.append(temp_elem)
+        del temp_elem
+
+
 def write_concat_sequence(
     groups: Sequence[Union[ZarrGroup, H5Group]],
     output_group,
@@ -213,17 +256,7 @@ def write_concat_sequence(
             for ds in datasets[1:]:
                 out_dataset.append(ds)
         else:
-            # TODO: should we give performance warning here?
-            init_elem = reindexers[0](
-                datasets[0].to_memory(), axis=1 - axis, fill_value=fill_value
-            )
-            write_elem(output_group, out_path, init_elem)
-            del init_elem
-            out_dataset: SparseDataset = read_group(output_group[out_path])
-            for ds, ri in zip(datasets[1:], reindexers[1:]):
-                temp_elem = ri(ds.to_memory(), axis=1 - axis, fill_value=fill_value)
-                out_dataset.append(temp_elem)
-                del temp_elem
+            _write_concat_sparse_reindexing_inner(datasets,output_group,out_path, axis,reindexers, fill_value)
 
     # If all are arrays
     elif all(get_encoding_type(g) == "array" for g in groups):
