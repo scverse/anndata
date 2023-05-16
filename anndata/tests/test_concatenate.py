@@ -1218,6 +1218,34 @@ def test_concat_ordered_categoricals_retained():
     assert c.obs["cat_ordered"].cat.ordered
 
 
+def test_bool_promotion():
+    np_bool = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame({"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5)]),
+    )
+    missing = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(5, 10)]),
+    )
+    result = concat({"np_bool": np_bool, "b": missing}, join="outer", label="batch")
+
+    assert pd.api.types.is_bool_dtype(result.obs["bool"])
+    assert pd.isnull(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
+
+    # Check that promotion doesn't occur if it doesn't need to:
+    np_bool_2 = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5, 10)]
+        ),
+    )
+    result = concat(
+        {"np_bool": np_bool, "np_bool_2": np_bool_2}, join="outer", label="batch"
+    )
+
+    assert result.obs["bool"].dtype == np.dtype(bool)
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
