@@ -34,3 +34,4 @@ test.zarr
 # Benchmark
 .asv
 benchmark/benchmarks/data
+benchmarks/benchmarks/data
