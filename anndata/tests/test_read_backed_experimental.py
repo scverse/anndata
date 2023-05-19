@@ -322,8 +322,8 @@ def test_read_view_of_view(tmp_path, mtx_format):
 def test_lazy_categorical_array_properties(categorical_lazy_arr):
     assert len(categorical_lazy_arr[0:3]) == 3
     assert type(categorical_lazy_arr[0:3]) == pd.Categorical
-    assert len(categorical_lazy_arr[()]) == len(categorical_lazy_arr)
-    assert type(categorical_lazy_arr[()]) == pd.Categorical
+    assert len(categorical_lazy_arr[...]) == len(categorical_lazy_arr)
+    assert type(categorical_lazy_arr[...]) == pd.Categorical
 
 
 def test_lazy_categorical_array_equality(categorical_lazy_arr):
@@ -337,7 +337,7 @@ def test_lazy_categorical_array_subset_subset(categorical_lazy_arr):
     assert len(subset_susbet) == 5
     assert type(subset_susbet) == pd.Categorical
     assert (
-        subset_susbet[()]
+        subset_susbet[...]
         == pd.Categorical.from_codes(
             codes=[2, 2, 1, 2, 0],
             categories=["foo", "bar", "jazz"],
@@ -349,8 +349,8 @@ def test_lazy_categorical_array_subset_subset(categorical_lazy_arr):
 def test_nullable_boolean_array_properties(nullable_boolean_lazy_arr):
     assert len(nullable_boolean_lazy_arr[0:3]) == 3
     assert type(nullable_boolean_lazy_arr[0:3]) == pd.arrays.BooleanArray
-    assert len(nullable_boolean_lazy_arr[()]) == len(nullable_boolean_lazy_arr)
-    assert type(nullable_boolean_lazy_arr[()]) == pd.arrays.BooleanArray
+    assert len(nullable_boolean_lazy_arr[...]) == len(nullable_boolean_lazy_arr)
+    assert type(nullable_boolean_lazy_arr[...]) == pd.arrays.BooleanArray
 
 
 def test_nullable_boolean_array_equality(nullable_boolean_lazy_arr):
@@ -364,7 +364,7 @@ def test_nullable_boolean_array_subset_subset(nullable_boolean_lazy_arr):
     assert len(subset_susbet) == 5
     assert type(subset_susbet) == pd.arrays.BooleanArray
     assert (
-        subset_susbet[()]
+        subset_susbet[...]
         == pd.arrays.BooleanArray(
             values=np.array([True, False, False, True, True]),
             mask=np.array([False, False, True, False, True]),
@@ -373,8 +373,8 @@ def test_nullable_boolean_array_subset_subset(nullable_boolean_lazy_arr):
 
 
 def test_nullable_boolean_array_no_mask_equality(nullable_boolean_lazy_arr_no_mask):
-    assert (nullable_boolean_lazy_arr_no_mask[0] is True).all()
-    assert (nullable_boolean_lazy_arr_no_mask[3:5] is False).all()
+    assert (nullable_boolean_lazy_arr_no_mask[0] == True).all()
+    assert (nullable_boolean_lazy_arr_no_mask[3:5] == False).all()
     assert (nullable_boolean_lazy_arr_no_mask[5:7] == np.array([True, False])).all()
 
 
@@ -385,7 +385,7 @@ def test_nullable_boolean_array_no_mask_subset_subset(
     assert len(subset_susbet) == 5
     assert type(subset_susbet) == pd.arrays.BooleanArray
     assert (
-        subset_susbet[()]
+        subset_susbet[...]
         == pd.array(
             np.array([True, False, False, True, True]),
         )
@@ -395,8 +395,8 @@ def test_nullable_boolean_array_no_mask_subset_subset(
 def test_nullable_integer_array_properties(nullable_integer_lazy_arr):
     assert len(nullable_integer_lazy_arr[0:3]) == 3
     assert type(nullable_integer_lazy_arr[0:3]) == pd.arrays.IntegerArray
-    assert len(nullable_integer_lazy_arr[()]) == len(nullable_integer_lazy_arr)
-    assert type(nullable_integer_lazy_arr[()]) == pd.arrays.IntegerArray
+    assert len(nullable_integer_lazy_arr[...]) == len(nullable_integer_lazy_arr)
+    assert type(nullable_integer_lazy_arr[...]) == pd.arrays.IntegerArray
 
 
 def test_nullable_integer_array_equality(nullable_integer_lazy_arr):
@@ -410,7 +410,7 @@ def test_nullable_integer_array_subset_subset(nullable_integer_lazy_arr):
     assert len(subset_susbet) == 5
     assert type(subset_susbet) == pd.arrays.IntegerArray
     assert (
-        subset_susbet[()]
+        subset_susbet[...]
         == pd.arrays.IntegerArray(
             values=np.array([2, 2, 1, 2, 0]),
             mask=np.array([False, False, True, False, True]),
@@ -431,7 +431,7 @@ def test_nullable_integer_array_no_mask_subset_subset(
     assert len(subset_susbet) == 5
     assert type(subset_susbet) == pd.arrays.IntegerArray
     assert (
-        subset_susbet[()]
+        subset_susbet[...]
         == pd.array(
             np.array([2, 2, 1, 2, 0]),
         )

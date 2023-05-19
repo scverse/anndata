@@ -128,6 +128,8 @@ def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
 
 @_subset.register(DaskArray)
 def _subset_dask(a: DaskArray, subset_idx: Index):
+    if isinstance(subset_idx, slice):
+        return a[subset_idx]
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
         return a.vindex[subset_idx]
@@ -149,6 +151,8 @@ def _subset_df(df: pd.DataFrame, subset_idx: Index):
 
 @_subset.register(AwkArray)
 def _subset_awkarray(a: AwkArray, subset_idx: Index):
+    if isinstance(subset_idx, slice):
+        return a[subset_idx]
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]

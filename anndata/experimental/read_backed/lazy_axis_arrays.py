@@ -20,10 +20,10 @@ class AxisArraysRemote(AxisArrays):
 
 def to_df_1d_axis_arrays(axis_arrays):
     """Convert to pandas dataframe."""
-    df = pd.DataFrame(index=axis_arrays.dim_names[()])
+    df = pd.DataFrame(index=axis_arrays.dim_names[...])
     for key in axis_arrays.keys():
         if "index" not in key:
-            df[key] = axis_arrays[key][()]
+            df[key] = axis_arrays[key][...]
     return df
 
 
@@ -35,7 +35,9 @@ class AxisArraysRemote1dMixin:
     def iloc(self):
         class IlocDispatch:
             def __getitem__(self_iloc, idx):
-                return self._view(self.parent, (idx,))
+                if type(idx) == list:
+                    return self._view(self.parent, np.array(idx))
+                return self._view(self.parent, idx)
 
         return IlocDispatch()
 

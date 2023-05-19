@@ -35,7 +35,7 @@ class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
             return (len(self.subset_idx),)
 
     def __eq__(self, __o) -> np.ndarray:
-        return self[()] == __o
+        return self[...] == __o
 
     def __ne__(self, __o) -> np.ndarray:
         return ~(self == __o)
@@ -149,7 +149,7 @@ class LazyMaskedArray(MaskedArrayMixIn):
 @_subset.register(MaskedArrayMixIn)
 def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
     a_copy = a.copy()
-    a_copy.subset_idx = subset_idx[0]  # this is a tuple?
+    a_copy.subset_idx = subset_idx
     return a_copy
 
 
