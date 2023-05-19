@@ -92,7 +92,7 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
 
     def copy(self):
-        arr = LazyCategoricalArray(self.values, self.categories, self.attrs)
+        arr = LazyCategoricalArray(self.values, self._categories, self.attrs) # self.categories reads in data
         arr.subset_idx = self.subset_idx
         return arr
 
