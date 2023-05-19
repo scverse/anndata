@@ -24,6 +24,7 @@ from anndata.utils import asarray, convert_to_dict
 import zarr
 import pandas as pd
 import dask.array as da
+from scipy import sparse
 from ..._core import AnnData
 from .. import read_dispatched
 from .lazy_arrays import LazyCategoricalArray, LazyMaskedArray
@@ -394,7 +395,8 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif iospec.encoding_type in {"array", "string-array"}:
             return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
-            return sparse_dataset(elem)
+            meta = sparse.random(1, 1, format=iospec.encoding_type[0:3], density=0.05)
+            return da.from_array(sparse_dataset(elem).to_backed(), meta=meta, name=elem_name)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         elif iospec.encoding_type in {"dataframe"}:
