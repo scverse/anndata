@@ -192,11 +192,11 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     orig = AnnData(
         obs=obs,
         var=var,
-        X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
+        X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32))
     )
     orig.write_zarr(orig_pth)
     store = AccessTrackingStore(orig_pth)
-    store.set_key_trackers(["obs/int64", "var/int64", "obs/cat/codes"])
+    store.set_key_trackers(["obs/int64", "var/int64", "obs/cat/codes", "X"])
     remote = read_backed(store)
     # a series of methods that should __not__ read in any data
     remote.X
@@ -208,6 +208,10 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     # only the `cat` should be read in
     subset = remote[remote.obs["cat"] == "a", :]
     subset.obs["int64"]
+    sub_subset = subset[0:10, :]
+    sub_subset.obs["int64"]
+    sub_subset.X # getting a repr/accessing the element should not read in data for X (or layers)
+    assert store.get_access_count("X") == 0
     assert store.get_access_count("obs/int64") == 0
     assert store.get_access_count("var/int64") == 0
     assert (
@@ -219,6 +223,33 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     )  # one for 0, .zmetadata handles .zarray
     assert store.get_access_count("var/int64") == 0  # never accessed
 
+def test_access_count_X_layers(tmp_path, mtx_format):
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.zarr"
+    M = 1000
+    N = 1000
+    orig = gen_adata((M, N), mtx_format)
+    orig.write_zarr(orig_pth)
+    store = AccessTrackingStore(orig_pth)
+    store.set_key_trackers(["layers", "X"])
+    remote = read_backed(store)
+    # a series of methods that should __not__ read in any data
+    remote.X
+    remote.X.shape
+    remote.shape
+    remote.layers
+    subset = remote[0:500, 200:400]
+    subset.X
+    subset.X.shape
+    subset.shape
+    subset.layers
+    sub_subset = subset[10:20, 50:60]
+    sub_subset.X
+    sub_subset.X.shape
+    sub_subset.shape
+    sub_subset.layers # getting a repr/accessing the element should not read in data for X or layers
+    assert store.get_access_count("X") == 0
+    assert store.get_access_count("layers") == 0
 
 def test_access_count_obsp_varp(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
@@ -234,6 +265,9 @@ def test_access_count_obsp_varp(tmp_path, mtx_format):
     subset = remote[0:10, 500:600]
     subset.obsp["array"]
     subset.varp["array"]
+    sub_subset = subset[0:5, 0:50]
+    sub_subset.obsp["array"]
+    sub_subset.varp["array"]
     assert store.get_access_count("obsp") == 0
     assert store.get_access_count("varp") == 0
 
