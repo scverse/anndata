@@ -192,7 +192,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     orig = AnnData(
         obs=obs,
         var=var,
-        X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32))
+        X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
     )
     orig.write_zarr(orig_pth)
     store = AccessTrackingStore(orig_pth)
@@ -210,7 +210,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     subset.obs["int64"]
     sub_subset = subset[0:10, :]
     sub_subset.obs["int64"]
-    sub_subset.X # getting a repr/accessing the element should not read in data for X (or layers)
+    sub_subset.X  # getting a repr/accessing the element should not read in data for X (or layers)
     assert store.get_access_count("X") == 0
     assert store.get_access_count("obs/int64") == 0
     assert store.get_access_count("var/int64") == 0
@@ -222,6 +222,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
         store.get_access_count("obs/int64") == 1
     )  # one for 0, .zmetadata handles .zarray
     assert store.get_access_count("var/int64") == 0  # never accessed
+
 
 def test_access_count_X_layers(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
@@ -247,9 +248,10 @@ def test_access_count_X_layers(tmp_path, mtx_format):
     sub_subset.X
     sub_subset.X.shape
     sub_subset.shape
-    sub_subset.layers # getting a repr/accessing the element should not read in data for X or layers
+    sub_subset.layers  # getting a repr/accessing the element should not read in data for X or layers
     assert store.get_access_count("X") == 0
     assert store.get_access_count("layers") == 0
+
 
 def test_access_count_obsp_varp(tmp_path, mtx_format):
     base_pth = Path(tmp_path)

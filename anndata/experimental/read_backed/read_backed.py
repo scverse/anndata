@@ -395,7 +395,7 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
             format_str = iospec.encoding_type[0:3]
             format_class = get_backed_class(format_str)
-            backed = format_class(tuple(elem.attrs['shape']), dtype=elem["data"].dtype)
+            backed = format_class(tuple(elem.attrs["shape"]), dtype=elem["data"].dtype)
             backed.data = da.from_zarr(elem["data"])
             backed.indices = da.from_zarr(elem["indices"])
             backed.indptr = da.from_zarr(elem["indptr"])
