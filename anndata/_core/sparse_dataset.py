@@ -308,7 +308,7 @@ class BaseCompressedSparseDataset(ABC):
     @property
     def name(self) -> str:
         return self.group.name
-    
+
     def get_backing_shape(self) -> Tuple[int, int]:
         shape = _read_attr(self.group.attrs, "shape", None)
         if shape is None:
@@ -319,8 +319,12 @@ class BaseCompressedSparseDataset(ABC):
     @property
     def shape(self) -> Tuple[int, int]:
         shape = self.get_backing_shape()
-        if isinstance(self.col_subset_idx, slice) and isinstance(self.row_subset_idx, slice):
-            if self.col_subset_idx == slice(None, None, None) and self.row_subset_idx == slice(None, None, None):
+        if isinstance(self.col_subset_idx, slice) and isinstance(
+            self.row_subset_idx, slice
+        ):
+            if self.col_subset_idx == slice(
+                None, None, None
+            ) and self.row_subset_idx == slice(None, None, None):
                 return tuple(shape)
         row_length = 0
         col_length = 0
@@ -330,14 +334,18 @@ class BaseCompressedSparseDataset(ABC):
             else:
                 row_length = self.row_subset_idx.stop - self.row_subset_idx.start
         else:
-            row_length = len(self.row_subset_idx.flatten()) # can we assume a flatten method?
+            row_length = len(
+                self.row_subset_idx.flatten()
+            )  # can we assume a flatten method?
         if isinstance(self.col_subset_idx, slice):
             if self.col_subset_idx == slice(None, None, None):
                 col_length = shape[1]
             else:
                 col_length = self.col_subset_idx.stop - self.col_subset_idx.start
         else:
-            col_length = len(self.col_subset_idx.flatten()) # can we assume a flatten method?
+            col_length = len(
+                self.col_subset_idx.flatten()
+            )  # can we assume a flatten method?
         return (row_length, col_length)
 
     @property
@@ -447,8 +455,12 @@ class BaseCompressedSparseDataset(ABC):
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
-        if isinstance(self.col_subset_idx, slice) and isinstance(self.row_subset_idx, slice):
-            if self.col_subset_idx == slice(None, None, None) and self.row_subset_idx == slice(None, None, None):
+        if isinstance(self.col_subset_idx, slice) and isinstance(
+            self.row_subset_idx, slice
+        ):
+            if self.col_subset_idx == slice(
+                None, None, None
+            ) and self.row_subset_idx == slice(None, None, None):
                 format_class = get_memory_class(self.format_str)
                 mtx = format_class(self.shape, dtype=self.dtype)
                 mtx.data = self.group["data"][...]
@@ -480,6 +492,7 @@ def sparse_dataset(group) -> BaseCompressedSparseDataset:
 @_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(d, subset_idx):
     return d[subset_idx]
+
 
 @as_view.register(BaseCompressedSparseDataset)
 def _view_masked(a: BaseCompressedSparseDataset, view_args):
