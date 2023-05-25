@@ -16,7 +16,7 @@ from anndata._core.anndata import StorageType, _check_2d_shape
 from anndata._core.anndata_base import AbstractAnnData
 from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
-from anndata._core.sparse_dataset import get_backed_class
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from anndata._core.views import _resolve_idxs
 from anndata.compat import DaskArray
 from anndata.utils import asarray, convert_to_dict
@@ -122,7 +122,6 @@ class AnnDataBacked(AbstractAnnData):
 
         self.obsm = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obsm))
         self.varm = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(varm))
-
         self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))
         self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))
         self.layers = Layers(adata_ref, layers)
@@ -174,6 +173,8 @@ class AnnDataBacked(AbstractAnnData):
                     v, LazyMaskedArray
                 ):
                     res[k] = v[...]
+                elif issubclass(BaseCompressedSparseDataset, type(v)):
+                    X = v.to_memory()
                 else:
                     res[k] = v
             return res
@@ -187,7 +188,10 @@ class AnnDataBacked(AbstractAnnData):
         layers = backed_dict_to_memory(dict(self.layers))
         X = None
         if not exclude_X:
-            X = asarray(self.X.compute())
+            if isinstance(self.X, BaseCompressedSparseDataset):
+                X = self.X.to_memory()
+            else:
+                X = self.X.compute()
         return AnnData(
             X=X,
             obs=obs,
@@ -393,15 +397,7 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
         elif iospec.encoding_type in {"array", "string-array"}:
             return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
-            format_str = iospec.encoding_type[0:3]
-            format_class = get_backed_class(format_str)
-            backed = format_class(tuple(elem.attrs['shape']), dtype=elem["data"].dtype)
-            backed.data = da.from_zarr(elem["data"])
-            backed.indices = da.from_zarr(elem["indices"])
-            backed.indptr = da.from_zarr(elem["indptr"])
-            meta = format_class((1, 1), dtype=elem["data"].dtype)
-            arr = da.from_array(backed, meta=meta, name=False, asarray=False)
-            return arr
+            return sparse_dataset(elem)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         elif iospec.encoding_type in {"dataframe"}:
