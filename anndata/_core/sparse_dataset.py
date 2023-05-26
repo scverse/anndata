@@ -269,12 +269,19 @@ class BaseCompressedSparseDataset(ABC):
     def __init__(self, group: Union[h5py.Group, zarr.Group]):
         type(self)._check_group_format(group)
         self.group = group
-        self._row_subset_idx = slice(None, None)
-        self._col_subset_idx = slice(None, None)
+        self._row_subset_idx = slice(None, None, None)
+        self._col_subset_idx = slice(None, None, None)
 
     @property
     def row_subset_idx(self):
         return self._row_subset_idx
+    
+    @property
+    def has_subset_idx(self):
+        if isinstance(self.col_subset_idx, slice) and isinstance(self.row_subset_idx, slice):
+            if self.col_subset_idx == slice(None, None, None) and self.row_subset_idx == slice(None, None, None):
+                return True
+        return False 
 
     @row_subset_idx.setter
     def row_subset_idx(self, new_idx):
@@ -319,9 +326,8 @@ class BaseCompressedSparseDataset(ABC):
     @property
     def shape(self) -> Tuple[int, int]:
         shape = self.get_backing_shape()
-        if isinstance(self.col_subset_idx, slice) and isinstance(self.row_subset_idx, slice):
-            if self.col_subset_idx == slice(None, None, None) and self.row_subset_idx == slice(None, None, None):
-                return tuple(shape)
+        if self.has_subset_idx:
+            return tuple(shape)
         row_length = 0
         col_length = 0
         if isinstance(self.row_subset_idx, slice):
@@ -447,17 +453,19 @@ class BaseCompressedSparseDataset(ABC):
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
-        if isinstance(self.col_subset_idx, slice) and isinstance(self.row_subset_idx, slice):
-            if self.col_subset_idx == slice(None, None, None) and self.row_subset_idx == slice(None, None, None):
-                format_class = get_memory_class(self.format_str)
-                mtx = format_class(self.shape, dtype=self.dtype)
-                mtx.data = self.group["data"][...]
-                mtx.indices = self.group["indices"][...]
-                mtx.indptr = self.group["indptr"][...]
-                return mtx
+        if self.has_subset_idx:
+            format_class = get_memory_class(self.format_str)
+            mtx = format_class(self.shape, dtype=self.dtype)
+            mtx.data = self.group["data"][...]
+            mtx.indices = self.group["indices"][...]
+            mtx.indptr = self.group["indptr"][...]
+            return mtx
         mtx = self.to_backed()
         mat = mtx[self.row_subset_idx, self.col_subset_idx]
         return mat
+    
+    def toarray(self) -> np.ndarray:
+        return self.to_memory().toarray()
 
 
 class CSRDataset(BaseCompressedSparseDataset):
