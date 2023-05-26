@@ -281,15 +281,9 @@ def test_read_full(tmp_path, mtx_format):
     adata.write_zarr(orig_pth)
     remote = read_backed(orig_pth)
     if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
-        assert np.all(
-            asarray(adata.X)
-            == asarray(remote.X.to_memory())
-        )
+        assert np.all(asarray(adata.X) == asarray(remote.X.to_memory()))
     else:
-        assert np.all(
-            asarray(adata.X)
-            == asarray(remote.X.compute())
-        )
+        assert np.all(asarray(adata.X) == asarray(remote.X.compute()))
     assert (adata.obs == remote.obs.to_df()[adata.obs.columns]).all().all()
     assert (adata.var == remote.var.to_df()[adata.var.columns]).all().all()
     assert (adata.obsm["array"] == remote.obsm["array"].compute()).all()
@@ -313,9 +307,13 @@ def test_read_view(tmp_path, mtx_format):
     remote = read_backed(orig_pth)
     subset = adata.obs["obs_cat"] == "a"
     if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
-        assert np.all(asarray(adata[subset, :].X) == asarray(remote[subset, :].X.to_memory()))
+        assert np.all(
+            asarray(adata[subset, :].X) == asarray(remote[subset, :].X.to_memory())
+        )
     else:
-        assert np.all(asarray(adata[subset, :].X) == asarray(remote[subset, :].X.compute()))
+        assert np.all(
+            asarray(adata[subset, :].X) == asarray(remote[subset, :].X.compute())
+        )
     assert (
         (adata[subset, :].obs == remote[subset, :].obs.to_df()[adata.obs.columns])
         .all()

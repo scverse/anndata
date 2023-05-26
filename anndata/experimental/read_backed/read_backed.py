@@ -174,7 +174,7 @@ class AnnDataBacked(AbstractAnnData):
                 ):
                     res[k] = v[...]
                 elif issubclass(BaseCompressedSparseDataset, type(v)):
-                    X = v.to_memory()
+                    res[k] = v.to_memory()
                 else:
                     res[k] = v
             return res
