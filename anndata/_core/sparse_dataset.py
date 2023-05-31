@@ -277,7 +277,7 @@ class BaseCompressedSparseDataset(ABC):
         return self._row_subset_idx
     
     @property
-    def has_subset_idx(self):
+    def has_no_subset_idx(self):
         if isinstance(self.col_subset_idx, slice) and isinstance(self.row_subset_idx, slice):
             if self.col_subset_idx == slice(None, None, None) and self.row_subset_idx == slice(None, None, None):
                 return True
@@ -326,7 +326,7 @@ class BaseCompressedSparseDataset(ABC):
     @property
     def shape(self) -> Tuple[int, int]:
         shape = self.get_backing_shape()
-        if self.has_subset_idx:
+        if self.has_no_subset_idx:
             return tuple(shape)
         row_length = 0
         col_length = 0
@@ -457,7 +457,7 @@ class BaseCompressedSparseDataset(ABC):
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
-        if self.has_subset_idx:
+        if self.has_no_subset_idx:
             format_class = get_memory_class(self.format_str)
             mtx = format_class(self.shape, dtype=self.dtype)
             mtx.data = self.group["data"][...]
