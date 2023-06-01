@@ -275,24 +275,28 @@ class BaseCompressedSparseDataset(ABC):
     @property
     def row_subset_idx(self):
         if isinstance(self._row_subset_idx, np.ndarray):
-            return self._row_subset_idx.flatten() # why????
+            return self._row_subset_idx.flatten()  # why????
         return self._row_subset_idx
-    
+
     @property
     def has_no_subset_idx(self):
         return self.has_no_col_subset_idx and self.has_no_row_subset_idx
-    
+
     @property
     def has_no_col_subset_idx(self):
         if isinstance(self.col_subset_idx, slice):
-            if self.col_subset_idx == slice(None, None, None) or self.col_subset_idx == slice(0, self.get_backing_shape()[1], 1):
+            if self.col_subset_idx == slice(
+                None, None, None
+            ) or self.col_subset_idx == slice(0, self.get_backing_shape()[1], 1):
                 return True
         return False
-    
+
     @property
     def has_no_row_subset_idx(self):
         if isinstance(self.row_subset_idx, slice):
-            if self.row_subset_idx == slice(None, None, None) or self.row_subset_idx == slice(0, self.get_backing_shape()[0], 1):
+            if self.row_subset_idx == slice(
+                None, None, None
+            ) or self.row_subset_idx == slice(0, self.get_backing_shape()[0], 1):
                 return True
         return False
 
@@ -307,7 +311,7 @@ class BaseCompressedSparseDataset(ABC):
     @property
     def col_subset_idx(self):
         if isinstance(self._col_subset_idx, np.ndarray):
-            return self._col_subset_idx.flatten() 
+            return self._col_subset_idx.flatten()
         return self._col_subset_idx
 
     @col_subset_idx.setter
@@ -350,19 +354,15 @@ class BaseCompressedSparseDataset(ABC):
                 row_length = shape[0]
             else:
                 row_length = self.row_subset_idx.stop - self.row_subset_idx.start
-        else:     
-            row_length = len(
-                self.row_subset_idx
-            )  # can we assume a flatten method?
+        else:
+            row_length = len(self.row_subset_idx)  # can we assume a flatten method?
         if isinstance(self.col_subset_idx, slice):
             if self.col_subset_idx == slice(None, None, None):
                 col_length = shape[1]
             else:
                 col_length = self.col_subset_idx.stop - self.col_subset_idx.start
-        else:     
-            col_length = len(
-                self.col_subset_idx
-            )  # can we assume a flatten method?
+        else:
+            col_length = len(self.col_subset_idx)  # can we assume a flatten method?
         return (row_length, col_length)
 
     @property
@@ -473,7 +473,9 @@ class BaseCompressedSparseDataset(ABC):
 
     def to_memory(self) -> ss.spmatrix:
         # Could not get row idx with csc and vice versa working without reading into memory but shouldn't matter
-        if (self.format_str == 'csr' and self.has_no_row_subset_idx) or (self.format_str == 'csc' and self.has_no_col_subset_idx):
+        if (self.format_str == "csr" and self.has_no_row_subset_idx) or (
+            self.format_str == "csc" and self.has_no_col_subset_idx
+        ):
             format_class = get_memory_class(self.format_str)
             mtx = format_class(self.get_backing_shape(), dtype=self.dtype)
             mtx.data = self.group["data"][...]
@@ -483,10 +485,10 @@ class BaseCompressedSparseDataset(ABC):
                 return mtx
         else:
             mtx = self.to_backed()
-        if self.format_str == 'csr':
+        if self.format_str == "csr":
             return mtx[self.row_subset_idx, :][:, self.col_subset_idx]
         return mtx[:, self.col_subset_idx][self.row_subset_idx, :]
-    
+
     def toarray(self) -> np.ndarray:
         return self.to_memory().toarray()
 

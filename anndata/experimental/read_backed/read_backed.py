@@ -167,7 +167,7 @@ class AnnDataBacked(AbstractAnnData):
         def backed_dict_to_memory(d, prefix):
             res = {}
             for k, v in d.items():
-                full_key = prefix + '/' + k
+                full_key = prefix + "/" + k
                 if any([full_key == exclude_key for exclude_key in exclude]):
                     continue
                 if isinstance(v, DaskArray):
@@ -181,15 +181,16 @@ class AnnDataBacked(AbstractAnnData):
                 else:
                     res[k] = v
             return res
+
         obs = self.obs.to_df(exclude)
         var = self.var.to_df(exclude)
-        obsm = backed_dict_to_memory(dict(self.obsm), 'obsm')
-        varm = backed_dict_to_memory(dict(self.varm), 'varm')
-        varp = backed_dict_to_memory(dict(self.varp), 'varp')
-        obsp = backed_dict_to_memory(dict(self.obsp), 'obsp')
-        layers = backed_dict_to_memory(dict(self.layers), 'layers')
+        obsm = backed_dict_to_memory(dict(self.obsm), "obsm")
+        varm = backed_dict_to_memory(dict(self.varm), "varm")
+        varp = backed_dict_to_memory(dict(self.varp), "varp")
+        obsp = backed_dict_to_memory(dict(self.obsp), "obsp")
+        layers = backed_dict_to_memory(dict(self.layers), "layers")
         X = None
-        if 'X' not in exclude:
+        if "X" not in exclude:
             if isinstance(self.X, BaseCompressedSparseDataset):
                 X = self.X.to_memory()
             else:

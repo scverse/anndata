@@ -22,8 +22,10 @@ def to_df_1d_axis_arrays(axis_arrays: AxisArrays, exclude=[]):
     """Convert to pandas dataframe."""
     df = pd.DataFrame(index=axis_arrays.dim_names[...])
     for key in axis_arrays.keys():
-        full_key = axis_arrays.attrname + '/' + key
-        if "index" not in key and all([full_key != exclude_key for exclude_key in exclude]):
+        full_key = axis_arrays.attrname + "/" + key
+        if "index" not in key and all(
+            [full_key != exclude_key for exclude_key in exclude]
+        ):
             df[key] = axis_arrays[key][...]
     return df
 
@@ -53,7 +55,7 @@ class AxisArraysRemote1dMixin:
 
     def _repr_latex_(self):
         return self.__repr__()
-    
+
     @property
     def attrname(self) -> str:
         return self.dim

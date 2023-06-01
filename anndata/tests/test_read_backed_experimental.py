@@ -308,47 +308,65 @@ def test_read_view(tmp_path, mtx_format):
     subset_obs = adata.obs["obs_cat"] == "a"
     if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
         assert np.all(
-            asarray(adata[subset_obs, :].X) == asarray(remote[subset_obs, :].X.to_memory())
+            asarray(adata[subset_obs, :].X)
+            == asarray(remote[subset_obs, :].X.to_memory())
         )
     else:
         assert np.all(
-            asarray(adata[subset_obs, :].X) == asarray(remote[subset_obs, :].X.compute())
+            asarray(adata[subset_obs, :].X)
+            == asarray(remote[subset_obs, :].X.compute())
         )
     assert (
-        (adata[subset_obs, :].obs == remote[subset_obs, :].obs.to_df()[adata.obs.columns])
+        (
+            adata[subset_obs, :].obs
+            == remote[subset_obs, :].obs.to_df()[adata.obs.columns]
+        )
         .all()
         .all()
     )
     assert (
-        (adata[subset_obs, :].var == remote[subset_obs, :].var.to_df()[adata.var.columns])
+        (
+            adata[subset_obs, :].var
+            == remote[subset_obs, :].var.to_df()[adata.var.columns]
+        )
         .all()
         .all()
     )
     assert (
-        adata[subset_obs, :].obsm["array"] == remote[subset_obs, :].obsm["array"].compute()
+        adata[subset_obs, :].obsm["array"]
+        == remote[subset_obs, :].obsm["array"].compute()
     ).all()
 
     subset_var = adata.var["var_cat"] == "a"
     if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
         assert np.all(
-            asarray(adata[:, subset_var].X) == asarray(remote[:, subset_var].X.to_memory())
+            asarray(adata[:, subset_var].X)
+            == asarray(remote[:, subset_var].X.to_memory())
         )
     else:
         assert np.all(
-            asarray(adata[:, subset_var].X) == asarray(remote[:, subset_var].X.compute())
+            asarray(adata[:, subset_var].X)
+            == asarray(remote[:, subset_var].X.compute())
         )
     assert (
-        (adata[:, subset_var].obs == remote[:, subset_var].obs.to_df()[adata.obs.columns])
+        (
+            adata[:, subset_var].obs
+            == remote[:, subset_var].obs.to_df()[adata.obs.columns]
+        )
         .all()
         .all()
     )
     assert (
-        (adata[:, subset_var].var == remote[:, subset_var].var.to_df()[adata.var.columns])
+        (
+            adata[:, subset_var].var
+            == remote[:, subset_var].var.to_df()[adata.var.columns]
+        )
         .all()
         .all()
     )
     assert (
-        adata[:, subset_var].obsm["array"] == remote[:, subset_var].obsm["array"].compute()
+        adata[:, subset_var].obsm["array"]
+        == remote[:, subset_var].obsm["array"].compute()
     ).all()
 
 
@@ -375,7 +393,9 @@ def test_read_view_of_view(tmp_path, mtx_format):
     assert (
         (
             subsetted_subsetted_adata.obs
-            == remote[subset_obs, :][subset_subset_obs, :].obs.to_df()[adata.obs.columns]
+            == remote[subset_obs, :][subset_subset_obs, :].obs.to_df()[
+                adata.obs.columns
+            ]
         )
         .all()
         .all()
@@ -383,7 +403,9 @@ def test_read_view_of_view(tmp_path, mtx_format):
     assert (
         (
             subsetted_subsetted_adata.var
-            == remote[subset_obs, :][subset_subset_obs, :].var.to_df()[adata.var.columns]
+            == remote[subset_obs, :][subset_subset_obs, :].var.to_df()[
+                adata.var.columns
+            ]
         )
         .all()
         .all()
@@ -410,7 +432,9 @@ def test_read_view_of_view(tmp_path, mtx_format):
     assert (
         (
             subsetted_subsetted_adata.obs
-            == remote[:, subset_var][:, subset_subset_var].obs.to_df()[adata.obs.columns]
+            == remote[:, subset_var][:, subset_subset_var].obs.to_df()[
+                adata.obs.columns
+            ]
         )
         .all()
         .all()
@@ -418,7 +442,9 @@ def test_read_view_of_view(tmp_path, mtx_format):
     assert (
         (
             subsetted_subsetted_adata.var
-            == remote[:, subset_var][:, subset_subset_var].var.to_df()[adata.var.columns]
+            == remote[:, subset_var][:, subset_subset_var].var.to_df()[
+                adata.var.columns
+            ]
         )
         .all()
         .all()
@@ -483,8 +509,8 @@ def test_nullable_boolean_array_subset_subset(nullable_boolean_lazy_arr):
 
 
 def test_nullable_boolean_array_no_mask_equality(nullable_boolean_lazy_arr_no_mask):
-    assert (nullable_boolean_lazy_arr_no_mask[0] == True).all()
-    assert (nullable_boolean_lazy_arr_no_mask[3:5] == False).all()
+    assert (nullable_boolean_lazy_arr_no_mask[0] is True).all()
+    assert (nullable_boolean_lazy_arr_no_mask[3:5] is False).all()
     assert (nullable_boolean_lazy_arr_no_mask[5:7] == np.array([True, False])).all()
 
 
