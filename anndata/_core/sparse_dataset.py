@@ -465,8 +465,11 @@ class BaseCompressedSparseDataset(ABC):
             mtx.indptr = self.group["indptr"][...]
             return mtx
         mtx = self.to_backed()
-        mat = mtx[self.row_subset_idx, self.col_subset_idx]
-        return mat
+        if self.format_str == 'csr':
+            mtx = mtx[self.row_subset_idx, :]
+            return mtx[:, self.col_subset_idx]
+        mtx = mtx[:, self.col_subset_idx]
+        return mtx[self.row_subset_idx, :]
     
     def toarray(self) -> np.ndarray:
         return self.to_memory().toarray()
