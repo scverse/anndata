@@ -163,31 +163,33 @@ class AnnDataBacked(AbstractAnnData):
             pd.Index(self.var_names.compute()),
         )
 
-    def to_memory(self, exclude_X=False):
-        def backed_dict_to_memory(d):
+    def to_memory(self, exclude=[]):
+        def backed_dict_to_memory(d, prefix):
             res = {}
             for k, v in d.items():
+                full_key = prefix + '/' + k
+                if any([full_key == exclude_key for exclude_key in exclude]):
+                    continue
                 if isinstance(v, DaskArray):
                     res[k] = v.compute()
                 elif isinstance(v, LazyCategoricalArray) or isinstance(
                     v, LazyMaskedArray
                 ):
                     res[k] = v[...]
-                elif issubclass(BaseCompressedSparseDataset, type(v)):
+                elif isinstance(v, BaseCompressedSparseDataset):
                     res[k] = v.to_memory()
                 else:
                     res[k] = v
             return res
-
-        obs = self.obs.to_df()
-        var = self.var.to_df()
-        obsm = backed_dict_to_memory(dict(self.obsm))
-        varm = backed_dict_to_memory(dict(self.varm))
-        varp = backed_dict_to_memory(dict(self.varp))
-        obsp = backed_dict_to_memory(dict(self.obsp))
-        layers = backed_dict_to_memory(dict(self.layers))
+        obs = self.obs.to_df(exclude)
+        var = self.var.to_df(exclude)
+        obsm = backed_dict_to_memory(dict(self.obsm), 'obsm')
+        varm = backed_dict_to_memory(dict(self.varm), 'varm')
+        varp = backed_dict_to_memory(dict(self.varp), 'varp')
+        obsp = backed_dict_to_memory(dict(self.obsp), 'obsp')
+        layers = backed_dict_to_memory(dict(self.layers), 'layers')
         X = None
-        if not exclude_X:
+        if 'X' not in exclude:
             if isinstance(self.X, BaseCompressedSparseDataset):
                 X = self.X.to_memory()
             else:
