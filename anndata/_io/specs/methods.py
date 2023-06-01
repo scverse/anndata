@@ -484,7 +484,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
     write_sparse_compressed(
         f,
         k,
-        (elem.to_backed() if elem.has_subset_idx else elem.to_memory()), # if there is a subset on the elem, to_memory lazily reads in __only__ the subset
+        elem.to_memory(), # if there is a subset on the elem, to_memory lazily reads in __only__ the subset
         _writer,
         fmt=elem.format_str,
         dataset_kwargs=dataset_kwargs,

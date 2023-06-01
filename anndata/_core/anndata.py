@@ -602,6 +602,8 @@ class AnnData(AbstractAnnData):
             # indices that aren’t strictly increasing
             if self.is_view:
                 X = _subset(X, (self._oidx, self._vidx))
+                if isinstance(X, BaseCompressedSparseDataset):
+                    X = X.to_memory()
         elif self.is_view and self._adata_ref.X is None:
             X = None
         elif self.is_view:
