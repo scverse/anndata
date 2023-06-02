@@ -112,7 +112,7 @@ def _gen_dataframe(anno, length, index_names):
     return pd.DataFrame(
         anno,
         index=pd.RangeIndex(0, length, name=None).astype(str),
-        columns=None if anno else EMPTY_IDX,
+        columns=None if len(anno) else EMPTY_IDX,
     )
 
 
