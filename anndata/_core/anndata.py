@@ -122,6 +122,8 @@ def _(anno, length, index_names):
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
         anno.index = anno.index.astype(str)
+    if not len(anno.columns):
+        anno.columns = anno.columns.astype(str)
     return anno
 
 
