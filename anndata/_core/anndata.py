@@ -54,8 +54,6 @@ from ..compat import (
     _move_adj_mtx,
 )
 
-EMPTY_IDX = pd.Index([], dtype="O")
-
 
 class StorageType(Enum):
     Array = np.ndarray
@@ -112,7 +110,7 @@ def _gen_dataframe(anno, length, index_names):
     return pd.DataFrame(
         anno,
         index=pd.RangeIndex(0, length, name=None).astype(str),
-        columns=None if len(anno) else EMPTY_IDX,
+        columns=None if len(anno) else [],
     )
 
 
@@ -424,11 +422,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             elif isinstance(X, pd.DataFrame):
                 # to verify index matching, we wait until obs and var are DataFrames
                 if obs is None:
-                    obs = pd.DataFrame(index=X.index, columns=EMPTY_IDX)
+                    obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
                     x_indices.append(("obs", "index", X.index))
                 if var is None:
-                    var = pd.DataFrame(index=X.columns, columns=EMPTY_IDX)
+                    var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
                     x_indices.append(("var", "columns", X.columns))
                 X = ensure_df_homogeneous(X, "X")
@@ -854,7 +852,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.deleter
     def obs(self):
-        self.obs = pd.DataFrame({}, index=self.obs_names, columns=EMPTY_IDX)
+        self.obs = pd.DataFrame({}, index=self.obs_names)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -877,7 +875,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.deleter
     def var(self):
-        self.var = pd.DataFrame({}, index=self.var_names, columns=EMPTY_IDX)
+        self.var = pd.DataFrame({}, index=self.var_names)
 
     @property
     def var_names(self) -> pd.Index:
