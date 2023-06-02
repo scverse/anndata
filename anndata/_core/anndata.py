@@ -54,6 +54,8 @@ from ..compat import (
     _move_adj_mtx,
 )
 
+EMPTY_IDX = pd.Index([], dtype="O")
+
 
 class StorageType(Enum):
     Array = np.ndarray
@@ -99,7 +101,7 @@ def _check_2d_shape(X):
 @singledispatch
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
-        return pd.DataFrame({}, index=pd.RangeIndex(0, length, name=None).astype(str))
+        anno = {}
     for index_name in index_names:
         if index_name in anno:
             return pd.DataFrame(
@@ -107,7 +109,11 @@ def _gen_dataframe(anno, length, index_names):
                 index=anno[index_name],
                 columns=[k for k in anno.keys() if k != index_name],
             )
-    return pd.DataFrame(anno, index=pd.RangeIndex(0, length, name=None).astype(str))
+    return pd.DataFrame(
+        anno,
+        index=pd.RangeIndex(0, length, name=None).astype(str),
+        columns=None if anno else EMPTY_IDX,
+    )
 
 
 @_gen_dataframe.register(pd.DataFrame)
@@ -416,11 +422,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             elif isinstance(X, pd.DataFrame):
                 # to verify index matching, we wait until obs and var are DataFrames
                 if obs is None:
-                    obs = pd.DataFrame(index=X.index)
+                    obs = pd.DataFrame(index=X.index, columns=EMPTY_IDX)
                 elif not isinstance(X.index, pd.RangeIndex):
                     x_indices.append(("obs", "index", X.index))
                 if var is None:
-                    var = pd.DataFrame(index=X.columns)
+                    var = pd.DataFrame(index=X.columns, columns=EMPTY_IDX)
                 elif not isinstance(X.columns, pd.RangeIndex):
                     x_indices.append(("var", "columns", X.columns))
                 X = ensure_df_homogeneous(X, "X")
@@ -784,6 +790,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         setattr(self, f"_{attr}", value)
         self._set_dim_index(value_idx, attr)
+        if not len(value.columns):
+            value.columns = value.columns.astype(str)
 
     def _prep_dim_index(self, value, attr: str) -> pd.Index:
         """Prepares index to be uses as obs_names or var_names for AnnData object.AssertionError
@@ -844,7 +852,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.deleter
     def obs(self):
-        self.obs = pd.DataFrame({}, index=self.obs_names)
+        self.obs = pd.DataFrame({}, index=self.obs_names, columns=EMPTY_IDX)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -867,7 +875,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.deleter
     def var(self):
-        self.var = pd.DataFrame({}, index=self.var_names)
+        self.var = pd.DataFrame({}, index=self.var_names, columns=EMPTY_IDX)
 
     @property
     def var_names(self) -> pd.Index:
