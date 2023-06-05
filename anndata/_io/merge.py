@@ -36,6 +36,7 @@ import numpy as np
 from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
 
 from scipy.sparse import csr_matrix, csc_matrix
+
 MAX_LOAD_SIZE = 60_000_000
 
 
@@ -172,6 +173,7 @@ def gen_reindexers_array_inner(
 
     return reindexers
 
+
 def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
     result = {}
 
@@ -203,7 +205,7 @@ def _write_concat_sparse(
         _write_concat_sparse_reindexing_inner(
             datasets, output_group, out_path, axis, reindexers, fill_value
         )
-    
+
 
 def _gen_chunks_to_append(
     datasets: Sequence[SparseDataset],
@@ -233,6 +235,7 @@ def _gen_chunks_to_append(
                 rem_slices -= slice_size
                 idx += slice_size
 
+
 def _write_concat_sparse_reindexing_inner(
     datasets: Sequence[SparseDataset],
     output_group,
@@ -241,7 +244,6 @@ def _write_concat_sparse_reindexing_inner(
     reindexers=None,
     fill_value=None,
 ):
-
     elems = _gen_chunks_to_append(datasets, reindexers, axis, fill_value)
     init_elem = next(elems)
     write_elem(output_group, out_path, init_elem)
@@ -250,7 +252,6 @@ def _write_concat_sparse_reindexing_inner(
     for temp_elem in elems:
         out_dataset.append(temp_elem)
         del temp_elem
-
 
 
 def write_concat_sequence(
@@ -273,16 +274,21 @@ def write_concat_sequence(
                 reindexers = gen_reindexers_df_inner(dfs, axis=axis)
             else:
                 raise NotImplementedError("Cannot reindex dataframes with outer join.")
-        df = concat_arrays(arrays=dfs,reindexers=reindexers,axis=axis,index=index,fill_value=fill_value)
+        df = concat_arrays(
+            arrays=dfs,
+            reindexers=reindexers,
+            axis=axis,
+            index=index,
+            fill_value=fill_value,
+        )
         write_elem(output_group, out_path, df)
-       
+
         # if not all(
         #     get_encoding_type(g) == "dataframe" or 0 in get_shape(g) for g in groups
         # ):
         #     raise NotImplementedError(
         #         "Cannot concatenate a dataframe with other array types."
         #     )
-
 
         # df = pd.concat(
         #     unify_dtypes([f(d) for f, d in zip(reindexers, dfs)]),
@@ -301,7 +307,9 @@ def write_concat_sequence(
             else:
                 raise NotImplementedError("Cannot reindex arrays with outer join.")
         datasets: Sequence[SparseDataset] = [read_group(g) for g in groups]
-        _write_concat_sparse(datasets, output_group, out_path, axis, reindexers, fill_value)
+        _write_concat_sparse(
+            datasets, output_group, out_path, axis, reindexers, fill_value
+        )
 
     # If all are arrays
     elif all(get_encoding_type(g) == "array" for g in groups):
@@ -669,7 +677,6 @@ def concat_on_disk(
             None if use_reindexing else [IdentityReindexer()] * len(groups),
         ),
         ("layers", None, axis, reindexers),
-
     ]
     for m, m_index, m_axis, m_reindexers in mapping_names:
         maps = [read_only_dict(g[m]) for g in groups]
@@ -683,5 +690,3 @@ def concat_on_disk(
             reindexers=m_reindexers,
             fill_value=fill_value,
         )
-
-    

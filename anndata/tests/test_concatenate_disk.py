@@ -147,7 +147,7 @@ def test_anndatas_with_reindex(axis, array_type, join_type, tmp_path, file_forma
             X_type=get_array_type(array_type, axis),
             sparse_fmt=sparse_fmt,
             obsm_types=(
-                get_array_type("sparse", 1-axis),
+                get_array_type("sparse", 1 - axis),
                 np.ndarray,
                 pd.DataFrame,
             ),
@@ -155,7 +155,7 @@ def test_anndatas_with_reindex(axis, array_type, join_type, tmp_path, file_forma
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
         a.layers["sparse"] = get_array_type("sparse", axis)(a.layers["sparse"])
-        a.varm["sparse"] = get_array_type("sparse", 1-axis)(a.varm["sparse"])
+        a.varm["sparse"] = get_array_type("sparse", 1 - axis)(a.varm["sparse"])
         adatas.append(a)
 
     assert_eq_concat_on_disk(adatas, tmp_path, file_format, axis=axis, join=join_type)
