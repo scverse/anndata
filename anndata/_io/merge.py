@@ -178,19 +178,6 @@ def gen_reindexers_array_inner(
     return reindexers
 
 
-def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
-    result = {}
-
-    for k in intersect_keys(mappings):
-        els = [m[k] for m in mappings]
-        if reindexers is None:
-            cur_reindexers = gen_inner_reindexers(els, new_index=index, axis=axis)
-        else:
-            cur_reindexers = reindexers
-
-        result[k] = concat_arrays(els, cur_reindexers, index=index, axis=axis)
-    return result
-
 
 def _gen_slice_to_append(
     datasets: Sequence[SparseDataset],
