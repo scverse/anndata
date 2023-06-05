@@ -146,7 +146,7 @@ def _gen_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
         if ri.no_change:
             yield elem
         else:
-            yield ri(elem, axis=1-axis, fill_value=fill_value)
+            yield ri(elem, axis=1 - axis, fill_value=fill_value)
 
 
 def gen_reindexers_df_inner(dfs: Sequence[pd.DataFrame], axis: Literal[0, 1] = 0):
@@ -309,21 +309,16 @@ def write_concat_sequence(
                 assert all(len(ri.new_idx) == alt_dim_res_len for ri in reindexers)
 
             new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
-            out_array: H5Array = output_group.create_dataset(
-                out_path, shape=new_shape
-            )
+            out_array: H5Array = output_group.create_dataset(out_path, shape=new_shape)
             idx = 0
             for arr in _gen_slice_to_append(
-                    arrays,
-                    axis=axis,
-                    reindexers=reindexers,
-                    fill_value=fill_value):
-
+                arrays, axis=axis, reindexers=reindexers, fill_value=fill_value
+            ):
                 added_size = arr.shape[axis]
                 if axis == 0:
-                    out_array[idx: idx + added_size, :] = arr
+                    out_array[idx : idx + added_size, :] = arr
                 else:
-                    out_array[:, idx: idx + added_size] = arr
+                    out_array[:, idx : idx + added_size] = arr
                 idx += added_size
         else:
             raise NotImplementedError("This is not yet implemented.")
