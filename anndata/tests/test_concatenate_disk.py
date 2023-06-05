@@ -129,6 +129,38 @@ def test_anndatas_without_reindex(axis, array_type, join_type, tmp_path, file_fo
     assert_eq_concat_on_disk(adatas, tmp_path, file_format, axis=axis, join=join_type)
 
 
+def test_anndatas_with_reindex(axis, array_type, join_type, tmp_path, file_format):
+    N = 50
+    M = 50
+    adatas = []
+
+    sparse_fmt = "csc"
+    if axis == 0:
+        sparse_fmt = "csr"
+
+    for _ in range(5):
+        M = np.random.randint(1, 100)
+        N = np.random.randint(1, 100)
+
+        a = gen_adata(
+            (M, N),
+            X_type=get_array_type(array_type, axis),
+            sparse_fmt=sparse_fmt,
+            obsm_types=(
+                get_array_type("sparse", 1-axis),
+                np.ndarray,
+                pd.DataFrame,
+            ),
+            varm_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
+            layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
+        )
+        a.layers["sparse"] = get_array_type("sparse", axis)(a.layers["sparse"])
+        a.varm["sparse"] = get_array_type("sparse", 1-axis)(a.varm["sparse"])
+        adatas.append(a)
+
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format, axis=axis, join=join_type)
+
+
 def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     a = AnnData(
         X=np.ones((5, 1)),

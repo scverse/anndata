@@ -9,7 +9,10 @@ from .._core.merge import (
     merge_dataframes,
     resolve_merge_strategy,
     gen_reindexer,
+    gen_inner_reindexers,
     reduce,
+    concat_arrays,
+    MissingVal,
     Reindexer,
 )
 from .._core.sparse_dataset import SparseDataset
@@ -32,7 +35,7 @@ import numpy as np
 
 from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
 
-
+from scipy.sparse import csr_matrix, csc_matrix
 MAX_LOAD_SIZE = 60_000_000
 
 
@@ -169,6 +172,66 @@ def gen_reindexers_array_inner(
 
     return reindexers
 
+def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
+    result = {}
+
+    for k in intersect_keys(mappings):
+        els = [m[k] for m in mappings]
+        if reindexers is None:
+            cur_reindexers = gen_inner_reindexers(els, new_index=index, axis=axis)
+        else:
+            cur_reindexers = reindexers
+
+        result[k] = concat_arrays(els, cur_reindexers, index=index, axis=axis)
+    return result
+
+
+def _write_concat_sparse(
+    datasets: Sequence[SparseDataset],
+    output_group,
+    out_path,
+    axis,
+    reindexers,
+    fill_value,
+):
+    if all(ri.no_change for ri in reindexers):
+        write_elem(output_group, out_path, datasets[0])
+        out_dataset: SparseDataset = read_group(output_group[out_path])
+        for ds in datasets[1:]:
+            out_dataset.append(ds)
+    else:
+        _write_concat_sparse_reindexing_inner(
+            datasets, output_group, out_path, axis, reindexers, fill_value
+        )
+    
+
+def _gen_chunks_to_append(
+    datasets: Sequence[SparseDataset],
+    reindexers=None,
+    axis=0,
+    fill_value=None,
+):
+    for ds, ri in zip(datasets, reindexers):
+        n_slices = ds.shape[axis] * ds.shape[1 - axis] // MAX_LOAD_SIZE
+        if n_slices < 2:
+            elem = ri(ds.to_memory(), axis=1 - axis, fill_value=fill_value)
+            yield (csr_matrix, csc_matrix)[axis](elem)
+        else:
+            slice_size = MAX_LOAD_SIZE // ds.shape[1 - axis]
+            if slice_size == 0:
+                slice_size = 1
+            rem_slices = ds.shape[axis]
+            idx = 0
+            while rem_slices > 0:
+                ds_part = None
+                if axis == 0:
+                    ds_part = ds[idx : idx + slice_size, :]
+                elif axis == 1:
+                    ds_part = ds[:, idx : idx + slice_size]
+                elem = ri(ds_part, axis=1 - axis, fill_value=fill_value)
+                yield (csr_matrix, csc_matrix)[axis](elem)
+                rem_slices -= slice_size
+                idx += slice_size
 
 def _write_concat_sparse_reindexing_inner(
     datasets: Sequence[SparseDataset],
@@ -178,28 +241,8 @@ def _write_concat_sparse_reindexing_inner(
     reindexers=None,
     fill_value=None,
 ):
-    def _gen_chunks_to_append(datasets, reindexers):
-        for ds, ri in zip(datasets, reindexers):
-            n_slices = ds.shape[axis] * ds.shape[1 - axis] // MAX_LOAD_SIZE
-            if n_slices < 2:
-                yield ri(ds.to_memory(), axis=1 - axis, fill_value=fill_value)
-            else:
-                slice_size = MAX_LOAD_SIZE // ds.shape[1 - axis]
-                if slice_size == 0:
-                    slice_size = 1
-                rem_slices = ds.shape[axis]
-                idx = 0
-                while rem_slices > 0:
-                    ds_part = None
-                    if axis == 0:
-                        ds_part = ds[idx : idx + slice_size, :]
-                    elif axis == 1:
-                        ds_part = ds[:, idx : idx + slice_size]
-                    yield ri(ds_part, axis=1 - axis, fill_value=fill_value)
-                    rem_slices -= slice_size
-                    idx += slice_size
 
-    elems = _gen_chunks_to_append(datasets, reindexers)
+    elems = _gen_chunks_to_append(datasets, reindexers, axis, fill_value)
     init_elem = next(elems)
     write_elem(output_group, out_path, init_elem)
     del init_elem
@@ -207,6 +250,7 @@ def _write_concat_sparse_reindexing_inner(
     for temp_elem in elems:
         out_dataset.append(temp_elem)
         del temp_elem
+
 
 
 def write_concat_sequence(
@@ -223,41 +267,41 @@ def write_concat_sequence(
     array, dataframe, csc_matrix, csc_matrix
     """
     if any(get_encoding_type(g) == "dataframe" for g in groups):
-        # TODO: what is missing val thing?
-        if not all(
-            get_encoding_type(g) == "dataframe" or 0 in get_shape(g) for g in groups
-        ):
-            raise NotImplementedError(
-                "Cannot concatenate a dataframe with other array types."
-            )
         dfs = [read_group(g) for g in groups]
         if reindexers is None:
             if join == "inner":
                 reindexers = gen_reindexers_df_inner(dfs, axis=axis)
             else:
                 raise NotImplementedError("Cannot reindex dataframes with outer join.")
-
-        df = pd.concat(
-            unify_dtypes([f(d) for f, d in zip(reindexers, dfs)]),
-            ignore_index=True,
-            axis=axis,
-        )
-        df.index = index
+        df = concat_arrays(arrays=dfs,reindexers=reindexers,axis=axis,index=index,fill_value=fill_value)
         write_elem(output_group, out_path, df)
+       
+        # if not all(
+        #     get_encoding_type(g) == "dataframe" or 0 in get_shape(g) for g in groups
+        # ):
+        #     raise NotImplementedError(
+        #         "Cannot concatenate a dataframe with other array types."
+        #     )
+
+
+        # df = pd.concat(
+        #     unify_dtypes([f(d) for f, d in zip(reindexers, dfs)]),
+        #     ignore_index=True,
+        #     axis=axis,
+        # )
+        # df.index = index
+        # write_elem(output_group, out_path, df)
     # If all are compatible sparse matrices
     elif (all(get_encoding_type(g) == "csc_matrix" for g in groups) and axis == 1) or (
         all(get_encoding_type(g) == "csr_matrix" for g in groups) and axis == 0
     ):
+        if reindexers is None:
+            if join == "inner":
+                reindexers = gen_reindexers_array_inner(groups, axis=axis)
+            else:
+                raise NotImplementedError("Cannot reindex arrays with outer join.")
         datasets: Sequence[SparseDataset] = [read_group(g) for g in groups]
-        if all(ri.no_change for ri in reindexers):
-            write_elem(output_group, out_path, datasets[0])
-            out_dataset: SparseDataset = read_group(output_group[out_path])
-            for ds in datasets[1:]:
-                out_dataset.append(ds)
-        else:
-            _write_concat_sparse_reindexing_inner(
-                datasets, output_group, out_path, axis, reindexers, fill_value
-            )
+        _write_concat_sparse(datasets, output_group, out_path, axis, reindexers, fill_value)
 
     # If all are arrays
     elif all(get_encoding_type(g) == "array" for g in groups):
@@ -605,19 +649,30 @@ def concat_on_disk(
     # Write {alt_dim}m
     _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge)
 
+    # Write X
+    Xs = [g["X"] for g in groups]
+    write_concat_sequence(
+        groups=Xs,
+        output_group=output_group,
+        out_path="X",
+        axis=axis,
+        reindexers=reindexers,
+        fill_value=fill_value,
+    )
+
     # Write Layers and {dim}m
     mapping_names = [
-        ("layers", None, axis, reindexers),
         (
             f"{dim}m",
             concat_indices,
             0,
             None if use_reindexing else [IdentityReindexer()] * len(groups),
         ),
+        ("layers", None, axis, reindexers),
+
     ]
     for m, m_index, m_axis, m_reindexers in mapping_names:
         maps = [read_only_dict(g[m]) for g in groups]
-
         write_concat_mappings(
             maps,
             output_group,
@@ -629,13 +684,4 @@ def concat_on_disk(
             fill_value=fill_value,
         )
 
-    # Write X
-    Xs = [g["X"] for g in groups]
-    write_concat_sequence(
-        groups=Xs,
-        output_group=output_group,
-        out_path="X",
-        axis=axis,
-        reindexers=reindexers,
-        fill_value=fill_value,
-    )
+    
