@@ -16,6 +16,7 @@ from .._core.merge import (
     Reindexer,
 )
 from .._core.sparse_dataset import SparseDataset
+from .._core.file_backing import to_memory
 from ..experimental import read_dispatched
 import pandas as pd
 from typing import (
@@ -140,9 +141,12 @@ def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
     raise NotImplementedError(f"Cannot get shape of {group.attrs['encoding-type']}")
 
 
-def get_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
+def _gen_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
     for elem, ri in zip(elems, reindexers):
-        yield ri(elem, axis=axis, fill_value=fill_value)
+        if ri.no_change:
+            yield elem
+        else:
+            yield ri(elem, axis=1-axis, fill_value=fill_value)
 
 
 def gen_reindexers_df_inner(dfs: Sequence[pd.DataFrame], axis: Literal[0, 1] = 0):
@@ -188,26 +192,7 @@ def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
     return result
 
 
-def _write_concat_sparse(
-    datasets: Sequence[SparseDataset],
-    output_group,
-    out_path,
-    axis,
-    reindexers,
-    fill_value,
-):
-    if all(ri.no_change for ri in reindexers):
-        write_elem(output_group, out_path, datasets[0])
-        out_dataset: SparseDataset = read_group(output_group[out_path])
-        for ds in datasets[1:]:
-            out_dataset.append(ds)
-    else:
-        _write_concat_sparse_reindexing_inner(
-            datasets, output_group, out_path, axis, reindexers, fill_value
-        )
-
-
-def _gen_chunks_to_append(
+def _gen_slice_to_append(
     datasets: Sequence[SparseDataset],
     reindexers=None,
     axis=0,
@@ -216,8 +201,10 @@ def _gen_chunks_to_append(
     for ds, ri in zip(datasets, reindexers):
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // MAX_LOAD_SIZE
         if n_slices < 2:
-            elem = ri(ds.to_memory(), axis=1 - axis, fill_value=fill_value)
-            yield (csr_matrix, csc_matrix)[axis](elem)
+            if ri.no_change:
+                yield to_memory(ds)
+            else:
+                yield ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
         else:
             slice_size = MAX_LOAD_SIZE // ds.shape[1 - axis]
             if slice_size == 0:
@@ -230,13 +217,15 @@ def _gen_chunks_to_append(
                     ds_part = ds[idx : idx + slice_size, :]
                 elif axis == 1:
                     ds_part = ds[:, idx : idx + slice_size]
-                elem = ri(ds_part, axis=1 - axis, fill_value=fill_value)
-                yield (csr_matrix, csc_matrix)[axis](elem)
+                if ri.no_change:
+                    yield ds_part
+                else:
+                    yield ri(ds_part, axis=1 - axis, fill_value=fill_value)
                 rem_slices -= slice_size
                 idx += slice_size
 
 
-def _write_concat_sparse_reindexing_inner(
+def _write_concat_sparse(
     datasets: Sequence[SparseDataset],
     output_group,
     out_path,
@@ -244,13 +233,13 @@ def _write_concat_sparse_reindexing_inner(
     reindexers=None,
     fill_value=None,
 ):
-    elems = _gen_chunks_to_append(datasets, reindexers, axis, fill_value)
-    init_elem = next(elems)
+    elems = _gen_slice_to_append(datasets, reindexers, axis, fill_value)
+    init_elem = (csr_matrix, csc_matrix)[axis](next(elems))
     write_elem(output_group, out_path, init_elem)
     del init_elem
     out_dataset: SparseDataset = read_group(output_group[out_path])
     for temp_elem in elems:
-        out_dataset.append(temp_elem)
+        out_dataset.append((csr_matrix, csc_matrix)[axis](temp_elem))
         del temp_elem
 
 
@@ -282,21 +271,6 @@ def write_concat_sequence(
             fill_value=fill_value,
         )
         write_elem(output_group, out_path, df)
-
-        # if not all(
-        #     get_encoding_type(g) == "dataframe" or 0 in get_shape(g) for g in groups
-        # ):
-        #     raise NotImplementedError(
-        #         "Cannot concatenate a dataframe with other array types."
-        #     )
-
-        # df = pd.concat(
-        #     unify_dtypes([f(d) for f, d in zip(reindexers, dfs)]),
-        #     ignore_index=True,
-        #     axis=axis,
-        # )
-        # df.index = index
-        # write_elem(output_group, out_path, df)
     # If all are compatible sparse matrices
     elif (all(get_encoding_type(g) == "csc_matrix" for g in groups) and axis == 1) or (
         all(get_encoding_type(g) == "csr_matrix" for g in groups) and axis == 0
@@ -323,25 +297,19 @@ def write_concat_sequence(
         init_elem = arrays[0]
 
         if isinstance(init_elem, (ZarrArray, ZarrGroup)):
-            if all(r.no_change for r in reindexers):
-                write_elem(output_group, out_path, init_elem)
-                out_array: ZarrArray = read_group(output_group[out_path])
-                for a in arrays[1:]:
-                    out_array.append(a, axis=axis)
-            else:
-                import dask.array as da
+            import dask.array as da
 
-                darrays = (da.from_zarr(a) for a in arrays)
-                res = da.concatenate(
-                    get_elem_to_append(
-                        darrays,
-                        axis=1 - axis,
-                        reindexers=reindexers,
-                        fill_value=fill_value,
-                    ),
+            darrays = (da.from_zarr(a) for a in arrays)
+            res = da.concatenate(
+                _gen_elem_to_append(
+                    darrays,
                     axis=axis,
-                )
-                write_elem(output_group, out_path, res)
+                    reindexers=reindexers,
+                    fill_value=fill_value,
+                ),
+                axis=axis,
+            )
+            write_elem(output_group, out_path, res)
 
         elif isinstance(init_elem, (H5Array, H5Group)):
             dim_shapes = [a.shape[axis] for a in arrays]
@@ -349,40 +317,27 @@ def write_concat_sequence(
 
             if all(r.no_change for r in reindexers):
                 alt_dim_res_len = arrays[0].shape[1 - axis]
-                new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
-                out_array: H5Array = output_group.create_dataset(
-                    out_path, shape=new_shape
-                )
-
-                idx = 0
-                for shape, arr in zip(dim_shapes, arrays):
-                    if axis == 0:
-                        out_array[idx : idx + shape, :] = arr
-                    else:
-                        out_array[:, idx : idx + shape] = arr
-                    idx += shape
             else:
                 alt_dim_res_len = len(reindexers[0].new_idx)
                 assert all(len(ri.new_idx) == alt_dim_res_len for ri in reindexers)
-                new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
-                out_array: H5Array = output_group.create_dataset(
-                    out_path, shape=new_shape
-                )
-                idx = 0
-                for shape, arr in zip(
-                    dim_shapes,
-                    get_elem_to_append(
-                        (a[...] for a in arrays),
-                        axis=1 - axis,
-                        reindexers=reindexers,
-                        fill_value=fill_value,
-                    ),
-                ):
-                    if axis == 0:
-                        out_array[idx : idx + shape, :] = arr
-                    else:
-                        out_array[:, idx : idx + shape] = arr
-                    idx += shape
+
+            new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
+            out_array: H5Array = output_group.create_dataset(
+                out_path, shape=new_shape
+            )
+            idx = 0
+            for arr in _gen_slice_to_append(
+                    arrays,
+                    axis=axis,
+                    reindexers=reindexers,
+                    fill_value=fill_value):
+
+                added_size = arr.shape[axis]
+                if axis == 0:
+                    out_array[idx: idx + added_size, :] = arr
+                else:
+                    out_array[:, idx: idx + added_size] = arr
+                idx += added_size
         else:
             raise NotImplementedError("This is not yet implemented.")
         output_group[out_path].attrs.update(
