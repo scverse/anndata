@@ -178,7 +178,6 @@ def gen_reindexers_array_inner(
     return reindexers
 
 
-
 def _gen_slice_to_append(
     datasets: Sequence[SparseDataset],
     reindexers=None,
