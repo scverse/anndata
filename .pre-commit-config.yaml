@@ -5,7 +5,7 @@ repos:
     -   id: black
 - repo: https://github.com/charliermarsh/ruff-pre-commit
   # Ruff version.
-  rev: 'v0.0.265'
+  rev: 'v0.0.270'
   hooks:
     - id: ruff
       args: ["--fix"]
