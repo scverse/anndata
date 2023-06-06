@@ -484,7 +484,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
     write_sparse_compressed(
         f,
         k,
-        elem.to_memory(), # if there is a subset on the elem, to_memory lazily reads in __only__ the subset
+        elem.to_memory(),  # if there is a subset on the elem, to_memory lazily reads in __only__ the subset
         _writer,
         fmt=elem.format_str,
         dataset_kwargs=dataset_kwargs,
@@ -591,7 +591,7 @@ def read_dataframe(elem, _reader):
     df = pd.DataFrame(
         {k: _reader.read_elem(elem[k]) for k in columns},
         index=_reader.read_elem(elem[idx_key]),
-        columns=list(columns),
+        columns=columns if len(columns) else None,
     )
     if idx_key != "_index":
         df.index.name = idx_key
@@ -614,7 +614,7 @@ def read_dataframe_partial(
     df = pd.DataFrame(
         {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
         index=read_elem_partial(elem[idx_key], indices=indices[0]),
-        columns=list(columns),
+        columns=columns if len(columns) else None,
     )
     if idx_key != "_index":
         df.index.name = idx_key
@@ -632,7 +632,7 @@ def read_dataframe_0_1_0(elem, _reader):
     df = pd.DataFrame(
         {k: read_series(elem[k]) for k in columns},
         index=read_series(elem[idx_key]),
-        columns=list(columns),
+        columns=columns if len(columns) else None,
     )
     if idx_key != "_index":
         df.index.name = idx_key
