@@ -167,16 +167,15 @@ def gen_reindexers_df_inner(dfs: Sequence[pd.DataFrame], axis: Literal[0, 1] = 0
 
 
 def gen_reindexers_array_inner(
-    groups: Sequence[Union[ZarrGroup, H5Group]], axis: Literal[0, 1] = 0
+    arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]], axis: Literal[0, 1] = 0
 ):
-    min_ind = min(get_shape(g)[1 - axis] for g in groups)
+    min_ind = min(a.shape[1 - axis] for a in arrays)
     reindexers = [
-        gen_reindexer(pd.RangeIndex(min_ind), pd.RangeIndex(get_shape(g)[1 - axis]))
-        for g in groups
+        gen_reindexer(pd.RangeIndex(min_ind), pd.RangeIndex(a.shape[1 - axis]))
+        for a in arrays
     ]
 
     return reindexers
-
 
 
 def _gen_slice_to_append(
@@ -188,10 +187,7 @@ def _gen_slice_to_append(
     for ds, ri in zip(datasets, reindexers):
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // MAX_LOAD_SIZE
         if n_slices < 2:
-            if ri.no_change:
-                yield to_memory(ds)
-            else:
-                yield ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
+            yield ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
         else:
             slice_size = MAX_LOAD_SIZE // ds.shape[1 - axis]
             if slice_size == 0:
@@ -204,10 +200,8 @@ def _gen_slice_to_append(
                     ds_part = ds[idx : idx + slice_size, :]
                 elif axis == 1:
                     ds_part = ds[:, idx : idx + slice_size]
-                if ri.no_change:
-                    yield ds_part
-                else:
-                    yield ri(ds_part, axis=1 - axis, fill_value=fill_value)
+
+                yield ri(ds_part, axis=1 - axis, fill_value=fill_value)
                 rem_slices -= slice_size
                 idx += slice_size
 
@@ -230,6 +224,81 @@ def _write_concat_sparse(
         del temp_elem
 
 
+def write_concat_arrays(
+    arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]],
+    output_group,
+    out_path,
+    axis=0,
+    reindexers=None,
+    fill_value=None,
+    join="inner",
+):
+    init_elem = arrays[0]
+    init_type = type(init_elem)
+    if not all(isinstance(a, init_type) for a in arrays):
+        raise NotImplementedError(
+            f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
+        )
+    if reindexers is None:
+        if join == "inner":
+            reindexers = gen_reindexers_array_inner(arrays, axis=axis)
+        else:
+            raise NotImplementedError("Cannot reindex arrays with outer join.")
+    if isinstance(init_elem, SparseDataset):
+        expected_sparse_fmt = ["csr", "csc"][axis]
+        if all(a.format_str == expected_sparse_fmt for a in arrays):
+            _write_concat_sparse(
+                arrays, output_group, out_path, axis, reindexers, fill_value
+            )
+        else:
+            raise NotImplementedError(
+                f"Concat of following not supported: {[a.format_str for a in arrays]}"
+            )
+    elif isinstance(init_elem, H5Array):
+        dim_shapes = [a.shape[axis] for a in arrays]
+        dim_res_len = sum(dim_shapes)
+
+        if all(r.no_change for r in reindexers):
+            alt_dim_res_len = arrays[0].shape[1 - axis]
+        else:
+            alt_dim_res_len = len(reindexers[0].new_idx)
+            assert all(len(ri.new_idx) == alt_dim_res_len for ri in reindexers)
+
+        new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
+        out_array: H5Array = output_group.create_dataset(out_path, shape=new_shape)
+        idx = 0
+        for arr in _gen_slice_to_append(
+            arrays, axis=axis, reindexers=reindexers, fill_value=fill_value
+        ):
+            added_size = arr.shape[axis]
+            if axis == 0:
+                out_array[idx : idx + added_size, :] = arr
+            else:
+                out_array[:, idx : idx + added_size] = arr
+            idx += added_size
+        output_group[out_path].attrs.update(
+            {"encoding-type": "array", "encoding-version": "0.2.0"}
+        )
+
+    elif isinstance(init_elem, ZarrArray):
+        import dask.array as da
+
+        darrays = (da.from_zarr(a) for a in arrays)
+        res = da.concatenate(
+            _gen_elem_to_append(
+                darrays,
+                axis=axis,
+                reindexers=reindexers,
+                fill_value=fill_value,
+            ),
+            axis=axis,
+        )
+        write_elem(output_group, out_path, res)
+        output_group[out_path].attrs.update(
+            {"encoding-type": "array", "encoding-version": "0.2.0"}
+        )
+
+
 def write_concat_sequence(
     groups: Sequence[Union[ZarrGroup, H5Group]],
     output_group,
@@ -243,15 +312,24 @@ def write_concat_sequence(
     """
     array, dataframe, csc_matrix, csc_matrix
     """
-    if any(get_encoding_type(g) == "dataframe" for g in groups):
-        dfs = [read_group(g) for g in groups]
+    arrays: Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray] = [
+        read_group(g) for g in groups
+    ]
+    if any(isinstance(a, pd.DataFrame) for a in arrays):
         if reindexers is None:
             if join == "inner":
-                reindexers = gen_reindexers_df_inner(dfs, axis=axis)
+                reindexers = gen_reindexers_df_inner(arrays, axis=axis)
             else:
                 raise NotImplementedError("Cannot reindex dataframes with outer join.")
+        if not all(
+            isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
+            for a in arrays
+        ):
+            raise NotImplementedError(
+                "Cannot concatenate a dataframe with other array types."
+            )
         df = concat_arrays(
-            arrays=dfs,
+            arrays=arrays,
             reindexers=reindexers,
             axis=axis,
             index=index,
@@ -259,75 +337,15 @@ def write_concat_sequence(
         )
         write_elem(output_group, out_path, df)
     # If all are compatible sparse matrices
-    elif (all(get_encoding_type(g) == "csc_matrix" for g in groups) and axis == 1) or (
-        all(get_encoding_type(g) == "csr_matrix" for g in groups) and axis == 0
+    elif all(
+        isinstance(a, (pd.DataFrame, SparseDataset, H5Array, ZarrArray)) for a in arrays
     ):
-        if reindexers is None:
-            if join == "inner":
-                reindexers = gen_reindexers_array_inner(groups, axis=axis)
-            else:
-                raise NotImplementedError("Cannot reindex arrays with outer join.")
-        datasets: Sequence[SparseDataset] = [read_group(g) for g in groups]
-        _write_concat_sparse(
-            datasets, output_group, out_path, axis, reindexers, fill_value
-        )
-
-    # If all are arrays
-    elif all(get_encoding_type(g) == "array" for g in groups):
-        if reindexers is None:
-            if join == "inner":
-                reindexers = gen_reindexers_array_inner(groups, axis=axis)
-            else:
-                raise NotImplementedError("Cannot reindex arrays with outer join.")
-
-        arrays: Sequence = [read_group(g) for g in groups]
-        init_elem = arrays[0]
-
-        if isinstance(init_elem, (ZarrArray, ZarrGroup)):
-            import dask.array as da
-
-            darrays = (da.from_zarr(a) for a in arrays)
-            res = da.concatenate(
-                _gen_elem_to_append(
-                    darrays,
-                    axis=axis,
-                    reindexers=reindexers,
-                    fill_value=fill_value,
-                ),
-                axis=axis,
-            )
-            write_elem(output_group, out_path, res)
-
-        elif isinstance(init_elem, (H5Array, H5Group)):
-            dim_shapes = [a.shape[axis] for a in arrays]
-            dim_res_len = sum(dim_shapes)
-
-            if all(r.no_change for r in reindexers):
-                alt_dim_res_len = arrays[0].shape[1 - axis]
-            else:
-                alt_dim_res_len = len(reindexers[0].new_idx)
-                assert all(len(ri.new_idx) == alt_dim_res_len for ri in reindexers)
-
-            new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
-            out_array: H5Array = output_group.create_dataset(out_path, shape=new_shape)
-            idx = 0
-            for arr in _gen_slice_to_append(
-                arrays, axis=axis, reindexers=reindexers, fill_value=fill_value
-            ):
-                added_size = arr.shape[axis]
-                if axis == 0:
-                    out_array[idx : idx + added_size, :] = arr
-                else:
-                    out_array[:, idx : idx + added_size] = arr
-                idx += added_size
-        else:
-            raise NotImplementedError("This is not yet implemented.")
-        output_group[out_path].attrs.update(
-            {"encoding-type": "array", "encoding-version": "0.2.0"}
+        write_concat_arrays(
+            arrays, output_group, out_path, axis, reindexers, fill_value, join
         )
     else:
         raise NotImplementedError(
-            f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups],axis}."
+            f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups] } with axis={axis}."
         )
 
 
