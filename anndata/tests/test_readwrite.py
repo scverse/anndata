@@ -814,7 +814,7 @@ def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip):
     orig = ad.AnnData(np.ones((3, 4)), uns=dict(log1p=dict(base=None)))
     curr = roundtrip(orig, pth)
 
-    assert curr.uns['log1p'] == orig.uns['log1p']
+    assert curr.uns["log1p"] == orig.uns["log1p"]
 
 
 def test_io_dtype(tmp_path, diskfmt, roundtrip, dtype):
