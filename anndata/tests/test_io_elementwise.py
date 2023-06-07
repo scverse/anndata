@@ -45,6 +45,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
 @pytest.mark.parametrize(
     "value,encoding_type",
     [
+        (None, "null"),
         ("hello world", "string"),
         (np.str_("hello world"), "string"),
         (np.array([1, 2, 3]), "array"),

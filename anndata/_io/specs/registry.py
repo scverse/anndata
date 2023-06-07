@@ -262,7 +262,7 @@ class Writer:
         self,
         store: GroupStorageType,
         k: str,
-        elem,
+        elem: Any,
         *,
         dataset_kwargs=MappingProxyType({}),
         modifiers=frozenset(),
@@ -272,9 +272,6 @@ class Writer:
 
         dest_type = type(store)
         t = type(elem)
-
-        if elem is None:
-            return lambda *_, **__: None
 
         # Normalize k to abosulte path
         if not PurePosixPath(k).is_absolute():
