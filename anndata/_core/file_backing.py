@@ -2,12 +2,13 @@ from functools import singledispatch
 from os import PathLike
 from pathlib import Path
 from typing import Optional, Union, Iterator, Literal
+from collections.abc import Mapping
 
 import h5py
 
 from . import anndata
 from .sparse_dataset import SparseDataset
-from ..compat import ZarrArray
+from ..compat import ZarrArray, DaskArray, AwkArray
 
 
 class AnnDataFileManager:
@@ -92,20 +93,43 @@ class AnnDataFileManager:
 
 
 @singledispatch
-def to_memory(x):
+def to_memory(x, copy=False):
     """Permissivley convert objects to in-memory representation.
 
     If they already are in-memory, (or are just unrecognized) pass a copy through.
     """
-    return x.copy()
+    if copy and hasattr(x, "copy"):
+        return x.copy()
+    else:
+        return x
 
 
 @to_memory.register(ZarrArray)
 @to_memory.register(h5py.Dataset)
-def _(x):
+def _(x, copy=False):
     return x[...]
 
 
 @to_memory.register(SparseDataset)
-def _(x: SparseDataset):
+def _(x: SparseDataset, copy=False):
     return x.to_memory()
+
+
+@to_memory.register(DaskArray)
+def _(x, copy=False):
+    return x.compute()
+
+
+@to_memory.register(Mapping)
+def _(x: Mapping, copy=False):
+    return {k: to_memory(v, copy=copy) for k, v in x.items()}
+
+
+@to_memory.register(AwkArray)
+def _(x, copy=False):
+    from copy import copy as _copy
+
+    if copy:
+        return _copy(x)
+    else:
+        return x

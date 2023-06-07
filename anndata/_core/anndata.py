@@ -45,16 +45,13 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous
+from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
-    _slice_uns_sparse_matrices,
     _move_adj_mtx,
-    _overloaded_uns,
-    OverloadedDict,
 )
 
 
@@ -102,7 +99,7 @@ def _check_2d_shape(X):
 @singledispatch
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
-        return pd.DataFrame(index=pd.RangeIndex(0, length, name=None).astype(str))
+        anno = {}
     for index_name in index_names:
         if index_name in anno:
             return pd.DataFrame(
@@ -110,7 +107,11 @@ def _gen_dataframe(anno, length, index_names):
                 index=anno[index_name],
                 columns=[k for k in anno.keys() if k != index_name],
             )
-    return pd.DataFrame(anno, index=pd.RangeIndex(0, length, name=None).astype(str))
+    return pd.DataFrame(
+        anno,
+        index=pd.RangeIndex(0, length, name=None).astype(str),
+        columns=None if len(anno) else [],
+    )
 
 
 @_gen_dataframe.register(pd.DataFrame)
@@ -119,6 +120,8 @@ def _(anno, length, index_names):
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
         anno.index = anno.index.astype(str)
+    if not len(anno.columns):
+        anno.columns = anno.columns.astype(str)
     return anno
 
 
@@ -166,8 +169,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         If passing a :class:`~numpy.ndarray`, it needs to have a structured datatype.
     layers
         Key-indexed multi-dimensional arrays aligned to dimensions of `X`.
-    dtype
-        Data type used for storage.
     shape
         Shape tuple (#observations, #variables). Can only be provided if `X` is `None`.
     filename
@@ -339,17 +340,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # Speical case for old neighbors, backwards compat. Remove in anndata 0.8.
-        uns_new = _slice_uns_sparse_matrices(
-            copy(adata_ref._uns), self._oidx, adata_ref.n_obs
-        )
         # fix categories
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
+        uns = copy(adata_ref._uns)
+        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
-        self._uns = uns_new
+        self._uns = uns
         self._n_obs = len(self.obs)
         self._n_vars = len(self.var)
 
@@ -451,27 +449,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
-            if dtype is None and X.dtype != np.float32:
+            if dtype is not None:
                 warnings.warn(
-                    f"X.dtype being converted to np.float32 from {X.dtype}. In the next "
-                    "version of anndata (0.9) conversion will not be automatic. Pass "
-                    "dtype explicitly to avoid this warning. Pass "
-                    "`AnnData(X, dtype=X.dtype, ...)` to get the future behavour.",
-                    FutureWarning,
-                    stacklevel=3,
+                    "The dtype argument will be deprecated in anndata 0.10.0",
+                    PendingDeprecationWarning,
                 )
-                dtype = np.float32
-            elif dtype is None:
-                dtype = np.float32
-            if issparse(X) or isinstance(X, ma.MaskedArray):
-                # TODO: maybe use view on data attribute of sparse matrix
-                #       as in readwrite.read_10x_h5
-                if X.dtype != np.dtype(dtype):
+                if issparse(X) or isinstance(X, ma.MaskedArray):
+                    # TODO: maybe use view on data attribute of sparse matrix
+                    #       as in readwrite.read_10x_h5
+                    if X.dtype != np.dtype(dtype):
+                        X = X.astype(dtype)
+                elif isinstance(X, (ZarrArray, DaskArray)):
                     X = X.astype(dtype)
-            elif isinstance(X, ZarrArray):
-                X = X.astype(dtype)
-            else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                X = np.array(X, dtype, copy=False)
+                else:  # is np.ndarray or a subclass, convert to true np.ndarray
+                    X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X
             self._n_obs, self._n_vars = self._X.shape
@@ -773,7 +764,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             if self.is_view:
                 self._init_as_actual(self.copy())
-            self._raw = Raw(value)
+            self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
 
     @raw.deleter
     def raw(self):
@@ -799,6 +790,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         setattr(self, f"_{attr}", value)
         self._set_dim_index(value_idx, attr)
+        if not len(value.columns):
+            value.columns = value.columns.astype(str)
 
     def _prep_dim_index(self, value, attr: str) -> pd.Index:
         """Prepares index to be uses as obs_names or var_names for AnnData object.AssertionError
@@ -823,7 +816,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # fmt: off
         if (
             not isinstance(value, pd.RangeIndex)
-            and not infer_dtype(value) in ("string", "bytes")
+            and infer_dtype(value) not in ("string", "bytes")
         ):
             sample = list(value[: min(len(value), 5)])
             warnings.warn(dedent(
@@ -859,7 +852,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.deleter
     def obs(self):
-        self.obs = pd.DataFrame(index=self.obs_names)
+        self.obs = pd.DataFrame({}, index=self.obs_names)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -882,7 +875,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.deleter
     def var(self):
-        self.var = pd.DataFrame(index=self.var_names)
+        self.var = pd.DataFrame({}, index=self.var_names)
 
     @property
     def var_names(self) -> pd.Index:
@@ -900,7 +893,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         uns = self._uns
         if self.is_view:
             uns = DictView(uns, view_args=(self, "_uns"))
-        uns = _overloaded_uns(self, uns)
         return uns
 
     @uns.setter
@@ -909,7 +901,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
             )
-        if isinstance(value, (OverloadedDict, DictView)):
+        if isinstance(value, DictView):
             value = value.copy()
         if self.is_view:
             self._init_as_actual(self.copy())
@@ -1078,7 +1070,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 # change from memory to backing-mode
                 # write the content of self to disk
-                self.write(filename, force_dense=True)
+                if self.raw is not None:
+                    as_dense = ("X", "raw/X")
+                else:
+                    as_dense = ("X",)
+                self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
             # as the data is stored on disk, we can safely set self._X to None
@@ -1243,11 +1239,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
-        if adata_subset._has_X():
-            dtype = adata_subset.X.dtype
-        else:
-            dtype = None
-        self._init_as_actual(adata_subset, dtype=dtype)
+        self._init_as_actual(adata_subset)
 
     def _inplace_subset_obs(self, index: Index1D):
         """\
@@ -1256,11 +1248,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
-        if adata_subset._has_X():
-            dtype = adata_subset.X.dtype
-        else:
-            dtype = None
-        self._init_as_actual(adata_subset, dtype=dtype)
+        self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
     def __setitem__(
@@ -1312,7 +1300,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             varp=self.obsp.copy(),
             filename=self.filename,
             layers={k: t_csr(v) for k, v in self.layers.items()},
-            dtype=self.X.dtype.name if X is not None else "float32",
         )
 
     T = property(transpose)
@@ -1466,10 +1453,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = getattr(self, key).copy()
         if "X" in kwargs:
             new["X"] = kwargs["X"]
-            new["dtype"] = new["X"].dtype
         elif self._has_X():
             new["X"] = self.X.copy()
-            new["dtype"] = new["X"].dtype
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
@@ -1480,8 +1465,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self) -> "AnnData":
-        """Load backed AnnData object into memory.
+    def to_memory(self, copy=False) -> "AnnData":
+        """Return a new AnnData object with all backed arrays loaded into memory.
+
+        Params
+        ------
+            copy:
+                Whether the arrays that are already in-memory should be copied.
 
         Example
         -------
@@ -1492,19 +1482,33 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             backed = anndata.read_h5ad("file.h5ad", backed="r")
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
-        if not self.isbacked:
-            raise ValueError("Object is already in memory.")
-        else:
-            elems = {"X": to_memory(self.X)}
-            if self.raw is not None:
-                elems["raw"] = {
-                    "X": to_memory(self.raw.X),
-                    "var": self.raw.var,
-                    "varm": self.raw.varm,
-                }
-            adata = self._mutated_copy(**elems)
+        new = {}
+        for attr_name in [
+            "X",
+            "obs",
+            "var",
+            "obsm",
+            "varm",
+            "obsp",
+            "varp",
+            "layers",
+            "uns",
+        ]:
+            attr = getattr(self, attr_name, None)
+            if attr is not None:
+                new[attr_name] = to_memory(attr, copy)
+
+        if self.raw is not None:
+            new["raw"] = {
+                "X": to_memory(self.raw.X, copy),
+                "var": to_memory(self.raw.var, copy),
+                "varm": to_memory(self.raw.varm, copy),
+            }
+
+        if self.isbacked:
             self.file.close()
-        return adata
+
+        return AnnData(**new)
 
     def copy(self, filename: Optional[PathLike] = None) -> "AnnData":
         """Full copy, optionally on disk."""
@@ -1627,12 +1631,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             obs: 'anno1', 'anno2', 'batch'
             var: 'annoA-0', 'annoA-1', 'annoA-2', 'annoB-2'
         >>> adata.X
-        array([[2., 3.],
-               [5., 6.],
-               [3., 2.],
-               [6., 5.],
-               [3., 2.],
-               [6., 5.]], dtype=float32)
+        array([[2, 3],
+               [5, 6],
+               [3, 2],
+               [6, 5],
+               [3, 2],
+               [6, 5]])
         >>> adata.obs
              anno1 anno2 batch
         s1-0    c1   NaN     0
@@ -1669,9 +1673,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [nan,  3.,  2.,  1.],
                [nan,  6.,  5.,  4.],
                [nan,  3.,  2.,  1.],
-               [nan,  6.,  5.,  4.]], dtype=float32)
+               [nan,  6.,  5.,  4.]])
         >>> outer.X.sum(axis=0)
-        array([nan, 25., 23., nan], dtype=float32)
+        array([nan, 25., 23., nan])
         >>> import pandas as pd
         >>> Xdf = pd.DataFrame(outer.X, columns=outer.var_names)
         >>> Xdf
@@ -1687,7 +1691,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         b    25.0
         c    23.0
         d    10.0
-        dtype: float32
+        dtype: float64
 
         One way to deal with missing values is to use masked arrays:
 
@@ -1707,10 +1711,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 [ True, False, False, False],
                 [ True, False, False, False],
                 [ True, False, False, False]],
-          fill_value=1e+20,
-          dtype=float32)
+          fill_value=1e+20)
         >>> outer.X.sum(axis=0).data
-        array([ 5., 25., 23., 10.], dtype=float32)
+        array([ 5., 25., 23., 10.])
 
         The masked array is not saved but has to be reinstantiated after saving.
 
@@ -1723,7 +1726,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [nan,  3.,  2.,  1.],
                [nan,  6.,  5.,  4.],
                [nan,  3.,  2.,  1.],
-               [nan,  6.,  5.,  4.]], dtype=float32)
+               [nan,  6.,  5.,  4.]])
 
         For sparse data, everything behaves similarly,
         except that for `join='outer'`, zeros are added.
@@ -1757,8 +1760,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         from .merge import concat, merge_outer, merge_dataframes, merge_same
 
+        warnings.warn(
+            "The AnnData.concatenate method is deprecated in favour of the "
+            "anndata.concat function. Please use anndata.concat instead.\n\n"
+            "See the tutorial for concat at: "
+            "https://anndata.readthedocs.io/en/latest/concatenation.html",
+            FutureWarning,
+        )
+
         if self.isbacked:
-            raise ValueError("Currently, concatenate does only work in memory mode.")
+            raise ValueError("Currently, concatenate only works in memory mode.")
 
         if len(adatas) == 0:
             return self.copy()
@@ -1851,7 +1862,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([o.shape[0] == self._n_obs for o in obsm.values()])
+                not all([dim_len(o, 0) == self._n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self._n_obs
             ):
                 raise ValueError(
@@ -1861,7 +1872,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "varm" in key:
             varm = self._varm
             if (
-                not all([v.shape[0] == self._n_vars for v in varm.values()])
+                not all([dim_len(v, 0) == self._n_vars for v in varm.values()])
                 and len(varm.dim_names) != self._n_vars
             ):
                 raise ValueError(
@@ -1874,7 +1885,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename: Optional[PathLike] = None,
         compression: Optional[Literal["gzip", "lzf"]] = None,
         compression_opts: Union[int, Any] = None,
-        force_dense: Optional[bool] = None,
         as_dense: Sequence[str] = (),
     ):
         """\
@@ -1897,15 +1907,47 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             Filename of data file. Defaults to backing file.
         compression
-            See the h5py :ref:`dataset_compression`.
+            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
+
+            Alternative compression filters such as `zstd` can be passed
+            from the :doc:`hdf5plugin <hdf5plugin:usage>` library.
+            Experimental.
+
+            Usage example::
+
+                import hdf5plugin
+                adata.write_h5ad(
+                    filename,
+                    compression=hdf5plugin.FILTERS["zstd"]
+                )
+
+            .. note::
+                Datasets written with hdf5plugin-provided compressors
+                cannot be opened without first loading the hdf5plugin
+                library using `import hdf5plugin`. When using alternative
+                compression filters such as `zstd`, consider writing to
+                `zarr` format instead of `h5ad`, as the `zarr` library
+                provides a more transparent compression pipeline.
+
         compression_opts
-            See the h5py :ref:`dataset_compression`.
+            For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
+
+            Alternative compression filters such as `zstd` can be configured
+            using helpers from the :doc:`hdf5plugin <hdf5plugin:usage>`
+            library. Experimental.
+
+            Usage example (setting `zstd` compression level to 5)::
+
+                import hdf5plugin
+                adata.write_h5ad(
+                    filename,
+                    compression=hdf5plugin.FILTERS["zstd"],
+                    compression_opts=hdf5plugin.Zstd(clevel=5).filter_options
+                )
+
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
-        force_dense
-            Write sparse data as a dense matrix.
-            Defaults to `True` if object is backed, otherwise to `False`.
         """
         from .._io.write import _write_h5ad
 
@@ -1919,7 +1961,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self,
             compression=compression,
             compression_opts=compression_opts,
-            force_dense=force_dense,
             as_dense=as_dense,
         )
 

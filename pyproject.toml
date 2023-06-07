@@ -21,7 +21,7 @@ maintainers = [
     {name = "Philipp Angerer", email = "philipp.angerer@helmholtz-muenchen.de"},
     {name = "Alex Wolf", email = "f.alex.wolf@gmx.de"},
 ]
-readme = {file = "README.rst", content-type="text/x-rst"}
+readme = {file = "README.md", content-type="text/markdown"}
 classifiers = [
     "License :: OSI Approved :: BSD License",
     "Environment :: Console",
@@ -40,7 +40,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas>=1.1.1",  # pandas <1.1.1 has pandas/issues/35446
+    "pandas>=1.1.1,!=2.0.1",  # pandas <1.1.1 has pandas/issues/35446
     "numpy>=1.16.5",  # required by pandas 1.x
     "scipy>1.4",
     "h5py>=3",
@@ -65,12 +65,16 @@ dev = [
 ]
 doc = [
     "sphinx>=4.4",
-    "sphinx-rtd-theme",
+    "sphinx-rtd-theme>=1.1.1",
     "sphinx-autodoc-typehints>=1.11.0",
     "sphinx_issues",
+    "sphinxext.opengraph",
     "nbsphinx",
     "scanpydoc>=0.7.7",
     "zarr",
+    "awkward>=2.0.7",
+    "IPython", # For syntax highlighting in notebooks
+    "myst_parser",
 ]
 test = [
     "loompy>=3.0.5",
@@ -78,12 +82,14 @@ test = [
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
-    "sklearn",
+    "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
     "scanpy",
     "dask[array]",
+    "awkward>=2.0.6",
+    "pytest_memray",
 ]
 
 [tool.flit.sdist]
@@ -104,7 +110,7 @@ omit = [
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
 python_files = "test_*.py"
-testpaths = ["anndata", "docs/concatenation.rst"]
+testpaths = ["anndata/tests", "docs/concatenation.rst"]
 filterwarnings = [
     'ignore:X\.dtype being converted to np.float32:FutureWarning'
 ]
@@ -115,3 +121,52 @@ xfail_strict = true
 line-length = 88
 target-version = ["py38"]
 exclude = "^/build/.*$"
+
+[tool.ruff]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "docs/_build",
+    "dist",
+]
+ignore = [
+    # module imported but unused -> required for Scanpys API
+    "F401",
+    # line too long -> we accept long comment lines; black gets rid of long code lines
+    "E501",
+    # module level import not at top of file -> required to circumvent circular imports for Scanpys API
+    "E402",
+    # Do not assign a lambda expression, use a def -> Scanpy allows lambda expression assignments,
+    "E731",
+    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
+    "E741",
+    ## Flake8 rules not supported by ruff:
+    # line break before a binary operator -> black does not adhere to PEP8
+    # "W503",
+    # line break occured after a binary operator -> black does not adhere to PEP8
+    # "W504",
+    # whitespace before : -> black does not adhere to PEP8
+    # "E203",
+    # missing whitespace after ,', ';', or ':' -> black does not adhere to PEP8
+    # "E231",
+    # continuation line over-indented for hanging indent -> black does not adhere to PEP8
+    # "E126",
+    # too many leading '# ' for block comment -> Scanpy allows them for comments into sections
+    # "E262",
+    # inline comment should start with '#' -> Scanpy allows them for specific explanations
+    # "E266",
+]
+line-length = 88
+select = [
+    "E",
+    "F",
+    "W",
+]
+[tool.ruff.per-file-ignores]
+# E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
+"anndata/tests/test_readwrite.py" = ["E721"]
+# F811 Redefinition of unused name from line, does not play nice with pytest fixtures
+"tests/test*.py" = ["F811"]
+# F821 Undefined name, can't import AnnData or it'd be a circular import
+"anndata/compat/_overloaded_dict.py" = ["F821"]

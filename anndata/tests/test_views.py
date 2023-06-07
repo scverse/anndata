@@ -10,14 +10,17 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
+from anndata.compat import DaskArray
+from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
-
 from anndata.tests.helpers import (
     gen_adata,
     subset_func,
     slice_subset,
     single_subset,
     assert_equal,
+    as_dense_dask_array,
+    GEN_ADATA_DASK_ARGS,
 )
 
 # ------------------------------------------------------------------------------
@@ -37,7 +40,6 @@ obs_dict = dict(
 var_dict = dict(vanno1=[3.1, 3.2, 3.3])
 # unstructured annotation
 uns_dict = dict(oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"])
-
 
 subset_func2 = subset_func
 
@@ -61,10 +63,22 @@ def adata_parameterized(request):
 
 
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
-    ids=["np_array", "scipy_csr", "scipy_csc"],
+    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
+    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def matrix_type(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
+    ids=[
+        "np_array",
+        "scipy_csr",
+        "scipy_csc",
+    ],
+)
+def matrix_type_no_dask(request):
     return request.param
 
 
@@ -79,8 +93,8 @@ def mapping_name(request):
 
 
 def test_views():
-    X = np.array(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict, dtype="int32")
+    X = np.array(X_list, dtype="int32")
+    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
@@ -181,7 +195,7 @@ def test_set_var(adata, subset_func):
 
 
 def test_drop_obs_column():
-    adata = ad.AnnData(np.array(X_list), obs=obs_dict, dtype="int32")
+    adata = ad.AnnData(np.array(X_list, dtype="int32"), obs=obs_dict)
 
     subset = adata[:2]
     assert subset.is_view
@@ -251,8 +265,8 @@ def test_set_varm(adata):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X(matrix_type_no_dask, subset_func):
+    adata = ad.AnnData(matrix_type_no_dask(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -272,6 +286,46 @@ def test_not_set_subset_X(matrix_type, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == joblib.hash(adata)
+
+
+@normalize_token.register(ad.AnnData)
+def tokenize_anndata(adata: ad.AnnData):
+    res = []
+    if adata.X is not None:
+        res.append(tokenize(adata.X))
+    res.extend([tokenize(adata.obs), tokenize(adata.var)])
+    for attr in ["obsm", "varm", "obsp", "varp", "layers"]:
+        elem = getattr(adata, attr)
+        res.append(tokenize(list(elem.items())))
+    res.append(joblib.hash(adata.uns))
+    if adata.raw is not None:
+        res.append(tokenize(adata.raw.to_adata()))
+    return tuple(res)
+
+
+# TODO: Determine if this is the intended behavior,
+#       or just the behaviour we’ve had for a while
+def test_not_set_subset_X_dask(matrix_type, subset_func):
+    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+    init_hash = tokenize(adata)
+    orig_X_val = adata.X.copy()
+    while True:
+        subset_idx = slice_subset(adata.obs_names)
+        if len(adata[subset_idx, :]) > 2:
+            break
+    subset = adata[subset_idx, :]
+
+    subset = adata[:, subset_idx]
+
+    internal_idx = _normalize_index(
+        subset_func(np.arange(subset.X.shape[1])), subset.var_names
+    )
+    assert subset.is_view
+    subset.X[:, internal_idx] = 1
+    assert not subset.is_view
+    assert not np.any(asarray(adata.X != orig_X_val))
+
+    assert init_hash == tokenize(adata)
 
 
 def test_set_scalar_subset_X(matrix_type, subset_func):
@@ -336,7 +390,7 @@ def test_set_subset_varm(adata, subset_func):
 
 @pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_failed_delitem(attr):
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     view = adata[5:7, :][:, :5]
     adata_hash = joblib.hash(adata)
     view_hash = joblib.hash(view)
@@ -351,7 +405,7 @@ def test_view_failed_delitem(attr):
 
 @pytest.mark.parametrize("attr", ["obsm", "varm", "obsp", "varp", "layers"])
 def test_view_delitem(attr):
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     getattr(adata, attr)["to_delete"] = np.ones((10, 10))
     # Shouldn’t be a subclass, should be an ndarray
     assert type(getattr(adata, attr)["to_delete"]) is np.ndarray
@@ -372,8 +426,8 @@ def test_view_delitem(attr):
     "attr", ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]
 )
 def test_view_delattr(attr, subset_func):
-    base = gen_adata((10, 10))
-    orig_hash = joblib.hash(base)
+    base = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
+    orig_hash = tokenize(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
     empty = ad.AnnData(obs=subset.obs[[]], var=subset.var[[]])
 
@@ -382,7 +436,7 @@ def test_view_delattr(attr, subset_func):
     assert not subset.is_view
     # Should now have same value as default
     assert_equal(getattr(subset, attr), getattr(empty, attr))
-    assert orig_hash == joblib.hash(base)  # Original should not be modified
+    assert orig_hash == tokenize(base)  # Original should not be modified
 
 
 @pytest.mark.parametrize(
@@ -390,7 +444,7 @@ def test_view_delattr(attr, subset_func):
 )
 def test_view_setattr_machinery(attr, subset_func, subset_func2):
     # Tests that setting attributes on a view doesn't mess anything up too bad
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     view = adata[subset_func(adata.obs_names), subset_func2(adata.var_names)]
 
     actual = view.copy()
@@ -461,7 +515,7 @@ def test_view_of_view_modification():
 
 
 def test_double_index(subset_func, subset_func2):
-    adata = gen_adata((10, 10))
+    adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     obs_subset = subset_func(adata.obs_names)
     var_subset = subset_func2(adata.var_names)
     v1 = adata[obs_subset, var_subset]

@@ -323,21 +323,6 @@ def test_slicing_strings():
         adata[["A", "B", "not_in_obs"], :]
 
 
-def test_slicing_graphs():
-    # Testing for deprecated behaviour of connectivity matrices in .uns["neighbors"]
-    with pytest.warns(FutureWarning, match=r".obsp\['connectivities'\]"):
-        adata = AnnData(
-            np.array([[1, 2], [3, 4], [5, 6]]),
-            uns=dict(neighbors=dict(connectivities=sp.csr_matrix(np.ones((3, 3))))),
-        )
-
-    adata_sub = adata[[0, 1], :]
-    with pytest.warns(FutureWarning):
-        assert adata_sub.uns["neighbors"]["connectivities"].shape[0] == 2
-        assert adata.uns["neighbors"]["connectivities"].shape[0] == 3
-        assert adata_sub.copy().uns["neighbors"]["connectivities"].shape[0] == 2
-
-
 def test_slicing_series():
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6]]),
@@ -607,3 +592,21 @@ def test_copy():
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
         for key in map_sprs.keys():
             assert_eq_not_id(map_sprs[key], map_copy[key])
+
+
+def test_to_memory_no_copy():
+    adata = gen_adata((3, 5))
+    mem = adata.to_memory()
+
+    assert mem.X is adata.X
+    # Currently does not hold for `obs`, `var`, but should in future
+    for key in adata.layers:
+        assert mem.layers[key] is adata.layers[key]
+    for key in adata.obsm:
+        assert mem.obsm[key] is adata.obsm[key]
+    for key in adata.varm:
+        assert mem.varm[key] is adata.varm[key]
+    for key in adata.obsp:
+        assert mem.obsp[key] is adata.obsp[key]
+    for key in adata.varp:
+        assert mem.varp[key] is adata.varp[key]

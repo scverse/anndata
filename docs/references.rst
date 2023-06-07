@@ -18,8 +18,8 @@ References
 
 .. [Murphy12]
    Murphy (2012,
-   *Machine Learning: A Probabilisitc Perspective*,
-   MIT Press https://mitpress.mit.edu/books/machine-learning-0.
+   *Machine Learning: A Probabilistic Perspective*,
+   MIT Press https://mitpress.mit.edu/9780262018029/machine-learning/.
 
 .. [Wolf18] Wolf *et al.* (2018),
    *Scanpy: large-scale single-cell gene expression data analysis*,

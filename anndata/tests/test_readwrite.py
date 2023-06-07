@@ -1,8 +1,9 @@
+import re
+from contextlib import contextmanager
 from importlib.util import find_spec
 from os import PathLike
 from pathlib import Path
 from string import ascii_letters
-import tempfile
 import warnings
 
 import h5py
@@ -14,10 +15,12 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
+from anndata._io.utils import AnnDataReadError
+from anndata._io.specs.registry import IORegistryError
 from anndata.utils import asarray
-from anndata.compat import _read_attr
+from anndata.compat import _read_attr, DaskArray
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import gen_adata, assert_equal, as_dense_dask_array
 
 HERE = Path(__file__).parent
 
@@ -96,7 +99,7 @@ diskfmt2 = diskfmt
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
     pth1 = tmpdir / f"first.{diskfmt}"
@@ -117,11 +120,9 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
-def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
-    tmpdir = tempfile.TemporaryDirectory()
-    tmpdirpth = Path(tmpdir.name)
-    mid_pth = tmpdirpth / "mid.h5ad"
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+def test_readwrite_h5ad(tmp_path, typ, dataset_kwargs, backing_h5ad):
+    mid_pth = tmp_path / "mid.h5ad"
 
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -141,20 +142,24 @@ def test_readwrite_h5ad(typ, dataset_kwargs, backing_h5ad):
     assert is_categorical_dtype(adata.raw.var["vanno2"])
     pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
     pd.testing.assert_frame_equal(adata.var, adata_src.var)
-    assert np.all(adata.var.index == adata_src.var.index)
+    assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
-    assert type(adata.raw.X) is type(adata_src.raw.X)
-    assert type(adata.raw.varm) is type(adata_src.raw.varm)
-    assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
+
+    assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
+    assert isinstance(
+        adata_src.uns["uns4"]["c"], (type(adata.uns["uns4"]["c"]), DaskArray)
+    )
+    assert isinstance(adata_src.varm, (type(adata.varm), DaskArray))
+
+    assert_equal(adata.raw.X, adata_src.raw.X)
     pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
-    assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
     assert_equal(adata, adata_src)
 
 
 @pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -171,21 +176,30 @@ def test_readwrite_zarr(typ, tmp_path):
     assert is_categorical_dtype(adata.raw.var["vanno2"])
     pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
     pd.testing.assert_frame_equal(adata.var, adata_src.var)
-    assert np.all(adata.var.index == adata_src.var.index)
+    assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
-    assert type(adata.raw.X) is type(adata_src.raw.X)
-    assert np.allclose(asarray(adata.raw.X), asarray(adata_src.raw.X))
-    assert np.all(adata.raw.var == adata_src.raw.var)
+
+    # Dev. Note:
+    # either load as same type or load the convert DaskArray to array
+    # since we tested if assigned types and loaded types are DaskArray
+    # this would also work if they work
+    assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
+    assert isinstance(
+        adata_src.uns["uns4"]["c"], (type(adata.uns["uns4"]["c"]), DaskArray)
+    )
+    assert isinstance(adata_src.varm, (type(adata.varm), DaskArray))
+
+    assert_equal(adata.raw.X, adata_src.raw.X)
+    assert_equal(adata.raw.var, adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
-    assert type(adata.uns["uns4"]["c"]) is type(adata_src.uns["uns4"]["c"])
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, dtype="int8")
+    X = typ(X_list).astype("int8")
+    adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read(backing_h5ad)
@@ -215,7 +229,7 @@ def test_maintain_layers(rw):
     assert not np.any((orig.layers["sparse"] != curr.layers["sparse"]).toarray())
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -226,7 +240,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
 def test_readwrite_backed(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -242,11 +256,9 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csc_matrix])
-def test_readwrite_equivalent_h5ad_zarr(typ):
-    tmpdir = tempfile.TemporaryDirectory()
-    tmpdirpth = Path(tmpdir.name)
-    h5ad_pth = tmpdirpth / "adata.h5ad"
-    zarr_pth = tmpdirpth / "adata.zarr"
+def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+    h5ad_pth = tmp_path / "adata.h5ad"
+    zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
     adata = gen_adata((M, N), X_type=typ)
@@ -258,6 +270,41 @@ def test_readwrite_equivalent_h5ad_zarr(typ):
     from_zarr = ad.read_zarr(zarr_pth)
 
     assert_equal(from_h5ad, from_zarr, exact=True)
+
+
+@contextmanager
+def store_context(path: Path):
+    if path.suffix == ".zarr":
+        store = zarr.open(path, "r+")
+    else:
+        file = h5py.File(path, "r+")
+        store = file["/"]
+    yield store
+    if "file" in locals():
+        file.close()
+
+
+@pytest.mark.parametrize(
+    ["name", "read", "write"],
+    [
+        ("adata.h5ad", ad.read_h5ad, ad.AnnData.write_h5ad),
+        ("adata.zarr", ad.read_zarr, ad.AnnData.write_zarr),
+    ],
+)
+def test_read_full_io_error(tmp_path, name, read, write):
+    adata = gen_adata((4, 3))
+    path = tmp_path / name
+    write(adata, path)
+    with store_context(path) as store:
+        store["obs"].attrs["encoding-type"] = "invalid"
+    with pytest.raises(
+        AnnDataReadError, match=r"raised while reading key '/obs'"
+    ) as exc_info:
+        read(path)
+    assert re.search(
+        r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
+        str(exc_info.value.__cause__),
+    )
 
 
 @pytest.mark.parametrize(
@@ -505,8 +552,6 @@ def test_write_csv_view(typ, tmp_path):
     ],
 )
 def test_readwrite_hdf5_empty(read, write, name, tmp_path):
-    if read is ad.read_zarr:
-        pytest.importorskip("zarr")
     adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
@@ -546,7 +591,7 @@ def test_write_categorical(tmp_path, diskfmt):
 def test_write_categorical_index(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
-        uns={"df": pd.DataFrame(index=pd.Categorical(list("aabcd")))},
+        uns={"df": pd.DataFrame({}, index=pd.Categorical(list("aabcd")))},
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
     curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
@@ -566,17 +611,17 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
     for colname in reserved:
         to_write = orig.copy()
         to_write.obs[colname] = np.ones(5)
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(e.value)
+        assert colname in str(exc_info.value.__cause__)
     for colname in reserved:
         to_write = orig.copy()
         to_write.varm["df"] = pd.DataFrame(
             {colname: list("aabcd")}, index=to_write.var_names
         )
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(e.value)
+        assert colname in str(exc_info.value.__cause__)
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
@@ -630,8 +675,9 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest.raises(TypeError, match=str(b"c")):
+    with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
+    assert str(b"c") in str(exc_info.value.__cause__)
 
 
 @pytest.mark.parametrize(
@@ -765,7 +811,7 @@ def test_io_dtype(tmp_path, diskfmt, dtype):
     read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
     write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
 
-    orig = ad.AnnData(np.ones((5, 8), dtype=dtype), dtype=dtype)
+    orig = ad.AnnData(np.ones((5, 8), dtype=dtype))
     write(orig, pth)
     curr = read(pth)
 

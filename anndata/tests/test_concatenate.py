@@ -2,6 +2,7 @@ from collections.abc import Hashable
 from copy import deepcopy
 from itertools import chain, product
 from functools import partial, singledispatch
+from typing import Any, List, Callable
 import warnings
 
 import numpy as np
@@ -17,8 +18,14 @@ from anndata import AnnData, Raw, concat
 from anndata._core.index import _subset
 from anndata._core import merge
 from anndata.tests import helpers
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import (
+    assert_equal,
+    as_dense_dask_array,
+    gen_adata,
+    GEN_ADATA_DASK_ARGS,
+)
 from anndata.utils import asarray
+from anndata.compat import DaskArray, AwkArray
 
 
 @singledispatch
@@ -27,10 +34,15 @@ def filled_like(a, fill_value=None):
 
 
 @filled_like.register(np.ndarray)
-def _filled_array(a, fill_value=None):
+def _filled_array_np(a, fill_value=None):
     if fill_value is None:
         fill_value = np.nan
     return np.broadcast_to(fill_value, a.shape)
+
+
+@filled_like.register(DaskArray)
+def _filled_array(a, fill_value=None):
+    return as_dense_dask_array(_filled_array_np(a, fill_value))
 
 
 @filled_like.register(sparse.spmatrix)
@@ -60,9 +72,11 @@ def make_idx_tuple(idx, axis):
     return tuple(tup)
 
 
+# Will call func(sparse_matrix) so these types should be sparse compatible
+# See array_type if only dense arrays are expected as input.
 @pytest.fixture(
-    params=[asarray, sparse.csr_matrix, sparse.csc_matrix],
-    ids=["np_array", "scipy_csr", "scipy_csc"],
+    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
+    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
 )
 def array_type(request):
     return request.param
@@ -139,7 +153,7 @@ def test_concat_interface_errors():
     ],
 )
 def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_compat):
-    adata = gen_adata((100, 10), X_type=array_type)
+    adata = gen_adata((100, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
 
     remaining = adata.obs_names
     subsets = []
@@ -430,20 +444,27 @@ def test_concatenate_fill_value(fill_val):
 
     adata1 = gen_adata((10, 10))
     adata1.obsm = {
-        k: v for k, v in adata1.obsm.items() if not isinstance(v, pd.DataFrame)
+        k: v
+        for k, v in adata1.obsm.items()
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
+    # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
+    for tmp_ad in [adata1, adata2, adata3]:
+        for k in [k for k, v in tmp_ad.varm.items() if isinstance(v, AwkArray)]:
+            del tmp_ad.varm[k]
+
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 
     ptr = 0
@@ -664,6 +685,100 @@ def test_concatenate_with_raw():
     assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert adata_all.raw is None
+
+
+def test_concatenate_awkward(join_type):
+    import awkward as ak
+
+    a = ak.Array([[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
+    b = ak.Array(
+        [
+            [{"a": 4}, {"a": 5}],
+            [{"a": 6}],
+            [{"a": 7}],
+        ]
+    )
+
+    adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
+    adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
+
+    if join_type == "inner":
+        expected = ak.Array(
+            [
+                [{"a": 1}],
+                [{"a": 2}, {"a": 3}],
+                [{"a": 4}, {"a": 5}],
+                [{"a": 6}],
+                [{"a": 7}],
+            ]
+        )
+    elif join_type == "outer":
+        # TODO: This is what we would like to return, but waiting on:
+        # * https://github.com/scikit-hep/awkward/issues/2182 and awkward 2.1.0
+        # * https://github.com/scikit-hep/awkward/issues/2173
+        # expected = ak.Array(
+        #     [
+        #         [{"a": 1, "b": "foo"}],
+        #         [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+        #         [{"a": 4, "b": None}, {"a": 5, "b": None}],
+        #         [{"a": 6, "b": None}],
+        #         [{"a": 7, "b": None}],
+        #     ]
+        # )
+        expected = ak.concatenate(
+            [  # I don't think I can construct a UnionArray directly
+                ak.Array(
+                    [
+                        [{"a": 1, "b": "foo"}],
+                        [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+                    ]
+                ),
+                ak.Array(
+                    [
+                        [{"a": 4}, {"a": 5}],
+                        [{"a": 6}],
+                        [{"a": 7}],
+                    ]
+                ),
+            ]
+        )
+
+    result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
+
+    assert_equal(expected, result)
+
+
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]}, index=list("cde")),
+        np.ones((3, 2)),
+        sparse.random(3, 100, format="csr"),
+    ],
+)
+def test_awkward_does_not_mix(join_type, other):
+    import awkward as ak
+
+    awk = ak.Array(
+        [[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]]
+    )
+
+    adata_a = AnnData(
+        np.zeros((2, 3), dtype=float),
+        obs=pd.DataFrame(index=list("ab")),
+        obsm={"val": awk},
+    )
+    adata_b = AnnData(
+        np.zeros((3, 3), dtype=float),
+        obs=pd.DataFrame(index=list("cde")),
+        obsm={"val": other},
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Cannot concatenate an AwkwardArray with other array types",
+    ):
+        concat([adata_a, adata_b], join=join_type)
 
 
 def test_pairwise_concat(axis, array_type):
@@ -971,16 +1086,14 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     print(merge_strategy, "\n", unss, "\n", result)
     result, *unss = permute_nested_values([result] + unss, value_gen)
     adatas = [uns_ad(uns) for uns in unss]
-    assert_equal(
-        adatas[0].concatenate(adatas[1:], uns_merge=merge_strategy).uns,
-        result,
-        elem_name="uns",
-    )
+    with pytest.warns(FutureWarning, match=r"concatenate method is deprecated"):
+        merged = AnnData.concatenate(*adatas, uns_merge=merge_strategy).uns
+    assert_equal(merged, result, elem_name="uns")
 
 
 def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
-    lhs = gen_adata((10, 10), X_type=array_type)
-    rhs = gen_adata((10, 12), X_type=array_type)
+    lhs = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    rhs = gen_adata((10, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
 
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
     b = concat(
@@ -990,14 +1103,14 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
     assert_equal(a, b)
 
 
-def test_batch_key(axis):
+def test_batch_key(axis, array_type):
     """Test that concat only adds a label if the key is provided"""
 
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
 
-    lhs = gen_adata((10, 10))
-    rhs = gen_adata((10, 12))
+    lhs = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
+    rhs = gen_adata((10, 12), **GEN_ADATA_DASK_ARGS)
 
     # There is probably a prettier way to do this
     annot = get_annot(concat([lhs, rhs], axis=axis))
@@ -1143,6 +1256,23 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     alt_axis = 1 - axis
     dim = ("obs", "var")[axis]
 
+    # TODO: Remove, see: https://github.com/scverse/anndata/issues/905
+    import awkward as ak
+
+    if (
+        (join_type == "inner")
+        and (merge_strategy in ("same", "unique"))
+        and ((axis, shape.index(0)) in [(0, 1), (1, 0)])
+        and ak.__version__ == "2.0.7"  # indicates if a release has happened
+    ):
+        aligned_mapping = (b.obsm, b.varm)[1 - axis]
+        to_remove = []
+        for k, v in aligned_mapping.items():
+            if isinstance(v, ak.Array):
+                to_remove.append(k)
+        for k in to_remove:
+            aligned_mapping.pop(k)
+
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
         {"a": a, "b": b},
@@ -1188,10 +1318,10 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
                     )
 
 
-@pytest.mark.parametrize("elem", ["sparse", "array", "df"])
+@pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
 def test_concat_outer_aligned_mapping(elem):
-    a = gen_adata((5, 5))
-    b = gen_adata((3, 5))
+    a = gen_adata((5, 5), **GEN_ADATA_DASK_ARGS)
+    b = gen_adata((3, 5), **GEN_ADATA_DASK_ARGS)
     del b.obsm[elem]
 
     concated = concat({"a": a, "b": b}, join="outer", label="group")
@@ -1228,11 +1358,9 @@ def test_concat_null_X():
 
 # https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
 def test_concat_X_dtype():
-    adatas_orig = {
-        k: AnnData(np.ones((20, 10), dtype=np.int8), dtype=np.int8) for k in list("abc")
-    }
+    adatas_orig = {k: AnnData(np.ones((20, 10), dtype=np.int8)) for k in list("abc")}
     for adata in adatas_orig.values():
-        adata.raw = AnnData(np.ones((20, 30), dtype=np.float64), dtype=np.float64)
+        adata.raw = AnnData(np.ones((20, 30), dtype=np.float64))
 
     result = concat(adatas_orig, index_unique="-")
 
@@ -1244,3 +1372,43 @@ def test_concat_X_dtype():
 # def test_concatenate_uns_types():
 #     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE
 #     assert set(UNS_STRATEGIES.keys()) == set(UNS_STRATEGIES_TYPE.__args__)
+
+
+# Tests how dask plays with other types on concatenation.
+def test_concat_different_types_dask(merge_strategy, array_type):
+    from scipy import sparse
+    import anndata as ad
+    import dask.array as da
+
+    varm_array = sparse.random(5, 20, density=0.5, format="csr")
+
+    ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array})
+    ad1_other = ad.AnnData(X=np.ones((5, 5)), varm={"a": array_type(varm_array)})
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)})
+
+    result1 = ad.concat([ad1, ad2], merge=merge_strategy)
+    target1 = ad.concat([ad1_other, ad2], merge=merge_strategy)
+    result2 = ad.concat([ad2, ad1], merge=merge_strategy)
+    target2 = ad.concat([ad2, ad1_other], merge=merge_strategy)
+
+    assert_equal(result1, target1)
+    assert_equal(result2, target2)
+
+
+def test_outer_concat_with_missing_value_for_df():
+    # https://github.com/scverse/anndata/issues/901
+    # TODO: Extend this test to cover all cases of missing values
+    # TODO: Check values
+    a_idx = ["a", "b", "c", "d", "e"]
+    b_idx = ["f", "g", "h", "i", "j", "k", "l", "m"]
+    a = AnnData(
+        np.ones((5, 5)),
+        obs=pd.DataFrame(index=a_idx),
+    )
+    b = AnnData(
+        np.zeros((8, 9)),
+        obs=pd.DataFrame(index=b_idx),
+        obsm={"df": pd.DataFrame({"col": np.arange(8)}, index=b_idx)},
+    )
+
+    concat([a, b], join="outer")
