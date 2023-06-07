@@ -78,6 +78,7 @@ def as_dense(request):
 # The test functions
 # -------------------------------------------------------------------------------
 
+
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     base_pth = Path(tmp_path)
@@ -207,7 +208,7 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     # Value equivalent
     assert_equal(mem_v, backed_v)
     # Type and value equivalent
-    assert_equal(mem_v.copy(), backed_v.to_memory(), exact=True)
+    assert_equal(mem_v.copy(), backed_v.to_memory(copy=True), exact=True)
     assert backed_v.is_view
     assert backed_v.isbacked
 

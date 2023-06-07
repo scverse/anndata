@@ -6,8 +6,12 @@ import h5py
 import pandas as pd
 
 import anndata as ad
+from anndata._io.specs.registry import IORegistryError
 from anndata.compat import _clean_uns
-from anndata._io.utils import report_read_key_on_error, AnnDataReadError
+from anndata._io.utils import (
+    report_read_key_on_error,
+    AnnDataReadError,
+)
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -46,20 +50,22 @@ def test_write_error_info(diskfmt, tmp_path):
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
-    with pytest.raises(Exception, match=r"Above error raised while writing key 'c'"):
+    with pytest.raises(
+        IORegistryError, match=r"Above error raised while writing key 'c'"
+    ):
         write(a)
 
 
 def test_clean_uns():
-    d = dict(
+    adata = ad.AnnData(
         uns=dict(species_categories=["a", "b"]),
-        obs=dict(species=pd.Series([0, 1, 0])),
-        var=dict(species=pd.Series([0, 1, 0, 2])),
+        obs=pd.DataFrame({"species": [0, 1, 0]}, index=["a", "b", "c"]),
+        var=pd.DataFrame({"species": [0, 1, 0, 2]}, index=["a", "b", "c", "d"]),
     )
-    _clean_uns(d)
-    assert "species_categories" not in d["uns"]
-    assert isinstance(d["obs"]["species"], pd.Categorical)
-    assert d["obs"]["species"].tolist() == ["a", "b", "a"]
+    _clean_uns(adata)
+    assert "species_categories" not in adata.uns
+    assert pd.api.types.is_categorical_dtype(adata.obs["species"])
+    assert adata.obs["species"].tolist() == ["a", "b", "a"]
     # var’s categories were overwritten by obs’s,
     # which we can detect here because var has too high codes
-    assert isinstance(d["var"]["species"], pd.Series)
+    assert pd.api.types.is_integer_dtype(adata.var["species"])

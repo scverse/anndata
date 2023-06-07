@@ -18,7 +18,7 @@ from typing import (
     Literal,
 )
 import typing
-from warnings import warn
+from warnings import warn, filterwarnings
 
 from natsort import natsorted
 import numpy as np
@@ -27,9 +27,10 @@ from scipy import sparse
 from scipy.sparse import spmatrix
 
 from .anndata import AnnData
-from ..utils import asarray
-from ..compat import DaskArray
+from ..compat import AwkArray, DaskArray
+from ..utils import asarray, dim_len
 from .index import _subset, make_slice
+from anndata._warnings import ExperimentalFeatureWarning
 
 T = TypeVar("T")
 
@@ -152,6 +153,13 @@ def equal_sparse(a, b) -> bool:
         # fmt: on
     else:
         return False
+
+
+@equal.register(AwkArray)
+def equal_awkward(a, b) -> bool:
+    from ..compat import awkward as ak
+
+    return ak.almost_equal(a, b)
 
 
 def as_sparse(x):
@@ -327,7 +335,7 @@ def resolve_merge_strategy(
 #####################
 
 
-class Reindexer(object):
+class Reindexer:
     """
     Indexing to be applied to axis of 2d array orthogonal to the axis being concatenated.
 
@@ -366,12 +374,14 @@ class Reindexer(object):
 
         Missing values are to be replaced with `fill_value`.
         """
-        if self.no_change and (el.shape[axis] == len(self.old_idx)):
+        if self.no_change and (dim_len(el, axis) == len(self.old_idx)):
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, sparse.spmatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, AwkArray):
+            return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, DaskArray):
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         else:
@@ -468,6 +478,22 @@ class Reindexer(object):
 
         return out
 
+    def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
+        import awkward as ak
+
+        if self.no_change:
+            return el
+        elif axis == 1:  # Indexing by field
+            if self.new_idx.isin(self.old_idx).all():  # inner join
+                return el[self.new_idx]
+            else:  # outer join
+                # TODO: this code isn't actually hit, we should refactor
+                raise Exception("This should be unreachable, please open an issue.")
+        else:
+            if len(self.new_idx) > len(self.old_idx):
+                el = ak.pad_none(el, 1, axis=axis)  # axis == 0
+            return el[self.old_idx.get_indexer(self.new_idx)]
+
 
 def merge_indices(
     inds: Iterable[pd.Index], join: Literal["inner", "outer"]
@@ -534,6 +560,17 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
         df.index = index
         return df
+    elif any(isinstance(a, AwkArray) for a in arrays):
+        from ..compat import awkward as ak
+
+        if not all(
+            isinstance(a, AwkArray) or a is MissingVal or 0 in a.shape for a in arrays
+        ):
+            raise NotImplementedError(
+                "Cannot concatenate an AwkwardArray with other array types."
+            )
+
+        return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)], axis=axis)
     elif any(isinstance(a, sparse.spmatrix) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
@@ -579,6 +616,15 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
             lambda x, y: x.intersection(y), (df_indices(el) for el in els)
         )
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
+    elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
+        if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+            raise NotImplementedError(
+                "Cannot concatenate an AwkwardArray with other array types."
+            )
+        common_keys = intersect_keys(el.fields for el in els)
+        reindexers = [
+            Reindexer(pd.Index(el.fields), pd.Index(list(common_keys))) for el in els
+        ]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
         reindexers = [
@@ -593,13 +639,41 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         reindexers = [
             (lambda x: x)
             if not_missing(el)
-            else (lambda x: pd.DataFrame(index=range(shape)))
+            else (lambda _, shape=shape: pd.DataFrame(index=range(shape)))
             for el, shape in zip(els, shapes)
         ]
-    else:
-        # if fill_value is None:
-        # fill_value = default_fill_value(els)
+    elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
+        import awkward as ak
 
+        if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
+            raise NotImplementedError(
+                "Cannot concatenate an AwkwardArray with other array types."
+            )
+        warn(
+            "Outer joins on awkward.Arrays will have different return values in the future."
+            "For details, and to offer input, please see:\n\n\t"
+            "https://github.com/scverse/anndata/issues/898",
+            ExperimentalFeatureWarning,
+        )
+        filterwarnings(
+            "ignore",
+            category=ExperimentalFeatureWarning,
+            message=r"Outer joins on awkward.Arrays will have different return values.*",
+        )
+        # all_keys = union_keys(el.fields for el in els if not_missing(el))
+        reindexers = []
+        for el in els:
+            if not_missing(el):
+                reindexers.append(lambda x: x)
+            else:
+                reindexers.append(
+                    lambda x: ak.pad_none(
+                        ak.Array([]),
+                        len(x),
+                        0,
+                    )
+                )
+    else:
         max_col = max(el.shape[1] for el in els if not_missing(el))
         orig_cols = [el.shape[1] if not_missing(el) else 0 for el in els]
         reindexers = [
@@ -718,7 +792,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
     elif any(X is None for X in Xs):
         raise NotImplementedError(
             "Some (but not all) of the AnnData's to be concatenated had no .X value. "
-            "Concatenation is currently only implmented for cases where all or none of"
+            "Concatenation is currently only implemented for cases where all or none of"
             " the AnnData's have .X assigned."
         )
     else:
@@ -741,12 +815,6 @@ def concat(
     """Concatenates AnnData objects along an axis.
 
     See the :doc:`concatenation <../concatenation>` section in the docs for a more in-depth description.
-
-    .. warning::
-
-        This function is marked as experimental for the `0.7` release series, and will
-        supercede the :meth:`AnnData.concatenate() <anndata.AnnData.concatenate>` method
-        in future releases.
 
     Params
     ------

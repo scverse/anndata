@@ -19,6 +19,7 @@ from ..compat import (
     _decode_structured_array,
     _clean_uns,
 )
+from ..experimental import read_dispatched
 from .utils import (
     H5PY_V3,
     report_read_key_on_error,
@@ -40,6 +41,8 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
+    from anndata.experimental import write_dispatched
+
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -60,8 +63,11 @@ def write_h5ad(
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
+
     with h5py.File(filepath, mode) as f:
         # TODO: Use spec writing system for this
+        # Currently can't use write_dispatched here because this function is also called to do an
+        # inplace update of a backed object, which would delete "/"
         f = f["/"]
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
@@ -135,11 +141,13 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
 
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
+    adata = AnnData(**d)
+
     # Backwards compat to <0.7
     if isinstance(f["obs"], h5py.Dataset):
-        _clean_uns(d)
+        _clean_uns(adata)
 
-    return AnnData(**d)
+    return adata
 
 
 def read_h5ad(
@@ -209,28 +217,42 @@ def read_h5ad(
     )
 
     with h5py.File(filename, "r") as f:
-        d = {}
-        for k in f.keys():
-            # Backwards compat for old raw
-            if k == "raw" or k.startswith("raw."):
-                continue
-            if k == "X" and "X" in as_sparse:
-                d[k] = rdasp(f[k])
-            elif k == "raw":
-                assert False, "unexpected raw format"
-            elif k in {"obs", "var"}:
-                # Backwards compat
-                d[k] = read_dataframe(f[k])
-            else:  # Base case
-                d[k] = read_elem(f[k])
 
-        d["raw"] = _read_raw(f, as_sparse, rdasp)
+        def callback(func, elem_name: str, elem, iospec):
+            if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+                return AnnData(
+                    **{
+                        # This is covering up backwards compat in the anndata initializer
+                        # In most cases we should be able to call `func(elen[k])` instead
+                        k: read_dispatched(elem[k], callback)
+                        for k in elem.keys()
+                        if not k.startswith("raw.")
+                    }
+                )
+            elif elem_name.startswith("/raw."):
+                return None
+            elif elem_name == "/X" and "X" in as_sparse:
+                return rdasp(elem)
+            elif elem_name == "/raw":
+                return _read_raw(f, as_sparse, rdasp)
+            elif elem_name in {"/obs", "/var"}:
+                # Backwards compat
+                return read_dataframe(elem)
+            return func(elem)
+
+        adata = read_dispatched(f, callback=callback)
+
+        # Backwards compat (should figure out which version)
+        if "raw.X" in f:
+            raw = AnnData(**_read_raw(f, as_sparse, rdasp))
+            raw.obs_names = adata.obs_names
+            adata.raw = raw
 
         # Backwards compat to <0.7
         if isinstance(f["obs"], h5py.Dataset):
-            _clean_uns(d)
+            _clean_uns(adata)
 
-    return AnnData(**d)
+    return adata
 
 
 def _read_raw(
@@ -239,7 +261,7 @@ def _read_raw(
     rdasp: Callable[[h5py.Dataset], sparse.spmatrix] = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
-):
+) -> dict:
     if as_sparse:
         assert rdasp is not None, "must supply rdasp if as_sparse is supplied"
     raw = {}
