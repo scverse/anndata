@@ -9,6 +9,7 @@ __pycache__/
 /build/
 /dist/
 /*.egg-info/
+/requirements*.lock
 
 # Tests and coverage
 /.pytest_cache/
