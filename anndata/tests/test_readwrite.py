@@ -808,13 +808,23 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     assert_equal(orig, curr)
 
 
-def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip):
+@pytest.mark.parametrize(
+    "uns_val",
+    [
+        pytest.param(dict(base=None), id="dict_val"),
+        pytest.param(pd.DataFrame(dict(col_0=["string", None])), id="df"),
+    ],
+)
+def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
     pth = tmp_path / f"adata_dtype.{diskfmt}"
 
-    orig = ad.AnnData(np.ones((3, 4)), uns=dict(log1p=dict(base=None)))
+    orig = ad.AnnData(np.ones((3, 4)), uns=dict(val=uns_val))
     curr = roundtrip(orig, pth)
 
-    assert curr.uns["log1p"] == orig.uns["log1p"]
+    if isinstance(orig.uns["val"], pd.DataFrame):
+        pd.testing.assert_frame_equal(curr.uns["val"], orig.uns["val"])
+    else:
+        assert curr.uns["val"] == orig.uns["val"]
 
 
 def test_io_dtype(tmp_path, diskfmt, roundtrip, dtype):
