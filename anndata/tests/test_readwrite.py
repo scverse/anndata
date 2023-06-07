@@ -716,15 +716,24 @@ def test_zarr_chunk_X(tmp_path):
 # Round-tripping scanpy datasets
 ################################
 
+
+@pytest.fixture
+def roundtrip(diskfmt):
+    def roundtrip(adata: ad.AnnData, pth: Path):
+        getattr(adata, f"write_{diskfmt}")(pth)
+        return getattr(ad, f"read_{diskfmt}")(pth)
+
+    return roundtrip
+
+
 diskfmt2 = diskfmt
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
-    read1 = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
-    write1 = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
-    read2 = lambda pth: getattr(ad, f"read_{diskfmt2}")(pth)
-    write2 = lambda adata, pth: getattr(adata, f"write_{diskfmt2}")(pth)
+def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
+    def roundtrip2(adata, pth):
+        getattr(adata, f"write_{diskfmt2}")(pth)
+        return getattr(ad, f"read_{diskfmt2}")(pth)
 
     filepth1 = tmp_path / f"test1.{diskfmt}"
     filepth2 = tmp_path / f"test2.{diskfmt2}"
@@ -735,26 +744,23 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
         warnings.simplefilter("ignore", ad.OldFormatWarning)
         pbmc = sc.datasets.pbmc68k_reduced()
 
-    write1(pbmc, filepth1)
-    from_disk1 = read1(filepth1)  # Do we read okay
-    write2(from_disk1, filepth2)  # Can we round trip
-    from_disk2 = read2(filepth2)
+    from_disk1 = roundtrip(pbmc, filepth1)  # Do we read okay
+    from_disk2 = roundtrip2(from_disk1, filepth2)  # Can we round trip
 
     assert_equal(pbmc, from_disk1)  # Not expected to be exact due to `nan`s
     assert_equal(pbmc, from_disk2)
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_krumsiek11(tmp_path, diskfmt):
+def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
     filepth = tmp_path / f"test.{diskfmt}"
     import scanpy as sc
 
     orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
-    getattr(orig, f"write_{diskfmt}")(filepth)
-    read = getattr(ad, f"read_{diskfmt}")(filepth)
+    curr = roundtrip(orig, filepth)
 
-    assert_equal(orig, read, exact=True)
+    assert_equal(orig, curr, exact=True)
 
 
 # Checking if we can read legacy zarr files
@@ -785,11 +791,8 @@ def test_backwards_compat_zarr():
     assert_equal(pbmc_zarr, pbmc_orig)
 
 
-# TODO: use diskfmt fixture once zarr backend implemented
-def test_adata_in_uns(tmp_path, diskfmt):
+def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     pth = tmp_path / f"adatas_in_uns.{diskfmt}"
-    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
-    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
 
     orig = gen_adata((4, 5))
     orig.uns["adatas"] = {
@@ -800,19 +803,24 @@ def test_adata_in_uns(tmp_path, diskfmt):
     another_one.raw = gen_adata((2, 7))
     orig.uns["adatas"]["b"].uns["another_one"] = another_one
 
-    write(orig, pth)
-    curr = read(pth)
+    curr = roundtrip(orig, pth)
 
     assert_equal(orig, curr)
 
 
-def test_io_dtype(tmp_path, diskfmt, dtype):
+def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip):
     pth = tmp_path / f"adata_dtype.{diskfmt}"
-    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
-    write = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
+
+    orig = ad.AnnData(np.ones((3, 4)), uns=dict(log1p=dict(base=None)))
+    curr = roundtrip(orig, pth)
+
+    assert curr.uns['log1p'] == orig.uns['log1p']
+
+
+def test_io_dtype(tmp_path, diskfmt, roundtrip, dtype):
+    pth = tmp_path / f"adata_dtype.{diskfmt}"
 
     orig = ad.AnnData(np.ones((5, 8), dtype=dtype))
-    write(orig, pth)
-    curr = read(pth)
+    curr = roundtrip(orig, pth)
 
     assert curr.X.dtype == dtype
