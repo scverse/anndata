@@ -812,7 +812,13 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     "uns_val",
     [
         pytest.param(dict(base=None), id="dict_val"),
-        # pytest.param(pd.DataFrame(dict(col_0=["string", None])), id="df"),
+        pytest.param(
+            pd.DataFrame(dict(col_0=["string", None])),
+            id="df",
+            marks=pytest.mark.xfail(
+                reason="Nullable string arrays not yet implemented"
+            ),
+        ),
     ],
 )
 def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
