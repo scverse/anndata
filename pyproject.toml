@@ -6,7 +6,7 @@ requires = ["hatchling", "hatch-vcs"]
 name = "anndata"
 description = "Annotated data."
 requires-python = ">=3.8"
-license = {file = "LICENSE"}
+license = "BSD"
 authors = [
     {name = "Philipp Angerer"},
     {name = "Alex Wolf"},
@@ -18,9 +18,8 @@ maintainers = [
     {name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de"},
     {name = "Alex Wolf", email = "f.alex.wolf@gmx.de"},
 ]
-readme = {file = "README.md", content-type="text/markdown"}
+readme = "README.md"
 classifiers = [
-    "License :: OSI Approved :: BSD License",
     "Environment :: Console",
     "Framework :: Jupyter",
     "Intended Audience :: Developers",
