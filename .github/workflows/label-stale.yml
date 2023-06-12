@@ -18,4 +18,4 @@ jobs:
           stale-issue-message: |
             This issue has been automatically marked as stale because it has not had recent activity.
             Please add a comment if you want to keep the issue open. Thank you for your contributions!
-          debug-only: true # enable dry-run, remove when we know from the logs it's working.
+          debug-only: false # set to `true` to enable dry-run
