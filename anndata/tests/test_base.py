@@ -99,7 +99,7 @@ def test_matching_int_index():
     ad = AnnData(
         pd.DataFrame(dict(a=[0.0, 0.5]), index=[0, 1]), obs=pd.DataFrame(index=[0, 1])
     )
-    assert not isinstance(ad.index, pd.RangeIndex)
+    pd.testing.assert_index_equal(ad.obs_names, pd.Index(["0", "1"]))
 
 
 def test_from_df_and_dict():
