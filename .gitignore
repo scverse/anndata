@@ -10,6 +10,7 @@ __pycache__/
 /dist/
 /*.egg-info/
 /requirements*.lock
+/.python-version
 
 # Tests and coverage
 /.pytest_cache/
