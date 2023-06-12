@@ -6,7 +6,7 @@ requires = ["hatchling", "hatch-vcs"]
 name = "anndata"
 description = "Annotated data."
 requires-python = ">=3.8"
-license = "BSD"
+license = "BSD-3-Clause"
 authors = [
     {name = "Philipp Angerer"},
     {name = "Alex Wolf"},
