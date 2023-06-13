@@ -10,6 +10,7 @@ __pycache__/
 /dist/
 /*.egg-info/
 /requirements*.lock
+/.python-version
 
 # Tests and coverage
 /.pytest_cache/
@@ -35,3 +36,4 @@ test.zarr
 # Benchmark
 .asv
 benchmark/benchmarks/data
+benchmarks/benchmarks/data
