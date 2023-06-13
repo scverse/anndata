@@ -1284,23 +1284,6 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     alt_axis = 1 - axis
     dim = ("obs", "var")[axis]
 
-    # TODO: Remove, see: https://github.com/scverse/anndata/issues/905
-    import awkward as ak
-
-    if (
-        (join_type == "inner")
-        and (merge_strategy in ("same", "unique"))
-        and ((axis, shape.index(0)) in [(0, 1), (1, 0)])
-        and ak.__version__ == "2.0.7"  # indicates if a release has happened
-    ):
-        aligned_mapping = (b.obsm, b.varm)[1 - axis]
-        to_remove = []
-        for k, v in aligned_mapping.items():
-            if isinstance(v, ak.Array):
-                to_remove.append(k)
-        for k in to_remove:
-            aligned_mapping.pop(k)
-
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
         {"a": a, "b": b},
