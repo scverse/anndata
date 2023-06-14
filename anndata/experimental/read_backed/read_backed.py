@@ -361,6 +361,16 @@ class AnnDataBacked(AbstractAnnData):
 
 
 def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
+    """Lazily read in on-disk/in-cloud AnnData stores.  A new, but familiar, AnnData object will be returned.
+    No array data should need to be read into memory, with exception of non-obs/var dataframes and Awkward Arrays.
+
+    Args:
+        store (Union[str, Path, MutableMapping, zarr.Group]): A store-like object to be read in.  If `zarr`, it is best
+        for it to be consolidated.
+
+    Returns:
+        AnnData: A lazily read-in AnnData object.
+    """
     if isinstance(store, Path):
         store = str(store)
 

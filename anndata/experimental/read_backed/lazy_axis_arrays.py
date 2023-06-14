@@ -18,8 +18,16 @@ class AxisArraysRemote(AxisArrays):
         return list(self.keys())
 
 
-def to_df_1d_axis_arrays(axis_arrays: AxisArrays, exclude=[]):
-    """Convert to pandas dataframe."""
+def to_df_1d_axis_arrays(axis_arrays: AxisArrays, exclude=[]) -> pd.DataFrame:
+    """Convert a axis array to dataframe in mememort
+
+    Args:
+        axis_arrays (AxisArrays): AxisArrays to be converted
+        exclude (list, optional): Keys to exclude from being loaded into the DataFrame/Memory. Defaults to [].
+
+    Returns:
+        pd.DataFrame: Potential subset of `axis_arrays` in memory
+    """
     df = pd.DataFrame(index=axis_arrays.dim_names[...])
     for key in axis_arrays.keys():
         full_key = axis_arrays.attrname + "/" + key
@@ -32,6 +40,14 @@ def to_df_1d_axis_arrays(axis_arrays: AxisArrays, exclude=[]):
 
 class AxisArraysRemote1dMixin:
     def to_df(self, exclude=[]) -> pd.DataFrame:
+        """Convert to a DataFrame
+
+        Args:
+             exclude (list, optional): Keys to exclude from being loaded into the DataFrame/Memory. Defaults to [].
+
+        Returns:
+            pd.DataFrame: Potential subset of `axis_arrays` in memory
+        """
         return to_df_1d_axis_arrays(self, exclude)
 
     @property

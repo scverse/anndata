@@ -8,7 +8,15 @@ from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin
 
 
 class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
-    def _resolve_idx(self, new_idx):
+    def _resolve_idx(self, new_idx: Index) -> Index:
+        """Wrapper for resolving the idx against (potentially) already existing `self.subset_idx`
+
+        Args:
+            new_idx (Index): new indices
+
+        Returns:
+            Index: The resolved idx, an intersection of new_idx and `self.subset_idx`
+        """
         return (
             new_idx
             if self.subset_idx is None
@@ -16,7 +24,12 @@ class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
         )
 
     @property
-    def subset_idx(self):
+    def subset_idx(self) -> Index:
+        """A local
+
+        Returns:
+            Index: The indices for this array
+        """
         return self._subset_idx
 
     @subset_idx.setter
@@ -25,6 +38,11 @@ class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
 
     @property
     def shape(self) -> Tuple[int, ...]:
+        """Shape of this array
+
+        Returns:
+            Tuple[int, ...]: A shape that looks like a 1-d shape i.e., (#, )
+        """
         if self.subset_idx is None:
             return self.values.shape
         if isinstance(self.subset_idx, slice):
@@ -55,7 +73,9 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         """Class for lazily reading categorical data from formatted zarr group
 
         Args:
-            group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
+            codes (zarr.Array): values (integers) of the array, one for each element
+            categories (zarr.Array): mappings from values to strings
+            attrs (zarr.Array): attrs containing boolean "ordered"
         """
         self.values = codes
         self._categories = categories
@@ -91,7 +111,12 @@ class LazyCategoricalArray(MaskedArrayMixIn):
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
 
-    def copy(self):
+    def copy(self) -> "LazyCategoricalArray":
+        """Returns a copy of this array which can then be safely edited
+
+        Returns:
+            LazyCategoricalArray: copied LazyCategoricalArray
+        """
         arr = LazyCategoricalArray(
             self.values, self._categories, self.attrs
         )  # self.categories reads in data
@@ -106,7 +131,8 @@ class LazyMaskedArray(MaskedArrayMixIn):
         """Class for lazily reading categorical data from formatted zarr group
 
         Args:
-            group (zarr.Group): group containing "codes" and "categories" key as well as "ordered" attr
+            values (zarr.Array): Integer/Boolean array of values
+            mask (zarr.Array): mask indicating which values are non-null
             dtype_str (Nullable): one of `nullable-integer` or `nullable-boolean`
         """
         self.values = values
@@ -142,7 +168,12 @@ class LazyMaskedArray(MaskedArrayMixIn):
         elif self._dtype_str == "nullable-boolean":
             return "LazyNullableBooleanArray"
 
-    def copy(self):
+    def copy(self) -> "LazyMaskedArray":
+        """Returns a copy of this array which can then be safely edited
+
+        Returns:
+            LazyMaskedArray: copied LazyMaskedArray
+        """
         arr = LazyMaskedArray(self.values, self.mask, self._dtype_str)
         arr.subset_idx = self.subset_idx
         return arr
