@@ -8,6 +8,7 @@ from typing import (
     Tuple,
 )
 
+import h5py
 from anndata._core.aligned_mapping import (
     Layers,
     PairwiseArrays,
@@ -18,6 +19,7 @@ from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from anndata._core.views import _resolve_idxs
+from anndata._io.h5ad import read_dataset
 from anndata.compat import DaskArray
 from anndata.utils import asarray, convert_to_dict
 
@@ -360,33 +362,39 @@ class AnnDataBacked(AbstractAnnData):
         return descr
 
 
-def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
+def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset]) -> AnnData:
     """Lazily read in on-disk/in-cloud AnnData stores.  A new, but familiar, AnnData object will be returned.
     No array data should need to be read into memory, with exception of non-obs/var dataframes and Awkward Arrays.
 
     Args:
-        store (Union[str, Path, MutableMapping, zarr.Group]): A store-like object to be read in.  If `zarr`, it is best
+        store (Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset]): A store-like object to be read in.  If `zarr`, it is best
         for it to be consolidated.
 
     Returns:
         AnnData: A lazily read-in AnnData object.
     """
-    if isinstance(store, Path):
+    is_h5 = False
+    if isinstance(store, Path) or isinstance(store, str):
         store = str(store)
+        if store.endswith('h5ad'):
+            is_h5 = True
 
-    is_consolidated = True
-    try:
-        f = zarr.open_consolidated(store, mode="r")
-    except KeyError:
-        is_consolidated = False
-        f = zarr.open(store, mode="r")
+    has_keys = True # true if consolidated or h5ad
+    if not is_h5:
+        try:
+            f = zarr.open_consolidated(store, mode="r")
+        except KeyError:
+            has_keys = False
+            f = zarr.open(store, mode="r")
+    else:
+         f = h5py.File(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             cols = ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "X", "raw"]
             iter_object = (
                 elem.items()
-                if is_consolidated
+                if has_keys
                 else [(k, elem[k]) for k in cols if k in elem]
             )
             return AnnDataBacked(
@@ -408,6 +416,12 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
                 iospec.encoding_type,
             )
         elif iospec.encoding_type in {"array", "string-array"}:
+            if is_h5:
+                if iospec.encoding_type == "string-array":
+                    elem = read_dataset(elem)
+                if not hasattr(elem, "chunks") or elem.chunks is None:
+                    return da.from_array(elem, chunks=(1000,) * len(elem.shape))
+                return da.from_array(elem)
             return da.from_zarr(elem)
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
             return sparse_dataset(elem)
