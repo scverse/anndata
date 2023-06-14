@@ -54,6 +54,9 @@ def mtx_format(request):
 def sparse_format(request):
     return request.param
 
+@pytest.fixture(params=["zarr", "h5ad"])
+def dskfmt(request):
+    return request.param
 
 @pytest.fixture()
 def categorical_lazy_arr(tmp_path_factory):
@@ -274,11 +277,12 @@ def test_access_count_obsp_varp(tmp_path, mtx_format):
     assert store.get_access_count("varp") == 0
 
 
-def test_read_full(tmp_path, mtx_format):
+def test_read_full(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.zarr"
-    adata.write_zarr(orig_pth)
+    orig_pth = base_pth / f"orig.{dskfmt}"
+    write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
+    write(adata)
     remote = read_backed(orig_pth)
     if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
         assert np.all(asarray(adata.X) == asarray(remote.X.to_memory()))
@@ -289,21 +293,23 @@ def test_read_full(tmp_path, mtx_format):
     assert (adata.obsm["array"] == remote.obsm["array"].compute()).all()
 
 
-def test_to_memory(tmp_path, mtx_format):
+def test_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.zarr"
-    adata.write_zarr(orig_pth)
+    orig_pth = base_pth / f"orig.{dskfmt}"
+    write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
+    write(adata)
     remote = read_backed(orig_pth)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
 
 
-def test_read_view(tmp_path, mtx_format):
+def test_read_view(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.zarr"
-    adata.write_zarr(orig_pth)
+    orig_pth = base_pth / f"orig.{dskfmt}"
+    write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
+    write(adata)
     remote = read_backed(orig_pth)
     subset = adata.obs["obs_cat"] == "a"
     if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
@@ -329,11 +335,12 @@ def test_read_view(tmp_path, mtx_format):
     ).all()
 
 
-def test_read_view_of_view(tmp_path, mtx_format):
+def test_read_view_of_view(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.zarr"
-    adata.write_zarr(orig_pth)
+    orig_pth = base_pth / f"orig.{dskfmt}"
+    write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
+    write(adata)
     remote = read_backed(orig_pth)
     subset = (adata.obs["obs_cat"] == "a") | (adata.obs["obs_cat"] == "b")
     subsetted_adata = adata[subset, :]
