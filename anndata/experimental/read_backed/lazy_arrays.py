@@ -1,6 +1,8 @@
 from typing import Tuple
 from anndata._core.index import Index, _subset
 from anndata._core.views import _resolve_idx, as_view
+from anndata._io.h5ad import read_dataset
+from anndata.compat import ZarrArray
 
 import pandas as pd
 import numpy as np
@@ -66,7 +68,10 @@ class LazyCategoricalArray(MaskedArrayMixIn):
     @property
     def categories(self):  # __slots__ and cached_property are incompatible
         if self._categories_cache is None:
-            self._categories_cache = self._categories[...]
+            if isinstance(self._categories, ZarrArray):
+                self._categories_cache = self._categories[...]
+            else:
+                self._categories_cache = read_dataset(self._categories)
         return self._categories_cache
 
     @property
@@ -79,7 +84,10 @@ class LazyCategoricalArray(MaskedArrayMixIn):
 
     def __getitem__(self, selection) -> pd.Categorical:
         idx = self._resolve_idx(selection)
-        codes = self.values.oindex[idx]
+        if isinstance(self.values, ZarrArray):
+            codes = self.values.oindex[idx]
+        else:
+            codes = self.values[idx]
         if codes.shape == ():  # handle 0d case
             codes = np.array([codes])
         return pd.Categorical.from_codes(

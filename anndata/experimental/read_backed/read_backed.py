@@ -19,6 +19,7 @@ from anndata._core.index import Index, _normalize_indices, _subset
 from anndata._core.raw import Raw
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from anndata._core.views import _resolve_idxs
+from anndata._io.h5ad import read_dataset
 from anndata.compat import DaskArray
 from anndata.utils import asarray, convert_to_dict
 
@@ -403,7 +404,9 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
             )
         elif iospec.encoding_type in {"array", "string-array"}:
             if is_h5:
-                if elem.chunks is None:
+                if iospec.encoding_type == "string-array":
+                    elem = read_dataset(elem)
+                if not hasattr(elem, "chunks") or elem.chunks is None:
                     return da.from_array(elem, chunks=(1000,) * len(elem.shape))
                 return da.from_array(elem)
             return da.from_zarr(elem)
