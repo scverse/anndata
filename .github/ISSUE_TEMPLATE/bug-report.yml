@@ -19,12 +19,29 @@ body:
 - type: markdown
   attributes:
     value: |
-      **Note**: Please read [this guide](https://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports) detailing how to provide the necessary information for us to reproduce your bug.
+      **Note**: Please read [this guide][] detailing how to provide the necessary information for us to reproduce your bug.
+
+      [this guide]: https://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports
 - type: textarea
   id: Report
   attributes:
     label: Report
-    description: Describe the bug you encountered, and what you were trying to do. Please use [github markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax) features for readability.
+    description: |
+      Describe the bug you encountered, and what you were trying to do. Please use [github markdown][] features for readability.
+
+      [github markdown]: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax
+    value: |
+      Code:
+
+      ```python
+
+      ```
+
+      Traceback:
+
+      ```pytb
+
+      ```
   validations:
     required: true
 - type: textarea
