@@ -54,6 +54,8 @@ Home-page = "https://github.com/scverse/anndata"
 
 [project.optional-dependencies]
 dev = [
+    # dev version generation
+    "setuptools_scm",
     # static checking
     "black>=20.8b1",
     "docutils",
