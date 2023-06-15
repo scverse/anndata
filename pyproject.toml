@@ -111,7 +111,7 @@ omit = [
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
 python_files = "test_*.py"
-testpaths = ["anndata/tests", "docs/concatenation.rst"]
+testpaths = ["anndata", "docs/concatenation.rst"]
 filterwarnings = [
     'ignore:X\.dtype being converted to np.float32:FutureWarning'
 ]

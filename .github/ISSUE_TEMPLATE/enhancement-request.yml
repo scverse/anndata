@@ -1,0 +1,13 @@
+name: Enhancement request
+description: Anything you’d like to see in anndata?
+#title: ...
+labels: [enhancement]
+#assignees: []
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: |
+        Please describe your wishes and possible alternatives to achieve the desired result.
+    validations:
+      required: true

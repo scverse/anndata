@@ -1216,6 +1216,34 @@ def test_concat_ordered_categoricals_retained():
     assert c.obs["cat_ordered"].cat.ordered
 
 
+def test_bool_promotion():
+    np_bool = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame({"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5)]),
+    )
+    missing = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(5, 10)]),
+    )
+    result = concat({"np_bool": np_bool, "b": missing}, join="outer", label="batch")
+
+    assert pd.api.types.is_bool_dtype(result.obs["bool"])
+    assert pd.isnull(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
+
+    # Check that promotion doesn't occur if it doesn't need to:
+    np_bool_2 = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5, 10)]
+        ),
+    )
+    result = concat(
+        {"np_bool": np_bool, "np_bool_2": np_bool_2}, join="outer", label="batch"
+    )
+
+    assert result.obs["bool"].dtype == np.dtype(bool)
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
@@ -1255,23 +1283,6 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     b = gen_adata(shape)
     alt_axis = 1 - axis
     dim = ("obs", "var")[axis]
-
-    # TODO: Remove, see: https://github.com/scverse/anndata/issues/905
-    import awkward as ak
-
-    if (
-        (join_type == "inner")
-        and (merge_strategy in ("same", "unique"))
-        and ((axis, shape.index(0)) in [(0, 1), (1, 0)])
-        and ak.__version__ == "2.0.7"  # indicates if a release has happened
-    ):
-        aligned_mapping = (b.obsm, b.varm)[1 - axis]
-        to_remove = []
-        for k, v in aligned_mapping.items():
-            if isinstance(v, ak.Array):
-                to_remove.append(k)
-        for k in to_remove:
-            aligned_mapping.pop(k)
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
@@ -1412,3 +1423,13 @@ def test_outer_concat_with_missing_value_for_df():
     )
 
     concat([a, b], join="outer")
+
+
+def test_outer_concat_outputs_nullable_bool_writable(tmp_path):
+    a = gen_adata((5, 5), obsm_types=(pd.DataFrame,))
+    b = gen_adata((3, 5), obsm_types=(pd.DataFrame,))
+
+    del b.obsm["df"]
+
+    adatas = concat({"a": a, "b": b}, join="outer", label="group")
+    adatas.write(tmp_path / "test.h5ad")
