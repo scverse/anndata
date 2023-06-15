@@ -4,4 +4,4 @@ overrides:
     options:
       parser: json5
       quoteProps: preserve
-      singleQuote: true
+      singleQuote: false
