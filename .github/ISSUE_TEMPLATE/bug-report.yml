@@ -47,8 +47,9 @@ body:
   id: versions
   attributes:
     label: Versions
-    description: Which version of anndata and other related software you used.
-    render: markdown
-    placeholder: anndata 0.9.1, pandas 2.0.2, …
+    description: Which version of anndata and other related software you used. Please install and use `session-info`
+    render: python
+    value: |
+      >>> import anndata, session_info; session_info.show()
   validations:
     required: true
