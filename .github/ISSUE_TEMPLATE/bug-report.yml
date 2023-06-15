@@ -21,28 +21,12 @@ body:
     value: |
       **Note**: Please read [this guide](https://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports) detailing how to provide the necessary information for us to reproduce your bug.
 - type: textarea
-  id: description
+  id: Report
   attributes:
-    label: What happened?
-    description: Describe what you tried to do, and what happened instead.
+    label: Report
+    description: Describe the bug you encountered, and what you were trying to do. Please use [github markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax) features for readability.
   validations:
     required: true
-- type: textarea
-  id: code
-  attributes:
-    label: Minimal code sample
-    description: (that we can copy&paste without having any data)
-    render: python
-  validations:
-    required: true
-- type: textarea
-  id: traceback
-  attributes:
-    label: Error output
-    description: Produced by the code above. Leave empty if the issue is unexpected behavior instead of an error.
-    render: pytb
-  validations:
-    required: false
 - type: textarea
   id: versions
   attributes:
