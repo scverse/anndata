@@ -88,7 +88,7 @@ test = [
     "boltons",
     "scanpy",
     "dask[array]",
-    "awkward>=2.0.6",
+    "awkward>=2.0.8",
     "pytest_memray",
 ]
 
