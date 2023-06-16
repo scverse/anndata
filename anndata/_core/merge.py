@@ -172,7 +172,6 @@ def as_sparse(x):
 
 
 def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
-
     """
     Attempts to unify datatypes from multiple dataframes.
 
