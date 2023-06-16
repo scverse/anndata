@@ -104,5 +104,5 @@ jobs:
 
       - script: |
           pip install dist/*.whl
-          python -c 'import anndata; import anndata._version; print(anndata.__version__)'
+          python -c 'import anndata; print(anndata.__version__)'
         displayName: "Check runtime version"
