@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import OrderedDict
 
 from os import PathLike
 from collections.abc import Mapping
@@ -273,8 +274,16 @@ def read_mapping(elem, _reader):
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
 
+@_REGISTRY.register_read(H5Group, IOSpec("ordered-dict", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("ordered-dict", "0.1.0"))
+def read_ordered_dict(elem, _reader):
+    return OrderedDict((k, _reader.read_elem(v)) for k, v in elem.items())
+
+
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
+@_REGISTRY.register_write(H5Group, OrderedDict, IOSpec("ordered-dict", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, OrderedDict, IOSpec("ordered-dict", "0.1.0"))
 def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
     g = f.create_group(k)
     for sub_k, sub_v in v.items():

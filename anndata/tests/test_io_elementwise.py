@@ -2,6 +2,7 @@
 Tests that each element in an anndata is written correctly
 """
 from __future__ import annotations
+from collections import OrderedDict
 
 import re
 
@@ -53,6 +54,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         (True, "numeric-scalar"),
         (1.0, "numeric-scalar"),
         ({"a": 1}, "dict"),
+        (OrderedDict({"a": 1}), "ordered-dict"),
         (gen_adata((3, 2)), "anndata"),
         (sparse.random(5, 3, format="csr", density=0.5), "csr_matrix"),
         (sparse.random(5, 3, format="csc", density=0.5), "csc_matrix"),
