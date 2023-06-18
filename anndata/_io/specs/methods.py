@@ -285,6 +285,7 @@ def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
 # np.ndarray #
 ##############
 
+
 @_REGISTRY.register_write(H5Group, list, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, list, IOSpec("array", "0.2.0"))
 def write_list(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
