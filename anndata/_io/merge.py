@@ -301,7 +301,7 @@ def write_concat_arrays(
 def write_concat_sequence(
     groups: Sequence[Union[ZarrGroup, H5Group]],
     output_group,
-    out_path,
+    output_path,
     axis=0,
     index=None,
     reindexers=None,
