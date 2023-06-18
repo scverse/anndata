@@ -44,8 +44,12 @@ SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
 EAGER_TYPES = {"dataframe", "awkward-array"}
 
+###################
+# Utilities
+###################
 
-# TODO: Not good
+# Wrapper to reindexer that stores if there is a change
+# and won't do anything if there is
 class IdentityReindexer:
     def __init__(self):
         self.no_change = True
@@ -99,7 +103,8 @@ def write_concat_mappings(
 
 def read_as_backed(group: Union[ZarrGroup, H5Group]):
     """Read the group until
-    SparseDataset, Array or EAGER_TYPES are encountered."""
+    SparseDataset, Array or EAGER_TYPES are encountered.
+    """
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in SPARSE_MATRIX:
@@ -108,20 +113,10 @@ def read_as_backed(group: Union[ZarrGroup, H5Group]):
             return read_elem(elem)
         elif iospec.encoding_type == "array":
             return elem
+        elif iospec.encoding_type == "dict":
+            return dict(elem.items())
         else:
             return func(elem)
-
-    return read_dispatched(group, callback=callback)
-
-
-def read_only_dict(group: Union[ZarrGroup, H5Group]):
-    """Read the dict and leave the rest of the group alone."""
-
-    def callback(func, elem_name: str, elem, iospec):
-        if iospec.encoding_type == "dict":
-            return {k: v for k, v in elem.items()}
-        else:
-            return elem
 
     return read_dispatched(group, callback=callback)
 
@@ -135,7 +130,7 @@ def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
     """Get the shape of a group (array, sparse matrix, etc.)"""
     if group.attrs["encoding-type"] == "array":
         return group.shape
-    elif group.attrs["encoding-type"] in SPARSE_MATRIX:
+    if group.attrs["encoding-type"] in SPARSE_MATRIX:
         return group.attrs.get("shape")
     raise NotImplementedError(f"Cannot get shape of {group.attrs['encoding-type']}")
 
@@ -147,34 +142,6 @@ def _gen_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
         else:
             yield ri(elem, axis=1 - axis, fill_value=fill_value)
 
-
-def gen_reindexers_df_inner(dfs: Sequence[pd.DataFrame], axis: Literal[0, 1] = 0):
-    if axis == 0:
-
-        def df_indices(x):
-            return x.columns
-
-    elif axis == 1:
-
-        def df_indices(x):
-            return x.indices
-
-    # TODO Handle empty later
-    common_ind = reduce(lambda x, y: x.intersection(y), (df_indices(df) for df in dfs))
-    reindexers = [Reindexer(df_indices(df), common_ind) for df in dfs]
-    return reindexers
-
-
-def gen_reindexers_array_inner(
-    arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]], axis: Literal[0, 1] = 0
-):
-    min_ind = min(a.shape[1 - axis] for a in arrays)
-    reindexers = [
-        gen_reindexer(pd.RangeIndex(min_ind), pd.RangeIndex(a.shape[1 - axis]))
-        for a in arrays
-    ]
-
-    return reindexers
 
 
 def _gen_slice_to_append(
@@ -240,7 +207,7 @@ def write_concat_arrays(
         )
     if reindexers is None:
         if join == "inner":
-            reindexers = gen_reindexers_array_inner(arrays, axis=axis)
+            reindexers = gen_inner_reindexers(arrays, None, axis=axis)
         else:
             raise NotImplementedError("Cannot reindex arrays with outer join.")
     if isinstance(init_elem, SparseDataset):
@@ -317,7 +284,7 @@ def write_concat_sequence(
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         if reindexers is None:
             if join == "inner":
-                reindexers = gen_reindexers_df_inner(arrays, axis=axis)
+                reindexers = gen_inner_reindexers(arrays, None, axis=axis)
             else:
                 raise NotImplementedError("Cannot reindex dataframes with outer join.")
         if not all(
@@ -633,7 +600,7 @@ def concat_on_disk(
         ("layers", None, axis, reindexers),
     ]
     for m, m_index, m_axis, m_reindexers in mapping_names:
-        maps = [read_only_dict(g[m]) for g in groups]
+        maps = [read_as_backed(g[m]) for g in groups]
         write_concat_mappings(
             maps,
             output_group,
