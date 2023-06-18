@@ -18,7 +18,7 @@ __all__ = [
     "read_dispatched",
     "write_dispatched",
     "IOSpec",
-    "concat_on_disk"
+    "concat_on_disk",
 ]
 
 
