@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from anndata._io.merge import concat_on_disk
+from anndata.experimental.merge import concat_on_disk
 from anndata import AnnData, concat
 from anndata.tests.helpers import (
     assert_equal,

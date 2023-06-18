@@ -1,5 +1,5 @@
 from functools import singledispatch
-from .specs import read_elem, write_elem
+from .._io.specs import read_elem, write_elem
 from .._core.merge import (
     _resolve_dim,
     StrategiesLiteral,
@@ -17,7 +17,7 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import to_memory
-from ..experimental import read_dispatched
+from . import read_dispatched
 import pandas as pd
 from typing import (
     Any,
@@ -89,7 +89,7 @@ def write_concat_mappings(
         write_concat_sequence(
             elems,
             output_group=mapping_group,
-            out_path=k,
+            output_path=k,
             axis=axis,
             index=index,
             reindexers=reindexers,
@@ -208,16 +208,16 @@ def _gen_slice_to_append(
 def _write_concat_sparse(
     datasets: Sequence[SparseDataset],
     output_group,
-    out_path,
+    output_path,
     axis=0,
     reindexers=None,
     fill_value=None,
 ):
     elems = _gen_slice_to_append(datasets, reindexers, axis, fill_value)
     init_elem = (csr_matrix, csc_matrix)[axis](next(elems))
-    write_elem(output_group, out_path, init_elem)
+    write_elem(output_group, output_path, init_elem)
     del init_elem
-    out_dataset: SparseDataset = read_as_backed(output_group[out_path])
+    out_dataset: SparseDataset = read_as_backed(output_group[output_path])
     for temp_elem in elems:
         out_dataset.append((csr_matrix, csc_matrix)[axis](temp_elem))
         del temp_elem
@@ -226,7 +226,7 @@ def _write_concat_sparse(
 def write_concat_arrays(
     arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]],
     output_group,
-    out_path,
+    output_path,
     axis=0,
     reindexers=None,
     fill_value=None,
@@ -247,7 +247,7 @@ def write_concat_arrays(
         expected_sparse_fmt = ["csr", "csc"][axis]
         if all(a.format_str == expected_sparse_fmt for a in arrays):
             _write_concat_sparse(
-                arrays, output_group, out_path, axis, reindexers, fill_value
+                arrays, output_group, output_path, axis, reindexers, fill_value
             )
         else:
             raise NotImplementedError(
@@ -264,7 +264,7 @@ def write_concat_arrays(
             assert all(len(ri.new_idx) == alt_dim_res_len for ri in reindexers)
 
         new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
-        out_array: H5Array = output_group.create_dataset(out_path, shape=new_shape)
+        out_array: H5Array = output_group.create_dataset(output_path, shape=new_shape)
         idx = 0
         for arr in _gen_slice_to_append(
             arrays, axis=axis, reindexers=reindexers, fill_value=fill_value
@@ -275,7 +275,7 @@ def write_concat_arrays(
             else:
                 out_array[:, idx : idx + added_size] = arr
             idx += added_size
-        output_group[out_path].attrs.update(
+        output_group[output_path].attrs.update(
             {"encoding-type": "array", "encoding-version": "0.2.0"}
         )
 
@@ -292,8 +292,8 @@ def write_concat_arrays(
             ),
             axis=axis,
         )
-        write_elem(output_group, out_path, res)
-        output_group[out_path].attrs.update(
+        write_elem(output_group, output_path, res)
+        output_group[output_path].attrs.update(
             {"encoding-type": "array", "encoding-version": "0.2.0"}
         )
 
@@ -334,13 +334,13 @@ def write_concat_sequence(
             index=index,
             fill_value=fill_value,
         )
-        write_elem(output_group, out_path, df)
+        write_elem(output_group, output_path, df)
     # If all are compatible sparse matrices
     elif all(
         isinstance(a, (pd.DataFrame, SparseDataset, H5Array, ZarrArray)) for a in arrays
     ):
         write_concat_arrays(
-            arrays, output_group, out_path, axis, reindexers, fill_value, join
+            arrays, output_group, output_path, axis, reindexers, fill_value, join
         )
     else:
         raise NotImplementedError(
@@ -616,7 +616,7 @@ def concat_on_disk(
     write_concat_sequence(
         groups=Xs,
         output_group=output_group,
-        out_path="X",
+        output_path="X",
         axis=axis,
         reindexers=reindexers,
         fill_value=fill_value,

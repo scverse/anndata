@@ -6,6 +6,7 @@ from typing import Callable, Any
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
 
+
 from anndata._io.specs import read_elem, write_elem, IOSpec
 from anndata._types import StorageType, GroupStorageType
 
@@ -17,6 +18,7 @@ __all__ = [
     "read_dispatched",
     "write_dispatched",
     "IOSpec",
+    "concat_on_disk"
 ]
 
 
