@@ -21,7 +21,7 @@ anndata is a Python package for handling annotated data matrices in memory and o
 - Ask questions on the [scverse Discourse](https://discourse.scverse.org).
 - Install via `pip install anndata` or `conda install anndata -c conda-forge`.
 - See [Scanpy's documentation](https://scanpy.readthedocs.io/) for usage related to single cell data. anndata was initially built for Scanpy.
-  
+
 If you use `anndata` in your work, please cite the `anndata` pre-print as follows:
 
 > **anndata: Annotated data**
