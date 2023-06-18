@@ -48,6 +48,7 @@ EAGER_TYPES = {"dataframe", "awkward-array"}
 # Utilities
 ###################
 
+
 # Wrapper to reindexer that stores if there is a change
 # and won't do anything if there is
 class IdentityReindexer:
@@ -141,7 +142,6 @@ def _gen_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
             yield elem
         else:
             yield ri(elem, axis=1 - axis, fill_value=fill_value)
-
 
 
 def _gen_slice_to_append(
