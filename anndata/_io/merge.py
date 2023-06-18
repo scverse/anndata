@@ -44,6 +44,7 @@ SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
 EAGER_TYPES = {"dataframe", "awkward-array"}
 
+
 # TODO: Not good
 class IdentityReindexer:
     def __init__(self):
@@ -94,7 +95,6 @@ def write_concat_mappings(
             reindexers=reindexers,
             fill_value=fill_value,
         )
-
 
 
 def read_as_backed(group: Union[ZarrGroup, H5Group]):
