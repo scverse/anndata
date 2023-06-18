@@ -285,12 +285,6 @@ def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
 # np.ndarray #
 ##############
 
-
-@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
-def write_zarr_array(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
-    f.create_dataset(k, data=elem, **dataset_kwargs)
-
-
 @_REGISTRY.register_write(H5Group, list, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, list, IOSpec("array", "0.2.0"))
 def write_list(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
@@ -299,6 +293,7 @@ def write_list(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
 
 # TODO: Is this the right behavior for MaskedArrays?
 # It's in the `AnnData.concatenate` docstring, but should we keep it?
+@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.ndarray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, h5py.Dataset, IOSpec("array", "0.2.0"))
