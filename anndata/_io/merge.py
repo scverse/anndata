@@ -40,6 +40,9 @@ from scipy.sparse import csr_matrix, csc_matrix
 
 MAX_LOAD_SIZE = 60_000_000
 
+SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
+
+EAGER_TYPES = {"dataframe", "awkward-array"}
 
 # TODO: Not good
 class IdentityReindexer:
@@ -71,7 +74,7 @@ def write_concat_mappings(
     fill_value=None,
 ):
     """
-    Write a list of mappings to a zarr group.
+    Write a list of mappings to a zarr/h5 group.
     """
     mapping_group = output_group.create_group(path)
     mapping_group.attrs.update(
@@ -93,12 +96,8 @@ def write_concat_mappings(
         )
 
 
-SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
-EAGER_TYPES = {"dataframe", "awkward-array"}
-
-
-def read_group(group: Union[ZarrGroup, H5Group]):
+def read_as_backed(group: Union[ZarrGroup, H5Group]):
     """Read the group until
     SparseDataset, Array or EAGER_TYPES are encountered."""
 
@@ -218,7 +217,7 @@ def _write_concat_sparse(
     init_elem = (csr_matrix, csc_matrix)[axis](next(elems))
     write_elem(output_group, out_path, init_elem)
     del init_elem
-    out_dataset: SparseDataset = read_group(output_group[out_path])
+    out_dataset: SparseDataset = read_as_backed(output_group[out_path])
     for temp_elem in elems:
         out_dataset.append((csr_matrix, csc_matrix)[axis](temp_elem))
         del temp_elem
@@ -313,7 +312,7 @@ def write_concat_sequence(
     array, dataframe, csc_matrix, csc_matrix
     """
     arrays: Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray] = [
-        read_group(g) for g in groups
+        read_as_backed(g) for g in groups
     ]
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         if reindexers is None:
@@ -414,7 +413,7 @@ def _get_groups_from_paths(
 
 
 def _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge):
-    alt_mapping = merge([read_group(g[alt_dim]) for g in groups])
+    alt_mapping = merge([read_as_backed(g[alt_dim]) for g in groups])
     # If its empty, we need to write an empty dataframe with the correct index
     if not alt_mapping:
         alt_df = pd.DataFrame(index=alt_indices)
