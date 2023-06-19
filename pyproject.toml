@@ -1,15 +1,12 @@
 [build-system]
-build-backend = "flit_core.buildapi"
-requires = [
-    "flit_core >=3.4,<4",
-    "setuptools_scm",
-]
+build-backend = "hatchling.build"
+requires = ["hatchling", "hatch-vcs"]
 
 [project]
 name = "anndata"
 description = "Annotated data."
 requires-python = ">=3.8"
-license = {file = "LICENSE"}
+license = "BSD-3-Clause"
 authors = [
     {name = "Philipp Angerer"},
     {name = "Alex Wolf"},
@@ -18,12 +15,11 @@ authors = [
 ]
 maintainers = [
     {name = "Isaac Virshup", email = "ivirshup@gmail.com"},
-    {name = "Philipp Angerer", email = "philipp.angerer@helmholtz-muenchen.de"},
+    {name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de"},
     {name = "Alex Wolf", email = "f.alex.wolf@gmx.de"},
 ]
-readme = {file = "README.md", content-type="text/markdown"}
+readme = "README.md"
 classifiers = [
-    "License :: OSI Approved :: BSD License",
     "Environment :: Console",
     "Framework :: Jupyter",
     "Intended Audience :: Developers",
@@ -36,11 +32,12 @@ classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas>=1.1.1,!=2.0.1",  # pandas <1.1.1 has pandas/issues/35446
+    "pandas>=1.1.1",  # pandas <1.1.1 has pandas/issues/35446
     "numpy>=1.16.5",  # required by pandas 1.x
     "scipy>1.4",
     "h5py>=3",
@@ -92,11 +89,15 @@ test = [
     "pytest_memray",
 ]
 
-[tool.flit.sdist]
+[tool.hatch.build]
 exclude = [
-    'anndata/tests/test_*.py',
-    'anndata/tests/data',
+    "anndata/tests/test_*.py",
+    "anndata/tests/data",
 ]
+[tool.hatch.version]
+source = "vcs"
+[tool.hatch.build.hooks.vcs]
+version-file = "anndata/_version.py"
 
 [tool.coverage.run]
 source = ["anndata"]
