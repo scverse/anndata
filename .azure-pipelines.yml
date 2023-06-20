@@ -101,3 +101,8 @@ jobs:
           python -m build --sdist --wheel .
           twine check dist/*
         displayName: "Build & Twine check"
+
+      - script: |
+          pip install dist/*.whl
+          python -c 'import anndata; print(anndata.__version__)'
+        displayName: "Check runtime version"
