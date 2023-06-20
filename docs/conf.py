@@ -44,7 +44,8 @@ exclude_patterns = [
 pygments_style = "sphinx"
 
 extensions = [
-    "myst_parser",
+    "myst_nb",
+    "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
@@ -52,11 +53,10 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
+    "sphinx.ext.linkcode",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
     "sphinxext.opengraph",
-    "scanpydoc",
-    "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
 myst_enable_extensions = [
