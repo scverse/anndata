@@ -1,4 +1,22 @@
+import os
 from functools import singledispatch
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Optional,
+    Sequence,
+    Union,
+    Literal,
+    Iterable,
+    Mapping,
+)
+import pandas as pd
+import typing
+from pathlib import Path
+import numpy as np
+from scipy.sparse import csr_matrix, csc_matrix
+
 from .._io.specs import read_elem, write_elem
 from .._core.merge import (
     _resolve_dim,
@@ -10,7 +28,6 @@ from .._core.merge import (
     resolve_merge_strategy,
     gen_reindexer,
     gen_inner_reindexers,
-    reduce,
     concat_arrays,
     MissingVal,
     Reindexer,
@@ -18,26 +35,8 @@ from .._core.merge import (
 from .._core.sparse_dataset import SparseDataset
 from .._core.file_backing import to_memory
 from . import read_dispatched
-import pandas as pd
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Optional,
-    Sequence,
-    Union,
-    Literal,
-    Iterable,
-    MutableMapping,
-    Mapping,
-)
-import typing
-from pathlib import Path
-import numpy as np
-
 from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
 
-from scipy.sparse import csr_matrix, csc_matrix
 
 MAX_LOAD_SIZE = 60_000_000
 
@@ -61,92 +60,10 @@ class IdentityReindexer:
         return x
 
 
+# Checks if given indices are equal to each other in the whole list.
 def _indices_equal(indices: Iterable[pd.Index]) -> bool:
     init_elem = indices[0]
     return all(np.array_equal(init_elem, elem) for elem in indices[1:])
-
-
-###################
-# Reading
-###################
-
-
-def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
-    index_key = df.attrs["_index"]
-    return pd.Index(read_elem(df[index_key]))
-
-
-def write_concat_mappings(
-    mappings,
-    output_group: Union[ZarrGroup, H5Group],
-    keys,
-    path,
-    axis=0,
-    index=None,
-    reindexers=None,
-    fill_value=None,
-):
-    """
-    Write a list of mappings to a zarr/h5 group.
-    """
-    mapping_group = output_group.create_group(path)
-    mapping_group.attrs.update(
-        {
-            "encoding-type": "dict",
-            "encoding-version": "0.1.0",
-        }
-    )
-    for k in keys:
-        elems = [m[k] for m in mappings]
-        write_concat_sequence(
-            elems,
-            output_group=mapping_group,
-            output_path=k,
-            axis=axis,
-            index=index,
-            reindexers=reindexers,
-            fill_value=fill_value,
-        )
-
-
-def read_as_backed(group: Union[ZarrGroup, H5Group]):
-    """Read the group until
-    SparseDataset, Array or EAGER_TYPES are encountered.
-    """
-
-    def callback(func, elem_name: str, elem, iospec):
-        if iospec.encoding_type in SPARSE_MATRIX:
-            return SparseDataset(elem)
-        elif iospec.encoding_type in EAGER_TYPES:
-            return read_elem(elem)
-        elif iospec.encoding_type == "array":
-            return elem
-        elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in elem.items()}
-        else:
-            return func(elem)
-
-    return read_dispatched(group, callback=callback)
-
-
-def gen_reindexers_array_inner(
-    arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]], axis: Literal[0, 1] = 0
-):
-    min_ind = min(a.shape[1 - axis] for a in arrays)
-    reindexers = [
-        gen_reindexer(pd.RangeIndex(min_ind), pd.RangeIndex(a.shape[1 - axis]))
-        for a in arrays
-    ]
-
-    return reindexers
-
-
-def _gen_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
-    for elem, ri in zip(elems, reindexers):
-        if ri.no_change:
-            yield elem
-        else:
-            yield ri(elem, axis=1 - axis, fill_value=fill_value)
 
 
 def _gen_slice_to_append(
@@ -177,12 +94,117 @@ def _gen_slice_to_append(
                 idx += slice_size
 
 
-def _write_concat_sparse(
+###################
+# File Management
+###################
+
+
+@singledispatch
+def as_group(store, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+    raise NotImplementedError("This is not yet implemented.")
+
+
+@as_group.register
+def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+    if store.suffix == ".h5ad":
+        import h5py
+
+        return h5py.File(store, *args, **kwargs)
+    import zarr
+
+    return zarr.open_group(store, *args, **kwargs)
+
+
+@as_group.register
+def _(store: str, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+    return as_group(Path(store), *args, **kwargs)
+
+
+@as_group.register(ZarrGroup)
+@as_group.register(H5Group)
+def _(store, *args, **kwargs):
+    return store
+
+
+###################
+# Reading
+###################
+
+
+def read_as_backed(group: Union[ZarrGroup, H5Group]):
+    """
+    Read the group until
+    SparseDataset, Array or EAGER_TYPES are encountered.
+    """
+
+    def callback(func, elem_name: str, elem, iospec):
+        if iospec.encoding_type in SPARSE_MATRIX:
+            return SparseDataset(elem)
+        elif iospec.encoding_type in EAGER_TYPES:
+            return read_elem(elem)
+        elif iospec.encoding_type == "array":
+            return elem
+        elif iospec.encoding_type == "dict":
+            return {k: read_as_backed(v) for k, v in elem.items()}
+        else:
+            return func(elem)
+
+    return read_dispatched(group, callback=callback)
+
+
+def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
+    index_key = df.attrs["_index"]
+    return pd.Index(read_elem(df[index_key]))
+
+
+###################
+# Writing
+###################
+
+
+def write_concat_dense(
+    arrays: Sequence[Union[ZarrArray, H5Array]],
+    output_group: Union[ZarrGroup, H5Group],
+    output_path: Union[ZarrGroup, H5Group],
+    axis: Literal[0, 1] = 0,
+    reindexers: Reindexer = None,
+    fill_value=None,
+):
+    """
+    Writes the concatenation of given dense arrays to disk using dask.
+    """
+    import dask.array as da
+
+    def _gen_elem_to_append(elems):
+        for elem, ri in zip(elems, reindexers):
+            yield ri(elem, axis=1 - axis, fill_value=fill_value)
+
+    darrays = None
+    init_elem = arrays[0]
+
+    if isinstance(init_elem, H5Array):
+        darrays = (da.from_array(a, chunks="auto") for a in arrays)
+    elif isinstance(init_elem, ZarrArray):
+        darrays = (da.from_zarr(a) for a in arrays)
+
+    res = da.concatenate(
+        _gen_elem_to_append(
+            darrays,
+        ),
+        axis=axis,
+    )
+    write_elem(output_group, output_path, res)
+    output_group[output_path].attrs.update(
+        {"encoding-type": "array", "encoding-version": "0.2.0"}
+    )
+
+
+def write_concat_sparse(
     datasets: Sequence[SparseDataset],
-    output_group,
-    output_path,
-    axis=0,
-    reindexers=None,
+    output_group: Union[ZarrGroup, H5Group],
+    output_path: Union[ZarrGroup, H5Group],
+    axis: Literal[0, 1] = 0,
+    reindexers: Reindexer = None,
     fill_value=None,
 ):
     elems = _gen_slice_to_append(datasets, reindexers, axis, fill_value)
@@ -195,7 +217,40 @@ def _write_concat_sparse(
         del temp_elem
 
 
-def write_concat_arrays(
+def _write_concat_mappings(
+    mappings,
+    output_group: Union[ZarrGroup, H5Group],
+    keys,
+    path,
+    axis=0,
+    index=None,
+    reindexers=None,
+    fill_value=None,
+):
+    """
+    Write a list of mappings to a zarr/h5 group.
+    """
+    mapping_group = output_group.create_group(path)
+    mapping_group.attrs.update(
+        {
+            "encoding-type": "dict",
+            "encoding-version": "0.1.0",
+        }
+    )
+    for k in keys:
+        elems = [m[k] for m in mappings]
+        _write_concat_sequence(
+            elems,
+            output_group=mapping_group,
+            output_path=k,
+            axis=axis,
+            index=index,
+            reindexers=reindexers,
+            fill_value=fill_value,
+        )
+
+
+def _write_concat_arrays(
     arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]],
     output_group,
     output_path,
@@ -213,14 +268,14 @@ def write_concat_arrays(
 
     if reindexers is None:
         if join == "inner":
-            reindexers = gen_reindexers_array_inner(arrays, axis=axis)
+            reindexers = gen_inner_reindexers(arrays, new_index=None, axis=axis)
         else:
             raise NotImplementedError("Cannot reindex arrays with outer join.")
 
     if isinstance(init_elem, SparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
         if all(a.format_str == expected_sparse_fmt for a in arrays):
-            _write_concat_sparse(
+            write_concat_sparse(
                 arrays, output_group, output_path, axis, reindexers, fill_value
             )
         else:
@@ -228,30 +283,12 @@ def write_concat_arrays(
                 f"Concat of following not supported: {[a.format_str for a in arrays]}"
             )
     else:
-        import dask.array as da
-
-        darrays = None
-        if isinstance(init_elem, H5Array):
-            darrays = (da.from_array(a, chunks="auto") for a in arrays)
-        elif isinstance(init_elem, ZarrArray):
-            darrays = (da.from_zarr(a) for a in arrays)
-
-        res = da.concatenate(
-            _gen_elem_to_append(
-                darrays,
-                axis=axis,
-                reindexers=reindexers,
-                fill_value=fill_value,
-            ),
-            axis=axis,
-        )
-        write_elem(output_group, output_path, res)
-        output_group[output_path].attrs.update(
-            {"encoding-type": "array", "encoding-version": "0.2.0"}
+        write_concat_dense(
+            arrays, output_group, output_path, axis, reindexers, fill_value
         )
 
 
-def write_concat_sequence(
+def _write_concat_sequence(
     arrays: Sequence[Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray]],
     output_group,
     output_path,
@@ -288,77 +325,13 @@ def write_concat_sequence(
     elif all(
         isinstance(a, (pd.DataFrame, SparseDataset, H5Array, ZarrArray)) for a in arrays
     ):
-        write_concat_arrays(
+        _write_concat_arrays(
             arrays, output_group, output_path, axis, reindexers, fill_value, join
         )
     else:
         raise NotImplementedError(
             f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays] } with axis={axis}."
         )
-
-
-def _get_group_from_hdf5(store, *args, **kwargs) -> H5Group:
-    import h5py
-
-    return h5py.File(store, *args, **kwargs)
-
-
-@singledispatch
-def _get_group(store, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
-    raise NotImplementedError("This is not yet implemented.")
-
-
-@_get_group.register
-def _(store: Path, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
-    if store.suffix == ".h5ad":
-        return _get_group_from_hdf5(store, *args, **kwargs)
-    import zarr
-
-    return zarr.open_group(store, *args, **kwargs)
-
-
-@_get_group.register
-def _(store: str, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
-    if store.endswith(".h5ad"):
-        return _get_group_from_hdf5(store, *args, **kwargs)
-    import zarr
-
-    return zarr.open_group(store, *args, **kwargs)
-
-
-@_get_group.register
-def _(store: dict, *args, **kwargs) -> ZarrGroup:
-    import zarr
-
-    return zarr.open_group(store, *args, **kwargs)
-
-
-@_get_group.register
-def _(store: ZarrGroup, *args, **kwargs) -> ZarrGroup:
-    return store
-
-
-@_get_group.register
-def _(store: H5Group, *args, **kwargs) -> H5Group:
-    return store
-
-
-def _get_groups_from_paths(
-    in_files: Union[
-        Collection[str],
-        Collection[Path],
-        MutableMapping,
-        Collection[Union[ZarrGroup, H5Group]],
-    ],
-    out_file: Union[str, MutableMapping, ZarrGroup, Path],
-    overwrite: bool,
-) -> typing.Tuple[Sequence[ZarrGroup], ZarrGroup]:
-    """Returns the groups to be concatenated and the output group."""
-    mode = "w" if overwrite else "w-"
-
-    res_out_file = _get_group(out_file, mode=mode)
-    res_in_files = [_get_group(f) for f in in_files]
-    return res_in_files, res_out_file
 
 
 def _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge):
@@ -393,12 +366,10 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
 
 def concat_on_disk(
     in_files: Union[
-        Collection[str],
+        Collection[Union[str, os.PathLike]],
         typing.MutableMapping,
-        Collection[ZarrGroup],
-        Collection[H5Group],
     ],
-    out_file: Union[str, typing.MutableMapping, ZarrGroup, H5Group],
+    out_file: Union[str, os.PathLike, typing.MutableMapping],
     overwrite: bool = False,
     *,
     axis: Literal[0, 1] = 0,
@@ -509,8 +480,8 @@ def concat_on_disk(
 
     mode = "w" if overwrite else "w-"
 
-    groups = _get_group(out_file, mode=mode)
-    output_group = [_get_group(f) for f in in_files]
+    output_group = as_group(out_file, mode=mode)
+    groups = [as_group(f) for f in in_files]
 
     use_reindexing = False
 
@@ -566,7 +537,7 @@ def concat_on_disk(
 
     # Write X
 
-    write_concat_arrays(
+    _write_concat_arrays(
         arrays=Xs,
         output_group=output_group,
         output_path="X",
@@ -587,7 +558,7 @@ def concat_on_disk(
     ]
     for m, m_index, m_axis, m_reindexers in mapping_names:
         maps = [read_as_backed(g[m]) for g in groups]
-        write_concat_mappings(
+        _write_concat_mappings(
             maps,
             output_group,
             intersect_keys(maps),
