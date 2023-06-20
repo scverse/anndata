@@ -130,30 +130,16 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert init_hash == joblib.hash(adata)
 
 
-# TODO: These tests could probably be condensed into a fixture
-#       based test for obsm and varm
-def test_set_obsm_key(adata):
+@pytest.mark.parametrize("axis", ["obsm", "varm"])
+def test_set_obsm_key(adata, axis):
     init_hash = joblib.hash(adata)
 
-    orig_obsm_val = adata.obsm["o"].copy()
-    subset_obsm = adata[:50]
-    assert subset_obsm.is_view
-    subset_obsm.obsm["o"] = np.ones((50, 20))
-    assert not subset_obsm.is_view
-    assert np.all(adata.obsm["o"] == orig_obsm_val)
-
-    assert init_hash == joblib.hash(adata)
-
-
-def test_set_varm_key(adata):
-    init_hash = joblib.hash(adata)
-
-    orig_varm_val = adata.varm["o"].copy()
-    subset_varm = adata[:, :50]
-    assert subset_varm.is_view
-    subset_varm.varm["o"] = np.ones((50, 20))
-    assert not subset_varm.is_view
-    assert np.all(adata.varm["o"] == orig_varm_val)
+    orig_val = getattr(adata, axis)["o"].copy()
+    subset = adata[:50] if axis == "obsm" else adata[:, :50]
+    assert subset.is_view
+    getattr(subset, axis)["o"] = np.ones((50, 20))
+    assert not subset.is_view
+    assert np.all(getattr(adata, axis)["o"] == orig_val)
 
     assert init_hash == joblib.hash(adata)
 
