@@ -12,7 +12,7 @@ import anndata  # noqa
 
 logger = logging.getLogger(__name__)
 
-for generated in HERE.glob("anndata.*.rst"):
+for generated in (HERE / "generated").glob("anndata.*.rst"):
     generated.unlink()
 
 
