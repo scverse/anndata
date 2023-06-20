@@ -137,9 +137,11 @@ def test_set_obsm_key(adata, axis):
     orig_val = getattr(adata, axis)["o"].copy()
     subset = adata[:50] if axis == "obsm" else adata[:, :50]
     assert subset.is_view
-    getattr(subset, axis)["o"] = np.ones((50, 20))
+    with pytest.warns(ad.ImplicitModificationWarning):
+        getattr(subset, axis)["o"] = new_val = np.ones((50, 20))
     assert not subset.is_view
     assert np.all(getattr(adata, axis)["o"] == orig_val)
+    assert np.any(getattr(subset, axis)["o"] == new_val)
 
     assert init_hash == joblib.hash(adata)
 
