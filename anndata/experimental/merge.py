@@ -27,6 +27,7 @@ from typing import (
     Sequence,
     Union,
     Literal,
+    Iterable,
     MutableMapping,
     Mapping,
 )
@@ -44,6 +45,7 @@ SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
 EAGER_TYPES = {"dataframe", "awkward-array"}
 
+
 ###################
 # Utilities
 ###################
@@ -59,14 +61,19 @@ class IdentityReindexer:
         return x
 
 
+def _indices_equal(indices: Iterable[pd.Index]) -> bool:
+    init_elem = indices[0]
+    return all(np.array_equal(init_elem, elem) for elem in indices[1:])
+
+
+###################
+# Reading
+###################
+
+
 def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
     index_key = df.attrs["_index"]
     return pd.Index(read_elem(df[index_key]))
-
-
-def _requires_reindexing(indices) -> bool:
-    init_elem = indices[0]
-    return any(not np.array_equal(init_elem, elem) for elem in indices[1:])
 
 
 def write_concat_mappings(
@@ -115,25 +122,23 @@ def read_as_backed(group: Union[ZarrGroup, H5Group]):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return dict(elem.items())
+            return {k: read_as_backed(v) for k, v in elem.items()}
         else:
             return func(elem)
 
     return read_dispatched(group, callback=callback)
 
 
-def get_encoding_type(group: Union[ZarrGroup, H5Group]) -> str:
-    """Get the encoding type of a group."""
-    return group.attrs.get("encoding-type")
+def gen_reindexers_array_inner(
+    arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]], axis: Literal[0, 1] = 0
+):
+    min_ind = min(a.shape[1 - axis] for a in arrays)
+    reindexers = [
+        gen_reindexer(pd.RangeIndex(min_ind), pd.RangeIndex(a.shape[1 - axis]))
+        for a in arrays
+    ]
 
-
-def get_shape(group: Union[ZarrGroup, H5Group]) -> str:
-    """Get the shape of a group (array, sparse matrix, etc.)"""
-    if group.attrs["encoding-type"] == "array":
-        return group.shape
-    if group.attrs["encoding-type"] in SPARSE_MATRIX:
-        return group.attrs.get("shape")
-    raise NotImplementedError(f"Cannot get shape of {group.attrs['encoding-type']}")
+    return reindexers
 
 
 def _gen_elem_to_append(elems, axis=0, reindexers=None, fill_value=None):
@@ -205,11 +210,13 @@ def write_concat_arrays(
         raise NotImplementedError(
             f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
         )
+
     if reindexers is None:
         if join == "inner":
-            reindexers = gen_inner_reindexers(arrays, None, axis=axis)
+            reindexers = gen_reindexers_array_inner(arrays, axis=axis)
         else:
             raise NotImplementedError("Cannot reindex arrays with outer join.")
+
     if isinstance(init_elem, SparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
         if all(a.format_str == expected_sparse_fmt for a in arrays):
@@ -220,36 +227,15 @@ def write_concat_arrays(
             raise NotImplementedError(
                 f"Concat of following not supported: {[a.format_str for a in arrays]}"
             )
-    elif isinstance(init_elem, H5Array):
-        dim_shapes = [a.shape[axis] for a in arrays]
-        dim_res_len = sum(dim_shapes)
-
-        if all(r.no_change for r in reindexers):
-            alt_dim_res_len = arrays[0].shape[1 - axis]
-        else:
-            alt_dim_res_len = len(reindexers[0].new_idx)
-            assert all(len(ri.new_idx) == alt_dim_res_len for ri in reindexers)
-
-        new_shape = (dim_res_len, alt_dim_res_len)[:: 1 - 2 * axis]
-        out_array: H5Array = output_group.create_dataset(output_path, shape=new_shape)
-        idx = 0
-        for arr in _gen_slice_to_append(
-            arrays, axis=axis, reindexers=reindexers, fill_value=fill_value
-        ):
-            added_size = arr.shape[axis]
-            if axis == 0:
-                out_array[idx : idx + added_size, :] = arr
-            else:
-                out_array[:, idx : idx + added_size] = arr
-            idx += added_size
-        output_group[output_path].attrs.update(
-            {"encoding-type": "array", "encoding-version": "0.2.0"}
-        )
-
-    elif isinstance(init_elem, ZarrArray):
+    else:
         import dask.array as da
 
-        darrays = (da.from_zarr(a) for a in arrays)
+        darrays = None
+        if isinstance(init_elem, H5Array):
+            darrays = (da.from_array(a, chunks="auto") for a in arrays)
+        elif isinstance(init_elem, ZarrArray):
+            darrays = (da.from_zarr(a) for a in arrays)
+
         res = da.concatenate(
             _gen_elem_to_append(
                 darrays,
@@ -266,7 +252,7 @@ def write_concat_arrays(
 
 
 def write_concat_sequence(
-    groups: Sequence[Union[ZarrGroup, H5Group]],
+    arrays: Sequence[Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray]],
     output_group,
     output_path,
     axis=0,
@@ -278,9 +264,6 @@ def write_concat_sequence(
     """
     array, dataframe, csc_matrix, csc_matrix
     """
-    arrays: Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray] = [
-        read_as_backed(g) for g in groups
-    ]
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         if reindexers is None:
             if join == "inner":
@@ -302,7 +285,6 @@ def write_concat_sequence(
             fill_value=fill_value,
         )
         write_elem(output_group, output_path, df)
-    # If all are compatible sparse matrices
     elif all(
         isinstance(a, (pd.DataFrame, SparseDataset, H5Array, ZarrArray)) for a in arrays
     ):
@@ -311,7 +293,7 @@ def write_concat_sequence(
         )
     else:
         raise NotImplementedError(
-            f"Concatenation of these types is not yet implemented: {[get_encoding_type(g) for g in groups] } with axis={axis}."
+            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays] } with axis={axis}."
         )
 
 
@@ -525,27 +507,31 @@ def concat_on_disk(
     _, dim = _resolve_dim(axis=axis)
     _, alt_dim = _resolve_dim(axis=1 - axis)
 
-    groups, output_group = _get_groups_from_paths(
-        in_files, out_file, overwrite=overwrite
-    )
+    mode = "w" if overwrite else "w-"
+
+    groups = _get_group(out_file, mode=mode)
+    output_group = [_get_group(f) for f in in_files]
 
     use_reindexing = False
 
     alt_dims = [_df_index(g[alt_dim]) for g in groups]
     # All dim_names must be equal if reindexing not applied
-    if _requires_reindexing(alt_dims):
+    if not _indices_equal(alt_dims):
         use_reindexing = True
 
     # All groups must be anndata
-    if not all(get_encoding_type(g) == "anndata" for g in groups):
+    if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
         raise ValueError("All groups must be anndata")
 
     # Write metadata
     output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
+    # Read the backed objects of Xs
+    Xs = [read_as_backed(g["X"]) for g in groups]
+
     # Label column
     label_col = pd.Categorical.from_codes(
-        np.repeat(np.arange(len(groups)), [get_shape(g["X"])[axis] for g in groups]),
+        np.repeat(np.arange(len(groups)), [x.shape[axis] for x in Xs]),
         categories=keys,
     )
 
@@ -579,9 +565,9 @@ def concat_on_disk(
     _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge)
 
     # Write X
-    Xs = [g["X"] for g in groups]
-    write_concat_sequence(
-        groups=Xs,
+
+    write_concat_arrays(
+        arrays=Xs,
         output_group=output_group,
         output_path="X",
         axis=axis,
