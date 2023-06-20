@@ -9,7 +9,7 @@
 
 <img
   src="https://raw.githubusercontent.com/scverse/anndata/main/docs/_static/img/anndata_schema.svg"
-  class="align-right" width="350" alt="image"
+  align="right" width="350" alt="image"
 />
 
 # anndata - Annotated data
