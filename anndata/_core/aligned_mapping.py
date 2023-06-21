@@ -12,7 +12,7 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
-from .views import _SetItemMixin, as_view
+from .views import as_view
 from .access import ElementRef
 from .index import _subset
 from anndata.compat import AwkArray
