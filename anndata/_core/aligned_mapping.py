@@ -136,8 +136,6 @@ class AlignedViewMixin(_SetItemMixin):
     parent_mapping: Mapping[str, V]
     """The object this is a view of."""
 
-    _view_args: ElementRef
-
     is_view = True
 
     def __getitem__(self, key: str) -> V:
@@ -165,6 +163,10 @@ class AlignedViewMixin(_SetItemMixin):
 
     def __len__(self) -> int:
         return len(self.parent_mapping)
+
+    @property
+    def _view_args(self) -> ElementRef:
+        return ElementRef(self.parent, self.attrname)
 
 
 class AlignedActualMixin:
@@ -275,9 +277,6 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self._parent = parent_view
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
-
-    def _view_args(self) -> ElementRef:
-        return ElementRef(self._parent, self._axis, (self.attrname,))
 
 
 AxisArraysBase._view_class = AxisArraysView
