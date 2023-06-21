@@ -130,18 +130,21 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert init_hash == joblib.hash(adata)
 
 
-@pytest.mark.parametrize("axis", ["obsm", "varm"])
-def test_set_obsm_key(adata, axis):
+@pytest.mark.parametrize("attr", ["obsm", "varm"])
+def test_set_obsm_key(adata, attr):
     init_hash = joblib.hash(adata)
 
-    orig_val = getattr(adata, axis)["o"].copy()
-    subset = adata[:50] if axis == "obsm" else adata[:, :50]
+    orig_val = getattr(adata, attr)["o"].copy()
+    subset = adata[:50] if attr == "obsm" else adata[:, :50]
+
     assert subset.is_view
-    with pytest.warns(ad.ImplicitModificationWarning):
-        getattr(subset, axis)["o"] = new_val = np.ones((50, 20))
+
+    with pytest.warns(ad.ImplicitModificationWarning, match=rf".*\.{attr}\['o'\].*"):
+        getattr(subset, attr)["o"] = new_val = np.ones((50, 20))
+
     assert not subset.is_view
-    assert np.all(getattr(adata, axis)["o"] == orig_val)
-    assert np.any(getattr(subset, axis)["o"] == new_val)
+    assert np.all(getattr(adata, attr)["o"] == orig_val)
+    assert np.any(getattr(subset, attr)["o"] == new_val)
 
     assert init_hash == joblib.hash(adata)
 
@@ -401,7 +404,10 @@ def test_view_delitem(attr):
     adata_hash = joblib.hash(adata)
     view_hash = joblib.hash(view)
 
-    getattr(view, attr).__delitem__("to_delete")
+    with pytest.warns(
+        ad.ImplicitModificationWarning, match=rf".*\.{attr}\['to_delete'\].*"
+    ):
+        getattr(view, attr).__delitem__("to_delete")
 
     assert not view.is_view
     assert "to_delete" not in getattr(view, attr)
