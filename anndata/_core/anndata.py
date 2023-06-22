@@ -44,6 +44,7 @@ from .views import (
     _resolve_idxs,
 )
 from .sparse_dataset import SparseDataset
+from .dataframe import DataFrame
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
@@ -353,7 +354,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # set data
         if self.isbacked:
-            self._X = None
+            self._X = self._obs = None
 
         # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:

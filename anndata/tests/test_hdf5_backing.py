@@ -175,6 +175,15 @@ def test_backed_raw(tmp_path):
     assert_equal(final_adata, mem_adata)
 
 
+def test_backed_dataframes(tmp_path):
+    backed_pth = tmp_path / "backed.h5ad"
+    mem_adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
+    mem_adata.write(backed_pth)
+
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    assert_equal(backed_adata, mem_adata)
+
+
 @pytest.mark.parametrize(
     "array_type",
     [
