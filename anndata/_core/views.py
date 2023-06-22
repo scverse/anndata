@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from contextlib import contextmanager
 from copy import deepcopy
-from enum import Enum
+from collections.abc import Sequence, KeysView
 from functools import reduce, singledispatch, wraps
-from typing import Any, KeysView, Optional, Sequence, Tuple
+from typing import Any
 import warnings
 
 import numpy as np
@@ -22,6 +24,8 @@ class _SetItemMixin:
     so it can make a copy of itself.
     This implements copy-on-modify semantics for views of AnnData objects.
     """
+
+    _view_args: ElementRef | None
 
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
@@ -50,7 +54,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -68,7 +72,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -77,7 +81,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         arr._view_args = view_args
         return arr
 
-    def __array_finalize__(self, obj: Optional[np.ndarray]):
+    def __array_finalize__(self, obj: np.ndarray | None):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
 
@@ -102,7 +106,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
     ):
         arr = super().__new__(
             cls,
@@ -119,7 +123,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
 
         return arr
 
-    def __array_finalize__(self, obj: Optional[DaskArray]):
+    def __array_finalize__(self, obj: DaskArray | None):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
 

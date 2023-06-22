@@ -12,7 +12,7 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
-from .views import as_view
+from .views import _SetItemMixin, as_view
 from .access import ElementRef
 from .index import _subset
 from anndata.compat import AwkArray
@@ -126,7 +126,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         return dict(self)
 
 
-class AlignedViewMixin:
+class AlignedViewMixin(_SetItemMixin):
     parent: "anndata.AnnData"
     """Reference to parent AnnData view"""
 
@@ -135,6 +135,8 @@ class AlignedViewMixin:
 
     parent_mapping: Mapping[str, V]
     """The object this is a view of."""
+
+    _view_args: ElementRef
 
     is_view = True
 
@@ -146,10 +148,7 @@ class AlignedViewMixin:
 
     def __setitem__(self, key: str, value: V):
         value = self._validate_value(value, key)  # Validate before mutating
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        new_mapping[key] = value
-        self.parent._init_as_actual(adata)
+        super().__setitem__(key, value)
 
     def __delitem__(self, key: str):
         self[key]  # Make sure it exists before bothering with a copy
@@ -277,6 +276,10 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
 
+    @property
+    def _view_args(self) -> ElementRef:
+        return ElementRef(self._parent, self.attrname, ())
+
 
 AxisArraysBase._view_class = AxisArraysView
 AxisArraysBase._actual_class = AxisArrays
@@ -318,6 +321,10 @@ class LayersView(AlignedViewMixin, LayersBase):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
+
+    @property
+    def _view_args(self) -> ElementRef:
+        return ElementRef(self._parent, "layers", ())
 
 
 LayersBase._view_class = LayersView
