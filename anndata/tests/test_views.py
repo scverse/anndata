@@ -137,7 +137,10 @@ def test_set_obsm_key(adata, axis):
     orig_val = getattr(adata, axis)["o"].copy()
     subset = adata[:50] if axis == "obsm" else adata[:, :50]
     assert subset.is_view
-    with pytest.warns(ad.ImplicitModificationWarning):
+    with pytest.warns(
+        ad.ImplicitModificationWarning,
+        match=rf"Trying to modify attribute `.{axis}` of view",
+    ):
         getattr(subset, axis)["o"] = new_val = np.ones((50, 20))
     assert not subset.is_view
     assert np.all(getattr(adata, axis)["o"] == orig_val)
@@ -458,7 +461,11 @@ def test_layers_view():
     assert real_hash == joblib.hash(real_adata)
     assert view_hash == joblib.hash(view_adata)
 
-    view_adata.layers["L2"] = L[1:, 1:] + 2
+    with pytest.warns(
+        ad.ImplicitModificationWarning,
+        match=r"Trying to modify attribute `.layers` of view",
+    ):
+        view_adata.layers["L2"] = L[1:, 1:] + 2
 
     assert not view_adata.is_view
     assert real_hash == joblib.hash(real_adata)

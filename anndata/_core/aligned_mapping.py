@@ -276,8 +276,9 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
 
+    @property
     def _view_args(self) -> ElementRef:
-        return ElementRef(self._parent, self._axis, (self.attrname,))
+        return ElementRef(self._parent, self.attrname, ())
 
 
 AxisArraysBase._view_class = AxisArraysView
@@ -320,6 +321,10 @@ class LayersView(AlignedViewMixin, LayersBase):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
+
+    @property
+    def _view_args(self) -> ElementRef:
+        return ElementRef(self._parent, "layers", ())
 
 
 LayersBase._view_class = LayersView
