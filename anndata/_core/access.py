@@ -12,6 +12,9 @@ class ElementRef(NamedTuple):
     def __str__(self) -> str:
         return f".{self.attrname}" + "".join(map(lambda x: f"['{x}']", self.keys))
 
+    def __getitem__(self, key: str) -> "ElementRef":
+        return ElementRef(self.parent, self.attrname, (*self.keys, key))
+
     @property
     def _parent_el(self):
         return reduce(

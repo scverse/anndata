@@ -12,7 +12,7 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
-from .views import as_view
+from .views import _SetItemMixin, as_view
 from .access import ElementRef
 from .index import _subset
 from anndata.compat import AwkArray
@@ -126,7 +126,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         return dict(self)
 
 
-class AlignedViewMixin:
+class AlignedViewMixin(_SetItemMixin):
     parent: "anndata.AnnData"
     """Reference to parent AnnData view"""
 
@@ -138,37 +138,37 @@ class AlignedViewMixin:
 
     is_view = True
 
+    @property
+    def _view_args(self) -> ElementRef:
+        return ElementRef(self.parent, self.attrname, ())
+
     def __getitem__(self, key: str) -> V:
         return as_view(
             _subset(self.parent_mapping[key], self.subset_idx),
-            ElementRef(self.parent, self.attrname, (key,)),
+            self._view_args[key],
         )
 
     def __setitem__(self, key: str, value: V):
         value = self._validate_value(value, key)  # Validate before mutating
         warnings.warn(
-            f"Setting element `.{self.attrname}['{key}']` of view, "
+            f"Setting element `{self._view_args[key]}` of view, "
             "initializing view as actual.",
             ImplicitModificationWarning,
             stacklevel=2,
         )
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        new_mapping[key] = value
-        self.parent._init_as_actual(adata)
+        with self._update() as container:
+            container[key] = value
 
     def __delitem__(self, key: str):
         _ = key in self  # Make sure it exists before bothering with a copy
         warnings.warn(
-            f"Removing element `.{self.attrname}['{key}']` of view, "
+            f"Removing element `.{self._view_args[key]}` of view, "
             "initializing view as actual.",
             ImplicitModificationWarning,
             stacklevel=2,
         )
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        del new_mapping[key]
-        self.parent._init_as_actual(adata)
+        with self._update() as container:
+            del container[key]
 
     def __contains__(self, key: str) -> bool:
         return key in self.parent_mapping

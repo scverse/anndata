@@ -32,7 +32,7 @@ class _SetItemMixin:
             super().__setitem__(idx, value)
         else:
             warnings.warn(
-                f"Trying to modify attribute `.{self._view_args.attrname}` of view, "
+                f"Trying to modify attribute `{self._view_args}` of view, "
                 "initializing view as actual.",
                 ImplicitModificationWarning,
                 stacklevel=2,
