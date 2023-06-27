@@ -38,8 +38,6 @@ from . import read_dispatched
 from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
 
 
-MAX_LOAD_SIZE = 60_000_000
-
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
 EAGER_TYPES = {"dataframe", "awkward-array"}
