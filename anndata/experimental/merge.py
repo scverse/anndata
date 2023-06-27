@@ -68,16 +68,17 @@ def _indices_equal(indices: Iterable[pd.Index]) -> bool:
 
 def _gen_slice_to_append(
     datasets: Sequence[SparseDataset],
-    reindexers=None,
+    reindexers,
+    max_loaded_sparse_elems: int,
     axis=0,
     fill_value=None,
 ):
     for ds, ri in zip(datasets, reindexers):
-        n_slices = ds.shape[axis] * ds.shape[1 - axis] // MAX_LOAD_SIZE
+        n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_sparse_elems
         if n_slices < 2:
             yield ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
         else:
-            slice_size = MAX_LOAD_SIZE // ds.shape[1 - axis]
+            slice_size = max_loaded_sparse_elems // ds.shape[1 - axis]
             if slice_size == 0:
                 slice_size = 1
             rem_slices = ds.shape[axis]
@@ -203,11 +204,14 @@ def write_concat_sparse(
     datasets: Sequence[SparseDataset],
     output_group: Union[ZarrGroup, H5Group],
     output_path: Union[ZarrGroup, H5Group],
+    max_loaded_sparse_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
     fill_value=None,
 ):
-    elems = _gen_slice_to_append(datasets, reindexers, axis, fill_value)
+    elems = _gen_slice_to_append(
+        datasets, reindexers, max_loaded_sparse_elems, axis, fill_value
+    )
     init_elem = (csr_matrix, csc_matrix)[axis](next(elems))
     write_elem(output_group, output_path, init_elem)
     del init_elem
@@ -222,6 +226,7 @@ def _write_concat_mappings(
     output_group: Union[ZarrGroup, H5Group],
     keys,
     path,
+    max_loaded_sparse_elems,
     axis=0,
     index=None,
     reindexers=None,
@@ -247,6 +252,7 @@ def _write_concat_mappings(
             index=index,
             reindexers=reindexers,
             fill_value=fill_value,
+            max_loaded_sparse_elems=max_loaded_sparse_elems,
         )
 
 
@@ -254,6 +260,7 @@ def _write_concat_arrays(
     arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]],
     output_group,
     output_path,
+    max_loaded_sparse_elems,
     axis=0,
     reindexers=None,
     fill_value=None,
@@ -276,7 +283,13 @@ def _write_concat_arrays(
         expected_sparse_fmt = ["csr", "csc"][axis]
         if all(a.format_str == expected_sparse_fmt for a in arrays):
             write_concat_sparse(
-                arrays, output_group, output_path, axis, reindexers, fill_value
+                arrays,
+                output_group,
+                output_path,
+                max_loaded_sparse_elems,
+                axis,
+                reindexers,
+                fill_value,
             )
         else:
             raise NotImplementedError(
@@ -292,6 +305,7 @@ def _write_concat_sequence(
     arrays: Sequence[Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray]],
     output_group,
     output_path,
+    max_loaded_sparse_elems,
     axis=0,
     index=None,
     reindexers=None,
@@ -326,7 +340,14 @@ def _write_concat_sequence(
         isinstance(a, (pd.DataFrame, SparseDataset, H5Array, ZarrArray)) for a in arrays
     ):
         _write_concat_arrays(
-            arrays, output_group, output_path, axis, reindexers, fill_value, join
+            arrays,
+            output_group,
+            output_path,
+            max_loaded_sparse_elems,
+            axis,
+            reindexers,
+            fill_value,
+            join,
         )
     else:
         raise NotImplementedError(
@@ -371,6 +392,7 @@ def concat_on_disk(
     ],
     out_file: Union[str, os.PathLike, typing.MutableMapping],
     overwrite: bool = False,
+    max_loaded_sparse_elems: int = 100_000_000,
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
@@ -393,6 +415,11 @@ def concat_on_disk(
     to the concatenation of the loaded AnnData objects using
     the `concat` function.
 
+    To adjust the maximum amount of data loaded in memory; for sparse
+    arrays use the max_loaded_sparse_elems argument; for dense arrays
+    see the Dask documentation, as the Dask concatenation function is used
+    to concatenate dense arrays in this function
+
 
 
     Params
@@ -406,6 +433,11 @@ def concat_on_disk(
     overwrite
         If False the and if a file already exists it will raise an error,
         otherwise it will overwrite.
+    max_loaded_sparse_elems
+        The maximum number of elements to load in memory when concatenating
+        sparse arrays. Note that this number also includes the empty entries.
+        Set to 100m by default meaning roughly 400mb will be loaded
+        to memory at simultaneously.
     axis
         Which axis to concatenate along.
     join
@@ -544,6 +576,7 @@ def concat_on_disk(
         axis=axis,
         reindexers=reindexers,
         fill_value=fill_value,
+        max_loaded_sparse_elems=max_loaded_sparse_elems,
     )
 
     # Write Layers and {dim}m
@@ -563,6 +596,7 @@ def concat_on_disk(
             output_group,
             intersect_keys(maps),
             m,
+            max_loaded_sparse_elems=max_loaded_sparse_elems,
             axis=m_axis,
             index=m_index,
             reindexers=m_reindexers,
