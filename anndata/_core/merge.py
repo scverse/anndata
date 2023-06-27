@@ -138,6 +138,7 @@ def equal_series(a, b) -> bool:
 
 
 @equal.register(sparse.spmatrix)
+@equal.register(sparse.sparray)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
     if isinstance(b, sparse.spmatrix):
@@ -165,7 +166,7 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x):
-    if not isinstance(x, sparse.spmatrix):
+    if not isinstance(x, (sparse.spmatrix, sparse.sparray)):
         return sparse.csr_matrix(x)
     else:
         return x
@@ -448,7 +449,10 @@ class Reindexer:
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
-    def _apply_to_sparse(self, el: spmatrix, *, axis, fill_value=None) -> spmatrix:
+    # TODO: Figure out how to make this work for array classes
+    def _apply_to_sparse(
+        self, el: sparse.spmatrix | sparse.sparray, *, axis, fill_value=None
+    ) -> spmatrix:
         if fill_value is None:
             fill_value = default_fill_value([el])
         if fill_value != 0:
@@ -534,7 +538,7 @@ def default_fill_value(els):
 
     This is largely due to backwards compat, and might not be the ideal solution.
     """
-    if any(isinstance(el, sparse.spmatrix) for el in els):
+    if any(isinstance(el, (sparse.spmatrix, sparse.sparray)) for el in els):
         return 0
     else:
         return np.nan
