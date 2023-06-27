@@ -19,6 +19,7 @@ def asarray(x):
     return np.asarray(x)
 
 
+@asarray.register(sparse.sparray)
 @asarray.register(sparse.spmatrix)
 def asarray_sparse(x):
     return x.toarray()

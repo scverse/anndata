@@ -431,6 +431,7 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(SparseDataset)
 @assert_equal.register(sparse.spmatrix)
+@assert_equal.register(sparse.sparray)  # TODO: Figure out compat for scipy < 1.11
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)

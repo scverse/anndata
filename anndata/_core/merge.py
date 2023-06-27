@@ -401,7 +401,7 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, sparse.spmatrix):
+        elif isinstance(el, (sparse.spmatrix, sparse.sparray)):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -601,7 +601,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
 
         return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)], axis=axis)
-    elif any(isinstance(a, sparse.spmatrix) for a in arrays):
+    elif any(isinstance(a, (sparse.spmatrix, sparse.sparray)) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
             [

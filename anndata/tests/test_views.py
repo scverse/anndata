@@ -9,7 +9,7 @@ import pytest
 
 import anndata as ad
 from anndata._core.index import _normalize_index
-from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
+from anndata._core.views import ArrayView, SparseCSRMatrixView, SparseCSCMatrixView
 from anndata.compat import DaskArray
 from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
@@ -580,7 +580,7 @@ def test_deepcopy_subset(adata, spmat: type):
     assert isinstance(adata.obsp["spmat"], spmat)
     assert not isinstance(
         adata.obsp["spmat"],
-        SparseCSRView if spmat is sparse.csr_matrix else SparseCSCView,
+        SparseCSRMatrixView if spmat is sparse.csr_matrix else SparseCSCMatrixView,
     )
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
 

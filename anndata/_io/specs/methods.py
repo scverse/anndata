@@ -453,26 +453,58 @@ write_csc = partial(write_sparse_compressed, fmt="csc")
 _REGISTRY.register_write(H5Group, sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"))(
     write_csr
 )
-_REGISTRY.register_write(H5Group, views.SparseCSRView, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
+_REGISTRY.register_write(
+    H5Group, views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0")
+)(write_csr)
 _REGISTRY.register_write(H5Group, sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"))(
     write_csc
 )
-_REGISTRY.register_write(H5Group, views.SparseCSCView, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
+_REGISTRY.register_write(
+    H5Group, views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0")
+)(write_csc)
 _REGISTRY.register_write(ZarrGroup, sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"))(
     write_csr
 )
-_REGISTRY.register_write(ZarrGroup, views.SparseCSRView, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
+_REGISTRY.register_write(
+    ZarrGroup, views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0")
+)(write_csr)
 _REGISTRY.register_write(ZarrGroup, sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"))(
     write_csc
 )
-_REGISTRY.register_write(ZarrGroup, views.SparseCSCView, IOSpec("csc_matrix", "0.1.0"))(
+_REGISTRY.register_write(
+    ZarrGroup, views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0")
+)(write_csc)
+_REGISTRY.register_write(H5Group, sparse.csr_array, IOSpec("csr_matrix", "0.1.0"))(
+    write_csr
+)
+_REGISTRY.register_write(
+    H5Group, views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0")
+)(write_csr)
+_REGISTRY.register_write(H5Group, sparse.csc_array, IOSpec("csc_matrix", "0.1.0"))(
     write_csc
+)
+_REGISTRY.register_write(
+    H5Group, views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0")
+)(write_csc)
+_REGISTRY.register_write(ZarrGroup, sparse.csr_array, IOSpec("csr_matrix", "0.1.0"))(
+    write_csr
+)
+_REGISTRY.register_write(
+    ZarrGroup, views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0")
+)(write_csr)
+_REGISTRY.register_write(ZarrGroup, sparse.csc_array, IOSpec("csc_matrix", "0.1.0"))(
+    write_csc
+)
+_REGISTRY.register_write(
+    ZarrGroup, views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0")
+)(write_csc)
+
+
+_REGISTRY.register_write(H5Group, sparse.csc_array, IOSpec("csc_matrix", "0.1.0"))(
+    write_csc
+)
+_REGISTRY.register_write(H5Group, sparse.csr_array, IOSpec("csr_matrix", "0.1.0"))(
+    write_csr
 )
 
 
