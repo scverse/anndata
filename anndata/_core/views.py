@@ -18,6 +18,33 @@ from .access import ElementRef
 from ..compat import ZappyArray, AwkArray, DaskArray
 
 
+@contextmanager
+def view_update(adata_view: anndata.AnnData, attr_name: str, keys: tuple[str, ...]):
+    """Context manager for updating a view of an AnnData object.
+
+    Contains logic for "actualizing" a view. Yields the object to be modified in-place.
+
+    Parameters
+    ----------
+    adata_view
+        A view of an AnnData
+    attr_name
+        Name of the attribute being updated
+    keys
+        Keys to the attribute being updated
+
+    Yields
+    ------
+
+    `adata.attr[key1][key2][keyn]...`
+    """
+    new = adata_view.copy()
+    attr = getattr(new, attr_name)
+    container = reduce(lambda d, k: d[k], keys, attr)
+    yield container
+    adata_view._init_as_actual(new)
+
+
 class _SetItemMixin:
     """\
     Class which (when values are being set) lets their parent AnnData view know,
@@ -37,17 +64,8 @@ class _SetItemMixin:
                 ImplicitModificationWarning,
                 stacklevel=2,
             )
-            with self._update() as container:
+            with view_update(*self._view_args) as container:
                 container[idx] = value
-
-    @contextmanager
-    def _update(self):
-        adata_view, attr_name, keys = self._view_args
-        new = adata_view.copy()
-        attr = getattr(new, attr_name)
-        container = reduce(lambda d, k: d[k], keys, attr)
-        yield container
-        adata_view._init_as_actual(new)
 
 
 class _ViewMixin(_SetItemMixin):
@@ -157,7 +175,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
     def drop(self, *args, inplace: bool = False, **kw):
         if not inplace:
             return self.copy().drop(*args, **kw)
-        with self._update() as df:
+        with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
 
 

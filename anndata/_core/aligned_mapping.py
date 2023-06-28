@@ -12,7 +12,7 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
-from .views import as_view
+from .views import as_view, view_update
 from .access import ElementRef
 from .index import _subset
 from anndata.compat import AwkArray
@@ -152,10 +152,8 @@ class AlignedViewMixin:
             ImplicitModificationWarning,
             stacklevel=2,
         )
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        new_mapping[key] = value
-        self.parent._init_as_actual(adata)
+        with view_update(self.parent, self.attrname, ()) as new_mapping:
+            new_mapping[key] = value
 
     def __delitem__(self, key: str):
         _ = key in self  # Make sure it exists before bothering with a copy
@@ -165,10 +163,8 @@ class AlignedViewMixin:
             ImplicitModificationWarning,
             stacklevel=2,
         )
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        del new_mapping[key]
-        self.parent._init_as_actual(adata)
+        with view_update(self.parent, self.attrname, ()) as new_mapping:
+            del new_mapping[key]
 
     def __contains__(self, key: str) -> bool:
         return key in self.parent_mapping
