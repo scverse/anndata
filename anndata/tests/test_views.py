@@ -11,7 +11,7 @@ import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRMatrixView, SparseCSCMatrixView
 from anndata.compat import DaskArray
-from dask.base import tokenize, normalize_token
+from dask.base import tokenize
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -286,21 +286,6 @@ def test_not_set_subset_X(matrix_type_no_dask, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == joblib.hash(adata)
-
-
-@normalize_token.register(ad.AnnData)
-def tokenize_anndata(adata: ad.AnnData):
-    res = []
-    if adata.X is not None:
-        res.append(tokenize(adata.X))
-    res.extend([tokenize(adata.obs), tokenize(adata.var)])
-    for attr in ["obsm", "varm", "obsp", "varp", "layers"]:
-        elem = getattr(adata, attr)
-        res.append(tokenize(list(elem.items())))
-    res.append(joblib.hash(adata.uns))
-    if adata.raw is not None:
-        res.append(tokenize(adata.raw.to_adata()))
-    return tuple(res)
 
 
 # TODO: Determine if this is the intended behavior,
