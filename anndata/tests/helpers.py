@@ -23,12 +23,25 @@ from anndata.compat import AwkArray, DaskArray
 GEN_ADATA_DASK_ARGS = dict(
     obsm_types=(
         sparse.csr_matrix,
+        sparse.csr_array,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
     ),
-    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
-    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    varm_types=(
+        sparse.csr_matrix,
+        sparse.csr_array,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    layers_types=(
+        sparse.csr_matrix,
+        sparse.csr_array,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
 )
 
 
