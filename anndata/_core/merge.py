@@ -250,12 +250,12 @@ def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"])
 
     Looks for if there are duplicated column names that would show up in the result.
     """
+    repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
     if join == "inner":
-        repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
         intersecting_cols = intersect_keys(cols)
         problem_cols = repeated_cols.intersection(intersecting_cols)
     elif join == "outer":
-        problem_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
+        problem_cols = repeated_cols
     else:
         raise ValueError()
 

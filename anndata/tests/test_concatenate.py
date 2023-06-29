@@ -1436,7 +1436,7 @@ def test_outer_concat_outputs_nullable_bool_writable(tmp_path):
 
 
 def test_concat_duplicated_columns(join_type):
-    # https://github.com/scverse/anndata/issues/483#issuecomment-1610579577
+    # https://github.com/scverse/anndata/issues/483
     a = AnnData(
         obs=pd.DataFrame(
             np.ones((5, 2)), columns=["a", "a"], index=[str(x) for x in range(5)]
