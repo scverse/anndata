@@ -52,6 +52,12 @@ def file_format(request):
     return request.param
 
 
+# trying with 10 should be slow but will guarantee that the feature is being used
+@pytest.fixture(params=[10, 100_000_000])
+def max_loaded_sparse_elems(request):
+    return request.param
+
+
 def _adatas_to_paths(adatas, tmp_path, file_format):
     """
     Gets list of adatas, writes them and returns their paths as zarr
@@ -79,7 +85,9 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
     return paths
 
 
-def assert_eq_concat_on_disk(adatas, tmp_path, file_format, *args, **kwargs):
+def assert_eq_concat_on_disk(
+    adatas, tmp_path, file_format, max_loaded_sparse_elems=None, *args, **kwargs
+):
     def read_func(path):
         if file_format == "h5ad":
             return read_h5ad(path)
@@ -90,6 +98,8 @@ def assert_eq_concat_on_disk(adatas, tmp_path, file_format, *args, **kwargs):
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
     out_name = tmp_path / ("out." + file_format)
+    if max_loaded_sparse_elems is not None:
+        kwargs["max_loaded_sparse_elems"] = max_loaded_sparse_elems
     concat_on_disk(paths, out_name, *args, **kwargs)
     res2 = read_func(out_name)
     assert_equal(res1, res2, exact=False)
@@ -106,7 +116,9 @@ def get_array_type(array_type, axis):
         raise NotImplementedError(f"array_type {array_type} not implemented")
 
 
-def test_anndatas_without_reindex(axis, array_type, join_type, tmp_path, file_format):
+def test_anndatas_without_reindex(
+    axis, array_type, join_type, tmp_path, max_loaded_sparse_elems, file_format
+):
     N = 50
     M = 50
     sparse_fmt = "csr"
@@ -126,10 +138,19 @@ def test_anndatas_without_reindex(axis, array_type, join_type, tmp_path, file_fo
         )
         adatas.append(a)
 
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format, axis=axis, join=join_type)
+    assert_eq_concat_on_disk(
+        adatas,
+        tmp_path,
+        file_format,
+        max_loaded_sparse_elems,
+        axis=axis,
+        join=join_type,
+    )
 
 
-def test_anndatas_with_reindex(axis, array_type, join_type, tmp_path, file_format):
+def test_anndatas_with_reindex(
+    axis, array_type, join_type, tmp_path, file_format, max_loaded_sparse_elems
+):
     N = 50
     M = 50
     adatas = []
@@ -158,7 +179,14 @@ def test_anndatas_with_reindex(axis, array_type, join_type, tmp_path, file_forma
         a.varm["sparse"] = get_array_type("sparse", 1 - axis)(a.varm["sparse"])
         adatas.append(a)
 
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format, axis=axis, join=join_type)
+    assert_eq_concat_on_disk(
+        adatas,
+        tmp_path,
+        file_format,
+        max_loaded_sparse_elems,
+        axis=axis,
+        join=join_type,
+    )
 
 
 def test_concat_ordered_categoricals_retained(tmp_path, file_format):
