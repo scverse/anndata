@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from contextlib import contextmanager
 from copy import deepcopy
-from enum import Enum
+from collections.abc import Sequence, KeysView
 from functools import reduce, singledispatch, wraps
-from typing import Any, KeysView, Optional, Sequence, Tuple
+from typing import Any
 import warnings
 
 import numpy as np
@@ -16,12 +18,41 @@ from .access import ElementRef
 from ..compat import ZappyArray, AwkArray, DaskArray
 
 
+@contextmanager
+def view_update(adata_view: anndata.AnnData, attr_name: str, keys: tuple[str, ...]):
+    """Context manager for updating a view of an AnnData object.
+
+    Contains logic for "actualizing" a view. Yields the object to be modified in-place.
+
+    Parameters
+    ----------
+    adata_view
+        A view of an AnnData
+    attr_name
+        Name of the attribute being updated
+    keys
+        Keys to the attribute being updated
+
+    Yields
+    ------
+
+    `adata.attr[key1][key2][keyn]...`
+    """
+    new = adata_view.copy()
+    attr = getattr(new, attr_name)
+    container = reduce(lambda d, k: d[k], keys, attr)
+    yield container
+    adata_view._init_as_actual(new)
+
+
 class _SetItemMixin:
     """\
     Class which (when values are being set) lets their parent AnnData view know,
     so it can make a copy of itself.
     This implements copy-on-modify semantics for views of AnnData objects.
     """
+
+    _view_args: ElementRef | None
 
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
@@ -33,24 +64,15 @@ class _SetItemMixin:
                 ImplicitModificationWarning,
                 stacklevel=2,
             )
-            with self._update() as container:
+            with view_update(*self._view_args) as container:
                 container[idx] = value
-
-    @contextmanager
-    def _update(self):
-        adata_view, attr_name, keys = self._view_args
-        new = adata_view.copy()
-        attr = getattr(new, attr_name)
-        container = reduce(lambda d, k: d[k], keys, attr)
-        yield container
-        adata_view._init_as_actual(new)
 
 
 class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -68,7 +90,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -77,7 +99,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         arr._view_args = view_args
         return arr
 
-    def __array_finalize__(self, obj: Optional[np.ndarray]):
+    def __array_finalize__(self, obj: np.ndarray | None):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
 
@@ -102,7 +124,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: Tuple["anndata.AnnData", str, Tuple[str, ...]] = None,
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
     ):
         arr = super().__new__(
             cls,
@@ -119,7 +141,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
 
         return arr
 
-    def __array_finalize__(self, obj: Optional[DaskArray]):
+    def __array_finalize__(self, obj: DaskArray | None):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
 
@@ -153,7 +175,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
     def drop(self, *args, inplace: bool = False, **kw):
         if not inplace:
             return self.copy().drop(*args, **kw)
-        with self._update() as df:
+        with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
 
 
