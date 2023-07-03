@@ -174,7 +174,6 @@ def write_concat_dense(
     """
     import dask.array as da
 
-
     darrays = None
     init_elem = arrays[0]
 
@@ -184,7 +183,10 @@ def write_concat_dense(
         darrays = (da.from_zarr(a) for a in arrays)
 
     res = da.concatenate(
-        [ri(a, axis=1 - axis, fill_value=fill_value) for a, ri in zip(darrays, reindexers)],
+        [
+            ri(a, axis=1 - axis, fill_value=fill_value)
+            for a, ri in zip(darrays, reindexers)
+        ],
         axis=axis,
     )
     write_elem(output_group, output_path, res)
