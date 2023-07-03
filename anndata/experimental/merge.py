@@ -407,7 +407,7 @@ def concat_on_disk(
         Collection[Union[str, os.PathLike]],
         typing.MutableMapping,
     ],
-    out_file: Union[str, os.PathLike, typing.MutableMapping],
+    out_file: Union[str, os.PathLike],
     overwrite: bool = False,
     max_loaded_sparse_elems: int = 100_000_000,
     *,
