@@ -5,7 +5,9 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from anndata.experimental.merge import concat_on_disk
+from anndata.experimental.merge import concat_on_disk, as_group
+from anndata.experimental import write_elem, read_elem
+
 from anndata import AnnData, concat
 from anndata.tests.helpers import (
     assert_equal,
@@ -14,9 +16,6 @@ from anndata.tests.helpers import (
 
 
 from anndata.utils import asarray
-
-
-from anndata import read_h5ad, read_zarr
 
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
@@ -64,23 +63,17 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
     """
     paths = None
 
-    def write_func(adata, path):
-        if file_format == "h5ad":
-            adata.write(path)
-        else:
-            adata.write_zarr(path)
-
     if isinstance(adatas, Mapping):
         paths = {}
         for k, v in adatas.items():
             p = tmp_path / (f"{k}." + file_format)
-            write_func(v, p)
+            write_elem(as_group(p, mode="a"), "", v)
             paths[k] = p
     else:
         paths = []
         for i, a in enumerate(adatas):
             p = tmp_path / (f"{i}." + file_format)
-            write_func(a, p)
+            write_elem(as_group(p, mode="a"), "", a)
             paths += [p]
     return paths
 
@@ -88,11 +81,6 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
 def assert_eq_concat_on_disk(
     adatas, tmp_path, file_format, max_loaded_sparse_elems=None, *args, **kwargs
 ):
-    def read_func(path):
-        if file_format == "h5ad":
-            return read_h5ad(path)
-        return read_zarr(path)
-
     # create one from the concat function
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
@@ -101,7 +89,7 @@ def assert_eq_concat_on_disk(
     if max_loaded_sparse_elems is not None:
         kwargs["max_loaded_sparse_elems"] = max_loaded_sparse_elems
     concat_on_disk(paths, out_name, *args, **kwargs)
-    res2 = read_func(out_name)
+    res2 = read_elem(as_group(out_name))
     assert_equal(res1, res2, exact=False)
 
 
