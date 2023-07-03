@@ -74,7 +74,9 @@ def _gen_slice_to_append(
     for ds, ri in zip(datasets, reindexers):
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_sparse_elems
         if n_slices < 2:
-            yield ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
+            yield (csr_matrix, csc_matrix)[axis](
+                ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
+            )
         else:
             slice_size = max_loaded_sparse_elems // ds.shape[1 - axis]
             if slice_size == 0:
@@ -88,7 +90,9 @@ def _gen_slice_to_append(
                 elif axis == 1:
                     ds_part = ds[:, idx : idx + slice_size]
 
-                yield ri(ds_part, axis=1 - axis, fill_value=fill_value)
+                yield (csr_matrix, csc_matrix)[axis](
+                    ri(ds_part, axis=1 - axis, fill_value=fill_value)
+                )
                 rem_slices -= slice_size
                 idx += slice_size
 
@@ -207,15 +211,33 @@ def write_concat_sparse(
     reindexers: Reindexer = None,
     fill_value=None,
 ):
-    elems = _gen_slice_to_append(
-        datasets, reindexers, max_loaded_sparse_elems, axis, fill_value
-    )
-    init_elem = (csr_matrix, csc_matrix)[axis](next(elems))
+    """
+    Writes and concatenates sparse datasets into a single output dataset.
+
+    Args:
+        datasets (Sequence[SparseDataset]): A sequence of SparseDataset objects to be concatenated.
+        output_group (Union[ZarrGroup, H5Group]): The output group where the concatenated dataset will be written.
+        output_path (Union[ZarrGroup, H5Group]): The output path where the concatenated dataset will be written.
+        max_loaded_sparse_elems (int): The maximum number of sparse elements to load at once.
+        axis (Literal[0, 1], optional): The axis along which the datasets should be concatenated.
+            Defaults to 0.
+        reindexers (Reindexer, optional): A reindexer object that defines the reindexing operation to be applied.
+            Defaults to None.
+        fill_value (Any, optional): The fill value to use for missing elements. Defaults to None.
+    """
+    elems = None
+    if all(ri.no_change for ri in reindexers):
+        elems = iter(datasets)
+    else:
+        elems = _gen_slice_to_append(
+            datasets, reindexers, max_loaded_sparse_elems, axis, fill_value
+        )
+    init_elem = next(elems)
     write_elem(output_group, output_path, init_elem)
     del init_elem
     out_dataset: SparseDataset = read_as_backed(output_group[output_path])
     for temp_elem in elems:
-        out_dataset.append((csr_matrix, csc_matrix)[axis](temp_elem))
+        out_dataset.append(temp_elem)
         del temp_elem
 
 
