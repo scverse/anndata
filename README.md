@@ -9,7 +9,7 @@
 
 <img
   src="https://raw.githubusercontent.com/scverse/anndata/main/docs/_static/img/anndata_schema.svg"
-  class="align-right" width="350" alt="image"
+  align="right" width="350" alt="image"
 />
 
 # anndata - Annotated data
@@ -21,7 +21,7 @@ anndata is a Python package for handling annotated data matrices in memory and o
 - Ask questions on the [scverse Discourse](https://discourse.scverse.org).
 - Install via `pip install anndata` or `conda install anndata -c conda-forge`.
 - See [Scanpy's documentation](https://scanpy.readthedocs.io/) for usage related to single cell data. anndata was initially built for Scanpy.
-  
+
 If you use `anndata` in your work, please cite the `anndata` pre-print as follows:
 
 > **anndata: Annotated data**
@@ -36,4 +36,4 @@ You can cite the scverse publication as follows:
 >
 > Isaac Virshup, Danila Bredikhin, Lukas Heumos, Giovanni Palla, Gregor Sturm, Adam Gayoso, Ilia Kats, Mikaela Koutrouli, Scverse Community, Bonnie Berger, Dana Pe’er, Aviv Regev, Sarah A. Teichmann, Francesca Finotello, F. Alexander Wolf, Nir Yosef, Oliver Stegle & Fabian J. Theis
 >
-> _Nat Biotechnol._ 2022 Apr 10. doi: [10.1038/s41587-023-01733-8](https://doi.org/10.1038/s41587-023-01733-8).
+> _Nat Biotechnol._ 2023 Apr 10. doi: [10.1038/s41587-023-01733-8](https://doi.org/10.1038/s41587-023-01733-8).

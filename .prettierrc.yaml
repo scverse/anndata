@@ -1,0 +1,7 @@
+overrides:
+  # JSON with comments and trailing commas
+  - files: benchmarks/asv.conf.json
+    options:
+      parser: json5
+      quoteProps: preserve
+      singleQuote: false

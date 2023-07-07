@@ -1433,3 +1433,20 @@ def test_outer_concat_outputs_nullable_bool_writable(tmp_path):
 
     adatas = concat({"a": a, "b": b}, join="outer", label="group")
     adatas.write(tmp_path / "test.h5ad")
+
+
+def test_concat_duplicated_columns(join_type):
+    # https://github.com/scverse/anndata/issues/483
+    a = AnnData(
+        obs=pd.DataFrame(
+            np.ones((5, 2)), columns=["a", "a"], index=[str(x) for x in range(5)]
+        )
+    )
+    b = AnnData(
+        obs=pd.DataFrame(
+            np.ones((5, 1)), columns=["a"], index=[str(x) for x in range(5, 10)]
+        )
+    )
+
+    with pytest.raises(pd.errors.InvalidIndexError, match=r"'a'"):
+        concat([a, b], join=join_type)

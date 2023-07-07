@@ -24,7 +24,6 @@ H5Array = h5py.Dataset
 
 
 # try importing zarr, dask, and zappy
-from packaging import version as _v
 
 try:
     from zarr.core import Array as ZarrArray
