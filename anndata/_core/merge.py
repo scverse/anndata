@@ -1,6 +1,8 @@
 """
 Code for merging/ concatenating AnnData objects.
 """
+from __future__ import annotations
+
 from collections import OrderedDict
 from collections.abc import Mapping, MutableSet
 from functools import reduce, singledispatch
@@ -169,9 +171,11 @@ def as_sparse(x):
         return x
 
 
-def unify_categorical_dtypes(dfs):
+def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
     """
-    Attempts to unify categorical datatypes from multiple dataframes
+    Attempts to unify datatypes from multiple dataframes.
+
+    For catching cases where pandas would convert to object dtype.
     """
     # Get shared categorical columns
     df_dtypes = [dict(df.dtypes) for df in dfs]
@@ -182,8 +186,6 @@ def unify_categorical_dtypes(dfs):
         for df in df_dtypes:
             dtypes[col].append(df.get(col, None))
 
-    dtypes = {k: v for k, v in dtypes.items() if unifiable_dtype(v)}
-
     if len(dtypes) == 0:
         return dfs
     else:
@@ -191,11 +193,9 @@ def unify_categorical_dtypes(dfs):
 
     new_dtypes = {}
     for col in dtypes.keys():
-        categories = reduce(
-            lambda x, y: x.union(y),
-            [x.categories for x in dtypes[col] if not pd.isnull(x)],
-        )
-        new_dtypes[col] = pd.CategoricalDtype(natsorted(categories), ordered=False)
+        target_dtype = try_unifying_dtype(dtypes[col])
+        if target_dtype is not None:
+            new_dtypes[col] = target_dtype
 
     for df in dfs:
         for col, dtype in new_dtypes.items():
@@ -205,21 +205,67 @@ def unify_categorical_dtypes(dfs):
     return dfs
 
 
-def unifiable_dtype(col: pd.Series) -> bool:
+def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
     """
-    Check if dtypes are mergable categoricals.
+    If dtypes can be unified, returns the dtype they would be unified to.
 
-    Currently, this means they must be unordered categoricals.
+    Returns None if they can't be unified, or if we can expect pandas to unify them for
+    us.
+
+    Params
+    ------
+    col:
+        A list of dtypes to unify. Can be numpy/ pandas dtypes, or None (which denotes
+        a missing value)
     """
     dtypes = set()
-    ordered = False
-    for dtype in col:
-        if pd.api.types.is_categorical_dtype(dtype):
-            dtypes.add(dtype.categories.dtype)
-            ordered = ordered | dtype.ordered
-        elif not pd.isnull(dtype):
-            return False
-    return len(dtypes) == 1 and not ordered
+    # Categorical
+    if any([pd.api.types.is_categorical_dtype(x) for x in col]):
+        ordered = False
+        for dtype in col:
+            if pd.api.types.is_categorical_dtype(dtype):
+                dtypes.add(dtype)
+                ordered = ordered | dtype.ordered
+            elif not pd.isnull(dtype):
+                return False
+        if len(dtypes) > 0 and not ordered:
+            categories = reduce(
+                lambda x, y: x.union(y),
+                [x.categories for x in dtypes if not pd.isnull(x)],
+            )
+
+            return pd.CategoricalDtype(natsorted(categories), ordered=False)
+    # Boolean
+    elif all([pd.api.types.is_bool_dtype(x) or x is None for x in col]):
+        if any([x is None for x in col]):
+            return pd.BooleanDtype()
+        else:
+            return None
+    else:
+        return None
+
+
+def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"]):
+    """Given columns for a set of dataframes, checks if the can be combined.
+
+    Looks for if there are duplicated column names that would show up in the result.
+    """
+    repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
+    if join == "inner":
+        intersecting_cols = intersect_keys(cols)
+        problem_cols = repeated_cols.intersection(intersecting_cols)
+    elif join == "outer":
+        problem_cols = repeated_cols
+    else:
+        raise ValueError()
+
+    if len(problem_cols) > 0:
+        problem_cols = list(problem_cols)
+        raise pd.errors.InvalidIndexError(
+            f"Cannot combine dataframes as some contained duplicated column names - "
+            "causing ambiguity.\n\n"
+            f"The problem columns are: {problem_cols}"
+        )
 
 
 ###################
@@ -538,6 +584,13 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
     return Reindexer(cur_var, new_var)
 
 
+def np_bool_to_pd_bool_array(df: pd.DataFrame):
+    for col_name, col_type in dict(df.dtypes).items():
+        if col_type is np.dtype(bool):
+            df[col_name] = pd.array(df[col_name].values)
+    return df
+
+
 def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     arrays = list(arrays)
     if fill_value is None:
@@ -554,7 +607,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
-            unify_categorical_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
+            unify_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
             ignore_index=True,
             axis=axis,
         )
@@ -1023,8 +1076,9 @@ def concat(
     ]
 
     # Annotation for concatenation axis
+    check_combinable_cols([getattr(a, dim).columns for a in adatas], join=join)
     concat_annot = pd.concat(
-        unify_categorical_dtypes([getattr(a, dim) for a in adatas]),
+        unify_dtypes([getattr(a, dim) for a in adatas]),
         join=join,
         ignore_index=True,
     )

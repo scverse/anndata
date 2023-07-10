@@ -56,7 +56,7 @@ Using this information, we're able to dispatch onto readers for the different el
 
 ### AnnData specification (v0.1.0)
 
-* An `AnnData` object MUST be a group. 
+* An `AnnData` object MUST be a group.
 * The group's metadata MUST include entries: `"encoding-type": "anndata"`, `"encoding-version": "0.1.0"`.
 * An `AnnData` group MUST contain entries `"obs"` and `"var"`, which MUST be dataframes (though this may only have an index with no columns).
 * The group MAY contain an entry `X`, which MUST be either a dense or sparse array and whose shape MUST be (`n_obs`, `n_var`)
@@ -241,7 +241,7 @@ n_neighbors <HDF5 dataset "n_neighbors": shape (), type "<i8">
 
 Discrete values can be efficiently represented with categorical arrays (similar to `factors` in `R`).
 These arrays encode the values as small width integers (`codes`), which map to the original label set (`categories`).
-Each entry in the `codes` array is the zero-based index of the encoded value in the `categories` array. 
+Each entry in the `codes` array is the zero-based index of the encoded value in the `categories` array.
 To represent a missing value, a code of `-1` is used.
 We store these two arrays separately.
 

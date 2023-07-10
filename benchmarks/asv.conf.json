@@ -28,7 +28,6 @@
         "python -m build --wheel -o {build_cache_dir} {build_dir}",
     ],
 
-
     // List of branches to benchmark. If not provided, defaults to "master"
     // (for git) or "default" (for mercurial).
     "branches": ["main"], // for git
@@ -81,8 +80,6 @@
         "pandas": [""],
         "memory_profiler": [""],
         "zarr": [""],
-        "setuptools_scm": [""],
-        "flit": [""],
         "pytoml": [""],
         "pytest": [""],
         "pooch": [""],
