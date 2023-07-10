@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from contextlib import contextmanager
 from copy import deepcopy
-from enum import Enum
+from collections.abc import Sequence, KeysView, Callable, Iterable
 from functools import reduce, singledispatch, wraps
-from typing import Any, KeysView, Optional, Sequence, Tuple
+from typing import Any, Optional, Tuple, Literal
 import warnings
 
 import numpy as np
@@ -64,6 +66,9 @@ class _ViewMixin(_SetItemMixin):
         return deepcopy(getattr(parent._adata_ref, attrname))
 
 
+_UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "inner"]
+
+
 class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
@@ -80,6 +85,44 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __array_finalize__(self, obj: Optional[np.ndarray]):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
+
+    def __array_ufunc__(
+        self: ArrayView,
+        ufunc: Callable[..., Any],
+        method: _UFuncMethod,
+        *inputs,
+        out: tuple[np.ndarray, ...] | None = None,
+        **kwargs,
+    ) -> np.ndarray:
+        """Makes numpy ufuncs convert all instances of views to plain arrays.
+
+        See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
+        """
+
+        def convert_all(arrs: Iterable[np.ndarray]) -> Iterable[np.ndarray]:
+            return (
+                arr.view(np.ndarray) if isinstance(arr, ArrayView) else arr
+                for arr in arrs
+            )
+
+        if out is None:
+            outputs = (None,) * ufunc.nout
+        else:
+            out = outputs = tuple(convert_all(out))
+
+        results = super().__array_ufunc__(
+            ufunc, method, *convert_all(inputs), out=out, **kwargs
+        )
+        if results is NotImplemented:
+            return NotImplemented
+
+        if ufunc.nout == 1:
+            results = (results,)
+        results = tuple(
+            (np.asarray(result) if output is None else output)
+            for result, output in zip(results, outputs)
+        )
+        return results[0] if len(results) == 1 else results
 
     def keys(self) -> KeysView[str]:
         # it’s a structured array
