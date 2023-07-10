@@ -545,12 +545,12 @@ def test_invalid_scalar_index(adata, index):
         _ = adata[index]
 
 
-@pytest.mark.parametrize("axis", ["obs", "vars"])
+@pytest.mark.parametrize("obs", [False, True])
 @pytest.mark.parametrize("index", [-100, -50, -1])
-def test_negative_scalar_index(adata, axis, index):
-    pos_index = index + getattr(adata, f"n_{axis}")
+def test_negative_scalar_index(adata, index: int, obs: bool):
+    pos_index = index + (adata.n_obs if obs else adata.n_vars)
 
-    if axis == "obs":
+    if obs:
         adata_pos_subset = adata[pos_index]
         adata_neg_subset = adata[index]
     else:
