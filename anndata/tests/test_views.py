@@ -566,6 +566,7 @@ def test_negative_scalar_index(adata, axis, index):
 
 
 def test_viewness_propagation():
+    # https://github.com/scverse/anndata/issues/239
     adata = ad.AnnData(np.random.random((10, 10)))
     adata = adata[:, [0, 2, 4]]
     v = adata.X.var(axis=0)
