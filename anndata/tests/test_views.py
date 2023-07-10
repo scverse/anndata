@@ -545,12 +545,12 @@ def test_invalid_scalar_index(adata, index):
         _ = adata[index]
 
 
-@pytest.mark.parametrize("obs", [False, True])
+@pytest.mark.parametrize("axis", ["obs", "var"])
 @pytest.mark.parametrize("index", [-100, -50, -1])
-def test_negative_scalar_index(adata, index: int, obs: bool):
-    pos_index = index + (adata.n_obs if obs else adata.n_vars)
+def test_negative_scalar_index(adata, axis, index):
+    pos_index = index + getattr(adata, f"n_{axis}")
 
-    if obs:
+    if axis == "obs":
         adata_pos_subset = adata[pos_index]
         adata_neg_subset = adata[index]
     else:
@@ -563,6 +563,15 @@ def test_negative_scalar_index(adata, index: int, obs: bool):
     np.testing.assert_array_equal(
         adata_pos_subset.var_names, adata_neg_subset.var_names
     )
+
+
+def test_viewness_propagation():
+    adata = ad.AnnData(np.random.random((10, 10)))
+    adata = adata[:, [0, 2, 4]]
+    v = adata.X.var(axis=0)
+    assert not isinstance(v, ArrayView)
+    # this used to break
+    v[np.isnan(v)] = 0
 
 
 @pytest.mark.parametrize("spmat", [sparse.csr_matrix, sparse.csc_matrix])
