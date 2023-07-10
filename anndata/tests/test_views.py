@@ -566,7 +566,7 @@ def test_negative_scalar_index(adata, index: int, obs: bool):
 
 
 def test_viewness_propagation_nan():
-    # https://github.com/scverse/anndata/issues/239
+    """Regression test for https://github.com/scverse/anndata/issues/239"""
     adata = ad.AnnData(np.random.random((10, 10)))
     adata = adata[:, [0, 2, 4]]
     v = adata.X.var(axis=0)
@@ -576,6 +576,7 @@ def test_viewness_propagation_nan():
 
 
 def test_viewness_propagation_allclose(adata):
+    """Regression test for https://github.com/scverse/anndata/issues/191"""
     adata.varm["o"][4:10] = np.tile(np.nan, (10 - 4, adata.varm["o"].shape[1]))
     a = adata[:50].copy()
     b = adata[:50]
