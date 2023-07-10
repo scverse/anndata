@@ -245,6 +245,29 @@ def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
         return None
 
 
+def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"]):
+    """Given columns for a set of dataframes, checks if the can be combined.
+
+    Looks for if there are duplicated column names that would show up in the result.
+    """
+    repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
+    if join == "inner":
+        intersecting_cols = intersect_keys(cols)
+        problem_cols = repeated_cols.intersection(intersecting_cols)
+    elif join == "outer":
+        problem_cols = repeated_cols
+    else:
+        raise ValueError()
+
+    if len(problem_cols) > 0:
+        problem_cols = list(problem_cols)
+        raise pd.errors.InvalidIndexError(
+            f"Cannot combine dataframes as some contained duplicated column names - "
+            "causing ambiguity.\n\n"
+            f"The problem columns are: {problem_cols}"
+        )
+
+
 ###################
 # Per element logic
 ###################
@@ -1055,6 +1078,7 @@ def concat(
     ]
 
     # Annotation for concatenation axis
+    check_combinable_cols([getattr(a, dim).columns for a in adatas], join=join)
     concat_annot = pd.concat(
         unify_dtypes([getattr(a, dim) for a in adatas]),
         join=join,

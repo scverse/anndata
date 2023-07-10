@@ -565,6 +565,30 @@ def test_negative_scalar_index(adata, index: int, obs: bool):
     )
 
 
+def test_viewness_propagation_nan():
+    """Regression test for https://github.com/scverse/anndata/issues/239"""
+    adata = ad.AnnData(np.random.random((10, 10)))
+    adata = adata[:, [0, 2, 4]]
+    v = adata.X.var(axis=0)
+    assert not isinstance(v, ArrayView), type(v).mro()
+    # this used to break
+    v[np.isnan(v)] = 0
+
+
+def test_viewness_propagation_allclose(adata):
+    """Regression test for https://github.com/scverse/anndata/issues/191"""
+    adata.varm["o"][4:10] = np.tile(np.nan, (10 - 4, adata.varm["o"].shape[1]))
+    a = adata[:50].copy()
+    b = adata[:50]
+
+    # .copy() turns view to ndarray, so this was fine:
+    assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
+    # Next line triggered the mutation:
+    assert np.allclose(a.varm["o"], b.varm["o"], equal_nan=True)
+    # Showing that the mutation didn’t happen:
+    assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
+
+
 @pytest.mark.parametrize("spmat", [sparse.csr_matrix, sparse.csc_matrix])
 def test_deepcopy_subset(adata, spmat: type):
     adata.obsp["arr"] = np.zeros((adata.n_obs, adata.n_obs))
