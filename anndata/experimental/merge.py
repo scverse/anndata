@@ -178,13 +178,7 @@ def write_concat_dense(
     """
     import dask.array as da
 
-    darrays = None
-    init_elem = arrays[0]
-
-    if isinstance(init_elem, H5Array):
-        darrays = (da.from_array(a, chunks="auto") for a in arrays)
-    elif isinstance(init_elem, ZarrArray):
-        darrays = (da.from_zarr(a) for a in arrays)
+    darrays = (da.from_array(a, chunks="auto") for a in arrays)
 
     res = da.concatenate(
         [
