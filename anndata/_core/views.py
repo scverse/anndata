@@ -118,20 +118,21 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
         See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
         """
-        args = [
-            input_.view(np.ndarray) if isinstance(input_, ArrayView) else input_
-            for input_ in inputs
-        ]
-        if out is not None:
-            outputs = out
-            out = tuple(
-                output.view(np.ndarray) if isinstance(output, ArrayView) else output
-                for output in outputs
-            )
-        else:
-            outputs = (None,) * ufunc.nout
 
-        results = super().__array_ufunc__(ufunc, method, *args, out=out, **kwargs)
+        def convert_all(arrs: Iterable[np.ndarray]) -> Iterable[np.ndarray]:
+            return (
+                arr.view(np.ndarray) if isinstance(arr, ArrayView) else arr
+                for arr in arrs
+            )
+
+        if out is None:
+            outputs = (None,) * ufunc.nout
+        else:
+            out = outputs = tuple(convert_all(out))
+
+        results = super().__array_ufunc__(
+            ufunc, method, *convert_all(inputs), out=out, **kwargs
+        )
         if results is NotImplemented:
             return NotImplemented
 
