@@ -139,7 +139,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         if ufunc.nout == 1:
             results = (results,)
         results = tuple(
-            (np.asarray(result).view(np.ndarray) if output is None else output)
+            (np.asarray(result) if output is None else output)
             for result, output in zip(results, outputs)
         )
         return results[0] if len(results) == 1 else results
