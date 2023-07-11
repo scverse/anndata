@@ -95,6 +95,13 @@ def test_create_from_df_with_obs_and_var():
         AnnData(df, var=var.reset_index())
 
 
+def test_matching_int_index():
+    adata = AnnData(
+        pd.DataFrame(dict(a=[0.0, 0.5]), index=[0, 1]), obs=pd.DataFrame(index=[0, 1])
+    )
+    pd.testing.assert_index_equal(adata.obs_names, pd.Index(["0", "1"]))
+
+
 def test_from_df_and_dict():
     df = pd.DataFrame(dict(a=[0.1, 0.2, 0.3], b=[1.1, 1.2, 1.3]))
     adata = AnnData(df, dict(species=pd.Categorical(["a", "b", "a"])))
