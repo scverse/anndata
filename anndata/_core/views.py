@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from collections.abc import Sequence, KeysView
+from collections.abc import Sequence, KeysView, Callable, Iterable, Mapping
 from functools import reduce, singledispatch, wraps
-from typing import Any
+from typing import Any, Literal
 import warnings
 
 import numpy as np
@@ -16,6 +16,33 @@ import anndata
 from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
 from ..compat import ZappyArray, AwkArray, DaskArray
+
+
+@contextmanager
+def view_update(adata_view: anndata.AnnData, attr_name: str, keys: tuple[str, ...]):
+    """Context manager for updating a view of an AnnData object.
+
+    Contains logic for "actualizing" a view. Yields the object to be modified in-place.
+
+    Parameters
+    ----------
+    adata_view
+        A view of an AnnData
+    attr_name
+        Name of the attribute being updated
+    keys
+        Keys to the attribute being updated
+
+    Yields
+    ------
+
+    `adata.attr[key1][key2][keyn]...`
+    """
+    new = adata_view.copy()
+    attr = getattr(new, attr_name)
+    container = reduce(lambda d, k: d[k], keys, attr)
+    yield container
+    adata_view._init_as_actual(new)
 
 
 class _SetItemMixin:
@@ -37,17 +64,8 @@ class _SetItemMixin:
                 ImplicitModificationWarning,
                 stacklevel=2,
             )
-            with self._update() as container:
+            with view_update(*self._view_args) as container:
                 container[idx] = value
-
-    @contextmanager
-    def _update(self):
-        adata_view, attr_name, keys = self._view_args
-        new = adata_view.copy()
-        attr = getattr(new, attr_name)
-        container = reduce(lambda d, k: d[k], keys, attr)
-        yield container
-        adata_view._init_as_actual(new)
 
 
 class _ViewMixin(_SetItemMixin):
@@ -68,6 +86,9 @@ class _ViewMixin(_SetItemMixin):
         return deepcopy(getattr(parent._adata_ref, attrname))
 
 
+_UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "inner"]
+
+
 class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
@@ -84,6 +105,44 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __array_finalize__(self, obj: np.ndarray | None):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
+
+    def __array_ufunc__(
+        self: ArrayView,
+        ufunc: Callable[..., Any],
+        method: _UFuncMethod,
+        *inputs,
+        out: tuple[np.ndarray, ...] | None = None,
+        **kwargs,
+    ) -> np.ndarray:
+        """Makes numpy ufuncs convert all instances of views to plain arrays.
+
+        See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
+        """
+
+        def convert_all(arrs: Iterable[np.ndarray]) -> Iterable[np.ndarray]:
+            return (
+                arr.view(np.ndarray) if isinstance(arr, ArrayView) else arr
+                for arr in arrs
+            )
+
+        if out is None:
+            outputs = (None,) * ufunc.nout
+        else:
+            out = outputs = tuple(convert_all(out))
+
+        results = super().__array_ufunc__(
+            ufunc, method, *convert_all(inputs), out=out, **kwargs
+        )
+        if results is NotImplemented:
+            return NotImplemented
+
+        if ufunc.nout == 1:
+            results = (results,)
+        results = tuple(
+            (np.asarray(result) if output is None else output)
+            for result, output in zip(results, outputs)
+        )
+        return results[0] if len(results) == 1 else results
 
     def keys(self) -> KeysView[str]:
         # it’s a structured array
@@ -157,7 +216,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
     def drop(self, *args, inplace: bool = False, **kw):
         if not inplace:
             return self.copy().drop(*args, **kw)
-        with self._update() as df:
+        with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
 
 
