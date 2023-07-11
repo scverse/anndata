@@ -51,6 +51,6 @@ body:
       description: Which version of anndata and other related software you used. Please install and use `session-info`
       render: python
       value: |
-        >>> import anndata, session_info; session_info.show()
+        >>> import anndata, session_info; session_info.show(html=False, dependencies=True)
     validations:
       required: true
