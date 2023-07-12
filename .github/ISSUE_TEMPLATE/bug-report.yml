@@ -49,7 +49,7 @@ body:
     attributes:
       label: Versions
       description: |
-      Which version of anndata and other related software you used. 
+      Which version of anndata and other related software you used.
 
       Please install `session-info`, run the following command, then paste the results into the text box below.
 
