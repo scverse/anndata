@@ -20,7 +20,12 @@ from anndata._io.specs.registry import IORegistryError
 from anndata.utils import asarray
 from anndata.compat import _read_attr, DaskArray
 
-from anndata.tests.helpers import gen_adata, assert_equal, as_dense_dask_array
+from anndata.tests.helpers import (
+    gen_adata,
+    assert_equal,
+    as_dense_dask_array,
+    check_error_or_notes_match,
+)
 
 HERE = Path(__file__).parent
 
@@ -613,7 +618,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         to_write.obs[colname] = np.ones(5)
         with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value.__cause__)
+        assert colname in str(exc_info.value)
     for colname in reserved:
         to_write = orig.copy()
         to_write.varm["df"] = pd.DataFrame(
@@ -621,7 +626,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         )
         with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value.__cause__)
+        assert colname in str(exc_info.value)
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
@@ -675,9 +680,11 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
+    with pytest.raises(TypeError) as exc_info:
         write(adata_pth)
-    assert str(b"c") in str(exc_info.value.__cause__)
+
+    check_error_or_notes_match(exc_info, r"writing key 'obs'")
+    assert str(b"c") in str(exc_info.value)
 
 
 @pytest.mark.parametrize(

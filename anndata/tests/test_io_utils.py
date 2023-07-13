@@ -12,6 +12,7 @@ from anndata._io.utils import (
     report_read_key_on_error,
     AnnDataReadError,
 )
+from anndata.tests.helpers import check_error_or_notes_match
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -50,10 +51,10 @@ def test_write_error_info(diskfmt, tmp_path):
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
-    with pytest.raises(
-        IORegistryError, match=r"Above error raised while writing key 'c'"
-    ):
+    with pytest.raises(IORegistryError) as exc_info:
         write(a)
+
+    check_error_or_notes_match(exc_info, r"Above error raised while writing key 'c'")
 
 
 def test_clean_uns():

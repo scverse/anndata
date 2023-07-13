@@ -17,7 +17,7 @@ from anndata._io.specs.registry import IORegistryError, _REGISTRY, get_spec, IOS
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata, check_error_or_notes_match
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -147,9 +147,13 @@ def test_write_io_error(store, obj):
     full_pattern = re.compile(
         rf"No method registered for writing {type(obj)} into .*Group"
     )
-    with pytest.raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
+
+    with pytest.raises(IORegistryError) as exc_info:
         write_elem(store, "/el", obj)
-    msg = str(exc_info.value.__cause__)
+
+    msg = str(exc_info.value)
+    check_error_or_notes_match(exc_info, r"while writing key '/el'")
+
     assert re.search(full_pattern, msg)
 
 

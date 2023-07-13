@@ -9,7 +9,7 @@ from packaging import version
 import h5py
 
 from .._core.sparse_dataset import SparseDataset
-from anndata.compat import H5Group, ZarrGroup
+from anndata.compat import H5Group, ZarrGroup, add_note
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
@@ -226,11 +226,12 @@ def report_write_key_on_error(func):
             raise
         else:
             parent = _get_parent(elem)
-            raise type(e)(
-                f"{e}\n\n"
-                f"Above error raised while writing key {key!r} of {type(elem)} "
-                f"to {parent}"
-            ) from e
+            add_note(
+                e,
+                f"Above error raised while writing key {key!r} of {type(elem)} to "
+                f"{parent}",
+            )
+            raise e
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):

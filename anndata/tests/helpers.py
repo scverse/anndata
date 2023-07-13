@@ -1,4 +1,5 @@
 from functools import singledispatch, wraps
+import re
 from string import ascii_letters
 from typing import Tuple, Optional, Type
 from collections.abc import Mapping, Collection
@@ -576,3 +577,15 @@ def as_dense_dask_array(a):
 @as_dense_dask_array.register(sparse.spmatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
+
+
+def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str):
+    """
+    Checks whether the printed error message or the notes contains the given pattern.
+
+    DOES NOT WORK IN IPYTHON - because of the way IPython handles exceptions
+    """
+    import traceback
+
+    message = "".join(traceback.format_exception_only(e.type, e.value))
+    assert re.search(pattern, message)

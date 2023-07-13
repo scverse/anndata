@@ -12,6 +12,12 @@ except (ImportError, LookupError):
             "anndata is not correctly installed. Please install it, e.g. with pip."
         )
 
+# Allowing notes to be added to exceptions. See: https://github.com/scverse/anndata/issues/868
+import sys
+
+if sys.version_info < (3, 11):
+    import exceptiongroup
+
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
@@ -35,3 +41,23 @@ from ._warnings import (
 
 # backwards compat / shortcut for default format
 from ._io import read_h5ad as read
+
+__all__ = [
+    "__version__",
+    "AnnData",
+    "concat",
+    "read_h5ad",
+    "read_loom",
+    "read_hdf",
+    "read_excel",
+    "read_umi_tools",
+    "read_csv",
+    "read_text",
+    "read_mtx",
+    "read_zarr",
+    "OldFormatWarning",
+    "WriteWarning",
+    "ImplicitModificationWarning",
+    "ExperimentalFeatureWarning",
+    "read",
+]

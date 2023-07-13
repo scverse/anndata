@@ -12,6 +12,8 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
+from .exceptiongroups import add_note
+
 
 class Empty:
     pass
