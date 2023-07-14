@@ -180,3 +180,24 @@ def test_override_specification():
         )
         def _(store, key, adata):
             pass
+
+
+@pytest.mark.parametrize("consolidated", [True, False])
+def test_read_zarr_from_group(tmp_path, consolidated):
+    # https://github.com/scverse/anndata/issues/1056
+    pth = tmp_path / "test.zarr"
+    adata = gen_adata((3, 2))
+
+    with zarr.open(pth, mode="w") as z:
+        write_elem(z, "table/table", adata)
+
+        if consolidated:
+            zarr.convenience.consolidate_metadata(z.store)
+
+    if consolidated:
+        read_func = zarr.open_consolidated
+    else:
+        read_func = zarr.open
+
+    with read_func(pth) as z:
+        assert_equal(read_elem(z["table/table"]), adata)
