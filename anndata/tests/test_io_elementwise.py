@@ -106,7 +106,7 @@ def test_io_spec_raw(store):
     assert_equal(from_disk.raw, adata.raw)
 
 
-def test_write_to_root(store):
+def test_write_anndata_to_root(store):
     adata = gen_adata((3, 2))
 
     write_elem(store, "/", adata)
@@ -182,3 +182,47 @@ def test_override_specification():
         )
         def _(store, key, adata):
             pass
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param({"a": 1}, id="dict"),
+        pytest.param(gen_adata((3, 2)), id="anndata"),
+        pytest.param(sparse.random(5, 3, format="csr", density=0.5), id="csr_matrix"),
+        pytest.param(sparse.random(5, 3, format="csc", density=0.5), id="csc_matrix"),
+        pytest.param(pd.DataFrame({"a": [1, 2, 3]}), id="dataframe"),
+        pytest.param(pd.Categorical(list("aabccedd")), id="categorical"),
+        pytest.param(
+            pd.Categorical(list("aabccedd"), ordered=True), id="categorical-ordered"
+        ),
+        pytest.param(
+            pd.Categorical([1, 2, 1, 3], ordered=True), id="categorical-numeric"
+        ),
+        pytest.param(
+            pd.arrays.IntegerArray(
+                np.ones(5, dtype=int), mask=np.array([True, False, True, False, True])
+            ),
+            id="nullable-integer",
+        ),
+        pytest.param(pd.array([1, 2, 3]), id="nullable-integer-no-nulls"),
+        pytest.param(
+            pd.arrays.BooleanArray(
+                np.random.randint(0, 2, size=5, dtype=bool),
+                mask=np.random.randint(0, 2, size=5, dtype=bool),
+            ),
+            id="nullable-boolean",
+        ),
+        pytest.param(
+            pd.array([True, False, True, True]), id="nullable-boolean-no-nulls"
+        ),
+    ],
+)
+def test_write_to_root(store, value):
+    """
+    Test that elements which are written as groups can we written to the root group.
+    """
+    write_elem(store, "/", value)
+    result = read_elem(store)
+
+    assert_equal(result, value)
