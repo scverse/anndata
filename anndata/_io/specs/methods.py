@@ -256,7 +256,7 @@ def read_anndata(elem, _reader):
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
 def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     _writer.write_elem(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
@@ -276,7 +276,7 @@ def read_mapping(elem, _reader):
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
 def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     for sub_k, sub_v in v.items():
         _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
 
@@ -436,7 +436,7 @@ def write_sparse_compressed(
     fmt: Literal["csr", "csc"],
     dataset_kwargs=MappingProxyType({}),
 ):
-    g = f.create_group(key)
+    g = f.require_group(key)
     g.attrs["shape"] = value.shape
 
     # Allow resizing for hdf5
@@ -524,7 +524,7 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 def write_awkward(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
     from anndata.compat import awkward as ak
 
-    group = f.create_group(k)
+    group = f.require_group(k)
     form, length, container = ak.to_buffers(ak.to_packed(v))
     group.attrs["length"] = length
     group.attrs["form"] = form.to_json()
@@ -558,7 +558,7 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
     for reserved in ("_index",):
         if reserved in df.columns:
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
-    group = f.create_group(key)
+    group = f.require_group(key)
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
@@ -677,7 +677,7 @@ def read_partial_dataframe_0_1_0(
 @_REGISTRY.register_write(H5Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
 def write_categorical(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     g.attrs["ordered"] = bool(v.ordered)
 
     _writer.write_elem(g, "codes", v.codes, dataset_kwargs=dataset_kwargs)
@@ -724,7 +724,7 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
 def write_nullable_integer(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     if v._mask is not None:
         _writer.write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "values", v._data, dataset_kwargs=dataset_kwargs)

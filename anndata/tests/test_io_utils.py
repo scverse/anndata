@@ -12,6 +12,7 @@ from anndata._io.utils import (
     report_read_key_on_error,
     AnnDataReadError,
 )
+from anndata.experimental import read_elem, write_elem
 from anndata.tests.helpers import check_error_or_notes_match
 
 
@@ -74,3 +75,36 @@ def test_clean_uns():
     # var’s categories were overwritten by obs’s,
     # which we can detect here because var has too high codes
     assert pd.api.types.is_integer_dtype(adata.var["species"])
+
+
+@pytest.mark.parametrize(
+    "group_fn",
+    [
+        pytest.param(lambda _: zarr.group(), id="zarr"),
+        pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
+    ],
+)
+def test_only_child_key_reported_on_failure(tmp_path, group_fn):
+    class Foo:
+        pass
+
+    group = group_fn(tmp_path)
+
+    with pytest.raises(IORegistryError) as exc_info:
+        write_elem(group, "/", {"a": {"b": Foo()}})
+
+    with pytest.raises(AssertionError):
+        check_error_or_notes_match(
+            exc_info, r"Above error raised while writing key '/?a'"
+        )
+
+    write_elem(group, "/", {"a": {"b": [1, 2, 3]}})
+    group["a/b"].attrs["encoding-type"] = "not a real encoding type"
+
+    with pytest.raises(IORegistryError) as exc_info:
+        read_elem(group)
+
+    with pytest.raises(AssertionError):
+        check_error_or_notes_match(
+            exc_info, r"Above error raised while reading key '/?a'"
+        )
