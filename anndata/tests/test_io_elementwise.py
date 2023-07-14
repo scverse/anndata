@@ -200,4 +200,4 @@ def test_read_zarr_from_group(tmp_path, consolidated):
         read_func = zarr.open
 
     with read_func(pth) as z:
-        assert_equal(read_elem(z["table/table"]), adata)
+        assert_equal(ad.read_zarr(z["table/table"]), adata)
