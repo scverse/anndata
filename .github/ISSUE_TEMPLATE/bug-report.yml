@@ -48,9 +48,14 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: Which version of anndata and other related software you used. Please install and use `session-info`
-      render: python
-      value: |
-        >>> import anndata, session_info; session_info.show()
+      description: |
+        Which version of anndata and other related software you used.
+
+        Please install `session-info`, run the following command, then paste the results into the text box below.
+
+        ```python
+        >>> import anndata, session_info; session_info.show(html=False, dependencies=True)
+        ```
+        render: python
     validations:
       required: true
