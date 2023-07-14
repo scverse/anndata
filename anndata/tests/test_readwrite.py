@@ -303,13 +303,11 @@ def test_read_full_io_error(tmp_path, name, read, write):
     with store_context(path) as store:
         store["obs"].attrs["encoding-type"] = "invalid"
     with pytest.raises(
-        AnnDataReadError, match=r"raised while reading key '/obs'"
+        IORegistryError,
+        match=r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
     ) as exc_info:
         read(path)
-    assert re.search(
-        r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
-        str(exc_info.value.__cause__),
-    )
+    check_error_or_notes_match(exc_info, r"raised while reading key '/obs'")
 
 
 @pytest.mark.parametrize(

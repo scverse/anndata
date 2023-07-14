@@ -36,12 +36,16 @@ def test_key_error(tmp_path, group_fn):
     with group if hasattr(group, "__enter__") else suppress():
         group["X"] = [1, 2, 3]
         group.create_group("group")
-        with pytest.raises(AnnDataReadError) as e:
+
+        with pytest.raises(NotImplementedError) as exc_info:
             read_attr(group["X"])
-        assert "'/X'" in str(e.value)
-        with pytest.raises(AnnDataReadError) as e:
+
+        check_error_or_notes_match(exc_info, r"/X")
+
+        with pytest.raises(NotImplementedError) as exc_info:
             read_attr(group["group"])
-        assert "'/group'" in str(e.value)
+
+        check_error_or_notes_match(exc_info, r"/group")
 
 
 def test_write_error_info(diskfmt, tmp_path):

@@ -129,11 +129,9 @@ def test_read_iospec_not_found(store, attribute, value):
     write_elem(store, "/", adata)
     store["obs"].attrs.update({attribute: value})
 
-    with pytest.raises(
-        AnnDataReadError, match=r"while reading key '/(obs)?'"
-    ) as exc_info:
+    with pytest.raises(IORegistryError) as exc_info:
         read_elem(store)
-    msg = str(exc_info.value.__cause__)
+    msg = str(exc_info.value)
 
     assert "No read method registered for IOSpec" in msg
     assert f"{attribute.replace('-', '_')}='{value}'" in msg
