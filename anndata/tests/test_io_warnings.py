@@ -3,6 +3,8 @@ from pathlib import Path
 import warnings
 
 import pytest
+import h5py
+import numpy as np
 
 import anndata as ad
 from anndata.tests.helpers import gen_adata
@@ -34,3 +36,16 @@ def test_old_format_warning_not_thrown(tmp_path):
         pytest.fail(
             f"Warnings were thrown when they shouldn't be. Got:\n\n{msg_content}"
         )
+
+
+def test_jhdf5_mitigation(tmp_path):
+    # See https://github.com/scverse/anndata/issues/1051
+    adata = ad.AnnData(np.ones((5, 5)))
+    path = tmp_path / "tmp.h5ad"
+    adata.write(path)
+
+    with h5py.File(path, "w") as f:
+        f.create_group("__DATA_TYPES__")
+
+    with pytest.warns(FutureWarning, match=r"JHDF5"):
+        ad.read_h5ad(path)
