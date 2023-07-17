@@ -7,6 +7,7 @@ from anndata.compat import ZarrArray
 import pandas as pd
 import numpy as np
 from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin
+import xarray as xr
 
 
 class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
@@ -187,6 +188,10 @@ class LazyMaskedArray(MaskedArrayMixIn):
         return arr
 
 
+@_subset.register(xr.DataArray)
+def _subset_masked(a: xr.DataArray, subset_idx: Index):
+    return a[subset_idx]
+
 @_subset.register(MaskedArrayMixIn)
 def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
     a_copy = a.copy()
@@ -216,4 +221,8 @@ def _view_pd_integer_array(a: pd.arrays.IntegerArray, view_args):
 
 @as_view.register(pd.arrays.BooleanArray)
 def _view_pd_boolean_array(a: pd.arrays.BooleanArray, view_args):
+    return a
+
+@as_view.register(xr.DataArray)
+def _view_pd_boolean_array(a: xr.DataArray, view_args):
     return a

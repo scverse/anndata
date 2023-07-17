@@ -24,6 +24,7 @@ from anndata.compat import DaskArray
 from anndata.utils import asarray, convert_to_dict
 
 import zarr
+import xarray as xr
 import pandas as pd
 import dask.array as da
 from scipy import sparse
@@ -119,6 +120,7 @@ class AnnDataBacked(AbstractAnnData):
         self.var_names = var[self.file["var"].attrs["_index"]]
         if vidx is not None:
             self.var_names = self.var_names[vidx]
+        
         self.obs = AxisArrays1dRemote(adata_ref, 0, vals=convert_to_dict(obs))
         self.var = AxisArrays1dRemote(adata_ref, 1, vals=convert_to_dict(var))
 
@@ -406,7 +408,15 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset
             iter_object = [(k, elem[k]) for k in elem.attrs["column-order"]] + [
                 (elem.attrs["_index"], elem[elem.attrs["_index"]])
             ]
-            return {k: read_dispatched(v, callback) for k, v in iter_object}
+            d = {k: read_dispatched(v, callback) for k, v in iter_object}
+            d_with_xr = {}
+            for k in d:
+                v = d[k]
+                if type(v) == DaskArray and k != elem.attrs["_index"]:
+                    d_with_xr[k] = xr.DataArray(v, coords=[d[elem.attrs["_index"]]], dims=[f'{elem_name.replace("/", "")}_names'], name=k)
+                else:
+                    d_with_xr[k] = v
+            return d_with_xr
         elif iospec.encoding_type == "categorical":
             return LazyCategoricalArray(elem["codes"], elem["categories"], elem.attrs)
         elif "nullable" in iospec.encoding_type:
