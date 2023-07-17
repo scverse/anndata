@@ -220,10 +220,17 @@ def read_h5ad(
 
         def callback(func, elem_name: str, elem, iospec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+                elem = dict(elem)
+                if elem.pop("__DATA_TYPES__", None) is not None:
+                    warn(
+                        "File has `/__DATA_TYPES__` key written by JHDF5. "
+                        "AnnData’s support for ignoring it will be removed in the future.",
+                        FutureWarning,
+                    )
                 return AnnData(
                     **{
                         # This is covering up backwards compat in the anndata initializer
-                        # In most cases we should be able to call `func(elen[k])` instead
+                        # In most cases we should be able to call `func(elem[k])` instead
                         k: read_dispatched(elem[k], callback)
                         for k in elem.keys()
                         if not k.startswith("raw.")
