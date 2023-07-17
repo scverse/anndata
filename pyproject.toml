@@ -100,6 +100,7 @@ source = "vcs"
 version-file = "anndata/_version.py"
 
 [tool.coverage.run]
+data_file = "cache/coverage"
 source = ["anndata"]
 omit = [
 	"setup.py",
@@ -107,6 +108,8 @@ omit = [
 	"anndata/_version.py",
 	"**/test_*.py",
 ]
+[tool.coverage.xml]
+output = "cache/coverage.xml"
 
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
