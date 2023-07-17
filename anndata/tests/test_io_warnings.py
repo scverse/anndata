@@ -44,7 +44,7 @@ def test_jhdf5_mitigation(tmp_path):
     path = tmp_path / "tmp.h5ad"
     adata.write(path)
 
-    with h5py.File(path, "w") as f:
+    with h5py.File(path, "r+") as f:
         f.create_group("__DATA_TYPES__")
 
     with pytest.warns(FutureWarning, match=r"JHDF5"):
