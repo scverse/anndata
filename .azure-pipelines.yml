@@ -54,7 +54,7 @@ jobs:
 
       - script: |
           mkdir -p cache
-          find . -type d \( -path cache -prune -o -exec chmod -w {} \; \)
+          find . -type d \( -path "./cache" -prune -o -exec chmod -w {} \; \)
         displayName: "Ensure that tests run without randomly writing files"
 
       - script: |
