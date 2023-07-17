@@ -34,7 +34,7 @@ def to_df_1d_axis_arrays(axis_arrays: AxisArrays, exclude=[]) -> pd.DataFrame:
         if "index" not in key and all(
             [full_key != exclude_key for exclude_key in exclude]
         ):
-            df[key] = axis_arrays[key][...]
+            df[key] = axis_arrays[key].data # all xarray DataArrays?
     return df
 
 

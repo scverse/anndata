@@ -209,7 +209,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     remote.obs["int64"]
     remote.var["int64"]
     # only the `cat` should be read in
-    subset = remote[remote.obs["cat"] == "a", :]
+    subset = remote[(remote.obs["cat"] == "a").data, :] # `.data` for xarray, but should we handle internally?
     subset.obs["int64"]
     sub_subset = subset[0:10, :]
     sub_subset.obs["int64"]

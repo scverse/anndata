@@ -174,14 +174,16 @@ class AnnDataBacked(AbstractAnnData):
                 full_key = prefix + "/" + k
                 if any([full_key == exclude_key for exclude_key in exclude]):
                     continue
+                if isinstance(v, xr.DataArray):
+                    v = v.data
                 if isinstance(v, DaskArray):
                     res[k] = v.compute()
+                elif isinstance(v, BaseCompressedSparseDataset):
+                    res[k] = v.to_memory()
                 elif isinstance(v, LazyCategoricalArray) or isinstance(
                     v, LazyMaskedArray
                 ):
                     res[k] = v[...]
-                elif isinstance(v, BaseCompressedSparseDataset):
-                    res[k] = v.to_memory()
                 else:
                     res[k] = v
             return res
@@ -414,6 +416,8 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset
                 v = d[k]
                 if type(v) == DaskArray and k != elem.attrs["_index"]:
                     d_with_xr[k] = xr.DataArray(v, coords=[d[elem.attrs["_index"]]], dims=[f'{elem_name.replace("/", "")}_names'], name=k)
+                elif (type(v) == LazyCategoricalArray or type(v) == LazyMaskedArray) and k != elem.attrs["_index"]:
+                    d_with_xr[k] = xr.DataArray(xr.core.indexing.LazilyIndexedArray(v), coords=[d[elem.attrs["_index"]]], dims=[f'{elem_name.replace("/", "")}_names'], name=k)
                 else:
                     d_with_xr[k] = v
             return d_with_xr

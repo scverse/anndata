@@ -6,39 +6,18 @@ from anndata.compat import ZarrArray
 
 import pandas as pd
 import numpy as np
-from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin
+from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin, BasicIndexer, OuterIndexer
 import xarray as xr
 
 
 class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
-    def _resolve_idx(self, new_idx: Index) -> Index:
-        """Wrapper for resolving the idx against (potentially) already existing `self.subset_idx`
 
-        Args:
-            new_idx (Index): new indices
+    def __eq__(self, __o) -> np.ndarray:
+        return self[...] == __o
 
-        Returns:
-            Index: The resolved idx, an intersection of new_idx and `self.subset_idx`
-        """
-        return (
-            new_idx
-            if self.subset_idx is None
-            else _resolve_idx(self.subset_idx, new_idx, self.shape[0])
-        )
-
-    @property
-    def subset_idx(self) -> Index:
-        """A local
-
-        Returns:
-            Index: The indices for this array
-        """
-        return self._subset_idx
-
-    @subset_idx.setter
-    def subset_idx(self, new_idx):
-        self._subset_idx = self._resolve_idx(new_idx)
-
+    def __ne__(self, __o) -> np.ndarray:
+        return ~(self == __o)
+    
     @property
     def shape(self) -> Tuple[int, ...]:
         """Shape of this array
@@ -46,20 +25,7 @@ class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
         Returns:
             Tuple[int, ...]: A shape that looks like a 1-d shape i.e., (#, )
         """
-        if self.subset_idx is None:
-            return self.values.shape
-        if isinstance(self.subset_idx, slice):
-            if self.subset_idx == slice(None, None, None):
-                return self.values.shape
-            return (self.subset_idx.stop - self.subset_idx.start,)
-        else:
-            return (len(self.subset_idx),)
-
-    def __eq__(self, __o) -> np.ndarray:
-        return self[...] == __o
-
-    def __ne__(self, __o) -> np.ndarray:
-        return ~(self == __o)
+        return self.values.shape
 
 
 class LazyCategoricalArray(MaskedArrayMixIn):
@@ -68,12 +34,11 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         "attrs",
         "_categories",
         "_categories_cache",
-        "_subset_idx",
         "group",
     )
 
     def __init__(self, codes, categories, attrs, *args, **kwargs):
-        """Class for lazily reading categorical data from formatted zarr group
+        """Class for lazily reading categorical data from formatted zarr group.   Used as base for `LazilyIndexedArray`.
 
         Args:
             codes (Union[zarr.Array, h5py.Dataset]): values (integers) of the array, one for each element
@@ -83,7 +48,6 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         self.values = codes
         self._categories = categories
         self._categories_cache = None
-        self._subset_idx = None
         self.attrs = dict(attrs)
 
     @property
@@ -104,7 +68,9 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         return bool(self.attrs["ordered"])
 
     def __getitem__(self, selection) -> pd.Categorical:
-        idx = self._resolve_idx(selection)
+        idx = selection
+        if isinstance(selection, BasicIndexer) or isinstance(selection, OuterIndexer):
+            idx = selection.tuple[0] # need to better understand this
         if isinstance(self.values, ZarrArray):
             codes = self.values.oindex[idx]
         else:
@@ -129,15 +95,14 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         arr = LazyCategoricalArray(
             self.values, self._categories, self.attrs
         )  # self.categories reads in data
-        arr.subset_idx = self.subset_idx
         return arr
 
 
 class LazyMaskedArray(MaskedArrayMixIn):
-    __slots__ = ("mask", "values", "_subset_idx", "_dtype_str")
+    __slots__ = ("mask", "values", "_dtype_str")
 
     def __init__(self, values, mask, dtype_str, *args, **kwargs):
-        """Class for lazily reading categorical data from formatted zarr group
+        """Class for lazily reading categorical data from formatted zarr group.  Used as base for `LazilyIndexedArray`.
 
         Args:
             values (Union[zarr.Array, h5py.Dataset]): Integer/Boolean array of values
@@ -146,7 +111,6 @@ class LazyMaskedArray(MaskedArrayMixIn):
         """
         self.values = values
         self.mask = mask
-        self._subset_idx = None
         self._dtype_str = dtype_str
 
     @property
@@ -159,7 +123,9 @@ class LazyMaskedArray(MaskedArrayMixIn):
         return pd.array
 
     def __getitem__(self, selection) -> pd.Categorical:
-        idx = self._resolve_idx(selection)
+        idx = selection
+        if isinstance(selection, BasicIndexer) or isinstance(selection, OuterIndexer):
+            idx = selection.tuple[0] # need to understand this better
         if type(idx) == int:
             idx = slice(idx, idx + 1)
         values = np.array(self.values[idx])
@@ -184,25 +150,12 @@ class LazyMaskedArray(MaskedArrayMixIn):
             LazyMaskedArray: copied LazyMaskedArray
         """
         arr = LazyMaskedArray(self.values, self.mask, self._dtype_str)
-        arr.subset_idx = self.subset_idx
         return arr
 
 
 @_subset.register(xr.DataArray)
 def _subset_masked(a: xr.DataArray, subset_idx: Index):
     return a[subset_idx]
-
-@_subset.register(MaskedArrayMixIn)
-def _subset_masked(a: MaskedArrayMixIn, subset_idx: Index):
-    a_copy = a.copy()
-    a_copy.subset_idx = subset_idx
-    return a_copy
-
-
-@as_view.register(MaskedArrayMixIn)
-def _view_masked(a: MaskedArrayMixIn, view_args):
-    return a
-
 
 @as_view.register(pd.Categorical)
 def _view_pd_categorical(a: pd.Categorical, view_args):
