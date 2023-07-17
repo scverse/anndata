@@ -1717,9 +1717,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         The masked array is not saved but has to be reinstantiated after saving.
 
-        >>> outer.write('./test.h5ad')
+        >>> outer.write(tmp_path / 'test.h5ad')
         >>> from anndata import read_h5ad
-        >>> outer = read_h5ad('./test.h5ad')
+        >>> outer = read_h5ad(tmp_path / 'test.h5ad')
         >>> outer.X
         array([[ 1.,  2.,  3., nan],
                [ 4.,  5.,  6., nan],
