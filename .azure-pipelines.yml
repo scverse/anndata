@@ -4,7 +4,7 @@ trigger:
 variables:
   PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
   RUN_COVERAGE: no
-  PYTEST_ADDOPTS: --color=yes --junitxml=cache/test-results.xml
+  PYTEST_ADDOPTS: --color=yes --nunit-xml=cache/test-results.xml
   PRERELEASE_DEPENDENCIES: no
 
 jobs:
@@ -37,15 +37,13 @@ jobs:
         displayName: Cache pip packages
 
       - script: |
-          python -m pip install --upgrade pip
-          pip install pytest-cov wheel
+          python -m pip install --upgrade pip wheel
           pip install .[dev,test]
         displayName: "Install dependencies"
         condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'no')
 
       - script: |
-          python -m pip install --pre --upgrade pip
-          pip install --pre pytest-cov wheel
+          python -m pip install --pre --upgrade pip wheel
           pip install --pre .[dev,test]
         displayName: "Install dependencies release candidates"
         condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'yes')
@@ -79,6 +77,7 @@ jobs:
         condition: succeededOrFailed()
         inputs:
           testResultsFiles: "cache/test-results.xml"
+          testResultsFormat: NUnit
           testRunTitle: "Publish test results for Python $(python.version)"
 
       - script: bash <(curl -s https://codecov.io/bash)
