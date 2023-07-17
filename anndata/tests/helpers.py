@@ -579,7 +579,7 @@ def _(a):
     return as_dense_dask_array(a.toarray())
 
 
-def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str):
+def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
     """
     Checks whether the printed error message or the notes contains the given pattern.
 
