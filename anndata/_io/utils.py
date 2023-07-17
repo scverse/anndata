@@ -167,7 +167,7 @@ def _get_parent(elem):
 
 def re_raise_error(e, elem, key, op=Literal["read", "writ"]):
     if any(
-        f"Above error raised while {op}ing key" in note
+        f"Error raised while {op}ing key" in note
         for note in getattr(e, "__notes__", [])
     ):
         raise
@@ -175,8 +175,7 @@ def re_raise_error(e, elem, key, op=Literal["read", "writ"]):
         parent = _get_parent(elem)
         add_note(
             e,
-            f"Above error raised while {op}ing key {key!r} of {type(elem)} to "
-            f"{parent}",
+            f"Error raised while {op}ing key {key!r} of {type(elem)} to " f"{parent}",
         )
         raise e
 

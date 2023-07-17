@@ -59,7 +59,7 @@ def test_write_error_info(diskfmt, tmp_path):
     with pytest.raises(IORegistryError) as exc_info:
         write(a)
 
-    check_error_or_notes_match(exc_info, r"Above error raised while writing key 'c'")
+    check_error_or_notes_match(exc_info, r"Error raised while writing key 'c'")
 
 
 def test_clean_uns():
@@ -94,9 +94,7 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
         write_elem(group, "/", {"a": {"b": Foo()}})
 
     with pytest.raises(AssertionError):
-        check_error_or_notes_match(
-            exc_info, r"Above error raised while writing key '/?a'"
-        )
+        check_error_or_notes_match(exc_info, r"Error raised while writing key '/?a'")
 
     write_elem(group, "/", {"a": {"b": [1, 2, 3]}})
     group["a/b"].attrs["encoding-type"] = "not a real encoding type"
@@ -105,6 +103,4 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
         read_elem(group)
 
     with pytest.raises(AssertionError):
-        check_error_or_notes_match(
-            exc_info, r"Above error raised while reading key '/?a'"
-        )
+        check_error_or_notes_match(exc_info, r"Error raised while reading key '/?a'")
