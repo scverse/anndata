@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import singledispatch, wraps
 import re
 from string import ascii_letters
