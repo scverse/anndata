@@ -9,6 +9,7 @@ from typing import (
 )
 
 import h5py
+import numpy as np
 from anndata._core.aligned_mapping import (
     Layers,
     PairwiseArrays,
@@ -52,10 +53,86 @@ class AnnDataBacked(AbstractAnnData):
         varp=None,
         oidx=None,
         vidx=None,
+        asview=False
+    ):
+        if asview:
+            if not issubclass(type(X), AbstractAnnData):
+                raise ValueError("`X` has to be an AnnData object.")
+            self._init_as_view(X, oidx, vidx)
+        else:
+            self._init_as_actual(
+                X=X,
+                obs=obs,
+                var=var,
+                uns=uns,
+                obsm=obsm,
+                varm=varm,
+                raw=raw,
+                layers=layers,
+                dtype=dtype,
+                shape=shape,
+                obsp=obsp,
+                varp=varp,
+                file=file,
+            )
+
+    def _init_as_view(self, adata_ref: "AnnData", oidx: Index, vidx: Index):
+        # Copied from non-backed class, maybe should refactor?
+        self._is_view = True
+        if isinstance(oidx, (int, np.integer)):
+            if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
+                raise IndexError(f"Observation index `{oidx}` is out of range.")
+            oidx += adata_ref.n_obs * (oidx < 0)
+            oidx = slice(oidx, oidx + 1, 1)
+        if isinstance(vidx, (int, np.integer)):
+            if not (-adata_ref.n_vars <= vidx < adata_ref.n_vars):
+                raise IndexError(f"Variable index `{vidx}` is out of range.")
+            vidx += adata_ref.n_vars * (vidx < 0)
+            vidx = slice(vidx, vidx + 1, 1)
+        if adata_ref.is_view:
+            prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
+            adata_ref = adata_ref._adata_ref
+            oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
+
+        # pd.Index objects so cheap to subset
+        self.obs_names = adata_ref.obs_names[oidx]
+        self.var_names = adata_ref.var_names[vidx]
+        # self._adata_ref is never a view
+        self._adata_ref = adata_ref
+        self._oidx = oidx
+        self._vidx = vidx
+        # the file is the same as of the reference object
+        self.file = adata_ref.file
+        # views on attributes of adata_ref
+        self.obs = adata_ref.obs.isel(obs_names=oidx)
+        self.var = adata_ref.var.isel(var_names=vidx)
+        self.obsm = adata_ref.obsm._view(self, (oidx,))
+        self.varm = adata_ref.varm._view(self, (vidx,))
+        self.layers = adata_ref.layers._view(self, (oidx, vidx))
+        self.obsp = adata_ref.obsp._view(self, oidx)
+        self.varp = adata_ref.varp._view(self, vidx)
+        # fix categories
+        self.uns = adata_ref.uns or OrderedDict()
+        self.file = adata_ref.file
+        self._X = adata_ref.X
+
+    def _init_as_actual(
+        self,
+        X=None,
+        obs=None,
+        var=None,
+        uns=None,
+        obsm=None,
+        varm=None,
+        varp=None,
+        obsp=None,
+        raw=None,
+        layers=None,
+        dtype=None,
+        shape=None,
+        file=None,
     ):
         self._is_view = False
-        if oidx is not None and vidx is not None:  # and or or?
-            self._is_view = True  # hack needed for clean use of views below
         adata_ref = self
         # init from AnnData
         if issubclass(type(X), AbstractAnnData):
@@ -63,16 +140,6 @@ class AnnDataBacked(AbstractAnnData):
                 raise ValueError(
                     "If `X` is a dict no further arguments must be provided."
                 )
-            if X.is_view:
-                prev_oidx, prev_vidx = X._oidx, X._vidx
-                self._oidx, self._vidx = _resolve_idxs(
-                    (prev_oidx, prev_vidx), (oidx, vidx), X._X
-                )
-            else:
-                self._oidx = oidx
-                self._vidx = vidx
-            if self._is_view:
-                adata_ref = X  # seems to work
             if file is None:
                 file = X.file
             X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
@@ -87,9 +154,6 @@ class AnnDataBacked(AbstractAnnData):
                 X.layers,
                 X.raw,
             )
-        else:
-            self._oidx = oidx
-            self._vidx = vidx
 
         if X is not None:
             for s_type in StorageType:
@@ -111,31 +175,18 @@ class AnnDataBacked(AbstractAnnData):
         else:
             self._X = None
 
-        # annotations - need names already for AxisArrays to work.
+        # Indices are read into memory by xarray anyway, so load them here.
         self.file = file
         self.obs_names = pd.Index(obs['obs_names'].data.compute() if isinstance(obs['obs_names'].data, DaskArray) else obs['obs_names'].data)
-        if oidx is not None:
-            self.obs_names = self.obs_names[oidx]
         self.var_names = pd.Index(var['var_names'].data.compute() if isinstance(var['var_names'].data, DaskArray) else var['var_names'].data)
-        if vidx is not None:
-            self.var_names = self.var_names[vidx]
         
         self.obs = xr.Dataset(obs)
         self.var = xr.Dataset(var)
-
         self.obsm = AxisArrays(adata_ref, 0, vals=convert_to_dict(obsm))
         self.varm = AxisArrays(adata_ref, 1, vals=convert_to_dict(varm))
         self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))
         self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))
         self.layers = Layers(adata_ref, layers)
-        if self.is_view:
-            self.obs = self.obs.isel(obs_names=oidx)
-            self.var = self.var.isel(var_names=vidx)
-            self.obsm = self.obsm._view(self, oidx)
-            self.varm = self.varm._view(self, vidx)
-            self.obsp = self.obsp._view(self, oidx)
-            self.varp = self.varp._view(self, vidx)
-            self.layers = self.layers._view(self, (oidx, vidx))
         self.uns = uns or OrderedDict()
 
         if not raw:
@@ -157,13 +208,13 @@ class AnnDataBacked(AbstractAnnData):
     def __getitem__(self, index: Index) -> "AnnData":
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
-        return AnnDataBacked(self, oidx=oidx, vidx=vidx)
+        return AnnDataBacked(self, oidx=oidx, vidx=vidx, asview=True)
 
     def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
         return _normalize_indices(
             index,
-            pd.Index(self.obs_names.compute() if isinstance(self.obs_names, DaskArray) else self.obs_names), # could be either dask or in-memory from xarray
-            pd.Index(self.var_names.compute() if isinstance(self.var_names, DaskArray) else self.var_names),
+            self.obs_names,
+            self.var_names,
         )
 
     def to_memory(self, exclude=[]):
@@ -271,6 +322,16 @@ class AnnDataBacked(AbstractAnnData):
     @obsm.setter
     def obsm(self, obsm):
         self._obsm = obsm
+
+    @property
+    def layers(self):
+        if hasattr(self, "_layers"):
+            return self._layers
+        return None
+
+    @layers.setter
+    def layers(self, layers):
+        self._layers = layers
 
     @property
     def obsp(self):
