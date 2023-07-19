@@ -287,6 +287,16 @@ def test_to_memory(tmp_path, mtx_format, dskfmt):
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
 
+def test_to_memory_exclude(tmp_path, mtx_format, dskfmt):
+    adata = gen_adata((1000, 1000), mtx_format)
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / f"orig.{dskfmt}"
+    write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
+    write(adata)
+    remote = read_backed(orig_pth)
+    remote_to_memory = remote.to_memory(exclude=['obs/nullable-bool', 'obsm/sparse'])
+    assert 'nullable-bool' not in remote_to_memory.obs
+    assert 'sparse' not in remote_to_memory.obsm
 
 def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)

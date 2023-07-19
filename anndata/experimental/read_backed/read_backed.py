@@ -241,17 +241,22 @@ class AnnDataBacked(AbstractAnnData):
                 if isinstance(dtype, pd.CategoricalDtype) or dtype == pd.arrays.BooleanArray or dtype == pd.arrays.IntegerArray:
                     cols += [c]
             return cols     
-        def to_df(ds):
+        def to_df(ds, exclude_vars):
             nullable_and_categorical_df_cols = get_nullable_and_categorical_cols(ds)
-            df = ds.drop_vars(list(set(exclude + nullable_and_categorical_df_cols))).to_dataframe()
+            drop_vars = [k for k in set(exclude_vars + nullable_and_categorical_df_cols) if k in ds]
+            df = ds.drop_vars(drop_vars).to_dataframe()
             for c in nullable_and_categorical_df_cols:
-                df[c] = ds[c].data[()]
+                    if c not in exclude_vars:
+                        df[c] = ds[c].data[()]
             df.index.name = None # matches old AnnData object
-            df = df[list(ds.keys())]
+            if len(exclude_vars) == 0:
+                df = df[list(ds.keys())]
             return df
         
-        obs = to_df(self.obs)
-        var = to_df(self.var)
+        exclude_obs = [key.replace('obs/', '') for key in exclude if key.startswith('obs/')]
+        obs = to_df(self.obs, exclude_obs)
+        exclude_var = [key.replace('var/', '') for key in exclude if key.startswith('var/')]
+        var = to_df(self.var, exclude_var)
         obsm = backed_dict_to_memory(convert_to_dict(self.obsm), "obsm")
         varm = backed_dict_to_memory(convert_to_dict(self.varm), "varm")
         varp = backed_dict_to_memory(convert_to_dict(self.varp), "varp")
