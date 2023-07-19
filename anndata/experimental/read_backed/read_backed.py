@@ -12,6 +12,7 @@ import h5py
 from anndata._core.aligned_mapping import (
     Layers,
     PairwiseArrays,
+    AxisArrays
 )
 from anndata._core.anndata import StorageType, _check_2d_shape
 from anndata._core.anndata_base import AbstractAnnData
@@ -31,8 +32,6 @@ from scipy import sparse
 from ..._core import AnnData
 from .. import read_dispatched
 from .lazy_arrays import LazyCategoricalArray, LazyMaskedArray
-from .lazy_axis_arrays import AxisArrays1dRemote, AxisArraysRemote
-
 
 class AnnDataBacked(AbstractAnnData):
     def __init__(
@@ -114,24 +113,24 @@ class AnnDataBacked(AbstractAnnData):
 
         # annotations - need names already for AxisArrays to work.
         self.file = file
-        self.obs_names = obs[self.file["obs"].attrs["_index"]]
+        self.obs_names = pd.Index(obs['obs_names'].data.compute() if isinstance(obs['obs_names'].data, DaskArray) else obs['obs_names'].data)
         if oidx is not None:
             self.obs_names = self.obs_names[oidx]
-        self.var_names = var[self.file["var"].attrs["_index"]]
+        self.var_names = pd.Index(var['var_names'].data.compute() if isinstance(var['var_names'].data, DaskArray) else var['var_names'].data)
         if vidx is not None:
             self.var_names = self.var_names[vidx]
         
-        self.obs = AxisArrays1dRemote(adata_ref, 0, vals=convert_to_dict(obs))
-        self.var = AxisArrays1dRemote(adata_ref, 1, vals=convert_to_dict(var))
+        self.obs = xr.Dataset(obs)
+        self.var = xr.Dataset(var)
 
-        self.obsm = AxisArraysRemote(adata_ref, 0, vals=convert_to_dict(obsm))
-        self.varm = AxisArraysRemote(adata_ref, 1, vals=convert_to_dict(varm))
+        self.obsm = AxisArrays(adata_ref, 0, vals=convert_to_dict(obsm))
+        self.varm = AxisArrays(adata_ref, 1, vals=convert_to_dict(varm))
         self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))
         self.varp = PairwiseArrays(adata_ref, 1, vals=convert_to_dict(varp))
         self.layers = Layers(adata_ref, layers)
         if self.is_view:
-            self.obs = self.obs._view(self, oidx)
-            self.var = self.var._view(self, vidx)
+            self.obs = self.obs.isel(obs_names=oidx)
+            self.var = self.var.isel(var_names=vidx)
             self.obsm = self.obsm._view(self, oidx)
             self.varm = self.varm._view(self, vidx)
             self.obsp = self.obsp._view(self, oidx)
@@ -163,37 +162,49 @@ class AnnDataBacked(AbstractAnnData):
     def _normalize_indices(self, index: Optional[Index]) -> Tuple[slice, slice]:
         return _normalize_indices(
             index,
-            pd.Index(self.obs_names.compute()),
-            pd.Index(self.var_names.compute()),
+            pd.Index(self.obs_names.compute() if isinstance(self.obs_names, DaskArray) else self.obs_names), # could be either dask or in-memory from xarray
+            pd.Index(self.var_names.compute() if isinstance(self.var_names, DaskArray) else self.var_names),
         )
 
     def to_memory(self, exclude=[]):
+        # handling for AxisArrays
         def backed_dict_to_memory(d, prefix):
             res = {}
             for k, v in d.items():
                 full_key = prefix + "/" + k
                 if any([full_key == exclude_key for exclude_key in exclude]):
                     continue
-                if isinstance(v, xr.DataArray):
-                    v = v.data
                 if isinstance(v, DaskArray):
                     res[k] = v.compute()
                 elif isinstance(v, BaseCompressedSparseDataset):
                     res[k] = v.to_memory()
-                elif isinstance(v, LazyCategoricalArray) or isinstance(
-                    v, LazyMaskedArray
-                ):
-                    res[k] = v[...]
                 else:
                     res[k] = v
             return res
 
-        obs = self.obs.to_df(exclude)
-        var = self.var.to_df(exclude)
-        obsm = backed_dict_to_memory(dict(self.obsm), "obsm")
-        varm = backed_dict_to_memory(dict(self.varm), "varm")
-        varp = backed_dict_to_memory(dict(self.varp), "varp")
-        obsp = backed_dict_to_memory(dict(self.obsp), "obsp")
+        # nullable and categoricals need special handling because xarray will convert them to numpy arrays first with dtype object
+        def get_nullable_and_categorical_cols(ds):
+            cols = []
+            for c in ds:
+                dtype = ds[c].dtype
+                if isinstance(dtype, pd.CategoricalDtype) or dtype == pd.arrays.BooleanArray or dtype == pd.arrays.IntegerArray:
+                    cols += [c]
+            return cols     
+        def to_df(ds):
+            nullable_and_categorical_df_cols = get_nullable_and_categorical_cols(ds)
+            df = ds.drop_vars(list(set(exclude + nullable_and_categorical_df_cols))).to_dataframe()
+            for c in nullable_and_categorical_df_cols:
+                df[c] = ds[c].data[()]
+            df.index.name = None # matches old AnnData object
+            df = df[list(ds.keys())]
+            return df
+        
+        obs = to_df(self.obs)
+        var = to_df(self.var)
+        obsm = backed_dict_to_memory(convert_to_dict(self.obsm), "obsm")
+        varm = backed_dict_to_memory(convert_to_dict(self.varm), "varm")
+        varp = backed_dict_to_memory(convert_to_dict(self.varp), "varp")
+        obsp = backed_dict_to_memory(convert_to_dict(self.obsp), "obsp")
         layers = backed_dict_to_memory(dict(self.layers), "layers")
         X = None
         if "X" not in exclude:
@@ -412,12 +423,15 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset
             ]
             d = {k: read_dispatched(v, callback) for k, v in iter_object}
             d_with_xr = {}
+            index_label = f'{elem_name.replace("/", "")}_names'
             for k in d:
                 v = d[k]
                 if type(v) == DaskArray and k != elem.attrs["_index"]:
-                    d_with_xr[k] = xr.DataArray(v, coords=[d[elem.attrs["_index"]]], dims=[f'{elem_name.replace("/", "")}_names'], name=k)
+                    d_with_xr[k] = xr.DataArray(v, coords=[d[elem.attrs["_index"]]], dims=[index_label], name=k)
                 elif (type(v) == LazyCategoricalArray or type(v) == LazyMaskedArray) and k != elem.attrs["_index"]:
-                    d_with_xr[k] = xr.DataArray(xr.core.indexing.LazilyIndexedArray(v), coords=[d[elem.attrs["_index"]]], dims=[f'{elem_name.replace("/", "")}_names'], name=k)
+                    d_with_xr[k] = xr.DataArray(xr.core.indexing.LazilyIndexedArray(v), coords=[d[elem.attrs["_index"]]], dims=[index_label], name=k)
+                elif k == elem.attrs["_index"]:
+                    d_with_xr[index_label] = xr.DataArray(v, coords=[v], dims=[index_label], name=index_label)
                 else:
                     d_with_xr[k] = v
             return d_with_xr

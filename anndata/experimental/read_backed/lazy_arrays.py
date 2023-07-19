@@ -157,25 +157,6 @@ class LazyMaskedArray(MaskedArrayMixIn):
 def _subset_masked(a: xr.DataArray, subset_idx: Index):
     return a[subset_idx]
 
-@as_view.register(pd.Categorical)
-def _view_pd_categorical(a: pd.Categorical, view_args):
-    return a
-
-
-@as_view.register(pd.api.extensions.ExtensionArray)
-def _view_pd_array(a: pd.api.extensions.ExtensionArray, view_args):
-    return a
-
-
-@as_view.register(pd.arrays.IntegerArray)
-def _view_pd_integer_array(a: pd.arrays.IntegerArray, view_args):
-    return a
-
-
-@as_view.register(pd.arrays.BooleanArray)
-def _view_pd_boolean_array(a: pd.arrays.BooleanArray, view_args):
-    return a
-
 @as_view.register(xr.DataArray)
 def _view_pd_boolean_array(a: xr.DataArray, view_args):
     return a

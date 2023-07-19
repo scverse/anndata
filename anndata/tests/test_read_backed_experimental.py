@@ -277,22 +277,6 @@ def test_access_count_obsp_varp(tmp_path, mtx_format):
     assert store.get_access_count("varp") == 0
 
 
-def test_read_full(tmp_path, mtx_format, dskfmt):
-    adata = gen_adata((1000, 1000), mtx_format)
-    base_pth = Path(tmp_path)
-    orig_pth = base_pth / f"orig.{dskfmt}"
-    write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
-    write(adata)
-    remote = read_backed(orig_pth)
-    if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
-        assert np.all(asarray(adata.X) == asarray(remote.X.to_memory()))
-    else:
-        assert np.all(asarray(adata.X) == asarray(remote.X.compute()))
-    assert (adata.obs == remote.obs.to_df()[adata.obs.columns]).all().all()
-    assert (adata.var == remote.var.to_df()[adata.var.columns]).all().all()
-    assert (adata.obsm["array"] == remote.obsm["array"].compute()).all()
-
-
 def test_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
@@ -304,7 +288,7 @@ def test_to_memory(tmp_path, mtx_format, dskfmt):
     assert_equal(remote_to_memory, adata)
 
 
-def test_read_view(tmp_path, mtx_format, dskfmt):
+def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
     orig_pth = base_pth / f"orig.{dskfmt}"
@@ -312,71 +296,13 @@ def test_read_view(tmp_path, mtx_format, dskfmt):
     write(adata)
     remote = read_backed(orig_pth)
     subset_obs = adata.obs["obs_cat"] == "a"
-    if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
-        assert np.all(
-            asarray(adata[subset_obs, :].X)
-            == asarray(remote[subset_obs, :].X.to_memory())
-        )
-    else:
-        assert np.all(
-            asarray(adata[subset_obs, :].X)
-            == asarray(remote[subset_obs, :].X.compute())
-        )
-    assert (
-        (
-            adata[subset_obs, :].obs
-            == remote[subset_obs, :].obs.to_df()[adata.obs.columns]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        (
-            adata[subset_obs, :].var
-            == remote[subset_obs, :].var.to_df()[adata.var.columns]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        adata[subset_obs, :].obsm["array"]
-        == remote[subset_obs, :].obsm["array"].compute()
-    ).all()
+    assert_equal(adata[subset_obs, :], remote[subset_obs, :].to_memory())
 
     subset_var = adata.var["var_cat"] == "a"
-    if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
-        assert np.all(
-            asarray(adata[:, subset_var].X)
-            == asarray(remote[:, subset_var].X.to_memory())
-        )
-    else:
-        assert np.all(
-            asarray(adata[:, subset_var].X)
-            == asarray(remote[:, subset_var].X.compute())
-        )
-    assert (
-        (
-            adata[:, subset_var].obs
-            == remote[:, subset_var].obs.to_df()[adata.obs.columns]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        (
-            adata[:, subset_var].var
-            == remote[:, subset_var].var.to_df()[adata.var.columns]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        adata[:, subset_var].obsm["array"]
-        == remote[:, subset_var].obsm["array"].compute()
-    ).all()
+    assert_equal(adata[:, subset_var], remote[:, subset_var].to_memory())
 
 
-def test_read_view_of_view(tmp_path, mtx_format, dskfmt):
+def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
     orig_pth = base_pth / f"orig.{dskfmt}"
@@ -387,79 +313,13 @@ def test_read_view_of_view(tmp_path, mtx_format, dskfmt):
     subsetted_adata = adata[subset_obs, :]
     subset_subset_obs = subsetted_adata.obs["obs_cat"] == "b"
     subsetted_subsetted_adata = subsetted_adata[subset_subset_obs, :]
-    if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
-        assert np.all(
-            asarray(subsetted_subsetted_adata.X)
-            == asarray(remote[subset_obs, :][subset_subset_obs, :].X.to_memory())
-        )
-    else:
-        assert np.all(
-            asarray(subsetted_subsetted_adata.X)
-            == asarray(remote[subset_obs, :][subset_subset_obs, :].X.compute())
-        )
-    assert (
-        (
-            subsetted_subsetted_adata.obs
-            == remote[subset_obs, :][subset_subset_obs, :].obs.to_df()[
-                adata.obs.columns
-            ]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        (
-            subsetted_subsetted_adata.var
-            == remote[subset_obs, :][subset_subset_obs, :].var.to_df()[
-                adata.var.columns
-            ]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        subsetted_subsetted_adata.obsm["array"]
-        == remote[subset_obs, :][subset_subset_obs, :].obsm["array"].compute()
-    ).all()
+    assert_equal(subsetted_subsetted_adata, remote[subset_obs, :][subset_subset_obs, :].to_memory())
 
     subset_var = (adata.var["var_cat"] == "a") | (adata.var["var_cat"] == "b")
     subsetted_adata = adata[:, subset_var]
     subset_subset_var = subsetted_adata.var["var_cat"] == "b"
     subsetted_subsetted_adata = subsetted_adata[:, subset_subset_var]
-    if mtx_format == sparse.csc_matrix or mtx_format == sparse.csr_matrix:
-        assert np.all(
-            asarray(subsetted_subsetted_adata.X)
-            == asarray(remote[:, subset_var][:, subset_subset_var].X.to_memory())
-        )
-    else:
-        assert np.all(
-            asarray(subsetted_subsetted_adata.X)
-            == asarray(remote[:, subset_var][:, subset_subset_var].X.compute())
-        )
-    assert (
-        (
-            subsetted_subsetted_adata.obs
-            == remote[:, subset_var][:, subset_subset_var].obs.to_df()[
-                adata.obs.columns
-            ]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        (
-            subsetted_subsetted_adata.var
-            == remote[:, subset_var][:, subset_subset_var].var.to_df()[
-                adata.var.columns
-            ]
-        )
-        .all()
-        .all()
-    )
-    assert (
-        subsetted_subsetted_adata.obsm["array"]
-        == remote[:, subset_var][:, subset_subset_var].obsm["array"].compute()
-    ).all()
+    assert_equal(subsetted_subsetted_adata, remote[:, subset_var][:, subset_subset_var].to_memory())
 
 
 def test_lazy_categorical_array_properties(categorical_lazy_arr):
