@@ -10,11 +10,7 @@ from typing import (
 
 import h5py
 import numpy as np
-from anndata._core.aligned_mapping import (
-    Layers,
-    PairwiseArrays,
-    AxisArrays
-)
+from anndata._core.aligned_mapping import Layers, PairwiseArrays, AxisArrays
 from anndata._core.anndata import StorageType, _check_2d_shape
 from anndata._core.anndata_base import AbstractAnnData
 from anndata._core.index import Index, _normalize_indices, _subset
@@ -33,6 +29,7 @@ from scipy import sparse
 from ..._core import AnnData
 from .. import read_dispatched
 from .lazy_arrays import LazyCategoricalArray, LazyMaskedArray
+
 
 class AnnDataBacked(AbstractAnnData):
     def __init__(
@@ -53,7 +50,7 @@ class AnnDataBacked(AbstractAnnData):
         varp=None,
         oidx=None,
         vidx=None,
-        asview=False
+        asview=False,
     ):
         if asview:
             if not issubclass(type(X), AbstractAnnData):
@@ -177,9 +174,17 @@ class AnnDataBacked(AbstractAnnData):
 
         # Indices are read into memory by xarray anyway, so load them here.
         self.file = file
-        self.obs_names = pd.Index(obs['obs_names'].data.compute() if isinstance(obs['obs_names'].data, DaskArray) else obs['obs_names'].data)
-        self.var_names = pd.Index(var['var_names'].data.compute() if isinstance(var['var_names'].data, DaskArray) else var['var_names'].data)
-        
+        self.obs_names = pd.Index(
+            obs["obs_names"].data.compute()
+            if isinstance(obs["obs_names"].data, DaskArray)
+            else obs["obs_names"].data
+        )
+        self.var_names = pd.Index(
+            var["var_names"].data.compute()
+            if isinstance(var["var_names"].data, DaskArray)
+            else var["var_names"].data
+        )
+
         self.obs = xr.Dataset(obs)
         self.var = xr.Dataset(var)
         self.obsm = AxisArrays(adata_ref, 0, vals=convert_to_dict(obsm))
@@ -238,24 +243,37 @@ class AnnDataBacked(AbstractAnnData):
             cols = []
             for c in ds:
                 dtype = ds[c].dtype
-                if isinstance(dtype, pd.CategoricalDtype) or dtype == pd.arrays.BooleanArray or dtype == pd.arrays.IntegerArray:
+                if (
+                    isinstance(dtype, pd.CategoricalDtype)
+                    or dtype == pd.arrays.BooleanArray
+                    or dtype == pd.arrays.IntegerArray
+                ):
                     cols += [c]
-            return cols     
+            return cols
+
         def to_df(ds, exclude_vars):
             nullable_and_categorical_df_cols = get_nullable_and_categorical_cols(ds)
-            drop_vars = [k for k in set(exclude_vars + nullable_and_categorical_df_cols) if k in ds]
+            drop_vars = [
+                k
+                for k in set(exclude_vars + nullable_and_categorical_df_cols)
+                if k in ds
+            ]
             df = ds.drop_vars(drop_vars).to_dataframe()
             for c in nullable_and_categorical_df_cols:
-                    if c not in exclude_vars:
-                        df[c] = ds[c].data[()]
-            df.index.name = None # matches old AnnData object
+                if c not in exclude_vars:
+                    df[c] = ds[c].data[()]
+            df.index.name = None  # matches old AnnData object
             if len(exclude_vars) == 0:
                 df = df[list(ds.keys())]
             return df
-        
-        exclude_obs = [key.replace('obs/', '') for key in exclude if key.startswith('obs/')]
+
+        exclude_obs = [
+            key.replace("obs/", "") for key in exclude if key.startswith("obs/")
+        ]
         obs = to_df(self.obs, exclude_obs)
-        exclude_var = [key.replace('var/', '') for key in exclude if key.startswith('var/')]
+        exclude_var = [
+            key.replace("var/", "") for key in exclude if key.startswith("var/")
+        ]
         var = to_df(self.var, exclude_var)
         obsm = backed_dict_to_memory(convert_to_dict(self.obsm), "obsm")
         varm = backed_dict_to_memory(convert_to_dict(self.varm), "varm")
@@ -443,7 +461,9 @@ class AnnDataBacked(AbstractAnnData):
         return descr
 
 
-def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset]) -> AnnData:
+def read_backed(
+    store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset]
+) -> AnnData:
     """Lazily read in on-disk/in-cloud AnnData stores.  A new, but familiar, AnnData object will be returned.
     No array data should need to be read into memory, with exception of non-obs/var dataframes and Awkward Arrays.
 
@@ -457,10 +477,10 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset
     is_h5 = False
     if isinstance(store, Path) or isinstance(store, str):
         store = str(store)
-        if store.endswith('h5ad'):
+        if store.endswith("h5ad"):
             is_h5 = True
 
-    has_keys = True # true if consolidated or h5ad
+    has_keys = True  # true if consolidated or h5ad
     if not is_h5:
         try:
             f = zarr.open_consolidated(store, mode="r")
@@ -468,15 +488,13 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset
             has_keys = False
             f = zarr.open(store, mode="r")
     else:
-         f = h5py.File(store, mode="r")
+        f = h5py.File(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             cols = ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "X", "raw"]
             iter_object = (
-                elem.items()
-                if has_keys
-                else [(k, elem[k]) for k in cols if k in elem]
+                elem.items() if has_keys else [(k, elem[k]) for k in cols if k in elem]
             )
             return AnnDataBacked(
                 **{k: read_dispatched(v, callback) for k, v in iter_object}, file=elem
@@ -493,11 +511,22 @@ def read_backed(store: Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset
             for k in d:
                 v = d[k]
                 if type(v) == DaskArray and k != elem.attrs["_index"]:
-                    d_with_xr[k] = xr.DataArray(v, coords=[d[elem.attrs["_index"]]], dims=[index_label], name=k)
-                elif (type(v) == LazyCategoricalArray or type(v) == LazyMaskedArray) and k != elem.attrs["_index"]:
-                    d_with_xr[k] = xr.DataArray(xr.core.indexing.LazilyIndexedArray(v), coords=[d[elem.attrs["_index"]]], dims=[index_label], name=k)
+                    d_with_xr[k] = xr.DataArray(
+                        v, coords=[d[elem.attrs["_index"]]], dims=[index_label], name=k
+                    )
+                elif (
+                    type(v) == LazyCategoricalArray or type(v) == LazyMaskedArray
+                ) and k != elem.attrs["_index"]:
+                    d_with_xr[k] = xr.DataArray(
+                        xr.core.indexing.LazilyIndexedArray(v),
+                        coords=[d[elem.attrs["_index"]]],
+                        dims=[index_label],
+                        name=k,
+                    )
                 elif k == elem.attrs["_index"]:
-                    d_with_xr[index_label] = xr.DataArray(v, coords=[v], dims=[index_label], name=index_label)
+                    d_with_xr[index_label] = xr.DataArray(
+                        v, coords=[v], dims=[index_label], name=index_label
+                    )
                 else:
                     d_with_xr[k] = v
             return d_with_xr

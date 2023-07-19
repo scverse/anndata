@@ -54,9 +54,11 @@ def mtx_format(request):
 def sparse_format(request):
     return request.param
 
+
 @pytest.fixture(params=["zarr", "h5ad"])
 def dskfmt(request):
     return request.param
+
 
 @pytest.fixture()
 def categorical_lazy_arr(tmp_path_factory):
@@ -209,7 +211,9 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     remote.obs["int64"]
     remote.var["int64"]
     # only the `cat` should be read in
-    subset = remote[(remote.obs["cat"] == "a").data, :] # `.data` for xarray, but should we handle internally?
+    subset = remote[
+        (remote.obs["cat"] == "a").data, :
+    ]  # `.data` for xarray, but should we handle internally?
     subset.obs["int64"]
     sub_subset = subset[0:10, :]
     sub_subset.obs["int64"]
@@ -287,6 +291,7 @@ def test_to_memory(tmp_path, mtx_format, dskfmt):
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
 
+
 def test_to_memory_exclude(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
@@ -294,9 +299,10 @@ def test_to_memory_exclude(tmp_path, mtx_format, dskfmt):
     write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
     write(adata)
     remote = read_backed(orig_pth)
-    remote_to_memory = remote.to_memory(exclude=['obs/nullable-bool', 'obsm/sparse'])
-    assert 'nullable-bool' not in remote_to_memory.obs
-    assert 'sparse' not in remote_to_memory.obsm
+    remote_to_memory = remote.to_memory(exclude=["obs/nullable-bool", "obsm/sparse"])
+    assert "nullable-bool" not in remote_to_memory.obs
+    assert "sparse" not in remote_to_memory.obsm
+
 
 def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
@@ -323,13 +329,19 @@ def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
     subsetted_adata = adata[subset_obs, :]
     subset_subset_obs = subsetted_adata.obs["obs_cat"] == "b"
     subsetted_subsetted_adata = subsetted_adata[subset_subset_obs, :]
-    assert_equal(subsetted_subsetted_adata, remote[subset_obs, :][subset_subset_obs, :].to_memory())
+    assert_equal(
+        subsetted_subsetted_adata,
+        remote[subset_obs, :][subset_subset_obs, :].to_memory(),
+    )
 
     subset_var = (adata.var["var_cat"] == "a") | (adata.var["var_cat"] == "b")
     subsetted_adata = adata[:, subset_var]
     subset_subset_var = subsetted_adata.var["var_cat"] == "b"
     subsetted_subsetted_adata = subsetted_adata[:, subset_subset_var]
-    assert_equal(subsetted_subsetted_adata, remote[:, subset_var][:, subset_subset_var].to_memory())
+    assert_equal(
+        subsetted_subsetted_adata,
+        remote[:, subset_var][:, subset_subset_var].to_memory(),
+    )
 
 
 def test_lazy_categorical_array_properties(categorical_lazy_arr):
@@ -386,8 +398,8 @@ def test_nullable_boolean_array_subset_subset(nullable_boolean_lazy_arr):
 
 
 def test_nullable_boolean_array_no_mask_equality(nullable_boolean_lazy_arr_no_mask):
-    assert nullable_boolean_lazy_arr_no_mask[0] == True
-    assert (nullable_boolean_lazy_arr_no_mask[3:5] == False).all()
+    assert nullable_boolean_lazy_arr_no_mask[0] is True
+    assert (nullable_boolean_lazy_arr_no_mask[3:5] is False).all()
     assert (nullable_boolean_lazy_arr_no_mask[5:7] == np.array([True, False])).all()
 
 

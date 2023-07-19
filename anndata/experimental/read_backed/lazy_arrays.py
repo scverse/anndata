@@ -6,18 +6,21 @@ from anndata.compat import ZarrArray
 
 import pandas as pd
 import numpy as np
-from xarray.core.indexing import ExplicitlyIndexedNDArrayMixin, BasicIndexer, OuterIndexer
+from xarray.core.indexing import (
+    ExplicitlyIndexedNDArrayMixin,
+    BasicIndexer,
+    OuterIndexer,
+)
 import xarray as xr
 
 
 class MaskedArrayMixIn(ExplicitlyIndexedNDArrayMixin):
-
     def __eq__(self, __o) -> np.ndarray:
         return self[...] == __o
 
     def __ne__(self, __o) -> np.ndarray:
         return ~(self == __o)
-    
+
     @property
     def shape(self) -> Tuple[int, ...]:
         """Shape of this array
@@ -70,7 +73,7 @@ class LazyCategoricalArray(MaskedArrayMixIn):
     def __getitem__(self, selection) -> pd.Categorical:
         idx = selection
         if isinstance(selection, BasicIndexer) or isinstance(selection, OuterIndexer):
-            idx = selection.tuple[0] # need to better understand this
+            idx = selection.tuple[0]  # need to better understand this
         if isinstance(self.values, ZarrArray):
             codes = self.values.oindex[idx]
         else:
@@ -125,7 +128,7 @@ class LazyMaskedArray(MaskedArrayMixIn):
     def __getitem__(self, selection) -> pd.Categorical:
         idx = selection
         if isinstance(selection, BasicIndexer) or isinstance(selection, OuterIndexer):
-            idx = selection.tuple[0] # need to understand this better
+            idx = selection.tuple[0]  # need to understand this better
         if type(idx) == int:
             idx = slice(idx, idx + 1)
         values = np.array(self.values[idx])
@@ -156,6 +159,7 @@ class LazyMaskedArray(MaskedArrayMixIn):
 @_subset.register(xr.DataArray)
 def _subset_masked(a: xr.DataArray, subset_idx: Index):
     return a[subset_idx]
+
 
 @as_view.register(xr.DataArray)
 def _view_pd_boolean_array(a: xr.DataArray, view_args):
