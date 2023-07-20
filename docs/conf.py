@@ -55,7 +55,8 @@ extensions = [
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
     "sphinxext.opengraph",
-    "scanpydoc",
+    "scanpydoc",  # needs to be before linkcode
+    "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
@@ -133,6 +134,7 @@ html_context = dict(
     github_version="master",  # Version
     conf_py_path="/docs/",  # Path in the checkout to the docs root
 )
+html_logo = "_static/img/anndata_schema.svg"
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_show_sphinx = False
 
