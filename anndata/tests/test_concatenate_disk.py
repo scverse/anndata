@@ -53,7 +53,7 @@ def file_format(request):
 
 # trying with 10 should be slow but will guarantee that the feature is being used
 @pytest.fixture(params=[10, 100_000_000])
-def max_loaded_sparse_elems(request):
+def max_loaded_elems(request):
     return request.param
 
 
@@ -79,15 +79,15 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
 
 
 def assert_eq_concat_on_disk(
-    adatas, tmp_path, file_format, max_loaded_sparse_elems=None, *args, **kwargs
+    adatas, tmp_path, file_format, max_loaded_elems=None, *args, **kwargs
 ):
     # create one from the concat function
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
     out_name = tmp_path / ("out." + file_format)
-    if max_loaded_sparse_elems is not None:
-        kwargs["max_loaded_sparse_elems"] = max_loaded_sparse_elems
+    if max_loaded_elems is not None:
+        kwargs["max_loaded_elems"] = max_loaded_elems
     concat_on_disk(paths, out_name, *args, **kwargs)
     res2 = read_elem(as_group(out_name))
     assert_equal(res1, res2, exact=False)
@@ -105,7 +105,7 @@ def get_array_type(array_type, axis):
 
 
 def test_anndatas_without_reindex(
-    axis, array_type, join_type, tmp_path, max_loaded_sparse_elems, file_format
+    axis, array_type, join_type, tmp_path, max_loaded_elems, file_format
 ):
     N = 50
     M = 50
@@ -130,14 +130,14 @@ def test_anndatas_without_reindex(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_sparse_elems,
+        max_loaded_elems,
         axis=axis,
         join=join_type,
     )
 
 
 def test_anndatas_with_reindex(
-    axis, array_type, join_type, tmp_path, file_format, max_loaded_sparse_elems
+    axis, array_type, join_type, tmp_path, file_format, max_loaded_elems
 ):
     N = 50
     M = 50
@@ -171,7 +171,7 @@ def test_anndatas_with_reindex(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_sparse_elems,
+        max_loaded_elems,
         axis=axis,
         join=join_type,
     )

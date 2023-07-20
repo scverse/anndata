@@ -1,42 +1,43 @@
 import os
+import shutil
 from functools import singledispatch
+from pathlib import Path
 from typing import (
     Any,
     Callable,
     Collection,
+    Iterable,
+    Literal,
+    Mapping,
     Optional,
     Sequence,
     Union,
-    Literal,
-    Iterable,
-    Mapping,
+    MutableMapping,
 )
-import pandas as pd
-import typing
-from pathlib import Path
-import numpy as np
-from scipy.sparse import csr_matrix, csc_matrix
 
-from .._io.specs import read_elem, write_elem
+import numpy as np
+import pandas as pd
+from scipy.sparse import csc_matrix, csr_matrix
+
+from .._core.file_backing import to_memory
 from .._core.merge import (
-    _resolve_dim,
-    StrategiesLiteral,
-    intersect_keys,
-    unify_dtypes,
-    merge_indices,
-    merge_dataframes,
-    resolve_merge_strategy,
-    gen_reindexer,
-    gen_inner_reindexers,
-    concat_arrays,
     MissingVal,
     Reindexer,
+    StrategiesLiteral,
+    _resolve_dim,
+    concat_arrays,
+    gen_inner_reindexers,
+    gen_reindexer,
+    intersect_keys,
+    merge_dataframes,
+    merge_indices,
+    resolve_merge_strategy,
+    unify_dtypes,
 )
 from .._core.sparse_dataset import SparseDataset
-from .._core.file_backing import to_memory
+from .._io.specs import read_elem, write_elem
+from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched
-from ..compat import ZarrGroup, ZarrArray, H5Group, H5Array
-
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
@@ -67,18 +68,18 @@ def _indices_equal(indices: Iterable[pd.Index]) -> bool:
 def _gen_slice_to_append(
     datasets: Sequence[SparseDataset],
     reindexers,
-    max_loaded_sparse_elems: int,
+    max_loaded_elems: int,
     axis=0,
     fill_value=None,
 ):
     for ds, ri in zip(datasets, reindexers):
-        n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_sparse_elems
+        n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
         if n_slices < 2:
             yield (csr_matrix, csc_matrix)[axis](
                 ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
             )
         else:
-            slice_size = max_loaded_sparse_elems // ds.shape[1 - axis]
+            slice_size = max_loaded_elems // ds.shape[1 - axis]
             if slice_size == 0:
                 slice_size = 1
             rem_slices = ds.shape[axis]
@@ -197,7 +198,7 @@ def write_concat_sparse(
     datasets: Sequence[SparseDataset],
     output_group: Union[ZarrGroup, H5Group],
     output_path: Union[ZarrGroup, H5Group],
-    max_loaded_sparse_elems: int,
+    max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
     fill_value=None,
@@ -209,7 +210,7 @@ def write_concat_sparse(
         datasets (Sequence[SparseDataset]): A sequence of SparseDataset objects to be concatenated.
         output_group (Union[ZarrGroup, H5Group]): The output group where the concatenated dataset will be written.
         output_path (Union[ZarrGroup, H5Group]): The output path where the concatenated dataset will be written.
-        max_loaded_sparse_elems (int): The maximum number of sparse elements to load at once.
+        max_loaded_elems (int): The maximum number of sparse elements to load at once.
         axis (Literal[0, 1], optional): The axis along which the datasets should be concatenated.
             Defaults to 0.
         reindexers (Reindexer, optional): A reindexer object that defines the reindexing operation to be applied.
@@ -221,7 +222,7 @@ def write_concat_sparse(
         elems = iter(datasets)
     else:
         elems = _gen_slice_to_append(
-            datasets, reindexers, max_loaded_sparse_elems, axis, fill_value
+            datasets, reindexers, max_loaded_elems, axis, fill_value
         )
     init_elem = next(elems)
     write_elem(output_group, output_path, init_elem)
@@ -237,7 +238,7 @@ def _write_concat_mappings(
     output_group: Union[ZarrGroup, H5Group],
     keys,
     path,
-    max_loaded_sparse_elems,
+    max_loaded_elems,
     axis=0,
     index=None,
     reindexers=None,
@@ -263,7 +264,7 @@ def _write_concat_mappings(
             index=index,
             reindexers=reindexers,
             fill_value=fill_value,
-            max_loaded_sparse_elems=max_loaded_sparse_elems,
+            max_loaded_elems=max_loaded_elems,
         )
 
 
@@ -271,7 +272,7 @@ def _write_concat_arrays(
     arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]],
     output_group,
     output_path,
-    max_loaded_sparse_elems,
+    max_loaded_elems,
     axis=0,
     reindexers=None,
     fill_value=None,
@@ -297,7 +298,7 @@ def _write_concat_arrays(
                 arrays,
                 output_group,
                 output_path,
-                max_loaded_sparse_elems,
+                max_loaded_elems,
                 axis,
                 reindexers,
                 fill_value,
@@ -316,7 +317,7 @@ def _write_concat_sequence(
     arrays: Sequence[Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray]],
     output_group,
     output_path,
-    max_loaded_sparse_elems,
+    max_loaded_elems,
     axis=0,
     index=None,
     reindexers=None,
@@ -354,7 +355,7 @@ def _write_concat_sequence(
             arrays,
             output_group,
             output_path,
-            max_loaded_sparse_elems,
+            max_loaded_elems,
             axis,
             reindexers,
             fill_value,
@@ -399,22 +400,26 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
 def concat_on_disk(
     in_files: Union[
         Collection[Union[str, os.PathLike]],
-        typing.MutableMapping,
+        MutableMapping[str, Union[str, os.PathLike]],
     ],
     out_file: Union[str, os.PathLike],
-    overwrite: bool = False,
-    max_loaded_sparse_elems: int = 100_000_000,
     *,
+    overwrite: bool = False,
+    max_loaded_elems: int = 100_000_000,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[StrategiesLiteral, Callable, None] = None,
-    uns_merge: Union[StrategiesLiteral, Callable, None] = None,
+    merge: Union[
+        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
+    ] = None,
+    uns_merge: Union[
+        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
+    ] = None,
     label: Optional[str] = None,
-    keys: Optional[Collection] = None,
+    keys: Optional[Collection[str]] = None,
     index_unique: Optional[str] = None,
     fill_value: Optional[Any] = None,
     pairwise: bool = False,
-):
+) -> None:
     """Concatenates multiple AnnData objects along a specified axis using their
     corresponding stores or paths, and writes the resulting AnnData object
     to a target location on disk.
@@ -427,7 +432,7 @@ def concat_on_disk(
     the `concat` function.
 
     To adjust the maximum amount of data loaded in memory; for sparse
-    arrays use the max_loaded_sparse_elems argument; for dense arrays
+    arrays use the max_loaded_elems argument; for dense arrays
     see the Dask documentation, as the Dask concatenation function is used
     to concatenate dense arrays in this function
     Params
@@ -441,7 +446,7 @@ def concat_on_disk(
     overwrite
         If `False` while a file already exists it will raise an error,
         otherwise it will overwrite.
-    max_loaded_sparse_elems
+    max_loaded_elems
         The maximum number of elements to load in memory when concatenating
         sparse arrays. Note that this number also includes the empty entries.
         Set to 100m by default meaning roughly 400mb will be loaded
@@ -590,7 +595,7 @@ def concat_on_disk(
         axis=axis,
         reindexers=reindexers,
         fill_value=fill_value,
-        max_loaded_sparse_elems=max_loaded_sparse_elems,
+        max_loaded_elems=max_loaded_elems,
     )
 
     # Write Layers and {dim}m
@@ -610,7 +615,7 @@ def concat_on_disk(
             output_group,
             intersect_keys(maps),
             m,
-            max_loaded_sparse_elems=max_loaded_sparse_elems,
+            max_loaded_elems=max_loaded_elems,
             axis=m_axis,
             index=m_index,
             reindexers=m_reindexers,
