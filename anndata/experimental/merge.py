@@ -501,7 +501,11 @@ def concat_on_disk(
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
     if len(in_files) <= 1:
-        raise ValueError("Must pass at least two files to concatenate.")
+        if len(in_files) == 1:
+            if not overwrite and Path(out_file).is_file():
+                raise FileExistsError(f"File “{out_file}” already exists and `overwrite` is set to False")
+            shutil.copy2(in_files[0], out_file)
+        return
     if isinstance(in_files, Mapping):
         if keys is not None:
             raise TypeError(
