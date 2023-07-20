@@ -503,7 +503,9 @@ def concat_on_disk(
     if len(in_files) <= 1:
         if len(in_files) == 1:
             if not overwrite and Path(out_file).is_file():
-                raise FileExistsError(f"File “{out_file}” already exists and `overwrite` is set to False")
+                raise FileExistsError(
+                    f"File “{out_file}” already exists and `overwrite` is set to False"
+                )
             shutil.copy2(in_files[0], out_file)
         return
     if isinstance(in_files, Mapping):
