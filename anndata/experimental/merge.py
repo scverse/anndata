@@ -442,7 +442,7 @@ def concat_on_disk(
     out_file
         The target path or store to write the result in.
     overwrite
-        If False the and if a file already exists it will raise an error,
+        If `False` while a file already exists it will raise an error,
         otherwise it will overwrite.
     max_loaded_sparse_elems
         The maximum number of elements to load in memory when concatenating
