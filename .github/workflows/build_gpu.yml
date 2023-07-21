@@ -29,9 +29,12 @@ jobs:
 
       - name: Install AnnData
         run: pip install .[dev,test]
+        shell: bash -el {0}
 
       - name: Mamba list
         run: micromamba list
+        shell: bash -el {0}
 
       - name: Run test
         run: python -c 'import anndata, cupy; cupyx.scipy.sparse.random(100, 50, format="csr")'
+        shell: bash -el {0}
