@@ -15,14 +15,21 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - name: Create conda environment
-        run: |
-          conda create -yn anndata-gpu cupy
-          conda activate anndata-gpu
-          pip install .[dev,test]
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment.yml
+          micromamba-version: "1.3.1-0"
+          create-args: >-
+            python
+            cupy
+          init-shell: >-
+            bash
 
-      - name: Conda list
-        run: conda list
+      - name: Install AnnData
+        run: pip install .[dev,test]
+
+      - name: Mamba list
+        run: mamba list
 
       - name: Run test
         run: python -c 'import anndata, cupy; cupyx.scipy.sparse.random(100, 50, format="csr")'
