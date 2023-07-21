@@ -12,6 +12,7 @@ __pycache__/
 /*.egg-info/
 /requirements*.lock
 /.python-version
+/hatch.toml
 
 # Tests and coverage
 /.pytest_cache/

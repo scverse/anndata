@@ -128,17 +128,14 @@ ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "scanpydoc"
-html_theme_options = dict(navigation_depth=4)
-html_context = dict(
-    display_github=True,  # Integrate GitHub
-    github_user="scverse",  # Username
-    github_repo="anndata",  # Repo name
-    github_version="main",  # Version
-    conf_py_path="/docs/",  # Path in the checkout to the docs root
+html_theme = "sphinx_book_theme"
+html_theme_options = dict(
+    use_repository_button=True,
+    repository_url="https://github.com/scverse/anndata",
+    repository_branch="main",
 )
 html_logo = "_static/img/anndata_schema.svg"
-issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
+issues_github_path = "scverse/anndata"
 html_show_sphinx = False
 
 
