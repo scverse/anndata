@@ -37,6 +37,7 @@ pygments_style = "sphinx"
 
 extensions = [
     "myst_parser",
+    "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
