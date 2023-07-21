@@ -7,20 +7,19 @@ on:
 
 jobs:
   build:
-
     runs-on: [self-hosted, aws-gpu] # aws-gpu == label in cirun.yml
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Get Hostname
-      run: |
-        hostname
-    - name: Get system Information
-      run: |
-        uname -a
-    - name: Get Architecture
-      run: |
-        dpkg --print-architecture
+      - name: Get Hostname
+        run: |
+          hostname
+      - name: Get system Information
+        run: |
+          uname -a
+      - name: Get Architecture
+        run: |
+          dpkg --print-architecture
 
-    - name: Nvidia SMI
-      run: nvidia-smi
+      - name: Nvidia SMI
+        run: nvidia-smi
