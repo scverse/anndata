@@ -2,6 +2,7 @@ name: AWS GPU
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -16,7 +17,7 @@ jobs:
 
       - name: Create conda environment
         run: |
-          conda create -yn anndata-gpu python=3.10 cupy
+          conda create -yn anndata-gpu cupy
           conda activate anndata-gpu
           pip install .[dev,test]
 
