@@ -1,18 +1,22 @@
 from abc import ABC, abstractmethod
 from collections import abc as cabc
+from copy import copy
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
+import warnings
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from ..utils import deprecated, ensure_df_homogeneous
+from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
-from .views import as_view
+from .views import as_view, view_update
 from .access import ElementRef
 from .index import _subset
+from anndata.compat import AwkArray
+from anndata._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -46,15 +50,37 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
+        if isinstance(val, AwkArray):
+            warnings.warn(
+                "Support for Awkward Arrays is currently experimental. "
+                "Behavior may change in the future. Please report any issues you may encounter!",
+                ExperimentalFeatureWarning,
+                # stacklevel=3,
+            )
+            # Prevent from showing up every time an awkward array is used
+            # You'd think `once` works, but it doesn't at the repl and in notebooks
+            warnings.filterwarnings(
+                "ignore",
+                category=ExperimentalFeatureWarning,
+                message="Support for Awkward Arrays is currently experimental.*",
+            )
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] != val.shape[i]:
+            if self.parent.shape[axis] != dim_len(val, i):
                 right_shape = tuple(self.parent.shape[a] for a in self.axes)
-                raise ValueError(
-                    f"Value passed for key {key!r} is of incorrect shape. "
-                    f"Values of {self.attrname} must match dimensions "
-                    f"{self.axes} of parent. Value had shape {val.shape} while "
-                    f"it should have had {right_shape}."
-                )
+                actual_shape = tuple(dim_len(val, a) for a, _ in enumerate(self.axes))
+                if actual_shape[i] is None and isinstance(val, AwkArray):
+                    raise ValueError(
+                        f"The AwkwardArray is of variable length in dimension {i}.",
+                        f"Try ak.to_regular(array, {i}) before including the array in AnnData",
+                    )
+                else:
+                    raise ValueError(
+                        f"Value passed for key {key!r} is of incorrect shape. "
+                        f"Values of {self.attrname} must match dimensions "
+                        f"{self.axes} of parent. Value had shape {actual_shape} while "
+                        f"it should have had {right_shape}."
+                    )
+
         if not self._allow_df and isinstance(val, pd.DataFrame):
             name = self.attrname.title().rstrip("s")
             val = ensure_df_homogeneous(val, f"{name} {key!r}")
@@ -84,7 +110,11 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def copy(self):
         d = self._actual_class(self.parent, self._axis)
         for k, v in self.items():
-            d[k] = v.copy()
+            if isinstance(v, AwkArray):
+                # Shallow copy since awkward array buffers are immutable
+                d[k] = copy(v)
+            else:
+                d[k] = v.copy()
         return d
 
     def _view(self, parent: "anndata.AnnData", subset_idx: I):
@@ -116,17 +146,25 @@ class AlignedViewMixin:
 
     def __setitem__(self, key: str, value: V):
         value = self._validate_value(value, key)  # Validate before mutating
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        new_mapping[key] = value
-        self.parent._init_as_actual(adata)
+        warnings.warn(
+            f"Setting element `.{self.attrname}['{key}']` of view, "
+            "initializing view as actual.",
+            ImplicitModificationWarning,
+            stacklevel=2,
+        )
+        with view_update(self.parent, self.attrname, ()) as new_mapping:
+            new_mapping[key] = value
 
     def __delitem__(self, key: str):
-        self[key]  # Make sure it exists before bothering with a copy
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        del new_mapping[key]
-        self.parent._init_as_actual(adata)
+        _ = key in self  # Make sure it exists before bothering with a copy
+        warnings.warn(
+            f"Removing element `.{self.attrname}['{key}']` of view, "
+            "initializing view as actual.",
+            ImplicitModificationWarning,
+            stacklevel=2,
+        )
+        with view_update(self.parent, self.attrname, ()) as new_mapping:
+            del new_mapping[key]
 
     def __contains__(self, key: str) -> bool:
         return key in self.parent_mapping

@@ -45,16 +45,13 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous
+from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
-    _slice_uns_sparse_matrices,
     _move_adj_mtx,
-    _overloaded_uns,
-    OverloadedDict,
 )
 
 
@@ -102,7 +99,7 @@ def _check_2d_shape(X):
 @singledispatch
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
-        return pd.DataFrame(index=pd.RangeIndex(0, length, name=None).astype(str))
+        anno = {}
     for index_name in index_names:
         if index_name in anno:
             return pd.DataFrame(
@@ -110,7 +107,11 @@ def _gen_dataframe(anno, length, index_names):
                 index=anno[index_name],
                 columns=[k for k in anno.keys() if k != index_name],
             )
-    return pd.DataFrame(anno, index=pd.RangeIndex(0, length, name=None).astype(str))
+    return pd.DataFrame(
+        anno,
+        index=pd.RangeIndex(0, length, name=None).astype(str),
+        columns=None if len(anno) else [],
+    )
 
 
 @_gen_dataframe.register(pd.DataFrame)
@@ -119,6 +120,8 @@ def _(anno, length, index_names):
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
         anno.index = anno.index.astype(str)
+    if not len(anno.columns):
+        anno.columns = anno.columns.astype(str)
     return anno
 
 
@@ -337,17 +340,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = adata_ref.layers._view(self, (oidx, vidx))
         self._obsp = adata_ref.obsp._view(self, oidx)
         self._varp = adata_ref.varp._view(self, vidx)
-        # Special case for old neighbors, backwards compat. Remove in anndata 0.8.
-        uns_new = _slice_uns_sparse_matrices(
-            copy(adata_ref._uns), self._oidx, adata_ref.n_obs
-        )
         # fix categories
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns_new)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns_new)
+        uns = copy(adata_ref._uns)
+        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
-        self._uns = uns_new
+        self._uns = uns
         self._n_obs = len(self.obs)
         self._n_vars = len(self.var)
 
@@ -424,11 +424,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", X.index))
+                    x_indices.append(("obs", "index", X.index.astype(str)))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
-                    x_indices.append(("var", "columns", X.columns))
+                    x_indices.append(("var", "columns", X.columns.astype(str)))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -764,7 +764,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             if self.is_view:
                 self._init_as_actual(self.copy())
-            self._raw = Raw(value)
+            self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
 
     @raw.deleter
     def raw(self):
@@ -790,6 +790,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         setattr(self, f"_{attr}", value)
         self._set_dim_index(value_idx, attr)
+        if not len(value.columns):
+            value.columns = value.columns.astype(str)
 
     def _prep_dim_index(self, value, attr: str) -> pd.Index:
         """Prepares index to be uses as obs_names or var_names for AnnData object.AssertionError
@@ -814,7 +816,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # fmt: off
         if (
             not isinstance(value, pd.RangeIndex)
-            and not infer_dtype(value) in ("string", "bytes")
+            and infer_dtype(value) not in ("string", "bytes")
         ):
             sample = list(value[: min(len(value), 5)])
             warnings.warn(dedent(
@@ -850,7 +852,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @obs.deleter
     def obs(self):
-        self.obs = pd.DataFrame(index=self.obs_names)
+        self.obs = pd.DataFrame({}, index=self.obs_names)
 
     @property
     def obs_names(self) -> pd.Index:
@@ -873,7 +875,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @var.deleter
     def var(self):
-        self.var = pd.DataFrame(index=self.var_names)
+        self.var = pd.DataFrame({}, index=self.var_names)
 
     @property
     def var_names(self) -> pd.Index:
@@ -891,7 +893,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         uns = self._uns
         if self.is_view:
             uns = DictView(uns, view_args=(self, "_uns"))
-        uns = _overloaded_uns(self, uns)
         return uns
 
     @uns.setter
@@ -900,7 +901,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
             )
-        if isinstance(value, (OverloadedDict, DictView)):
+        if isinstance(value, DictView):
             value = value.copy()
         if self.is_view:
             self._init_as_actual(self.copy())
@@ -1464,7 +1465,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self, copy=True) -> "AnnData":
+    def to_memory(self, copy=False) -> "AnnData":
         """Return a new AnnData object with all backed arrays loaded into memory.
 
         Params
@@ -1861,7 +1862,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([o.shape[0] == self._n_obs for o in obsm.values()])
+                not all([dim_len(o, 0) == self._n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self._n_obs
             ):
                 raise ValueError(
@@ -1871,7 +1872,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "varm" in key:
             varm = self._varm
             if (
-                not all([v.shape[0] == self._n_vars for v in varm.values()])
+                not all([dim_len(v, 0) == self._n_vars for v in varm.values()])
                 and len(varm.dim_names) != self._n_vars
             ):
                 raise ValueError(

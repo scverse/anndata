@@ -25,7 +25,7 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray
+from anndata.compat import DaskArray, AwkArray
 
 
 @singledispatch
@@ -444,20 +444,27 @@ def test_concatenate_fill_value(fill_val):
 
     adata1 = gen_adata((10, 10))
     adata1.obsm = {
-        k: v for k, v in adata1.obsm.items() if not isinstance(v, pd.DataFrame)
+        k: v
+        for k, v in adata1.obsm.items()
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame)
+        if not isinstance(v, (pd.DataFrame, AwkArray))
     }
+    # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
+    for tmp_ad in [adata1, adata2, adata3]:
+        for k in [k for k, v in tmp_ad.varm.items() if isinstance(v, AwkArray)]:
+            del tmp_ad.varm[k]
+
     joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
 
     ptr = 0
@@ -678,6 +685,100 @@ def test_concatenate_with_raw():
     assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert adata_all.raw is None
+
+
+def test_concatenate_awkward(join_type):
+    import awkward as ak
+
+    a = ak.Array([[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
+    b = ak.Array(
+        [
+            [{"a": 4}, {"a": 5}],
+            [{"a": 6}],
+            [{"a": 7}],
+        ]
+    )
+
+    adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
+    adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
+
+    if join_type == "inner":
+        expected = ak.Array(
+            [
+                [{"a": 1}],
+                [{"a": 2}, {"a": 3}],
+                [{"a": 4}, {"a": 5}],
+                [{"a": 6}],
+                [{"a": 7}],
+            ]
+        )
+    elif join_type == "outer":
+        # TODO: This is what we would like to return, but waiting on:
+        # * https://github.com/scikit-hep/awkward/issues/2182 and awkward 2.1.0
+        # * https://github.com/scikit-hep/awkward/issues/2173
+        # expected = ak.Array(
+        #     [
+        #         [{"a": 1, "b": "foo"}],
+        #         [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+        #         [{"a": 4, "b": None}, {"a": 5, "b": None}],
+        #         [{"a": 6, "b": None}],
+        #         [{"a": 7, "b": None}],
+        #     ]
+        # )
+        expected = ak.concatenate(
+            [  # I don't think I can construct a UnionArray directly
+                ak.Array(
+                    [
+                        [{"a": 1, "b": "foo"}],
+                        [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+                    ]
+                ),
+                ak.Array(
+                    [
+                        [{"a": 4}, {"a": 5}],
+                        [{"a": 6}],
+                        [{"a": 7}],
+                    ]
+                ),
+            ]
+        )
+
+    result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
+
+    assert_equal(expected, result)
+
+
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.DataFrame({"a": [4, 5, 6], "b": ["foo", "bar", "baz"]}, index=list("cde")),
+        np.ones((3, 2)),
+        sparse.random(3, 100, format="csr"),
+    ],
+)
+def test_awkward_does_not_mix(join_type, other):
+    import awkward as ak
+
+    awk = ak.Array(
+        [[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]]
+    )
+
+    adata_a = AnnData(
+        np.zeros((2, 3), dtype=float),
+        obs=pd.DataFrame(index=list("ab")),
+        obsm={"val": awk},
+    )
+    adata_b = AnnData(
+        np.zeros((3, 3), dtype=float),
+        obs=pd.DataFrame(index=list("cde")),
+        obsm={"val": other},
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Cannot concatenate an AwkwardArray with other array types",
+    ):
+        concat([adata_a, adata_b], join=join_type)
 
 
 def test_pairwise_concat(axis, array_type):
@@ -985,11 +1086,9 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     print(merge_strategy, "\n", unss, "\n", result)
     result, *unss = permute_nested_values([result] + unss, value_gen)
     adatas = [uns_ad(uns) for uns in unss]
-    assert_equal(
-        adatas[0].concatenate(adatas[1:], uns_merge=merge_strategy).uns,
-        result,
-        elem_name="uns",
-    )
+    with pytest.warns(FutureWarning, match=r"concatenate method is deprecated"):
+        merged = AnnData.concatenate(*adatas, uns_merge=merge_strategy).uns
+    assert_equal(merged, result, elem_name="uns")
 
 
 def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
@@ -1115,6 +1214,34 @@ def test_concat_ordered_categoricals_retained():
 
     assert pd.api.types.is_categorical_dtype(c.obs["cat_ordered"])
     assert c.obs["cat_ordered"].cat.ordered
+
+
+def test_bool_promotion():
+    np_bool = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame({"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5)]),
+    )
+    missing = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(5, 10)]),
+    )
+    result = concat({"np_bool": np_bool, "b": missing}, join="outer", label="batch")
+
+    assert pd.api.types.is_bool_dtype(result.obs["bool"])
+    assert pd.isnull(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
+
+    # Check that promotion doesn't occur if it doesn't need to:
+    np_bool_2 = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5, 10)]
+        ),
+    )
+    result = concat(
+        {"np_bool": np_bool, "np_bool_2": np_bool_2}, join="outer", label="batch"
+    )
+
+    assert result.obs["bool"].dtype == np.dtype(bool)
 
 
 def test_concat_names(axis):
@@ -1257,6 +1384,7 @@ def test_concat_X_dtype():
 #     from anndata._core.merge import UNS_STRATEGIES, UNS_STRATEGIES_TYPE
 #     assert set(UNS_STRATEGIES.keys()) == set(UNS_STRATEGIES_TYPE.__args__)
 
+
 # Tests how dask plays with other types on concatenation.
 def test_concat_different_types_dask(merge_strategy, array_type):
     from scipy import sparse
@@ -1276,3 +1404,49 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     assert_equal(result1, target1)
     assert_equal(result2, target2)
+
+
+def test_outer_concat_with_missing_value_for_df():
+    # https://github.com/scverse/anndata/issues/901
+    # TODO: Extend this test to cover all cases of missing values
+    # TODO: Check values
+    a_idx = ["a", "b", "c", "d", "e"]
+    b_idx = ["f", "g", "h", "i", "j", "k", "l", "m"]
+    a = AnnData(
+        np.ones((5, 5)),
+        obs=pd.DataFrame(index=a_idx),
+    )
+    b = AnnData(
+        np.zeros((8, 9)),
+        obs=pd.DataFrame(index=b_idx),
+        obsm={"df": pd.DataFrame({"col": np.arange(8)}, index=b_idx)},
+    )
+
+    concat([a, b], join="outer")
+
+
+def test_outer_concat_outputs_nullable_bool_writable(tmp_path):
+    a = gen_adata((5, 5), obsm_types=(pd.DataFrame,))
+    b = gen_adata((3, 5), obsm_types=(pd.DataFrame,))
+
+    del b.obsm["df"]
+
+    adatas = concat({"a": a, "b": b}, join="outer", label="group")
+    adatas.write(tmp_path / "test.h5ad")
+
+
+def test_concat_duplicated_columns(join_type):
+    # https://github.com/scverse/anndata/issues/483
+    a = AnnData(
+        obs=pd.DataFrame(
+            np.ones((5, 2)), columns=["a", "a"], index=[str(x) for x in range(5)]
+        )
+    )
+    b = AnnData(
+        obs=pd.DataFrame(
+            np.ones((5, 1)), columns=["a"], index=[str(x) for x in range(5, 10)]
+        )
+    )
+
+    with pytest.raises(pd.errors.InvalidIndexError, match=r"'a'"):
+        concat([a, b], join=join_type)
