@@ -1,19 +1,12 @@
 import sys
-import logging
 from pathlib import Path
 from datetime import datetime
+from importlib import metadata
 
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
-import anndata  # noqa
-
-
-logger = logging.getLogger(__name__)
-
-for generated in HERE.glob("anndata.*.rst"):
-    generated.unlink()
+sys.path[:0] = [str(HERE / "extensions")]
 
 
 # -- General configuration ------------------------------------------------
@@ -25,8 +18,7 @@ needs_sphinx = "1.7"  # autosummary bugfix
 project = "anndata"
 author = f"{project} developers"
 copyright = f"{datetime.now():%Y}, {author}"
-version = anndata.__version__.replace(".dirty", "")
-release = version
+release = version = metadata.version("anndata")
 
 # default settings
 templates_path = ["_templates"]
