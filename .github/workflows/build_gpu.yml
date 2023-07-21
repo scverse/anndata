@@ -31,7 +31,7 @@ jobs:
         run: pip install .[dev,test]
 
       - name: Mamba list
-        run: mamba list
+        run: micromamba list
 
       - name: Run test
         run: python -c 'import anndata, cupy; cupyx.scipy.sparse.random(100, 50, format="csr")'
