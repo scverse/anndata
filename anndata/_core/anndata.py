@@ -135,13 +135,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     """\
     An annotated data matrix.
 
+    .. figure:: ../_static/img/anndata_schema.svg
+       :width: 260px
+       :align: right
+       :class: dark-light
+
     :class:`~anndata.AnnData` stores a data matrix :attr:`X` together with annotations
     of observations :attr:`obs` (:attr:`obsm`, :attr:`obsp`),
     variables :attr:`var` (:attr:`varm`, :attr:`varp`),
     and unstructured annotations :attr:`uns`.
-
-    .. figure:: ../_static/img/anndata_schema.svg
-       :width: 260px
 
     An :class:`~anndata.AnnData` object `adata` can be sliced like a
     :class:`~pandas.DataFrame`,
