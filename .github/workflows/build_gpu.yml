@@ -12,15 +12,18 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Get Hostname
-      run: |
-        hostname
-    - name: Get system Information
-      run: |
-        uname -a
-    - name: Get Architecture
-      run: |
-        dpkg --print-architecture
-
-    - name: Nvidia SMI
+    - name: Nvidia SMI sanity check
       run: nvidia-smi
+
+    - name: Create conda environment
+      run: |
+        conda create -yn anndata-gpu python=3.10 cupy
+        conda activate anndata-gpu
+        pip install .[dev,test]
+
+    - name: Conda list
+      run: conda list
+
+    - name: Run test
+      run: python -c 'import anndata, cupy; cupyx.scipy.sparse.random(100, 50, format="csr")'
+
