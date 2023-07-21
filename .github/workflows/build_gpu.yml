@@ -7,23 +7,21 @@ on:
 
 jobs:
   build:
-
     runs-on: [self-hosted, aws-gpu] # aws-gpu == label in cirun.yml
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Nvidia SMI sanity check
-      run: nvidia-smi
+      - name: Nvidia SMI sanity check
+        run: nvidia-smi
 
-    - name: Create conda environment
-      run: |
-        conda create -yn anndata-gpu python=3.10 cupy
-        conda activate anndata-gpu
-        pip install .[dev,test]
+      - name: Create conda environment
+        run: |
+          conda create -yn anndata-gpu python=3.10 cupy
+          conda activate anndata-gpu
+          pip install .[dev,test]
 
-    - name: Conda list
-      run: conda list
+      - name: Conda list
+        run: conda list
 
-    - name: Run test
-      run: python -c 'import anndata, cupy; cupyx.scipy.sparse.random(100, 50, format="csr")'
-
+      - name: Run test
+        run: python -c 'import anndata, cupy; cupyx.scipy.sparse.random(100, 50, format="csr")'
