@@ -11,7 +11,7 @@ jobs:
     runs-on: [self-hosted, aws-gpu] # aws-gpu == label in cirun.yml
     defaults:
       run:
-        shell: bash -l {0}
+        shell: bash -el {0}
     steps:
       - uses: actions/checkout@v2
 
@@ -23,19 +23,16 @@ jobs:
           environment-name: anndatagpu
           micromamba-version: "1.3.1-0"
           create-args: >-
-            python
+            python=3.10
             cupy
           init-shell: >-
             bash
 
       - name: Install AnnData
         run: pip install .[dev,test]
-        shell: bash -el {0}
 
       - name: Mamba list
         run: micromamba list
-        shell: bash -el {0}
 
       - name: Run test
-        run: python -c 'import anndata, cupy; cupyx.scipy.sparse.random(100, 50, format="csr")'
-        shell: bash -el {0}
+        run: python3 -c 'import anndata, cupyx; cupyx.scipy.sparse.random(100, 50, format="csr")'
