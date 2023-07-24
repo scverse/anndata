@@ -21,6 +21,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           micromamba-version: "1.3.1-0"
+          environment-name: anndata-gpu-ci
           create-args: >-
             python=3.10
             cupy
