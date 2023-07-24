@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from collections.abc import Sequence, KeysView, Callable, Iterable, Mapping
 from functools import reduce, singledispatch, wraps
-from typing import Any, Literal
+from typing import Any, Literal, Dict, cast
 import warnings
 
 import numpy as np
@@ -295,8 +295,8 @@ try:
             """
             array = self
             # makes a shallow copy and removes the reference to the original AnnData object
-            array = ak.with_parameter(self, _PARAM_NAME, None)
-            array = ak.with_parameter(array, "__list__", None)
+            array = ak.with_parameter(array, _PARAM_NAME, None)
+            array = ak.with_parameter(array, "__record__", None)
             return array
 
     @as_view.register(AwkArray)
@@ -308,15 +308,16 @@ try:
         # possible strategies to stack behaviors.
         # A better solution might be based on xarray-style "attrs", once this is implemented
         # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
-        if type(array).__name__ != "Array":
+        if "__record__" in cast(Dict, ak.parameters(array)):
             raise NotImplementedError(
-                "Cannot create a view of an awkward array with __array__ parameter. "
+                "Cannot create a view of an awkward array with __record__ parameter. "
                 "Please open an issue in the AnnData repo and describe your use-case."
             )
         array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
-        array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
+        array = ak.with_parameter(array, "__record__", "AwkwardArrayView")
         return array
 
+    ak.behavior["*", "AwkwardArrayView"] = AwkwardArrayView
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView
 
 except ImportError:

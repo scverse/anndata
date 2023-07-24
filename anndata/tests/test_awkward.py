@@ -159,7 +159,7 @@ def test_view_of_awkward_array_with_custom_behavior():
     ak.behavior[BEHAVIOUR_ID] = ReversibleArray
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
     adata.obsm["awk_string"] = ak.with_parameter(
-        ak.Array(["AAA", "BBB", "CCC"]), "__list__", BEHAVIOUR_ID
+        ak.Array(["AAA", "BBB", "CCC"]), "__record__", BEHAVIOUR_ID
     )
     adata_view = adata[:2]
 
