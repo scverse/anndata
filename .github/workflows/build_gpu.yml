@@ -26,6 +26,7 @@ jobs:
             cupy
           init-shell: >-
             bash
+          generate-run-shell: false
 
       - name: Install AnnData
         run: pip install .[dev,test]
