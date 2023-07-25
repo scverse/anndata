@@ -25,4 +25,7 @@ def pytest_runtest_setup(item):
     else:  # Skip GPU tests if cupy not installed
         from importlib.util import find_spec
 
-        pytest.mark.skipif(not find_spec("cupy"), reason="No cupy installed")
+        if not find_spec("cupy"):
+            pytest.skip("Cupy not installed.")
+        # why is this different?
+        # pytest.mark.skipif(not find_spec("cupy"), reason="No cupy installed")
