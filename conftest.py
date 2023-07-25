@@ -9,14 +9,18 @@ import pytest
 
 
 @pytest.fixture
-def chdir_to_tmp(tmp_path: Path) -> None:
-    old = tmp_path.chdir()
+def doctest_env(cache: pytest.Cache, tmp_path: Path) -> None:
+    from scanpy import settings
+
+    old_wd = tmp_path.chdir()
+    old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     yield
-    old.chdir()
+    old_wd.chdir()
+    settings.datasetdir = old_dd
 
 
 def pytest_collection_modifyitems(items: Iterable[pytest.Item]) -> None:
-    skip_marker = pytest.mark.usefixtures("chdir_to_tmp")
+    skip_marker = pytest.mark.usefixtures("doctest_env")
 
     for item in items:
         if isinstance(item, pytest.DoctestItem):

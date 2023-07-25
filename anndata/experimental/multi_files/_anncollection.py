@@ -640,9 +640,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
 
     Examples
     ----------
-    >>> import scanpy
     >>> from scanpy.datasets import pbmc68k_reduced, pbmc3k_processed
-    >>> scanpy.settings.datasetdir = data_dir
     >>> adata1, adata2 = pbmc68k_reduced(), pbmc3k_processed()
     >>> adata1.shape
     (700, 765)
