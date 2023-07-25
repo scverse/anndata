@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.mark.gpu
 def test_gpu():
     """
