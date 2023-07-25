@@ -1,6 +1,6 @@
 # This file exists
 # 1. to allow ignoring warnings without test collection failing on CI
-# 2. as a central
+# 2. as a pytest plugin/config that applies to doctests as well
 # TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
 
 from pathlib import Path
