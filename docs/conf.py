@@ -55,7 +55,8 @@ extensions = [
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
     "sphinxext.opengraph",
-    "scanpydoc",
+    "scanpydoc",  # needs to be before linkcode
+    "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
@@ -97,7 +98,7 @@ suppress_warnings = [
 
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = False
+    app.warningiserror = True
 
 
 intersphinx_mapping = dict(
@@ -136,6 +137,7 @@ html_context = dict(
     github_version="main",  # Version
     conf_py_path="/docs/",  # Path in the checkout to the docs root
 )
+html_logo = "_static/img/anndata_schema.svg"
 issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
 html_show_sphinx = False
 
