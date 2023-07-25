@@ -51,6 +51,8 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
+    CupyArray,
+    CupySparseMatrix,
     _move_adj_mtx,
 )
 
@@ -62,6 +64,8 @@ class StorageType(Enum):
     ZarrArray = ZarrArray
     ZappyArray = ZappyArray
     DaskArray = DaskArray
+    CupyArray = CupyArray
+    CupySparseMatrix = CupySparseMatrix
 
     @classmethod
     def classes(cls):

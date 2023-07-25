@@ -82,6 +82,7 @@ def as_cupy_type(val, typ):
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
         import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
 
         if isinstance(val, np.ndarray):
             return cpsparse.csr_matrix(cp.array(val))
@@ -89,6 +90,7 @@ def as_cupy_type(val, typ):
             return cpsparse.csr_matrix(val)
     elif issubclass(typ, CupyCSCMatrix):
         import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
 
         if isinstance(val, np.ndarray):
             return cpsparse.csr_matrix(cp.array(val))
@@ -98,28 +100,38 @@ def as_cupy_type(val, typ):
         raise NotImplementedError(f"Conversion to {typ} not implemented")
 
 
+_matrix_casting_params = [
+    pytest.param(np.array, id="np_array"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+    pytest.param(as_dense_dask_array, id="dask_array"),
+]
+_cupy_casting_params = [
+    pytest.param(
+        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSRMatrix),
+        id="cupy_csr",
+        marks=pytest.mark.gpu,
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSCMatrix),
+        id="cupy_csc",
+        marks=pytest.mark.gpu,
+    ),
+]
+
+
 @pytest.fixture(
-    params=[
-        pytest.param(np.array, id="np_array"),
-        pytest.param(sparse.csr_matrix, id="scipy_csr"),
-        pytest.param(sparse.csc_matrix, id="scipy_csc"),
-        pytest.param(as_dense_dask_array, id="dask_array"),
-        pytest.param(
-            partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
-        ),
-        pytest.param(
-            partial(as_cupy_type, typ=CupyCSRMatrix),
-            id="cupy_csr",
-            marks=pytest.mark.gpu,
-        ),
-        pytest.param(
-            partial(as_cupy_type, typ=CupyCSCMatrix),
-            id="cupy_csc",
-            marks=pytest.mark.gpu,
-        ),
-    ],
+    params=_matrix_casting_params + _cupy_casting_params,
 )
 def matrix_type(request):
+    return request.param
+
+
+@pytest.fixture(params=_matrix_casting_params)
+def matrix_type_no_gpu(request):
     return request.param
 
 
@@ -349,8 +361,8 @@ def tokenize_anndata(adata: ad.AnnData):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X_dask(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
+    adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:

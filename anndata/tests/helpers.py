@@ -17,7 +17,7 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
-from anndata.compat import AwkArray, DaskArray
+from anndata.compat import AwkArray, DaskArray, CupySparseMatrix, CupyArray
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -382,6 +382,11 @@ def assert_equal(a, b, exact=False, elem_name=None):
     _assert_equal(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(CupyArray)
+def assert_equal_cupy(a, b, exact=False, elem_name=None):
+    assert_equal(b, a.get(), exact, elem_name)
+
+
 @assert_equal.register(np.ndarray)
 def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     b = asarray(b)
@@ -409,6 +414,12 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
 @assert_equal.register(sparse.spmatrix)
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
+    assert_equal(b, a, exact, elem_name=elem_name)
+
+
+@assert_equal.register(CupySparseMatrix)
+def assert_equal_cupy_sparse(a, b, exact=False, elem_name=None):
+    a = a.toarray()
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
