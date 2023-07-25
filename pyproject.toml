@@ -87,6 +87,9 @@ test = [
     "awkward>=2.0.8,<2.3",
     "pytest_memray",
 ]
+gpu = [
+    "cupy",
+]
 
 [tool.hatch.build]
 exclude = [
@@ -116,6 +119,7 @@ filterwarnings = [
 ]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
+markers = ["gpu: mark test to run on GPU"]
 
 [tool.ruff]
 ignore = [
