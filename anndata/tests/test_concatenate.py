@@ -21,11 +21,12 @@ from anndata.tests import helpers
 from anndata.tests.helpers import (
     assert_equal,
     as_dense_dask_array,
+    as_cupy_type,
     gen_adata,
     GEN_ADATA_DASK_ARGS,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray, AwkArray
+from anndata.compat import DaskArray, AwkArray, CupyArray, CupyCSRMatrix, CupyCSCMatrix
 
 
 @singledispatch
@@ -72,11 +73,34 @@ def make_idx_tuple(idx, axis):
     return tuple(tup)
 
 
+# TODO: copied from test_views, consider deduplication
+_matrix_casting_params = [
+    pytest.param(asarray, id="np_array"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+    pytest.param(as_dense_dask_array, id="dask_array"),
+]
+_cupy_casting_params = [
+    pytest.param(
+        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSRMatrix),
+        id="cupy_csr",
+        marks=pytest.mark.gpu,
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSCMatrix),
+        id="cupy_csc",
+        marks=pytest.mark.gpu,
+    ),
+]
+
+
 # Will call func(sparse_matrix) so these types should be sparse compatible
 # See array_type if only dense arrays are expected as input.
 @pytest.fixture(
-    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
+    params=_matrix_casting_params + _cupy_casting_params,
 )
 def array_type(request):
     return request.param

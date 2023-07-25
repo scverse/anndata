@@ -21,6 +21,7 @@ from anndata.tests.helpers import (
     single_subset,
     assert_equal,
     as_dense_dask_array,
+    as_cupy_type,
     GEN_ADATA_DASK_ARGS,
 )
 
@@ -70,34 +71,6 @@ def adata():
 )
 def adata_parameterized(request):
     return gen_adata(shape=(200, 300), X_type=request.param)
-
-
-def as_cupy_type(val, typ):
-    """
-    Rough conversion function
-    """
-    if issubclass(typ, CupyArray):
-        import cupy as cp
-
-        return cp.array(val)
-    elif issubclass(typ, CupyCSRMatrix):
-        import cupyx.scipy.sparse as cpsparse
-        import cupy as cp
-
-        if isinstance(val, np.ndarray):
-            return cpsparse.csr_matrix(cp.array(val))
-        else:
-            return cpsparse.csr_matrix(val)
-    elif issubclass(typ, CupyCSCMatrix):
-        import cupyx.scipy.sparse as cpsparse
-        import cupy as cp
-
-        if isinstance(val, np.ndarray):
-            return cpsparse.csr_matrix(cp.array(val))
-        else:
-            return cpsparse.csr_matrix(val)
-    else:
-        raise NotImplementedError(f"Conversion to {typ} not implemented")
 
 
 _matrix_casting_params = [

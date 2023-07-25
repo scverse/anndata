@@ -17,7 +17,14 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
-from anndata.compat import AwkArray, DaskArray, CupySparseMatrix, CupyArray
+from anndata.compat import (
+    AwkArray,
+    DaskArray,
+    CupySparseMatrix,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+)
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -592,3 +599,35 @@ def as_dense_dask_array(a):
 @as_dense_dask_array.register(sparse.spmatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
+
+
+def as_cupy_type(val, typ):
+    """
+    Rough conversion function
+    """
+    if issubclass(typ, CupyArray):
+        import cupy as cp
+
+        if isinstance(val, sparse.spmatrix):
+            val = val.toarray()
+        return cp.array(val)
+    elif issubclass(typ, CupyCSRMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csr_matrix(cp.array(val))
+        else:
+            return cpsparse.csr_matrix(val)
+    elif issubclass(typ, CupyCSCMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csr_matrix(cp.array(val))
+        else:
+            return cpsparse.csr_matrix(val)
+    else:
+        raise NotImplementedError(
+            f"Conversion from {type(val)} to {typ} not implemented"
+        )

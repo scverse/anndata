@@ -43,6 +43,7 @@ dependencies = [
     "h5py>=3",
     "natsort",
     "packaging>=20",
+    "array_api_compat",
 ]
 dynamic = ["version"]
 
