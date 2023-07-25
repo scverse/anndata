@@ -5,6 +5,7 @@ build:
     python: "3.10"
 sphinx:
   configuration: docs/conf.py
+  fail_on_warning: true # do not change or you will be fired
 python:
   install:
     - method: pip

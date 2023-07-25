@@ -147,8 +147,20 @@ def test_view(key):
 def test_view_of_awkward_array_with_custom_behavior():
     """Currently can't create view of arrays with custom __name__ (in this case "string")
     See https://github.com/scverse/anndata/pull/647#discussion_r963494798_"""
+
+    from uuid import uuid4
+
+    BEHAVIOUR_ID = str(uuid4())
+
+    class ReversibleArray(ak.Array):
+        def reversed(self):
+            return self[..., ::-1]
+
+    ak.behavior[BEHAVIOUR_ID] = ReversibleArray
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
-    adata.obsm["awk_string"] = ak.Array(["AAA", "BBB", "CCC"])
+    adata.obsm["awk_string"] = ak.with_parameter(
+        ak.Array(["AAA", "BBB", "CCC"]), "__list__", BEHAVIOUR_ID
+    )
     adata_view = adata[:2]
 
     with pytest.raises(NotImplementedError):

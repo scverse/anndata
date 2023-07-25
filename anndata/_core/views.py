@@ -349,7 +349,7 @@ try:
             array = self
             # makes a shallow copy and removes the reference to the original AnnData object
             array = ak.with_parameter(self, _PARAM_NAME, None)
-            array = ak.with_parameter(array, "__array__", None)
+            array = ak.with_parameter(array, "__list__", None)
             return array
 
     @as_view.register(AwkArray)
@@ -367,7 +367,7 @@ try:
                 "Please open an issue in the AnnData repo and describe your use-case."
             )
         array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
-        array = ak.with_parameter(array, "__array__", "AwkwardArrayView")
+        array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
         return array
 
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView
