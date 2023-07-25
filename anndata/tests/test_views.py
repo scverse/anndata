@@ -1,4 +1,5 @@
 from copy import deepcopy
+from functools import partial
 from operator import mul
 
 import joblib
@@ -10,7 +11,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray
+from anndata.compat import DaskArray, CupyArray, CupyCSCMatrix, CupyCSRMatrix
 from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
 from anndata.tests.helpers import (
@@ -57,14 +58,63 @@ def adata():
     return adata
 
 
-@pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
+# TODO: not sure if this is used
+@pytest.fixture(
+    params=[
+        asarray,
+        sparse.csr_matrix,
+        sparse.csc_matrix,
+        pytest.param(CupyCSRMatrix, marks=pytest.mark.gpu),
+        pytest.param(CupyCSCMatrix, marks=pytest.mark.gpu),
+    ]
+)
 def adata_parameterized(request):
     return gen_adata(shape=(200, 300), X_type=request.param)
 
 
+def as_cupy_type(val, typ):
+    """
+    Rough conversion function
+    """
+    import cupyx.scipy.sparse as cpsparse
+    import cupy as cp
+
+    if issubclass(typ, CupyArray):
+        return cp.array(val)
+    elif issubclass(typ, CupyCSRMatrix):
+        if isinstance(val, np.ndarray):
+            return cpsparse.csr_matrix(cp.array(val))
+        else:
+            return cpsparse.csr_matrix(val)
+    elif issubclass(typ, CupyCSCMatrix):
+        if isinstance(val, np.ndarray):
+            return cpsparse.csr_matrix(cp.array(val))
+        else:
+            return cpsparse.csr_matrix(val)
+    else:
+        raise NotImplementedError(f"Conversion to {typ} not implemented")
+
+
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
+    params=[
+        pytest.param(np.array, id="np_array"),
+        pytest.param(sparse.csr_matrix, id="scipy_csr"),
+        pytest.param(sparse.csc_matrix, id="scipy_csc"),
+        pytest.param(as_dense_dask_array, id="dask_array"),
+        pytest.param(
+            partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+        ),
+        pytest.param(
+            partial(as_cupy_type, typ=CupyCSRMatrix),
+            id="cupy_csr",
+            marks=pytest.mark.gpu,
+        ),
+        pytest.param(
+            partial(as_cupy_type, typ=CupyCSCMatrix),
+            id="cupy_csc",
+            marks=pytest.mark.gpu,
+        ),
+    ],
 )
 def matrix_type(request):
     return request.param

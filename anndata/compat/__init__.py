@@ -74,6 +74,36 @@ except ImportError:
             return "mock dask.array.core.Array"
 
 
+try:
+    from cupyx.scipy.sparse import (
+        spmatrix as CupySparseMatrix,
+        csr_matrix as CupyCSRMatrix,
+        csc_matrix as CupyCSCMatrix,
+    )
+    from cupy import ndarray as CupyArray
+except ImportError:
+
+    class CupySparseMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.spmatrix"
+
+    class CupyCSRMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csr_matrix"
+
+    class CupyCSCMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csc_matrix"
+
+    class CupyArray:
+        @staticmethod
+        def __repr__():
+            return "mock cupy.ndarray"
+
+
 @singledispatch
 def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
     if default is Empty:
