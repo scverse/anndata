@@ -311,7 +311,7 @@ try:
         #
         # Allow only Arrays that have no record behavior attached, or with __record__ explicitly
         # set to None
-        if ak.parameters(array).get("__record__", None) is not None:
+        if array.layout.purelist_parameter("__record__") is not None:
             raise NotImplementedError(
                 "Cannot create a view of an awkward array with __record__ parameter. "
                 "Please open an issue in the AnnData repo and describe your use-case."
