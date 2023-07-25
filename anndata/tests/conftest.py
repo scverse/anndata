@@ -3,6 +3,7 @@ import warnings
 import pytest
 
 import anndata
+from anndata.tests.helpers import subset_func  # noqa: F401
 
 
 # TODO: Should be done in pyproject.toml, see anndata/conftest.py
