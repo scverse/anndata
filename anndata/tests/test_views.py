@@ -76,17 +76,20 @@ def as_cupy_type(val, typ):
     """
     Rough conversion function
     """
-    import cupyx.scipy.sparse as cpsparse
-    import cupy as cp
-
     if issubclass(typ, CupyArray):
+        import cupy as cp
+
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
+        import cupyx.scipy.sparse as cpsparse
+
         if isinstance(val, np.ndarray):
             return cpsparse.csr_matrix(cp.array(val))
         else:
             return cpsparse.csr_matrix(val)
     elif issubclass(typ, CupyCSCMatrix):
+        import cupyx.scipy.sparse as cpsparse
+
         if isinstance(val, np.ndarray):
             return cpsparse.csr_matrix(cp.array(val))
         else:
