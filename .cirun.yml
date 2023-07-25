@@ -6,4 +6,4 @@ runners:
     preemptible: false
     workflow: .github/workflows/build_gpu.yml
     labels:
-      - aws-gpu
+      - cirun-aws-gpu

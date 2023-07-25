@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: [self-hosted, aws-gpu] # aws-gpu == label in cirun.yml
+    runs-on: "cirun-aws-gpu--${{ github.run_id }}"
     defaults:
       run:
         shell: bash -el {0}
