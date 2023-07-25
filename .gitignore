@@ -8,6 +8,7 @@ __pycache__/
 # Distribution / packaging
 /build/
 /dist/
+/anndata/_version.py
 /*.egg-info/
 /requirements*.lock
 /.python-version
