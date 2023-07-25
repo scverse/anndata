@@ -308,7 +308,10 @@ try:
         # possible strategies to stack behaviors.
         # A better solution might be based on xarray-style "attrs", once this is implemented
         # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
-        if "__record__" in cast(Dict, ak.parameters(array)):
+        #
+        # Allow only Arrays that have no record behavior attached, or with __record__ explicitly
+        # set to None
+        if ak.parameters(array).get("__record__", None) is not None:
             raise NotImplementedError(
                 "Cannot create a view of an awkward array with __record__ parameter. "
                 "Please open an issue in the AnnData repo and describe your use-case."
