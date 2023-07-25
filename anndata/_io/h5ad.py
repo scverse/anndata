@@ -30,6 +30,16 @@ from .utils import (
 from .specs import read_elem, write_elem
 from anndata._warnings import OldFormatWarning
 
+
+__all__ = [
+    "read_elem",
+    "write_elem",
+    "read_h5ad",
+    "write_h5ad",
+    "read_dataset",
+]
+
+
 T = TypeVar("T")
 
 
@@ -41,8 +51,6 @@ def write_h5ad(
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
-    from anndata.experimental import write_dispatched
-
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:

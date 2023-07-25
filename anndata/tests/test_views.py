@@ -10,7 +10,6 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray
 from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
 from anndata.tests.helpers import (

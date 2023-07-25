@@ -27,6 +27,19 @@ except ImportError as _e:
         raise e
 
 
+__all__ = [
+    "read_h5ad",
+    "read_zarr",
+    "read_csv",
+    "read_excel",
+    "read_umi_tools",
+    "read_hdf",
+    "read_loom",
+    "read_mtx",
+    "read_text",
+]
+
+
 def read_csv(
     filename: Union[PathLike, Iterator[str]],
     delimiter: Optional[str] = ",",
@@ -359,7 +372,7 @@ def read_text(
             return _read_text(f, delimiter, first_column_names, dtype)
 
 
-def iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
+def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
     """Helper for iterating only nonempty lines without line breaks"""
     for line in file_like:
         line = line.rstrip("\r\n")
@@ -375,7 +388,7 @@ def _read_text(
 ) -> AnnData:
     comments = []
     data = []
-    lines = iter_lines(f)
+    lines = _iter_lines(f)
     col_names = []
     row_names = []
     # read header and column names
@@ -472,22 +485,3 @@ def _read_text(
         obs=dict(obs_names=row_names),
         var=dict(var_names=col_names),
     )
-
-
-def load_sparse_csr(d, key="X"):
-    from scipy.sparse.csr import csr_matrix
-
-    key_csr = f"{key}_csr"
-    d[key] = csr_matrix(
-        (d[f"{key_csr}_data"], d[f"{key_csr}_indices"], d[f"{key_csr}_indptr"]),
-        shape=d[f"{key_csr}_shape"],
-    )
-    del_sparse_matrix_keys(d, key_csr)
-    return d
-
-
-def del_sparse_matrix_keys(mapping, key_csr):
-    del mapping[f"{key_csr}_data"]
-    del mapping[f"{key_csr}_indices"]
-    del mapping[f"{key_csr}_indptr"]
-    del mapping[f"{key_csr}_shape"]

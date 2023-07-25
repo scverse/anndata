@@ -22,6 +22,15 @@ from .specs import read_elem, write_elem
 from anndata._warnings import OldFormatWarning
 
 
+__all__ = [
+    "read_elem",
+    "write_elem",
+    "read_zarr",
+    "write_zarr",
+    "read_dataset",
+]
+
+
 T = TypeVar("T")
 
 
@@ -136,8 +145,6 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 
 @report_read_key_on_error
 def read_dataframe(group) -> pd.DataFrame:
-    from .specs import _REGISTRY
-
     # Fast paths
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)

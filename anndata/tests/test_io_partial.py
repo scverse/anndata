@@ -2,7 +2,7 @@ from importlib.util import find_spec
 from anndata import AnnData
 from anndata._io.specs.registry import read_elem_partial, read_elem
 from anndata._io import write_zarr, _write_h5ad
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import csr_matrix
 from pathlib import Path
 import numpy as np
 import pytest

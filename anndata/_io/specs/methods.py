@@ -26,18 +26,11 @@ from anndata.compat import (
     _from_fixed_length_strings,
     _decode_structured_array,
 )
-from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
+from anndata._io.utils import check_key, H5PY_V3
 from anndata._warnings import OldFormatWarning
 from anndata.compat import AwkArray
 
-from .registry import (
-    _REGISTRY,
-    IOSpec,
-    get_spec,
-    read_elem,
-    read_elem_partial,
-    write_elem,
-)
+from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group

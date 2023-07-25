@@ -16,8 +16,6 @@ import zarr
 
 import anndata as ad
 from anndata._io.utils import AnnDataReadError
-from anndata._io.specs.registry import IORegistryError
-from anndata.utils import asarray
 from anndata.compat import _read_attr, DaskArray
 
 from anndata.tests.helpers import gen_adata, assert_equal, as_dense_dask_array
