@@ -12,10 +12,6 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure(config):
-    config.addinivalue_line("markers", "gpu: mark test as requiring GPU")
-
-
 def pytest_runtest_setup(item):
     gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
 
@@ -27,5 +23,3 @@ def pytest_runtest_setup(item):
 
         if not find_spec("cupy"):
             pytest.skip("Cupy not installed.")
-        # why is this different?
-        # pytest.mark.skipif(not find_spec("cupy"), reason="No cupy installed")
