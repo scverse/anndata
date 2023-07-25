@@ -32,10 +32,10 @@ jobs:
           generate-run-shell: false
 
       - name: Install AnnData
-        run: pip install .[dev,test]
+        run: pip install .[dev,test,gpu]
 
       - name: Mamba list
         run: micromamba list
 
       - name: Run test
-        run: python3 -c 'import anndata, cupyx; cupyx.scipy.sparse.random(100, 50, format="csr")'
+        run: pytest --only-gpu
