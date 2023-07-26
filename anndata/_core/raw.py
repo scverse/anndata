@@ -15,7 +15,6 @@ from .sparse_dataset import SparseDataset
 from ..compat import CupyArray, CupySparseMatrix
 
 
-
 # TODO: Implement views for Raw
 class Raw:
     def __init__(
