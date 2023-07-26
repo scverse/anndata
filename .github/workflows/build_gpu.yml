@@ -27,6 +27,10 @@ jobs:
           create-args: >-
             python=3.10
             cupy
+            numba
+            pytest
+            pytest-cov
+            pytest-xdist
           init-shell: >-
             bash
           generate-run-shell: false
@@ -38,4 +42,8 @@ jobs:
         run: micromamba list
 
       - name: Run test
-        run: pytest --only-gpu
+        run: pytest --only-gpu --cov --cov-report=xml --cov-context=test
+
+      - uses: codecov/codecov-action@v3
+        with:
+          flags: gpu-tests
