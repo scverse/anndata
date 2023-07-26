@@ -15,14 +15,6 @@ from .sparse_dataset import SparseDataset
 from ..compat import CupyArray, CupySparseMatrix
 
 
-class CPType(Enum):
-    CupyArray = CupyArray
-    CupySparseMatrix = CupySparseMatrix
-
-    @classmethod
-    def classes(cls):
-        return tuple(c.value for c in cls.__members__.values())
-
 
 # TODO: Implement views for Raw
 class Raw:
