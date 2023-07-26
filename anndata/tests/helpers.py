@@ -1,4 +1,4 @@
-from functools import singledispatch, wraps
+from functools import singledispatch, wraps, partial
 from string import ascii_letters
 from typing import Tuple, Optional, Type
 from collections.abc import Mapping, Collection
@@ -601,10 +601,25 @@ def _(a):
     return as_dense_dask_array(a.toarray())
 
 
-def as_cupy_type(val, typ):
+def as_cupy_type(val, typ=None):
     """
     Rough conversion function
+
+    Will try to infer target type from input type if not specified.
     """
+    if typ is None:
+        input_typ = type(val)
+        if issubclass(input_typ, np.ndarray):
+            typ = CupyArray
+        elif issubclass(input_typ, sparse.csr_matrix):
+            typ = CupyCSRMatrix
+        elif issubclass(input_typ, sparse.csc_matrix):
+            typ = CupyCSCMatrix
+        else:
+            raise NotImplementedError(
+                f"No default target type for input type {input_typ}"
+            )
+
     if issubclass(typ, CupyArray):
         import cupy as cp
 
@@ -631,3 +646,30 @@ def as_cupy_type(val, typ):
         raise NotImplementedError(
             f"Conversion from {type(val)} to {typ} not implemented"
         )
+
+
+BASE_MATRIX_PARAMS = [
+    pytest.param(asarray, id="np_array"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+]
+
+DASK_MATRIX_PARAMS = [
+    pytest.param(as_dense_dask_array, id="dask_array"),
+]
+
+CUPY_MATRIX_PARAMS = [
+    pytest.param(
+        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSRMatrix),
+        id="cupy_csr",
+        marks=pytest.mark.gpu,
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSCMatrix),
+        id="cupy_csc",
+        marks=pytest.mark.gpu,
+    ),
+]
