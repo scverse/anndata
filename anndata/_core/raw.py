@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 from scipy.sparse import issparse
-from enum import Enum
 
 from . import anndata
 from .index import _normalize_index, _subset, unpack_index, get_vector
