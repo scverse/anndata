@@ -11,6 +11,8 @@ from .index import _normalize_index, _subset, unpack_index, get_vector
 from .aligned_mapping import AxisArrays, AxisArraysView
 from .sparse_dataset import SparseDataset
 
+from ..compat import CupyArray, CupySparseMatrix
+
 
 # TODO: Implement views for Raw
 class Raw:
@@ -31,7 +33,11 @@ class Raw:
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
-            self._X = adata.X.copy()
+            # Move from GPU to CPU since it's large and not always used
+            if isinstance(adata.X, (CupyArray, CupySparseMatrix)):
+                self._X = adata.X.get()
+            else:
+                self._X = adata.X.copy()
             self._var = adata.var.copy()
             self._varm = AxisArrays(self, 1, adata.varm.copy())
         elif adata.isbacked:
