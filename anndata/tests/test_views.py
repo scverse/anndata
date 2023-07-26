@@ -327,8 +327,14 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     assert adata_subset.is_view
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
-
-    assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+    if isinstance(adata.X, CupyCSCMatrix):
+        # Comparison broken for CSC matrices
+        # https://github.com/cupy/cupy/issues/7757
+        assert asarray((orig_X_val.tocsr() != adata.X.tocsr())).sum() == mul(
+            *adata_subset.shape
+        )
+    else:
+        assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
 
 
 # TODO: Use different kind of subsetting for adata and view

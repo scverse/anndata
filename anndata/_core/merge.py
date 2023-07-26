@@ -29,7 +29,7 @@ from scipy import sparse
 from scipy.sparse import spmatrix
 
 from .anndata import AnnData
-from ..compat import AwkArray, DaskArray, CupySparseMatrix, CupyArray
+from ..compat import AwkArray, DaskArray, CupySparseMatrix, CupyArray, CupyCSRMatrix
 from ..utils import asarray, dim_len
 from .index import _subset, make_slice
 from anndata._warnings import ExperimentalFeatureWarning
@@ -153,6 +153,10 @@ def equal_sparse(a, b) -> bool:
     xp = array_api_compat.array_namespace(a.data)
 
     if isinstance(b, (CupySparseMatrix, sparse.spmatrix)):
+        if isinstance(a, CupySparseMatrix):
+            # Comparison broken for CSC matrices
+            # https://github.com/cupy/cupy/issues/7757
+            a, b = CupyCSRMatrix(a), CupyCSRMatrix(b)
         comp = a != b
         if isinstance(comp, bool):
             return not comp
