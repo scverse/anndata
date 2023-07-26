@@ -35,7 +35,8 @@ class Raw:
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
-            if isinstance(adata.X, CPType.classes()):
+            # Move from GPU to CPU since it's large and not always used
+            if isinstance(adata.X, (CupyArray, CupySparseMatrix)):
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
