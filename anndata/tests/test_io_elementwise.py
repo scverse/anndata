@@ -17,7 +17,7 @@ from anndata._io.specs.registry import IORegistryError, _REGISTRY, get_spec, IOS
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata, as_cupy_type
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -90,6 +90,33 @@ def test_io_spec(store, value, encoding_type):
     assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
     from_disk = read_elem(store[key])
+    assert_equal(value, from_disk)
+    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+
+
+# Can't instantiate cupy types at the top level, so converting them within the test
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    "value,encoding_type",
+    [
+        (np.array([1, 2, 3]), "array"),
+        (np.arange(12).reshape(4, 3), "array"),
+        (sparse.random(5, 3, format="csr", density=0.5), "csr_matrix"),
+        (sparse.random(5, 3, format="csc", density=0.5), "csc_matrix"),
+    ],
+)
+def test_io_spec_cupy(store, value, encoding_type):
+    """Tests that"""
+    key = f"key_for_{encoding_type}"
+    print(type(value))
+    value = as_cupy_type(value)
+
+    print(type(value))
+    write_elem(store, key, value, dataset_kwargs={})
+
+    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
+
+    from_disk = as_cupy_type(read_elem(store[key]))
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 

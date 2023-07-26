@@ -639,9 +639,9 @@ def as_cupy_type(val, typ=None):
         import cupy as cp
 
         if isinstance(val, np.ndarray):
-            return cpsparse.csr_matrix(cp.array(val))
+            return cpsparse.csc_matrix(cp.array(val))
         else:
-            return cpsparse.csr_matrix(val)
+            return cpsparse.csc_matrix(val)
     else:
         raise NotImplementedError(
             f"Conversion from {type(val)} to {typ} not implemented"
