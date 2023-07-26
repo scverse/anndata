@@ -45,6 +45,18 @@ H5File = h5py.File
 
 
 ####################
+# Dask utils       #
+####################
+
+try:
+    from dask.utils import SerializableLock as Lock
+except ImportError:
+    from threading import Lock
+
+# to fix https://github.com/dask/distributed/issues/780
+GLOBAL_LOCK = Lock()
+
+####################
 # Dispatch methods #
 ####################
 
@@ -314,7 +326,7 @@ def write_basic_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     import dask.array as da
 
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g)
+    da.store(elem, g, lock=GLOBAL_LOCK)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
