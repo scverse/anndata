@@ -302,6 +302,7 @@ def write_list(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
 def write_basic(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     """Write methods which underlying library handles natively."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
