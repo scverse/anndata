@@ -4,7 +4,7 @@ import pytest
 
 
 def pytest_itemcollected(item):
-    # Defniing behavior of pytest.mark.gpu
+    """Defining behavior of pytest.mark.gpu"""
     from importlib.util import find_spec
 
     gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
