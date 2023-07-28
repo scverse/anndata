@@ -4,6 +4,6 @@ runners:
     instance_type: g4dn.xlarge
     machine_image: ami-0678adbdcb4c3a662
     preemptible: false
-    workflow: .github/workflows/build_gpu.yml
+    workflow: .github/workflows/test-gpu.yml
     labels:
       - cirun-aws-gpu

@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  test:
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
     defaults:
       run:
@@ -48,7 +48,7 @@ jobs:
         run: micromamba list
 
       - name: Run test
-        run: pytest --only-gpu --cov --cov-report=xml --cov-context=test
+        run: pytest --only-gpu --cov --cov-report=xml --cov-context=test -n 4
 
       - uses: codecov/codecov-action@v3
         with:
