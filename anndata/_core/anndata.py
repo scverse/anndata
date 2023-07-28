@@ -282,6 +282,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varp: Optional[Union[np.ndarray, Mapping[str, Sequence[Any]]]] = None,
         oidx: Index1D = None,
         vidx: Index1D = None,
+        check_unique: bool = True,
     ):
         if asview:
             if not isinstance(X, AnnData):
@@ -303,6 +304,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varp=varp,
                 filename=filename,
                 filemode=filemode,
+                check_unique=check_unique,
             )
 
     def _init_as_view(self, adata_ref: "AnnData", oidx: Index, vidx: Index):
@@ -379,6 +381,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         shape=None,
         filename=None,
         filemode=None,
+        check_unique=None,
     ):
         # view attributes
         self._is_view = False
@@ -509,7 +512,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
 
         self._check_dimensions()
-        self._check_uniqueness()
+        if check_unique:
+            self._check_uniqueness()
 
         if self.filename:
             assert not isinstance(
@@ -1758,7 +1762,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 0., 2., 1.],
                [0., 6., 5., 0.]], dtype=float32)
         """
-        from .merge import concat, merge_outer, merge_dataframes, merge_same
+        from .merge import concat, merge_dataframes, merge_outer, merge_same
 
         warnings.warn(
             "The AnnData.concatenate method is deprecated in favour of the "
