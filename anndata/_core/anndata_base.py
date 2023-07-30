@@ -1,8 +1,6 @@
 from abc import abstractmethod
 from typing import Tuple
-import pandas as pd
 
-from .file_backing import AnnDataFileManager
 from ..utils import DeprecationMixinMeta
 
 
