@@ -19,16 +19,16 @@ from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dat
 from anndata._core.views import _resolve_idxs
 from anndata._io.h5ad import read_dataset
 from anndata.compat import DaskArray
-from anndata.utils import asarray, convert_to_dict
+from anndata.utils import convert_to_dict
 
 import zarr
 import xarray as xr
 import pandas as pd
 import dask.array as da
-from scipy import sparse
 from ..._core import AnnData
 from .. import read_dispatched
 from .lazy_arrays import LazyCategoricalArray, LazyMaskedArray
+from .xarray import Dataset2D
 
 
 class AnnDataBacked(AbstractAnnData):
@@ -185,8 +185,8 @@ class AnnDataBacked(AbstractAnnData):
             else var["var_names"].data
         )
 
-        self.obs = xr.Dataset(obs)
-        self.var = xr.Dataset(var)
+        self.obs = obs
+        self.var = var
         self.obsm = AxisArrays(adata_ref, 0, vals=convert_to_dict(obsm))
         self.varm = AxisArrays(adata_ref, 1, vals=convert_to_dict(varm))
         self.obsp = PairwiseArrays(adata_ref, 0, vals=convert_to_dict(obsp))
@@ -223,20 +223,6 @@ class AnnDataBacked(AbstractAnnData):
         )
 
     def to_memory(self, exclude=[]):
-        # handling for AxisArrays
-        def backed_dict_to_memory(d, prefix):
-            res = {}
-            for k, v in d.items():
-                full_key = prefix + "/" + k
-                if any([full_key == exclude_key for exclude_key in exclude]):
-                    continue
-                if isinstance(v, DaskArray):
-                    res[k] = v.compute()
-                elif isinstance(v, BaseCompressedSparseDataset):
-                    res[k] = v.to_memory()
-                else:
-                    res[k] = v
-            return res
 
         # nullable and categoricals need special handling because xarray will convert them to numpy arrays first with dtype object
         def get_nullable_and_categorical_cols(ds):
@@ -251,7 +237,7 @@ class AnnDataBacked(AbstractAnnData):
                     cols += [c]
             return cols
 
-        def to_df(ds, exclude_vars):
+        def to_df(ds, exclude_vars=[]):
             nullable_and_categorical_df_cols = get_nullable_and_categorical_cols(ds)
             drop_vars = [
                 k
@@ -266,6 +252,23 @@ class AnnDataBacked(AbstractAnnData):
             if len(exclude_vars) == 0:
                 df = df[list(ds.keys())]
             return df
+        
+        # handling for AxisArrays
+        def backed_dict_to_memory(d, prefix):
+            res = {}
+            for k, v in d.items():
+                full_key = prefix + "/" + k
+                if any([full_key == exclude_key for exclude_key in exclude]):
+                    continue
+                if isinstance(v, DaskArray):
+                    res[k] = v.compute()
+                elif isinstance(v, BaseCompressedSparseDataset):
+                    res[k] = v.to_memory()
+                elif isinstance(v, Dataset2D):
+                    res[k] = to_df(v)
+                else:
+                    res[k] = v
+            return res
 
         exclude_obs = [
             key.replace("obs/", "") for key in exclude if key.startswith("obs/")
@@ -501,7 +504,7 @@ def read_backed(
             )
         elif elem_name.startswith("/raw"):
             return None
-        elif elem_name in {"/obs", "/var"}:
+        elif iospec.encoding_type in {"dataframe"}:
             iter_object = [(k, elem[k]) for k in elem.attrs["column-order"]] + [
                 (elem.attrs["_index"], elem[elem.attrs["_index"]])
             ]
@@ -529,9 +532,10 @@ def read_backed(
                     )
                 else:
                     d_with_xr[k] = v
-            return d_with_xr
+            return Dataset2D(d_with_xr)
         elif iospec.encoding_type == "categorical":
-            return LazyCategoricalArray(elem["codes"], elem["categories"], elem.attrs)
+            drop_unused_cats = not (elem_name.startswith('/obsm') or elem_name.startswith('/varm'))
+            return LazyCategoricalArray(elem["codes"], elem["categories"], elem.attrs, drop_unused_cats)
         elif "nullable" in iospec.encoding_type:
             return LazyMaskedArray(
                 elem["values"],
@@ -549,8 +553,6 @@ def read_backed(
         elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
             return sparse_dataset(elem)
         elif iospec.encoding_type in {"awkward-array"}:
-            return read_dispatched(elem, None)
-        elif iospec.encoding_type in {"dataframe"}:
             return read_dispatched(elem, None)
         return func(elem)
 

@@ -68,7 +68,7 @@ def categorical_lazy_arr(tmp_path_factory):
     z["categories"] = np.array(["foo", "bar", "jazz"])
     z.attrs["ordered"] = False
     z = zarr.open(base_path)
-    return LazyCategoricalArray(z["codes"], z["categories"], z.attrs)
+    return LazyCategoricalArray(z["codes"], z["categories"], z.attrs, True)
 
 
 @pytest.fixture()
@@ -398,8 +398,8 @@ def test_nullable_boolean_array_subset_subset(nullable_boolean_lazy_arr):
 
 
 def test_nullable_boolean_array_no_mask_equality(nullable_boolean_lazy_arr_no_mask):
-    assert nullable_boolean_lazy_arr_no_mask[0] is True
-    assert (nullable_boolean_lazy_arr_no_mask[3:5] is False).all()
+    assert nullable_boolean_lazy_arr_no_mask[0] == True
+    assert (nullable_boolean_lazy_arr_no_mask[3:5] == False).all()
     assert (nullable_boolean_lazy_arr_no_mask[5:7] == np.array([True, False])).all()
 
 

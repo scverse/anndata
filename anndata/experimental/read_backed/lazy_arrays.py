@@ -38,20 +38,23 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         "_categories",
         "_categories_cache",
         "group",
+        "_drop_unused_cats"
     )
 
-    def __init__(self, codes, categories, attrs, *args, **kwargs):
+    def __init__(self, codes, categories, attrs, _drop_unused_cats, *args, **kwargs):
         """Class for lazily reading categorical data from formatted zarr group.   Used as base for `LazilyIndexedArray`.
 
         Args:
             codes (Union[zarr.Array, h5py.Dataset]): values (integers) of the array, one for each element
             categories (Union[zarr.Array, h5py.Dataset]): mappings from values to strings
             attrs (Union[zarr.Array, h5py.Dataset]): attrs containing boolean "ordered"
+            _drop_unused_cats (bool): Whether or not to drop unused categories.
         """
         self.values = codes
         self._categories = categories
         self._categories_cache = None
         self.attrs = dict(attrs)
+        self._drop_unused_cats = _drop_unused_cats # obsm/varm do not drop, but obs and var do.  TODO: Should fix in normal AnnData?
 
     @property
     def categories(self):  # __slots__ and cached_property are incompatible
@@ -80,11 +83,14 @@ class LazyCategoricalArray(MaskedArrayMixIn):
             codes = self.values[idx]
         if codes.shape == ():  # handle 0d case
             codes = np.array([codes])
-        return pd.Categorical.from_codes(
+        res = pd.Categorical.from_codes(
             codes=codes,
             categories=self.categories,
             ordered=self.ordered,
-        ).remove_unused_categories()
+        )
+        if self._drop_unused_cats:
+            return res.remove_unused_categories()
+        return res
 
     def __repr__(self) -> str:
         return f"LazyCategoricalArray(codes=..., categories={self.categories}, ordered={self.ordered})"
