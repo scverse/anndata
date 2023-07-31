@@ -3,7 +3,7 @@ from __future__ import annotations
 from os import PathLike
 from collections.abc import Mapping
 from itertools import product
-from functools import partial, wraps
+from functools import partial
 from typing import Union, Literal
 from types import MappingProxyType
 from warnings import warn

@@ -21,7 +21,6 @@ from anndata.tests import helpers
 from anndata.tests.helpers import (
     assert_equal,
     as_dense_dask_array,
-    as_cupy_type,
     gen_adata,
     GEN_ADATA_DASK_ARGS,
     BASE_MATRIX_PARAMS,
@@ -29,7 +28,7 @@ from anndata.tests.helpers import (
     CUPY_MATRIX_PARAMS,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray, AwkArray, CupyArray, CupyCSRMatrix, CupyCSCMatrix
+from anndata.compat import DaskArray, AwkArray
 
 
 @singledispatch

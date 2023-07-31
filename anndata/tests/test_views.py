@@ -1,5 +1,4 @@
 from copy import deepcopy
-from functools import partial
 from operator import mul
 
 import joblib
@@ -19,8 +18,6 @@ from anndata.tests.helpers import (
     slice_subset,
     single_subset,
     assert_equal,
-    as_dense_dask_array,
-    as_cupy_type,
     GEN_ADATA_DASK_ARGS,
     BASE_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
