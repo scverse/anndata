@@ -10,7 +10,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from dask.base import tokenize, normalize_token
+from anndata.compat import CupyCSCMatrix
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -23,6 +23,8 @@ from anndata.tests.helpers import (
     DASK_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
 )
+from dask.base import tokenize, normalize_token
+
 
 # ------------------------------------------------------------------------------
 # Some test data
