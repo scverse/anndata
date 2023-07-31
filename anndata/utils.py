@@ -9,6 +9,7 @@ from scipy import sparse
 
 from .logging import get_logger
 from ._core.sparse_dataset import BaseCompressedSparseDataset
+from .compat import CupyArray, CupySparseMatrix
 
 logger = get_logger(__name__)
 
@@ -32,6 +33,16 @@ def asarray_sparse_dataset(x):
 @asarray.register(h5py.Dataset)
 def asarray_h5py_dataset(x):
     return x[...]
+
+
+@asarray.register(CupyArray)
+def asarray_cupy(x):
+    return x.get()
+
+
+@asarray.register(CupySparseMatrix)
+def asarray_cupy_sparse(x):
+    return x.toarray().get()
 
 
 @singledispatch

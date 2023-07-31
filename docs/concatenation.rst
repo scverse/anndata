@@ -77,7 +77,7 @@ When building a joint anndata object, we would still like to store the coordinat
 
     >>> coords = np.hstack([np.repeat(np.arange(10), 10), np.tile(np.arange(10), 10)]).T
     >>> spatial = AnnData(
-    ...     sparse.random(5000, 10000, format="csr"), 
+    ...     sparse.random(5000, 10000, format="csr"),
     ...     obsm={"coords": np.random.randn(5000, 2)}
     ... )
     >>> droplet = AnnData(sparse.random(5000, 10000, format="csr"))

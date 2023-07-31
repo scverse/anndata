@@ -51,6 +51,8 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
+    CupyArray,
+    CupySparseMatrix,
     _move_adj_mtx,
 )
 
@@ -62,6 +64,8 @@ class StorageType(Enum):
     ZarrArray = ZarrArray
     ZappyArray = ZappyArray
     DaskArray = DaskArray
+    CupyArray = CupyArray
+    CupySparseMatrix = CupySparseMatrix
 
     @classmethod
     def classes(cls):
@@ -99,7 +103,7 @@ def _check_2d_shape(X):
 @singledispatch
 def _gen_dataframe(anno, length, index_names):
     if anno is None or len(anno) == 0:
-        return pd.DataFrame({}, index=pd.RangeIndex(0, length, name=None).astype(str))
+        anno = {}
     for index_name in index_names:
         if index_name in anno:
             return pd.DataFrame(
@@ -107,7 +111,11 @@ def _gen_dataframe(anno, length, index_names):
                 index=anno[index_name],
                 columns=[k for k in anno.keys() if k != index_name],
             )
-    return pd.DataFrame(anno, index=pd.RangeIndex(0, length, name=None).astype(str))
+    return pd.DataFrame(
+        anno,
+        index=pd.RangeIndex(0, length, name=None).astype(str),
+        columns=None if len(anno) else [],
+    )
 
 
 @_gen_dataframe.register(pd.DataFrame)
@@ -116,6 +124,8 @@ def _(anno, length, index_names):
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
         anno.index = anno.index.astype(str)
+    if not len(anno.columns):
+        anno.columns = anno.columns.astype(str)
     return anno
 
 
@@ -418,11 +428,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", X.index))
+                    x_indices.append(("obs", "index", X.index.astype(str)))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
-                    x_indices.append(("var", "columns", X.columns))
+                    x_indices.append(("var", "columns", X.columns.astype(str)))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -784,6 +794,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._init_as_actual(self.copy())
         setattr(self, f"_{attr}", value)
         self._set_dim_index(value_idx, attr)
+        if not len(value.columns):
+            value.columns = value.columns.astype(str)
 
     def _prep_dim_index(self, value, attr: str) -> pd.Index:
         """Prepares index to be uses as obs_names or var_names for AnnData object.AssertionError

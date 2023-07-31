@@ -8,14 +8,19 @@ __pycache__/
 # Distribution / packaging
 /build/
 /dist/
+/anndata/_version.py
 /*.egg-info/
+/requirements*.lock
+/.python-version
+/hatch.toml
 
 # Tests and coverage
-/.pytest_cache/
-/.cache/
+/*cache/
 /data/
 /tmp.zarr/
 test.h5ad
+test.loom
+test.zarr
 .coverage
 
 # jupyter
@@ -29,3 +34,7 @@ test.h5ad
 /.idea/
 /.vscode/
 
+# Benchmark
+.asv
+benchmark/benchmarks/data
+benchmarks/benchmarks/data
