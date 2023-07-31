@@ -3,6 +3,7 @@ name: AWS GPU
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 # Cancel the job if new commits are pushed
