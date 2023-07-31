@@ -34,7 +34,7 @@ from .._core.merge import (
     resolve_merge_strategy,
     unify_dtypes,
 )
-from .._core.sparse_dataset import SparseDataset
+from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched
@@ -66,7 +66,7 @@ def _indices_equal(indices: Iterable[pd.Index]) -> bool:
 
 
 def _gen_slice_to_append(
-    datasets: Sequence[SparseDataset],
+    datasets: Sequence[BaseCompressedSparseDataset],
     reindexers,
     max_loaded_elems: int,
     axis=0,
@@ -138,12 +138,12 @@ def _(store, *args, **kwargs):
 def read_as_backed(group: Union[ZarrGroup, H5Group]):
     """
     Read the group until
-    SparseDataset, Array or EAGER_TYPES are encountered.
+    BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
     """
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in SPARSE_MATRIX:
-            return SparseDataset(elem)
+            return sparse_dataset(elem)
         elif iospec.encoding_type in EAGER_TYPES:
             return read_elem(elem)
         elif iospec.encoding_type == "array":
@@ -195,7 +195,7 @@ def write_concat_dense(
 
 
 def write_concat_sparse(
-    datasets: Sequence[SparseDataset],
+    datasets: Sequence[BaseCompressedSparseDataset],
     output_group: Union[ZarrGroup, H5Group],
     output_path: Union[ZarrGroup, H5Group],
     max_loaded_elems: int,
@@ -207,7 +207,7 @@ def write_concat_sparse(
     Writes and concatenates sparse datasets into a single output dataset.
 
     Args:
-        datasets (Sequence[SparseDataset]): A sequence of SparseDataset objects to be concatenated.
+        datasets (Sequence[BaseCompressedSparseDataset]): A sequence of BaseCompressedSparseDataset objects to be concatenated.
         output_group (Union[ZarrGroup, H5Group]): The output group where the concatenated dataset will be written.
         output_path (Union[ZarrGroup, H5Group]): The output path where the concatenated dataset will be written.
         max_loaded_elems (int): The maximum number of sparse elements to load at once.
@@ -227,7 +227,7 @@ def write_concat_sparse(
     init_elem = next(elems)
     write_elem(output_group, output_path, init_elem)
     del init_elem
-    out_dataset: SparseDataset = read_as_backed(output_group[output_path])
+    out_dataset: BaseCompressedSparseDataset = read_as_backed(output_group[output_path])
     for temp_elem in elems:
         out_dataset.append(temp_elem)
         del temp_elem
@@ -269,7 +269,7 @@ def _write_concat_mappings(
 
 
 def _write_concat_arrays(
-    arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]],
+    arrays: Sequence[Union[ZarrArray, H5Array, BaseCompressedSparseDataset]],
     output_group,
     output_path,
     max_loaded_elems,
@@ -291,7 +291,7 @@ def _write_concat_arrays(
         else:
             raise NotImplementedError("Cannot reindex arrays with outer join.")
 
-    if isinstance(init_elem, SparseDataset):
+    if isinstance(init_elem, BaseCompressedSparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
         if all(a.format_str == expected_sparse_fmt for a in arrays):
             write_concat_sparse(
@@ -314,7 +314,7 @@ def _write_concat_arrays(
 
 
 def _write_concat_sequence(
-    arrays: Sequence[Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray]],
+    arrays: Sequence[Union[pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray]],
     output_group,
     output_path,
     max_loaded_elems,
@@ -349,7 +349,7 @@ def _write_concat_sequence(
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, (pd.DataFrame, SparseDataset, H5Array, ZarrArray)) for a in arrays
+        isinstance(a, (pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray)) for a in arrays
     ):
         _write_concat_arrays(
             arrays,
