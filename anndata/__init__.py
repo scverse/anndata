@@ -32,6 +32,7 @@ from ._warnings import (
     ImplicitModificationWarning,
     ExperimentalFeatureWarning,
 )
+from . import experimental
 
 # backwards compat / shortcut for default format
 from ._io import read_h5ad as read  # noqa: F401
@@ -54,4 +55,5 @@ __all__ = [
     "WriteWarning",
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
+    "experimental",
 ]
