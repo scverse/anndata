@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from os import PathLike
 from collections.abc import Mapping
-from functools import partial
+from itertools import product
+from functools import partial, wraps
 from typing import Union, Literal
 from types import MappingProxyType
 from warnings import warn
@@ -28,7 +29,7 @@ from anndata.compat import (
 )
 from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
 from anndata._warnings import OldFormatWarning
-from anndata.compat import AwkArray
+from anndata.compat import AwkArray, CupyArray, CupyCSRMatrix, CupyCSCMatrix
 
 from .registry import (
     _REGISTRY,
@@ -66,6 +67,26 @@ H5File = h5py.File
 #                 return False
 #         return True
 #     return False
+
+
+def _to_cpu_mem_wrapper(write_func):
+    """
+    Wrapper to bring cupy types into cpu memory before writing.
+
+    Ideally we do direct writing at some point.
+    """
+
+    def wrapper(
+        f,
+        k,
+        cupy_val: CupyArray | CupyCSCMatrix | CupyCSRMatrix,
+        _writer,
+        *,
+        dataset_kwargs=MappingProxyType,
+    ):
+        return write_func(f, k, cupy_val.get(), _writer, dataset_kwargs=dataset_kwargs)
+
+    return wrapper
 
 
 ################################
@@ -308,6 +329,14 @@ def write_basic(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(k, data=elem, **dataset_kwargs)
 
 
+_REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
+    _to_cpu_mem_wrapper(write_basic)
+)
+_REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
+    _to_cpu_mem_wrapper(write_basic)
+)
+
+
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
@@ -451,30 +480,29 @@ def write_sparse_compressed(
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
 write_csc = partial(write_sparse_compressed, fmt="csc")
-_REGISTRY.register_write(H5Group, sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(H5Group, views.SparseCSRView, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(H5Group, sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(H5Group, views.SparseCSCView, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(ZarrGroup, sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(ZarrGroup, views.SparseCSRView, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(ZarrGroup, sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(ZarrGroup, views.SparseCSCView, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
+
+for store_type, (cls, spec, func) in product(
+    (H5Group, ZarrGroup),
+    [
+        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (views.SparseCSRView, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (views.SparseCSCView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csr)),
+        (
+            views.CupySparseCSRView,
+            IOSpec("csr_matrix", "0.1.0"),
+            _to_cpu_mem_wrapper(write_csr),
+        ),
+        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csc)),
+        (
+            views.CupySparseCSCView,
+            IOSpec("csc_matrix", "0.1.0"),
+            _to_cpu_mem_wrapper(write_csc),
+        ),
+    ],
+):
+    _REGISTRY.register_write(store_type, cls, spec)(func)
 
 
 @_REGISTRY.register_write(H5Group, SparseDataset, IOSpec("", "0.1.0"))
