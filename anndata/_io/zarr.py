@@ -18,17 +18,8 @@ from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
 )
-from .specs import read_elem, write_elem
+from .specs import read_elem
 from anndata._warnings import OldFormatWarning
-
-
-__all__ = [
-    "read_elem",
-    "write_elem",
-    "read_zarr",
-    "write_zarr",
-    "read_dataset",
-]
 
 
 T = TypeVar("T")

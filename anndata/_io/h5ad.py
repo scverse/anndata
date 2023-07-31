@@ -31,15 +31,6 @@ from .specs import read_elem, write_elem
 from anndata._warnings import OldFormatWarning
 
 
-__all__ = [
-    "read_elem",
-    "write_elem",
-    "read_h5ad",
-    "write_h5ad",
-    "read_dataset",
-]
-
-
 T = TypeVar("T")
 
 
