@@ -43,7 +43,7 @@ from .views import (
     as_view,
     _resolve_idxs,
 )
-from .sparse_dataset import sparse_dataset
+from .sparse_dataset import sparse_dataset, BaseCompressedSparseDataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
@@ -609,6 +609,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # indices that aren’t strictly increasing
             if self.is_view:
                 X = _subset(X, (self._oidx, self._vidx))
+            if isinstance(X, BaseCompressedSparseDataset):
+                X = X.to_memory()
         elif self.is_view and self._adata_ref.X is None:
             X = None
         elif self.is_view:
