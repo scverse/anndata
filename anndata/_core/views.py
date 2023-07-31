@@ -15,7 +15,14 @@ from scipy import sparse
 import anndata
 from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
-from ..compat import ZappyArray, AwkArray, DaskArray
+from ..compat import (
+    ZappyArray,
+    AwkArray,
+    DaskArray,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+)
 
 
 @contextmanager
@@ -205,6 +212,37 @@ class SparseCSCView(_ViewMixin, sparse.csc_matrix):
         return sparse.csc_matrix(self).copy()
 
 
+class CupySparseCSRView(_ViewMixin, CupyCSRMatrix):
+    def copy(self) -> CupyCSRMatrix:
+        return CupyCSRMatrix(self).copy()
+
+
+class CupySparseCSCView(_ViewMixin, CupyCSCMatrix):
+    def copy(self) -> CupyCSCMatrix:
+        return CupyCSCMatrix(self).copy()
+
+
+class CupyArrayView(_ViewMixin, CupyArray):
+    def __new__(
+        cls,
+        input_array: Sequence[Any],
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+    ):
+        import cupy as cp
+
+        arr = cp.asarray(input_array).view(type=cls)
+
+        if view_args is not None:
+            view_args = ElementRef(*view_args)
+        arr._view_args = view_args
+        return arr
+
+    def copy(self) -> CupyArray:
+        import cupy as cp
+
+        return cp.array(self).copy()
+
+
 class DictView(_ViewMixin, dict):
     pass
 
@@ -260,6 +298,21 @@ def as_view_zappy(z, view_args):
     # Previous code says ZappyArray works as view,
     # but as far as I can tell they’re immutable.
     return z
+
+
+@as_view.register(CupyArray)
+def as_view_cupy(array, view_args):
+    return CupyArrayView(array, view_args=view_args)
+
+
+@as_view.register(CupyCSRMatrix)
+def as_view_cupy_csr(mtx, view_args):
+    return CupySparseCSRView(mtx, view_args=view_args)
+
+
+@as_view.register(CupyCSCMatrix)
+def as_view_cupy_csc(mtx, view_args):
+    return CupySparseCSCView(mtx, view_args=view_args)
 
 
 try:
