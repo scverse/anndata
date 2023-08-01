@@ -10,11 +10,8 @@ from scipy.sparse import issparse
 from .. import AnnData
 from ..logging import get_logger
 from .._warnings import WriteWarning
-from ..utils import import_function
 
 logger = get_logger(__name__)
-
-write_zarr = import_function("anndata._io.zarr", "write_zarr")
 
 
 def write_csvs(

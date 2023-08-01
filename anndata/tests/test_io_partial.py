@@ -1,7 +1,7 @@
 from importlib.util import find_spec
 from anndata import AnnData
 from anndata._io.specs.registry import read_elem_partial, read_elem
-from anndata._io.write import write_zarr
+from anndata._io.zarr import write_zarr
 from anndata._io.h5ad import write_h5ad
 from scipy.sparse import csr_matrix
 from pathlib import Path
