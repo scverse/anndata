@@ -88,7 +88,9 @@ def test_backed_indexing(ondisk_equivalent_adata, subset_func, subset_func2):
     ],
 )
 def test_dataset_append_memory(tmp_path, sparse_format, append_method, diskfmt):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"  # diskfmt is either h5ad or zarr
+    path = (
+        tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    )  # diskfmt is either h5ad or zarr
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
     if diskfmt == "zarr":
@@ -114,7 +116,9 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method, diskfmt):
     ],
 )
 def test_dataset_append_disk(tmp_path, sparse_format, append_method, diskfmt):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"  # diskfmt is either h5ad or zarr
+    path = (
+        tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    )  # diskfmt is either h5ad or zarr
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 

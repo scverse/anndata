@@ -19,6 +19,5 @@ __all__ = [
     "concat_on_disk",
     "sparse_dataset",
     "CSRDataset",
-    "CSCDataset"
-
+    "CSCDataset",
 ]
