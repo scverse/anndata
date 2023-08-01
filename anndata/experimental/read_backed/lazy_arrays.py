@@ -38,7 +38,7 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         "_categories",
         "_categories_cache",
         "group",
-        "_drop_unused_cats"
+        "_drop_unused_cats",
     )
 
     def __init__(self, codes, categories, attrs, _drop_unused_cats, *args, **kwargs):
@@ -54,7 +54,7 @@ class LazyCategoricalArray(MaskedArrayMixIn):
         self._categories = categories
         self._categories_cache = None
         self.attrs = dict(attrs)
-        self._drop_unused_cats = _drop_unused_cats # obsm/varm do not drop, but obs and var do.  TODO: Should fix in normal AnnData?
+        self._drop_unused_cats = _drop_unused_cats  # obsm/varm do not drop, but obs and var do.  TODO: Should fix in normal AnnData?
 
     @property
     def categories(self):  # __slots__ and cached_property are incompatible
