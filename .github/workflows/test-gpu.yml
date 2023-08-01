@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   test:
+    name: GPU Tests
     if: ${{ contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
     defaults:
