@@ -24,7 +24,6 @@ H5Array = h5py.Dataset
 
 
 # try importing zarr, dask, and zappy
-from packaging import version as _v
 
 try:
     from zarr.core import Array as ZarrArray
@@ -73,6 +72,36 @@ except ImportError:
         @staticmethod
         def __repr__():
             return "mock dask.array.core.Array"
+
+
+try:
+    from cupyx.scipy.sparse import (
+        spmatrix as CupySparseMatrix,
+        csr_matrix as CupyCSRMatrix,
+        csc_matrix as CupyCSCMatrix,
+    )
+    from cupy import ndarray as CupyArray
+except ImportError:
+
+    class CupySparseMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.spmatrix"
+
+    class CupyCSRMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csr_matrix"
+
+    class CupyCSCMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csc_matrix"
+
+    class CupyArray:
+        @staticmethod
+        def __repr__():
+            return "mock cupy.ndarray"
 
 
 @singledispatch

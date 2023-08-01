@@ -63,7 +63,10 @@ def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
     if isinstance(store, Path):
         store = str(store)
 
-    f = zarr.open(store, mode="r")
+    if isinstance(store, zarr.Group):
+        f = store
+    else:
+        f = zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):

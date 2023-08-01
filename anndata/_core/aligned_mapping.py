@@ -12,11 +12,11 @@ from scipy.sparse import spmatrix
 
 from ..utils import deprecated, ensure_df_homogeneous, dim_len
 from . import raw, anndata
-from .views import as_view
+from .views import as_view, view_update
 from .access import ElementRef
 from .index import _subset
 from anndata.compat import AwkArray
-from anndata._warnings import ExperimentalFeatureWarning
+from anndata._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 
 
 OneDIdx = Union[Sequence[int], Sequence[bool], slice]
@@ -148,17 +148,25 @@ class AlignedViewMixin:
 
     def __setitem__(self, key: str, value: V):
         value = self._validate_value(value, key)  # Validate before mutating
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        new_mapping[key] = value
-        self.parent._init_as_actual(adata)
+        warnings.warn(
+            f"Setting element `.{self.attrname}['{key}']` of view, "
+            "initializing view as actual.",
+            ImplicitModificationWarning,
+            stacklevel=2,
+        )
+        with view_update(self.parent, self.attrname, ()) as new_mapping:
+            new_mapping[key] = value
 
     def __delitem__(self, key: str):
-        self[key]  # Make sure it exists before bothering with a copy
-        adata = self.parent.copy()
-        new_mapping = getattr(adata, self.attrname)
-        del new_mapping[key]
-        self.parent._init_as_actual(adata)
+        _ = key in self  # Make sure it exists before bothering with a copy
+        warnings.warn(
+            f"Removing element `.{self.attrname}['{key}']` of view, "
+            "initializing view as actual.",
+            ImplicitModificationWarning,
+            stacklevel=2,
+        )
+        with view_update(self.parent, self.attrname, ()) as new_mapping:
+            del new_mapping[key]
 
     def __contains__(self, key: str) -> bool:
         return key in self.parent_mapping

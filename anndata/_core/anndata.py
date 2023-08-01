@@ -52,6 +52,8 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
+    CupyArray,
+    CupySparseMatrix,
     _move_adj_mtx,
 )
 from .sparse_dataset import BaseCompressedSparseDataset
@@ -65,6 +67,8 @@ class StorageType(Enum):
     ZappyArray = ZappyArray
     DaskArray = DaskArray
     BaseCompressedSparseDataset = BaseCompressedSparseDataset
+    CupyArray = CupyArray
+    CupySparseMatrix = CupySparseMatrix
 
     @classmethod
     def classes(cls):
@@ -427,11 +431,11 @@ class AnnData(AbstractAnnData):
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", X.index))
+                    x_indices.append(("obs", "index", X.index.astype(str)))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
-                    x_indices.append(("var", "columns", X.columns))
+                    x_indices.append(("var", "columns", X.columns.astype(str)))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
