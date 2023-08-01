@@ -27,7 +27,7 @@ from .utils import (
     idx_chunks_along_axis,
     _read_legacy_raw,
 )
-from .specs import read_elem, write_elem
+from .specs.registry import read_elem, write_elem
 from anndata._warnings import OldFormatWarning
 
 

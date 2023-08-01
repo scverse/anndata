@@ -35,7 +35,7 @@ from .._core.merge import (
     unify_dtypes,
 )
 from .._core.sparse_dataset import SparseDataset
-from .._io.specs import read_elem, write_elem
+from .._io.specs.registry import read_elem, write_elem
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched
 

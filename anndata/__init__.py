@@ -15,8 +15,8 @@ except (ImportError, LookupError):
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._io import (
-    read_h5ad,
+from ._io.h5ad import read_h5ad
+from ._io.read import (
     read_loom,
     read_hdf,
     read_excel,
@@ -35,7 +35,7 @@ from ._warnings import (
 from . import experimental
 
 # backwards compat / shortcut for default format
-from ._io import read_h5ad as read  # noqa: F401
+read = read_h5ad
 
 __all__ = [
     "__version__",

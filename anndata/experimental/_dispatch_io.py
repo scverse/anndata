@@ -4,7 +4,7 @@ from types import MappingProxyType
 from typing import Callable, Any
 
 
-from anndata._io.specs import IOSpec
+from anndata._io.specs.registry import IOSpec
 from anndata._types import StorageType, GroupStorageType
 
 
