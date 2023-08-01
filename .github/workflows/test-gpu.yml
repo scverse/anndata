@@ -4,7 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
+    types:
+      - labeled
+      - opened
+      - synchronize
 
 # Cancel the job if new commits are pushed
 # https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
@@ -14,6 +17,7 @@ concurrency:
 
 jobs:
   test:
+    if: ${{ contains(github.event.pull_request.labels, 'run-gpu-ci') }}
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
     defaults:
       run:
