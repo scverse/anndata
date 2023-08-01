@@ -46,13 +46,13 @@ Commit: 0ebe187e <views-of-views>
 views.SubsetMemorySuite.track_repeated_subset_memratio [mimir.mobility.unimelb.net.au/conda-py3.7-h5py-memory_profiler-natsort-numpy-pandas-scipy]
   ok
   ======= ======= ========== ============ ===================== ====================== ======================
-  --                                                                   index_kind                        
+  --                                                                   index_kind
   --------------------------------------- -------------------------------------------------------------------
-   n_obs   n_var   attr_set   subset_dim         intarray             boolarray                slice     
+   n_obs   n_var   attr_set   subset_dim         intarray             boolarray                slice
   ======= ======= ========== ============ ===================== ====================== ======================
-    100     100     X-csr        obs               2.84           1.7916666666666667            0.5      
-    100     100     X-csr        var        2.5357142857142856    1.8695652173913044     0.5652173913043478  
-    100     100    X-dense       obs        3.1739130434782608    1.6538461538461537            0.6      
+    100     100     X-csr        obs               2.84           1.7916666666666667            0.5
+    100     100     X-csr        var        2.5357142857142856    1.8695652173913044     0.5652173913043478
+    100     100    X-dense       obs        3.1739130434782608    1.6538461538461537            0.6
 ...
 ```
 

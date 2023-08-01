@@ -1,4 +1,5 @@
 from copy import deepcopy
+from functools import partial
 from operator import mul
 
 import joblib
@@ -10,7 +11,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray
+from anndata.compat import DaskArray, CupyArray, CupyCSCMatrix, CupyCSRMatrix
 from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
 from anndata.tests.helpers import (
@@ -20,7 +21,11 @@ from anndata.tests.helpers import (
     single_subset,
     assert_equal,
     as_dense_dask_array,
+    as_cupy_type,
     GEN_ADATA_DASK_ARGS,
+    BASE_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
 )
 
 # ------------------------------------------------------------------------------
@@ -57,28 +62,20 @@ def adata():
     return adata
 
 
-@pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
-def adata_parameterized(request):
-    return gen_adata(shape=(200, 300), X_type=request.param)
-
-
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
+    params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS,
 )
 def matrix_type(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
-    ids=[
-        "np_array",
-        "scipy_csr",
-        "scipy_csc",
-    ],
-)
-def matrix_type_no_dask(request):
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+def matrix_type_no_gpu(request):
+    return request.param
+
+
+@pytest.fixture(params=BASE_MATRIX_PARAMS)
+def matrix_type_base(request):
     return request.param
 
 
@@ -130,30 +127,21 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert init_hash == joblib.hash(adata)
 
 
-# TODO: These tests could probably be condensed into a fixture
-#       based test for obsm and varm
-def test_set_obsm_key(adata):
+@pytest.mark.parametrize("attr", ["obsm", "varm"])
+def test_set_obsm_key(adata, attr):
     init_hash = joblib.hash(adata)
 
-    orig_obsm_val = adata.obsm["o"].copy()
-    subset_obsm = adata[:50]
-    assert subset_obsm.is_view
-    subset_obsm.obsm["o"] = np.ones((50, 20))
-    assert not subset_obsm.is_view
-    assert np.all(adata.obsm["o"] == orig_obsm_val)
+    orig_val = getattr(adata, attr)["o"].copy()
+    subset = adata[:50] if attr == "obsm" else adata[:, :50]
 
-    assert init_hash == joblib.hash(adata)
+    assert subset.is_view
 
+    with pytest.warns(ad.ImplicitModificationWarning, match=rf".*\.{attr}\['o'\].*"):
+        getattr(subset, attr)["o"] = new_val = np.ones((50, 20))
 
-def test_set_varm_key(adata):
-    init_hash = joblib.hash(adata)
-
-    orig_varm_val = adata.varm["o"].copy()
-    subset_varm = adata[:, :50]
-    assert subset_varm.is_view
-    subset_varm.varm["o"] = np.ones((50, 20))
-    assert not subset_varm.is_view
-    assert np.all(adata.varm["o"] == orig_varm_val)
+    assert not subset.is_view
+    assert np.all(getattr(adata, attr)["o"] == orig_val)
+    assert np.any(getattr(subset, attr)["o"] == new_val)
 
     assert init_hash == joblib.hash(adata)
 
@@ -265,8 +253,8 @@ def test_set_varm(adata):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X(matrix_type_no_dask, subset_func):
-    adata = ad.AnnData(matrix_type_no_dask(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X(matrix_type_base, subset_func):
+    adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -305,8 +293,8 @@ def tokenize_anndata(adata: ad.AnnData):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X_dask(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
+    adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -339,8 +327,14 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     assert adata_subset.is_view
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
-
-    assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+    if isinstance(adata.X, CupyCSCMatrix):
+        # Comparison broken for CSC matrices
+        # https://github.com/cupy/cupy/issues/7757
+        assert asarray((orig_X_val.tocsr() != adata.X.tocsr())).sum() == mul(
+            *adata_subset.shape
+        )
+    else:
+        assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
 
 
 # TODO: Use different kind of subsetting for adata and view
@@ -413,7 +407,10 @@ def test_view_delitem(attr):
     adata_hash = joblib.hash(adata)
     view_hash = joblib.hash(view)
 
-    getattr(view, attr).__delitem__("to_delete")
+    with pytest.warns(
+        ad.ImplicitModificationWarning, match=rf".*\.{attr}\['to_delete'\].*"
+    ):
+        getattr(view, attr).__delitem__("to_delete")
 
     assert not view.is_view
     assert "to_delete" not in getattr(view, attr)
@@ -569,6 +566,30 @@ def test_negative_scalar_index(adata, index: int, obs: bool):
     np.testing.assert_array_equal(
         adata_pos_subset.var_names, adata_neg_subset.var_names
     )
+
+
+def test_viewness_propagation_nan():
+    """Regression test for https://github.com/scverse/anndata/issues/239"""
+    adata = ad.AnnData(np.random.random((10, 10)))
+    adata = adata[:, [0, 2, 4]]
+    v = adata.X.var(axis=0)
+    assert not isinstance(v, ArrayView), type(v).mro()
+    # this used to break
+    v[np.isnan(v)] = 0
+
+
+def test_viewness_propagation_allclose(adata):
+    """Regression test for https://github.com/scverse/anndata/issues/191"""
+    adata.varm["o"][4:10] = np.tile(np.nan, (10 - 4, adata.varm["o"].shape[1]))
+    a = adata[:50].copy()
+    b = adata[:50]
+
+    # .copy() turns view to ndarray, so this was fine:
+    assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
+    # Next line triggered the mutation:
+    assert np.allclose(a.varm["o"], b.varm["o"], equal_nan=True)
+    # Showing that the mutation didn’t happen:
+    assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
 
 
 @pytest.mark.parametrize("spmat", [sparse.csr_matrix, sparse.csc_matrix])

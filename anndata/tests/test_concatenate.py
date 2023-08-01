@@ -21,11 +21,15 @@ from anndata.tests import helpers
 from anndata.tests.helpers import (
     assert_equal,
     as_dense_dask_array,
+    as_cupy_type,
     gen_adata,
     GEN_ADATA_DASK_ARGS,
+    BASE_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray, AwkArray
+from anndata.compat import DaskArray, AwkArray, CupyArray, CupyCSRMatrix, CupyCSCMatrix
 
 
 @singledispatch
@@ -74,10 +78,7 @@ def make_idx_tuple(idx, axis):
 
 # Will call func(sparse_matrix) so these types should be sparse compatible
 # See array_type if only dense arrays are expected as input.
-@pytest.fixture(
-    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
-)
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS)
 def array_type(request):
     return request.param
 
@@ -1216,6 +1217,34 @@ def test_concat_ordered_categoricals_retained():
     assert c.obs["cat_ordered"].cat.ordered
 
 
+def test_bool_promotion():
+    np_bool = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame({"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5)]),
+    )
+    missing = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(5, 10)]),
+    )
+    result = concat({"np_bool": np_bool, "b": missing}, join="outer", label="batch")
+
+    assert pd.api.types.is_bool_dtype(result.obs["bool"])
+    assert pd.isnull(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
+
+    # Check that promotion doesn't occur if it doesn't need to:
+    np_bool_2 = AnnData(
+        np.ones((5, 1)),
+        obs=pd.DataFrame(
+            {"bool": [True] * 5}, index=[f"cell{i:02}" for i in range(5, 10)]
+        ),
+    )
+    result = concat(
+        {"np_bool": np_bool, "np_bool_2": np_bool_2}, join="outer", label="batch"
+    )
+
+    assert result.obs["bool"].dtype == np.dtype(bool)
+
+
 def test_concat_names(axis):
     def get_annot(adata):
         return getattr(adata, ("obs", "var")[axis])
@@ -1255,23 +1284,6 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     b = gen_adata(shape)
     alt_axis = 1 - axis
     dim = ("obs", "var")[axis]
-
-    # TODO: Remove, see: https://github.com/scverse/anndata/issues/905
-    import awkward as ak
-
-    if (
-        (join_type == "inner")
-        and (merge_strategy in ("same", "unique"))
-        and ((axis, shape.index(0)) in [(0, 1), (1, 0)])
-        and ak.__version__ == "2.0.7"  # indicates if a release has happened
-    ):
-        aligned_mapping = (b.obsm, b.varm)[1 - axis]
-        to_remove = []
-        for k, v in aligned_mapping.items():
-            if isinstance(v, ak.Array):
-                to_remove.append(k)
-        for k in to_remove:
-            aligned_mapping.pop(k)
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
     result = concat(
@@ -1412,3 +1424,30 @@ def test_outer_concat_with_missing_value_for_df():
     )
 
     concat([a, b], join="outer")
+
+
+def test_outer_concat_outputs_nullable_bool_writable(tmp_path):
+    a = gen_adata((5, 5), obsm_types=(pd.DataFrame,))
+    b = gen_adata((3, 5), obsm_types=(pd.DataFrame,))
+
+    del b.obsm["df"]
+
+    adatas = concat({"a": a, "b": b}, join="outer", label="group")
+    adatas.write(tmp_path / "test.h5ad")
+
+
+def test_concat_duplicated_columns(join_type):
+    # https://github.com/scverse/anndata/issues/483
+    a = AnnData(
+        obs=pd.DataFrame(
+            np.ones((5, 2)), columns=["a", "a"], index=[str(x) for x in range(5)]
+        )
+    )
+    b = AnnData(
+        obs=pd.DataFrame(
+            np.ones((5, 1)), columns=["a"], index=[str(x) for x in range(5, 10)]
+        )
+    )
+
+    with pytest.raises(pd.errors.InvalidIndexError, match=r"'a'"):
+        concat([a, b], join=join_type)
