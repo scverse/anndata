@@ -87,17 +87,19 @@ def test_backed_indexing(ondisk_equivalent_adata, subset_func, subset_func2):
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
-def test_dataset_append_memory(tmp_path, sparse_format, append_method):
-    h5_path = tmp_path / "test.h5"
+def test_dataset_append_memory(tmp_path, sparse_format, append_method, diskfmt):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"  # diskfmt is either h5ad or zarr
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+    ad._io.specs.write_elem(f, "mtx", a)
+    diskmtx = sparse_dataset(f["mtx"])
 
-    with h5py.File(h5_path, "a") as f:
-        ad._io.specs.write_elem(f, "mtx", a)
-        diskmtx = sparse_dataset(f["mtx"])
-
-        diskmtx.append(b)
-        fromdisk = diskmtx.to_memory()
+    diskmtx.append(b)
+    fromdisk = diskmtx.to_memory()
 
     frommem = append_method([a, b])
 
@@ -111,19 +113,22 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method):
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
-def test_dataset_append_disk(tmp_path, sparse_format, append_method):
-    h5_path = tmp_path / "test.h5"
+def test_dataset_append_disk(tmp_path, sparse_format, append_method, diskfmt):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"  # diskfmt is either h5ad or zarr
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
-    with h5py.File(h5_path, "a") as f:
-        ad._io.specs.write_elem(f, "a", a)
-        ad._io.specs.write_elem(f, "b", b)
-        a_disk = sparse_dataset(f["a"])
-        b_disk = sparse_dataset(f["b"])
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+    ad._io.specs.write_elem(f, "a", a)
+    ad._io.specs.write_elem(f, "b", b)
+    a_disk = sparse_dataset(f["a"])
+    b_disk = sparse_dataset(f["b"])
 
-        a_disk.append(b_disk)
-        fromdisk = a_disk.to_memory()
+    a_disk.append(b_disk)
+    fromdisk = a_disk.to_memory()
 
     frommem = append_method([a, b])
 
