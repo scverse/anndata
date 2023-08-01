@@ -60,7 +60,7 @@ dev = [
     # static checking
     "black>=20.8b1",
     "docutils",
-    "xarray>=2023.1.0"
+    "xarray>=2023.1.0",
     # test speedups
     "pytest-xdist",
 ]
