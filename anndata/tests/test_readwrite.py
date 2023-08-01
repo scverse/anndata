@@ -15,6 +15,8 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
+from anndata._io.h5ad import write_h5ad
+from anndata._io.write import write_zarr, write_loom
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, DaskArray
 
@@ -355,7 +357,7 @@ def test_zarr_compression(tmp_path):
     compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
     not_compressed = []
 
-    ad._io.write_zarr(pth, adata, compressor=compressor)
+    write_zarr(pth, adata, compressor=compressor)
 
     def check_compressed(key, value):
         if isinstance(value, zarr.Array) and value.shape != ():
@@ -533,17 +535,17 @@ def test_write_csv_view(typ, tmp_path):
 @pytest.mark.parametrize(
     ["read", "write", "name"],
     [
-        pytest.param(ad.read_h5ad, ad._io.write._write_h5ad, "test_empty.h5ad"),
+        pytest.param(ad.read_h5ad, write_h5ad, "test_empty.h5ad"),
         pytest.param(
             ad.read_loom,
-            ad._io.write_loom,
+            write_loom,
             "test_empty.loom",
             marks=pytest.mark.xfail(reason="Loom can’t handle 0×0 matrices"),
         ),
-        pytest.param(ad.read_zarr, ad._io.write_zarr, "test_empty.zarr"),
+        pytest.param(ad.read_zarr, write_zarr, "test_empty.zarr"),
         pytest.param(
             ad.read_zarr,
-            ad._io.write_zarr,
+            write_zarr,
             "test_empty.zip",
             marks=pytest.mark.xfail(reason="Zarr zip storage doesn’t seem to work…"),
         ),

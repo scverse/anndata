@@ -12,9 +12,6 @@ from ..logging import get_logger
 from .._warnings import WriteWarning
 from ..utils import import_function
 
-# Exports
-from .h5ad import write_h5ad as _write_h5ad  # noqa: F401
-
 logger = get_logger(__name__)
 
 write_zarr = import_function("anndata._io.zarr", "write_zarr")
