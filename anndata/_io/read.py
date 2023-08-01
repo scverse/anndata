@@ -27,19 +27,6 @@ except ImportError as _e:
         raise e
 
 
-__all__ = [
-    "read_h5ad",
-    "read_zarr",
-    "read_csv",
-    "read_excel",
-    "read_umi_tools",
-    "read_hdf",
-    "read_loom",
-    "read_mtx",
-    "read_text",
-]
-
-
 def read_csv(
     filename: Union[PathLike, Iterator[str]],
     delimiter: Optional[str] = ",",
