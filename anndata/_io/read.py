@@ -16,7 +16,6 @@ from scipy import sparse
 from .. import AnnData
 from ..compat import _deprecate_positional_args
 from .utils import is_float
-from .h5ad import read_h5ad
 
 try:
     from .zarr import read_zarr
