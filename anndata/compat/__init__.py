@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from functools import reduce, singledispatch, wraps
+from functools import singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
-from typing import Any, Tuple, Union, Mapping, MutableMapping, Optional
+from typing import Any, Tuple, Union, Mapping, Optional
 from warnings import warn
 
 import h5py
@@ -24,7 +23,6 @@ H5Array = h5py.Dataset
 
 
 # try importing zarr, dask, and zappy
-from packaging import version as _v
 
 try:
     from zarr.core import Array as ZarrArray

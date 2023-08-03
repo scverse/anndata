@@ -16,8 +16,6 @@ import zarr
 
 import anndata as ad
 from anndata._io.utils import AnnDataReadError
-from anndata._io.specs.registry import IORegistryError
-from anndata.utils import asarray
 from anndata.compat import _read_attr, DaskArray
 
 from anndata.tests.helpers import gen_adata, assert_equal, as_dense_dask_array
@@ -535,7 +533,7 @@ def test_write_csv_view(typ, tmp_path):
 @pytest.mark.parametrize(
     ["read", "write", "name"],
     [
-        pytest.param(ad.read_h5ad, ad._io.write._write_h5ad, "test_empty.h5ad"),
+        pytest.param(ad.read_h5ad, ad._io.write_h5ad, "test_empty.h5ad"),
         pytest.param(
             ad.read_loom,
             ad._io.write_loom,

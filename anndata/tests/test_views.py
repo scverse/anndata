@@ -6,12 +6,11 @@ import numpy as np
 from scipy import sparse
 import pandas as pd
 import pytest
+from dask.base import tokenize, normalize_token
 
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray
-from dask.base import tokenize, normalize_token
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -22,6 +21,7 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     GEN_ADATA_DASK_ARGS,
 )
+
 
 # ------------------------------------------------------------------------------
 # Some test data
