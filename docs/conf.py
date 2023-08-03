@@ -7,7 +7,7 @@ from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
 sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
-import anndata  # noqa
+import anndata  # noqa: E402
 
 
 logger = logging.getLogger(__name__)

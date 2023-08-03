@@ -130,8 +130,6 @@ exclude = [
     "dist",
 ]
 ignore = [
-    # module imported but unused -> required for Scanpys API
-    "F401",
     # line too long -> we accept long comment lines; black gets rid of long code lines
     "E501",
     # module level import not at top of file -> required to circumvent circular imports for Scanpys API
