@@ -1528,8 +1528,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 return self._mutated_copy()
         else:
-            from .._io import read_h5ad
-            from .._io.write import _write_h5ad
+            from .._io import read_h5ad, write_h5ad
 
             if filename is None:
                 raise ValueError(
@@ -1538,7 +1537,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     "To load the object into memory, use `.to_memory()`."
                 )
             mode = self.file._filemode
-            _write_h5ad(filename, self)
+            write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
     def concatenate(
@@ -1953,14 +1952,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
         """
-        from .._io.write import _write_h5ad
+        from .._io import write_h5ad
 
         if filename is None and not self.isbacked:
             raise ValueError("Provide a filename!")
         if filename is None:
             filename = self.filename
 
-        _write_h5ad(
+        write_h5ad(
             Path(filename),
             self,
             compression=compression,
@@ -1989,7 +1988,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         sep
              Separator for the data.
         """
-        from .._io.write import write_csvs
+        from .._io import write_csvs
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
@@ -2002,7 +2001,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             The filename.
         """
-        from .._io.write import write_loom
+        from .._io import write_loom
 
         write_loom(filename, self, write_obsm_varm=write_obsm_varm)
 
@@ -2021,7 +2020,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         chunks
             Chunk shape.
         """
-        from .._io.write import write_zarr
+        from .._io import write_zarr
 
         write_zarr(store, self, chunks=chunks)
 

@@ -124,8 +124,6 @@ markers = ["gpu: mark test to run on GPU"]
 
 [tool.ruff]
 ignore = [
-    # module imported but unused -> required for API exports
-    "F401",
     # line too long -> we accept long comment lines; black gets rid of long code lines
     "E501",
     # Do not assign a lambda expression, use a def -> Scanpy allows lambda expression assignments,
