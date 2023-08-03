@@ -13,7 +13,7 @@ from scipy import sparse
 import zarr
 
 import anndata as ad
-from anndata._io.specs.registry import IORegistryError, _REGISTRY, get_spec, IOSpec
+from anndata._io.specs import IORegistryError, _REGISTRY, get_spec, IOSpec
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
