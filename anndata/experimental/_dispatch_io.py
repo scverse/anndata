@@ -4,7 +4,7 @@ from types import MappingProxyType
 from typing import Callable, Any
 
 
-from anndata._io.specs.registry import IOSpec
+from anndata._io.specs import IOSpec
 from anndata._types import StorageType, GroupStorageType
 
 
@@ -39,7 +39,7 @@ def read_dispatched(
 
     :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
-    from anndata._io.specs.registry import Reader, _REGISTRY
+    from anndata._io.specs import Reader, _REGISTRY
 
     reader = Reader(_REGISTRY, callback=callback)
 
@@ -90,7 +90,7 @@ def write_dispatched(
 
     :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
-    from anndata._io.specs.registry import Writer, _REGISTRY
+    from anndata._io.specs import Writer, _REGISTRY
 
     writer = Writer(_REGISTRY, callback=callback)
 

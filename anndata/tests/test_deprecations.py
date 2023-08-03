@@ -101,7 +101,7 @@ def test_deprecated_write_attribute(tmp_path):
     pth = tmp_path / "file.h5"
     A = np.random.randn(20, 10)
     from anndata._io.utils import read_attribute, write_attribute
-    from anndata._io.specs.registry import read_elem
+    from anndata._io.specs import read_elem
 
     with h5py.File(pth, "w") as f:
         with pytest.warns(DeprecationWarning, match="write_elem"):

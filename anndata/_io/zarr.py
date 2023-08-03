@@ -18,7 +18,7 @@ from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
 )
-from .specs.registry import read_elem
+from .specs import read_elem
 from anndata._warnings import OldFormatWarning
 
 

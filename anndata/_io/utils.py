@@ -118,7 +118,7 @@ def check_key(key):
 
 
 def read_attribute(*args, **kwargs):
-    from .specs.registry import read_elem
+    from .specs import read_elem
 
     warn(
         "This internal function has been deprecated, please use read_elem instead",
@@ -128,7 +128,7 @@ def read_attribute(*args, **kwargs):
 
 
 def write_attribute(*args, **kwargs):
-    from .specs.registry import write_elem
+    from .specs import write_elem
 
     warn(
         "This internal function has been deprecated, please use write_elem instead",
@@ -191,7 +191,7 @@ def report_read_key_on_error(func):
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
-        from anndata._io.specs.registry import Reader
+        from anndata._io.specs import Reader
 
         # Figure out signature (method vs function) by going through args
         for elem in args:
@@ -233,7 +233,7 @@ def report_write_key_on_error(func):
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
-        from anndata._io.specs.registry import Writer
+        from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
         for i in range(len(args)):

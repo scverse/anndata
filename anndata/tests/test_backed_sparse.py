@@ -5,7 +5,6 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.sparse_dataset import SparseDataset
-from anndata._io.specs.registry import write_elem
 from anndata.tests.helpers import assert_equal, subset_func
 
 subset_func2 = subset_func
@@ -56,7 +55,7 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method):
     b = sparse_format(sparse.random(100, 100))
 
     with h5py.File(h5_path, "a") as f:
-        write_elem(f, "mtx", a)
+        ad._io.specs.write_elem(f, "mtx", a)
         diskmtx = SparseDataset(f["mtx"])
 
         diskmtx.append(b)
@@ -80,8 +79,8 @@ def test_dataset_append_disk(tmp_path, sparse_format, append_method):
     b = sparse_format(sparse.random(10, 10))
 
     with h5py.File(h5_path, "a") as f:
-        write_elem(f, "a", a)
-        write_elem(f, "b", b)
+        ad._io.specs.write_elem(f, "a", a)
+        ad._io.specs.write_elem(f, "b", b)
         a_disk = SparseDataset(f["a"])
         b_disk = SparseDataset(f["b"])
 
@@ -106,8 +105,8 @@ def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape):
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
     with h5py.File(h5_path, "a") as f:
-        write_elem(f, "a", a_mem)
-        write_elem(f, "b", b_mem)
+        ad._io.specs.write_elem(f, "a", a_mem)
+        ad._io.specs.write_elem(f, "b", b_mem)
         a_disk = SparseDataset(f["a"])
         b_disk = SparseDataset(f["b"])
 
@@ -120,7 +119,7 @@ def test_wrong_formats(tmp_path):
     base = sparse.random(100, 100, format="csr")
 
     with h5py.File(h5_path, "a") as f:
-        write_elem(f, "base", base)
+        ad._io.specs.write_elem(f, "base", base)
         disk_mtx = SparseDataset(f["base"])
         pre_checks = disk_mtx.to_memory()
 
