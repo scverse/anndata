@@ -15,9 +15,7 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
-from anndata._io.h5ad import write_h5ad
-from anndata._io.zarr import write_zarr
-from anndata._io.write import write_loom
+from anndata._io import write_h5ad, write_loom, write_zarr
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, DaskArray
 

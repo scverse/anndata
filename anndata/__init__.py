@@ -15,15 +15,15 @@ except (ImportError, LookupError):
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._io.h5ad import read_h5ad
-from ._io.read import (
-    read_loom,
-    read_hdf,
-    read_excel,
-    read_umi_tools,
+from ._io import (
     read_csv,
-    read_text,
+    read_excel,
+    read_h5ad,
+    read_hdf,
+    read_loom,
     read_mtx,
+    read_text,
+    read_umi_tools,
     read_zarr,
 )
 from ._warnings import (
