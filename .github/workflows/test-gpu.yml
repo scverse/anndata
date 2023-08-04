@@ -16,9 +16,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check:
+    name: Check if GPU tests are allowed to run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: flying-sheep/check@v1
+        with:
+          success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
   test:
     name: GPU Tests
-    if: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
+    needs: check
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
     defaults:
       run:
