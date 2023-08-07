@@ -62,12 +62,13 @@ dev = [
 ]
 doc = [
     "sphinx>=4.4",
-    "sphinx-rtd-theme>=1.1.1",
+    "sphinx-book-theme>=1.0.1",
     "sphinx-autodoc-typehints>=1.11.0",
-    "sphinx_issues",
+    "sphinx-issues",
+    "sphinx-copybutton",
     "sphinxext.opengraph",
     "nbsphinx",
-    "scanpydoc[theme]>=0.9",
+    "scanpydoc>=0.9",
     "zarr",
     "awkward>=2.0.7",
     "IPython", # For syntax highlighting in notebooks

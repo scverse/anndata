@@ -1,19 +1,12 @@
 import sys
-import logging
 from pathlib import Path
 from datetime import datetime
+from importlib import metadata
 
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
-import anndata  # noqa: E402
-
-
-logger = logging.getLogger(__name__)
-
-for generated in HERE.glob("anndata.*.rst"):
-    generated.unlink()
+sys.path[:0] = [str(HERE / "extensions")]
 
 
 # -- General configuration ------------------------------------------------
@@ -25,8 +18,7 @@ needs_sphinx = "1.7"  # autosummary bugfix
 project = "anndata"
 author = f"{project} developers"
 copyright = f"{datetime.now():%Y}, {author}"
-version = anndata.__version__.replace(".dirty", "")
-release = version
+release = version = metadata.version("anndata")
 
 # default settings
 templates_path = ["_templates"]
@@ -45,6 +37,7 @@ pygments_style = "sphinx"
 
 extensions = [
     "myst_parser",
+    "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
@@ -128,17 +121,14 @@ ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "scanpydoc"
-html_theme_options = dict(navigation_depth=4)
-html_context = dict(
-    display_github=True,  # Integrate GitHub
-    github_user="scverse",  # Username
-    github_repo="anndata",  # Repo name
-    github_version="main",  # Version
-    conf_py_path="/docs/",  # Path in the checkout to the docs root
+html_theme = "sphinx_book_theme"
+html_theme_options = dict(
+    use_repository_button=True,
+    repository_url="https://github.com/scverse/anndata",
+    repository_branch="main",
 )
 html_logo = "_static/img/anndata_schema.svg"
-issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
+issues_github_path = "scverse/anndata"
 html_show_sphinx = False
 
 
