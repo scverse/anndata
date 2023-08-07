@@ -18,12 +18,12 @@ concurrency:
 jobs:
   check:
     name: Check if GPU tests are allowed to run
+    if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
     runs-on: ubuntu-latest
     steps:
       - uses: flying-sheep/check@v1
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
-    if: ! contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')
   test:
     name: GPU Tests
     needs: check
