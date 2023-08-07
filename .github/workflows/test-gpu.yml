@@ -23,7 +23,7 @@ jobs:
   # If the `run-gpu-ci` label is set or we reacted to a `push` event, this job succeeds (and `test` is run).
   # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
-    name: Check if GPU tests are allowed to run
+    name: 'Triage: Check if GPU tests are allowed to run'
     if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
     runs-on: ubuntu-latest
     steps:
