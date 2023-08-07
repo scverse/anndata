@@ -5,7 +5,6 @@ from functools import partial
 from typing import Dict, Union, Sequence
 
 import numpy as np
-import warnings
 
 from ..._core.anndata import AnnData
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
@@ -13,9 +12,9 @@ from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
 try:
     import torch
-    from torch.utils.data import Sampler, BatchSampler, Dataset, DataLoader
+    from torch.utils.data import Sampler, BatchSampler, DataLoader
 except ImportError:
-    Sampler, BatchSampler, Dataset, DataLoader = object, object, object, object
+    Sampler, BatchSampler, DataLoader = object, object, object
 
 
 # Custom sampler to get proper batches instead of joined separate indices

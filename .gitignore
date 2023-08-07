@@ -15,8 +15,7 @@ __pycache__/
 /hatch.toml
 
 # Tests and coverage
-/.pytest_cache/
-/.cache/
+/*cache/
 /data/
 /tmp.zarr/
 test.h5ad
