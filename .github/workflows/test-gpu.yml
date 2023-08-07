@@ -15,7 +15,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# There are two jobs:
+# 1. `check` determines if the second job (`test`) will be run (through a job dependency).
+# 2. `test` runs on an AWS runner and executes the GPU tests.
 jobs:
+  # If the `skip-gpu-ci` label is set, this job is skipped, and consequently the `test` job too.
+  # If the `run-gpu-ci` label is set or we reacted to a `push` event, this job succeeds (and `test` is run).
+  # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
     name: Check if GPU tests are allowed to run
     if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
@@ -24,6 +30,7 @@ jobs:
       - uses: flying-sheep/check@v1
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
+  # If `check` wasn’t skipped or failed, start an AWS runner and run the GPU tests on it.
   test:
     name: GPU Tests
     needs: check
