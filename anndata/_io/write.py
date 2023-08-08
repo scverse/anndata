@@ -9,16 +9,9 @@ from scipy.sparse import issparse
 
 from .. import AnnData
 from ..logging import get_logger
-from anndata._warnings import WriteWarning
-
-# Exports
-from .h5ad import write_h5ad as _write_h5ad
-
-from ..utils import import_function
+from .._warnings import WriteWarning
 
 logger = get_logger(__name__)
-
-write_zarr = import_function("anndata._io.zarr", "write_zarr")
 
 
 def write_csvs(
