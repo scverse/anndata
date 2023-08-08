@@ -4,7 +4,6 @@
 # TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
 
 from pathlib import Path
-from collections.abc import Iterable
 import pytest
 
 
