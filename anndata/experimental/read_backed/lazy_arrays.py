@@ -1,6 +1,6 @@
 from typing import Tuple
 from anndata._core.index import Index, _subset
-from anndata._core.views import _resolve_idx, as_view
+from anndata._core.views import as_view
 from anndata._io.h5ad import read_dataset
 from anndata.compat import ZarrArray
 

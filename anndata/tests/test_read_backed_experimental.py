@@ -18,7 +18,6 @@ from anndata.experimental.read_backed import (
     LazyCategoricalArray,
     LazyMaskedArray,
 )
-from anndata.utils import asarray
 
 from zarr import DirectoryStore
 
