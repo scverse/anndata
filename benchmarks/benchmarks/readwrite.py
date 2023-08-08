@@ -27,7 +27,7 @@ from memory_profiler import memory_usage
 import numpy as np
 import pooch
 
-from .utils import get_anndata_memsize, sedate, get_peak_mem, get_actualsize
+from .utils import sedate, get_peak_mem, get_actualsize
 
 # from . import datasets
 

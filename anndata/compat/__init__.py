@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from functools import reduce, singledispatch, wraps
+from functools import singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
-from typing import Any, Tuple, Union, Mapping, MutableMapping, Optional
+from typing import Any, Tuple, Union, Mapping, Optional
 from warnings import warn
 
 import h5py
