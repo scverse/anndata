@@ -15,7 +15,6 @@ import collections.abc as cabc
 from itertools import accumulate, chain
 from pathlib import Path
 from typing import Union, NamedTuple, Tuple, Sequence, Iterable, Type
-from warnings import warn
 
 import h5py
 import zarr

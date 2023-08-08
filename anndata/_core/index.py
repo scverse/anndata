@@ -123,11 +123,13 @@ def _subset(a: np.ndarray, subset_idx: Index):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
 
+
 @_subset.register(ZarrArray)
 def _subset_zarr(a: ZarrArray, subset_idx: Index):
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a.oindex[subset_idx]
+
 
 @_subset.register(DaskArray)
 def _subset_dask(a: DaskArray, subset_idx: Index):

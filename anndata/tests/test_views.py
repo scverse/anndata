@@ -1,5 +1,4 @@
 from copy import deepcopy
-from functools import partial
 from operator import mul
 
 import joblib
@@ -11,8 +10,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray, CupyArray, CupyCSCMatrix, CupyCSRMatrix
-from dask.base import tokenize, normalize_token
+from anndata.compat import CupyCSCMatrix
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -20,13 +18,13 @@ from anndata.tests.helpers import (
     slice_subset,
     single_subset,
     assert_equal,
-    as_dense_dask_array,
-    as_cupy_type,
     GEN_ADATA_DASK_ARGS,
     BASE_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
 )
+from dask.base import tokenize, normalize_token
+
 
 # ------------------------------------------------------------------------------
 # Some test data

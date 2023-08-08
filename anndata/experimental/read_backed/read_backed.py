@@ -223,7 +223,6 @@ class AnnDataBacked(AbstractAnnData):
         )
 
     def to_memory(self, exclude=[]):
-
         # nullable and categoricals need special handling because xarray will convert them to numpy arrays first with dtype object
         def get_nullable_and_categorical_cols(ds):
             cols = []
@@ -252,7 +251,7 @@ class AnnDataBacked(AbstractAnnData):
             if len(exclude_vars) == 0:
                 df = df[list(ds.keys())]
             return df
-        
+
         # handling for AxisArrays
         def backed_dict_to_memory(d, prefix):
             res = {}
@@ -534,8 +533,12 @@ def read_backed(
                     d_with_xr[k] = v
             return Dataset2D(d_with_xr)
         elif iospec.encoding_type == "categorical":
-            drop_unused_cats = not (elem_name.startswith('/obsm') or elem_name.startswith('/varm'))
-            return LazyCategoricalArray(elem["codes"], elem["categories"], elem.attrs, drop_unused_cats)
+            drop_unused_cats = not (
+                elem_name.startswith("/obsm") or elem_name.startswith("/varm")
+            )
+            return LazyCategoricalArray(
+                elem["codes"], elem["categories"], elem.attrs, drop_unused_cats
+            )
         elif "nullable" in iospec.encoding_type:
             return LazyMaskedArray(
                 elem["values"],

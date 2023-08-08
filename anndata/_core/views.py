@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from collections.abc import Sequence, KeysView, Callable, Iterable, Mapping
+from collections.abc import Sequence, KeysView, Callable, Iterable
 from functools import reduce, singledispatch, wraps
 from typing import Any, Literal
 import warnings

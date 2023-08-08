@@ -315,7 +315,9 @@ def _write_concat_arrays(
 
 
 def _write_concat_sequence(
-    arrays: Sequence[Union[pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray]],
+    arrays: Sequence[
+        Union[pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray]
+    ],
     output_group,
     output_path,
     max_loaded_elems,
@@ -350,7 +352,8 @@ def _write_concat_sequence(
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, (pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray)) for a in arrays
+        isinstance(a, (pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray))
+        for a in arrays
     ):
         _write_concat_arrays(
             arrays,

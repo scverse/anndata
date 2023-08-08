@@ -911,8 +911,6 @@ def concat_pairwise_mapping(
             for m, s in zip(mappings, shapes)
         ]
         if all(isinstance(el, (CupySparseMatrix, CupyArray)) for el in els):
-            from cupyx.scipy import sparse as cpsparse
-
             result[k] = _cpblock_diag(els, format="csr")
         else:
             result[k] = sparse.block_diag(els, format="csr")
