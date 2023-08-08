@@ -57,9 +57,6 @@ Home-page = "https://github.com/scverse/anndata"
 dev = [
     # dev version generation
     "setuptools_scm",
-    # static checking
-    "black>=20.8b1",
-    "docutils",
     "xarray>=2023.1.0",
     # test speedups
     "pytest-xdist",
