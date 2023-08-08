@@ -1,8 +1,9 @@
 from importlib.util import find_spec
 from anndata import AnnData
-from anndata._io.specs.registry import read_elem_partial, read_elem
-from anndata._io import write_zarr, _write_h5ad
-from scipy.sparse import csr_matrix, issparse
+from anndata._io.specs import read_elem
+from anndata._io.specs.registry import read_elem_partial
+from anndata._io import write_h5ad, write_zarr
+from scipy.sparse import csr_matrix
 from pathlib import Path
 import numpy as np
 import pytest
@@ -12,7 +13,7 @@ import h5py
 X = np.array([[1.0, 0.0, 3.0], [4.0, 0.0, 6.0], [0.0, 8.0, 0.0]], dtype="float32")
 X_check = np.array([[4.0, 0.0], [0.0, 8.0]], dtype="float32")
 
-WRITER = dict(h5ad=_write_h5ad, zarr=write_zarr)
+WRITER = dict(h5ad=write_h5ad, zarr=write_zarr)
 READER = dict(h5ad=h5py.File, zarr=zarr.open)
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from enum import Enum
-from functools import wraps, singledispatch
+from functools import wraps
 from typing import Callable
 from warnings import warn
 

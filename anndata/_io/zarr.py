@@ -18,7 +18,7 @@ from .utils import (
     report_read_key_on_error,
     _read_legacy_raw,
 )
-from .specs import read_elem, write_elem
+from .specs import read_elem
 from anndata._warnings import OldFormatWarning
 
 
@@ -137,8 +137,6 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 
 @report_read_key_on_error
 def read_dataframe(group) -> pd.DataFrame:
-    from .specs import _REGISTRY
-
     # Fast paths
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)
