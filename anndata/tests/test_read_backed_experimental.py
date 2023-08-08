@@ -13,8 +13,8 @@ from anndata.tests.helpers import (
     gen_typed_df,
     assert_equal,
 )
-from anndata.experimental.read_backed import (
-    read_backed,
+from anndata.experimental import read_backed
+from anndata.experimental.backed._lazy_arrays import (
     LazyCategoricalArray,
     LazyMaskedArray,
 )
