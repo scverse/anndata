@@ -3,7 +3,9 @@
 # 2. as a pytest plugin/config that applies to doctests as well
 # TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
 
+from contextlib import chdir
 from pathlib import Path
+
 import pytest
 
 
@@ -14,10 +16,9 @@ doctest_skip_marker = pytest.mark.usefixtures("doctest_env")
 def doctest_env(cache: pytest.Cache, tmp_path: Path) -> None:
     from scanpy import settings
 
-    old_wd = tmp_path.chdir()
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
-    yield
-    old_wd.chdir()
+    with chdir(tmp_path):
+        yield
     settings.datasetdir = old_dd
 
 
