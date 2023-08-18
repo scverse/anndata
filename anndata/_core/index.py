@@ -142,7 +142,7 @@ def _subset_spmatrix(a: spmatrix, subset_idx: Index):
 
 @_subset.register(pd.DataFrame)
 def _subset_df(df: pd.DataFrame, subset_idx: Index):
-    if len(subset_idx) == 1:
+    if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
         return df.iloc[subset_idx[0]]
     return df.iloc[subset_idx]
 
