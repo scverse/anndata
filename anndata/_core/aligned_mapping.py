@@ -244,7 +244,7 @@ class AxisArraysBase(AlignedMapping):
         if (
             hasattr(val, "index")
             and isinstance(val.index, cabc.Collection)
-            and not (val.index == self.dim_names).all()
+            and val.index.equals(self.dim_names)
         ):
             # Could probably also re-order index if it’s contained
             raise ValueError(
