@@ -248,7 +248,7 @@ class AxisArraysBase(AlignedMapping):
                 # Could probably also re-order index if it’s contained
                 raise ValueError(
                     f"value.index does not match parent’s axis {self.axes[0]} names:\n{e}"
-                )
+                ) from None
         return super()._validate_value(val, key)
 
     @property
