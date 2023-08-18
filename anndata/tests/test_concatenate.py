@@ -8,7 +8,6 @@ import warnings
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy import sparse
 from boltons.iterutils import research, remap, default_exit
@@ -128,7 +127,7 @@ def fix_known_differences(orig, result, backwards_compat=True):
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for k, dtype in orig.obs.dtypes.items():
-        if is_categorical_dtype(dtype) and dtype.ordered:
+        if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
             result.obs[k] = result.obs[k].astype(dtype)
 
     return orig, result
@@ -1184,8 +1183,8 @@ def test_concat_categories_maintain_dtype():
 
     result = concat({"a": a, "b": b, "c": c}, join="outer")
 
-    assert pd.api.types.is_categorical_dtype(
-        result.obs["cat"]
+    assert isinstance(
+        result.obs["cat"].dtype, pd.CategoricalDtype
     ), f"Was {result.obs['cat'].dtype}"
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
@@ -1212,7 +1211,7 @@ def test_concat_ordered_categoricals_retained():
 
     c = concat([a, b])
 
-    assert pd.api.types.is_categorical_dtype(c.obs["cat_ordered"])
+    assert isinstance(c.obs["cat_ordered"].dtype, pd.CategoricalDtype)
     assert c.obs["cat_ordered"].cat.ordered
 
 

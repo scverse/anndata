@@ -14,6 +14,7 @@ from typing import (
     Collection,
     Iterable,
     Optional,
+    Sequence,
     Tuple,
     TypeVar,
     Union,
@@ -211,7 +212,7 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
     df_dtypes = [dict(df.dtypes) for df in dfs]
     columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
 
-    dtypes = {col: list() for col in columns}
+    dtypes: dict[str, list[np.dtype]] = {col: [] for col in columns}
     for col in columns:
         for df in df_dtypes:
             dtypes[col].append(df.get(col, None))
@@ -235,7 +236,9 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
     return dfs
 
 
-def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
+def try_unifying_dtype(
+    col: Sequence[np.dtype],
+) -> pd.core.dtypes.base.ExtensionDtype | None:
     """
     If dtypes can be unified, returns the dtype they would be unified to.
 
@@ -248,12 +251,12 @@ def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
         A list of dtypes to unify. Can be numpy/ pandas dtypes, or None (which denotes
         a missing value)
     """
-    dtypes = set()
+    dtypes: set[pd.CategoricalDtype] = set()
     # Categorical
-    if any([pd.api.types.is_categorical_dtype(x) for x in col]):
+    if any(isinstance(dtype, pd.CategoricalDtype) for dtype in col):
         ordered = False
         for dtype in col:
-            if pd.api.types.is_categorical_dtype(dtype):
+            if isinstance(dtype, pd.CategoricalDtype):
                 dtypes.add(dtype)
                 ordered = ordered | dtype.ordered
             elif not pd.isnull(dtype):
@@ -261,13 +264,13 @@ def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
         if len(dtypes) > 0 and not ordered:
             categories = reduce(
                 lambda x, y: x.union(y),
-                [x.categories for x in dtypes if not pd.isnull(x)],
+                [dtype.categories for dtype in dtypes if not pd.isnull(dtype)],
             )
 
             return pd.CategoricalDtype(natsorted(categories), ordered=False)
     # Boolean
-    elif all([pd.api.types.is_bool_dtype(x) or x is None for x in col]):
-        if any([x is None for x in col]):
+    elif all(pd.api.types.is_bool_dtype(dtype) or dtype is None for dtype in col):
+        if any(dtype is None for dtype in col):
             return pd.BooleanDtype()
         else:
             return None

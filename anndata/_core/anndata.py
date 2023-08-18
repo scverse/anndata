@@ -19,7 +19,7 @@ from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
+from pandas.api.types import infer_dtype, is_string_dtype
 from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
 
@@ -1114,9 +1114,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
-    def _remove_unused_categories(self, df_full, df_sub, uns):
+    def _remove_unused_categories(
+        self, df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
+    ):
         for k in df_full:
-            if not is_categorical_dtype(df_full[k]):
+            if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
             with pd.option_context("mode.chained_assignment", None):
