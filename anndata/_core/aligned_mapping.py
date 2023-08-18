@@ -241,15 +241,14 @@ class AxisArraysBase(AlignedMapping):
         return df
 
     def _validate_value(self, val: V, key: str) -> V:
-        if (
-            hasattr(val, "index")
-            and isinstance(val.index, cabc.Collection)
-            and val.index.equals(self.dim_names)
-        ):
-            # Could probably also re-order index if it’s contained
-            raise ValueError(
-                f"value.index does not match parent’s axis {self.axes[0]} names"
-            )
+        if hasattr(val, "index") and isinstance(val.index, cabc.Collection):
+            try:
+                pd.testing.assert_index_equal(val.index, self.dim_names)
+            except AssertionError as e:
+                # Could probably also re-order index if it’s contained
+                raise ValueError(
+                    f"value.index does not match parent’s axis {self.axes[0]} names:\n{e}"
+                )
         return super()._validate_value(val, key)
 
     @property
