@@ -3,7 +3,6 @@ This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
-from pathlib import Path
 import warnings
 
 import h5py
@@ -11,7 +10,6 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-import anndata as ad
 from anndata import AnnData
 
 from anndata.tests.helpers import assert_equal

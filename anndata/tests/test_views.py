@@ -10,8 +10,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray
-from dask.base import tokenize, normalize_token
+from anndata.compat import CupyCSCMatrix
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -19,9 +18,13 @@ from anndata.tests.helpers import (
     slice_subset,
     single_subset,
     assert_equal,
-    as_dense_dask_array,
     GEN_ADATA_DASK_ARGS,
+    BASE_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
 )
+from dask.base import tokenize, normalize_token
+
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -57,28 +60,20 @@ def adata():
     return adata
 
 
-@pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
-def adata_parameterized(request):
-    return gen_adata(shape=(200, 300), X_type=request.param)
-
-
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
+    params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS,
 )
 def matrix_type(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
-    ids=[
-        "np_array",
-        "scipy_csr",
-        "scipy_csc",
-    ],
-)
-def matrix_type_no_dask(request):
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+def matrix_type_no_gpu(request):
+    return request.param
+
+
+@pytest.fixture(params=BASE_MATRIX_PARAMS)
+def matrix_type_base(request):
     return request.param
 
 
@@ -256,8 +251,8 @@ def test_set_varm(adata):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X(matrix_type_no_dask, subset_func):
-    adata = ad.AnnData(matrix_type_no_dask(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X(matrix_type_base, subset_func):
+    adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -296,8 +291,8 @@ def tokenize_anndata(adata: ad.AnnData):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X_dask(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
+    adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -330,8 +325,14 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     assert adata_subset.is_view
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
-
-    assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+    if isinstance(adata.X, CupyCSCMatrix):
+        # Comparison broken for CSC matrices
+        # https://github.com/cupy/cupy/issues/7757
+        assert asarray((orig_X_val.tocsr() != adata.X.tocsr())).sum() == mul(
+            *adata_subset.shape
+        )
+    else:
+        assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
 
 
 # TODO: Use different kind of subsetting for adata and view

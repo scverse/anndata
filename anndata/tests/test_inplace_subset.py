@@ -8,7 +8,6 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray
 
 
 @pytest.fixture(
