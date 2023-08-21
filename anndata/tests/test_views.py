@@ -10,8 +10,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray
-from dask.base import tokenize, normalize_token
+from anndata.compat import CupyCSCMatrix
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -19,9 +18,13 @@ from anndata.tests.helpers import (
     slice_subset,
     single_subset,
     assert_equal,
-    as_dense_dask_array,
     GEN_ADATA_DASK_ARGS,
+    BASE_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
 )
+from dask.base import tokenize, normalize_token
+
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -57,28 +60,20 @@ def adata():
     return adata
 
 
-@pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
-def adata_parameterized(request):
-    return gen_adata(shape=(200, 300), X_type=request.param)
-
-
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
+    params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS,
 )
 def matrix_type(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
-    ids=[
-        "np_array",
-        "scipy_csr",
-        "scipy_csc",
-    ],
-)
-def matrix_type_no_dask(request):
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+def matrix_type_no_gpu(request):
+    return request.param
+
+
+@pytest.fixture(params=BASE_MATRIX_PARAMS)
+def matrix_type_base(request):
     return request.param
 
 
@@ -111,6 +106,14 @@ def test_views():
     assert not adata_subset.is_view
 
     assert adata_subset.obs["foo"].tolist() == list(range(2))
+
+
+def test_view_subset_shapes():
+    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
+
+    view = adata[:, ::2]
+    assert view.var.shape == (5, 8)
+    assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
 
 
 def test_modify_view_component(matrix_type, mapping_name):
@@ -256,8 +259,8 @@ def test_set_varm(adata):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X(matrix_type_no_dask, subset_func):
-    adata = ad.AnnData(matrix_type_no_dask(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X(matrix_type_base, subset_func):
+    adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -296,8 +299,8 @@ def tokenize_anndata(adata: ad.AnnData):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X_dask(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
+    adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -330,8 +333,14 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     assert adata_subset.is_view
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
-
-    assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+    if isinstance(adata.X, CupyCSCMatrix):
+        # Comparison broken for CSC matrices
+        # https://github.com/cupy/cupy/issues/7757
+        assert asarray((orig_X_val.tocsr() != adata.X.tocsr())).sum() == mul(
+            *adata_subset.shape
+        )
+    else:
+        assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
 
 
 # TODO: Use different kind of subsetting for adata and view
@@ -563,6 +572,30 @@ def test_negative_scalar_index(adata, index: int, obs: bool):
     np.testing.assert_array_equal(
         adata_pos_subset.var_names, adata_neg_subset.var_names
     )
+
+
+def test_viewness_propagation_nan():
+    """Regression test for https://github.com/scverse/anndata/issues/239"""
+    adata = ad.AnnData(np.random.random((10, 10)))
+    adata = adata[:, [0, 2, 4]]
+    v = adata.X.var(axis=0)
+    assert not isinstance(v, ArrayView), type(v).mro()
+    # this used to break
+    v[np.isnan(v)] = 0
+
+
+def test_viewness_propagation_allclose(adata):
+    """Regression test for https://github.com/scverse/anndata/issues/191"""
+    adata.varm["o"][4:10] = np.tile(np.nan, (10 - 4, adata.varm["o"].shape[1]))
+    a = adata[:50].copy()
+    b = adata[:50]
+
+    # .copy() turns view to ndarray, so this was fine:
+    assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
+    # Next line triggered the mutation:
+    assert np.allclose(a.varm["o"], b.varm["o"], equal_nan=True)
+    # Showing that the mutation didn’t happen:
+    assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
 
 
 @pytest.mark.parametrize("spmat", [sparse.csr_matrix, sparse.csc_matrix])

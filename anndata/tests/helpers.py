@@ -1,4 +1,4 @@
-from functools import singledispatch, wraps
+from functools import singledispatch, wraps, partial
 from string import ascii_letters
 from typing import Tuple, Optional, Type
 from collections.abc import Mapping, Collection
@@ -17,7 +17,14 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
-from anndata.compat import AwkArray, DaskArray
+from anndata.compat import (
+    AwkArray,
+    DaskArray,
+    CupySparseMatrix,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+)
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -163,6 +170,7 @@ def gen_adata(
         AwkArray,
     ),
     layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    sparse_fmt: str = "csr",
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -186,6 +194,9 @@ def gen_adata(
         What kinds of containers should be in `.varm`?
     layers_types
         What kinds of containers should be in `.layers`?
+    sparse_fmt
+        What sparse format should be used for sparse matrices?
+        (csr, csc)
     """
     import dask.array as da
 
@@ -204,7 +215,7 @@ def gen_adata(
         X = X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype))
     obsm = dict(
         array=np.random.random((M, 50)),
-        sparse=sparse.random(M, 100, format="csr"),
+        sparse=sparse.random(M, 100, format=sparse_fmt),
         df=gen_typed_df(M, obs_names),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
@@ -212,7 +223,7 @@ def gen_adata(
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format="csr"),
+        sparse=sparse.random(N, 100, format=sparse_fmt),
         df=gen_typed_df(N, var_names),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
@@ -220,15 +231,15 @@ def gen_adata(
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
         array=np.random.random((M, N)),
-        sparse=sparse.random(M, N, format="csr"),
+        sparse=sparse.random(M, N, format=sparse_fmt),
         da=da.random.random((M, N)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)), sparse=sparse.random(M, M, format="csr")
+        array=np.random.random((M, M)), sparse=sparse.random(M, M, format=sparse_fmt)
     )
     varp = dict(
-        array=np.random.random((N, N)), sparse=sparse.random(N, N, format="csr")
+        array=np.random.random((N, N)), sparse=sparse.random(N, N, format=sparse_fmt)
     )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
@@ -378,6 +389,11 @@ def assert_equal(a, b, exact=False, elem_name=None):
     _assert_equal(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(CupyArray)
+def assert_equal_cupy(a, b, exact=False, elem_name=None):
+    assert_equal(b, a.get(), exact, elem_name)
+
+
 @assert_equal.register(np.ndarray)
 def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     b = asarray(b)
@@ -408,6 +424,12 @@ def assert_equal_sparse(a, b, exact=False, elem_name=None):
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
+@assert_equal.register(CupySparseMatrix)
+def assert_equal_cupy_sparse(a, b, exact=False, elem_name=None):
+    a = a.toarray()
+    assert_equal(b, a, exact, elem_name=elem_name)
+
+
 @assert_equal.register(h5py.Dataset)
 def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     a = asarray(a)
@@ -433,8 +455,9 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
     report_name(pd.testing.assert_frame_equal)(
         a,
         b,
-        check_index_type=exact,
         check_exact=exact,
+        check_column_type=exact,
+        check_index_type=exact,
         _elem_name=elem_name,
         check_frame_type=False,
     )
@@ -576,3 +599,77 @@ def as_dense_dask_array(a):
 @as_dense_dask_array.register(sparse.spmatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
+
+
+def as_cupy_type(val, typ=None):
+    """
+    Rough conversion function
+
+    Will try to infer target type from input type if not specified.
+    """
+    if typ is None:
+        input_typ = type(val)
+        if issubclass(input_typ, np.ndarray):
+            typ = CupyArray
+        elif issubclass(input_typ, sparse.csr_matrix):
+            typ = CupyCSRMatrix
+        elif issubclass(input_typ, sparse.csc_matrix):
+            typ = CupyCSCMatrix
+        else:
+            raise NotImplementedError(
+                f"No default target type for input type {input_typ}"
+            )
+
+    if issubclass(typ, CupyArray):
+        import cupy as cp
+
+        if isinstance(val, sparse.spmatrix):
+            val = val.toarray()
+        return cp.array(val)
+    elif issubclass(typ, CupyCSRMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csr_matrix(cp.array(val))
+        else:
+            return cpsparse.csr_matrix(val)
+    elif issubclass(typ, CupyCSCMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csc_matrix(cp.array(val))
+        else:
+            return cpsparse.csc_matrix(val)
+    else:
+        raise NotImplementedError(
+            f"Conversion from {type(val)} to {typ} not implemented"
+        )
+
+
+BASE_MATRIX_PARAMS = [
+    pytest.param(asarray, id="np_array"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+]
+
+DASK_MATRIX_PARAMS = [
+    pytest.param(as_dense_dask_array, id="dask_array"),
+]
+
+CUPY_MATRIX_PARAMS = [
+    pytest.param(
+        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSRMatrix),
+        id="cupy_csr",
+        marks=pytest.mark.gpu,
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSCMatrix),
+        id="cupy_csc",
+        marks=pytest.mark.gpu,
+    ),
+]

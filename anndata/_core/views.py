@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from collections.abc import Sequence, KeysView
+from collections.abc import Sequence, KeysView, Callable, Iterable
 from functools import reduce, singledispatch, wraps
-from typing import Any
+from typing import Any, Literal
 import warnings
 
 import numpy as np
@@ -15,7 +15,14 @@ from scipy import sparse
 import anndata
 from anndata._warnings import ImplicitModificationWarning
 from .access import ElementRef
-from ..compat import ZappyArray, AwkArray, DaskArray
+from ..compat import (
+    ZappyArray,
+    AwkArray,
+    DaskArray,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+)
 
 
 @contextmanager
@@ -86,6 +93,9 @@ class _ViewMixin(_SetItemMixin):
         return deepcopy(getattr(parent._adata_ref, attrname))
 
 
+_UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "inner"]
+
+
 class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
@@ -102,6 +112,44 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __array_finalize__(self, obj: np.ndarray | None):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
+
+    def __array_ufunc__(
+        self: ArrayView,
+        ufunc: Callable[..., Any],
+        method: _UFuncMethod,
+        *inputs,
+        out: tuple[np.ndarray, ...] | None = None,
+        **kwargs,
+    ) -> np.ndarray:
+        """Makes numpy ufuncs convert all instances of views to plain arrays.
+
+        See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
+        """
+
+        def convert_all(arrs: Iterable[np.ndarray]) -> Iterable[np.ndarray]:
+            return (
+                arr.view(np.ndarray) if isinstance(arr, ArrayView) else arr
+                for arr in arrs
+            )
+
+        if out is None:
+            outputs = (None,) * ufunc.nout
+        else:
+            out = outputs = tuple(convert_all(out))
+
+        results = super().__array_ufunc__(
+            ufunc, method, *convert_all(inputs), out=out, **kwargs
+        )
+        if results is NotImplemented:
+            return NotImplemented
+
+        if ufunc.nout == 1:
+            results = (results,)
+        results = tuple(
+            (np.asarray(result) if output is None else output)
+            for result, output in zip(results, outputs)
+        )
+        return results[0] if len(results) == 1 else results
 
     def keys(self) -> KeysView[str]:
         # it’s a structured array
@@ -164,6 +212,37 @@ class SparseCSCView(_ViewMixin, sparse.csc_matrix):
         return sparse.csc_matrix(self).copy()
 
 
+class CupySparseCSRView(_ViewMixin, CupyCSRMatrix):
+    def copy(self) -> CupyCSRMatrix:
+        return CupyCSRMatrix(self).copy()
+
+
+class CupySparseCSCView(_ViewMixin, CupyCSCMatrix):
+    def copy(self) -> CupyCSCMatrix:
+        return CupyCSCMatrix(self).copy()
+
+
+class CupyArrayView(_ViewMixin, CupyArray):
+    def __new__(
+        cls,
+        input_array: Sequence[Any],
+        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+    ):
+        import cupy as cp
+
+        arr = cp.asarray(input_array).view(type=cls)
+
+        if view_args is not None:
+            view_args = ElementRef(*view_args)
+        arr._view_args = view_args
+        return arr
+
+    def copy(self) -> CupyArray:
+        import cupy as cp
+
+        return cp.array(self).copy()
+
+
 class DictView(_ViewMixin, dict):
     pass
 
@@ -221,6 +300,21 @@ def as_view_zappy(z, view_args):
     return z
 
 
+@as_view.register(CupyArray)
+def as_view_cupy(array, view_args):
+    return CupyArrayView(array, view_args=view_args)
+
+
+@as_view.register(CupyCSRMatrix)
+def as_view_cupy_csr(mtx, view_args):
+    return CupySparseCSRView(mtx, view_args=view_args)
+
+
+@as_view.register(CupyCSCMatrix)
+def as_view_cupy_csc(mtx, view_args):
+    return CupySparseCSCView(mtx, view_args=view_args)
+
+
 try:
     from ..compat import awkward as ak
     import weakref
@@ -255,7 +349,7 @@ try:
             array = self
             # makes a shallow copy and removes the reference to the original AnnData object
             array = ak.with_parameter(self, _PARAM_NAME, None)
-            array = ak.with_parameter(array, "__array__", None)
+            array = ak.with_parameter(array, "__list__", None)
             return array
 
     @as_view.register(AwkArray)
@@ -273,7 +367,7 @@ try:
                 "Please open an issue in the AnnData repo and describe your use-case."
             )
         array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
-        array = ak.with_parameter(array, "__array__", "AwkwardArrayView")
+        array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
         return array
 
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView

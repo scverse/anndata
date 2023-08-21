@@ -24,7 +24,7 @@ env:
 
 jobs:
   check-milestone:
-    name: Check Milestone
+    name: "Triage: Check Milestone"
     runs-on: ubuntu-latest
     steps:
       - name: Check if merging isn’t blocked
