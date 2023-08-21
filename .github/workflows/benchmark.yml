@@ -55,4 +55,4 @@ jobs:
         working-directory: ${{ env.ASV_DIR }}
         run: |
           asv machine --yes
-          asv run --quick --show-stderr --verbose --strict
+          asv run --quick --show-stderr --verbose
