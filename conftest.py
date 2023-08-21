@@ -3,10 +3,11 @@
 # 2. as a pytest plugin/config that applies to doctests as well
 # TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
 
-from contextlib import chdir
 from pathlib import Path
 
 import pytest
+
+from anndata.compat import chdir
 
 
 doctest_marker = pytest.mark.usefixtures("doctest_env")
