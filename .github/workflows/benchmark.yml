@@ -33,12 +33,15 @@ jobs:
         if: ${{ github.ref_name != 'main' }}
         # Errors on main branch
 
-      - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v4
+      - uses: mamba-org/setup-micromamba@v1
         with:
-          python-version: ${{ matrix.python }}
-          cache: "pip"
-          cache-dependency-path: "**/pyproject.toml"
+          environment-name: asv
+          cache-environment: true
+          create-args: >-
+            python=3.10
+            asv
+            mamba
+            packaging
 
       - name: Cache datasets
         uses: actions/cache@v3
@@ -46,10 +49,6 @@ jobs:
           path: |
             ~/.cache
           key: benchmark-state-${{ hashFiles('benchmarks/**') }}
-
-      - name: Install dependencies
-        run: |
-          pip install asv packaging
 
       - name: Quick benchmark run
         working-directory: ${{ env.ASV_DIR }}
