@@ -4,7 +4,7 @@ trigger:
 variables:
   PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
   RUN_COVERAGE: no
-  PYTEST_ADDOPTS: --color=yes --nunit-xml=cache/test-results.xml
+  PYTEST_ADDOPTS: --color=yes --nunit-xml=test-data/test-results.xml
   PRERELEASE_DEPENDENCIES: no
 
 jobs:
@@ -53,11 +53,6 @@ jobs:
         displayName: "Display installed versions"
 
       - script: |
-          mkdir -p cache .pytest_cache
-          find . -type d \( -path "./cache" -prune -o -path "./.pytest_cache" -prune -o -exec chmod -w {} \; \)
-        displayName: "Ensure that tests run without randomly writing files"
-
-      - script: |
           pytest
         displayName: "PyTest"
         condition: eq(variables['RUN_COVERAGE'], 'no')
@@ -70,13 +65,13 @@ jobs:
       - task: PublishCodeCoverageResults@1
         inputs:
           codeCoverageTool: Cobertura
-          summaryFileLocation: "cache/coverage.xml"
+          summaryFileLocation: "test-data/coverage.xml"
         condition: eq(variables['RUN_COVERAGE'], 'yes')
 
       - task: PublishTestResults@2
         condition: succeededOrFailed()
         inputs:
-          testResultsFiles: "cache/test-results.xml"
+          testResultsFiles: "test-data/test-results.xml"
           testResultsFormat: NUnit
           testRunTitle: "Publish test results for Python $(python.version)"
 

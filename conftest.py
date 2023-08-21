@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 
-doctest_skip_marker = pytest.mark.usefixtures("doctest_env")
+doctest_marker = pytest.mark.usefixtures("doctest_env")
 
 
 @pytest.fixture
@@ -33,4 +33,4 @@ def pytest_itemcollected(item):
         )
 
     if isinstance(item, pytest.DoctestItem):
-        item.add_marker(doctest_skip_marker)
+        item.add_marker(doctest_marker)
