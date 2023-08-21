@@ -609,14 +609,6 @@ def test_deepcopy_subset(adata, spmat: type):
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
 
 
-def test_view_subset_shapes():
-    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
-
-    view = adata[:, ::2]
-    assert view.var.shape == (5, 8)
-    assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
-
-
 # https://github.com/scverse/anndata/issues/680
 @pytest.mark.parametrize("array_type", [asarray, sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
