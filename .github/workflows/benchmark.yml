@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10"]
+        python: ["3.11"]
         os: [ubuntu-latest]
 
     env:
@@ -55,4 +55,5 @@ jobs:
         working-directory: ${{ env.ASV_DIR }}
         run: |
           asv machine --yes
-          asv run -qev --strict
+          asv run --quick --show-stderr --verbose
+          # asv continuous ... --strict
