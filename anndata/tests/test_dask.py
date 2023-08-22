@@ -111,6 +111,12 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
             adata.obsm["b"] = da.random.random((M, 10))
             adata.varm["a"] = da.random.random((N, 10))
             orig = adata
+            if diskfmt == "h5ad":
+                with pytest.raises(
+                    ValueError, match="Cannot write dask arrays to hdf5"
+                ):
+                    write_elem(g, "", orig)
+                return
             write_elem(g, "", orig)
             curr = read_elem(g)
 
