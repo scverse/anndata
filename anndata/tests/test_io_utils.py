@@ -10,7 +10,6 @@ from anndata._io.specs.registry import IORegistryError
 from anndata.compat import _clean_uns
 from anndata._io.utils import (
     report_read_key_on_error,
-    AnnDataReadError,
 )
 from anndata.experimental import read_elem, write_elem
 from anndata.tests.helpers import check_error_or_notes_match
