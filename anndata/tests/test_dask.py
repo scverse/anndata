@@ -96,11 +96,11 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
+@pytest.mark.needs("dask.distributed")
 def test_dask_distributed_write(adata, tmp_path, diskfmt):
     import dask.array as da
+    import dask.distributed as dd
     import numpy as np
-
-    dd = pytest.importorskip("dask.distributed")
 
     pth = tmp_path / f"test_write.{diskfmt}"
     g = as_group(pth, mode="w")
