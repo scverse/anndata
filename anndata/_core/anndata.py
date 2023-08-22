@@ -1549,7 +1549,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         batch_key: str = "batch",
         batch_categories: Sequence[Any] = None,
         uns_merge: Optional[str] = None,
-        index_unique: Optional[str] = "-",
+        index_unique: bool = False,
+        index_delimiter: Optional[str] = "-",
         fill_value=None,
     ) -> "AnnData":
         """\
@@ -1585,9 +1586,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             * `"only"`: A value is included if only one of the AnnData objects has a value at this
               path.
         index_unique
-            Make the index unique by joining the existing index names with the
-            batch category, using `index_unique='-'`, for instance. Provide
-            `None` to keep existing indices.
+            If `True`, make the index unique by using the `keys` and `index_delimiter`. When
+            `False`, the original indices are kept.
+        index_delimiter
+            If `index_unique` is True, this is the delimeter in "{orig_idx}{index_unique}{key}".
         fill_value
             Scalar value to fill newly missing values in arrays with. Note: only applies to arrays
             and sparse matrices (not dataframes) and will only be used if `join="outer"`.
@@ -1791,6 +1793,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             uns_merge=uns_merge,
             fill_value=fill_value,
             index_unique=index_unique,
+            index_delimiter=index_delimiter,
             pairwise=False,
         )
 
@@ -1803,6 +1806,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             label=batch_key,
             keys=batch_categories,
             index_unique=index_unique,
+            index_delimiter=index_delimiter,
         ).obs
         # Removing varm
         del out.varm

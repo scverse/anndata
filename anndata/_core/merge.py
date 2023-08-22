@@ -1002,7 +1002,8 @@ def concat(
     uns_merge: Union[StrategiesLiteral, Callable, None] = None,
     label: Optional[str] = None,
     keys: Optional[Collection] = None,
-    index_unique: Optional[str] = None,
+    index_unique: bool = False,
+    index_delimiter: Optional[str] = "_",
     fill_value: Optional[Any] = None,
     pairwise: bool = False,
 ) -> AnnData:
@@ -1041,9 +1042,10 @@ def concat(
         `label` or appended to the index if `index_unique` is not `None`. Defaults to
         incrementing integer labels.
     index_unique
-        Whether to make the index unique by using the keys. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
-        the original indices are kept.
+        If `True`, make the index unique by using the `keys` and `index_delimiter`. When
+        `False`, the original indices are kept.
+    index_delimiter
+        If `index_unique` is True, this is the delimeter between "{orig_idx}{index_unique}{key}".
     fill_value
         When `join="outer"`, this is the value that will be used to fill the introduced
         indices. By default, sparse arrays are padded with zeros, while dense arrays and
@@ -1138,7 +1140,7 @@ def concat(
     s2     b     a
     s3     b     b
     s4     c     b
-    >>> ad.concat({"a": a, "b": b}, index_unique="-").obs
+    >>> ad.concat({"a": a, "b": b}, index_unique=True, index_delimiter="-").obs
          group
     s1-a     a
     s2-a     b
@@ -1206,7 +1208,19 @@ def concat(
         [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        if isinstance(index_unique, str):
+            warn(
+                "Passing index delimiters to `index_unique` is deprecated and will not work in a"
+                "future version of AnnData. Please pass delimiters to `index_delimiter`.",
+                FutureWarning,
+                stacklevel=4,
+            )
+            index_delimiter = index_unique
+            index_unique = True
+        if index_unique:
+            concat_indices = concat_indices.str.cat(
+                label_col.map(str), sep=index_delimiter
+            )
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = merge_indices(

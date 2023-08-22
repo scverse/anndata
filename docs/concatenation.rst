@@ -138,7 +138,7 @@ These values can be made unique by appending the relevant key using the `index_u
     Empty DataFrame
     Columns: []
     Index: [cell-0, cell-1, cell-2, cell-0, cell-1, cell-2, cell-3, cell-4]
-    >>> ad.concat(adatas, index_unique="_").obs
+    >>> ad.concat(adatas, index_unique=True, index_delimiter="_").obs
     Empty DataFrame
     Columns: []
     Index: [cell-0_a, cell-1_a, cell-2_a, cell-0_b, cell-1_b, cell-2_b, cell-3_b, cell-4_b]

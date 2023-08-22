@@ -142,7 +142,8 @@ class AnnLoader(DataLoader):
             join_obsm = kwargs.pop("join_obsm", None)
             label = kwargs.pop("label", None)
             keys = kwargs.pop("keys", None)
-            index_unique = kwargs.pop("index_unique", None)
+            index_unique = kwargs.pop("index_unique", False)
+            index_delimiter = kwargs.pop("index_delimiter", "_")
             convert = kwargs.pop("convert", None)
             harmonize_dtypes = kwargs.pop("harmonize_dtypes", True)
             indices_strict = kwargs.pop("indices_strict", True)
@@ -154,6 +155,7 @@ class AnnLoader(DataLoader):
                 label=label,
                 keys=keys,
                 index_unique=index_unique,
+                index_delimiter=index_delimiter,
                 convert=convert,
                 harmonize_dtypes=harmonize_dtypes,
                 indices_strict=indices_strict,

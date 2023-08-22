@@ -620,10 +620,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         `label` or appended to the index if `index_unique` is not `None`. Defaults to
         incrementing integer labels.
     index_unique
-        Whether to make the index unique by using the keys. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
-        the original indices are kept.
-    convert
+        If `True`, make the index unique by using the `keys` and `index_delimiter`. When
+        `False`, the original indices are kept.
+    index_delimiter
+        If `index_unique` is True, this is the delimeter between "{orig_idx}{index_unique}{key}".
+        convert
         You can pass a function or a Mapping of functions which will be applied
         to the values of attributes (`.obs`, `.obsm`, `.layers`, `.X`) or to specific
         keys of these attributes in the subset object.
@@ -671,7 +672,8 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         join_vars: Optional[Literal["inner"]] = None,
         label: Optional[str] = None,
         keys: Optional[Sequence[str]] = None,
-        index_unique: Optional[str] = None,
+        index_unique: bool = False,
+        index_delimiter: Optional[str] = "_",
         convert: Optional[ConvertType] = None,
         harmonize_dtypes: bool = True,
         indices_strict: bool = True,
@@ -718,9 +720,19 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             categories=keys,
         )
         if index_unique is not None:
-            concat_indices = concat_indices.str.cat(
-                label_col.map(str), sep=index_unique
-            )
+            if isinstance(index_unique, str):
+                warn(
+                    "Passing index delimiters to `index_unique` is deprecated and will not work in a"
+                    "future version of AnnData. Please pass delimiters to `index_delimiter`.",
+                    FutureWarning,
+                    stacklevel=4,
+                )
+                index_delimiter = index_unique
+                index_unique = True
+            if index_unique:
+                concat_indices = concat_indices.str.cat(
+                    label_col.map(str), sep=index_delimiter
+                )
         self.obs_names = pd.Index(concat_indices)
 
         if not self.obs_names.is_unique:
