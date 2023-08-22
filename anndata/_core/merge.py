@@ -4,22 +4,18 @@ Code for merging/ concatenating AnnData objects.
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Mapping, MutableSet
+from collections.abc import (
+    Callable,
+    Collection,
+    Mapping,
+    MutableSet,
+    Iterable,
+    Sequence,
+)
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Iterable,
-    Optional,
-    Sequence,
-    Tuple,
-    TypeVar,
-    Union,
-    Literal,
-)
+from typing import Any, Optional, TypeVar, Union, Literal
 import typing
 from warnings import warn, filterwarnings
 
@@ -946,7 +942,7 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     return out
 
 
-def _resolve_dim(*, dim: str = None, axis: int = None) -> Tuple[int, str]:
+def _resolve_dim(*, dim: str = None, axis: int = None) -> tuple[int, str]:
     _dims = ("obs", "var")
     if (dim is None and axis is None) or (dim is not None and axis is not None):
         raise ValueError(
