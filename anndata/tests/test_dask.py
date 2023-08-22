@@ -96,10 +96,12 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
+@pytest.mark.dependency(depends=[""])
 def test_dask_distributed_write(adata, tmp_path, diskfmt):
     import dask.array as da
     import numpy as np
-    import dask.distributed as dd
+
+    dd = pytest.importorskip("dask.distributed")
 
     pth = tmp_path / f"test_write.{diskfmt}"
     g = as_group(pth, mode="w")
