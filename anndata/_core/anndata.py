@@ -1,6 +1,8 @@
 """\
 Main class and helper functions.
 """
+from __future__ import annotations
+
 import warnings
 import collections.abc as cabc
 from collections import OrderedDict
