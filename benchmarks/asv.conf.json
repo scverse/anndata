@@ -44,7 +44,7 @@
     // If missing or the empty string, the tool will be automatically
     // determined by looking for tools on the PATH environment
     // variable.
-    "environment_type": "conda",
+    "environment_type": "mamba",
 
     // timeout in seconds for installing any dependencies in environment
     // defaults to 10 min
@@ -117,7 +117,7 @@
     //     // additional env for python2.7
     //     {"python": "2.7", "numpy": "1.8"},
     //     // additional env if run on windows+conda
-    //     {"platform": "win32", "environment_type": "conda", "python": "2.7", "libpython": ""},
+    //     {"platform": "win32", "environment_type": "mamba", "python": "2.7", "libpython": ""},
     // ],
 
     // The directory (relative to the current directory) that benchmarks are

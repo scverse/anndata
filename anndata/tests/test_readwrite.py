@@ -1,4 +1,3 @@
-import re
 from contextlib import contextmanager
 from importlib.util import find_spec
 from os import PathLike
@@ -15,9 +14,7 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
-from anndata._io.utils import AnnDataReadError
 from anndata._io.specs.registry import IORegistryError
-from anndata.utils import asarray
 from anndata.compat import _read_attr, DaskArray
 
 from anndata.tests.helpers import (
@@ -538,7 +535,7 @@ def test_write_csv_view(typ, tmp_path):
 @pytest.mark.parametrize(
     ["read", "write", "name"],
     [
-        pytest.param(ad.read_h5ad, ad._io.write._write_h5ad, "test_empty.h5ad"),
+        pytest.param(ad.read_h5ad, ad._io.write_h5ad, "test_empty.h5ad"),
         pytest.param(
             ad.read_loom,
             ad._io.write_loom,

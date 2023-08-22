@@ -16,20 +16,21 @@ except (ImportError, LookupError):
 import sys
 
 if sys.version_info < (3, 11):
-    import exceptiongroup
+    # Backport package for exception groups
+    import exceptiongroup  # noqa: F401
 
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
 from ._io import (
-    read_h5ad,
-    read_loom,
-    read_hdf,
-    read_excel,
-    read_umi_tools,
     read_csv,
-    read_text,
+    read_excel,
+    read_h5ad,
+    read_hdf,
+    read_loom,
     read_mtx,
+    read_text,
+    read_umi_tools,
     read_zarr,
 )
 from ._warnings import (
@@ -38,14 +39,16 @@ from ._warnings import (
     ImplicitModificationWarning,
     ExperimentalFeatureWarning,
 )
+from . import experimental
 
 # backwards compat / shortcut for default format
-from ._io import read_h5ad as read
+read = read_h5ad
 
 __all__ = [
     "__version__",
     "AnnData",
     "concat",
+    "Raw",
     "read_h5ad",
     "read_loom",
     "read_hdf",
@@ -60,4 +63,5 @@ __all__ = [
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
     "read",
+    "experimental",
 ]
