@@ -26,6 +26,7 @@ from warnings import warn, filterwarnings
 from natsort import natsorted
 import numpy as np
 import pandas as pd
+from pandas.api.extensions import ExtensionDtype
 from scipy import sparse
 from scipy.sparse import spmatrix
 
@@ -212,7 +213,7 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
     df_dtypes = [dict(df.dtypes) for df in dfs]
     columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
 
-    dtypes: dict[str, list[np.dtype]] = {col: [] for col in columns}
+    dtypes: dict[str, list[np.dtype | ExtensionDtype]] = {col: [] for col in columns}
     for col in columns:
         for df in df_dtypes:
             dtypes[col].append(df.get(col, None))
@@ -237,7 +238,7 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
 
 
 def try_unifying_dtype(
-    col: Sequence[np.dtype],
+    col: Sequence[np.dtype | ExtensionDtype],
 ) -> pd.core.dtypes.base.ExtensionDtype | None:
     """
     If dtypes can be unified, returns the dtype they would be unified to.
