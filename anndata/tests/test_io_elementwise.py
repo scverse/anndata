@@ -13,11 +13,12 @@ from scipy import sparse
 import zarr
 
 import anndata as ad
-from anndata._io.specs.registry import IORegistryError, _REGISTRY, get_spec, IOSpec
+from anndata._io.specs import _REGISTRY, get_spec, IOSpec
+from anndata._io.specs.registry import IORegistryError
 from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata, as_cupy_type
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -94,6 +95,33 @@ def test_io_spec(store, value, encoding_type):
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
+# Can't instantiate cupy types at the top level, so converting them within the test
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    "value,encoding_type",
+    [
+        (np.array([1, 2, 3]), "array"),
+        (np.arange(12).reshape(4, 3), "array"),
+        (sparse.random(5, 3, format="csr", density=0.5), "csr_matrix"),
+        (sparse.random(5, 3, format="csc", density=0.5), "csc_matrix"),
+    ],
+)
+def test_io_spec_cupy(store, value, encoding_type):
+    """Tests that"""
+    key = f"key_for_{encoding_type}"
+    print(type(value))
+    value = as_cupy_type(value)
+
+    print(type(value))
+    write_elem(store, key, value, dataset_kwargs={})
+
+    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
+
+    from_disk = as_cupy_type(read_elem(store[key]))
+    assert_equal(value, from_disk)
+    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
     adata.raw = adata
@@ -159,10 +187,10 @@ def test_categorical_order_type(store):
     write_elem(store, "ordered", cat)
     write_elem(store, "unordered", cat.set_ordered(False))
 
+    assert isinstance(read_elem(store["ordered"]).ordered, bool)
     assert read_elem(store["ordered"]).ordered is True
-    assert type(read_elem(store["ordered"]).ordered) == bool
+    assert isinstance(read_elem(store["unordered"]).ordered, bool)
     assert read_elem(store["unordered"]).ordered is False
-    assert type(read_elem(store["unordered"]).ordered) == bool
 
 
 def test_override_specification():

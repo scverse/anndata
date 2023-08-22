@@ -8,7 +8,6 @@ from scipy import sparse
 import sys
 import gc
 
-import anndata
 from anndata import AnnData
 
 

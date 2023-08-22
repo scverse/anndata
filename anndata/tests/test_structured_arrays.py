@@ -1,5 +1,4 @@
 from itertools import product, combinations
-from string import ascii_letters
 
 import numpy as np
 import pytest
