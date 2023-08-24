@@ -12,7 +12,7 @@ from anndata.tests.helpers import (
     report_name,
     gen_adata,
     asarray,
-    check_error_or_notes_match,
+    pytest_8_raises,
 )
 from anndata.utils import dim_len
 from anndata.compat import add_note
@@ -260,9 +260,8 @@ def test_assert_equal_dask_sparse_arrays():
     ],
 )
 def test_check_error_notes_success(error, match):
-    with pytest.raises(Exception) as exc_info:
+    with pytest_8_raises(Exception, match=match):
         raise error
-    check_error_or_notes_match(exc_info, match)
 
 
 @pytest.mark.parametrize(
@@ -273,7 +272,6 @@ def test_check_error_notes_success(error, match):
     ],
 )
 def test_check_error_notes_failure(error, match):
-    with pytest.raises(Exception) as exc_info:
-        raise error
     with pytest.raises(AssertionError):
-        check_error_or_notes_match(exc_info, match)
+        with pytest_8_raises(Exception, match=match):
+            raise error

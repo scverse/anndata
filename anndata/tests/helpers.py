@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from functools import singledispatch, wraps, partial
 import re
 from string import ascii_letters
@@ -602,6 +603,25 @@ def as_dense_dask_array(a):
 @as_dense_dask_array.register(sparse.spmatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
+
+
+@contextmanager
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern):
+    """Error handling using pytest 8's support for __notes__.
+
+    See: https://github.com/pytest-dev/pytest/pull/11227
+
+    Remove once pytest 8 is out!
+    """
+    import traceback
+
+    with pytest.raises(exc_cls) as exc_info:
+        yield
+
+    message = "".join(traceback.format_exception_only(exc_info.type, exc_info.value))
+    assert re.search(
+        match, message
+    ), f"Could not find pattern: '{match}' in error:\n\n{message}\n"
 
 
 def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
