@@ -62,6 +62,5 @@ __all__ = [
     "WriteWarning",
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
-    "read",
     "experimental",
 ]
