@@ -1,8 +1,8 @@
-import re
 from contextlib import contextmanager
 from importlib.util import find_spec
 from os import PathLike
 from pathlib import Path
+import re
 from string import ascii_letters
 import warnings
 
@@ -15,10 +15,15 @@ from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
-from anndata._io.utils import AnnDataReadError
+from anndata._io.specs.registry import IORegistryError
 from anndata.compat import _read_attr, DaskArray
 
-from anndata.tests.helpers import gen_adata, assert_equal, as_dense_dask_array
+from anndata.tests.helpers import (
+    gen_adata,
+    assert_equal,
+    as_dense_dask_array,
+    pytest_8_raises,
+)
 
 HERE = Path(__file__).parent
 
@@ -295,13 +300,14 @@ def test_read_full_io_error(tmp_path, name, read, write):
     write(adata, path)
     with store_context(path) as store:
         store["obs"].attrs["encoding-type"] = "invalid"
-    with pytest.raises(
-        AnnDataReadError, match=r"raised while reading key '/obs'"
+    with pytest_8_raises(
+        IORegistryError,
+        match=r"raised while reading key '/obs'",
     ) as exc_info:
         read(path)
     assert re.search(
         r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
-        str(exc_info.value.__cause__),
+        str(exc_info.value),
     )
 
 
@@ -611,7 +617,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         to_write.obs[colname] = np.ones(5)
         with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value.__cause__)
+        assert colname in str(exc_info.value)
     for colname in reserved:
         to_write = orig.copy()
         to_write.varm["df"] = pd.DataFrame(
@@ -619,7 +625,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         )
         with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value.__cause__)
+        assert colname in str(exc_info.value)
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
@@ -673,9 +679,10 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
+    with pytest_8_raises(TypeError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
-    assert str(b"c") in str(exc_info.value.__cause__)
+
+    assert str("b'c'") in str(exc_info.value)
 
 
 @pytest.mark.parametrize(

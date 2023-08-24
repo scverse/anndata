@@ -1,4 +1,8 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
 from functools import singledispatch, wraps, partial
+import re
 from string import ascii_letters
 from typing import Tuple, Optional, Type
 from collections.abc import Mapping, Collection
@@ -599,6 +603,35 @@ def as_dense_dask_array(a):
 @as_dense_dask_array.register(sparse.spmatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
+
+
+@contextmanager
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
+    """Error handling using pytest 8's support for __notes__.
+
+    See: https://github.com/pytest-dev/pytest/pull/11227
+
+    Remove once pytest 8 is out!
+    """
+
+    with pytest.raises(exc_cls) as exc_info:
+        yield exc_info
+
+    check_error_or_notes_match(exc_info, match)
+
+
+def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
+    """
+    Checks whether the printed error message or the notes contains the given pattern.
+
+    DOES NOT WORK IN IPYTHON - because of the way IPython handles exceptions
+    """
+    import traceback
+
+    message = "".join(traceback.format_exception_only(e.type, e.value))
+    assert re.search(
+        pattern, message
+    ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
 
 
 def as_cupy_type(val, typ=None):
