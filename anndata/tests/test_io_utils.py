@@ -63,7 +63,7 @@ def test_clean_uns():
     )
     _clean_uns(adata)
     assert "species_categories" not in adata.uns
-    assert pd.api.types.is_categorical_dtype(adata.obs["species"])
+    assert isinstance(adata.obs["species"].dtype, pd.CategoricalDtype)
     assert adata.obs["species"].tolist() == ["a", "b", "a"]
     # var’s categories were overwritten by obs’s,
     # which we can detect here because var has too high codes
