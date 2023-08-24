@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from importlib.util import find_spec
 from os import PathLike
 from pathlib import Path
+import re
 from string import ascii_letters
 import warnings
 
@@ -21,7 +22,7 @@ from anndata.tests.helpers import (
     gen_adata,
     assert_equal,
     as_dense_dask_array,
-    check_error_or_notes_match,
+    pytest_8_raises,
 )
 
 HERE = Path(__file__).parent
@@ -299,12 +300,15 @@ def test_read_full_io_error(tmp_path, name, read, write):
     write(adata, path)
     with store_context(path) as store:
         store["obs"].attrs["encoding-type"] = "invalid"
-    with pytest.raises(
+    with pytest_8_raises(
         IORegistryError,
-        match=r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
+        match=r"raised while reading key '/obs'",
     ) as exc_info:
         read(path)
-    check_error_or_notes_match(exc_info, r"raised while reading key '/obs'")
+    assert re.search(
+        r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
+        str(exc_info.value),
+    )
 
 
 @pytest.mark.parametrize(
@@ -675,11 +679,10 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest.raises(TypeError) as exc_info:
+    with pytest_8_raises(TypeError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
 
-    check_error_or_notes_match(exc_info, r"writing key 'obs'")
-    assert str(b"c") in str(exc_info.value)
+    assert str("b'c'") in str(exc_info.value)
 
 
 @pytest.mark.parametrize(

@@ -606,22 +606,18 @@ def _(a):
 
 
 @contextmanager
-def pytest_8_raises(exc_cls, *, match: str | re.Pattern):
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
     """Error handling using pytest 8's support for __notes__.
 
     See: https://github.com/pytest-dev/pytest/pull/11227
 
     Remove once pytest 8 is out!
     """
-    import traceback
 
     with pytest.raises(exc_cls) as exc_info:
-        yield
+        yield exc_info
 
-    message = "".join(traceback.format_exception_only(exc_info.type, exc_info.value))
-    assert re.search(
-        match, message
-    ), f"Could not find pattern: '{match}' in error:\n\n{message}\n"
+    check_error_or_notes_match(exc_info, match)
 
 
 def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):

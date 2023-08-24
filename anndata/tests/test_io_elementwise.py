@@ -20,7 +20,7 @@ from anndata._io.specs import write_elem, read_elem
 from anndata.tests.helpers import (
     assert_equal,
     as_cupy_type,
-    check_error_or_notes_match,
+    pytest_8_raises,
     gen_adata,
 )
 
@@ -178,12 +178,10 @@ def test_write_io_error(store, obj):
         rf"No method registered for writing {type(obj)} into .*Group"
     )
 
-    with pytest.raises(IORegistryError) as exc_info:
+    with pytest_8_raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
         write_elem(store, "/el", obj)
 
     msg = str(exc_info.value)
-    check_error_or_notes_match(exc_info, r"while writing key '/el'")
-
     assert re.search(full_pattern, msg)
 
 
