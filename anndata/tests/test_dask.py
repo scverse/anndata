@@ -96,7 +96,6 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-@pytest.mark.needs("dask.distributed")
 def test_dask_distributed_write(adata, tmp_path, diskfmt):
     import dask.array as da
     import dask.distributed as dd
