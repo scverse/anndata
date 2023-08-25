@@ -1,24 +1,28 @@
-import re
 from contextlib import contextmanager
 from importlib.util import find_spec
 from os import PathLike
 from pathlib import Path
+import re
 from string import ascii_letters
 import warnings
 
 import h5py
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy.sparse import csr_matrix, csc_matrix
 import zarr
 
 import anndata as ad
-from anndata._io.utils import AnnDataReadError
+from anndata._io.specs.registry import IORegistryError
 from anndata.compat import _read_attr, DaskArray
 
-from anndata.tests.helpers import gen_adata, assert_equal, as_dense_dask_array
+from anndata.tests.helpers import (
+    gen_adata,
+    assert_equal,
+    as_dense_dask_array,
+    pytest_8_raises,
+)
 
 HERE = Path(__file__).parent
 
@@ -124,7 +128,7 @@ def test_readwrite_h5ad(tmp_path, typ, dataset_kwargs, backing_h5ad):
 
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    assert not is_categorical_dtype(adata_src.obs["oanno1"])
+    assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
     adata_src.raw = adata_src
     adata_src.write(backing_h5ad, **dataset_kwargs)
 
@@ -132,12 +136,12 @@ def test_readwrite_h5ad(tmp_path, typ, dataset_kwargs, backing_h5ad):
     adata_mid.write(mid_pth, **dataset_kwargs)
 
     adata = ad.read_h5ad(mid_pth)
-    assert is_categorical_dtype(adata.obs["oanno1"])
-    assert not is_categorical_dtype(adata.obs["oanno2"])
+    assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
+    assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
     assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
-    assert is_categorical_dtype(adata.raw.var["vanno2"])
+    assert isinstance(adata.raw.var["vanno2"].dtype, pd.CategoricalDtype)
     pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
     pd.testing.assert_frame_equal(adata.var, adata_src.var)
     assert_equal(adata.var.index, adata_src.var.index)
@@ -162,16 +166,16 @@ def test_readwrite_zarr(typ, tmp_path):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.raw = adata_src
-    assert not is_categorical_dtype(adata_src.obs["oanno1"])
+    assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
     adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
 
     adata = ad.read_zarr(tmp_path / "test_zarr_dir")
-    assert is_categorical_dtype(adata.obs["oanno1"])
-    assert not is_categorical_dtype(adata.obs["oanno2"])
+    assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
+    assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
     assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
-    assert is_categorical_dtype(adata.raw.var["vanno2"])
+    assert isinstance(adata.raw.var["vanno2"].dtype, pd.CategoricalDtype)
     pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
     pd.testing.assert_frame_equal(adata.var, adata_src.var)
     assert_equal(adata.var.index, adata_src.var.index)
@@ -246,8 +250,8 @@ def test_readwrite_backed(typ, backing_h5ad):
     adata_src.write()
 
     adata = ad.read(backing_h5ad)
-    assert is_categorical_dtype(adata.obs["oanno1"])
-    assert not is_categorical_dtype(adata.obs["oanno2"])
+    assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
+    assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
     assert_equal(adata, adata_src)
@@ -295,13 +299,14 @@ def test_read_full_io_error(tmp_path, name, read, write):
     write(adata, path)
     with store_context(path) as store:
         store["obs"].attrs["encoding-type"] = "invalid"
-    with pytest.raises(
-        AnnDataReadError, match=r"raised while reading key '/obs'"
+    with pytest_8_raises(
+        IORegistryError,
+        match=r"raised while reading key '/obs'",
     ) as exc_info:
         read(path)
     assert re.search(
         r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
-        str(exc_info.value.__cause__),
+        str(exc_info.value),
     )
 
 
@@ -611,7 +616,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         to_write.obs[colname] = np.ones(5)
         with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value.__cause__)
+        assert colname in str(exc_info.value)
     for colname in reserved:
         to_write = orig.copy()
         to_write.varm["df"] = pd.DataFrame(
@@ -619,7 +624,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt):
         )
         with pytest.raises(ValueError) as exc_info:
             getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value.__cause__)
+        assert colname in str(exc_info.value)
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
@@ -673,9 +678,10 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
+    with pytest_8_raises(TypeError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
-    assert str(b"c") in str(exc_info.value.__cause__)
+
+    assert str("b'c'") in str(exc_info.value)
 
 
 @pytest.mark.parametrize(
