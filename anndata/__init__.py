@@ -41,8 +41,17 @@ from ._warnings import (
 )
 from . import experimental
 
-# backwards compat / shortcut for default format
-read = read_h5ad
+
+def read(*args, **kwargs):
+    import warnings
+
+    warnings.warn(
+        "`anndata.read` is deprecated, use `anndata.read_h5ad` instead. "
+        "`ad.read` will be removed in mid 2024.",
+        FutureWarning,
+    )
+    return read_h5ad(*args, **kwargs)
+
 
 __all__ = [
     "__version__",
