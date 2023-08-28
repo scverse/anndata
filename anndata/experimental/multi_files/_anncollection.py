@@ -421,7 +421,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     def obsm(self):
         """Lazy subset of multi-dimensional annotation of observations.
 
-        Points to the `.obsm` attributes of the underlying adatas ot to `.obsm` of the parent
+        Points to the `.obsm` attributes of the underlying adatas to `.obsm` of the parent
         AnnCollection object depending on the `join_obsm` option of the AnnCollection object.
         See the docs of :class:`~anndata.experimental.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
@@ -437,7 +437,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     def obs(self):
         """Lazy suset of one-dimensional annotation of observations.
 
-        Points to the `.obs` attributes of the underlying adatas ot to `.obs` of the parent
+        Points to the `.obs` attributes of the underlying adatas to `.obs` of the parent
         AnnCollection object depending on the `join_obs` option of the AnnCollection object.
         See the docs of `~anndata.experimental.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
