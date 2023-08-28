@@ -1377,7 +1377,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Returns
         -------
-        A one dimensional nd array, with values for each obs in the same order
+        A one dimensional ndarray, with values for each obs in the same order
         as :attr:`obs_names`.
         """
         if layer == "X":
@@ -1409,7 +1409,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Returns
         -------
-        A one dimensional nd array, with values for each var in the same order
+        A one dimensional ndarray, with values for each var in the same order
         as :attr:`var_names`.
         """
         if layer == "X":
