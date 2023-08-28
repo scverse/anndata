@@ -146,5 +146,4 @@ select = [
 
 [tool.codespell]
 skip = '.git,*.pdf,*.svg'
-#
-# ignore-words-list = ''
+ignore-words-list = 'theis'
