@@ -965,7 +965,7 @@ def permute_nested_values(dicts: "List[dict]", gen_val: "Callable[[int], Any]"):
     This function permutes the values of a nested mapping, for testing that out merge
     method work regardless of the values types.
 
-    Assumes the intial dictionary had integers for values.
+    Assumes the initial dictionary had integers for values.
     """
     dicts = deepcopy(dicts)
     initial_values = [

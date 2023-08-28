@@ -561,7 +561,7 @@ def assert_adata_equal(
     assert_equal(a.obs_names, b.obs_names, exact, elem_name=fmt_name("obs_names"))
     assert_equal(a.var_names, b.var_names, exact, elem_name=fmt_name("var_names"))
     if not exact:
-        # Reorder all elements if neccesary
+        # Reorder all elements if necessary
         idx = [slice(None), slice(None)]
         # Since it’s a pain to compare a list of pandas objects
         change_flag = False

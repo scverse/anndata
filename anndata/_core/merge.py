@@ -94,7 +94,7 @@ def not_missing(v) -> bool:
 
 
 # We need to be able to check for equality of arrays to know which are the same.
-# Unfortunatley equality of arrays is poorly defined.
+# Unfortunately equality of arrays is poorly defined.
 # * `np.array_equal` does not work for sparse arrays
 # * `np.array_equal(..., equal_nan=True)` does not work for null values at the moment
 #   (see https://github.com/numpy/numpy/issues/16377)
@@ -1042,7 +1042,7 @@ def concat(
         incrementing integer labels.
     index_unique
         Whether to make the index unique by using the keys. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
+        is the delimiter between "{orig_idx}{index_unique}{key}". When `None`,
         the original indices are kept.
     fill_value
         When `join="outer"`, this is the value that will be used to fill the introduced

@@ -650,7 +650,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
-        # This can occur if there are succesive views
+        # This can occur if there are successive views
         if (
             self.is_view
             and isinstance(self._oidx, np.ndarray)
@@ -667,7 +667,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ):
             if not np.isscalar(value) and self.shape != value.shape:
                 # For assigning vector of values to 2d array or matrix
-                # Not neccesary for row of 2d array
+                # Not necessary for row of 2d array
                 value = value.reshape(self.shape)
             if self.isbacked:
                 if self.is_view:

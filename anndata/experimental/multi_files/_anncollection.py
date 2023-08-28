@@ -392,7 +392,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         The data matrix formed from the `.X` attributes of the underlying `adatas`,
         properly reindexed and lazily merged.
         Nothing is copied until `.X` is accessed, no real concatenation of the
-        unerlying `.X` attributes is done.
+        underlying `.X` attributes is done.
         """
         # inconsistent behavior here, _X can be changed,
         # but the other attributes can't be changed.
@@ -445,7 +445,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         To get `.obs` as a DataFrame, use `.obs.df`.
         To get `.obs` as a dictionary, use `.obs.to_dict()`. You can also specify keys
         to include in the dict `.obs.to_dict(keys=['key1', 'key2'])` and if you want
-        converters to be truned off when copying to dict `.obs.to_dict(use_convert=False)`.
+        converters to be turned off when copying to dict `.obs.to_dict(use_convert=False)`.
         """
         self._lazy_init_attr("obs")
         return self._obs_view
@@ -621,7 +621,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         incrementing integer labels.
     index_unique
         Whether to make the index unique by using the keys. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
+        is the delimiter between "{orig_idx}{index_unique}{key}". When `None`,
         the original indices are kept.
     convert
         You can pass a function or a Mapping of functions which will be applied

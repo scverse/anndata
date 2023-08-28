@@ -79,7 +79,7 @@ def test_gen_awkward(shape, datashape):
 # Does this work for every warning?
 def test_report_name():
     def raise_error():
-        raise Exception("an error occured!")
+        raise Exception("an error occurred!")
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))
