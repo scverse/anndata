@@ -88,7 +88,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy",
-    "dask[array]",
+    "dask[array,distributed]",
     "awkward>=2.3",
     "pytest_memray",
 ]
