@@ -12,6 +12,13 @@ except (ImportError, LookupError):
             "anndata is not correctly installed. Please install it, e.g. with pip."
         )
 
+# Allowing notes to be added to exceptions. See: https://github.com/scverse/anndata/issues/868
+import sys
+
+if sys.version_info < (3, 11):
+    # Backport package for exception groups
+    import exceptiongroup  # noqa: F401
+
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
