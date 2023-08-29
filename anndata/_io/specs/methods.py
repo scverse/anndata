@@ -541,6 +541,54 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
     f[k].attrs["encoding-version"] = "0.1.0"
 
 
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, sparse.csc_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+    sparse_format = elem._meta.format
+    if sparse_format == "csr":
+        axis = 0
+    elif sparse_format == "csc":
+        axis = 1
+    else:
+        raise NotImplementedError(
+            f"Cannot write dask sparse arrays with format {sparse_format}"
+        )
+
+    def chunk_slice(start: int, stop: int) -> tuple[slice | None, slice | None]:
+        result = [slice(None), slice(None)]
+        result[axis] = slice(start, stop)
+        return tuple(result)
+
+    axis_chunks = elem.chunks[axis]
+    chunk_start = 0
+    chunk_stop = axis_chunks[0]
+
+    _writer.write_elem(
+        f,
+        k,
+        elem[chunk_slice(chunk_start, chunk_stop)].compute(),
+        dataset_kwargs=dataset_kwargs,
+    )
+
+    disk_mtx = SparseDataset(f[k])
+
+    for chunk_size in axis_chunks[1:]:
+        chunk_start = chunk_stop
+        chunk_stop += chunk_size
+
+        disk_mtx.append(elem[chunk_slice(chunk_start, chunk_stop)].compute())
+
+
 @_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))

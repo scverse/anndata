@@ -126,6 +126,28 @@ def test_io_spec_cupy(store, value, encoding_type):
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+def test_dask_write_sparse(store, sparse_format):
+    import dask.array as da
+
+    X = sparse.random(
+        1000,
+        1000,
+        format=sparse_format,
+        density=0.01,
+        random_state=np.random.default_rng(),
+    )
+    X_dask = da.from_array(X, chunks=(100, 100))
+
+    write_elem(store, "X", X)
+    write_elem(store, "X_dask", X_dask)
+
+    X_from_disk = read_elem(store["X"])
+    X_dask_from_disk = read_elem(store["X_dask"])
+
+    assert_equal(X_from_disk, X_dask_from_disk)
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
     adata.raw = adata
