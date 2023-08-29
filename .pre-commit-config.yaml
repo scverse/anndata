@@ -27,9 +27,9 @@ repos:
       - id: no-commit-to-branch
         args: ["--branch=main"]
 
-- repo: https://github.com/codespell-project/codespell
-  rev: v2.2.5
-  hooks:
-  - id: codespell
-    additional_dependencies:
-      - tomli
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.5
+    hooks:
+      - id: codespell
+        additional_dependencies:
+          - tomli
