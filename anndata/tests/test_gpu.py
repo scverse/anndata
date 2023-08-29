@@ -1,6 +1,7 @@
 import pytest
+from scipy import sparse
+
 from anndata import AnnData, Raw
-from scipy.sparse import isspmatrix_csr
 
 
 @pytest.mark.gpu
@@ -15,19 +16,23 @@ def test_gpu():
 
 @pytest.mark.gpu
 def test_adata_raw_gpu():
-    from cupyx.scipy.sparse import random
+    from cupyx.scipy import sparse as cupy_sparse
     import cupy as cp
 
-    adata = AnnData(X=random(500, 50, density=0.01, format="csr", dtype=cp.float32))
+    adata = AnnData(
+        X=cupy_sparse.random(500, 50, density=0.01, format="csr", dtype=cp.float32)
+    )
     adata.raw = adata
-    assert isspmatrix_csr(adata.raw.X)
+    assert isinstance(adata.raw.X, sparse.csr_matrix)
 
 
 @pytest.mark.gpu
 def test_raw_gpu():
-    from cupyx.scipy.sparse import random
+    from cupyx.scipy import sparse as cupy_sparse
     import cupy as cp
 
-    adata = AnnData(X=random(500, 50, density=0.01, format="csr", dtype=cp.float32))
+    adata = AnnData(
+        X=cupy_sparse.random(500, 50, density=0.01, format="csr", dtype=cp.float32)
+    )
     araw = Raw(adata)
-    assert isspmatrix_csr(araw.X)
+    assert isinstance(araw.X, sparse.csr_matrix)
