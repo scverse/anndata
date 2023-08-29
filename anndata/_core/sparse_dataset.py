@@ -14,7 +14,6 @@ from abc import ABC
 import collections.abc as cabc
 from itertools import accumulate, chain
 from typing import Literal, Union, NamedTuple, Tuple, Sequence, Iterable, Type
-from warnings import warn
 
 import h5py
 import numpy as np
