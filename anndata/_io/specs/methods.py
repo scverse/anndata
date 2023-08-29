@@ -39,6 +39,18 @@ H5File = h5py.File
 
 
 ####################
+# Dask utils       #
+####################
+
+try:
+    from dask.utils import SerializableLock as Lock
+except ImportError:
+    from threading import Lock
+
+# to fix https://github.com/dask/distributed/issues/780
+GLOBAL_LOCK = Lock()
+
+####################
 # Dispatch methods #
 ####################
 
@@ -331,9 +343,24 @@ _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
 
 
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_basic_dask_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     import dask.array as da
+
+    g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    da.store(elem, g, lock=GLOBAL_LOCK)
+
+
+# Adding this seperately because h5py isn't serializable
+# https://github.com/pydata/xarray/issues/4242
+@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
+def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+    import dask.array as da
+    import dask.config as dc
+
+    if dc.get("scheduler", None) == "dask.distributed":
+        raise ValueError(
+            "Cannot write dask arrays to hdf5 when using distributed scheduler"
+        )
 
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g)
