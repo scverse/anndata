@@ -13,13 +13,14 @@ See the copyright and license note in this directory source code.
 from abc import ABC
 import collections.abc as cabc
 from itertools import accumulate, chain
-from typing import Union, NamedTuple, Tuple, Sequence, Iterable, Type
+from typing import Literal, Union, NamedTuple, Tuple, Sequence, Iterable, Type
 from warnings import warn
 
 import h5py
 import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
+import zarr
 
 from ..compat import _read_attr
 
@@ -243,9 +244,15 @@ class BaseCompressedSparseDataset(ABC):
     Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices.
     """
 
-    def __init__(self, group: h5py.Group):
+    def __init__(self, group: h5py.Group | zarr.Group):
         type(self)._check_group_format(group)
         self.group = group
+
+    @property
+    def backend(self) -> Literal["zarr", "hdf5"]:
+        if type(self.group) == zarr.Group:
+            return "zarr"
+        return "hdf5"
 
     @property
     def dtype(self) -> np.dtype:
@@ -273,11 +280,7 @@ class BaseCompressedSparseDataset(ABC):
         return self.to_memory()
 
     def __repr__(self) -> str:
-        return (
-            f"<Backed sparse dataset: format {self.format_str!r}, "
-            f"shape {self.shape}, "
-            f'type {self.group["data"].dtype.str!r}>'
-        )
+        return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
     def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
         row, col = self._normalize_index(index)
@@ -393,8 +396,30 @@ class CSCDataset(BaseCompressedSparseDataset):
     format_str = "csc"
 
 
-def sparse_dataset(group) -> BaseCompressedSparseDataset:
-    # encoding_type = _read_attr(group, "encoding-type")
+def sparse_dataset(group: zarr.Group | h5py.Group) -> BaseCompressedSparseDataset:
+    """Generates a backed mode-compatible sparse dataset class.
+
+    Parameters
+    ----------
+    group
+        The backing group store.
+
+    Returns
+    -------
+        Sparse dataset class.
+
+    Usage
+    -----
+
+    >>> group = zarr.open_group('./my_test_store.zarr')
+    >>> group['data'] = [10, 20, 30, 40, 50, 60, 70, 80]
+    >>> group['indices'] = [0, 1, 1, 3, 2, 3, 4, 5]
+    >>> group['indptr'] = [0, 2, 4, 7, 8]
+    >>> group.attrs['shape'] = (4, 6)
+    >>> group.attrs['encoding-type'] = 'csr_matrix'
+    >>> sparse_dataset(group)
+    CSRDataset: backend zarr, shape (4, 6), data_dtype int64
+    """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
         return CSRDataset(group)
