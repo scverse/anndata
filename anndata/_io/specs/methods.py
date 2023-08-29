@@ -350,7 +350,7 @@ def write_basic_dask_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({
     da.store(elem, g, lock=GLOBAL_LOCK)
 
 
-# Adding this seperately because h5py isn't serializable
+# Adding this separately because h5py isn't serializable
 # https://github.com/pydata/xarray/issues/4242
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):

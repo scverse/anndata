@@ -305,7 +305,7 @@ class LayersBase(AlignedMapping):
     attrname = "layers"
     axes = (0, 1)
 
-    # TODO: I thought I had a more elegant solution to overiding this...
+    # TODO: I thought I had a more elegant solution to overriding this...
     def copy(self) -> "Layers":
         d = self._actual_class(self.parent)
         for k, v in self.items():

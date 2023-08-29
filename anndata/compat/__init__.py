@@ -145,7 +145,7 @@ def _from_fixed_length_strings(value):
     """\
     Convert from fixed length strings to unicode.
 
-    For backwards compatability with older h5ad and zarr files.
+    For backwards compatibility with older h5ad and zarr files.
     """
     new_dtype = []
     for dt in value.dtype.descr:
