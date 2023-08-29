@@ -145,5 +145,5 @@ select = [
 "anndata/tests/test_readwrite.py" = ["E721"]
 
 [tool.codespell]
-skip = '.git,*.pdf,*.svg'
-ignore-words-list = 'theis,coo,homogenous'
+skip = ".git,*.pdf,*.svg"
+ignore-words-list = "theis,coo,homogenous"
