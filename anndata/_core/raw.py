@@ -29,7 +29,11 @@ class Raw:
         self._n_obs = adata.n_obs
         # construct manually
         if adata.isbacked == (X is None):
-            self._X = X
+            # Move from GPU to CPU since it's large and not always used
+            if isinstance(X, (CupyArray, CupySparseMatrix)):
+                self._X = X.get()
+            else:
+                self._X = X
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
