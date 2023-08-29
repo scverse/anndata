@@ -146,41 +146,53 @@ def test_dataset_append_disk(tmp_path, sparse_format, append_method, diskfmt):
         pytest.param("csc", (100, 100), (200, 100)),
     ],
 )
-def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape):
-    h5_path = tmp_path / "base.h5"
+def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape, diskfmt):
+    path = (
+        tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    )  # diskfmt is either h5ad or zarr
     a_mem = sparse.random(*a_shape, format=sparse_format)
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
-    with h5py.File(h5_path, "a") as f:
-        ad._io.specs.write_elem(f, "a", a_mem)
-        ad._io.specs.write_elem(f, "b", b_mem)
-        a_disk = sparse_dataset(f["a"])
-        b_disk = sparse_dataset(f["b"])
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
 
-        with pytest.raises(AssertionError):
-            a_disk.append(b_disk)
+    ad._io.specs.write_elem(f, "a", a_mem)
+    ad._io.specs.write_elem(f, "b", b_mem)
+    a_disk = sparse_dataset(f["a"])
+    b_disk = sparse_dataset(f["b"])
+
+    with pytest.raises(AssertionError):
+        a_disk.append(b_disk)
 
 
-def test_wrong_formats(tmp_path):
-    h5_path = tmp_path / "base.h5"
+def test_wrong_formats(tmp_path, diskfmt):
+    path = (
+        tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    )  # diskfmt is either h5ad or zarr
     base = sparse.random(100, 100, format="csr")
 
-    with h5py.File(h5_path, "a") as f:
-        ad._io.specs.write_elem(f, "base", base)
-        disk_mtx = sparse_dataset(f["base"])
-        pre_checks = disk_mtx.to_memory()
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
 
-        with pytest.raises(ValueError):
-            disk_mtx.append(sparse.random(100, 100, format="csc"))
-        with pytest.raises(ValueError):
-            disk_mtx.append(sparse.random(100, 100, format="coo"))
-        with pytest.raises(NotImplementedError):
-            disk_mtx.append(np.random.random((100, 100)))
-        disk_dense = f.create_dataset("dense", data=np.random.random((100, 100)))
-        with pytest.raises(NotImplementedError):
-            disk_mtx.append(disk_dense)
+    ad._io.specs.write_elem(f, "base", base)
+    disk_mtx = sparse_dataset(f["base"])
+    pre_checks = disk_mtx.to_memory()
 
-        post_checks = disk_mtx.to_memory()
+    with pytest.raises(ValueError):
+        disk_mtx.append(sparse.random(100, 100, format="csc"))
+    with pytest.raises(ValueError):
+        disk_mtx.append(sparse.random(100, 100, format="coo"))
+    with pytest.raises(NotImplementedError):
+        disk_mtx.append(np.random.random((100, 100)))
+    disk_dense = f.create_dataset("dense", data=np.random.random((100, 100)))
+    with pytest.raises(NotImplementedError):
+        disk_mtx.append(disk_dense)
+
+    post_checks = disk_mtx.to_memory()
 
     # Check nothing changed
     assert not np.any((pre_checks != post_checks).toarray())
