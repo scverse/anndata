@@ -24,7 +24,7 @@ env:
 
 jobs:
   check-milestone:
-    name: Check Milestone
+    name: "Triage: Check Milestone"
     runs-on: ubuntu-latest
     steps:
       - if: github.event.pull_request.milestone == null && contains( env.LABELS, 'no milestone' ) == false

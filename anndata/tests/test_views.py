@@ -1,5 +1,4 @@
 from copy import deepcopy
-from functools import partial
 from operator import mul
 
 import joblib
@@ -11,8 +10,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray, CupyArray, CupyCSCMatrix, CupyCSRMatrix
-from dask.base import tokenize, normalize_token
+from anndata.compat import CupyCSCMatrix
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -20,13 +18,13 @@ from anndata.tests.helpers import (
     slice_subset,
     single_subset,
     assert_equal,
-    as_dense_dask_array,
-    as_cupy_type,
     GEN_ADATA_DASK_ARGS,
     BASE_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
 )
+from dask.base import tokenize, normalize_token
+
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -108,6 +106,14 @@ def test_views():
     assert not adata_subset.is_view
 
     assert adata_subset.obs["foo"].tolist() == list(range(2))
+
+
+def test_view_subset_shapes():
+    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
+
+    view = adata[:, ::2]
+    assert view.var.shape == (5, 8)
+    assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
 
 
 def test_modify_view_component(matrix_type, mapping_name):

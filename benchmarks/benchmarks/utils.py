@@ -8,7 +8,6 @@ from scipy import sparse
 import sys
 import gc
 
-import anndata
 from anndata import AnnData
 
 
@@ -116,7 +115,7 @@ def gen_adata(n_obs, n_var, attr_set):
         X = sparse.random(n_obs, n_var, density=0.1, format="csr")
         X = X.toarray()
     else:
-        # TODO: Theres probably a better way to do this
+        # TODO: There's probably a better way to do this
         X = sparse.random(n_obs, n_var, density=0, format="csr")
     adata = AnnData(X)
     if "obs,var" in attr_set:

@@ -58,7 +58,7 @@ def write_dispatched(
     dataset_kwargs=MappingProxyType({}),
 ) -> None:
     """
-    Write elem to store, recusively calling callback at each sub-element.
+    Write elem to store, recursively calling callback at each sub-element.
 
     Params
     ------
