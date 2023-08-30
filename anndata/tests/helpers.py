@@ -442,13 +442,16 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(DaskArray)
 def assert_equal_dask_array(a, b, exact=False, elem_name=None):
-    from dask.array.utils import assert_eq
-
-    if exact:
-        assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
-    else:
-        # TODO: Why does it fail when check_graph=True
-        assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
+    assert_equal(b, a.compute(), exact, elem_name)
+    # TODO: Figure out why we did this
+    # from dask.array.utils import assert_eq
+    #
+    # I believe the above fails for sparse matrices due to some coercion to np.matrix
+    # if exact:
+    #     assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
+    # else:
+    #     # TODO: Why does it fail when check_graph=True
+    #     assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
 
 
 @assert_equal.register(pd.DataFrame)
@@ -605,6 +608,25 @@ def _(a):
     return as_dense_dask_array(a.toarray())
 
 
+@singledispatch
+def as_sparse_dask_array(a):
+    import dask.array as da
+
+    return da.from_array(sparse.csr_matrix(a))
+
+
+@as_sparse_dask_array.register(sparse.spmatrix)
+def _(a):
+    import dask.array as da
+
+    return da.from_array(a)
+
+
+@as_sparse_dask_array.register(DaskArray)
+def _(a):
+    return a.map_blocks(sparse.csr_matrix)
+
+
 @contextmanager
 def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
     """Error handling using pytest 8's support for __notes__.
@@ -688,7 +710,8 @@ BASE_MATRIX_PARAMS = [
 ]
 
 DASK_MATRIX_PARAMS = [
-    pytest.param(as_dense_dask_array, id="dask_array"),
+    pytest.param(as_dense_dask_array, id="dense_dask_array"),
+    pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
 ]
 
 CUPY_MATRIX_PARAMS = [

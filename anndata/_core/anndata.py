@@ -1285,6 +1285,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Ignores `.raw`.
         """
+        from anndata.compat import _safe_transpose
+
         if not self.isbacked:
             X = self.X
         else:
@@ -1295,11 +1297,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 "which is currently not implemented. Call `.copy()` before transposing."
             )
 
-        def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
-            return m.T.tocsr() if sparse.isspmatrix_csr(m) else m.T
+        # TODO: Was this imoprtant?
+        # def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
+        #     return m.T.tocsr() if sparse.isspmatrix_csr(m) else m.T
 
         return AnnData(
-            X=t_csr(X) if X is not None else None,
+            X=_safe_transpose(X) if X is not None else None,
+            # X=t_csr(X) if X is not None else None,
             obs=self.var,
             var=self.obs,
             # we're taking a private attributes here to be able to modify uns of the original object
@@ -1309,7 +1313,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             obsp=self.varp.copy(),
             varp=self.obsp.copy(),
             filename=self.filename,
-            layers={k: t_csr(v) for k, v in self.layers.items()},
+            # layers={k: t_csr(v) for k, v in self.layers.items()},
+            layers={k: _safe_transpose(v) for k, v in self.layers.items()},
         )
 
     T = property(transpose)
