@@ -136,6 +136,20 @@ def _(anno, length, index_names):
 def _(anno, length, index_names):
     raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
 
+def _slice_length(slice_obj, iterable_length):
+    start, stop, step = slice_obj.indices(iterable_length)
+    return max(0, (stop - start + (step - (1 if step > 0 else -1))) // step)
+
+
+def _get_dimensions(s_object, shape):
+    if isinstance(s_object, slice):
+        return _slice_length(s_object, shape)
+    if isinstance(s_object, int):
+        return 1
+    else:
+        return len(s_object)
+
+
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
     """\
@@ -1242,23 +1256,69 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     _sanitize = strings_to_categoricals  # backwards compat
 
-    def _inplace_subset_var(self, index: Index1D):
+    def _inplace_subset_var(self, index):
         """\
         Inplace subsetting along variables dimension.
 
         Same as `adata = adata[:, index]`, but inplace.
         """
-        adata_subset = self[:, index].copy()
-        self._init_as_actual(adata_subset)
+        _, var_dx = _normalize_indices(
+            (slice(None, None, None), index), self.obs_names, self.var_names
+        )
 
-    def _inplace_subset_obs(self, index: Index1D):
+        if isinstance(var_dx, (int, np.integer)):
+            if not (-self.n_vars <= var_dx < self.n_vars):
+                raise IndexError(f"Variable index `{var_dx}` is out of range.")
+            var_dx += self.n_vars * (var_dx < 0)
+            var_dx = slice(var_dx, var_dx + 1, 1)
+        y_dim = _get_dimensions(var_dx, self.shape[1])
+        self._n_vars = y_dim
+        if self.X is not None:
+            self._X = self.X[:, var_dx].reshape(self.n_obs, y_dim)
+        uns = copy(self._uns)
+        var_sub = self.var.iloc[var_dx]
+        self._remove_unused_categories(self.var, var_sub, uns)
+        self._var = pd.DataFrame(var_sub)
+        self._uns = uns
+        
+        if self.layers:
+            for key, matrix in self.layers.items():
+                self.layers[key] = matrix[:, var_dx].reshape(self.n_obs, y_dim)
+        self._varm = self.varm._view(self, (var_dx,)).copy()
+        self._varp = self.varp._view(self, var_dx).copy()
+
+    def _inplace_subset_obs(self, index):
         """\
-        Inplace subsetting along variables dimension.
+        Inplace subsetting along observations dimension.
 
         Same as `adata = adata[index, :]`, but inplace.
         """
-        adata_subset = self[index].copy()
-        self._init_as_actual(adata_subset)
+        obs_dx, _ = _normalize_indices(
+            (index, slice(None, None, None)), self.obs_names, self.var_names
+        )
+        if isinstance(obs_dx, (int, np.integer)):
+            if not (-self.n_obs <= obs_dx < self.n_obs):
+                raise IndexError(f"Observation index `{obs_dx}` is out of range.")
+            obs_dx += self.n_obs * (obs_dx < 0)
+            obs_dx = slice(obs_dx, obs_dx + 1, 1)
+        x_dim = _get_dimensions(obs_dx, self.shape[0])
+        self._n_obs = x_dim
+        if self.X is not None:
+            self._X = self.X[obs_dx, :].reshape(x_dim, self.n_vars)
+
+        uns = copy(self._uns)
+        obs_sub = self.obs.iloc[obs_dx]
+        self._remove_unused_categories(self.obs, obs_sub, uns)
+        self._obs = pd.DataFrame(obs_sub)
+        self._uns = uns
+
+        if self.layers:
+            for key, matrix in self.layers.items():
+                self.layers[key] = matrix[obs_dx, :].reshape(x_dim, self.n_vars)
+        self._obsm = self.obsm._view(self, (obs_dx,)).copy()
+        self._obsp = self.obsp._view(self, obs_dx).copy()
+        if self.raw:
+            self.raw = self.raw[obs_dx,:]
 
     # TODO: Update, possibly remove
     def __setitem__(
