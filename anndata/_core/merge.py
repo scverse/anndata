@@ -122,7 +122,11 @@ def equal_dask_array(a, b) -> bool:
     if isinstance(b, DaskArray):
         if tokenize(a) == tokenize(b):
             return True
-    return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
+    if isinstance(a._meta, spmatrix):
+        # TODO: Maybe also do this in the other case?
+        return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
+    else:
+        return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
 @equal.register(np.ndarray)
