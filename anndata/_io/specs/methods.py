@@ -516,12 +516,6 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 
 @_REGISTRY.register_write(H5Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, AwkArray, IOSpec("awkward-array", "0.1.0"))
-@_REGISTRY.register_write(
-    H5Group, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
-)
 def write_awkward(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
     from anndata.compat import awkward as ak
 
