@@ -303,7 +303,7 @@ def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"])
 
 
 # TODO: open PR or feature request to cupy
-def _cpblock_diag(mats, format=None, dtype=None):
+def _cp_block_diag(mats, format=None, dtype=None):
     """
     Modified version of scipy.sparse.block_diag for cupy sparse.
     """
@@ -337,6 +337,23 @@ def _cpblock_diag(mats, format=None, dtype=None):
     return cpsparse.coo_matrix(
         (data, (row, col)), shape=(r_idx, c_idx), dtype=dtype
     ).asformat(format)
+
+
+def _dask_block_diag(mats):
+    from itertools import permutations
+    import dask.array as da
+
+    blocks = np.zeros((len(mats), len(mats)), dtype=object)
+    for i, j in permutations(range(len(mats)), 2):
+        blocks[i, j] = da.from_array(
+            sparse.csr_matrix((mats[i].shape[0], mats[j].shape[1]))
+        )
+    for i, x in enumerate(mats):
+        if not isinstance(x._meta, sparse.csr_matrix):
+            x = x.map_blocks(sparse.csr_matrix)
+        blocks[i, i] = x
+
+    return da.block(blocks.tolist())
 
 
 ###################
@@ -915,7 +932,9 @@ def concat_pairwise_mapping(
             for m, s in zip(mappings, shapes)
         ]
         if all(isinstance(el, (CupySparseMatrix, CupyArray)) for el in els):
-            result[k] = _cpblock_diag(els, format="csr")
+            result[k] = _cp_block_diag(els, format="csr")
+        elif all(isinstance(el, DaskArray) for el in els):
+            result[k] = _dask_block_diag(els)
         else:
             result[k] = sparse.block_diag(els, format="csr")
     return result

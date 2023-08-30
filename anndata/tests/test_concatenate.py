@@ -818,6 +818,9 @@ def test_pairwise_concat(axis, array_type):
         orig_arr = getattr(adatas[k], dim_attr)["arr"]
         full_arr = getattr(w_pairwise, dim_attr)["arr"]
 
+        if isinstance(full_arr, DaskArray):
+            full_arr = full_arr.compute()
+
         # Check original values are intact
         assert_equal(orig_arr, _subset(full_arr, (inds, inds)))
         # Check that entries are filled with zeroes
