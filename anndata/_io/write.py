@@ -54,7 +54,7 @@ def write_csvs(
                 value = value[None]
             try:
                 df = pd.DataFrame(value)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 warnings.warn(
                     f"Omitting to write {key!r} of type {type(e)}.",
                     WriteWarning,

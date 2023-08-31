@@ -16,9 +16,9 @@ from anndata.tests.helpers import gen_adata, assert_equal
 
 def test_read_dispatched_w_regex():
     def read_only_axis_dfs(func, elem_name: str, elem, iospec):
-        if iospec.encoding_type == "anndata":
-            return func(elem)
-        elif re.match(r"^/((obs)|(var))?(/.*)?$", elem_name):
+        if iospec.encoding_type == "anndata" or re.match(
+            r"^/((obs)|(var))?(/.*)?$", elem_name
+        ):
             return func(elem)
         else:
             return None

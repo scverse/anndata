@@ -22,6 +22,7 @@ Also interesting:
 import tempfile
 from pathlib import Path
 import sys
+from typing import ClassVar
 
 from memory_profiler import memory_usage
 import numpy as np
@@ -76,8 +77,8 @@ PBMC_3K_URL = "http://falexwolf.de/data/pbmc3k_raw.h5ad"
 
 
 class H5ADInMemorySizeSuite:
-    params = [PBMC_3K_URL]
-    param_names = ["input_url"]
+    params: ClassVar = [PBMC_3K_URL]
+    param_names: ClassVar = ["input_url"]
 
     def setup(self, input_url):
         self.filepath = pooch.retrieve(url=input_url, known_hash=None)
@@ -96,9 +97,9 @@ class H5ADInMemorySizeSuite:
 
 
 class H5ADReadSuite:
-    # params = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
-    params = [PBMC_3K_URL]
-    param_names = ["input_url"]
+    # params: ClassVar = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
+    params: ClassVar = [PBMC_3K_URL]
+    param_names: ClassVar = ["input_url"]
 
     def setup(self, input_url):
         self.filepath = pooch.retrieve(url=input_url, known_hash=None)
@@ -130,9 +131,9 @@ class H5ADReadSuite:
 
 
 class H5ADWriteSuite:
-    # params = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
-    params = [PBMC_3K_URL]
-    param_names = ["input_url"]
+    # params: ClassVar = [PBMC_REDUCED_PATH, PBMC_3K_PATH, BM_43K_CSR_PATH]
+    params: ClassVar = [PBMC_3K_URL]
+    param_names: ClassVar = ["input_url"]
 
     def setup(self, input_url):
         mem_recording, adata = memory_usage(
@@ -173,9 +174,9 @@ class H5ADWriteSuite:
 
 
 class H5ADBackedWriteSuite(H5ADWriteSuite):
-    # params = [PBMC_REDUCED_PATH, PBMC_3K_PATH]
-    params = [PBMC_3K_URL]
-    param_names = ["input_url"]
+    # params: ClassVar = [PBMC_REDUCED_PATH, PBMC_3K_PATH]
+    params: ClassVar = [PBMC_3K_URL]
+    param_names: ClassVar = ["input_url"]
 
     def setup(self, input_url):
         mem_recording, adata = memory_usage(

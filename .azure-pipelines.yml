@@ -16,8 +16,8 @@ jobs:
         Python3.11:
           python.version: "3.11"
           RUN_COVERAGE: yes
-        Python3.8:
-          python.version: "3.8"
+        Python3.9:
+          python.version: "3.9"
         PreRelease:
           python.version: "3.11"
           PRERELEASE_DEPENDENCIES: yes

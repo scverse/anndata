@@ -10,7 +10,7 @@ except (ImportError, LookupError):
     except ModuleNotFoundError:
         raise RuntimeError(
             "anndata is not correctly installed. Please install it, e.g. with pip."
-        )
+        ) from None
 
 # Allowing notes to be added to exceptions. See: https://github.com/scverse/anndata/issues/868
 import sys
@@ -39,7 +39,9 @@ from ._warnings import (
     ImplicitModificationWarning,
     ExperimentalFeatureWarning,
 )
-from . import experimental
+
+if True:  # Bypass isort, this needs to come last
+    from . import experimental
 
 
 def read(*args, **kwargs):

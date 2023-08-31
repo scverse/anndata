@@ -1,4 +1,4 @@
-from contextlib import suppress
+from contextlib import nullcontext
 
 import pytest
 import zarr
@@ -33,7 +33,7 @@ def test_key_error(tmp_path, group_fn):
         raise NotImplementedError()
 
     group = group_fn(tmp_path)
-    with group if hasattr(group, "__enter__") else suppress():
+    with group if hasattr(group, "__enter__") else nullcontext():
         group["X"] = [1, 2, 3]
         group.create_group("group")
 

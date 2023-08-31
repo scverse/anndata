@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from collections import abc as cabc
 from copy import copy
-from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
-from typing import Iterator, Mapping, Sequence  # ABCs
-from typing import Tuple, List, Dict  # Generic base types
+from typing import Union, Optional, Type, ClassVar, TypeVar
+from typing import Iterator, Mapping, Sequence
+from typing import Tuple, List, Dict
 import warnings
 
 import numpy as np

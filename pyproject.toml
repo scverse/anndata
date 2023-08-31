@@ -5,7 +5,7 @@ requires = ["hatchling", "hatch-vcs"]
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = "BSD-3-Clause"
 authors = [
     {name = "Philipp Angerer"},
@@ -29,7 +29,6 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -128,21 +127,46 @@ markers = ["gpu: mark test to run on GPU"]
 
 [tool.ruff]
 ignore = [
+    # TODO: add `stacklevel` arg to all `warn` calls
+    "B028",
+    # dict() calls are prettier for kwargs dicts
+    "C408",
     # line too long -> we accept long comment lines; black gets rid of long code lines
     "E501",
-    # Do not assign a lambda expression, use a def -> Scanpy allows lambda expression assignments,
+    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments
     "E731",
     # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
     "E741",
+    # Ruff’s “confusable” character list is far too zealous
+    "RUF001", "RUF002", "RUF003",
 ]
 select = [
-    "E",
-    "F",
-    "W",
+    "F",    # Errors detected by Pyflakes
+    "E",    # Error detected by Pycodestyle
+    "W",    # Warning detected by Pycodestyle
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "PERF", # More list comprehension rules
+    "BLE",  # flake8-blind-except
+    "UP",   # pyupgrade
+    "TCH",  # manage type checking blocks
+    "PIE",  # Various useful rules
+    "RUF",  # Various useful Ruff rules
+    "EM",   # Error messages and tracebacks
+    "ISC",  # Implicit string concatenation
+    "ICN",  # Follow import conventions
+    "SIM",  # Flow simplifications
+    "PTH",  # Pathlib instead of os.path
 ]
 [tool.ruff.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
 "anndata/tests/test_readwrite.py" = ["E721"]
+[tool.ruff.isort]
+known-first-party = ["anndata"]
+required-imports = ["from __future__ import annotations"]
+[tool.ruff.flake8-bugbear]
+extend-immutable-calls = ["slice"]
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"

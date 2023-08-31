@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from collections.abc import Sequence, KeysView, Callable, Iterable
 from functools import reduce, singledispatch, wraps
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 import warnings
 
 import numpy as np
@@ -248,7 +248,7 @@ class DictView(_ViewMixin, dict):
 
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ["_view_args"]
+    _metadata: ClassVar = ["_view_args"]
 
     @wraps(pd.DataFrame.drop)
     def drop(self, *args, inplace: bool = False, **kw):

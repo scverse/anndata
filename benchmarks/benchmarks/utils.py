@@ -92,13 +92,6 @@ def gen_indexer(adata, dim, index_kind, ratio):
     return tuple(subset)
 
 
-def take_view(adata, *, dim, index_kind, ratio=0.5, nviews=100):
-    subset = gen_indexer(adata, dim, index_kind, ratio)
-    views = []
-    for i in range(nviews):
-        views.append(adata[subset])
-
-
 def take_repeated_view(adata, *, dim, index_kind, ratio=0.9, nviews=10):
     v = adata
     views = []

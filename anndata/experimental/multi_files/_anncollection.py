@@ -353,12 +353,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 if oidx.size > 1 and np.any(oidx[:-1] >= oidx[1:]):
                     oidx, reverse = np.unique(oidx, return_inverse=True)
 
-                if isinstance(vidx, slice):
-                    arr = X[oidx, vidx]
-                else:
-                    # this is a very memory inefficient approach
-                    # todo: fix
-                    arr = X[oidx][:, vidx]
+                # TODO: fix else case (very memory inefficient approach)
+                arr = X[oidx, vidx] if isinstance(vidx, slice) else X[oidx][:, vidx]
                 Xs.append(arr if reverse is None else arr[reverse])
             elif isinstance(X, BaseCompressedSparseDataset):
                 # very slow indexing with two arrays

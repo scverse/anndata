@@ -204,7 +204,7 @@ def report_read_key_on_error(func):
                 break
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             re_raise_error(e, elem, elem.name, "read")
 
     return func_wrapper
@@ -237,7 +237,7 @@ def report_write_key_on_error(func):
                 break
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             re_raise_error(e, elem, key, "writ")
 
     return func_wrapper

@@ -308,24 +308,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     .. _scikit-learn: http://scikit-learn.org/
     """
 
-    _BACKED_ATTRS = ["X", "raw.X"]
-
-    # backwards compat
-    _H5_ALIASES = dict(
-        X={"X", "_X", "data", "_data"},
-        obs={"obs", "_obs", "smp", "_smp"},
-        var={"var", "_var"},
-        uns={"uns"},
-        obsm={"obsm", "_obsm", "smpm", "_smpm"},
-        varm={"varm", "_varm"},
-        layers={"layers", "_layers"},
-    )
-
-    _H5_ALIASES_NAMES = dict(
-        obs={"obs_names", "smp_names", "row_names", "index"},
-        var={"var_names", "col_names", "index"},
-    )
-
     def __init__(
         self,
         X: Optional[Union[np.ndarray, sparse.spmatrix, pd.DataFrame]] = None,
@@ -1495,12 +1477,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _mutated_copy(self, **kwargs):
         """Creating AnnData with attributes optionally specified via kwargs."""
-        if self.isbacked:
-            if "X" not in kwargs or (self.raw is not None and "raw" not in kwargs):
-                raise NotImplementedError(
-                    "This function does not currently handle backed objects "
-                    "internally, this should be dealt with before."
-                )
+        if self.isbacked and (
+            "X" not in kwargs or (self.raw is not None and "raw" not in kwargs)
+        ):
+            raise NotImplementedError(
+                "This function does not currently handle backed objects "
+                "internally, this should be dealt with before."
+            )
         new = {}
 
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
@@ -2171,10 +2154,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 m_attr[key] = self._get_and_delete_multicol_field(axis, key)
 
     def _get_and_delete_multicol_field(self, a, key_multicol):
-        keys = []
-        for k in getattr(self, a).columns:
-            if k.startswith(key_multicol):
-                keys.append(k)
+        keys = [k for k in getattr(self, a).columns if k.startswith(key_multicol)]
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values

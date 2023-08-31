@@ -795,11 +795,9 @@ def test_pairwise_concat(axis, array_type):
 
     adatas = {
         k: AnnData(
-            **{
-                "X": sparse.csr_matrix((m, n)),
-                "obsp": {"arr": gen_dim_array(m)},
-                "varp": {"arr": gen_dim_array(n)},
-            }
+            X=sparse.csr_matrix((m, n)),
+            obsp={"arr": gen_dim_array(m)},
+            varp={"arr": gen_dim_array(n)},
         )
         for k, m, n in zip("abc", Ms, Ns)
     }
@@ -1347,8 +1345,8 @@ def test_concatenate_size_0_dim():
     b = gen_adata((5, 0))
 
     # Mostly testing that this doesn't error
-    a.concatenate([b]).shape == (10, 0)
-    b.concatenate([a]).shape == (10, 0)
+    assert a.concatenate([b]).shape == (10, 0)
+    assert b.concatenate([a]).shape == (10, 0)
 
 
 def test_concat_null_X():

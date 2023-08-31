@@ -304,21 +304,26 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     adata.write_h5ad(pth, **kwargs)
 
     def check_compressed(key, value):
-        if isinstance(value, h5py.Dataset) and value.shape != ():
-            if compression is not None and value.compression != compression:
-                not_compressed.append(key)
-            elif (
-                compression_opts is not None
-                and value.compression_opts != compression_opts
-            ):
-                not_compressed.append(key)
+        if (
+            isinstance(value, h5py.Dataset)
+            and value.shape != ()
+            and (
+                (compression is not None and value.compression != compression)
+                or (
+                    compression_opts is not None
+                    and value.compression_opts != compression_opts
+                )
+            )
+        ):
+            not_compressed.append(key)
 
     with h5py.File(pth) as f:
         f.visititems(check_compressed)
 
     if not_compressed:
-        msg = "\n\t".join(not_compressed)
-        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+        msg = "These elements were not compressed correctly:\n\t"
+        msg += "\n\t".join(not_compressed)
+        raise AssertionError(msg)
 
     assert_equal(adata, ad.read_h5ad(pth))
 
@@ -334,16 +339,20 @@ def test_zarr_compression(tmp_path):
     ad._io.write_zarr(pth, adata, compressor=compressor)
 
     def check_compressed(key, value):
-        if isinstance(value, zarr.Array) and value.shape != ():
-            if value.compressor != compressor:
-                not_compressed.append(key)
+        if (
+            isinstance(value, zarr.Array)
+            and value.shape != ()
+            and value.compressor != compressor
+        ):
+            not_compressed.append(key)
 
     with zarr.open(str(pth), "r") as f:
         f.visititems(check_compressed)
 
     if not_compressed:
-        msg = "\n\t".join(not_compressed)
-        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+        msg = "These elements were not compressed correctly:\n\t"
+        msg += "\n\t".join(not_compressed)
+        raise AssertionError(msg)
 
     assert_equal(adata, ad.read_zarr(pth))
 
@@ -479,9 +488,9 @@ def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
-    def md5_path(pth: PathLike) -> bytes:
+    def md5_path(pth: Path) -> bytes:
         checksum = hashlib.md5()
-        with open(pth, "rb") as f:
+        with pth.open("rb") as f:
             while True:
                 buf = f.read(checksum.block_size * 100)
                 if not buf:
