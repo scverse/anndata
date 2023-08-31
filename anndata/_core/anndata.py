@@ -1280,12 +1280,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._remove_unused_categories(self.var, var_sub, uns)
         self._var = pd.DataFrame(var_sub)
         self._uns = uns
-
+        
         if self.layers:
             for key, matrix in self.layers.items():
                 self.layers[key] = matrix[:, var_dx].reshape(self.n_obs, y_dim)
         self._varm = self.varm._view(self, (var_dx,)).copy()
         self._varp = self.varp._view(self, var_dx).copy()
+        self._is_view = False
 
     def _inplace_subset_obs(self, index):
         """\
@@ -1318,7 +1319,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsm = self.obsm._view(self, (obs_dx,)).copy()
         self._obsp = self.obsp._view(self, obs_dx).copy()
         if self.raw:
-            self.raw = self.raw[obs_dx, :]
+            self.raw = self.raw[obs_dx, :].copy()
+        self._is_view = False
 
     # TODO: Update, possibly remove
     def __setitem__(
