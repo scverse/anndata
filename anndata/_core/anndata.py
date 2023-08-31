@@ -136,6 +136,7 @@ def _(anno, length, index_names):
 def _(anno, length, index_names):
     raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
 
+
 def _slice_length(slice_obj, iterable_length):
     start, stop, step = slice_obj.indices(iterable_length)
     return max(0, (stop - start + (step - (1 if step > 0 else -1))) // step)
@@ -148,7 +149,6 @@ def _get_dimensions(s_object, shape):
         return 1
     else:
         return len(s_object)
-
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -1280,7 +1280,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._remove_unused_categories(self.var, var_sub, uns)
         self._var = pd.DataFrame(var_sub)
         self._uns = uns
-        
+
         if self.layers:
             for key, matrix in self.layers.items():
                 self.layers[key] = matrix[:, var_dx].reshape(self.n_obs, y_dim)
@@ -1318,7 +1318,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obsm = self.obsm._view(self, (obs_dx,)).copy()
         self._obsp = self.obsp._view(self, obs_dx).copy()
         if self.raw:
-            self.raw = self.raw[obs_dx,:]
+            self.raw = self.raw[obs_dx, :]
 
     # TODO: Update, possibly remove
     def __setitem__(
