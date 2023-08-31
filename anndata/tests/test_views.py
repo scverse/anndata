@@ -121,7 +121,7 @@ def test_modify_view_component(matrix_type, mapping_name):
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
-    init_hash = joblib.hash(adata)
+    init_hash = tokenize(adata)
 
     subset = adata[:5, :][:, :5]
     assert subset.is_view
@@ -130,7 +130,7 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert not subset.is_view
     assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
-    assert init_hash == joblib.hash(adata)
+    assert init_hash == tokenize(adata)
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
