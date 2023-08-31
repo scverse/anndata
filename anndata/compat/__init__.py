@@ -16,6 +16,8 @@ from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
 
+from .exceptiongroups import add_note  # noqa: F401
+
 
 class Empty:
     pass
@@ -177,7 +179,7 @@ def _from_fixed_length_strings(value):
     """\
     Convert from fixed length strings to unicode.
 
-    For backwards compatability with older h5ad and zarr files.
+    For backwards compatibility with older h5ad and zarr files.
     """
     new_dtype = []
     for dt in value.dtype.descr:

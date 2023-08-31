@@ -441,7 +441,7 @@ def _read_text(
         else:
             data.append(np.array(line_list, dtype=dtype))
     # logg.msg("    read data into list of lists", t=True, v=4)
-    # transfrom to array, this takes a long time and a lot of memory
+    # transform to array, this takes a long time and a lot of memory
     # but it’s actually the same thing as np.genfromtxt does
     # - we don’t use the latter as it would involve another slicing step
     #   in the end, to separate row_names from float data, slicing takes
