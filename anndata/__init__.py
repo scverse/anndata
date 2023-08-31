@@ -39,7 +39,9 @@ from ._warnings import (
     ImplicitModificationWarning,
     ExperimentalFeatureWarning,
 )
-from . import experimental
+
+if True:  # Bypass isort, this needs to come last
+    from . import experimental
 
 
 def read(*args, **kwargs):

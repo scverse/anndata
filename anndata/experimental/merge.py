@@ -108,7 +108,7 @@ def as_group(store, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     raise NotImplementedError("This is not yet implemented.")
 
 
-@as_group.register
+@as_group.register(os.PathLike)
 def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     if store.suffix == ".h5ad":
         import h5py
@@ -119,7 +119,7 @@ def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     return zarr.open_group(store, *args, **kwargs)
 
 
-@as_group.register
+@as_group.register(str)
 def _(store: str, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     return as_group(Path(store), *args, **kwargs)
 
