@@ -7,7 +7,7 @@ from typing import Any, Tuple, Union, Mapping, Optional
 from warnings import warn
 
 import h5py
-from scipy.sparse import spmatrix
+from scipy.sparse import spmatrix, issparse
 import numpy as np
 import pandas as pd
 
@@ -348,11 +348,8 @@ def _safe_transpose(x):
 
     This is a workaround for: https://github.com/scipy/scipy/issues/19161
     """
-    from scipy import sparse
 
-    if isinstance(x, DaskArray) and isinstance(
-        x._meta, (sparse.spmatrix, sparse.sparray)
-    ):
+    if isinstance(x, DaskArray) and issparse(x._meta):
         return _transpose_by_block(x)
     else:
         return x.T
