@@ -1280,7 +1280,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._remove_unused_categories(self.var, var_sub, uns)
         self._var = pd.DataFrame(var_sub)
         self._uns = uns
-        
+
         if self.layers:
             for key, matrix in self.layers.items():
                 self.layers[key] = matrix[:, var_dx].reshape(self.n_obs, y_dim)
