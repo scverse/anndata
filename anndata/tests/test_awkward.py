@@ -123,24 +123,74 @@ def test_copy(key):
         getattr(adata, key)["awk"]["d"]
 
 
-@pytest.mark.parametrize("key", ["obsm", "varm"])
-def test_view(key):
-    """Check that modifying a view does not modify the original"""
+@pytest.mark.parametrize(
+    "array,setter_slice,setter_value,expected",
+    [
+        # Non-records are immutable and setting on them results in a TypeError
+        pytest.param(
+            [[1], [2, 3], [4, 5, 6]],
+            (slice(None), 2),
+            42,
+            TypeError,
+            id="immutable_ragged_list",
+        ),
+        pytest.param(
+            np.zeros((3, 3)),
+            (slice(None), 1),
+            42,
+            TypeError,
+            id="immutable_regular_type",
+        ),
+        pytest.param(
+            [{"a": 1}, {"a": 2}, {"a": 3}],
+            "a",
+            [42, 43, 44],
+            [{"a": 42}, {"a": 43}, {"a": 44}],
+            id="updating_record",
+        ),
+        pytest.param(
+            [{"a": 1}, {"a": 2}, {"a": 3}],
+            "b",
+            [42, 43, 44],
+            [{"a": 1, "b": 42}, {"a": 2, "b": 43}, {"a": 3, "b": 44}],
+            id="adding_record",
+        ),
+    ],
+)
+@pytest.mark.parametrize("key", ["obsm", "varm", "uns"])
+def test_view(key, array, setter_slice, setter_value, expected):
+    """Check that modifying a view does not modify the original.
+
+    Parameters
+    ----------
+    key
+        key in anndata, obsm, varm, or uns
+    view_func
+        a function that returns a view of an AnnData object
+    array
+        The array that is assigned to adata[key]["awk"] for testing.
+    setter_slice
+        The slice used for setting a value on the awkward array with `arr[slice] = ...`
+    setter_value
+        The value assigned to the array with `arr[slice] = setter_value`
+    expected
+        The expected array after setting the value. Can be an exception if setting the value is supposed
+        to result in an error.
+    """
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
-    getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
-    adata_view = adata[:2, :2]
+    getattr(adata, key)["awk"] = ak.Array(array)
+    adata_view = adata[:]
+    awk_view = getattr(adata_view, key)["awk"]
 
-    getattr(adata_view, key)["awk"]["c"] = np.full((2, 1), 4)
-    getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
-
-    # values in view were correctly set
-    npt.assert_equal(getattr(adata_view, key)["awk"]["c"], np.full((2, 1), 4))
-    npt.assert_equal(getattr(adata_view, key)["awk"]["d"], np.full((2, 1), 5))
-
-    # values in original were not updated
-    npt.assert_equal(getattr(adata, key)["awk"]["c"], np.full((3, 1), 3))
-    with pytest.raises(IndexError):
-        getattr(adata, key)["awk"]["d"]
+    if isinstance(expected, type):
+        with pytest.raises(expected):
+            awk_view[setter_slice] = setter_value
+    else:
+        awk_view[setter_slice] = setter_value
+        # values in view are correctly set
+        assert ak.all(awk_view[setter_slice] == setter_value)
+        # values in original were not modified
+        assert ak.to_list(getattr(adata, key)["awk"]) == array
 
 
 def test_view_of_awkward_array_with_custom_behavior():
