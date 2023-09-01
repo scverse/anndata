@@ -31,7 +31,7 @@ def test_uns_color_subset():
     assert "cat1_colors" not in v.uns
     assert "cat2_colors" not in v.uns
 
-    # Otherwise the colors should still match after reseting
+    # Otherwise the colors should still match after resetting
     cat1_colors = np.array(["red", "green", "blue", "yellow"], dtype=object)
     adata = AnnData(np.ones((5, 5)), obs=obs, uns={"cat1_colors": cat1_colors.copy()})
 

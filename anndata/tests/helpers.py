@@ -1,4 +1,8 @@
-from functools import singledispatch, wraps
+from __future__ import annotations
+
+from contextlib import contextmanager
+from functools import singledispatch, wraps, partial
+import re
 from string import ascii_letters
 from typing import Tuple, Optional, Type
 from collections.abc import Mapping, Collection
@@ -17,7 +21,14 @@ from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
-from anndata.compat import AwkArray, DaskArray
+from anndata.compat import (
+    AwkArray,
+    DaskArray,
+    CupySparseMatrix,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+)
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -382,6 +393,11 @@ def assert_equal(a, b, exact=False, elem_name=None):
     _assert_equal(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(CupyArray)
+def assert_equal_cupy(a, b, exact=False, elem_name=None):
+    assert_equal(b, a.get(), exact, elem_name)
+
+
 @assert_equal.register(np.ndarray)
 def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     b = asarray(b)
@@ -409,6 +425,12 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
 @assert_equal.register(sparse.spmatrix)
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
+    assert_equal(b, a, exact, elem_name=elem_name)
+
+
+@assert_equal.register(CupySparseMatrix)
+def assert_equal_cupy_sparse(a, b, exact=False, elem_name=None):
+    a = a.toarray()
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
@@ -539,7 +561,7 @@ def assert_adata_equal(
     assert_equal(a.obs_names, b.obs_names, exact, elem_name=fmt_name("obs_names"))
     assert_equal(a.var_names, b.var_names, exact, elem_name=fmt_name("var_names"))
     if not exact:
-        # Reorder all elements if neccesary
+        # Reorder all elements if necessary
         idx = [slice(None), slice(None)]
         # Since it’s a pain to compare a list of pandas objects
         change_flag = False
@@ -581,3 +603,106 @@ def as_dense_dask_array(a):
 @as_dense_dask_array.register(sparse.spmatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
+
+
+@contextmanager
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
+    """Error handling using pytest 8's support for __notes__.
+
+    See: https://github.com/pytest-dev/pytest/pull/11227
+
+    Remove once pytest 8 is out!
+    """
+
+    with pytest.raises(exc_cls) as exc_info:
+        yield exc_info
+
+    check_error_or_notes_match(exc_info, match)
+
+
+def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
+    """
+    Checks whether the printed error message or the notes contains the given pattern.
+
+    DOES NOT WORK IN IPYTHON - because of the way IPython handles exceptions
+    """
+    import traceback
+
+    message = "".join(traceback.format_exception_only(e.type, e.value))
+    assert re.search(
+        pattern, message
+    ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
+
+
+def as_cupy_type(val, typ=None):
+    """
+    Rough conversion function
+
+    Will try to infer target type from input type if not specified.
+    """
+    if typ is None:
+        input_typ = type(val)
+        if issubclass(input_typ, np.ndarray):
+            typ = CupyArray
+        elif issubclass(input_typ, sparse.csr_matrix):
+            typ = CupyCSRMatrix
+        elif issubclass(input_typ, sparse.csc_matrix):
+            typ = CupyCSCMatrix
+        else:
+            raise NotImplementedError(
+                f"No default target type for input type {input_typ}"
+            )
+
+    if issubclass(typ, CupyArray):
+        import cupy as cp
+
+        if isinstance(val, sparse.spmatrix):
+            val = val.toarray()
+        return cp.array(val)
+    elif issubclass(typ, CupyCSRMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csr_matrix(cp.array(val))
+        else:
+            return cpsparse.csr_matrix(val)
+    elif issubclass(typ, CupyCSCMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csc_matrix(cp.array(val))
+        else:
+            return cpsparse.csc_matrix(val)
+    else:
+        raise NotImplementedError(
+            f"Conversion from {type(val)} to {typ} not implemented"
+        )
+
+
+BASE_MATRIX_PARAMS = [
+    pytest.param(asarray, id="np_array"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+]
+
+DASK_MATRIX_PARAMS = [
+    pytest.param(as_dense_dask_array, id="dask_array"),
+]
+
+CUPY_MATRIX_PARAMS = [
+    pytest.param(
+        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSRMatrix),
+        id="cupy_csr",
+        marks=pytest.mark.gpu,
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSCMatrix),
+        id="cupy_csc",
+        marks=pytest.mark.gpu,
+    ),
+]

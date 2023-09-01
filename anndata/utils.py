@@ -1,6 +1,6 @@
 import warnings
 from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union, Callable
+from typing import Mapping, Any, Sequence, Union
 
 import h5py
 import pandas as pd
@@ -9,6 +9,7 @@ from scipy import sparse
 
 from .logging import get_logger
 from ._core.sparse_dataset import SparseDataset
+from .compat import CupyArray, CupySparseMatrix
 
 logger = get_logger(__name__)
 
@@ -32,6 +33,16 @@ def asarray_sparse_dataset(x):
 @asarray.register(h5py.Dataset)
 def asarray_h5py_dataset(x):
     return x[...]
+
+
+@asarray.register(CupyArray)
+def asarray_cupy(x):
+    return x.get()
+
+
+@asarray.register(CupySparseMatrix)
+def asarray_cupy_sparse(x):
+    return x.toarray().get()
 
 
 @singledispatch
@@ -334,32 +345,3 @@ class DeprecationMixinMeta(type):
             for item in type.__dir__(cls)
             if not is_deprecated(getattr(cls, item, None))
         ]
-
-
-def import_function(module: str, name: str) -> Callable:
-    """\
-    Try to import function from module. If the module is not installed or
-    function is not part of the module, it returns a dummy function that raises
-    the respective import error once the function is called. This could be a
-    ModuleNotFoundError if the module is missing or an AttributeError if the
-    module is installed but the function is not exported by it.
-
-    Params
-    -------
-    module
-        Module to import from. Can be nested, e.g. "sklearn.utils".
-    name
-        Name of function to import from module.
-    """
-    from importlib import import_module
-
-    try:
-        module = import_module(module)
-        func = getattr(module, name)
-    except (ImportError, AttributeError) as e:
-        error = e
-
-        def func(*_, **__):
-            raise error
-
-    return func

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from functools import reduce, singledispatch, wraps
+from functools import singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
-from typing import Any, Tuple, Union, Mapping, MutableMapping, Optional
+from typing import Any, Tuple, Union, Mapping, Optional
 from warnings import warn
 
 import h5py
 from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
+
+from .exceptiongroups import add_note  # noqa: F401
 
 
 class Empty:
@@ -74,6 +75,36 @@ except ImportError:
             return "mock dask.array.core.Array"
 
 
+try:
+    from cupyx.scipy.sparse import (
+        spmatrix as CupySparseMatrix,
+        csr_matrix as CupyCSRMatrix,
+        csc_matrix as CupyCSCMatrix,
+    )
+    from cupy import ndarray as CupyArray
+except ImportError:
+
+    class CupySparseMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.spmatrix"
+
+    class CupyCSRMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csr_matrix"
+
+    class CupyCSCMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csc_matrix"
+
+    class CupyArray:
+        @staticmethod
+        def __repr__():
+            return "mock cupy.ndarray"
+
+
 @singledispatch
 def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
     if default is Empty:
@@ -114,7 +145,7 @@ def _from_fixed_length_strings(value):
     """\
     Convert from fixed length strings to unicode.
 
-    For backwards compatability with older h5ad and zarr files.
+    For backwards compatibility with older h5ad and zarr files.
     """
     new_dtype = []
     for dt in value.dtype.descr:

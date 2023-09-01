@@ -3,14 +3,14 @@
 [![Coverage](https://codecov.io/gh/scverse/anndata/branch/main/graph/badge.svg?token=IN1mJN1Wi8)](https://codecov.io/gh/scverse/anndata)
 [![Docs](https://readthedocs.com/projects/icb-anndata/badge/?version=latest)](https://anndata.readthedocs.io)
 [![PyPI](https://img.shields.io/pypi/v/anndata.svg)](https://pypi.org/project/anndata)
-[![PyPIDownloadsMonth](https://img.shields.io/pypi/dm/scanpy?logo=PyPI&color=blue)](https://pypi.org/project/anndata)
-[![PyPIDownloadsTotal](https://pepy.tech/badge/anndata)](https://pepy.tech/project/anndata)
+[![Downloads](https://static.pepy.tech/badge/anndata/month)](https://pepy.tech/project/anndata)
+[![Downloads](https://static.pepy.tech/badge/anndata)](https://pepy.tech/project/anndata)
 [![Stars](https://img.shields.io/github/stars/scverse/anndata?logo=GitHub&color=yellow)](https://github.com/scverse/anndata/stargazers)
 [![Powered by NumFOCUS](https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A)](http://numfocus.org)
 
 <img
   src="https://raw.githubusercontent.com/scverse/anndata/main/docs/_static/img/anndata_schema.svg"
-  align="right" width="350" alt="image"
+  class="dark-light" align="right" width="350" alt="image"
 />
 
 # anndata - Annotated data

@@ -276,7 +276,7 @@ class Writer:
         if elem is None:
             return lambda *_, **__: None
 
-        # Normalize k to abosulte path
+        # Normalize k to absolute path
         if not PurePosixPath(k).is_absolute():
             k = str(PurePosixPath(store.name) / k)
 

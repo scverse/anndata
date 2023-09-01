@@ -1,8 +1,12 @@
-## Version 0.10.0
+## Version 0.10
 
 ```{include} /release-notes/0.10.0.md
 ```
+
 ## Version 0.9
+
+```{include} /release-notes/0.9.3.md
+```
 
 ```{include} /release-notes/0.9.2.md
 ```

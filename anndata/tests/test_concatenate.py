@@ -8,7 +8,6 @@ import warnings
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
 import pytest
 from scipy import sparse
 from boltons.iterutils import research, remap, default_exit
@@ -23,6 +22,9 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     gen_adata,
     GEN_ADATA_DASK_ARGS,
+    BASE_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
 )
 from anndata.utils import asarray
 from anndata.compat import DaskArray, AwkArray
@@ -74,10 +76,7 @@ def make_idx_tuple(idx, axis):
 
 # Will call func(sparse_matrix) so these types should be sparse compatible
 # See array_type if only dense arrays are expected as input.
-@pytest.fixture(
-    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
-)
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS)
 def array_type(request):
     return request.param
 
@@ -128,7 +127,7 @@ def fix_known_differences(orig, result, backwards_compat=True):
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for k, dtype in orig.obs.dtypes.items():
-        if is_categorical_dtype(dtype) and dtype.ordered:
+        if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
             result.obs[k] = result.obs[k].astype(dtype)
 
     return orig, result
@@ -966,7 +965,7 @@ def permute_nested_values(dicts: "List[dict]", gen_val: "Callable[[int], Any]"):
     This function permutes the values of a nested mapping, for testing that out merge
     method work regardless of the values types.
 
-    Assumes the intial dictionary had integers for values.
+    Assumes the initial dictionary had integers for values.
     """
     dicts = deepcopy(dicts)
     initial_values = [
@@ -1184,8 +1183,8 @@ def test_concat_categories_maintain_dtype():
 
     result = concat({"a": a, "b": b, "c": c}, join="outer")
 
-    assert pd.api.types.is_categorical_dtype(
-        result.obs["cat"]
+    assert isinstance(
+        result.obs["cat"].dtype, pd.CategoricalDtype
     ), f"Was {result.obs['cat'].dtype}"
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
@@ -1212,7 +1211,7 @@ def test_concat_ordered_categoricals_retained():
 
     c = concat([a, b])
 
-    assert pd.api.types.is_categorical_dtype(c.obs["cat_ordered"])
+    assert isinstance(c.obs["cat_ordered"].dtype, pd.CategoricalDtype)
     assert c.obs["cat_ordered"].cat.ordered
 
 

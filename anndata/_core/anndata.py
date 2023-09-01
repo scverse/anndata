@@ -1,6 +1,8 @@
 """\
 Main class and helper functions.
 """
+from __future__ import annotations
+
 import warnings
 import collections.abc as cabc
 from collections import OrderedDict
@@ -19,7 +21,7 @@ from natsort import natsorted
 import numpy as np
 from numpy import ma
 import pandas as pd
-from pandas.api.types import infer_dtype, is_string_dtype, is_categorical_dtype
+from pandas.api.types import infer_dtype, is_string_dtype
 from scipy import sparse
 from scipy.sparse import issparse, csr_matrix
 
@@ -51,6 +53,8 @@ from ..compat import (
     ZarrArray,
     ZappyArray,
     DaskArray,
+    CupyArray,
+    CupySparseMatrix,
     _move_adj_mtx,
 )
 
@@ -62,6 +66,8 @@ class StorageType(Enum):
     ZarrArray = ZarrArray
     ZappyArray = ZappyArray
     DaskArray = DaskArray
+    CupyArray = CupyArray
+    CupySparseMatrix = CupySparseMatrix
 
     @classmethod
     def classes(cls):
@@ -135,13 +141,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     """\
     An annotated data matrix.
 
+    .. figure:: ../_static/img/anndata_schema.svg
+       :width: 260px
+       :align: right
+       :class: dark-light
+
     :class:`~anndata.AnnData` stores a data matrix :attr:`X` together with annotations
     of observations :attr:`obs` (:attr:`obsm`, :attr:`obsp`),
     variables :attr:`var` (:attr:`varm`, :attr:`varp`),
     and unstructured annotations :attr:`uns`.
-
-    .. figure:: ../_static/img/anndata_schema.svg
-       :width: 260px
 
     An :class:`~anndata.AnnData` object `adata` can be sliced like a
     :class:`~pandas.DataFrame`,
@@ -642,7 +650,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
-        # This can occur if there are succesive views
+        # This can occur if there are successive views
         if (
             self.is_view
             and isinstance(self._oidx, np.ndarray)
@@ -659,7 +667,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ):
             if not np.isscalar(value) and self.shape != value.shape:
                 # For assigning vector of values to 2d array or matrix
-                # Not neccesary for row of 2d array
+                # Not necessary for row of 2d array
                 value = value.reshape(self.shape)
             if self.isbacked:
                 if self.is_view:
@@ -1108,9 +1116,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
-    def _remove_unused_categories(self, df_full, df_sub, uns):
+    def _remove_unused_categories(
+        self, df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
+    ):
         for k in df_full:
-            if not is_categorical_dtype(df_full[k]):
+            if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
             with pd.option_context("mode.chained_assignment", None):
@@ -1367,7 +1377,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Returns
         -------
-        A one dimensional nd array, with values for each obs in the same order
+        A one dimensional ndarray, with values for each obs in the same order
         as :attr:`obs_names`.
         """
         if layer == "X":
@@ -1399,7 +1409,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Returns
         -------
-        A one dimensional nd array, with values for each var in the same order
+        A one dimensional ndarray, with values for each var in the same order
         as :attr:`var_names`.
         """
         if layer == "X":
@@ -1524,8 +1534,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 return self._mutated_copy()
         else:
-            from .._io import read_h5ad
-            from .._io.write import _write_h5ad
+            from .._io import read_h5ad, write_h5ad
 
             if filename is None:
                 raise ValueError(
@@ -1534,7 +1543,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     "To load the object into memory, use `.to_memory()`."
                 )
             mode = self.file._filemode
-            _write_h5ad(filename, self)
+            write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
     def concatenate(
@@ -1949,14 +1958,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
         """
-        from .._io.write import _write_h5ad
+        from .._io import write_h5ad
 
         if filename is None and not self.isbacked:
             raise ValueError("Provide a filename!")
         if filename is None:
             filename = self.filename
 
-        _write_h5ad(
+        write_h5ad(
             Path(filename),
             self,
             compression=compression,
@@ -1985,7 +1994,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         sep
              Separator for the data.
         """
-        from .._io.write import write_csvs
+        from .._io import write_csvs
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
@@ -1998,7 +2007,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             The filename.
         """
-        from .._io.write import write_loom
+        from .._io import write_loom
 
         write_loom(filename, self, write_obsm_varm=write_obsm_varm)
 
@@ -2017,7 +2026,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         chunks
             Chunk shape.
         """
-        from .._io.write import write_zarr
+        from .._io import write_zarr
 
         write_zarr(store, self, chunks=chunks)
 
