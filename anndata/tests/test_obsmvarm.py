@@ -20,16 +20,18 @@ def adata():
     return anndata.AnnData(X, obs=obs, var=var)
 
 
-def test_assigmnent_dict(adata):
+def test_assignment_dict(adata):
     d_obsm = dict(
         a=pd.DataFrame(
-            dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]), index=adata.obs_names,
+            dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]),
+            index=adata.obs_names,
         ),
         b=np.zeros((M, 2)),
     )
     d_varm = dict(
         a=pd.DataFrame(
-            dict(a1=np.ones(N), a2=[f"a{i}" for i in range(N)]), index=adata.var_names,
+            dict(a1=np.ones(N), a2=[f"a{i}" for i in range(N)]),
+            index=adata.var_names,
         ),
         b=np.zeros((N, 2)),
     )
@@ -98,4 +100,26 @@ def test_setting_sparse(adata):
     with pytest.raises(ValueError):
         adata.varm["b"] = bad_varm_sparse
 
+    assert h == joblib.hash(adata)
+
+
+def test_setting_daskarray(adata):
+    import dask.array as da
+
+    adata.obsm["a"] = da.ones((M, 10))
+    adata.varm["a"] = da.ones((N, 10))
+    assert da.all(adata.obsm["a"] == da.ones((M, 10)))
+    assert da.all(adata.varm["a"] == da.ones((N, 10)))
+    assert type(adata.obsm["a"]) == da.Array
+    assert type(adata.varm["a"]) == da.Array
+
+    h = joblib.hash(adata)
+    with pytest.raises(ValueError):
+        adata.obsm["b"] = da.ones((int(M / 2), 10))
+    with pytest.raises(ValueError):
+        adata.obsm["b"] = da.ones((int(M * 2), 10))
+    with pytest.raises(ValueError):
+        adata.varm["b"] = da.ones((int(N / 2), 10))
+    with pytest.raises(ValueError):
+        adata.varm["b"] = da.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)

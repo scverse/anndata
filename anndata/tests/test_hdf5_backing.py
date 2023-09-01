@@ -6,7 +6,13 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal, subset_func
+from anndata.tests.helpers import (
+    as_dense_dask_array,
+    GEN_ADATA_DASK_ARGS,
+    gen_adata,
+    assert_equal,
+    subset_func,
+)
 from anndata.utils import asarray
 
 subset_func2 = subset_func
@@ -41,13 +47,12 @@ def adata():
         obsm=dict(o1=np.zeros((X.shape[0], 10))),
         varm=dict(v1=np.ones((X.shape[1], 20))),
         layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
-        dtype="int32",
     )
 
 
 @pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array],
-    ids=["scipy-csr", "scipy-csc", "np-array"],
+    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
+    ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
 )
 def mtx_format(request):
     return request.param
@@ -63,8 +68,8 @@ def backed_mode(request):
     return request.param
 
 
-@pytest.fixture(params=[True, False])
-def force_dense(request):
+@pytest.fixture(params=(("X",), ()))
+def as_dense(request):
     return request.param
 
 
@@ -72,8 +77,9 @@ def force_dense(request):
 # The test functions
 # -------------------------------------------------------------------------------
 
+
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
-def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
+def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.h5ad"
     backed_pth = base_pth / "backed.h5ad"
@@ -82,7 +88,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, force_dense):
     orig.write(orig_pth)
 
     backed = ad.read(orig_pth, backed=backed_mode)
-    backed.write(backed_pth, as_dense=["X"])
+    backed.write(backed_pth, as_dense=as_dense)
     backed.file.close()
 
     from_backed = ad.read(backed_pth)
@@ -139,11 +145,24 @@ def test_backing(adata, tmp_path, backing_h5ad):
     adata_subset.write()
 
 
+def test_backing_copy(adata, tmp_path, backing_h5ad):
+    adata.filename = backing_h5ad
+    adata.write()
+
+    copypath = tmp_path / "test.copy.h5ad"
+    copy = adata.copy(copypath)
+
+    assert adata.filename == backing_h5ad
+    assert copy.filename == copypath
+    assert adata.isbacked
+    assert copy.isbacked
+
+
 # TODO: Also test updating the backing file inplace
 def test_backed_raw(tmp_path):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10))
+    mem_adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     mem_adata.raw = mem_adata
     mem_adata.write(backed_pth)
 
@@ -155,25 +174,72 @@ def test_backed_raw(tmp_path):
     assert_equal(final_adata, mem_adata)
 
 
-def test_backed_raw_subset(tmp_path, subset_func, subset_func2):
+@pytest.mark.parametrize(
+    "array_type",
+    [
+        pytest.param(asarray, id="dense_array"),
+        pytest.param(sparse.csr_matrix, id="csr_matrix"),
+    ],
+)
+def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10))
+    mem_adata = gen_adata((10, 10), X_type=array_type)
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
+    if (
+        array_type is asarray
+        and isinstance(obs_idx, (np.ndarray, sparse.spmatrix))
+        and isinstance(var_idx, (np.ndarray, sparse.spmatrix))
+    ):
+        pytest.xfail(
+            "Fancy indexing does not work with multiple arrays on a h5py.Dataset"
+        )
     mem_adata.write(backed_pth)
 
+    ### Backed view has same values as in memory view ###
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
     backed_v = backed_adata[obs_idx, var_idx]
     assert backed_v.is_view
     mem_v = mem_adata[obs_idx, var_idx]
-    assert_equal(backed_v, mem_v)
-    backed_v.write_h5ad(final_pth)
 
+    # Value equivalent
+    assert_equal(mem_v, backed_v)
+    # Type and value equivalent
+    assert_equal(mem_v.copy(), backed_v.to_memory(copy=True), exact=True)
+    assert backed_v.is_view
+    assert backed_v.isbacked
+
+    ### Write from backed view ###
+    backed_v.write_h5ad(final_pth)
     final_adata = ad.read_h5ad(final_pth)
-    # TODO: Figure out why this doesn’t work if I don’t copy
-    assert_equal(final_adata, mem_v.copy())
+
+    assert_equal(mem_v, final_adata)
+    assert_equal(final_adata, backed_v.to_memory())  # assert loading into memory
+
+
+@pytest.mark.parametrize(
+    "array_type",
+    [
+        pytest.param(asarray, id="dense_array"),
+        pytest.param(sparse.csr_matrix, id="csr_matrix"),
+        pytest.param(as_dense_dask_array, id="dask_array"),
+    ],
+)
+def test_to_memory_full(tmp_path, array_type):
+    backed_pth = tmp_path / "backed.h5ad"
+    mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    mem_adata.write_h5ad(backed_pth, compression="lzf")
+
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    assert_equal(mem_adata, backed_adata.to_memory())
+
+    # Test that raw can be removed
+    del backed_adata.raw
+    del mem_adata.raw
+    assert_equal(mem_adata, backed_adata.to_memory())
 
 
 def test_double_index(adata, backing_h5ad):

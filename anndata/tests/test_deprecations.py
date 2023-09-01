@@ -3,13 +3,15 @@ This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
+import warnings
+
 import h5py
 import numpy as np
 import pytest
 from scipy import sparse
 
-import anndata as ad
 from anndata import AnnData
+import anndata as ad
 
 from anndata.tests.helpers import assert_equal
 
@@ -17,7 +19,7 @@ from anndata.tests.helpers import assert_equal
 @pytest.fixture
 def adata():
     adata = AnnData(
-        X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]]),
+        X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         obs=dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         var=dict(var_names=["a", "b", "c"]),
     )
@@ -41,14 +43,16 @@ def test_get_obsvar_array(adata):
     with pytest.warns(DeprecationWarning):  # Just to hide warnings
         assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
         assert np.allclose(
-            adata._get_obs_array("a", layer="x2"), adata.obs_vector("a", layer="x2"),
+            adata._get_obs_array("a", layer="x2"),
+            adata.obs_vector("a", layer="x2"),
         )
         assert np.allclose(
             adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
         )
         assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
         assert np.allclose(
-            adata._get_var_array("s1", layer="x2"), adata.var_vector("s1", layer="x2"),
+            adata._get_var_array("s1", layer="x2"),
+            adata.var_vector("s1", layer="x2"),
         )
         assert np.allclose(
             adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
@@ -64,138 +68,60 @@ def test_obsvar_vector_Xlayer(adata):
     adata = adata.copy()
     adata.layers["X"] = adata.X * 3
 
-    with pytest.warns(None) as records:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         adata.var_vector("s1", layer="X")
         adata.obs_vector("a", layer="X")
 
-    for r in records:
-        # This time it shouldn’t throw a warning
-        if "anndata" in r.filename:
-            assert r.category is not FutureWarning
+
+# This should break in 0.9
+def test_dtype_warning():
+    # Tests a warning is thrown
+    with pytest.warns(PendingDeprecationWarning):
+        a = AnnData(np.ones((3, 3)), dtype=np.float32)
+    assert a.X.dtype == np.float32
+
+    # This shouldn't warn, shouldn't copy
+    with warnings.catch_warnings(record=True) as record:
+        b_X = np.ones((3, 3), dtype=np.float64)
+        b = AnnData(b_X)
+        assert not record
+    assert b_X is b.X
+    assert b.X.dtype == np.float64
+
+    # Should warn, should copy
+    with pytest.warns(PendingDeprecationWarning):
+        c_X = np.ones((3, 3), dtype=np.float32)
+        c = AnnData(c_X, dtype=np.float64)
+        assert not record
+    assert c_X is not c.X
+    assert c.X.dtype == np.float64
 
 
-def test_force_dense_deprecated(tmp_path):
-    dense_pth = tmp_path / "dense.h5ad"
-    adata = AnnData(X=sparse.random(10, 10, format="csr"))
-    adata.raw = adata
+def test_deprecated_write_attribute(tmp_path):
+    pth = tmp_path / "file.h5"
+    A = np.random.randn(20, 10)
+    from anndata._io.utils import read_attribute, write_attribute
+    from anndata._io.specs import read_elem
 
-    with pytest.warns(FutureWarning):
-        adata.write_h5ad(dense_pth, force_dense=True)
-    with h5py.File(dense_pth, "r") as f:
-        assert isinstance(f["X"], h5py.Dataset)
-        assert isinstance(f["raw/X"], h5py.Dataset)
+    with h5py.File(pth, "w") as f:
+        with pytest.warns(DeprecationWarning, match="write_elem"):
+            write_attribute(f, "written_attribute", A)
 
-    dense = ad.read_h5ad(dense_pth)
+    with h5py.File(pth, "r") as f:
+        elem_A = read_elem(f["written_attribute"])
+        with pytest.warns(DeprecationWarning, match="read_elem"):
+            attribute_A = read_attribute(f["written_attribute"])
 
-    assert isinstance(dense.X, np.ndarray)
-    assert isinstance(dense.raw.X, np.ndarray)
-    assert_equal(adata, dense)
-
-
-#######################################
-# Dealing with uns adj matrices
-#######################################
+        assert_equal(elem_A, attribute_A)
+        assert_equal(A, attribute_A)
 
 
-def test_get_uns_neighbors_deprecated(adata):
-    n = adata.shape[0]
-    mtx = sparse.random(n, n, density=0.3, format="csr")
-    adata.obsp["connectivities"] = mtx
-    adata.uns["neighbors"] = {}
+def test_deprecated_read(tmp_path):
+    memory = AnnData(np.random.randn(20, 10))
+    memory.write_h5ad(tmp_path / "file.h5ad")
 
-    with pytest.warns(FutureWarning):
-        from_uns = adata.uns["neighbors"]["connectivities"]
+    with pytest.warns(FutureWarning, match="`anndata.read` is deprecated"):
+        from_disk = ad.read(tmp_path / "file.h5ad")
 
-    assert_equal(from_uns, mtx)
-
-    with pytest.warns(None) as rec:
-        v = adata[: n // 2]
-        assert not rec
-
-    with pytest.warns(FutureWarning):
-        from_uns_v = v.uns["neighbors"]["connectivities"]
-
-    assert_equal(from_uns_v, v.obsp["connectivities"])
-
-
-def test_set_uns_neighbors_deprecated(adata):
-    n = adata.shape[0]
-    mtx = sparse.random(n, n, format="csr")
-    adata.uns["neighbors"] = {}
-
-    with pytest.warns(FutureWarning):
-        adata.uns["neighbors"]["connectivities"] = sparse.random(n, n, format="csr")
-
-    assert_equal(adata.obsp["connectivities"], mtx)
-    with pytest.warns(FutureWarning):
-        assert_equal(adata.uns["neighbors"]["connectivities"], mtx)
-
-    # Make sure that we can write to uns normally:
-    adata.uns["new_key"] = 100
-    assert adata.uns["new_key"] == 100
-
-
-def test_slice_uns_sparse_deprecated():
-    adata = AnnData(sparse.csr_matrix((500, 10)))
-    n = adata.shape[0]
-    mtx = sparse.random(n, n, density=0.2, format="csr")
-    adata.uns["sparse_mtx"] = mtx
-
-    with pytest.warns(FutureWarning):
-        v = adata[: n // 2]
-
-    assert_equal(adata.uns["sparse_mtx"], mtx)
-    assert_equal(v.uns["sparse_mtx"], mtx[: n // 2, : n // 2])
-
-
-@pytest.fixture
-def adata_neighbors():
-    return ad.AnnData(
-        X=sparse.random(100, 200, format="csr"),
-        obsp=dict(
-            distances=sparse.random(100, 100, format="csr"),
-            connectivities=sparse.random(100, 100, format="csr"),
-        ),
-        uns={"neighbors": {"params": {"method": "umap", "n_neighbors": 10}}},
-    )
-
-
-def test_deprecated_neighbors_get_mtx(adata_neighbors):
-    """Test getting neighbor matrices from adata.uns"""
-    adata = adata_neighbors
-
-    with pytest.warns(FutureWarning):
-        assert_equal(adata.obsp["distances"], adata.uns["neighbors"]["distances"])
-    with pytest.warns(FutureWarning):
-        assert_equal(
-            adata.obsp["connectivities"], adata.uns["neighbors"]["connectivities"]
-        )
-
-
-def test_deprecated_neighbors_get_other(adata_neighbors):
-    """Test getting other fields from adata.uns"""
-    adata = adata_neighbors
-
-    # This shouldn't throw a warning
-    with pytest.warns(None) as rec:
-        assert adata.uns["neighbors"]["params"] == {"method": "umap", "n_neighbors": 10}
-        assert not rec
-
-
-def test_deprecated_neighbors_set_other(adata_neighbors):
-    adata = adata_neighbors
-
-    # This shouldn't throw a warning
-    with pytest.warns(None) as rec:
-        adata.uns["neighbors"]["new_key"] = 10
-        assert adata.uns["neighbors"]["new_key"] == 10
-        # Test nested
-        adata.uns["neighbors"]["params"]["new_param"] = 100
-        assert adata.uns["neighbors"]["params"]["new_param"] == 100
-        assert adata.uns["neighbors"]["params"] == {
-            "method": "umap",
-            "n_neighbors": 10,
-            "new_param": 100,
-        }
-
-        assert not rec
+    assert_equal(memory, from_disk)

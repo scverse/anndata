@@ -3,7 +3,7 @@ import pytest
 
 import anndata as ad
 from anndata._core.anndata import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal
+from anndata.tests.helpers import assert_equal, gen_adata, GEN_ADATA_DASK_ARGS
 
 
 # -------------------------------------------------------------------------------
@@ -35,7 +35,7 @@ uns_dict = dict(  # unstructured annotation
 @pytest.fixture
 def adata_raw():
     adata = ad.AnnData(
-        np.array(data), obs=obs_dict, var=var_dict, uns=uns_dict, dtype="int32"
+        np.array(data, dtype="int32"), obs=obs_dict, var=var_dict, uns=uns_dict
     )
     adata.raw = adata
     # Make them different shapes
@@ -57,6 +57,17 @@ def test_raw_init(adata_raw):
 def test_raw_del(adata_raw):
     del adata_raw.raw
     assert adata_raw.raw is None
+
+
+def test_raw_set_as_none(adata_raw):
+    # Test for scverse/anndata#445
+    a = adata_raw
+    b = adata_raw.copy()
+
+    del a.raw
+    b.raw = None
+
+    assert_equal(a, b)
 
 
 def test_raw_of_view(adata_raw):
@@ -82,7 +93,7 @@ def test_raw_view_rw(adata_raw, backing_h5ad):
     # Make sure it still writes correctly if the object is a view
     adata_raw_view = adata_raw[:, adata_raw.var_names]
     assert_equal(adata_raw_view, adata_raw)
-    with pytest.warns(ImplicitModificationWarning, match="Initializing view as actual"):
+    with pytest.warns(ImplicitModificationWarning, match="initializing view as actual"):
         adata_raw_view.write(backing_h5ad)
     adata_read = ad.read(backing_h5ad)
 
@@ -114,7 +125,7 @@ def test_raw_view_backed(adata_raw, backing_h5ad):
 
 
 def test_raw_as_parent_view():
-    # https://github.com/theislab/anndata/issues/288
+    # https://github.com/scverse/anndata/issues/288
     a = ad.AnnData(np.ones((4, 3)))
     a.varm["PCs"] = np.ones((3, 3))
     a.raw = a
@@ -122,3 +133,32 @@ def test_raw_as_parent_view():
     b = a.raw[:, "0"]
     # actualize
     b.varm["PCs"] = np.array([[1, 2, 3]])
+
+
+def test_to_adata():
+    # https://github.com/scverse/anndata/pull/404
+    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
+
+    with_raw = adata[:, ::2].copy()
+    with_raw.raw = adata.copy()
+
+    # Raw doesn't do layers or varp currently
+    # Deleting after creation so we know to rewrite the test if they are supported
+    del adata.layers, adata.varp
+
+    assert_equal(adata, with_raw.raw.to_adata())
+
+
+def test_to_adata_populates_obs():
+    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
+
+    del adata.layers, adata.uns, adata.varp
+    adata_w_raw = adata.copy()
+
+    raw = adata.copy()
+    del raw.obs, raw.obsm, raw.obsp, raw.uns
+
+    adata_w_raw.raw = raw
+    from_raw = adata_w_raw.raw.to_adata()
+
+    assert_equal(adata, from_raw)

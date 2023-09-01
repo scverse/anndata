@@ -1,0 +1,19 @@
+name: "Close stale issues"
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v5
+        with:
+          days-before-issue-stale: -1 # We don't want to mark issues as stale in this action
+          days-before-issue-close: 14
+          days-before-pr-close: -1 # don't close PRs
+          days-before-pr-stale: -1 # don't mark PRs as stale
+          stale-issue-label: stale
+          any-of-labels: "needs info"
+          debug-only: true # enable dry-run, remove when we know from the logs it's working.

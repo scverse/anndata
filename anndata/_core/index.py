@@ -3,13 +3,11 @@ from functools import singledispatch
 from itertools import repeat
 from typing import Union, Sequence, Optional, Tuple
 
+import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-
-
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
+from ..compat import AwkArray, DaskArray, Index, Index1D
 
 
 def _normalize_indices(
@@ -126,6 +124,14 @@ def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
     return a[subset_idx]
 
 
+@_subset.register(DaskArray)
+def _subset_dask(a: DaskArray, subset_idx: Index):
+    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+        return a.vindex[subset_idx]
+    return a[subset_idx]
+
+
 @_subset.register(spmatrix)
 def _subset_spmatrix(a: spmatrix, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
@@ -137,6 +143,29 @@ def _subset_spmatrix(a: spmatrix, subset_idx: Index):
 @_subset.register(pd.DataFrame)
 def _subset_df(df: pd.DataFrame, subset_idx: Index):
     return df.iloc[subset_idx]
+
+
+@_subset.register(AwkArray)
+def _subset_awkarray(a: AwkArray, subset_idx: Index):
+    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+    return a[subset_idx]
+
+
+# Registration for SparseDataset occurs in sparse_dataset.py
+@_subset.register(h5py.Dataset)
+def _subset_dataset(d, subset_idx):
+    if not isinstance(subset_idx, tuple):
+        subset_idx = (subset_idx,)
+    ordered = list(subset_idx)
+    rev_order = [slice(None) for _ in range(len(subset_idx))]
+    for axis, axis_idx in enumerate(ordered.copy()):
+        if isinstance(axis_idx, np.ndarray) and axis_idx.dtype.type != bool:
+            order = np.argsort(axis_idx)
+            ordered[axis] = axis_idx[order]
+            rev_order[axis] = np.argsort(order)
+    # from hdf5, then to real order
+    return d[tuple(ordered)][tuple(rev_order)]
 
 
 def make_slice(idx, dimidx, n=2):

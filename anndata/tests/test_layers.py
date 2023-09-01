@@ -1,4 +1,5 @@
 from importlib.util import find_spec
+import warnings
 
 import pytest
 import numpy as np
@@ -46,7 +47,7 @@ def test_views():
     "df,homogenous,dtype",
     [
         (lambda: gen_typed_df_t2_size(*X.shape), True, np.object_),
-        (lambda: pd.DataFrame(X ** 2), False, np.int_),
+        (lambda: pd.DataFrame(X**2), False, np.int_),
     ],
 )
 def test_set_dataframe(homogenous, df, dtype):
@@ -55,9 +56,9 @@ def test_set_dataframe(homogenous, df, dtype):
         with pytest.warns(UserWarning, match=r"Layer 'df'.*dtype object"):
             adata.layers["df"] = df()
     else:
-        with pytest.warns(None) as warnings:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             adata.layers["df"] = df()
-            assert not len(warnings)
     assert isinstance(adata.layers["df"], np.ndarray)
     assert np.issubdtype(adata.layers["df"].dtype, dtype)
 

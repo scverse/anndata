@@ -9,18 +9,7 @@ from scipy.sparse import issparse
 
 from .. import AnnData
 from ..logging import get_logger
-from . import WriteWarning
-
-# Exports
-from .h5ad import write_h5ad as _write_h5ad
-
-try:
-    from .zarr import write_zarr
-except ImportError as e:
-
-    def write_zarr(*_, **__):
-        raise e
-
+from .._warnings import WriteWarning
 
 logger = get_logger(__name__)
 
@@ -45,7 +34,7 @@ def write_csvs(
         varm=adata._varm.to_df(),
     )
     if not skip_data:
-        d["X"] = pd.DataFrame(adata._X.toarray() if issparse(adata._X) else adata._X)
+        d["X"] = pd.DataFrame(adata.X.toarray() if issparse(adata.X) else adata.X)
     d_write = {**d, **adata._uns}
     not_yet_raised_sparse_warning = True
     for key, value in d_write.items():
@@ -67,7 +56,8 @@ def write_csvs(
                 df = pd.DataFrame(value)
             except Exception as e:
                 warnings.warn(
-                    f"Omitting to write {key!r} of type {type(e)}.", WriteWarning,
+                    f"Omitting to write {key!r} of type {type(e)}.",
+                    WriteWarning,
                 )
                 continue
         df.to_csv(
@@ -81,9 +71,13 @@ def write_csvs(
 def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
-    row_attrs["var_names"] = adata.var_names.values
+    row_names = adata.var_names
+    row_dim = row_names.name if row_names.name is not None else "var_names"
+    row_attrs[row_dim] = row_names.values
     col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict("list").items()}
-    col_attrs["obs_names"] = adata.obs_names.values
+    col_names = adata.obs_names
+    col_dim = col_names.name if col_names.name is not None else "obs_names"
+    col_attrs[col_dim] = col_names.values
 
     if adata.X is None:
         raise ValueError("loompy does not accept empty matrices as data")

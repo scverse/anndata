@@ -1,19 +1,12 @@
 import sys
-import logging
 from pathlib import Path
 from datetime import datetime
+from importlib import metadata
 
 from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
-import anndata  # noqa
-
-
-logger = logging.getLogger(__name__)
-
-for generated in HERE.glob("anndata.*.rst"):
-    generated.unlink()
+sys.path[:0] = [str(HERE / "extensions")]
 
 
 # -- General configuration ------------------------------------------------
@@ -23,20 +16,28 @@ needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
-author = anndata.__author__
-copyright = f"{datetime.now():%Y}, {author}."
-version = anndata.__version__.replace(".dirty", "")
-release = version
+author = f"{project} developers"
+copyright = f"{datetime.now():%Y}, {author}"
+release = version = metadata.version("anndata")
 
 # default settings
 templates_path = ["_templates"]
-source_suffix = ".rst"
+html_static_path = ["_static"]
+source_suffix = [".rst", ".md"]
 master_doc = "index"
 default_role = "literal"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "**.ipynb_checkpoints",
+    "tutorials/notebooks/*.rst",
+]
 pygments_style = "sphinx"
 
 extensions = [
+    "myst_parser",
+    "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
@@ -45,13 +46,21 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
-    "scanpydoc",
-    *[p.stem for p in (HERE / "extensions").glob("*.py")],
+    "sphinx_issues",
+    "sphinxext.opengraph",
+    "scanpydoc",  # needs to be before linkcode
+    "sphinx.ext.linkcode",
+    "nbsphinx",
+    "IPython.sphinxext.ipython_console_highlighting",
+]
+myst_enable_extensions = [
+    "html_image",  # So README.md can be used on github and sphinx docs
 ]
 
 # Generate the API documentation when building
 autosummary_generate = True
 autodoc_member_order = "bysource"
+issues_github_path = "scverse/anndata"
 # autodoc_default_flags = ['members']
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -59,71 +68,67 @@ napoleon_include_init_with_doc = False
 napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
+typehints_defaults = "braces"
 todo_include_todos = False
 nitpicky = True  # Report broken links
-suppress_warnings = ["ref.citation"]
-
-
-def work_around_issue_6785():
-    """See https://github.com/sphinx-doc/sphinx/issues/6785"""
-    from docutils.parsers.rst import directives
-    from sphinx.ext import autodoc
-    from sphinx.domains.python import PyAttribute
-
-    # check if the code changes on the sphinx side and we can remove this
-    assert autodoc.PropertyDocumenter.directivetype == "method"
-    autodoc.PropertyDocumenter.directivetype = "attribute"
-
-    def get_signature_prefix(self, sig: str) -> str:
-        # TODO: abstract attributes
-        return "property " if "property" in self.options else ""
-
-    PyAttribute.option_spec["property"] = directives.flag
-    PyAttribute.get_signature_prefix = get_signature_prefix
+nitpick_ignore = [
+    ("py:class", "scipy.sparse.base.spmatrix"),
+    ("py:meth", "pandas.DataFrame.iloc"),
+    ("py:meth", "pandas.DataFrame.loc"),
+    ("py:class", "anndata._core.views.ArrayView"),
+    ("py:class", "anndata._core.raw.Raw"),
+    *[
+        ("py:class", f"anndata._core.aligned_mapping.{cls}{kind}")
+        for cls in "Layers AxisArrays PairwiseArrays".split()
+        for kind in ["", "View"]
+    ],
+]
+suppress_warnings = [
+    "ref.citation",
+    "myst.header",  # https://github.com/executablebooks/MyST-Parser/issues/262
+]
 
 
 def setup(app: Sphinx):
-    work_around_issue_6785()
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
     app.warningiserror = True
 
 
 intersphinx_mapping = dict(
-    h5py=("http://docs.h5py.org/en/latest/", None),
+    h5py=("https://docs.h5py.org/en/latest/", None),
+    hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest/", None),
     loompy=("https://linnarssonlab.org/loompy/", None),
-    numpy=("https://docs.scipy.org/doc/numpy/", None),
+    numpy=("https://numpy.org/doc/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
     python=("https://docs.python.org/3", None),
-    scipy=("https://docs.scipy.org/doc/scipy/reference/", None),
+    scipy=("https://docs.scipy.org/doc/scipy/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
-    xarray=("http://xarray.pydata.org/en/stable/", None),
+    xarray=("https://xarray.pydata.org/en/stable/", None),
 )
 qualname_overrides = {
+    "h5py._hl.group.Group": "h5py.Group",
+    "h5py._hl.files.File": "h5py.File",
+    "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
-    # Temporarily
-    "anndata._core.raw.Raw": "anndata.AnnData",
-    "anndata._core.views.ArrayView": "numpy.ndarray",
-    **{
-        f"anndata._core.aligned_mapping.{cls}{kind}": "typing.Mapping"
-        for cls in "Layers AxisArrays PairwiseArrays".split()
-        for kind in ["", "View"]
-    },
 }
+
+# -- Social cards ---------------------------------------------------------
+
+ogp_site_url = "https://anndata.readthedocs.io/"
+ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema.svg"
 
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "scanpydoc"
-html_theme_options = dict(navigation_depth=4)
-html_context = dict(
-    display_github=True,  # Integrate GitHub
-    github_user="theislab",  # Username
-    github_repo="anndata",  # Repo name
-    github_version="master",  # Version
-    conf_py_path="/docs/",  # Path in the checkout to the docs root
+html_theme = "sphinx_book_theme"
+html_theme_options = dict(
+    use_repository_button=True,
+    repository_url="https://github.com/scverse/anndata",
+    repository_branch="main",
 )
-issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
+html_logo = "_static/img/anndata_schema.svg"
+issues_github_path = "scverse/anndata"
 html_show_sphinx = False
 
 

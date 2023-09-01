@@ -19,7 +19,8 @@ def mtx_format(request):
 
 
 @pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix], ids=["scipy-csr", "scipy-csc"],
+    params=[sparse.csr_matrix, sparse.csc_matrix],
+    ids=["scipy-csr", "scipy-csc"],
 )
 def spmtx_format(request):
     return request.param

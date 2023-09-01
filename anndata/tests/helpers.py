@@ -1,7 +1,11 @@
-from functools import singledispatch, wraps
+from __future__ import annotations
+
+from contextlib import contextmanager
+from functools import singledispatch, wraps, partial
+import re
 from string import ascii_letters
-from typing import Tuple
-from collections.abc import Mapping
+from typing import Tuple, Optional, Type
+from collections.abc import Mapping, Collection
 import warnings
 
 import h5py
@@ -10,12 +14,33 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import pytest
 from scipy import sparse
+import random
 
-from anndata import AnnData
+from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
 from anndata._core.sparse_dataset import SparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
+from anndata.compat import (
+    AwkArray,
+    DaskArray,
+    CupySparseMatrix,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+)
+
+# Give this to gen_adata when dask array support is expected.
+GEN_ADATA_DASK_ARGS = dict(
+    obsm_types=(
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+)
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -35,15 +60,83 @@ def gen_typed_df(n, index=None):
     if n > len(letters):
         letters = letters[: n // 2]  # Make sure categories are repeated
     return pd.DataFrame(
-        dict(
-            cat=pd.Categorical(np.random.choice(letters, n)),
-            cat_ordered=pd.Categorical(np.random.choice(letters, n), ordered=True),
-            int64=np.random.randint(-50, 50, n),
-            float64=np.random.random(n),
-            uint8=np.random.randint(255, size=n, dtype="uint8"),
-        ),
+        {
+            "cat": pd.Categorical(np.random.choice(letters, n)),
+            "cat_ordered": pd.Categorical(np.random.choice(letters, n), ordered=True),
+            "int64": np.random.randint(-50, 50, n),
+            "float64": np.random.random(n),
+            "uint8": np.random.randint(255, size=n, dtype="uint8"),
+            "bool": np.random.randint(0, 2, size=n, dtype=bool),
+            "nullable-bool": pd.arrays.BooleanArray(
+                np.random.randint(0, 2, size=n, dtype=bool),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+            "nullable-int": pd.arrays.IntegerArray(
+                np.random.randint(0, 1000, size=n, dtype=np.int32),
+                mask=np.random.randint(0, 2, size=n, dtype=bool),
+            ),
+        },
         index=index,
     )
+
+
+def _gen_awkward_inner(shape, rng, dtype):
+    # the maximum length a ragged dimension can take
+    MAX_RAGGED_DIM_LEN = 20
+    if not len(shape):
+        # abort condition -> no dimension left, return an actual value instead
+        return dtype(rng.randrange(1000))
+    else:
+        curr_dim_len = shape[0]
+        lil = []
+        if curr_dim_len is None:
+            # ragged dimension, set random length
+            curr_dim_len = rng.randrange(MAX_RAGGED_DIM_LEN)
+
+        for _ in range(curr_dim_len):
+            lil.append(_gen_awkward_inner(shape[1:], rng, dtype))
+
+        return lil
+
+
+def gen_awkward(shape, dtype=np.int32):
+    """Function to generate an awkward array with random values.
+
+    Awkward array dimensions can either be fixed-length ("regular") or variable length ("ragged")
+    (the first dimension is always fixed-length).
+
+
+    Parameters
+    ----------
+    shape
+        shape of the array to be generated. Any dimension specified as `None` will be simulated as ragged.
+    """
+    import awkward as ak
+
+    if shape[0] is None:
+        raise ValueError("The first dimension must be fixed-length.")
+
+    rng = random.Random(123)
+    shape = np.array(shape)
+
+    if np.any(shape == 0):
+        # use empty numpy array for fixed dimensions, then add empty singletons for ragged dimensions
+        var_dims = [i for i, s in enumerate(shape) if s is None]
+        shape = [s for s in shape if s is not None]
+        arr = ak.Array(np.empty(shape, dtype=dtype))
+        for d in var_dims:
+            arr = ak.singletons(arr, axis=d - 1)
+        return arr
+    else:
+        lil = _gen_awkward_inner(shape, rng, dtype)
+        arr = ak.values_astype(AwkArray(lil), dtype)
+
+    # make fixed-length dimensions regular
+    for i, d in enumerate(shape):
+        if d is not None:
+            arr = ak.to_regular(arr, i)
+
+    return arr
 
 
 def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
@@ -68,9 +161,20 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
-    varm_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame,),
+    obsm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        AwkArray,
+    ),
+    varm_types: "Collection[Type]" = (
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        AwkArray,
+    ),
+    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    sparse_fmt: str = "csr",
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -94,7 +198,12 @@ def gen_adata(
         What kinds of containers should be in `.varm`?
     layers_types
         What kinds of containers should be in `.layers`?
+    sparse_fmt
+        What sparse format should be used for sparse matrices?
+        (csr, csc)
     """
+    import dask.array as da
+
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
@@ -104,34 +213,52 @@ def gen_adata(
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    if X_type is None:
+        X = None
+    else:
+        X = X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype))
     obsm = dict(
         array=np.random.random((M, 50)),
-        sparse=sparse.random(M, 100, format="csr"),
+        sparse=sparse.random(M, 100, format=sparse_fmt),
         df=gen_typed_df(M, obs_names),
+        awk_2d_ragged=gen_awkward((M, None)),
+        da=da.random.random((M, 50)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format="csr"),
+        sparse=sparse.random(N, 100, format=sparse_fmt),
         df=gen_typed_df(N, var_names),
+        awk_2d_ragged=gen_awkward((N, None)),
+        da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
-        array=np.random.random((M, N)), sparse=sparse.random(M, N, format="csr")
+        array=np.random.random((M, N)),
+        sparse=sparse.random(M, N, format=sparse_fmt),
+        da=da.random.random((M, N)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)), sparse=sparse.random(M, M, format="csr")
+        array=np.random.random((M, M)), sparse=sparse.random(M, M, format=sparse_fmt)
     )
     varp = dict(
-        array=np.random.random((N, N)), sparse=sparse.random(N, N, format="csr")
+        array=np.random.random((N, N)), sparse=sparse.random(N, N, format=sparse_fmt)
     )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
+        nested=dict(
+            scalar_str="str",
+            scalar_int=42,
+            scalar_float=3.0,
+            nested_further=dict(array=np.arange(5)),
+        ),
+        awkward_regular=gen_awkward((10, 5)),
+        awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     adata = AnnData(
-        X=X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype)),
+        X=X,
         obs=obs,
         var=var,
         obsm=obsm,
@@ -139,7 +266,6 @@ def gen_adata(
         layers=layers,
         obsp=obsp,
         varp=varp,
-        dtype=X_dtype,
         uns=uns,
     )
     return adata
@@ -203,7 +329,7 @@ def slice_subset(index, min_size=2):
 
 
 def single_subset(index):
-    return index[np.random.randint(0, len(index), size=())]
+    return index[np.random.randint(0, len(index))]
 
 
 @pytest.fixture(
@@ -267,6 +393,11 @@ def assert_equal(a, b, exact=False, elem_name=None):
     _assert_equal(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(CupyArray)
+def assert_equal_cupy(a, b, exact=False, elem_name=None):
+    assert_equal(b, a.get(), exact, elem_name)
+
+
 @assert_equal.register(np.ndarray)
 def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     b = asarray(b)
@@ -297,10 +428,27 @@ def assert_equal_sparse(a, b, exact=False, elem_name=None):
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
+@assert_equal.register(CupySparseMatrix)
+def assert_equal_cupy_sparse(a, b, exact=False, elem_name=None):
+    a = a.toarray()
+    assert_equal(b, a, exact, elem_name=elem_name)
+
+
 @assert_equal.register(h5py.Dataset)
 def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
+
+
+@assert_equal.register(DaskArray)
+def assert_equal_dask_array(a, b, exact=False, elem_name=None):
+    from dask.array.utils import assert_eq
+
+    if exact:
+        assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
+    else:
+        # TODO: Why does it fail when check_graph=True
+        assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
 
 
 @assert_equal.register(pd.DataFrame)
@@ -311,11 +459,21 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
     report_name(pd.testing.assert_frame_equal)(
         a,
         b,
-        check_index_type=exact,
         check_exact=exact,
+        check_column_type=exact,
+        check_index_type=exact,
         _elem_name=elem_name,
         check_frame_type=False,
     )
+
+
+@assert_equal.register(AwkArray)
+def assert_equal_awkarray(a, b, exact=False, elem_name=None):
+    import awkward as ak
+
+    if exact:
+        assert a.type == b.type, f"{a.type} != {b.type}, {format_msg(elem_name)}"
+    assert ak.to_list(a) == ak.to_list(b), format_msg(elem_name)
 
 
 @assert_equal.register(Mapping)
@@ -333,7 +491,7 @@ def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
     b_indices = (b.parent.obs_names, b.parent.var_names)
     for axis_idx in a.axes:
         assert_equal(
-            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx,
+            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx
         )
     assert a.attrname == b.attrname, format_msg(elem_name)
     assert_equal_mapping(a, b, exact=exact, elem_name=elem_name)
@@ -343,14 +501,42 @@ def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
 def assert_equal_index(a, b, exact=False, elem_name=None):
     if not exact:
         report_name(pd.testing.assert_index_equal)(
-            a, b, check_names=False, check_categorical=False, _elem_name=elem_name,
+            a, b, check_names=False, check_categorical=False, _elem_name=elem_name
         )
     else:
         report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
 
 
+@assert_equal.register(pd.api.extensions.ExtensionArray)
+def assert_equal_extension_array(a, b, exact=False, elem_name=None):
+    report_name(pd.testing.assert_extension_array_equal)(
+        a,
+        b,
+        check_dtype=exact,
+        check_exact=exact,
+        _elem_name=elem_name,
+    )
+
+
+@assert_equal.register(Raw)
+def assert_equal_raw(a, b, exact=False, elem_name=None):
+    def assert_is_not_none(x):  # can't put an assert in a lambda
+        assert x is not None
+
+    report_name(assert_is_not_none)(b, _elem_name=elem_name)
+    for attr in ["X", "var", "varm", "obs_names"]:
+        assert_equal(
+            getattr(a, attr),
+            getattr(b, attr),
+            exact=exact,
+            elem_name=f"{elem_name}/{attr}",
+        )
+
+
 @assert_equal.register(AnnData)
-def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
+def assert_adata_equal(
+    a: AnnData, b: AnnData, exact: bool = False, elem_name: Optional[str] = None
+):
     """\
     Check whether two AnnData objects are equivalent,
     raising an AssertionError if they aren’t.
@@ -363,12 +549,19 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
         Whether comparisons should be exact or not. This has a somewhat flexible
         meaning and should probably get refined in the future.
     """
+
+    def fmt_name(x):
+        if elem_name is None:
+            return x
+        else:
+            return f"{elem_name}/{x}"
+
     # There may be issues comparing views, since np.allclose
     # can modify ArrayViews if they contain `nan`s
-    assert_equal(a.obs_names, b.obs_names, exact, elem_name="obs_names")
-    assert_equal(a.var_names, b.var_names, exact, elem_name="var_names")
+    assert_equal(a.obs_names, b.obs_names, exact, elem_name=fmt_name("obs_names"))
+    assert_equal(a.var_names, b.var_names, exact, elem_name=fmt_name("var_names"))
     if not exact:
-        # Reorder all elements if neccesary
+        # Reorder all elements if necessary
         idx = [slice(None), slice(None)]
         # Since it’s a pain to compare a list of pandas objects
         change_flag = False
@@ -380,17 +573,136 @@ def assert_adata_equal(a: AnnData, b: AnnData, exact: bool = False):
             change_flag = True
         if change_flag:
             b = b[tuple(idx)].copy()
-    assert_equal(a.obs, b.obs, exact, elem_name="obs")
-    assert_equal(a.var, b.var, exact, elem_name="var")
-    assert_equal(a.X, b.X, exact, elem_name="X")
-    for mapping_attr in ["obsm", "varm", "layers", "uns", "obsp", "varp"]:
+    for attr in [
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "layers",
+        "uns",
+        "obsp",
+        "varp",
+        "raw",
+    ]:
         assert_equal(
-            getattr(a, mapping_attr),
-            getattr(b, mapping_attr),
+            getattr(a, attr),
+            getattr(b, attr),
             exact,
-            elem_name=mapping_attr,
+            elem_name=fmt_name(attr),
         )
-    if a.raw is not None:
-        assert_equal(a.raw.X, b.raw.X, exact, elem_name="raw/X")
-        assert_equal(a.raw.var, b.raw.var, exact, elem_name="raw/var")
-        assert_equal(a.raw.varm, b.raw.varm, exact, elem_name="raw/varm")
+
+
+@singledispatch
+def as_dense_dask_array(a):
+    import dask.array as da
+
+    return da.asarray(a)
+
+
+@as_dense_dask_array.register(sparse.spmatrix)
+def _(a):
+    return as_dense_dask_array(a.toarray())
+
+
+@contextmanager
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
+    """Error handling using pytest 8's support for __notes__.
+
+    See: https://github.com/pytest-dev/pytest/pull/11227
+
+    Remove once pytest 8 is out!
+    """
+
+    with pytest.raises(exc_cls) as exc_info:
+        yield exc_info
+
+    check_error_or_notes_match(exc_info, match)
+
+
+def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
+    """
+    Checks whether the printed error message or the notes contains the given pattern.
+
+    DOES NOT WORK IN IPYTHON - because of the way IPython handles exceptions
+    """
+    import traceback
+
+    message = "".join(traceback.format_exception_only(e.type, e.value))
+    assert re.search(
+        pattern, message
+    ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
+
+
+def as_cupy_type(val, typ=None):
+    """
+    Rough conversion function
+
+    Will try to infer target type from input type if not specified.
+    """
+    if typ is None:
+        input_typ = type(val)
+        if issubclass(input_typ, np.ndarray):
+            typ = CupyArray
+        elif issubclass(input_typ, sparse.csr_matrix):
+            typ = CupyCSRMatrix
+        elif issubclass(input_typ, sparse.csc_matrix):
+            typ = CupyCSCMatrix
+        else:
+            raise NotImplementedError(
+                f"No default target type for input type {input_typ}"
+            )
+
+    if issubclass(typ, CupyArray):
+        import cupy as cp
+
+        if isinstance(val, sparse.spmatrix):
+            val = val.toarray()
+        return cp.array(val)
+    elif issubclass(typ, CupyCSRMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csr_matrix(cp.array(val))
+        else:
+            return cpsparse.csr_matrix(val)
+    elif issubclass(typ, CupyCSCMatrix):
+        import cupyx.scipy.sparse as cpsparse
+        import cupy as cp
+
+        if isinstance(val, np.ndarray):
+            return cpsparse.csc_matrix(cp.array(val))
+        else:
+            return cpsparse.csc_matrix(val)
+    else:
+        raise NotImplementedError(
+            f"Conversion from {type(val)} to {typ} not implemented"
+        )
+
+
+BASE_MATRIX_PARAMS = [
+    pytest.param(asarray, id="np_array"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+]
+
+DASK_MATRIX_PARAMS = [
+    pytest.param(as_dense_dask_array, id="dask_array"),
+]
+
+CUPY_MATRIX_PARAMS = [
+    pytest.param(
+        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSRMatrix),
+        id="cupy_csr",
+        marks=pytest.mark.gpu,
+    ),
+    pytest.param(
+        partial(as_cupy_type, typ=CupyCSCMatrix),
+        id="cupy_csc",
+        marks=pytest.mark.gpu,
+    ),
+]

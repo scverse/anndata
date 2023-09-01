@@ -1,10 +1,18 @@
-from enum import Enum
-from functools import wraps, singledispatch
+from __future__ import annotations
+
+from functools import wraps
+from typing import Callable, Literal
 from warnings import warn
 
 from packaging import version
+import h5py
 
 from .._core.sparse_dataset import SparseDataset
+from anndata.compat import H5Group, ZarrGroup, add_note
+
+# For allowing h5py v3
+# https://github.com/scverse/anndata/issues/442
+H5PY_V3 = version.parse(h5py.__version__).major >= 3
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -88,24 +96,45 @@ def convert_string(string):
         return string
 
 
+def check_key(key):
+    """Checks that passed value is a valid h5py key.
+
+    Should convert it if there is an obvious conversion path, error otherwise.
+    """
+    typ = type(key)
+    if issubclass(typ, str):
+        return str(key)
+    # TODO: Should I try to decode bytes? It's what h5py would do,
+    # but it will be read out as a str.
+    # elif issubclass(typ, bytes):
+    # return key
+    else:
+        raise TypeError(f"{key} of type {typ} is an invalid key. Should be str.")
+
+
 # -------------------------------------------------------------------------------
 # Generic functions
 # -------------------------------------------------------------------------------
 
 
-@singledispatch
-def write_attribute(*args, **kwargs):
-    raise NotImplementedError("Unrecognized argument types for `write_attribute`.")
-
-
-@singledispatch
 def read_attribute(*args, **kwargs):
-    raise NotImplementedError("Unrecognized argument types for `read_attribute`.")
+    from .specs import read_elem
+
+    warn(
+        "This internal function has been deprecated, please use read_elem instead",
+        DeprecationWarning,
+    )
+    return read_elem(*args, **kwargs)
 
 
-@read_attribute.register(type(None))
-def read_attribute_none(value) -> None:
-    return None
+def write_attribute(*args, **kwargs):
+    from .specs import write_elem
+
+    warn(
+        "This internal function has been deprecated, please use write_elem instead",
+        DeprecationWarning,
+    )
+    return write_elem(*args, **kwargs)
 
 
 # -------------------------------------------------------------------------------
@@ -135,6 +164,21 @@ def _get_parent(elem):
     return parent
 
 
+def re_raise_error(e, elem, key, op=Literal["read", "writ"]):
+    if any(
+        f"Error raised while {op}ing key" in note
+        for note in getattr(e, "__notes__", [])
+    ):
+        raise
+    else:
+        parent = _get_parent(elem)
+        add_note(
+            e,
+            f"Error raised while {op}ing key {key!r} of {type(elem)} to " f"{parent}",
+        )
+        raise e
+
+
 def report_read_key_on_error(func):
     """\
     A decorator for zarr element reading which makes keys involved in errors get reported.
@@ -151,18 +195,17 @@ def report_read_key_on_error(func):
     """
 
     @wraps(func)
-    def func_wrapper(elem, *args, **kwargs):
+    def func_wrapper(*args, **kwargs):
+        from anndata._io.specs import Reader
+
+        # Figure out signature (method vs function) by going through args
+        for elem in args:
+            if not isinstance(elem, Reader):
+                break
         try:
-            return func(elem, *args, **kwargs)
+            return func(*args, **kwargs)
         except Exception as e:
-            if isinstance(e, AnnDataReadError):
-                raise e
-            else:
-                parent = _get_parent(elem)
-                raise AnnDataReadError(
-                    f"Above error raised while reading key {elem.name!r} of "
-                    f"type {type(elem)} from {parent}."
-                )
+            re_raise_error(e, elem, elem.name, "read")
 
     return func_wrapper
 
@@ -183,16 +226,19 @@ def report_write_key_on_error(func):
     """
 
     @wraps(func)
-    def func_wrapper(elem, key, val, *args, **kwargs):
+    def func_wrapper(*args, **kwargs):
+        from anndata._io.specs import Writer
+
+        # Figure out signature (method vs function) by going through args
+        for i in range(len(args)):
+            elem = args[i]
+            key = args[i + 1]
+            if not isinstance(elem, Writer):
+                break
         try:
-            return func(elem, key, val, *args, **kwargs)
+            return func(*args, **kwargs)
         except Exception as e:
-            parent = _get_parent(elem)
-            raise type(e)(
-                f"{e}\n\n"
-                f"Above error raised while writing key {key!r} of {type(elem)}"
-                f" from {parent}."
-            ) from e
+            re_raise_error(e, elem, key, "writ")
 
     return func_wrapper
 
@@ -202,7 +248,14 @@ def report_write_key_on_error(func):
 # -------------------------------------------------------------------------------
 
 
-def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "varm")):
+def _read_legacy_raw(
+    f: ZarrGroup | H5Group,
+    modern_raw,  # TODO: type
+    read_df: Callable,
+    read_attr: Callable,
+    *,
+    attrs=("X", "var", "varm"),
+) -> dict:
     """\
     Backwards compat for reading legacy raw.
     Makes sure that no modern raw group coexists with legacy raw.* groups.
@@ -221,18 +274,3 @@ def _read_legacy_raw(f, modern_raw, read_df, read_attr, *, attrs=("X", "var", "v
     if "varm" in attrs and "raw.varm" in f:
         raw["varm"] = read_attr(f["raw.varm"])
     return raw
-
-
-class EncodingVersions(Enum):
-    raw = "0.1.0"
-    csr_matrix = csc_matrix = "0.1.0"
-    dataframe = "0.1.0"
-
-    def check(self, key: str, encoded_version: str):
-        if version.parse(encoded_version) > version.parse(self.value):
-            warn(
-                f"The supported version for decoding {self.name} is {self.value}, "
-                f"but a {self.name} with version {encoded_version} "
-                f"was encountered at {key}.",
-                FutureWarning,
-            )

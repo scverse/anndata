@@ -8,8 +8,10 @@ from scipy.sparse import issparse
 
 from . import anndata
 from .index import _normalize_index, _subset, unpack_index, get_vector
-from .aligned_mapping import AxisArrays, AxisArraysView
+from .aligned_mapping import AxisArrays
 from .sparse_dataset import SparseDataset
+
+from ..compat import CupyArray, CupySparseMatrix
 
 
 # TODO: Implement views for Raw
@@ -27,11 +29,19 @@ class Raw:
         self._n_obs = adata.n_obs
         # construct manually
         if adata.isbacked == (X is None):
-            self._X = X
+            # Move from GPU to CPU since it's large and not always used
+            if isinstance(X, (CupyArray, CupySparseMatrix)):
+                self._X = X.get()
+            else:
+                self._X = X
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
-            self._X = adata.X.copy()
+            # Move from GPU to CPU since it's large and not always used
+            if isinstance(adata.X, (CupyArray, CupySparseMatrix)):
+                self._X = adata.X.get()
+            else:
+                self._X = adata.X.copy()
             self._var = adata.var.copy()
             self._varm = AxisArrays(self, 1, adata.varm.copy())
         elif adata.isbacked:
@@ -65,7 +75,7 @@ class Raw:
         if self._adata.is_view:
             # TODO: As noted above, implement views of raw
             #       so we can know if we need to subset by var
-            return X[self._adata._oidx, slice(None)]
+            return _subset(X, (self._adata._oidx, slice(None)))
         else:
             return X
 
@@ -129,19 +139,20 @@ class Raw:
     def copy(self):
         return Raw(
             self._adata,
-            X=self._X.copy(),
-            var=self._var.copy(),
+            X=self.X.copy(),
+            var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
         )
 
     def to_adata(self):
         """Create full AnnData object."""
         return anndata.AnnData(
-            X=self._X.copy(),
-            var=self._var.copy(),
+            X=self.X.copy(),
+            var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
             obs=self._adata.obs.copy(),
             obsm=self._adata.obsm.copy(),
+            obsp=self._adata.obsp.copy(),
             uns=self._adata.uns.copy(),
         )
 
