@@ -154,6 +154,13 @@ def test_copy(key):
             [{"a": 1, "b": 42}, {"a": 2, "b": 43}, {"a": 3, "b": 44}],
             id="adding_record",
         ),
+        pytest.param(
+            [{"outer": {"a": 1}}, {"outer": {"a": 2}}, {"outer": {"a": 3}}],
+            ("outer", "a"),
+            [42, 43, 44],
+            [{"outer": {"a": 42}}, {"outer": {"a": 43}}, {"outer": {"a": 44}}],
+            id="updating_nested_record",
+        ),
     ],
 )
 @pytest.mark.parametrize("key", ["obsm", "varm", "uns"])
