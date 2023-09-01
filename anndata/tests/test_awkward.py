@@ -5,7 +5,6 @@ import numpy.testing as npt
 
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
 from anndata.compat import awkward as ak
-from anndata import ImplicitModificationWarning
 from anndata.utils import dim_len
 from anndata import AnnData, read_h5ad
 import anndata
