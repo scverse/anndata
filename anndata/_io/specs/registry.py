@@ -275,9 +275,8 @@ class Writer:
         for pattern in _iter_patterns(elem):
             if self.registry.has_writer(dest_type, pattern, modifiers):
                 return self.registry.get_writer(dest_type, pattern, modifiers)
-        else:
-            # Raises IORegistryError
-            self.registry.get_writer(dest_type, type(elem), modifiers)
+        # Raises IORegistryError
+        return self.registry.get_writer(dest_type, type(elem), modifiers)
 
     @report_write_key_on_error
     def write_elem(
