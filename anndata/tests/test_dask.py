@@ -11,6 +11,8 @@ from anndata.tests.helpers import (
     gen_adata,
     assert_equal,
 )
+from anndata.experimental import write_elem, read_elem
+from anndata.experimental.merge import as_group
 from anndata.compat import DaskArray
 
 pytest.importorskip("dask.array")
@@ -79,6 +81,44 @@ def test_dask_write(adata, tmp_path, diskfmt):
     orig = adata
     write(orig, pth)
     curr = read(pth)
+
+    with pytest.raises(Exception):
+        assert_equal(curr.obsm["a"], curr.obsm["b"])
+
+    assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(curr.obsm["a"], orig.obsm["a"])
+
+    assert isinstance(curr.X, np.ndarray)
+    assert isinstance(curr.obsm["a"], np.ndarray)
+    assert isinstance(curr.varm["a"], np.ndarray)
+    assert isinstance(orig.X, DaskArray)
+    assert isinstance(orig.obsm["a"], DaskArray)
+    assert isinstance(orig.varm["a"], DaskArray)
+
+
+def test_dask_distributed_write(adata, tmp_path, diskfmt):
+    import dask.array as da
+    import dask.distributed as dd
+    import numpy as np
+
+    pth = tmp_path / f"test_write.{diskfmt}"
+    g = as_group(pth, mode="w")
+
+    with dd.LocalCluster(n_workers=1, threads_per_worker=1, processes=False) as cluster:
+        with dd.Client(cluster):
+            M, N = adata.X.shape
+            adata.obsm["a"] = da.random.random((M, 10))
+            adata.obsm["b"] = da.random.random((M, 10))
+            adata.varm["a"] = da.random.random((N, 10))
+            orig = adata
+            if diskfmt == "h5ad":
+                with pytest.raises(
+                    ValueError, match="Cannot write dask arrays to hdf5"
+                ):
+                    write_elem(g, "", orig)
+                return
+            write_elem(g, "", orig)
+            curr = read_elem(g)
 
     with pytest.raises(Exception):
         assert_equal(curr.obsm["a"], curr.obsm["b"])

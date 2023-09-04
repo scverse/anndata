@@ -6,7 +6,6 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata._io.zarr import read_dataframe
 from anndata.tests.helpers import assert_equal, subset_func
 from anndata.experimental import read_dispatched
 

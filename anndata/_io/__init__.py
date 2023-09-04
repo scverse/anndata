@@ -1,13 +1,35 @@
 from .read import (
     read_csv,
     read_excel,
-    read_umi_tools,
     read_hdf,
     read_loom,
     read_mtx,
     read_text,
+    read_umi_tools,
     read_zarr,
-    read_h5ad,
 )
-from .write import write_csvs, write_loom, _write_h5ad, write_zarr
-from . import h5ad
+from .h5ad import read_h5ad, write_h5ad
+from .write import write_csvs, write_loom
+
+
+def write_zarr(*args, **kw):
+    from .zarr import write_zarr
+
+    return write_zarr(*args, **kw)
+
+
+__all__ = [
+    "read_csv",
+    "read_excel",
+    "read_h5ad",
+    "read_hdf",
+    "read_loom",
+    "read_mtx",
+    "read_text",
+    "read_umi_tools",
+    "read_zarr",
+    "write_csvs",
+    "write_h5ad",
+    "write_loom",
+    "write_zarr",
+]
