@@ -34,8 +34,9 @@ class Raw:
                 self._X = X.get()
             else:
                 self._X = X
+            n_var = None if self._X is None else self._X.shape[1]
             self._var = _gen_dataframe(
-                var, ["var_names"], source="X", attr="var", length=self.X.shape[1]
+                var, ["var_names"], source="X", attr="var", length=n_var
             )
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
