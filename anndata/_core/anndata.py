@@ -103,7 +103,9 @@ def _check_2d_shape(X):
 
 
 @singledispatch
-def _gen_dataframe(anno, length, index_names):
+def _gen_dataframe(
+    anno: Mapping[str, Any], index_names: Iterable[str], length: int | None = None
+) -> pd.DataFrame:
     if anno is None or len(anno) == 0:
         anno = {}
     for index_name in index_names:
@@ -113,15 +115,27 @@ def _gen_dataframe(anno, length, index_names):
                 index=anno[index_name],
                 columns=[k for k in anno.keys() if k != index_name],
             )
-    return pd.DataFrame(
+
+    def mk_index(l: int) -> pd.Index:
+        return pd.RangeIndex(0, l, name=None).astype(str)
+
+    df = pd.DataFrame(
         anno,
-        index=pd.RangeIndex(0, length, name=None).astype(str),
+        index=None if length is None else mk_index(length),
         columns=None if len(anno) else [],
     )
+    if length is None:
+        df.index = mk_index(len(df))
+    return df
 
 
 @_gen_dataframe.register(pd.DataFrame)
-def _(anno, length, index_names):
+def _gen_dataframe_df(
+    anno: pd.DataFrame, index_names: Iterable[str], length: int | None = None
+):
+    if length is not None and length != len(anno):
+        msg = f"`shape` is inconsistent with `{index_names[0].split('_')[0]}`"
+        raise ValueError(msg)
     anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
@@ -133,7 +147,9 @@ def _(anno, length, index_names):
 
 @_gen_dataframe.register(pd.Series)
 @_gen_dataframe.register(pd.Index)
-def _(anno, length, index_names):
+def _gen_dataframe_1d(
+    anno: pd.Series | pd.Index, index_names: Iterable[str], length: int | None = None
+):
     raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
 
 
@@ -473,27 +489,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X
-            self._n_obs, self._n_vars = self._X.shape
+            n_obs, n_vars = self._X.shape
         else:
             self._X = None
-            self._n_obs = len([] if obs is None else obs)
-            self._n_vars = len([] if var is None else var)
-            # check consistency with shape
-            if shape is not None:
-                if self._n_obs == 0:
-                    self._n_obs = shape[0]
-                else:
-                    if self._n_obs != shape[0]:
-                        raise ValueError("`shape` is inconsistent with `obs`")
-                if self._n_vars == 0:
-                    self._n_vars = shape[1]
-                else:
-                    if self._n_vars != shape[1]:
-                        raise ValueError("`shape` is inconsistent with `var`")
+            n_obs, n_vars = (None, None) if shape is None else shape
 
         # annotations
-        self._obs = _gen_dataframe(obs, self._n_obs, ["obs_names", "row_names"])
-        self._var = _gen_dataframe(var, self._n_vars, ["var_names", "col_names"])
+        self._obs = _gen_dataframe(obs, ["obs_names", "row_names"], n_obs)
+        self._var = _gen_dataframe(var, ["var_names", "col_names"], n_vars)
+        self._n_obs = len(self.obs)
+        self._n_vars = len(self.var)
 
         # now we can verify if indices match!
         for attr_name, x_name, idx in x_indices:
