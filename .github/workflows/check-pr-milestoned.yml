@@ -20,12 +20,16 @@ on:
       - synchronize
 
 env:
-  LABELS: ${{ join( github.event.pull_request.labels.*.name, '|' ) }}
+  LABELS: ${{ join(github.event.pull_request.labels.*.name, '|') }}
 
 jobs:
   check-milestone:
     name: "Triage: Check Milestone"
     runs-on: ubuntu-latest
     steps:
-      - if: github.event.pull_request.milestone == null && contains( env.LABELS, 'no milestone' ) == false
+      - name: Check if merging isn’t blocked
+        if: contains(env.LABELS, 'DON’T MERGE')
+        run: exit 1
+      - name: Check if a milestone is necessary and exists
+        if: github.event.pull_request.milestone == null && contains(env.LABELS, 'no milestone') == false
         run: exit 1
