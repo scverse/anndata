@@ -608,18 +608,26 @@ def _(a):
     return as_dense_dask_array(a.toarray())
 
 
+def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
+    def half_rounded_up(x):
+        div, mod = divmod(x, 2)
+        return div + (mod > 0)
+
+    return tuple(half_rounded_up(x) for x in a)
+
+
 @singledispatch
 def as_sparse_dask_array(a):
     import dask.array as da
 
-    return da.from_array(sparse.csr_matrix(a))
+    return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
 
 
 @as_sparse_dask_array.register(sparse.spmatrix)
 def _(a):
     import dask.array as da
 
-    return da.from_array(a)
+    return da.from_array(a, _half_chunk_size(a.shape))
 
 
 @as_sparse_dask_array.register(DaskArray)
