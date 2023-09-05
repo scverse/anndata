@@ -146,6 +146,7 @@ def test_dask_write_sparse(store, sparse_format):
     X_dask_from_disk = read_elem(store["X_dask"])
 
     assert_equal(X_from_disk, X_dask_from_disk)
+    assert_equal(dict(store["X"].attrs), dict(store["X_dask"].attrs))
 
 
 def test_io_spec_raw(store):
