@@ -111,8 +111,8 @@ def _mk_df_error(
     if source == "X":
         what = "row" if attr == "obs" else "column"
         msg = (
-            f"Observations annot. `{attr}` must have number of {what}s of `X`"
-            f" ({expected}), but has {actual} {what}s."
+            f"Observations annot. `{attr}` must have as many rows as `X` has {what}s "
+            f"({expected}), but has {actual} rows."
         )
     else:
         msg = (

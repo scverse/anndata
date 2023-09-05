@@ -54,7 +54,10 @@ def test_creation():
     ("src", "src_arg", "dim_msg"),
     [
         pytest.param(
-            "X", adata_dense.X, "`{dim}` must have number of {mat_dim}s of `X`", id="x"
+            "X",
+            adata_dense.X,
+            "`{dim}` must have as many rows as `X` has {mat_dim}s",
+            id="x",
         ),
         pytest.param(
             "shape", (2, 2), "`shape` is inconsistent with `{dim}`", id="shape"
