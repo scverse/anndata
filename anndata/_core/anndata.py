@@ -126,6 +126,13 @@ def _gen_dataframe(
     )
     if length is None:
         df.index = mk_index(len(df))
+    elif length != len(df):
+        attr = index_names[0].split("_")[0]
+        what = "row" if attr == "obs" else "column"
+        raise ValueError(
+            f"Observations annot. `{attr}` must have number of {what}s of `X`"
+            f" ({length}), but has {len(df)} {what}s."
+        )
     return df
 
 
@@ -372,8 +379,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
         self._uns = uns
-        self._n_obs = len(self.obs)
-        self._n_vars = len(self.var)
 
         # set data
         if self.isbacked:
@@ -497,8 +502,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # annotations
         self._obs = _gen_dataframe(obs, ["obs_names", "row_names"], n_obs)
         self._var = _gen_dataframe(var, ["var_names", "col_names"], n_vars)
-        self._n_obs = len(self.obs)
-        self._n_vars = len(self.var)
 
         # now we can verify if indices match!
         for attr_name, x_name, idx in x_indices:
@@ -788,12 +791,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def n_obs(self) -> int:
         """Number of observations."""
-        return self._n_obs
+        return len(self.obs)
 
     @property
     def n_vars(self) -> int:
         """Number of variables/features."""
-        return self._n_vars
+        return len(self.var)
 
     def _set_dim_df(self, value: pd.DataFrame, attr: str):
         if not isinstance(value, pd.DataFrame):
@@ -1860,38 +1863,28 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _check_dimensions(self, key=None):
         if key is None:
-            key = {"obs", "var", "obsm", "varm"}
+            key = {"obsm", "varm"}
         else:
             key = {key}
-        if "obs" in key and len(self._obs) != self._n_obs:
-            raise ValueError(
-                "Observations annot. `obs` must have number of rows of `X`"
-                f" ({self._n_obs}), but has {self._obs.shape[0]} rows."
-            )
-        if "var" in key and len(self._var) != self._n_vars:
-            raise ValueError(
-                "Variables annot. `var` must have number of columns of `X`"
-                f" ({self._n_vars}), but has {self._var.shape[0]} rows."
-            )
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([dim_len(o, 0) == self._n_obs for o in obsm.values()])
-                and len(obsm.dim_names) != self._n_obs
+                not all([dim_len(o, 0) == self.n_obs for o in obsm.values()])
+                and len(obsm.dim_names) != self.n_obs
             ):
                 raise ValueError(
                     "Observations annot. `obsm` must have number of rows of `X`"
-                    f" ({self._n_obs}), but has {len(obsm)} rows."
+                    f" ({self.n_obs}), but has {len(obsm)} rows."
                 )
         if "varm" in key:
             varm = self._varm
             if (
-                not all([dim_len(v, 0) == self._n_vars for v in varm.values()])
-                and len(varm.dim_names) != self._n_vars
+                not all([dim_len(v, 0) == self.n_vars for v in varm.values()])
+                and len(varm.dim_names) != self.n_vars
             ):
                 raise ValueError(
                     "Variables annot. `varm` must have number of columns of `X`"
-                    f" ({self._n_vars}), but has {len(varm)} rows."
+                    f" ({self.n_vars}), but has {len(varm)} rows."
                 )
 
     def write_h5ad(
