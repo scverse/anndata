@@ -14,8 +14,9 @@ __pycache__/
 /.python-version
 /hatch.toml
 
-# Test results and coverage
+# Test results (nunit/junit) and coverage
 /test-data/
+*coverage*
 
 # jupyter
 .ipynb_checkpoints
