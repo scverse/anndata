@@ -14,6 +14,7 @@ from abc import ABC
 import collections.abc as cabc
 from itertools import accumulate, chain
 from typing import Literal, Union, NamedTuple, Tuple, Sequence, Iterable, Type
+import warnings
 
 import h5py
 import numpy as np
@@ -302,11 +303,14 @@ class BaseCompressedSparseDataset(ABC):
             row, col = np.ix_(row, col)
         return row, col
 
-    # def __setitem__(self, index: Union[Index, Tuple[()]], value):
-
-    #     row, col = self._normalize_index(index)
-    #     mock_matrix = self._to_backed()
-    #     mock_matrix[row, col] = value
+    def __setitem__(self, index: Union[Index, Tuple[()]], value):
+        warnings.warn(
+            "__setitem__ will likely be removed in the near future. We do not recommend relying on its stability.",
+            PendingDeprecationWarning,
+        )
+        row, col = self._normalize_index(index)
+        mock_matrix = self._to_backed()
+        mock_matrix[row, col] = value
 
     # TODO: split to other classes?
     def append(self, sparse_matrix: ss.spmatrix):
