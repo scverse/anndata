@@ -102,9 +102,34 @@ def _check_2d_shape(X):
         )
 
 
+def _mk_df_error(
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    expected: int,
+    actual: int,
+):
+    if source == "X":
+        what = "row" if attr == "obs" else "column"
+        msg = (
+            f"Observations annot. `{attr}` must have number of {what}s of `X`"
+            f" ({expected}), but has {actual} {what}s."
+        )
+    else:
+        msg = (
+            f"`shape` is inconsistent with `{attr}` "
+            "({actual} {what}s instead of {expected})"
+        )
+    return ValueError(msg)
+
+
 @singledispatch
 def _gen_dataframe(
-    anno: Mapping[str, Any], index_names: Iterable[str], length: int | None = None
+    anno: Mapping[str, Any],
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
 ) -> pd.DataFrame:
     if anno is None or len(anno) == 0:
         anno = {}
@@ -127,22 +152,21 @@ def _gen_dataframe(
     if length is None:
         df.index = mk_index(len(df))
     elif length != len(df):
-        attr = index_names[0].split("_")[0]
-        what = "row" if attr == "obs" else "column"
-        raise ValueError(
-            f"Observations annot. `{attr}` must have number of {what}s of `X`"
-            f" ({length}), but has {len(df)} {what}s."
-        )
+        raise _mk_df_error(source, attr, length, len(df))
     return df
 
 
 @_gen_dataframe.register(pd.DataFrame)
 def _gen_dataframe_df(
-    anno: pd.DataFrame, index_names: Iterable[str], length: int | None = None
+    anno: pd.DataFrame,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
 ):
     if length is not None and length != len(anno):
-        msg = f"`shape` is inconsistent with `{index_names[0].split('_')[0]}`"
-        raise ValueError(msg)
+        raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
         warnings.warn("Transforming to str index.", ImplicitModificationWarning)
@@ -155,9 +179,14 @@ def _gen_dataframe_df(
 @_gen_dataframe.register(pd.Series)
 @_gen_dataframe.register(pd.Index)
 def _gen_dataframe_1d(
-    anno: pd.Series | pd.Index, index_names: Iterable[str], length: int | None = None
+    anno: pd.Series | pd.Index,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
 ):
-    raise ValueError(f"Cannot convert {type(anno)} to DataFrame")
+    raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -495,13 +524,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # data matrix and shape
             self._X = X
             n_obs, n_vars = self._X.shape
+            source = "X"
         else:
             self._X = None
             n_obs, n_vars = (None, None) if shape is None else shape
+            source = "shape"
 
         # annotations
-        self._obs = _gen_dataframe(obs, ["obs_names", "row_names"], n_obs)
-        self._var = _gen_dataframe(var, ["var_names", "col_names"], n_vars)
+        self._obs = _gen_dataframe(
+            obs, ["obs_names", "row_names"], source=source, attr="obs", length=n_obs
+        )
+        self._var = _gen_dataframe(
+            var, ["var_names", "col_names"], source=source, attr="var", length=n_vars
+        )
 
         # now we can verify if indices match!
         for attr_name, x_name, idx in x_indices:

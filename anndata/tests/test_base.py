@@ -77,8 +77,8 @@ def test_creation():
     ],
 )
 def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
-    mat_dim = "row" if dim == "obs" else "column"
     if msg is None:
+        mat_dim = "row" if dim == "obs" else "column"
         msg = dim_msg.format(dim=dim, mat_dim=mat_dim)
     with pytest.raises(ValueError, match=re.escape(msg)):
         AnnData(**{src: src_arg, dim: dim_arg(dim)})

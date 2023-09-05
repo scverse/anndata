@@ -34,7 +34,9 @@ class Raw:
                 self._X = X.get()
             else:
                 self._X = X
-            self._var = _gen_dataframe(var, ["var_names"], self.X.shape[1])
+            self._var = _gen_dataframe(
+                var, ["var_names"], source="X", attr="var", length=self.X.shape[1]
+            )
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
