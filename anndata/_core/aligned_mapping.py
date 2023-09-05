@@ -4,6 +4,7 @@ from copy import copy
 from typing import Union, Optional, Type, ClassVar, TypeVar  # Special types
 from typing import Iterator, Mapping, Sequence  # ABCs
 from typing import Tuple, List, Dict  # Generic base types
+import weakref
 import warnings
 
 import numpy as np
@@ -65,8 +66,8 @@ class AlignedMapping(cabc.MutableMapping, ABC):
                 message="Support for Awkward Arrays is currently experimental.*",
             )
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] != dim_len(val, i):
-                right_shape = tuple(self.parent.shape[a] for a in self.axes)
+            if self.parent_shape[axis] != dim_len(val, i):
+                right_shape = tuple(self.parent_shape[a] for a in self.axes)
                 actual_shape = tuple(dim_len(val, a) for a, _ in enumerate(self.axes))
                 if actual_shape[i] is None and isinstance(val, AwkArray):
                     raise ValueError(
@@ -106,6 +107,12 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     @property
     def parent(self) -> Union["anndata.AnnData", "raw.Raw"]:
         return self._parent
+
+    @property
+    def parent_shape(self) -> Tuple[int, int]:
+        if hasattr(self, "_parent_shape"):
+            return self._parent_shape
+        return self._parent.shape
 
     def copy(self):
         d = self._actual_class(self.parent, self._axis)
@@ -259,7 +266,7 @@ class AxisArraysBase(AlignedMapping):
 
     @property
     def dim_names(self) -> pd.Index:
-        return (self.parent.obs_names, self.parent.var_names)[self._axis]
+        return (self._parent.obs_names, self._parent.var_names)[self._axis]
 
 
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
@@ -269,13 +276,38 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         axis: int,
         vals: Union[Mapping, AxisArraysBase, None] = None,
     ):
-        self._parent = parent
+        if isinstance(parent, anndata.AnnData):
+            self._parent_ref = weakref.ref(parent)
+            self._is_weak = True
+        else:
+            self._parent_ref = parent
+            self._is_weak = False
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
+
+        self._parent_shape = parent.shape
+        # self.dim_names = (parent.obs_names, parent.var_names)[self._axis]
         self._data = dict()
         if vals is not None:
             self.update(vals)
+
+    @property
+    def _parent(self) -> Union["anndata.AnnData", "raw.Raw"]:
+        if self._is_weak:
+            return self._parent_ref()
+        return self._parent_ref
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if self._is_weak:
+            state["_parent_ref"] = state["_parent_ref"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        if self._is_weak:
+            self.__dict__["_parent_ref"] = weakref.ref(state["_parent_ref"])
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
@@ -315,10 +347,23 @@ class LayersBase(AlignedMapping):
 
 class Layers(AlignedActualMixin, LayersBase):
     def __init__(self, parent: "anndata.AnnData", vals: Optional[Mapping] = None):
-        self._parent = parent
+        self._parent_ref = weakref.ref(parent)
         self._data = dict()
         if vals is not None:
             self.update(vals)
+
+    @property
+    def _parent(self):
+        return self._parent_ref()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_parent_ref"] = state["_parent_ref"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        self.__dict__["_parent_ref"] = weakref.ref(state["_parent_ref"])
 
 
 class LayersView(AlignedViewMixin, LayersBase):
@@ -368,13 +413,26 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         axis: int,
         vals: Optional[Mapping] = None,
     ):
-        self._parent = parent
+        self._parent_ref = weakref.ref(parent)
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
         self._data = dict()
         if vals is not None:
             self.update(vals)
+
+    @property
+    def _parent(self):
+        return self._parent_ref()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_parent_ref"] = state["_parent_ref"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        self.__dict__["_parent_ref"] = weakref.ref(state["_parent_ref"])
 
 
 class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
