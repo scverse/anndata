@@ -133,22 +133,26 @@ def _gen_dataframe(
 ) -> pd.DataFrame:
     if anno is None or len(anno) == 0:
         anno = {}
-    for index_name in index_names:
-        if index_name in anno:
-            return pd.DataFrame(
-                anno,
-                index=anno[index_name],
-                columns=[k for k in anno.keys() if k != index_name],
-            )
 
     def mk_index(l: int) -> pd.Index:
         return pd.RangeIndex(0, l, name=None).astype(str)
 
-    df = pd.DataFrame(
-        anno,
-        index=None if length is None else mk_index(length),
-        columns=None if len(anno) else [],
-    )
+    for index_name in index_names:
+        if index_name not in anno:
+            continue
+        df = pd.DataFrame(
+            anno,
+            index=anno[index_name],
+            columns=[k for k in anno.keys() if k != index_name],
+        )
+        break
+    else:
+        df = pd.DataFrame(
+            anno,
+            index=None if length is None else mk_index(length),
+            columns=None if len(anno) else [],
+        )
+
     if length is None:
         df.index = mk_index(len(df))
     elif length != len(df):
