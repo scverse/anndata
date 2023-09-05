@@ -60,17 +60,17 @@ def test_creation():
     ("dim_arg", "msg_template"),
     [
         pytest.param(
-            dict(TooLong=[1, 2, 3, 4]),
+            lambda _: dict(TooLong=[1, 2, 3, 4]),
             "Length of values (4) does not match length of index (2)",
             id="too_long_col",
         ),
         pytest.param(
-            dict(obs_names=["a", "b", "c"]),
+            lambda dim: {f"{dim}_names": ["a", "b", "c"]},
             "`{dim}` must have number of {mat_dim}s of `X`",
             id="too_many_names",
         ),
         pytest.param(
-            pd.DataFrame(index=["a", "b", "c"]),
+            lambda _: pd.DataFrame(index=["a", "b", "c"]),
             "`{dim}` must have number of {mat_dim}s of `X`",
             id="too_long_df",
         ),
@@ -80,7 +80,7 @@ def test_creation_error(src_kw, dim, dim_arg, msg_template: str):
     mat_dim = "row" if dim == "obs" else "column"
     msg = msg_template.format(dim=dim, mat_dim=mat_dim)
     with pytest.raises(ValueError, match=re.escape(msg)):
-        AnnData(**src_kw, **{dim: dim_arg})
+        AnnData(**src_kw, **{dim: dim_arg(dim)})
 
 
 def test_create_with_dfs():
