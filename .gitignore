@@ -2,8 +2,10 @@
 .DS_Store
 *~
 
-# Compiled files
+# Caches for compiled and downloaded files
 __pycache__/
+/*cache/
+/data/
 
 # Distribution / packaging
 /dist/
@@ -12,10 +14,8 @@ __pycache__/
 /.python-version
 /hatch.toml
 
-# Tests and coverage
-/*cache/
+# Test results and coverage
 /test-data/
-/data/
 
 # jupyter
 .ipynb_checkpoints
