@@ -1,4 +1,5 @@
 from itertools import product
+import re
 import warnings
 
 import numpy as np
@@ -39,15 +40,47 @@ def test_creation():
     assert adata.raw.X.tolist() == X.tolist()
     assert adata.raw.var_names.tolist() == ["a", "b", "c"]
 
-    with pytest.raises(ValueError):
-        AnnData(np.array([[1, 2], [3, 4]]), dict(TooLong=[1, 2, 3, 4]))
-
     # init with empty data matrix
     shape = (3, 5)
     adata = AnnData(None, uns=dict(test=np.array((3, 3))), shape=shape)
     assert adata.X is None
     assert adata.shape == shape
     assert "test" in adata.uns
+
+
+@pytest.mark.parametrize(
+    "src_kw",
+    [
+        pytest.param(dict(X=adata_dense.X), id="x"),
+        pytest.param(dict(shape=(2, 2)), id="shape"),
+    ],
+)
+@pytest.mark.parametrize("dim", ["obs", "var"])
+@pytest.mark.parametrize(
+    ("dim_arg", "msg_template"),
+    [
+        pytest.param(
+            dict(TooLong=[1, 2, 3, 4]),
+            "Length of values (4) does not match length of index (2)",
+            id="too_long_col",
+        ),
+        pytest.param(
+            dict(obs_names=["a", "b", "c"]),
+            "`{dim}` must have number of {mat_dim}s of `X`",
+            id="too_many_names",
+        ),
+        pytest.param(
+            pd.DataFrame(index=["a", "b", "c"]),
+            "`{dim}` must have number of {mat_dim}s of `X`",
+            id="too_long_df",
+        ),
+    ],
+)
+def test_creation_error(src_kw, dim, dim_arg, msg_template: str):
+    mat_dim = "row" if dim == "obs" else "column"
+    msg = msg_template.format(dim=dim, mat_dim=mat_dim)
+    with pytest.raises(ValueError, match=re.escape(msg)):
+        AnnData(**src_kw, **{dim: dim_arg})
 
 
 def test_create_with_dfs():
