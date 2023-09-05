@@ -49,15 +49,15 @@ def test_creation():
 
 
 @pytest.mark.parametrize(
-    "src_kw",
+    ("src", "src_arg"),
     [
-        pytest.param(dict(X=adata_dense.X), id="x"),
-        pytest.param(dict(shape=(2, 2)), id="shape"),
+        pytest.param("X", adata_dense.X, id="x"),
+        pytest.param("shape", (2, 2), id="shape"),
     ],
 )
 @pytest.mark.parametrize("dim", ["obs", "var"])
 @pytest.mark.parametrize(
-    ("dim_arg", "msg_template"),
+    ("dim_arg", "msg"),
     [
         pytest.param(
             lambda _: dict(TooLong=[1, 2, 3, 4]),
@@ -65,22 +65,22 @@ def test_creation():
             id="too_long_col",
         ),
         pytest.param(
-            lambda dim: {f"{dim}_names": ["a", "b", "c"]},
-            "`{dim}` must have number of {mat_dim}s of `X`",
-            id="too_many_names",
+            lambda dim: {f"{dim}_names": ["a", "b", "c"]}, None, id="too_many_names"
         ),
         pytest.param(
-            lambda _: pd.DataFrame(index=["a", "b", "c"]),
-            "`{dim}` must have number of {mat_dim}s of `X`",
-            id="too_long_df",
+            lambda _: pd.DataFrame(index=["a", "b", "c"]), None, id="too_long_df"
         ),
     ],
 )
-def test_creation_error(src_kw, dim, dim_arg, msg_template: str):
+def test_creation_error(src, src_arg, dim, dim_arg, msg: str | None):
     mat_dim = "row" if dim == "obs" else "column"
-    msg = msg_template.format(dim=dim, mat_dim=mat_dim)
+    if msg is None:
+        msg = dict(
+            X=f"`{dim}` must have number of {mat_dim}s of `X`",
+            shape=f"`shape` is inconsistent with `{dim}`",
+        )[src]
     with pytest.raises(ValueError, match=re.escape(msg)):
-        AnnData(**src_kw, **{dim: dim_arg(dim)})
+        AnnData(**{src: src_arg, dim: dim_arg(dim)})
 
 
 def test_create_with_dfs():
