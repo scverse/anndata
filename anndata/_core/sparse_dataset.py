@@ -10,6 +10,8 @@ See the copyright and license note in this directory source code.
 
 # TODO:
 # - think about supporting the COO format
+from __future__ import annotations
+
 from abc import ABC
 import collections.abc as cabc
 from itertools import accumulate, chain
