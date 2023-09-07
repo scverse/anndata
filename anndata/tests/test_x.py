@@ -66,7 +66,7 @@ def test_del_set_equiv_X():
 
 
 @pytest.mark.parametrize(
-    ("obs", "var", "shape"),
+    ("obs", "var", "shape_expected"),
     [
         pytest.param(dict(obs_names=["1", "2"]), None, (2, 0), id="obs"),
         pytest.param(None, dict(var_names=["a", "b"]), (0, 2), id="var"),
@@ -78,10 +78,10 @@ def test_del_set_equiv_X():
         ),
     ],
 )
-def test_init_x_as_none_shape_from_obs_var(obs, var, shape):
+def test_init_x_as_none_shape_from_obs_var(obs, var, shape_expected):
     adata = AnnData(None, obs, var)
     assert adata.X is None
-    assert adata.shape == shape
+    assert adata.shape == shape_expected
 
 
 def test_init_x_as_none_explicit_shape():
