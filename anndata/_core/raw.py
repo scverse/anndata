@@ -8,7 +8,7 @@ from scipy.sparse import issparse
 
 from . import anndata
 from .index import _normalize_index, _subset, unpack_index, get_vector
-from .aligned_mapping import AxisArrays
+from .aligned_mapping import AxisArrays, AlignedMappingProperty
 from .sparse_dataset import SparseDataset
 
 from ..compat import CupyArray, CupySparseMatrix
@@ -35,7 +35,8 @@ class Raw:
             else:
                 self._X = X
             self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
-            self._varm = AxisArrays(self, 1, varm)
+            self.varm = varm
+            # self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
             if isinstance(adata.X, (CupyArray, CupySparseMatrix)):
@@ -43,7 +44,8 @@ class Raw:
             else:
                 self._X = adata.X.copy()
             self._var = adata.var.copy()
-            self._varm = AxisArrays(self, 1, adata.varm.copy())
+            self.varm = adata.varm.copy()
+            # self._varm = AxisArrays(self, 1, adata.varm.copy())
         elif adata.isbacked:
             raise ValueError("Cannot specify X if adata is backed")
 
@@ -95,9 +97,7 @@ class Raw:
     def n_obs(self):
         return self._n_obs
 
-    @property
-    def varm(self):
-        return self._varm
+    varm = AlignedMappingProperty("varm", AxisArrays, 1)
 
     @property
     def var_names(self):
@@ -123,10 +123,14 @@ class Raw:
 
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
-        if self._varm is not None:
+        if self.varm is not None:
             # Since there is no view of raws
-            new._varm = self._varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
+            new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
         return new
+
+    @property
+    def is_view(self):
+        return False
 
     def __str__(self):
         descr = f"Raw AnnData with n_obs × n_vars = {self.n_obs} × {self.n_vars}"

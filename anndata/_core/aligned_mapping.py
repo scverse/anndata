@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from ..utils import deprecated, ensure_df_homogeneous, dim_len
+from ..utils import deprecated, ensure_df_homogeneous, dim_len, convert_to_dict
 from . import raw, anndata
 from .views import as_view, view_update
 from .access import ElementRef
@@ -108,7 +108,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         return self._parent
 
     def copy(self):
-        d = self._actual_class(self.parent, self._axis)
+        d = self._actual_class(self.parent, self._axis, {})
         for k, v in self.items():
             if isinstance(v, AwkArray):
                 # Shallow copy since awkward array buffers are immutable
@@ -262,6 +262,7 @@ class AxisArraysBase(AlignedMapping):
         return (self.parent.obs_names, self.parent.var_names)[self._axis]
 
 
+# TODO: vals can't be None
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
     def __init__(
         self,
@@ -273,9 +274,9 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
-        self._data = dict()
-        if vals is not None:
-            self.update(vals)
+        for k, v in vals.items():
+            vals[k] = self._validate_value(v, k)
+        self._data = vals
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
@@ -307,18 +308,21 @@ class LayersBase(AlignedMapping):
 
     # TODO: I thought I had a more elegant solution to overriding this...
     def copy(self) -> "Layers":
-        d = self._actual_class(self.parent)
+        d = self._actual_class(self.parent, vals={})
         for k, v in self.items():
             d[k] = v.copy()
         return d
 
 
 class Layers(AlignedActualMixin, LayersBase):
-    def __init__(self, parent: "anndata.AnnData", vals: Optional[Mapping] = None):
+    def __init__(
+        self, parent: "anndata.AnnData", axis=(0, 1), vals: Optional[Mapping] = None
+    ):
+        assert axis == (0, 1), axis
         self._parent = parent
-        self._data = dict()
-        if vals is not None:
-            self.update(vals)
+        for k, v in vals.items():
+            vals[k] = self._validate_value(v, k)
+        self._data = vals
 
 
 class LayersView(AlignedViewMixin, LayersBase):
@@ -372,9 +376,9 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
-        self._data = dict()
-        if vals is not None:
-            self.update(vals)
+        for k, v in vals.items():
+            vals[k] = self._validate_value(v, k)
+        self._data = vals
 
 
 class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
@@ -386,9 +390,38 @@ class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
     ):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
-        self.subset_idx = (subset_idx, subset_idx)
+        self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
 
 
 PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
+
+
+class AlignedMappingProperty:
+    def __init__(self, name, cls, axis):
+        self.name = name
+        self.axis = axis
+        self.cls = cls
+
+    def __get__(self, obj, objtype=None):
+        if obj.is_view:
+            parent_anndata = obj._adata_ref
+            idxs = (obj._oidx, obj._vidx)
+            parent_aligned_mapping = getattr(parent_anndata, self.name)
+            return parent_aligned_mapping._view(
+                obj, tuple(idxs[ax] for ax in parent_aligned_mapping.axes)
+            )
+            # return self.cls._view_class()
+        else:
+            return self.cls(obj, self.axis, getattr(obj, "_" + self.name))
+
+    def __set__(self, obj, value):
+        value = convert_to_dict(value)
+        _ = self.cls(obj, self.axis, value)  # Validate
+        if obj.is_view:
+            obj._init_as_actual(obj.copy())
+        setattr(obj, "_" + self.name, value)
+
+    def __delete__(self, obj):
+        setattr(obj, self.name, dict())

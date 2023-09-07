@@ -32,11 +32,9 @@ from .file_backing import AnnDataFileManager, to_memory
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
-    AxisArraysView,
     PairwiseArrays,
-    PairwiseArraysView,
     Layers,
-    LayersView,
+    AlignedMappingProperty,
 )
 from .views import (
     ArrayView,
@@ -47,7 +45,7 @@ from .views import (
 )
 from .sparse_dataset import SparseDataset
 from .. import utils
-from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
+from ..utils import ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
 from ..compat import (
     ZarrArray,
@@ -343,11 +341,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # views on attributes of adata_ref
         obs_sub = adata_ref.obs.iloc[oidx]
         var_sub = adata_ref.var.iloc[vidx]
-        self._obsm = adata_ref.obsm._view(self, (oidx,))
-        self._varm = adata_ref.varm._view(self, (vidx,))
-        self._layers = adata_ref.layers._view(self, (oidx, vidx))
-        self._obsp = adata_ref.obsp._view(self, oidx)
-        self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
         self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
@@ -506,12 +499,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # unstructured annotations
         self.uns = uns or OrderedDict()
 
-        # TODO: Think about consequences of making obsm a group in hdf
-        self._obsm = AxisArrays(self, 0, vals=convert_to_dict(obsm))
-        self._varm = AxisArrays(self, 1, vals=convert_to_dict(varm))
+        self.obsm = obsm
+        self.varm = varm
 
-        self._obsp = PairwiseArrays(self, 0, vals=convert_to_dict(obsp))
-        self._varp = PairwiseArrays(self, 1, vals=convert_to_dict(varp))
+        self.obsp = obsp
+        self.varp = varp
 
         # Backwards compat for connectivities matrices in uns["neighbors"]
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
@@ -536,7 +528,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._clean_up_old_format(uns)
 
         # layers
-        self._layers = Layers(self, layers)
+        self.layers = layers
 
     def __sizeof__(self, show_stratified=None) -> int:
         def get_size(X):
@@ -696,45 +688,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self):
         self.X = None
 
-    @property
-    def layers(self) -> Union[Layers, LayersView]:
-        """\
-        Dictionary-like object with values of the same dimensions as :attr:`X`.
-
-        Layers in AnnData are inspired by loompy’s :ref:`loomlayers`.
-
-        Return the layer named `"unspliced"`::
-
-            adata.layers["unspliced"]
-
-        Create or replace the `"spliced"` layer::
-
-            adata.layers["spliced"] = ...
-
-        Assign the 10th column of layer `"spliced"` to the variable a::
-
-            a = adata.layers["spliced"][:, 10]
-
-        Delete the `"spliced"` layer::
-
-            del adata.layers["spliced"]
-
-        Return layers’ names::
-
-            adata.layers.keys()
-        """
-        return self._layers
-
-    @layers.setter
-    def layers(self, value):
-        layers = Layers(self, vals=convert_to_dict(value))
-        if self.is_view:
-            self._init_as_actual(self.copy())
-        self._layers = layers
-
-    @layers.deleter
-    def layers(self):
-        self.layers = dict()
+    obsm = AlignedMappingProperty("obsm", AxisArrays, 0)
+    varm = AlignedMappingProperty("varm", AxisArrays, 1)
+    layers = AlignedMappingProperty("layers", Layers, (0, 1))
+    obsp = AlignedMappingProperty("obsp", PairwiseArrays, 0)
+    varp = AlignedMappingProperty("varp", PairwiseArrays, 1)
 
     @property
     def raw(self) -> Raw:
@@ -845,7 +803,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.is_view:
             self._init_as_actual(self.copy())
         getattr(self, attr).index = value
-        for v in getattr(self, f"{attr}m").values():
+        for v in getattr(self, f"_{attr}m").values():
             if isinstance(v, pd.DataFrame):
                 v.index = value
 
@@ -918,98 +876,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @uns.deleter
     def uns(self):
         self.uns = OrderedDict()
-
-    @property
-    def obsm(self) -> Union[AxisArrays, AxisArraysView]:
-        """\
-        Multi-dimensional annotation of observations
-        (mutable structured :class:`~numpy.ndarray`).
-
-        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-        of length `n_obs`.
-        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
-        """
-        return self._obsm
-
-    @obsm.setter
-    def obsm(self, value):
-        obsm = AxisArrays(self, 0, vals=convert_to_dict(value))
-        if self.is_view:
-            self._init_as_actual(self.copy())
-        self._obsm = obsm
-
-    @obsm.deleter
-    def obsm(self):
-        self.obsm = dict()
-
-    @property
-    def varm(self) -> Union[AxisArrays, AxisArraysView]:
-        """\
-        Multi-dimensional annotation of variables/features
-        (mutable structured :class:`~numpy.ndarray`).
-
-        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-        of length `n_vars`.
-        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
-        """
-        return self._varm
-
-    @varm.setter
-    def varm(self, value):
-        varm = AxisArrays(self, 1, vals=convert_to_dict(value))
-        if self.is_view:
-            self._init_as_actual(self.copy())
-        self._varm = varm
-
-    @varm.deleter
-    def varm(self):
-        self.varm = dict()
-
-    @property
-    def obsp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
-        """\
-        Pairwise annotation of observations,
-        a mutable mapping with array-like values.
-
-        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-        whose first two dimensions are of length `n_obs`.
-        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
-        """
-        return self._obsp
-
-    @obsp.setter
-    def obsp(self, value):
-        obsp = PairwiseArrays(self, 0, vals=convert_to_dict(value))
-        if self.is_view:
-            self._init_as_actual(self.copy())
-        self._obsp = obsp
-
-    @obsp.deleter
-    def obsp(self):
-        self.obsp = dict()
-
-    @property
-    def varp(self) -> Union[PairwiseArrays, PairwiseArraysView]:
-        """\
-        Pairwise annotation of variables/features,
-        a mutable mapping with array-like values.
-
-        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-        whose first two dimensions are of length `n_var`.
-        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
-        """
-        return self._varp
-
-    @varp.setter
-    def varp(self, value):
-        varp = PairwiseArrays(self, 1, vals=convert_to_dict(value))
-        if self.is_view:
-            self._init_as_actual(self.copy())
-        self._varp = varp
-
-    @varp.deleter
-    def varp(self):
-        self.varp = dict()
 
     def obs_keys(self) -> List[str]:
         """List keys of observation annotation :attr:`obs`."""
