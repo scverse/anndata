@@ -702,6 +702,20 @@ def as_cupy_type(val, typ=None):
         )
 
 
+@singledispatch
+def shares_memory(x, y):
+    return np.shares_memory(x, y)
+
+
+@shares_memory.register(sparse.spmatrix)
+def shares_memory_sparse(x, y):
+    return (
+        np.shares_memory(x.data, y.data)
+        and np.shares_memory(x.indices, y.indices)
+        and np.shares_memory(x.indptr, y.indptr)
+    )
+
+
 BASE_MATRIX_PARAMS = [
     pytest.param(asarray, id="np_array"),
     pytest.param(sparse.csr_matrix, id="scipy_csr"),
