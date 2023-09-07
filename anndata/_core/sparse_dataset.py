@@ -311,7 +311,7 @@ class BaseCompressedSparseDataset(ABC):
             PendingDeprecationWarning,
         )
         row, col = self._normalize_index(index)
-        mock_matrix = self._to_backed()
+        mock_matrix = self.to_backed()
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
