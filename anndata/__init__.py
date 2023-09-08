@@ -40,8 +40,8 @@ from ._warnings import (
     ExperimentalFeatureWarning,
 )
 
-if True:  # Bypass isort, this needs to come last
-    from . import experimental
+# Experimental needs to be imported last
+from . import experimental  # isort: skip
 
 
 def read(*args, **kwargs):
