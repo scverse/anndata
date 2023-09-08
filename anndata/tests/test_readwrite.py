@@ -127,7 +127,7 @@ needs_zarr = pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not insta
 
 @pytest.mark.parametrize("storage", ["h5ad", pytest.param("zarr", marks=[needs_zarr])])
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
-def test_readwrite_h5ad(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
+def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
