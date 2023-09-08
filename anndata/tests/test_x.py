@@ -65,8 +65,26 @@ def test_del_set_equiv_X():
     assert orig.X is None
 
 
-def test_init_X_as_none():
-    # test initialiser
+@pytest.mark.parametrize(
+    ("obs", "var", "shape_expected"),
+    [
+        pytest.param(dict(obs_names=["1", "2"]), None, (2, 0), id="obs"),
+        pytest.param(None, dict(var_names=["a", "b"]), (0, 2), id="var"),
+        pytest.param(
+            dict(obs_names=["1", "2", "3"]),
+            dict(var_names=["a", "b"]),
+            (3, 2),
+            id="both",
+        ),
+    ],
+)
+def test_init_x_as_none_shape_from_obs_var(obs, var, shape_expected):
+    adata = AnnData(None, obs, var)
+    assert adata.X is None
+    assert adata.shape == shape_expected
+
+
+def test_init_x_as_none_explicit_shape():
     shape = (3, 5)
     adata = AnnData(None, uns=dict(test=np.array((3, 3))), shape=shape)
     assert adata.X is None

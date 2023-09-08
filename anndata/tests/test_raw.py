@@ -33,7 +33,7 @@ uns_dict = dict(  # unstructured annotation
 
 
 @pytest.fixture
-def adata_raw():
+def adata_raw() -> ad.AnnData:
     adata = ad.AnnData(
         np.array(data, dtype="int32"), obs=obs_dict, var=var_dict, uns=uns_dict
     )
@@ -48,18 +48,18 @@ def adata_raw():
 # -------------------------------------------------------------------------------
 
 
-def test_raw_init(adata_raw):
+def test_raw_init(adata_raw: ad.AnnData):
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
     assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
 
 
-def test_raw_del(adata_raw):
+def test_raw_del(adata_raw: ad.AnnData):
     del adata_raw.raw
     assert adata_raw.raw is None
 
 
-def test_raw_set_as_none(adata_raw):
+def test_raw_set_as_none(adata_raw: ad.AnnData):
     # Test for scverse/anndata#445
     a = adata_raw
     b = adata_raw.copy()
@@ -70,7 +70,7 @@ def test_raw_set_as_none(adata_raw):
     assert_equal(a, b)
 
 
-def test_raw_of_view(adata_raw):
+def test_raw_of_view(adata_raw: ad.AnnData):
     adata_view = adata_raw[adata_raw.obs["oanno1"] == "cat2"]
     assert adata_view.raw.X.tolist() == [
         [4, 5, 6],
@@ -78,7 +78,7 @@ def test_raw_of_view(adata_raw):
     ]
 
 
-def test_raw_rw(adata_raw, backing_h5ad):
+def test_raw_rw(adata_raw: ad.AnnData, backing_h5ad):
     adata_raw.write(backing_h5ad)
     adata_read = ad.read(backing_h5ad)
 
@@ -89,7 +89,7 @@ def test_raw_rw(adata_raw, backing_h5ad):
     assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
 
 
-def test_raw_view_rw(adata_raw, backing_h5ad):
+def test_raw_view_rw(adata_raw: ad.AnnData, backing_h5ad):
     # Make sure it still writes correctly if the object is a view
     adata_raw_view = adata_raw[:, adata_raw.var_names]
     assert_equal(adata_raw_view, adata_raw)
@@ -104,7 +104,7 @@ def test_raw_view_rw(adata_raw, backing_h5ad):
     assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
 
 
-def test_raw_backed(adata_raw, backing_h5ad):
+def test_raw_backed(adata_raw: ad.AnnData, backing_h5ad):
     adata_raw.filename = backing_h5ad
 
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
@@ -114,7 +114,7 @@ def test_raw_backed(adata_raw, backing_h5ad):
     assert adata_raw.raw[:, 0].X[:].tolist() == [[1], [4], [7]]
 
 
-def test_raw_view_backed(adata_raw, backing_h5ad):
+def test_raw_view_backed(adata_raw: ad.AnnData, backing_h5ad):
     adata_raw.filename = backing_h5ad
 
     assert adata_raw.var_names.tolist() == ["var1", "var2"]

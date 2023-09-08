@@ -659,3 +659,14 @@ def test_copy_X_dtype():
     adata = ad.AnnData(sparse.eye(50, dtype=np.float64, format="csr"))
     adata_c = adata[::2].copy()
     assert adata_c.X.dtype == adata.X.dtype
+
+
+def test_x_none():
+    orig = ad.AnnData(obs=pd.DataFrame(index=np.arange(50)))
+    assert orig.shape == (50, 0)
+    view = orig[2:4]
+    assert view.shape == (2, 0)
+    assert view.obs_names.tolist() == ["2", "3"]
+    new = view.copy()
+    assert new.shape == (2, 0)
+    assert new.obs_names.tolist() == ["2", "3"]
