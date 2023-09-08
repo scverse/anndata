@@ -122,54 +122,25 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
-def test_readwrite_h5ad(tmp_path, typ, dataset_kwargs, backing_h5ad):
-    mid_pth = tmp_path / "mid.h5ad"
+needs_zarr = pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
 
+
+@pytest.mark.parametrize("storage", ["h5ad", pytest.param("zarr", marks=[needs_zarr])])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
     adata_src.raw = adata_src
-    adata_src.write(backing_h5ad, **dataset_kwargs)
 
-    adata_mid = ad.read(backing_h5ad)
-    adata_mid.write(mid_pth, **dataset_kwargs)
-
-    adata = ad.read_h5ad(mid_pth)
-    assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
-    assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
-    assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
-    assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
-    assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
-    assert isinstance(adata.raw.var["vanno2"].dtype, pd.CategoricalDtype)
-    pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
-    pd.testing.assert_frame_equal(adata.var, adata_src.var)
-    assert_equal(adata.var.index, adata_src.var.index)
-    assert adata.var.index.dtype == adata_src.var.index.dtype
-
-    assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
-    assert isinstance(
-        adata_src.uns["uns4"]["c"], (type(adata.uns["uns4"]["c"]), DaskArray)
-    )
-    assert isinstance(adata_src.varm, (type(adata.varm), DaskArray))
-
-    assert_equal(adata.raw.X, adata_src.raw.X)
-    pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
-    assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
-    assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
-    assert_equal(adata, adata_src)
-
-
-@pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
-def test_readwrite_zarr(typ, tmp_path):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata_src.raw = adata_src
-    assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
-    adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
-
-    adata = ad.read_zarr(tmp_path / "test_zarr_dir")
+    if storage == "h5ad":
+        adata_src.write(backing_h5ad, **dataset_kwargs)
+        adata_mid = ad.read(backing_h5ad)
+        adata_mid.write(tmp_path / "mid.h5ad", **dataset_kwargs)
+        adata = ad.read_h5ad(tmp_path / "mid.h5ad")
+    else:
+        adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
+        adata = ad.read_zarr(tmp_path / "test_zarr_dir")
     assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
     assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
@@ -192,7 +163,7 @@ def test_readwrite_zarr(typ, tmp_path):
     assert isinstance(adata_src.varm, (type(adata.varm), DaskArray))
 
     assert_equal(adata.raw.X, adata_src.raw.X)
-    assert_equal(adata.raw.var, adata_src.raw.var)
+    pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
     assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
     assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
     assert_equal(adata, adata_src)
