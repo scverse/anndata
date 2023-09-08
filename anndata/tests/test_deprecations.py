@@ -137,8 +137,8 @@ def test_deprecated_sparse_dataset_values():
     write_elem(g, "mtx", mtx)
     mtx_backed = sparse_dataset(g["mtx"])
 
-    with pytest.warns(FutureWarning, "Please use .to_memory()"):
+    with pytest.warns(FutureWarning, match="Please use .to_memory()"):
         mtx_backed.value
 
-    with pytest.warns(FutureWarning, "Please use .format"):
+    with pytest.warns(FutureWarning, match="Please use .format"):
         mtx_backed.format_str
