@@ -45,7 +45,7 @@ from .views import (
     as_view,
     _resolve_idxs,
 )
-from .sparse_dataset import SparseDataset
+from .sparse_dataset import sparse_dataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
@@ -655,7 +655,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 self.file.open()
             X = self.file["X"]
             if isinstance(X, h5py.Group):
-                X = SparseDataset(X)
+                X = sparse_dataset(X)
             # This is so that we can index into a backed dense dataset with
             # indices that aren’t strictly increasing
             if self.is_view:
@@ -720,7 +720,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if self.is_view:
                     X = self.file["X"]
                     if isinstance(X, h5py.Group):
-                        X = SparseDataset(X)
+                        X = sparse_dataset(X)
                     X[oidx, vidx] = value
                 else:
                     self._set_backed("X", value)

@@ -125,3 +125,20 @@ def test_deprecated_read(tmp_path):
         from_disk = ad.read(tmp_path / "file.h5ad")
 
     assert_equal(memory, from_disk)
+
+
+def test_deprecated_sparse_dataset_values():
+    import zarr
+    from anndata.experimental import sparse_dataset, write_elem
+
+    mtx = sparse.random(50, 50, format="csr")
+    g = zarr.group()
+
+    write_elem(g, "mtx", mtx)
+    mtx_backed = sparse_dataset(g["mtx"])
+
+    with pytest.warns(FutureWarning, match="Please use .to_memory()"):
+        mtx_backed.value
+
+    with pytest.warns(FutureWarning, match="Please use .format"):
+        mtx_backed.format_str

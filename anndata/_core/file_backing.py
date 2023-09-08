@@ -7,8 +7,8 @@ from collections.abc import Mapping
 import h5py
 
 from . import anndata
-from .sparse_dataset import SparseDataset
-from ..compat import ZarrArray, DaskArray, AwkArray
+from .sparse_dataset import BaseCompressedSparseDataset
+from ..compat import ZarrArray, ZarrGroup, DaskArray, AwkArray
 
 
 class AnnDataFileManager:
@@ -39,11 +39,15 @@ class AnnDataFileManager:
     def __iter__(self) -> Iterator[str]:
         return iter(self._file)
 
-    def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, SparseDataset]:
+    def __getitem__(
+        self, key: str
+    ) -> Union[h5py.Group, h5py.Dataset, BaseCompressedSparseDataset]:
         return self._file[key]
 
     def __setitem__(
-        self, key: str, value: Union[h5py.Group, h5py.Dataset, SparseDataset]
+        self,
+        key: str,
+        value: Union[h5py.Group, h5py.Dataset, BaseCompressedSparseDataset],
     ):
         self._file[key] = value
 
@@ -110,8 +114,8 @@ def _(x, copy=False):
     return x[...]
 
 
-@to_memory.register(SparseDataset)
-def _(x: SparseDataset, copy=False):
+@to_memory.register(BaseCompressedSparseDataset)
+def _(x: BaseCompressedSparseDataset, copy=True):
     return x.to_memory()
 
 
@@ -133,3 +137,20 @@ def _(x, copy=False):
         return _copy(x)
     else:
         return x
+
+
+@singledispatch
+def filename(x):
+    raise NotImplementedError(f"Not implemented for {type(x)}")
+
+
+@filename.register(h5py.Group)
+@filename.register(h5py.Dataset)
+def _(x):
+    return x.file.filename
+
+
+@filename.register(ZarrArray)
+@filename.register(ZarrGroup)
+def _(x):
+    return x.store.path
