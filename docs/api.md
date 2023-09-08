@@ -92,6 +92,17 @@ Two classes for working with batched access to collections of many `AnnData` obj
    experimental.AnnLoader
 ```
 
+Interface for accessing on-disk sparse data:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   experimental.sparse_dataset
+   experimental.CSRDataset
+   experimental.CSCDataset
+```
+
 Low level methods for reading and writing elements of an `` AnnData` `` object to a store:
 
 ```{eval-rst}

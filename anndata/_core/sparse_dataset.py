@@ -242,13 +242,14 @@ def _get_group_format(group) -> str:
 
 
 class BaseCompressedSparseDataset(ABC):
-    """
-    Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices.
-    """
+    """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
 
     def __init__(self, group: h5py.Group | ZarrGroup):
         type(self)._check_group_format(group)
         self.group = group
+
+    shape: tuple[int, int]
+    """Shape of the matrix."""
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
@@ -270,6 +271,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def format_str(self) -> Literal["csc", "csr"]:
+        """DEPRECATED Use .format instead."""
         warnings.warn(
             "The attribute .format_str is deprecated and will be removed in the anndata 0.11.0. "
             "Please use .format instead.",
@@ -291,6 +293,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def value(self) -> ss.spmatrix:
+        """DEPRECATED Use .to_memory() instead."""
         warnings.warn(
             "The .value attribute is deprecated and will be removed in the anndata 0.11.0. "
             "Please use .to_memory() instead.",
@@ -409,15 +412,31 @@ class BaseCompressedSparseDataset(ABC):
         return mtx
 
 
+_sparse_dataset_doc = """\
+    On disk {format} sparse matrix.
+
+    Parameters
+    ----------
+    group
+        The backing group store.
+"""
+
+
 class CSRDataset(BaseCompressedSparseDataset):
+    __doc__ = _sparse_dataset_doc.format(
+        format="CSR",
+    )
     format = "csr"
 
 
 class CSCDataset(BaseCompressedSparseDataset):
+    __doc__ = _sparse_dataset_doc.format(
+        format="CSC",
+    )
     format = "csc"
 
 
-def sparse_dataset(group: ZarrGroup | H5Group) -> BaseCompressedSparseDataset:
+def sparse_dataset(group: ZarrGroup | H5Group) -> CSRDataset | CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
@@ -429,8 +448,8 @@ def sparse_dataset(group: ZarrGroup | H5Group) -> BaseCompressedSparseDataset:
     -------
         Sparse dataset class.
 
-    Usage
-    -----
+    Example
+    -------
 
     >>> import zarr
     >>> from anndata.experimental import sparse_dataset
