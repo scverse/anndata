@@ -12,7 +12,7 @@ from typing import Any, Tuple, Union, Mapping, Optional
 from warnings import warn
 
 import h5py
-from scipy.sparse import spmatrix
+from scipy.sparse import spmatrix, issparse
 import numpy as np
 import pandas as pd
 
@@ -360,3 +360,30 @@ def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.
         return _inner_deprecate_positional_args(func)
 
     return _inner_deprecate_positional_args
+
+
+def _transpose_by_block(dask_array: DaskArray) -> DaskArray:
+    import dask.array as da
+
+    b = dask_array.blocks
+    b_raveled = b.ravel()
+    block_layout = np.zeros(b.shape, dtype=object)
+
+    for i in range(block_layout.size):
+        block_layout.flat[i] = b_raveled[i].map_blocks(
+            lambda x: x.T, chunks=b_raveled[i].chunks[::-1]
+        )
+
+    return da.block(block_layout.T.tolist())
+
+
+def _safe_transpose(x):
+    """Safely transpose x
+
+    This is a workaround for: https://github.com/scipy/scipy/issues/19161
+    """
+
+    if isinstance(x, DaskArray) and issparse(x._meta):
+        return _transpose_by_block(x)
+    else:
+        return x.T

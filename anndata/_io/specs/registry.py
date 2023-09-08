@@ -211,6 +211,20 @@ def get_spec(
     )
 
 
+def _iter_patterns(elem):
+    """Iterates over possible patterns for an element in order of precedence."""
+    from anndata.compat import DaskArray
+
+    t = type(elem)
+
+    if isinstance(elem, DaskArray):
+        yield (t, type(elem._meta), elem.dtype.kind)
+        yield (t, type(elem._meta))
+    if hasattr(elem, "dtype"):
+        yield (t, elem.dtype.kind)
+    yield t
+
+
 class Reader:
     def __init__(
         self, registry: IORegistry, callback: Union[Callable, None] = None
@@ -257,6 +271,13 @@ class Writer:
         self.registry = registry
         self.callback = callback
 
+    def find_writer(self, dest_type, elem, modifiers):
+        for pattern in _iter_patterns(elem):
+            if self.registry.has_writer(dest_type, pattern, modifiers):
+                return self.registry.get_writer(dest_type, pattern, modifiers)
+        # Raises IORegistryError
+        return self.registry.get_writer(dest_type, type(elem), modifiers)
+
     @report_write_key_on_error
     def write_elem(
         self,
@@ -269,9 +290,12 @@ class Writer:
     ):
         from functools import partial
         from pathlib import PurePosixPath
+        import h5py
+
+        if isinstance(store, h5py.File):
+            store = store["/"]
 
         dest_type = type(store)
-        t = type(elem)
 
         if elem is None:
             return lambda *_, **__: None
@@ -284,19 +308,11 @@ class Writer:
             store.clear()
         elif k in store:
             del store[k]
-        if (
-            hasattr(elem, "dtype")
-            and (dest_type, (t, elem.dtype.kind), modifiers) in self.registry.write
-        ):
-            write_func = partial(
-                self.registry.get_writer(dest_type, (t, elem.dtype.kind), modifiers),
-                _writer=self,
-            )
-        else:
-            write_func = partial(
-                self.registry.get_writer(dest_type, t, modifiers),
-                _writer=self,
-            )
+
+        write_func = partial(
+            self.find_writer(dest_type, elem, modifiers),
+            _writer=self,
+        )
 
         if self.callback is not None:
             return self.callback(

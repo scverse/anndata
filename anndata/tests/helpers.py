@@ -442,13 +442,7 @@ def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(DaskArray)
 def assert_equal_dask_array(a, b, exact=False, elem_name=None):
-    from dask.array.utils import assert_eq
-
-    if exact:
-        assert_eq(a, b, check_dtype=True, check_type=True, check_graph=False)
-    else:
-        # TODO: Why does it fail when check_graph=True
-        assert_eq(a, b, check_dtype=False, check_type=False, check_graph=False)
+    assert_equal(b, a.compute(), exact, elem_name)
 
 
 @assert_equal.register(pd.DataFrame)
@@ -605,6 +599,33 @@ def _(a):
     return as_dense_dask_array(a.toarray())
 
 
+def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
+    def half_rounded_up(x):
+        div, mod = divmod(x, 2)
+        return div + (mod > 0)
+
+    return tuple(half_rounded_up(x) for x in a)
+
+
+@singledispatch
+def as_sparse_dask_array(a) -> DaskArray:
+    import dask.array as da
+
+    return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
+
+
+@as_sparse_dask_array.register(sparse.spmatrix)
+def _(a):
+    import dask.array as da
+
+    return da.from_array(a, _half_chunk_size(a.shape))
+
+
+@as_sparse_dask_array.register(DaskArray)
+def _(a):
+    return a.map_blocks(sparse.csr_matrix)
+
+
 @contextmanager
 def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
     """Error handling using pytest 8's support for __notes__.
@@ -681,6 +702,20 @@ def as_cupy_type(val, typ=None):
         )
 
 
+@singledispatch
+def shares_memory(x, y) -> bool:
+    return np.shares_memory(x, y)
+
+
+@shares_memory.register(sparse.spmatrix)
+def shares_memory_sparse(x, y):
+    return (
+        np.shares_memory(x.data, y.data)
+        and np.shares_memory(x.indices, y.indices)
+        and np.shares_memory(x.indptr, y.indptr)
+    )
+
+
 BASE_MATRIX_PARAMS = [
     pytest.param(asarray, id="np_array"),
     pytest.param(sparse.csr_matrix, id="scipy_csr"),
@@ -688,7 +723,8 @@ BASE_MATRIX_PARAMS = [
 ]
 
 DASK_MATRIX_PARAMS = [
-    pytest.param(as_dense_dask_array, id="dask_array"),
+    pytest.param(as_dense_dask_array, id="dense_dask_array"),
+    pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
 ]
 
 CUPY_MATRIX_PARAMS = [

@@ -10,7 +10,7 @@ import pytest
 import anndata as ad
 from anndata._core.index import _normalize_index
 from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import CupyCSCMatrix
+from anndata.compat import CupyCSCMatrix, DaskArray
 from anndata.utils import asarray
 from anndata.tests.helpers import (
     gen_adata,
@@ -121,7 +121,14 @@ def test_modify_view_component(matrix_type, mapping_name):
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
-    init_hash = joblib.hash(adata)
+    # Fix if and when dask supports tokenizing GPU arrays
+    # https://github.com/dask/dask/issues/6718
+    if isinstance(matrix_type(np.zeros((1, 1))), DaskArray):
+        hash_func = tokenize
+    else:
+        hash_func = joblib.hash
+
+    init_hash = hash_func(adata)
 
     subset = adata[:5, :][:, :5]
     assert subset.is_view
@@ -130,7 +137,7 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert not subset.is_view
     assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
-    assert init_hash == joblib.hash(adata)
+    assert init_hash == hash_func(adata)
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])

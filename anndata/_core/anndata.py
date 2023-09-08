@@ -1329,9 +1329,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Transpose whole object.
 
         Data matrix is transposed, observations and variables are interchanged.
-
         Ignores `.raw`.
         """
+        from anndata.compat import _safe_transpose
+
         if not self.isbacked:
             X = self.X
         else:
@@ -1342,21 +1343,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 "which is currently not implemented. Call `.copy()` before transposing."
             )
 
-        def t_csr(m: sparse.spmatrix) -> sparse.csr_matrix:
-            return m.T.tocsr() if sparse.isspmatrix_csr(m) else m.T
-
         return AnnData(
-            X=t_csr(X) if X is not None else None,
+            X=_safe_transpose(X) if X is not None else None,
+            layers={k: _safe_transpose(v) for k, v in self.layers.items()},
             obs=self.var,
             var=self.obs,
-            # we're taking a private attributes here to be able to modify uns of the original object
             uns=self._uns,
-            obsm=self.varm.flipped(),
-            varm=self.obsm.flipped(),
-            obsp=self.varp.copy(),
-            varp=self.obsp.copy(),
+            obsm=self._varm,
+            varm=self._obsm,
+            obsp=self._varp,
+            varp=self._obsp,
             filename=self.filename,
-            layers={k: t_csr(v) for k, v in self.layers.items()},
         )
 
     T = property(transpose)

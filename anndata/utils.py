@@ -8,8 +8,9 @@ import numpy as np
 from scipy import sparse
 
 from .logging import get_logger
+
 from ._core.sparse_dataset import BaseCompressedSparseDataset
-from .compat import CupyArray, CupySparseMatrix
+from .compat import CupyArray, CupySparseMatrix, DaskArray
 
 logger = get_logger(__name__)
 
@@ -43,6 +44,11 @@ def asarray_cupy(x):
 @asarray.register(CupySparseMatrix)
 def asarray_cupy_sparse(x):
     return x.toarray().get()
+
+
+@asarray.register(DaskArray)
+def asarray_dask(x):
+    return asarray(x.compute())
 
 
 @singledispatch
