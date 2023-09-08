@@ -342,12 +342,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
         raw: Mapping[str, Any] | None = None,
-        dtype: np.dtype | type | str | None = None,
+        *,
         shape: tuple[int, int] | None = None,
         filename: PathLike | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
-        *,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         oidx: Index1D = None,
@@ -367,7 +366,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varm=varm,
                 raw=raw,
                 layers=layers,
-                dtype=dtype,
                 shape=shape,
                 obsp=obsp,
                 varp=varp,
@@ -443,7 +441,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp=None,
         raw=None,
         layers=None,
-        dtype=None,
+        *,
         shape=None,
         filename=None,
         filemode=None,
@@ -516,21 +514,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
-            # if type doesn’t match, a copy is made, otherwise, use a view
-            if dtype is not None:
-                warnings.warn(
-                    "The dtype argument will be deprecated in anndata 0.10.0",
-                    PendingDeprecationWarning,
-                )
-                if issparse(X) or isinstance(X, ma.MaskedArray):
-                    # TODO: maybe use view on data attribute of sparse matrix
-                    #       as in readwrite.read_10x_h5
-                    if X.dtype != np.dtype(dtype):
-                        X = X.astype(dtype)
-                elif isinstance(X, (ZarrArray, DaskArray)):
-                    X = X.astype(dtype)
-                else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                    X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X
             n_obs, n_vars = X.shape
