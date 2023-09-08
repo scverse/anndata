@@ -527,7 +527,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X = np.array(X, dtype, copy=False)
             # data matrix and shape
             self._X = X
-            n_obs, n_vars = self._X.shape
+            n_obs, n_vars = X.shape
             source = "X"
         else:
             self._X = None
@@ -830,12 +830,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def n_obs(self) -> int:
         """Number of observations."""
-        return len(self.obs)
+        return len(self.obs_names)
 
     @property
     def n_vars(self) -> int:
         """Number of variables/features."""
-        return len(self.var)
+        return len(self.var_names)
 
     def _set_dim_df(self, value: pd.DataFrame, attr: str):
         if not isinstance(value, pd.DataFrame):
