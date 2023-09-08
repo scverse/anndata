@@ -136,13 +136,27 @@ class AlignedViewMixin:
     parent_mapping: Mapping[str, V]
     """The object this is a view of."""
 
+    copied_objects: Mapping[str, V]
+    """Objects that are copied at view creation, because they natively support copy on write"""
+
     is_view = True
 
     def __getitem__(self, key: str) -> V:
-        return as_view(
-            _subset(self.parent_mapping[key], self.subset_idx),
-            ElementRef(self.parent, self.attrname, (key,)),
-        )
+        try:
+            return self.copied_objects[key]
+        # key might not exist, or copied_objects might not yet be initialized
+        except (KeyError, AttributeError):
+            return as_view(
+                _subset(self.parent_mapping[key], self.subset_idx),
+                ElementRef(self.parent, self.attrname, (key,)),
+            )
+
+    def _copy_objects(self):
+        """For some objects (Awkward arrays) we want to store a copy of the slice at view creation."""
+        self.copied_objects = {}
+        for key, value in self.parent_mapping.items():
+            if isinstance(value, AwkArray):
+                self.copied_objects[key] = AwkArray(self[key])
 
     def __setitem__(self, key: str, value: V):
         value = self._validate_value(value, key)  # Validate before mutating
@@ -286,9 +300,11 @@ class AxisArraysView(AlignedViewMixin, AxisArraysBase):
         subset_idx: OneDIdx,
     ):
         self.parent_mapping = parent_mapping
+        self.copied_objects = {}
         self._parent = parent_view
         self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
+        self._copy_objects()
 
 
 AxisArraysBase._view_class = AxisArraysView

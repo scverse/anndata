@@ -306,7 +306,7 @@ def as_view_awkarray(array, view_args):
     # shallow copy of the original. This implies that setting a record field on a slice never modifies the original.
     # Other fields than records are entirely immutable anyway.
     # See also https://github.com/scverse/anndata/issues/1035#issuecomment-1687619270.
-    return array
+    return AwkArray(array)
 
 
 @as_view.register(CupyArray)
