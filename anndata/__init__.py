@@ -1,4 +1,5 @@
 """Annotated multivariate observation data."""
+from __future__ import annotations
 
 try:  # See https://github.com/maresb/hatch-vcs-footgun-example
     from setuptools_scm import get_version
@@ -8,9 +9,8 @@ except (ImportError, LookupError):
     try:
         from ._version import __version__
     except ModuleNotFoundError:
-        raise RuntimeError(
-            "anndata is not correctly installed. Please install it, e.g. with pip."
-        ) from None
+        msg = "anndata is not correctly installed. Please install it, e.g. with pip."
+        raise RuntimeError(msg) from None
 
 # Allowing notes to be added to exceptions. See: https://github.com/scverse/anndata/issues/868
 import sys
@@ -34,10 +34,10 @@ from ._io import (
     read_zarr,
 )
 from ._warnings import (
+    ExperimentalFeatureWarning,
+    ImplicitModificationWarning,
     OldFormatWarning,
     WriteWarning,
-    ImplicitModificationWarning,
-    ExperimentalFeatureWarning,
 )
 
 if True:  # Bypass isort, this needs to come last

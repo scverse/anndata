@@ -1,11 +1,12 @@
+from __future__ import annotations
+
+
 class WriteWarning(UserWarning):
     pass
 
 
 class OldFormatWarning(PendingDeprecationWarning):
     """Raised when a file in an old file format is read."""
-
-    pass
 
 
 class ImplicitModificationWarning(UserWarning):
@@ -20,10 +21,6 @@ class ImplicitModificationWarning(UserWarning):
     ImplicitModificationWarning: Transforming to str index.
     """
 
-    pass
-
 
 class ExperimentalFeatureWarning(Warning):
     """Raised when an unstable experimental feature is used."""
-
-    pass

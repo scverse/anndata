@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
 import anndata as ad
 from anndata._core.anndata import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal, gen_adata, GEN_ADATA_DASK_ARGS
-
+from anndata.tests.helpers import GEN_ADATA_DASK_ARGS, assert_equal, gen_adata
 
 # -------------------------------------------------------------------------------
 # Some test data

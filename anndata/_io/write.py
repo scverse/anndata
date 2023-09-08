@@ -1,15 +1,20 @@
-import warnings
-from pathlib import Path
-from os import PathLike, fspath
+from __future__ import annotations
 
-import pandas as pd
 import math
+import warnings
+from os import PathLike, fspath
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import numpy as np
+import pandas as pd
 from scipy.sparse import issparse
 
-from .. import AnnData
-from ..logging import get_logger
 from .._warnings import WriteWarning
+from ..logging import get_logger
+
+if TYPE_CHECKING:
+    from .. import AnnData
 
 logger = get_logger(__name__)
 
@@ -80,12 +85,13 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
     col_attrs[col_dim] = col_names.values
 
     if adata.X is None:
-        raise ValueError("loompy does not accept empty matrices as data")
+        msg = "loompy does not accept empty matrices as data"
+        raise ValueError(msg)
 
     if write_obsm_varm:
-        for key in adata.obsm.keys():
+        for key in adata.obsm:
             col_attrs[key] = adata.obsm[key]
-        for key in adata.varm.keys():
+        for key in adata.varm:
             row_attrs[key] = adata.varm[key]
     elif len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
         logger.warning(
@@ -95,7 +101,7 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
         )
 
     layers = {"": adata.X.T}
-    for key in adata.layers.keys():
+    for key in adata.layers:
         layers[key] = adata.layers[key].T
 
     from loompy import create

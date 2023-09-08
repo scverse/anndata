@@ -1,18 +1,22 @@
-from scipy.sparse import issparse
-from math import ceil
+from __future__ import annotations
+
 from copy import copy
 from functools import partial
-from typing import Dict, Union, Sequence
+from math import ceil
+from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy.sparse import issparse
 
 from ..._core.anndata import AnnData
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 try:
     import torch
-    from torch.utils.data import Sampler, BatchSampler, DataLoader
+    from torch.utils.data import BatchSampler, DataLoader, Sampler
 except ImportError:
     Sampler, BatchSampler, DataLoader = object, object, object
 
@@ -83,10 +87,7 @@ def _convert_on_top(convert, top_convert, attrs_keys):
             if attr not in convert:
                 new_convert[attr] = top_convert
             else:
-                if isinstance(attrs_keys, list):
-                    as_ks = None
-                else:
-                    as_ks = attrs_keys[attr]
+                as_ks = None if isinstance(attrs_keys, list) else attrs_keys[attr]
                 new_convert[attr] = _convert_on_top(convert[attr], top_convert, as_ks)
     return new_convert
 
@@ -123,7 +124,7 @@ class AnnLoader(DataLoader):
 
     def __init__(
         self,
-        adatas: Union[Sequence[AnnData], Dict[str, AnnData]],
+        adatas: Sequence[AnnData] | dict[str, AnnData],
         batch_size: int = 1,
         shuffle: bool = False,
         use_default_converter: bool = True,
@@ -133,11 +134,7 @@ class AnnLoader(DataLoader):
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
-        if (
-            isinstance(adatas, list)
-            or isinstance(adatas, tuple)
-            or isinstance(adatas, dict)
-        ):
+        if isinstance(adatas, (list, tuple, dict)):
             join_obs = kwargs.pop("join_obs", "inner")
             join_obsm = kwargs.pop("join_obsm", None)
             label = kwargs.pop("label", None)
@@ -162,7 +159,8 @@ class AnnLoader(DataLoader):
         elif isinstance(adatas, _ConcatViewMixin):
             dataset = copy(adatas)
         else:
-            raise ValueError("adata should be of type AnnData or AnnCollection.")
+            msg = "adata should be of type AnnData or AnnCollection."
+            raise ValueError(msg)
 
         if use_default_converter:
             pin_memory = kwargs.pop("pin_memory", False)

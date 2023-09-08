@@ -1,15 +1,15 @@
 """Tests for the attribute .X"""
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
+import pytest
 from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
+from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
-
-import pytest
-
-from anndata.tests.helpers import gen_adata, assert_equal
 
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
@@ -91,7 +91,7 @@ def test_init_x_as_none_explicit_shape():
     assert adata.shape == shape
 
 
-@pytest.mark.parametrize("shape", SINGULAR_SHAPES + [pytest.param((5, 3), id="(5, 3)")])
+@pytest.mark.parametrize("shape", [*SINGULAR_SHAPES, pytest.param((5, 3), id="(5, 3)")])
 def test_transpose_with_X_as_none(shape):
     adata = gen_adata(shape, X_type=lambda x: None)
     adataT = adata.transpose()

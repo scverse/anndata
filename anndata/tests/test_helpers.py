@@ -1,21 +1,23 @@
+from __future__ import annotations
+
 from string import ascii_letters
 
+import numpy as np
 import pandas as pd
 import pytest
-import numpy as np
 from scipy import sparse
 
 import anndata as ad
+from anndata.compat import add_note
 from anndata.tests.helpers import (
-    assert_equal,
-    gen_awkward,
-    report_name,
-    gen_adata,
     asarray,
+    assert_equal,
+    gen_adata,
+    gen_awkward,
     pytest_8_raises,
+    report_name,
 )
 from anndata.utils import dim_len
-from anndata.compat import add_note
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -79,7 +81,8 @@ def test_gen_awkward(shape, datashape):
 # Does this work for every warning?
 def test_report_name():
     def raise_error():
-        raise Exception("an error occurred!")
+        msg = "an error occurred!"
+        raise Exception(msg)
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))
@@ -116,7 +119,7 @@ def test_assert_equal():
     #     exact=False,
     # )
     adata2 = adata.copy()
-    to_modify = list(adata2.layers.keys())[0]
+    to_modify = next(iter(adata2.layers.keys()))
     del adata2.layers[to_modify]
     with pytest.raises(AssertionError) as missing_layer_error:
         assert_equal(adata, adata2)
@@ -272,6 +275,5 @@ def test_check_error_notes_success(error, match):
     ],
 )
 def test_check_error_notes_failure(error, match):
-    with pytest.raises(AssertionError):
-        with pytest_8_raises(Exception, match=match):
-            raise error
+    with pytest.raises(AssertionError), pytest_8_raises(Exception, match=match):
+        raise error

@@ -9,19 +9,18 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 import zarr
+from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import _REGISTRY, get_spec, IOSpec
+from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import _read_attr, H5Group, ZarrGroup
-from anndata._io.specs import write_elem, read_elem
+from anndata.compat import H5Group, ZarrGroup, _read_attr
 from anndata.tests.helpers import (
-    assert_equal,
     as_cupy_type,
-    pytest_8_raises,
+    assert_equal,
     gen_adata,
+    pytest_8_raises,
 )
 
 
@@ -38,7 +37,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
     elif request.param == "zarr":
         store = zarr.open(tmp_path / "test.zarr", "w")
     else:
-        assert False
+        raise AssertionError()
 
     try:
         yield store
@@ -132,7 +131,7 @@ def test_io_spec_raw(store):
 
     write_elem(store, "adata", adata)
 
-    assert "raw" == _read_attr(store["adata/raw"].attrs, "encoding-type")
+    assert _read_attr(store["adata/raw"].attrs, "encoding-type") == "raw"
 
     from_disk = read_elem(store["adata"])
     assert_equal(from_disk.raw, adata.raw)
@@ -144,7 +143,7 @@ def test_write_anndata_to_root(store):
     write_elem(store, "/", adata)
     from_disk = read_elem(store)
 
-    assert "anndata" == _read_attr(store.attrs, "encoding-type")
+    assert _read_attr(store.attrs, "encoding-type") == "anndata"
     assert_equal(from_disk, adata)
 
 
@@ -270,10 +269,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
         if consolidated:
             zarr.convenience.consolidate_metadata(z.store)
 
-    if consolidated:
-        read_func = zarr.open_consolidated
-    else:
-        read_func = zarr.open
+    read_func = zarr.open_consolidated if consolidated else zarr.open
 
     with read_func(pth) as z:
         assert_equal(ad.read_zarr(z["table/table"]), adata)

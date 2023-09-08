@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 from importlib.util import find_spec
-from anndata import AnnData
-from anndata._io.specs import read_elem
-from anndata._io.specs.registry import read_elem_partial
-from anndata._io import write_h5ad, write_zarr
-from scipy.sparse import csr_matrix
 from pathlib import Path
+
+import h5py
 import numpy as np
 import pytest
 import zarr
-import h5py
+from scipy.sparse import csr_matrix
+
+from anndata import AnnData
+from anndata._io import write_h5ad, write_zarr
+from anndata._io.specs import read_elem
+from anndata._io.specs.registry import read_elem_partial
 
 X = np.array([[1.0, 0.0, 3.0], [4.0, 0.0, 6.0], [0.0, 8.0, 0.0]], dtype="float32")
 X_check = np.array([[4.0, 0.0], [0.0, 8.0]], dtype="float32")
@@ -70,15 +74,15 @@ def test_read_partial_adata(tmp_path, accessor):
     assert np.all(part.keys() == adata_sbs.var.keys())
     assert np.all(part.index == adata_sbs.var.index)
 
-    for key in storage["obsm"].keys():
+    for key in storage["obsm"]:
         part = read_elem_partial(storage["obsm"][key], indices=(obs_idx,))
         assert np.all(part == adata_sbs.obsm[key])
 
-    for key in storage["varm"].keys():
+    for key in storage["varm"]:
         part = read_elem_partial(storage["varm"][key], indices=(var_idx,))
         np.testing.assert_equal(part, adata_sbs.varm[key])
 
-    for key in storage["obsp"].keys():
+    for key in storage["obsp"]:
         part = read_elem_partial(storage["obsp"][key], indices=(obs_idx, obs_idx))
         part = part.toarray()
         assert np.all(part == adata_sbs.obsp[key])

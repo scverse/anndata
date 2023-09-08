@@ -3,34 +3,37 @@ Code for merging/ concatenating AnnData objects.
 """
 from __future__ import annotations
 
+import typing
 from collections import OrderedDict
 from collections.abc import (
     Callable,
     Collection,
+    Iterable,
     Mapping,
     MutableSet,
-    Iterable,
     Sequence,
 )
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Any, Optional, TypeVar, Union, Literal
-import typing
-from warnings import warn, filterwarnings
+from typing import Any, Literal, TypeVar
+from warnings import filterwarnings, warn
 
-from natsort import natsorted
 import numpy as np
 import pandas as pd
-from pandas.api.extensions import ExtensionDtype
+from natsort import natsorted
 from scipy import sparse
-from scipy.sparse import spmatrix
 
-from .anndata import AnnData
-from ..compat import AwkArray, DaskArray, CupySparseMatrix, CupyArray, CupyCSRMatrix
-from ..utils import asarray, dim_len
-from .index import _subset, make_slice
 from anndata._warnings import ExperimentalFeatureWarning
+
+from ..compat import AwkArray, CupyArray, CupyCSRMatrix, CupySparseMatrix, DaskArray
+from ..utils import asarray, dim_len
+from .anndata import AnnData
+from .index import _subset, make_slice
+
+if typing.TYPE_CHECKING:
+    from pandas.api.extensions import ExtensionDtype
+    from scipy.sparse import spmatrix
 
 T = TypeVar("T")
 
@@ -62,14 +65,14 @@ class OrderedSet(MutableSet):
     def add(self, val):
         self.dict[val] = None
 
-    def union(self, *vals) -> "OrderedSet":
+    def union(self, *vals) -> OrderedSet:
         return reduce(or_, vals, self)
 
     def discard(self, val):
         if val in self:
             del self.dict[val]
 
-    def difference(self, *vals) -> "OrderedSet":
+    def difference(self, *vals) -> OrderedSet:
         return reduce(sub, vals, self)
 
 
@@ -119,9 +122,8 @@ def equal_dask_array(a, b) -> bool:
         return True
     if a.shape != b.shape:
         return False
-    if isinstance(b, DaskArray):
-        if tokenize(a) == tokenize(b):
-            return True
+    if isinstance(b, DaskArray) and tokenize(a) == tokenize(b):
+        return True
     return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
@@ -220,7 +222,7 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
         dfs = [df.copy(deep=False) for df in dfs]
 
     new_dtypes = {}
-    for col in dtypes.keys():
+    for col in dtypes:
         target_dtype = try_unifying_dtype(dtypes[col])
         if target_dtype is not None:
             new_dtypes[col] = target_dtype
@@ -291,11 +293,8 @@ def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"])
 
     if len(problem_cols) > 0:
         problem_cols = list(problem_cols)
-        raise pd.errors.InvalidIndexError(
-            f"Cannot combine dataframes as some contained duplicated column names - "
-            "causing ambiguity.\n\n"
-            f"The problem columns are: {problem_cols}"
-        )
+        msg = f"Cannot combine dataframes as some contained duplicated column names - causing ambiguity.\n\nThe problem columns are: {problem_cols}"
+        raise pd.errors.InvalidIndexError(msg)
 
 
 # TODO: open PR or feature request to cupy
@@ -340,7 +339,7 @@ def _cpblock_diag(mats, format=None, dtype=None):
 ###################
 
 
-def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
+def unique_value(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -352,7 +351,7 @@ def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
     return unique_val
 
 
-def first(vals: Collection[T]) -> Union[T, MissingVal]:
+def first(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection of vals, return the first non-missing one.If they're all missing,
     return MissingVal.
@@ -363,7 +362,7 @@ def first(vals: Collection[T]) -> Union[T, MissingVal]:
     return MissingVal
 
 
-def only(vals: Collection[T]) -> Union[T, MissingVal]:
+def only(vals: Collection[T]) -> T | MissingVal:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -436,7 +435,7 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
-    strategy: Union[str, Callable, None]
+    strategy: str | Callable | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
@@ -647,7 +646,8 @@ class Reindexer:
                 return el[self.new_idx]
             else:  # outer join
                 # TODO: this code isn't actually hit, we should refactor
-                raise Exception("This should be unreachable, please open an issue.")
+                msg = "This should be unreachable, please open an issue."
+                raise Exception(msg)
         else:
             if len(self.new_idx) > len(self.old_idx):
                 el = ak.pad_none(el, 1, axis=axis)  # axis == 0
@@ -715,9 +715,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
             for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate a dataframe with other array types."
-            )
+            msg = "Cannot concatenate a dataframe with other array types."
+            raise NotImplementedError(msg)
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
             unify_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
@@ -732,9 +731,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         if not all(
             isinstance(a, AwkArray) or a is MissingVal or 0 in a.shape for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate an AwkwardArray with other array types."
-            )
+            msg = "Cannot concatenate an AwkwardArray with other array types."
+            raise NotImplementedError(msg)
 
         return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)], axis=axis)
     elif any(isinstance(a, CupySparseMatrix) for a in arrays):
@@ -752,9 +750,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         import cupy as cp
 
         if not all(isinstance(a, CupyArray) or 0 in a.shape for a in arrays):
-            raise NotImplementedError(
-                "Cannot concatenate a cupy array with other array types."
-            )
+            msg = "Cannot concatenate a cupy array with other array types."
+            raise NotImplementedError(msg)
         return cp.concatenate(
             [
                 f(cp.asarray(x), fill_value=fill_value, axis=1 - axis)
@@ -809,9 +806,8 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
     elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
-            raise NotImplementedError(
-                "Cannot concatenate an AwkwardArray with other array types."
-            )
+            msg = "Cannot concatenate an AwkwardArray with other array types."
+            raise NotImplementedError(msg)
         common_keys = intersect_keys(el.fields for el in els)
         reindexers = [
             Reindexer(pd.Index(el.fields), pd.Index(list(common_keys))) for el in els
@@ -837,9 +833,8 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         import awkward as ak
 
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
-            raise NotImplementedError(
-                "Cannot concatenate an AwkwardArray with other array types."
-            )
+            msg = "Cannot concatenate an AwkwardArray with other array types."
+            raise NotImplementedError(msg)
         warn(
             "Outer joins on awkward.Arrays will have different return values in the future."
             "For details, and to offer input, please see:\n\n\t"
@@ -942,16 +937,17 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     return out
 
 
-def _resolve_dim(*, dim: str = None, axis: int = None) -> tuple[int, str]:
+def _resolve_dim(*, dim: str | None = None, axis: int | None = None) -> tuple[int, str]:
     _dims = ("obs", "var")
     if (dim is None and axis is None) or (dim is not None and axis is not None):
-        raise ValueError(
-            f"Must pass exactly one of `dim` or `axis`. Got: dim={dim}, axis={axis}."
-        )
+        msg = f"Must pass exactly one of `dim` or `axis`. Got: dim={dim}, axis={axis}."
+        raise ValueError(msg)
     elif dim is not None and dim not in _dims:
-        raise ValueError(f"`dim` must be one of ('obs', 'var'), was {dim}")
+        msg = f"`dim` must be one of ('obs', 'var'), was {dim}"
+        raise ValueError(msg)
     elif axis is not None and axis not in (0, 1):
-        raise ValueError(f"`axis` must be either 0 or 1, was {axis}")
+        msg = f"`axis` must be either 0 or 1, was {axis}"
+        raise ValueError(msg)
     if dim is not None:
         return _dims.index(dim), dim
     else:
@@ -984,26 +980,23 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
     if all(X is None for X in Xs):
         return None
     elif any(X is None for X in Xs):
-        raise NotImplementedError(
-            "Some (but not all) of the AnnData's to be concatenated had no .X value. "
-            "Concatenation is currently only implemented for cases where all or none of"
-            " the AnnData's have .X assigned."
-        )
+        msg = "Some (but not all) of the AnnData's to be concatenated had no .X value. Concatenation is currently only implemented for cases where all or none of the AnnData's have .X assigned."
+        raise NotImplementedError(msg)
     else:
         return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
 
 
 def concat(
-    adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
+    adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[StrategiesLiteral, Callable, None] = None,
-    uns_merge: Union[StrategiesLiteral, Callable, None] = None,
-    label: Optional[str] = None,
-    keys: Optional[Collection] = None,
-    index_unique: Optional[str] = None,
-    fill_value: Optional[Any] = None,
+    merge: StrategiesLiteral | Callable | None = None,
+    uns_merge: StrategiesLiteral | Callable | None = None,
+    label: str | None = None,
+    keys: Collection | None = None,
+    index_unique: str | None = None,
+    fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
@@ -1181,10 +1174,8 @@ def concat(
 
     if isinstance(adatas, Mapping):
         if keys is not None:
-            raise TypeError(
-                "Cannot specify categories in both mapping keys and using `keys`. "
-                "Only specify this once."
-            )
+            msg = "Cannot specify categories in both mapping keys and using `keys`. Only specify this once."
+            raise TypeError(msg)
         keys, adatas = list(adatas.keys()), list(adatas.values())
     else:
         adatas = list(adatas)

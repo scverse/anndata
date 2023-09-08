@@ -1,17 +1,19 @@
+from __future__ import annotations
+
 import re
 
-from scipy import sparse
 import h5py
 import zarr
+from scipy import sparse
 
 import anndata as ad
 from anndata.experimental import (
     read_dispatched,
-    write_dispatched,
     read_elem,
+    write_dispatched,
     write_elem,
 )
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import assert_equal, gen_adata
 
 
 def test_read_dispatched_w_regex():
@@ -79,7 +81,7 @@ def test_read_dispatched_null_case():
 
 
 def test_write_dispatched_chunks():
-    from itertools import repeat, chain
+    from itertools import chain, repeat
 
     def determine_chunks(elem_shape, specified_chunks):
         chunk_iterator = chain(specified_chunks, repeat(None))

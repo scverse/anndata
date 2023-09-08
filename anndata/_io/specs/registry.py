@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any
 
+from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata.compat import _read_attr
-from anndata._types import StorageType, GroupStorageType
-from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
+
+if TYPE_CHECKING:
+    from anndata._types import GroupStorageType, StorageType
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
 # TODO: Should filetype be included in the IOSpec if it changes the encoding? Or does the intent that these things be "the same" overrule that?
@@ -66,7 +68,7 @@ class IORegistry:
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
         ] = {}
-        self.write_specs: dict[Union[type, tuple[type, str]], IOSpec] = {}
+        self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
 
     def register_write(
         self,
@@ -82,10 +84,8 @@ class IORegistry:
         if src_type in self.write_specs and (spec != self.write_specs[src_type]):
             # First check for consistency
             current_spec = self.write_specs[src_type]
-            raise TypeError(
-                "Cannot overwrite IO specifications. Attempted to overwrite encoding "
-                f"for {src_type} from {current_spec} to {spec}"
-            )
+            msg = f"Cannot overwrite IO specifications. Attempted to overwrite encoding for {src_type} from {current_spec} to {spec}"
+            raise TypeError(msg)
         else:
             self.write_specs[src_type] = spec
 
@@ -140,9 +140,8 @@ class IORegistry:
         if (src_type, spec, modifiers) in self.read:
             return self.read[(src_type, spec, modifiers)]
         else:
-            raise IORegistryError._from_read_parts(
-                "read", _REGISTRY.read, src_type, spec
-            )
+            msg = "read"
+            raise IORegistryError._from_read_parts(msg, _REGISTRY.read, src_type, spec)
 
     def has_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
@@ -170,8 +169,9 @@ class IORegistry:
         if (src_type, spec, modifiers) in self.read_partial:
             return self.read_partial[(src_type, spec, modifiers)]
         else:
+            msg = "read_partial"
             raise IORegistryError._from_read_parts(
-                "read_partial", _REGISTRY.read_partial, src_type, spec
+                msg, _REGISTRY.read_partial, src_type, spec
             )
 
     def get_spec(self, elem: Any) -> IOSpec:
@@ -187,7 +187,8 @@ _REGISTRY = IORegistry()
 
 @singledispatch
 def proc_spec(spec) -> IOSpec:
-    raise NotImplementedError(f"proc_spec not defined for type: {type(spec)}.")
+    msg = f"proc_spec not defined for type: {type(spec)}."
+    raise NotImplementedError(msg)
 
 
 @proc_spec.register(IOSpec)
@@ -212,9 +213,7 @@ def get_spec(
 
 
 class Reader:
-    def __init__(
-        self, registry: IORegistry, callback: Union[Callable, None] = None
-    ) -> None:
+    def __init__(self, registry: IORegistry, callback: Callable | None = None) -> None:
         self.registry = registry
         self.callback = callback
 
@@ -241,18 +240,16 @@ class Writer:
     def __init__(
         self,
         registry: IORegistry,
-        callback: Union[
-            Callable[
-                [
-                    GroupStorageType,
-                    str,
-                    StorageType,
-                    dict,
-                ],
-                None,
+        callback: Callable[
+            [
+                GroupStorageType,
+                str,
+                StorageType,
+                dict,
             ],
             None,
-        ] = None,
+        ]
+        | None = None,
     ):
         self.registry = registry
         self.callback = callback

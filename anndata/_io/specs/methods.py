@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from os import PathLike
 from collections.abc import Mapping
-from itertools import product
 from functools import partial
-from typing import Union, Literal
+from itertools import product
 from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal
 from warnings import warn
 
 import h5py
@@ -15,23 +14,29 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData, Raw
+from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
-from anndata._core import views
+from anndata._io.utils import H5PY_V3, check_key
+from anndata._warnings import OldFormatWarning
 from anndata.compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+    DaskArray,
     ZarrArray,
     ZarrGroup,
-    DaskArray,
-    _read_attr,
-    _from_fixed_length_strings,
     _decode_structured_array,
+    _from_fixed_length_strings,
+    _read_attr,
 )
-from anndata._io.utils import check_key, H5PY_V3
-from anndata._warnings import OldFormatWarning
-from anndata.compat import AwkArray, CupyArray, CupyCSRMatrix, CupyCSCMatrix
 
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group
@@ -224,16 +229,10 @@ def read_partial(
 def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
     if group is None:
         return None
-    if items is None:
-        keys = intersect_keys((group,))
-    else:
-        keys = intersect_keys((group, items))
+    keys = intersect_keys((group,)) if items is None else intersect_keys((group, items))
     result = {}
     for k in keys:
-        if isinstance(items, Mapping):
-            next_items = items.get(k, None)
-        else:
-            next_items = None
+        next_items = items.get(k, None) if isinstance(items, Mapping) else None
         result[k] = read_elem_partial(group[k], items=next_items, indices=indices)
     return result
 
@@ -358,9 +357,8 @@ def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})
     import dask.config as dc
 
     if dc.get("scheduler", None) == "dask.distributed":
-        raise ValueError(
-            "Cannot write dask arrays to hdf5 when using distributed scheduler"
-        )
+        msg = "Cannot write dask arrays to hdf5 when using distributed scheduler"
+        raise ValueError(msg)
 
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g)
@@ -590,7 +588,7 @@ def read_awkward(elem, _reader):
 
     form = _read_attr(elem.attrs, "form")
     length = _read_attr(elem.attrs, "length")
-    container = {k: _reader.read_elem(elem[k]) for k in elem.keys()}
+    container = {k: _reader.read_elem(elem[k]) for k in elem}
 
     return ak.from_buffers(form, length, container)
 
@@ -608,15 +606,13 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("_index",):
         if reserved in df.columns:
-            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
+            msg = f"{reserved!r} is a reserved name for dataframe columns."
+            raise ValueError(msg)
     group = f.require_group(key)
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
-    if df.index.name is not None:
-        index_name = df.index.name
-    else:
-        index_name = "_index"
+    index_name = df.index.name if df.index.name is not None else "_index"
     group.attrs["_index"] = check_key(index_name)
 
     # ._values is "the best" array representation. It's the true array backing the
@@ -688,7 +684,7 @@ def read_dataframe_0_1_0(elem, _reader):
     return df
 
 
-def read_series(dataset: h5py.Dataset) -> Union[np.ndarray, pd.Categorical]:
+def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
     # For reading older dataframes
     if "categories" in dataset.attrs:
         if isinstance(dataset, ZarrArray):
@@ -713,10 +709,7 @@ def read_series(dataset: h5py.Dataset) -> Union[np.ndarray, pd.Categorical]:
 def read_partial_dataframe_0_1_0(
     elem, *, items=None, indices=(slice(None), slice(None))
 ):
-    if items is None:
-        items = slice(None)
-    else:
-        items = list(items)
+    items = slice(None) if items is None else list(items)
     return read_elem(elem)[items].iloc[indices[0]]
 
 

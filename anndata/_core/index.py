@@ -1,18 +1,21 @@
+from __future__ import annotations
+
 import collections.abc as cabc
+from collections.abc import Sequence
 from functools import singledispatch
 from itertools import repeat
-from typing import Union, Sequence, Optional, Tuple
 
 import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix, issparse
+from scipy.sparse import issparse, spmatrix
+
 from ..compat import AwkArray, DaskArray, Index, Index1D
 
 
 def _normalize_indices(
-    index: Optional[Index], names0: pd.Index, names1: pd.Index
-) -> Tuple[slice, slice]:
+    index: Index | None, names0: pd.Index, names1: pd.Index
+) -> tuple[slice, slice]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
@@ -21,7 +24,8 @@ def _normalize_indices(
         index: Index = index.values
     if isinstance(index, tuple):
         if len(index) > 2:
-            raise ValueError("AnnData can only be sliced in rows and columns.")
+            msg = "AnnData can only be sliced in rows and columns."
+            raise ValueError(msg)
         # deal with pd.Series
         # TODO: The series should probably be aligned first
         if isinstance(index[1], pd.Series):
@@ -35,17 +39,15 @@ def _normalize_indices(
 
 
 def _normalize_index(
-    indexer: Union[
-        slice,
-        np.integer,
-        int,
-        str,
-        Sequence[Union[int, np.integer]],
-        np.ndarray,
-        pd.Index,
-    ],
+    indexer: slice
+    | np.integer
+    | int
+    | str
+    | Sequence[int | np.integer]
+    | np.ndarray
+    | pd.Index,
     index: pd.Index,
-) -> Union[slice, int, np.ndarray]:  # ndarray of int
+) -> slice | int | np.ndarray:  # ndarray of int
     if not isinstance(index, pd.RangeIndex):
         assert (
             index.dtype != float and index.dtype != int
@@ -84,27 +86,23 @@ def _normalize_index(
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
             if indexer.shape != index.shape:
-                raise IndexError(
-                    f"Boolean index does not match AnnData’s shape along this "
-                    f"dimension. Boolean index has shape {indexer.shape} while "
-                    f"AnnData index has shape {index.shape}."
-                )
+                msg = f"Boolean index does not match AnnData’s shape along this dimension. Boolean index has shape {indexer.shape} while AnnData index has shape {index.shape}."
+                raise IndexError(msg)
             positions = np.where(indexer)[0]
             return positions  # np.ndarray[int]
         else:  # indexer should be string array
             positions = index.get_indexer(indexer)
             if np.any(positions < 0):
                 not_found = indexer[positions < 0]
-                raise KeyError(
-                    f"Values {list(not_found)}, from {list(indexer)}, "
-                    "are not valid obs/ var names or indices."
-                )
+                msg = f"Values {list(not_found)}, from {list(indexer)}, are not valid obs/ var names or indices."
+                raise KeyError(msg)
             return positions  # np.ndarray[int]
     else:
-        raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
+        msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
+        raise IndexError(msg)
 
 
-def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
+def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     if not isinstance(index, tuple):
         return index, slice(None)
     elif len(index) == 2:
@@ -112,11 +110,12 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
     elif len(index) == 1:
         return index[0], slice(None)
     else:
-        raise IndexError("invalid number of indices")
+        msg = "invalid number of indices"
+        raise IndexError(msg)
 
 
 @singledispatch
-def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
+def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
@@ -184,13 +183,11 @@ def get_vector(adata, k, coldim, idxdim, layer=None):
     in_idx = k in idx
 
     if (in_col + in_idx) == 2:
-        raise ValueError(
-            f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
-        )
+        msg = f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
+        raise ValueError(msg)
     elif (in_col + in_idx) == 0:
-        raise KeyError(
-            f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
-        )
+        msg = f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
+        raise KeyError(msg)
     elif in_col:
         return getattr(adata, coldim)[k].values
     elif in_idx:

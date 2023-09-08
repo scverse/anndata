@@ -1,27 +1,32 @@
-from typing import Union, Mapping, Sequence, Tuple
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
 import pandas as pd
-from scipy import sparse
 from scipy.sparse import issparse
 
+from ..compat import CupyArray, CupySparseMatrix
 from . import anndata
-from .index import _normalize_index, _subset, unpack_index, get_vector
 from .aligned_mapping import AxisArrays
+from .index import _normalize_index, _subset, get_vector, unpack_index
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 
-from ..compat import CupyArray, CupySparseMatrix
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from scipy import sparse
 
 
 # TODO: Implement views for Raw
 class Raw:
     def __init__(
         self,
-        adata: "anndata.AnnData",
-        X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Union[pd.DataFrame, Mapping[str, Sequence], None] = None,
-        varm: Union[AxisArrays, Mapping[str, np.ndarray], None] = None,
+        adata: anndata.AnnData,
+        X: np.ndarray | sparse.spmatrix | None = None,
+        var: pd.DataFrame | Mapping[str, Sequence] | None = None,
+        varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ):
         from .anndata import _gen_dataframe
 
@@ -48,7 +53,8 @@ class Raw:
             self._var = adata.var.copy()
             self._varm = AxisArrays(self, 1, adata.varm.copy())
         elif adata.isbacked:
-            raise ValueError("Cannot specify X if adata is backed")
+            msg = "Cannot specify X if adata is backed"
+            raise ValueError(msg)
 
     def _get_X(self, layer=None):
         if layer is not None:
@@ -56,7 +62,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> Union[BaseCompressedSparseDataset, np.ndarray, sparse.spmatrix]:
+    def X(self) -> BaseCompressedSparseDataset | np.ndarray | sparse.spmatrix:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -68,10 +74,8 @@ class Raw:
         elif "raw.X" in self._adata.file:
             X = self._adata.file["raw.X"]  # Backwards compat
         else:
-            raise AttributeError(
-                f"Could not find dataset for raw X in file: "
-                f"{self._adata.file.filename}."
-            )
+            msg = f"Could not find dataset for raw X in file: {self._adata.file.filename}."
+            raise AttributeError(msg)
         if isinstance(X, h5py.Group):
             X = sparse_dataset(X)
         # Check if we need to subset
@@ -119,10 +123,7 @@ class Raw:
         if isinstance(oidx, (int, np.integer)):
             oidx = slice(oidx, oidx + 1, 1)
 
-        if not self._adata.isbacked:
-            X = _subset(self.X, (oidx, vidx))
-        else:
-            X = None
+        X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
@@ -191,12 +192,12 @@ class Raw:
 # This exists to accommodate AlignedMappings,
 # until we implement a proper RawView or get rid of Raw in favor of modes.
 class _RawViewHack:
-    def __init__(self, raw: Raw, vidx: Union[slice, np.ndarray]):
+    def __init__(self, raw: Raw, vidx: slice | np.ndarray):
         self.parent_raw = raw
         self.vidx = vidx
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         return self.parent_raw.n_obs, len(self.var_names)
 
     @property

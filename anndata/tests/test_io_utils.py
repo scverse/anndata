@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 from contextlib import nullcontext
 
-import pytest
-import zarr
 import h5py
 import pandas as pd
+import pytest
+import zarr
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import _clean_uns
 from anndata._io.utils import (
     report_read_key_on_error,
 )
+from anndata.compat import _clean_uns
 from anndata.experimental import read_elem, write_elem
 from anndata.tests.helpers import pytest_8_raises
 

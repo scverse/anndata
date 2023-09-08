@@ -1,8 +1,9 @@
-from scipy import sparse
+from __future__ import annotations
 
 import pytest
+from scipy import sparse
 
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import assert_equal, gen_adata
 
 
 def test_transpose_orig():
@@ -58,9 +59,7 @@ def test_transposed_contents(adata):
     else:
         assert adata.X is t.X is None
 
-    assert_equal(
-        {k: v.T for k, v in adata.layers.items()}, {k: v for k, v in t.layers.items()}
-    )
+    assert_equal({k: v.T for k, v in adata.layers.items()}, dict(t.layers.items()))
     assert_equal(adata.obs, t.var)
     assert_equal(adata.var, t.obs)
     assert_equal(dict(adata.obsm), dict(t.varm))

@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from functools import partial
-from itertools import product
 import re
 import warnings
+from functools import partial
+from itertools import product
 
 import numpy as np
-from numpy import ma
 import pandas as pd
 import pytest
+from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
 from anndata._core.raw import Raw
 from anndata.tests.helpers import assert_equal, gen_adata
-
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
@@ -642,7 +641,7 @@ def test_copy():
         map_copy = getattr(adata_copy, attr)
         assert map_sprs is not map_copy
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
-        for key in map_sprs.keys():
+        for key in map_sprs:
             assert_eq_not_id(map_sprs[key], map_copy[key])
 
 

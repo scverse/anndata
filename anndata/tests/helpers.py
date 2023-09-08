@@ -1,34 +1,33 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from functools import singledispatch, wraps, partial
+import random
 import re
-from string import ascii_letters
-from typing import Tuple, Optional, Type
-from collections.abc import Mapping, Collection
 import warnings
+from collections.abc import Collection, Mapping
+from contextlib import contextmanager
+from functools import partial, singledispatch, wraps
+from string import ascii_letters
 
 import h5py
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
 import pytest
+from pandas.api.types import is_numeric_dtype
 from scipy import sparse
-import random
 
 from anndata import AnnData, Raw
-from anndata._core.views import ArrayView
-from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
-from anndata.utils import asarray
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset
+from anndata._core.views import ArrayView
 from anndata.compat import (
     AwkArray,
-    DaskArray,
-    CupySparseMatrix,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
+    CupySparseMatrix,
+    DaskArray,
 )
+from anndata.utils import asarray
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -110,7 +109,8 @@ def gen_awkward(shape, dtype=np.int32):
     import awkward as ak
 
     if shape[0] is None:
-        raise ValueError("The first dimension must be fixed-length.")
+        msg = "The first dimension must be fixed-length."
+        raise ValueError(msg)
 
     rng = random.Random(123)
     shape = np.array(shape)
@@ -152,24 +152,24 @@ def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
 
 # TODO: Use hypothesis for this?
 def gen_adata(
-    shape: Tuple[int, int],
+    shape: tuple[int, int],
     X_type=sparse.csr_matrix,
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (
+    obsm_types: Collection[type] = (
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         AwkArray,
     ),
-    varm_types: "Collection[Type]" = (
+    varm_types: Collection[type] = (
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         AwkArray,
     ),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: Collection[type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
     sparse_fmt: str = "csr",
 ) -> AnnData:
     """\
@@ -295,9 +295,8 @@ def spmatrix_bool_subset(index, min_size=2):
 
 def array_subset(index, min_size=2):
     if len(index) < min_size:
-        raise ValueError(
-            f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
-        )
+        msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
+        raise ValueError(msg)
     return np.random.choice(
         index, size=np.random.randint(min_size, len(index), ()), replace=False
     )
@@ -305,9 +304,8 @@ def array_subset(index, min_size=2):
 
 def array_int_subset(index, min_size=2):
     if len(index) < min_size:
-        raise ValueError(
-            f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
-        )
+        msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
+        raise ValueError(msg)
     return np.random.choice(
         np.arange(len(index)),
         size=np.random.randint(min_size, len(index), ()),
@@ -475,7 +473,7 @@ def assert_equal_awkarray(a, b, exact=False, elem_name=None):
 @assert_equal.register(Mapping)
 def assert_equal_mapping(a, b, exact=False, elem_name=None):
     assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
-    for k in a.keys():
+    for k in a:
         if elem_name is None:
             elem_name = ""
         assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
@@ -531,7 +529,7 @@ def assert_equal_raw(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AnnData)
 def assert_adata_equal(
-    a: AnnData, b: AnnData, exact: bool = False, elem_name: Optional[str] = None
+    a: AnnData, b: AnnData, exact: bool = False, elem_name: str | None = None
 ):
     """\
     Check whether two AnnData objects are equivalent,
@@ -602,7 +600,7 @@ def _(a):
 
 
 @contextmanager
-def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern | None = None):
     """Error handling using pytest 8's support for __notes__.
 
     See: https://github.com/pytest-dev/pytest/pull/11227
@@ -645,9 +643,8 @@ def as_cupy_type(val, typ=None):
         elif issubclass(input_typ, sparse.csc_matrix):
             typ = CupyCSCMatrix
         else:
-            raise NotImplementedError(
-                f"No default target type for input type {input_typ}"
-            )
+            msg = f"No default target type for input type {input_typ}"
+            raise NotImplementedError(msg)
 
     if issubclass(typ, CupyArray):
         import cupy as cp
@@ -656,25 +653,24 @@ def as_cupy_type(val, typ=None):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
-        import cupyx.scipy.sparse as cpsparse
         import cupy as cp
+        import cupyx.scipy.sparse as cpsparse
 
         if isinstance(val, np.ndarray):
             return cpsparse.csr_matrix(cp.array(val))
         else:
             return cpsparse.csr_matrix(val)
     elif issubclass(typ, CupyCSCMatrix):
-        import cupyx.scipy.sparse as cpsparse
         import cupy as cp
+        import cupyx.scipy.sparse as cpsparse
 
         if isinstance(val, np.ndarray):
             return cpsparse.csc_matrix(cp.array(val))
         else:
             return cpsparse.csc_matrix(val)
     else:
-        raise NotImplementedError(
-            f"Conversion from {type(val)} to {typ} not implemented"
-        )
+        msg = f"Conversion from {type(val)} to {typ} not implemented"
+        raise NotImplementedError(msg)
 
 
 BASE_MATRIX_PARAMS = [

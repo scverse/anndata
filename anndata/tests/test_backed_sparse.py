@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 import h5py
 import numpy as np
 import pytest
+import zarr
 from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.tests.helpers import assert_equal, subset_func
 from anndata.experimental import read_dispatched
-
-import zarr
+from anndata.tests.helpers import assert_equal, subset_func
 
 subset_func2 = subset_func
 
@@ -92,10 +93,7 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method, diskfmt):
     )  # diskfmt is either h5ad or zarr
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
-    if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
-    else:
-        f = h5py.File(path, "a")
+    f = zarr.open_group(path, "a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad._io.specs.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
 
@@ -121,10 +119,7 @@ def test_dataset_append_disk(tmp_path, sparse_format, append_method, diskfmt):
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
-    if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
-    else:
-        f = h5py.File(path, "a")
+    f = zarr.open_group(path, "a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad._io.specs.write_elem(f, "a", a)
     ad._io.specs.write_elem(f, "b", b)
     a_disk = sparse_dataset(f["a"])
@@ -152,10 +147,7 @@ def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape, diskfmt):
     a_mem = sparse.random(*a_shape, format=sparse_format)
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
-    if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
-    else:
-        f = h5py.File(path, "a")
+    f = zarr.open_group(path, "a") if diskfmt == "zarr" else h5py.File(path, "a")
 
     ad._io.specs.write_elem(f, "a", a_mem)
     ad._io.specs.write_elem(f, "b", b_mem)
@@ -172,10 +164,7 @@ def test_wrong_formats(tmp_path, diskfmt):
     )  # diskfmt is either h5ad or zarr
     base = sparse.random(100, 100, format="csr")
 
-    if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
-    else:
-        f = h5py.File(path, "a")
+    f = zarr.open_group(path, "a") if diskfmt == "zarr" else h5py.File(path, "a")
 
     ad._io.specs.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])

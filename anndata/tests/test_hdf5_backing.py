@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import joblib
-import pytest
 import numpy as np
+import pytest
 from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import (
-    as_dense_dask_array,
     GEN_ADATA_DASK_ARGS,
-    gen_adata,
+    as_dense_dask_array,
     assert_equal,
+    gen_adata,
     subset_func,
 )
 from anndata.utils import asarray

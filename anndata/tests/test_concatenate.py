@@ -1,33 +1,34 @@
+from __future__ import annotations
+
+import warnings
 from collections.abc import Hashable
 from copy import deepcopy
-from itertools import chain, product
 from functools import partial, singledispatch
-from typing import Any, List, Callable
-import warnings
+from itertools import chain, product
+from typing import Any, Callable
 
 import numpy as np
-from numpy import ma
 import pandas as pd
 import pytest
+from boltons.iterutils import default_exit, remap, research
+from numpy import ma
 from scipy import sparse
-from boltons.iterutils import research, remap, default_exit
-
 
 from anndata import AnnData, Raw, concat
-from anndata._core.index import _subset
 from anndata._core import merge
+from anndata._core.index import _subset
+from anndata.compat import AwkArray, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
-    assert_equal,
-    as_dense_dask_array,
-    gen_adata,
-    GEN_ADATA_DASK_ARGS,
     BASE_MATRIX_PARAMS,
-    DASK_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    GEN_ADATA_DASK_ARGS,
+    as_dense_dask_array,
+    assert_equal,
+    gen_adata,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray, AwkArray
 
 
 @singledispatch
@@ -958,7 +959,7 @@ def map_values(mapping, path, key, old_parent, new_parent, new_items):
     return ret
 
 
-def permute_nested_values(dicts: "List[dict]", gen_val: "Callable[[int], Any]"):
+def permute_nested_values(dicts: list[dict], gen_val: Callable[[int], Any]):
     """
     This function permutes the values of a nested mapping, for testing that out merge
     method work regardless of the values types.
@@ -1081,7 +1082,7 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     """
     # So we can see what the initial pattern was meant to be
     print(merge_strategy, "\n", unss, "\n", result)
-    result, *unss = permute_nested_values([result] + unss, value_gen)
+    result, *unss = permute_nested_values([result, *unss], value_gen)
     adatas = [uns_ad(uns) for uns in unss]
     with pytest.warns(FutureWarning, match=r"concatenate method is deprecated"):
         merged = AnnData.concatenate(*adatas, uns_merge=merge_strategy).uns
@@ -1301,7 +1302,7 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
 
         check_filled_like(result.X[axis_idx], elem_name="X")
         check_filled_like(result.X[altaxis_idx], elem_name="X")
-        for k, elem in getattr(result, "layers").items():
+        for k, elem in result.layers.items():
             check_filled_like(elem[axis_idx], elem_name=f"layers/{k}")
             check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
 
@@ -1384,9 +1385,10 @@ def test_concat_X_dtype():
 
 # Tests how dask plays with other types on concatenation.
 def test_concat_different_types_dask(merge_strategy, array_type):
-    from scipy import sparse
-    import anndata as ad
     import dask.array as da
+    from scipy import sparse
+
+    import anndata as ad
 
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
 

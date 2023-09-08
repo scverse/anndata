@@ -12,17 +12,18 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
-from abc import ABC
 import collections.abc as cabc
-from itertools import accumulate, chain
-from typing import Literal, Union, NamedTuple, Tuple, Sequence, Iterable, Type
 import warnings
+from abc import ABC
+from itertools import accumulate, chain
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import h5py
 import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
-from anndata.compat import ZarrGroup, H5Group
+
+from anndata.compat import H5Group, ZarrGroup
 
 from ..compat import _read_attr
 
@@ -32,13 +33,16 @@ try:
 except ImportError:
     _cs_matrix = ss.spmatrix
 
-from .index import unpack_index, Index, _subset
+from .index import Index, _subset, unpack_index
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
 
 
 class BackedFormat(NamedTuple):
     format: str
-    backed_type: Type["BackedSparseMatrix"]
-    memory_type: Type[ss.spmatrix]
+    backed_type: type[BackedSparseMatrix]
+    memory_type: type[ss.spmatrix]
 
 
 class BackedSparseMatrix(_cs_matrix):
@@ -74,9 +78,8 @@ class BackedSparseMatrix(_cs_matrix):
             return
 
         else:
-            raise ValueError(
-                "You cannot change the sparsity structure of a SparseDataset."
-            )
+            msg = "You cannot change the sparsity structure of a SparseDataset."
+            raise ValueError(msg)
             # replace where possible
             # mask = offsets > -1
             # # offsets[mask]
@@ -192,7 +195,7 @@ def slice_as_int(s: slice, l: int) -> int:
 
 def get_compressed_vectors(
     x: BackedSparseMatrix, row_idxs: Iterable[int]
-) -> Tuple[Sequence, Sequence, Sequence]:
+) -> tuple[Sequence, Sequence, Sequence]:
     slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
     data = np.concatenate([x.data[s] for s in slices])
     indices = np.concatenate([x.indices[s] for s in slices])
@@ -202,7 +205,7 @@ def get_compressed_vectors(
 
 def get_compressed_vector(
     x: BackedSparseMatrix, idx: int
-) -> Tuple[Sequence, Sequence, Sequence]:
+) -> tuple[Sequence, Sequence, Sequence]:
     s = slice(*(x.indptr[idx : idx + 2]))
     data = x.data[s]
     indices = x.indices[s]
@@ -214,21 +217,24 @@ def get_format(data: ss.spmatrix) -> str:
     for fmt, _, memory_class in FORMATS:
         if isinstance(data, memory_class):
             return fmt
-    raise ValueError(f"Data type {type(data)} is not supported.")
+    msg = f"Data type {type(data)} is not supported."
+    raise ValueError(msg)
 
 
-def get_memory_class(format: str) -> Type[ss.spmatrix]:
+def get_memory_class(format: str) -> type[ss.spmatrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
             return memory_class
-    raise ValueError(f"Format string {format} is not supported.")
+    msg = f"Format string {format} is not supported."
+    raise ValueError(msg)
 
 
-def get_backed_class(format: str) -> Type[BackedSparseMatrix]:
+def get_backed_class(format: str) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
             return backed_class
-    raise ValueError(f"Format string {format} is not supported.")
+    msg = f"Format string {format} is not supported."
+    raise ValueError(msg)
 
 
 def _get_group_format(group) -> str:
@@ -258,7 +264,8 @@ class BaseCompressedSparseDataset(ABC):
         elif isinstance(self.group, H5Group):
             return "hdf5"
         else:
-            raise ValueError(f"Unknown group type {type(self.group)}")
+            msg = f"Unknown group type {type(self.group)}"
+            raise ValueError(msg)
 
     @property
     def dtype(self) -> np.dtype:
@@ -284,7 +291,7 @@ class BaseCompressedSparseDataset(ABC):
         return self.group.name
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         shape = _read_attr(self.group.attrs, "shape", None)
         if shape is None:
             # TODO warn
@@ -304,7 +311,7 @@ class BaseCompressedSparseDataset(ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
+    def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
         row, col = self._normalize_index(index)
         mtx = self._to_backed()
         sub = mtx[row, col]
@@ -316,8 +323,8 @@ class BaseCompressedSparseDataset(ABC):
             return sub
 
     def _normalize_index(
-        self, index: Union[Index, Tuple[()]]
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        self, index: Index | tuple[()]
+    ) -> tuple[np.ndarray, np.ndarray]:
         if index == ():
             index = slice(None)
         row, col = unpack_index(index)
@@ -325,7 +332,7 @@ class BaseCompressedSparseDataset(ABC):
             row, col = np.ix_(row, col)
         return row, col
 
-    def __setitem__(self, index: Union[Index, Tuple[()]], value):
+    def __setitem__(self, index: Index | tuple[()], value):
         warnings.warn(
             "__setitem__ will likely be removed in the near future. We do not recommend relying on its stability.",
             PendingDeprecationWarning,
@@ -343,19 +350,14 @@ class BaseCompressedSparseDataset(ABC):
 
         # Check input
         if not ss.isspmatrix(sparse_matrix):
-            raise NotImplementedError(
-                "Currently, only sparse matrices of equivalent format can be "
-                "appended to a SparseDataset."
-            )
+            msg = "Currently, only sparse matrices of equivalent format can be appended to a SparseDataset."
+            raise NotImplementedError(msg)
         if self.format not in {"csr", "csc"}:
-            raise NotImplementedError(
-                f"The append method for format {self.format} " f"is not implemented."
-            )
+            msg = f"The append method for format {self.format} is not implemented."
+            raise NotImplementedError(msg)
         if self.format != get_format(sparse_matrix):
-            raise ValueError(
-                f"Matrices must have same format. Currently are "
-                f"{self.format!r} and {get_format(sparse_matrix)!r}"
-            )
+            msg = f"Matrices must have same format. Currently are {self.format!r} and {get_format(sparse_matrix)!r}"
+            raise ValueError(msg)
 
         # shape
         if self.format == "csr":
@@ -369,7 +371,8 @@ class BaseCompressedSparseDataset(ABC):
             ), "CSC matrices must have same size of dimension 0 to be appended."
             new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
         else:
-            assert False, "We forgot to update this branching to a new format"
+            msg = "We forgot to update this branching to a new format"
+            raise AssertionError(msg)
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
         self.group.attrs["shape"] = new_shape

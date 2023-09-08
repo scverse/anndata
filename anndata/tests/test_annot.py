@@ -1,11 +1,12 @@
 """Test handling of values in `obs`/ `var`"""
-from natsort import natsorted
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
+import pytest
+from natsort import natsorted
 
 import anndata as ad
-
-import pytest
 
 
 @pytest.mark.parametrize("dtype", [object, "string"])

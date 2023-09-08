@@ -1,16 +1,19 @@
-from functools import reduce
-from typing import NamedTuple, Tuple
+from __future__ import annotations
 
-from . import anndata
+from functools import reduce
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from . import anndata
 
 
 class ElementRef(NamedTuple):
-    parent: "anndata.AnnData"
+    parent: anndata.AnnData
     attrname: str
-    keys: Tuple[str, ...] = ()
+    keys: tuple[str, ...] = ()
 
     def __str__(self) -> str:
-        return f".{self.attrname}" + "".join(map(lambda x: f"['{x}']", self.keys))
+        return f".{self.attrname}" + "".join(f"['{x}']" for x in self.keys)
 
     @property
     def _parent_el(self):

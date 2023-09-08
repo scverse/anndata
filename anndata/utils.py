@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import warnings
-from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union
+from functools import singledispatch, wraps
+from typing import TYPE_CHECKING, Any
 
 import h5py
-import pandas as pd
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
-from .logging import get_logger
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import CupyArray, CupySparseMatrix
+from .logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 logger = get_logger(__name__)
 
@@ -58,11 +63,9 @@ def convert_to_dict_dict(obj: dict):
 @convert_to_dict.register(np.ndarray)
 def convert_to_dict_ndarray(obj: np.ndarray):
     if obj.dtype.fields is None:
-        raise TypeError(
-            "Can only convert np.ndarray with compound dtypes to dict, "
-            f"passed array had “{obj.dtype}”."
-        )
-    return {k: obj[k] for k in obj.dtype.fields.keys()}
+        msg = f"Can only convert np.ndarray with compound dtypes to dict, passed array had “{obj.dtype}”."
+        raise TypeError(msg)
+    return {k: obj[k] for k in obj.dtype.fields}
 
 
 @convert_to_dict.register(type(None))
@@ -88,13 +91,11 @@ try:
         if layout.is_numpy:
             # if it's an embedded rectilinear array, we have to deal with its shape
             # which might not be 1-dimensional
-            if layout.is_unknown:
-                shape = (0,)
-            else:
-                shape = layout.shape
+            shape = (0,) if layout.is_unknown else layout.shape
             numpy_axis = lateral_context["axis"] - depth + 1
             if not (1 <= numpy_axis < len(shape)):
-                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+                msg = f"axis={lateral_context['axis']} is too deep"
+                raise TypeError(msg)
             lateral_context["out"] = shape[numpy_axis]
             return ak.contents.EmptyArray()
 
@@ -103,7 +104,8 @@ try:
                 # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
                 # which results in an extra hierarchy-level that shouldn't show up in dim_len
                 # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
-                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+                msg = f"axis={lateral_context['axis']} is too deep"
+                raise TypeError(msg)
 
             if layout.is_regular:
                 # if it's a regular list, you want the size
@@ -121,9 +123,8 @@ try:
             # currently, we don't recurse into records
             # in theory we could, just not sure how to do it at the moment
             # Would need to consider cases like: scalars, unevenly sized values
-            raise TypeError(
-                f"Cannot recurse into record type found at axis={lateral_context['axis']}"
-            )
+            msg = f"Cannot recurse into record type found at axis={lateral_context['axis']}"
+            raise TypeError(msg)
 
         elif layout.is_union:
             # if it's a union, you could get the result of each union branch
@@ -154,7 +155,8 @@ try:
         Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
         """
         if axis < 0:  # negative axis is another can of worms... maybe later
-            raise NotImplementedError("Does not support negative axis")
+            msg = "Does not support negative axis"
+            raise NotImplementedError(msg)
         elif axis == 0:
             return len(array)
         else:
@@ -253,7 +255,7 @@ def warn_names_duplicates(attr: str):
 
 def ensure_df_homogeneous(
     df: pd.DataFrame, name: str
-) -> Union[np.ndarray, sparse.csr_matrix]:
+) -> np.ndarray | sparse.csr_matrix:
     # TODO: rename this function, I would not expect this to return a non-dataframe
     if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
         arr = df.sparse.to_coo().tocsr()
@@ -274,10 +276,8 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
             for col in source.values()
         ]
     except UnicodeEncodeError as e:
-        raise ValueError(
-            "Currently only support ascii strings. "
-            "Don’t use “ö” etc. for sample annotation."
-        ) from e
+        msg = "Currently only support ascii strings. Don’t use “ö” etc. for sample annotation."
+        raise ValueError(msg) from e
 
     # if old_index_key not in source:
     #     names.append(new_index_key)

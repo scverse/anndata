@@ -3,6 +3,8 @@ This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
+from __future__ import annotations
+
 import warnings
 
 import h5py
@@ -10,9 +12,8 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from anndata import AnnData
 import anndata as ad
-
+from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 
 
@@ -101,12 +102,11 @@ def test_dtype_warning():
 def test_deprecated_write_attribute(tmp_path):
     pth = tmp_path / "file.h5"
     A = np.random.randn(20, 10)
-    from anndata._io.utils import read_attribute, write_attribute
     from anndata._io.specs import read_elem
+    from anndata._io.utils import read_attribute, write_attribute
 
-    with h5py.File(pth, "w") as f:
-        with pytest.warns(DeprecationWarning, match="write_elem"):
-            write_attribute(f, "written_attribute", A)
+    with h5py.File(pth, "w") as f, pytest.warns(DeprecationWarning, match="write_elem"):
+        write_attribute(f, "written_attribute", A)
 
     with h5py.File(pth, "r") as f:
         elem_A = read_elem(f["written_attribute"])
@@ -129,6 +129,7 @@ def test_deprecated_read(tmp_path):
 
 def test_deprecated_sparse_dataset_values():
     import zarr
+
     from anndata.experimental import sparse_dataset, write_elem
 
     mtx = sparse.random(50, 50, format="csr")
@@ -138,7 +139,7 @@ def test_deprecated_sparse_dataset_values():
     mtx_backed = sparse_dataset(g["mtx"])
 
     with pytest.warns(FutureWarning, match="Please use .to_memory()"):
-        mtx_backed.value
+        mtx_backed.value  # noqa: B018
 
     with pytest.warns(FutureWarning, match="Please use .format"):
-        mtx_backed.format_str
+        mtx_backed.format_str  # noqa: B018

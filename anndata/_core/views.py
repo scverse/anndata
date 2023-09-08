@@ -1,28 +1,32 @@
 from __future__ import annotations
 
+import warnings
 from contextlib import contextmanager
 from copy import deepcopy
-from collections.abc import Sequence, KeysView, Callable, Iterable
 from functools import reduce, singledispatch, wraps
-from typing import Any, ClassVar, Literal
-import warnings
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
-import anndata
 from anndata._warnings import ImplicitModificationWarning
-from .access import ElementRef
+
 from ..compat import (
-    ZappyArray,
     AwkArray,
-    DaskArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
+    DaskArray,
+    ZappyArray,
 )
+from .access import ElementRef
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, KeysView, Sequence
+
+    import anndata
 
 
 @contextmanager
@@ -79,7 +83,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[anndata.AnnData, str, tuple[str, ...]] | None = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -100,7 +104,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[anndata.AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -172,7 +176,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[anndata.AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = super().__new__(
             cls,
@@ -226,7 +230,7 @@ class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[anndata.AnnData, str, tuple[str, ...]] | None = None,
     ):
         import cupy as cp
 
@@ -260,7 +264,8 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 @singledispatch
 def as_view(obj, view_args):
-    raise NotImplementedError(f"No view type has been registered for {type(obj)}")
+    msg = f"No view type has been registered for {type(obj)}"
+    raise NotImplementedError(msg)
 
 
 @as_view.register(np.ndarray)
@@ -316,8 +321,9 @@ def as_view_cupy_csc(mtx, view_args):
 
 
 try:
-    from ..compat import awkward as ak
     import weakref
+
+    from ..compat import awkward as ak
 
     # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
     _registry = weakref.WeakValueDictionary()
@@ -362,10 +368,8 @@ try:
         # A better solution might be based on xarray-style "attrs", once this is implemented
         # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
         if type(array).__name__ != "Array":
-            raise NotImplementedError(
-                "Cannot create a view of an awkward array with __array__ parameter. "
-                "Please open an issue in the AnnData repo and describe your use-case."
-            )
+            msg = "Cannot create a view of an awkward array with __array__ parameter. Please open an issue in the AnnData repo and describe your use-case."
+            raise NotImplementedError(msg)
         array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
         array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
         return array

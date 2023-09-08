@@ -1,18 +1,14 @@
+from __future__ import annotations
+
 import os
 import shutil
+from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
 from functools import singledispatch
 from pathlib import Path
 from typing import (
     Any,
     Callable,
-    Collection,
-    Iterable,
     Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
-    MutableMapping,
 )
 
 import numpy as np
@@ -104,12 +100,13 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
-    raise NotImplementedError("This is not yet implemented.")
+def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
+    msg = "This is not yet implemented."
+    raise NotImplementedError(msg)
 
 
 @as_group.register(os.PathLike)
-def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+def _(store: os.PathLike, *args, **kwargs) -> ZarrGroup | H5Group:
     if store.suffix == ".h5ad":
         import h5py
 
@@ -120,7 +117,7 @@ def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
 
 
 @as_group.register(str)
-def _(store: str, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+def _(store: str, *args, **kwargs) -> ZarrGroup | H5Group:
     return as_group(Path(store), *args, **kwargs)
 
 
@@ -135,7 +132,7 @@ def _(store, *args, **kwargs):
 ###################
 
 
-def read_as_backed(group: Union[ZarrGroup, H5Group]):
+def read_as_backed(group: ZarrGroup | H5Group):
     """
     Read the group until
     BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
@@ -156,7 +153,7 @@ def read_as_backed(group: Union[ZarrGroup, H5Group]):
     return read_dispatched(group, callback=callback)
 
 
-def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
+def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
     index_key = df.attrs["_index"]
     return pd.Index(read_elem(df[index_key]))
 
@@ -167,9 +164,9 @@ def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
 
 
 def write_concat_dense(
-    arrays: Sequence[Union[ZarrArray, H5Array]],
-    output_group: Union[ZarrGroup, H5Group],
-    output_path: Union[ZarrGroup, H5Group],
+    arrays: Sequence[ZarrArray | H5Array],
+    output_group: ZarrGroup | H5Group,
+    output_path: ZarrGroup | H5Group,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
     fill_value=None,
@@ -196,8 +193,8 @@ def write_concat_dense(
 
 def write_concat_sparse(
     datasets: Sequence[BaseCompressedSparseDataset],
-    output_group: Union[ZarrGroup, H5Group],
-    output_path: Union[ZarrGroup, H5Group],
+    output_group: ZarrGroup | H5Group,
+    output_path: ZarrGroup | H5Group,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
@@ -235,7 +232,7 @@ def write_concat_sparse(
 
 def _write_concat_mappings(
     mappings,
-    output_group: Union[ZarrGroup, H5Group],
+    output_group: ZarrGroup | H5Group,
     keys,
     path,
     max_loaded_elems,
@@ -269,7 +266,7 @@ def _write_concat_mappings(
 
 
 def _write_concat_arrays(
-    arrays: Sequence[Union[ZarrArray, H5Array, BaseCompressedSparseDataset]],
+    arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
     output_group,
     output_path,
     max_loaded_elems,
@@ -281,15 +278,15 @@ def _write_concat_arrays(
     init_elem = arrays[0]
     init_type = type(init_elem)
     if not all(isinstance(a, init_type) for a in arrays):
-        raise NotImplementedError(
-            f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
-        )
+        msg = f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
+        raise NotImplementedError(msg)
 
     if reindexers is None:
         if join == "inner":
             reindexers = gen_inner_reindexers(arrays, new_index=None, axis=axis)
         else:
-            raise NotImplementedError("Cannot reindex arrays with outer join.")
+            msg = "Cannot reindex arrays with outer join."
+            raise NotImplementedError(msg)
 
     if isinstance(init_elem, BaseCompressedSparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
@@ -304,9 +301,8 @@ def _write_concat_arrays(
                 fill_value,
             )
         else:
-            raise NotImplementedError(
-                f"Concat of following not supported: {[a.format for a in arrays]}"
-            )
+            msg = f"Concat of following not supported: {[a.format for a in arrays]}"
+            raise NotImplementedError(msg)
     else:
         write_concat_dense(
             arrays, output_group, output_path, axis, reindexers, fill_value
@@ -314,9 +310,7 @@ def _write_concat_arrays(
 
 
 def _write_concat_sequence(
-    arrays: Sequence[
-        Union[pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray]
-    ],
+    arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
     output_group,
     output_path,
     max_loaded_elems,
@@ -334,14 +328,14 @@ def _write_concat_sequence(
             if join == "inner":
                 reindexers = gen_inner_reindexers(arrays, None, axis=axis)
             else:
-                raise NotImplementedError("Cannot reindex dataframes with outer join.")
+                msg = "Cannot reindex dataframes with outer join."
+                raise NotImplementedError(msg)
         if not all(
             isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
             for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate a dataframe with other array types."
-            )
+            msg = "Cannot concatenate a dataframe with other array types."
+            raise NotImplementedError(msg)
         df = concat_arrays(
             arrays=arrays,
             reindexers=reindexers,
@@ -365,9 +359,8 @@ def _write_concat_sequence(
             join,
         )
     else:
-        raise NotImplementedError(
-            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays] } with axis={axis}."
-        )
+        msg = f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
+        raise NotImplementedError(msg)
 
 
 def _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge):
@@ -401,26 +394,21 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
 
 
 def concat_on_disk(
-    in_files: Union[
-        Collection[Union[str, os.PathLike]],
-        MutableMapping[str, Union[str, os.PathLike]],
-    ],
-    out_file: Union[str, os.PathLike],
+    in_files: Collection[str | os.PathLike] | MutableMapping[str, str | os.PathLike],
+    out_file: str | os.PathLike,
     *,
     overwrite: bool = False,
     max_loaded_elems: int = 100_000_000,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[
-        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
-    ] = None,
-    uns_merge: Union[
-        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
-    ] = None,
-    label: Optional[str] = None,
-    keys: Optional[Collection[str]] = None,
-    index_unique: Optional[str] = None,
-    fill_value: Optional[Any] = None,
+    merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
+    uns_merge: StrategiesLiteral
+    | Callable[[Collection[Mapping]], Mapping]
+    | None = None,
+    label: str | None = None,
+    keys: Collection[str] | None = None,
+    index_unique: str | None = None,
+    fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> None:
     """Concatenates multiple AnnData objects along a specified axis using their
@@ -502,26 +490,27 @@ def concat_on_disk(
     """
     # Argument normalization
     if pairwise:
-        raise NotImplementedError("pairwise concatenation not yet implemented")
+        msg = "pairwise concatenation not yet implemented"
+        raise NotImplementedError(msg)
     if join != "inner":
-        raise NotImplementedError("only inner join is currently supported")
+        msg = "only inner join is currently supported"
+        raise NotImplementedError(msg)
 
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
     if len(in_files) <= 1:
         if len(in_files) == 1:
             if not overwrite and Path(out_file).is_file():
-                raise FileExistsError(
+                msg = (
                     f"File “{out_file}” already exists and `overwrite` is set to False"
                 )
+                raise FileExistsError(msg)
             shutil.copy2(in_files[0], out_file)
         return
     if isinstance(in_files, Mapping):
         if keys is not None:
-            raise TypeError(
-                "Cannot specify categories in both mapping keys and using `keys`. "
-                "Only specify this once."
-            )
+            msg = "Cannot specify categories in both mapping keys and using `keys`. Only specify this once."
+            raise TypeError(msg)
         keys, in_files = list(in_files.keys()), list(in_files.values())
     else:
         in_files = list(in_files)
@@ -546,7 +535,8 @@ def concat_on_disk(
 
     # All groups must be anndata
     if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
-        raise ValueError("All groups must be anndata")
+        msg = "All groups must be anndata"
+        raise ValueError(msg)
 
     # Write metadata
     output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
