@@ -1,4 +1,6 @@
 # TODO: These tests should share code with test_layers, and test_obsmvarm
+from __future__ import annotations
+
 import warnings
 
 import joblib

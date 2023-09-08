@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from .h5ad import read_h5ad, write_h5ad
 from .read import (
     read_csv,
     read_excel,
@@ -8,7 +11,6 @@ from .read import (
     read_umi_tools,
     read_zarr,
 )
-from .h5ad import read_h5ad, write_h5ad
 from .write import write_csvs, write_loom
 
 

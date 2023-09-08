@@ -4,11 +4,12 @@ from functools import wraps
 from typing import Callable, Literal
 from warnings import warn
 
-from packaging import version
 import h5py
+from packaging import version
+
+from anndata.compat import H5Group, ZarrGroup, add_note
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from anndata.compat import H5Group, ZarrGroup, add_note
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442

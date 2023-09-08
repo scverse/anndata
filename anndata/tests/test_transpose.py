@@ -1,10 +1,11 @@
-from scipy import sparse
-import numpy as np
+from __future__ import annotations
 
+import numpy as np
 import pytest
+from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal, shares_memory
+from anndata.tests.helpers import assert_equal, gen_adata, shares_memory
 
 
 def test_transpose_orig():

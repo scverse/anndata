@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from os import PathLike
 from collections.abc import Mapping
-from itertools import product
 from functools import partial
-from typing import Union, Literal
+from itertools import product
 from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal
 from warnings import warn
 
 import h5py
@@ -15,23 +14,29 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData, Raw
+from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
-from anndata._core import views
+from anndata._io.utils import H5PY_V3, check_key
+from anndata._warnings import OldFormatWarning
 from anndata.compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+    DaskArray,
     ZarrArray,
     ZarrGroup,
-    DaskArray,
-    _read_attr,
-    _from_fixed_length_strings,
     _decode_structured_array,
+    _from_fixed_length_strings,
+    _read_attr,
 )
-from anndata._io.utils import check_key, H5PY_V3
-from anndata._warnings import OldFormatWarning
-from anndata.compat import AwkArray, CupyArray, CupyCSRMatrix, CupyCSCMatrix
 
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group
@@ -736,7 +741,7 @@ def read_dataframe_0_1_0(elem, _reader):
     return df
 
 
-def read_series(dataset: h5py.Dataset) -> Union[np.ndarray, pd.Categorical]:
+def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
     # For reading older dataframes
     if "categories" in dataset.attrs:
         if isinstance(dataset, ZarrArray):

@@ -1,12 +1,13 @@
-from itertools import product, combinations
+from __future__ import annotations
+
+from itertools import combinations, product
 
 import numpy as np
 import pytest
 
-from anndata.tests.helpers import gen_vstr_recarray
-
-from anndata import AnnData
 import anndata as ad
+from anndata import AnnData
+from anndata.tests.helpers import gen_vstr_recarray
 
 
 @pytest.fixture(params=["h5ad", "zarr"])

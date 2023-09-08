@@ -1,16 +1,20 @@
+from __future__ import annotations
+
 import warnings
-from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union
+from functools import singledispatch, wraps
+from typing import TYPE_CHECKING, Any
 
 import h5py
-import pandas as pd
 import numpy as np
+import pandas as pd
 from scipy import sparse
-
-from .logging import get_logger
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import CupyArray, CupySparseMatrix, DaskArray
+from .logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 logger = get_logger(__name__)
 
@@ -259,7 +263,7 @@ def warn_names_duplicates(attr: str):
 
 def ensure_df_homogeneous(
     df: pd.DataFrame, name: str
-) -> Union[np.ndarray, sparse.csr_matrix]:
+) -> np.ndarray | sparse.csr_matrix:
     # TODO: rename this function, I would not expect this to return a non-dataframe
     if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
         arr = df.sparse.to_coo().tocsr()

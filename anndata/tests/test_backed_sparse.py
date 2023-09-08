@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 import h5py
 import numpy as np
 import pytest
+import zarr
 from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.tests.helpers import assert_equal, subset_func
 from anndata.experimental import read_dispatched
-
-import zarr
+from anndata.tests.helpers import assert_equal, subset_func
 
 subset_func2 = subset_func
 

@@ -2,13 +2,16 @@
 # 1. to allow ignoring warnings without test collection failing on CI
 # 2. as a pytest plugin/config that applies to doctests as well
 # TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
+from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from anndata.compat import chdir
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 doctest_marker = pytest.mark.usefixtures("doctest_env")
 

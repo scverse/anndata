@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 from pathlib import Path
 
+import pandas as pd
 import pytest
+from scipy import sparse
 
 import anndata as ad
-import pandas as pd
-from scipy import sparse
 from anndata.tests.helpers import assert_equal
 
 ARCHIVE_PTH = Path(__file__).parent / "data/archives"

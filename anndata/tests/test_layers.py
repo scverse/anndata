@@ -1,11 +1,13 @@
-from importlib.util import find_spec
-import warnings
+from __future__ import annotations
 
-import pytest
+import warnings
+from importlib.util import find_spec
+
 import numpy as np
 import pandas as pd
+import pytest
 
-from anndata import AnnData, read_loom, read_h5ad
+from anndata import AnnData, read_h5ad, read_loom
 from anndata.tests.helpers import gen_typed_df_t2_size
 
 X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])

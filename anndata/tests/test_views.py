@@ -1,30 +1,31 @@
+from __future__ import annotations
+
 from copy import deepcopy
 from operator import mul
 
 import joblib
 import numpy as np
-from scipy import sparse
 import pandas as pd
 import pytest
+from dask.base import normalize_token, tokenize
+from scipy import sparse
 
 import anndata as ad
 from anndata._core.index import _normalize_index
-from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
+from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
 from anndata.compat import CupyCSCMatrix, DaskArray
-from anndata.utils import asarray
 from anndata.tests.helpers import (
-    gen_adata,
-    subset_func,
-    slice_subset,
-    single_subset,
-    assert_equal,
-    GEN_ADATA_DASK_ARGS,
     BASE_MATRIX_PARAMS,
-    DASK_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    GEN_ADATA_DASK_ARGS,
+    assert_equal,
+    gen_adata,
+    single_subset,
+    slice_subset,
+    subset_func,
 )
-from dask.base import tokenize, normalize_token
-
+from anndata.utils import asarray
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -343,11 +344,11 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
     if isinstance(adata.X, CupyCSCMatrix):
         # Comparison broken for CSC matrices
         # https://github.com/cupy/cupy/issues/7757
-        assert asarray((orig_X_val.tocsr() != adata.X.tocsr())).sum() == mul(
+        assert asarray(orig_X_val.tocsr() != adata.X.tocsr()).sum() == mul(
             *adata_subset.shape
         )
     else:
-        assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+        assert asarray(orig_X_val != adata.X).sum() == mul(*adata_subset.shape)
 
 
 # TODO: Use different kind of subsetting for adata and view

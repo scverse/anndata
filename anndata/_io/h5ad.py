@@ -1,41 +1,50 @@
+from __future__ import annotations
+
 import re
 from functools import partial
-from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Type, TypeVar, Union, Literal
-from typing import Collection, Sequence, Mapping
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Literal,
+    TypeVar,
+)
+from warnings import warn
 
 import h5py
 import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from .._core.sparse_dataset import BaseCompressedSparseDataset
-from .._core.file_backing import AnnDataFileManager, filename
-from .._core.anndata import AnnData
-from ..compat import (
-    _from_fixed_length_strings,
-    _decode_structured_array,
-    _clean_uns,
-)
-from ..experimental import read_dispatched
-from .utils import (
-    H5PY_V3,
-    report_read_key_on_error,
-    report_write_key_on_error,
-    idx_chunks_along_axis,
-    _read_legacy_raw,
-)
-from .specs import read_elem, write_elem
 from anndata._warnings import OldFormatWarning
 
+from .._core.anndata import AnnData
+from .._core.file_backing import AnnDataFileManager, filename
+from .._core.sparse_dataset import BaseCompressedSparseDataset
+from ..compat import (
+    _clean_uns,
+    _decode_structured_array,
+    _from_fixed_length_strings,
+)
+from ..experimental import read_dispatched
+from .specs import read_elem, write_elem
+from .utils import (
+    H5PY_V3,
+    _read_legacy_raw,
+    idx_chunks_along_axis,
+    report_read_key_on_error,
+    report_write_key_on_error,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Collection, Mapping, Sequence
 
 T = TypeVar("T")
 
 
 def write_h5ad(
-    filepath: Union[Path, str],
+    filepath: Path | str,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
@@ -122,7 +131,7 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
         del f[key]
 
 
-def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> AnnData:
+def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
     d = dict(filename=filename, filemode=mode)
 
     f = h5py.File(filename, mode)
@@ -151,11 +160,11 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
 
 
 def read_h5ad(
-    filename: Union[str, Path],
-    backed: Union[Literal["r", "r+"], bool, None] = None,
+    filename: str | Path,
+    backed: Literal["r", "r+"] | bool | None = None,
     *,
     as_sparse: Sequence[str] = (),
-    as_sparse_fmt: Type[sparse.spmatrix] = sparse.csr_matrix,
+    as_sparse_fmt: type[sparse.spmatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
     """\
@@ -256,7 +265,7 @@ def read_h5ad(
 
 
 def _read_raw(
-    f: Union[h5py.File, AnnDataFileManager],
+    f: h5py.File | AnnDataFileManager,
     as_sparse: Collection[str] = (),
     rdasp: Callable[[h5py.Dataset], sparse.spmatrix] = None,
     *,

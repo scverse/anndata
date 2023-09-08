@@ -1,34 +1,33 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from functools import singledispatch, wraps, partial
+import random
 import re
-from string import ascii_letters
-from typing import Tuple, Optional, Type
-from collections.abc import Mapping, Collection
 import warnings
+from collections.abc import Collection, Mapping
+from contextlib import contextmanager
+from functools import partial, singledispatch, wraps
+from string import ascii_letters
 
 import h5py
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
 import pytest
+from pandas.api.types import is_numeric_dtype
 from scipy import sparse
-import random
 
 from anndata import AnnData, Raw
-from anndata._core.views import ArrayView
-from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
-from anndata.utils import asarray
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset
+from anndata._core.views import ArrayView
 from anndata.compat import (
     AwkArray,
-    DaskArray,
-    CupySparseMatrix,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
+    CupySparseMatrix,
+    DaskArray,
 )
+from anndata.utils import asarray
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -156,24 +155,24 @@ def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
 
 # TODO: Use hypothesis for this?
 def gen_adata(
-    shape: Tuple[int, int],
+    shape: tuple[int, int],
     X_type=sparse.csr_matrix,
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: "Collection[Type]" = (
+    obsm_types: Collection[type] = (
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         AwkArray,
     ),
-    varm_types: "Collection[Type]" = (
+    varm_types: Collection[type] = (
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         AwkArray,
     ),
-    layers_types: "Collection[Type]" = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: Collection[type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
     sparse_fmt: str = "csr",
 ) -> AnnData:
     """\
@@ -529,7 +528,7 @@ def assert_equal_raw(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AnnData)
 def assert_adata_equal(
-    a: AnnData, b: AnnData, exact: bool = False, elem_name: Optional[str] = None
+    a: AnnData, b: AnnData, exact: bool = False, elem_name: str | None = None
 ):
     """\
     Check whether two AnnData objects are equivalent,
@@ -681,16 +680,16 @@ def as_cupy_type(val, typ=None):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
-        import cupyx.scipy.sparse as cpsparse
         import cupy as cp
+        import cupyx.scipy.sparse as cpsparse
 
         if isinstance(val, np.ndarray):
             return cpsparse.csr_matrix(cp.array(val))
         else:
             return cpsparse.csr_matrix(val)
     elif issubclass(typ, CupyCSCMatrix):
-        import cupyx.scipy.sparse as cpsparse
         import cupy as cp
+        import cupyx.scipy.sparse as cpsparse
 
         if isinstance(val, np.ndarray):
             return cpsparse.csc_matrix(cp.array(val))

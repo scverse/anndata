@@ -1,32 +1,36 @@
 from __future__ import annotations
 
+import warnings
 from contextlib import contextmanager
 from copy import deepcopy
-from collections.abc import Sequence, KeysView, Callable, Iterable
 from functools import reduce, singledispatch, wraps
-from typing import Any, Literal
-import warnings
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
-import anndata
 from anndata._warnings import ImplicitModificationWarning
-from .access import ElementRef
+
 from ..compat import (
-    ZappyArray,
     AwkArray,
-    DaskArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
+    DaskArray,
+    ZappyArray,
 )
+from .access import ElementRef
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, KeysView, Sequence
+
+    from anndata import AnnData
 
 
 @contextmanager
-def view_update(adata_view: anndata.AnnData, attr_name: str, keys: tuple[str, ...]):
+def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
     """Context manager for updating a view of an AnnData object.
 
     Contains logic for "actualizing" a view. Yields the object to be modified in-place.
@@ -79,7 +83,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -100,7 +104,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -172,7 +176,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
     ):
         arr = super().__new__(
             cls,
@@ -226,7 +230,7 @@ class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
     ):
         import cupy as cp
 
@@ -316,8 +320,9 @@ def as_view_cupy_csc(mtx, view_args):
 
 
 try:
-    from ..compat import awkward as ak
     import weakref
+
+    from ..compat import awkward as ak
 
     # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
     _registry = weakref.WeakValueDictionary()

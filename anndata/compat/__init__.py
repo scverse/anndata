@@ -1,20 +1,20 @@
 from __future__ import annotations
 
+import os
+from codecs import decode
+from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-
 from functools import singledispatch, wraps
-from codecs import decode
-from inspect import signature, Parameter
-import os
+from inspect import Parameter, signature
 from pathlib import Path
-from typing import Any, Tuple, Union, Mapping, Optional
+from typing import Any, Union
 from warnings import warn
 
 import h5py
-from scipy.sparse import spmatrix, issparse
 import numpy as np
 import pandas as pd
+from scipy.sparse import issparse, spmatrix
 
 from .exceptiongroups import add_note  # noqa: F401
 
@@ -24,7 +24,7 @@ class Empty:
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
+Index = Union[Index1D, tuple[Index1D, Index1D], spmatrix]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 
@@ -105,12 +105,16 @@ except ImportError:
 
 
 try:
+    from cupy import ndarray as CupyArray
     from cupyx.scipy.sparse import (
-        spmatrix as CupySparseMatrix,
-        csr_matrix as CupyCSRMatrix,
         csc_matrix as CupyCSCMatrix,
     )
-    from cupy import ndarray as CupyArray
+    from cupyx.scipy.sparse import (
+        csr_matrix as CupyCSRMatrix,
+    )
+    from cupyx.scipy.sparse import (
+        spmatrix as CupySparseMatrix,
+    )
 except ImportError:
 
     class CupySparseMatrix:
@@ -140,7 +144,7 @@ except ImportError:
 
 
 @singledispatch
-def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
+def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
     if default is Empty:
         return attrs[name]
     else:
@@ -149,7 +153,7 @@ def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
 
 @_read_attr.register(h5py.AttributeManager)
 def _read_attr_hdf5(
-    attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty
+    attrs: h5py.AttributeManager, name: str, default: Any | None = Empty
 ):
     """
     Read an HDF5 attribute and perform all necessary conversions.
@@ -200,7 +204,7 @@ def _from_fixed_length_strings(value):
 
 
 def _decode_structured_array(
-    arr: np.ndarray, dtype: Optional[np.dtype] = None, copy: bool = False
+    arr: np.ndarray, dtype: np.dtype | None = None, copy: bool = False
 ) -> np.ndarray:
     """
     h5py 3.0 now reads all strings as bytes. There is a helper method which can convert these to strings,
@@ -250,7 +254,7 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
 #############################
 
 
-def _clean_uns(adata: "AnnData"):  # noqa: F821
+def _clean_uns(adata: AnnData):  # noqa: F821
     """
     Compat function for when categorical keys were stored in uns.
     This used to be buggy because when storing categorical columns in obs and var with
@@ -342,7 +346,7 @@ def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.
 
             # extra_args > 0
             args_msg = [
-                "{}={}".format(name, arg)
+                f"{name}={arg}"
                 for name, arg in zip(kwonly_args[:extra_args], args[-extra_args:])
             ]
             args_msg = ", ".join(args_msg)

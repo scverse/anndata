@@ -1,18 +1,14 @@
+from __future__ import annotations
+
 import os
 import shutil
+from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
 from functools import singledispatch
 from pathlib import Path
 from typing import (
     Any,
     Callable,
-    Collection,
-    Iterable,
     Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
-    MutableMapping,
 )
 
 import numpy as np
@@ -104,12 +100,12 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
     raise NotImplementedError("This is not yet implemented.")
 
 
 @as_group.register(os.PathLike)
-def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+def _(store: os.PathLike, *args, **kwargs) -> ZarrGroup | H5Group:
     if store.suffix == ".h5ad":
         import h5py
 
@@ -120,7 +116,7 @@ def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
 
 
 @as_group.register(str)
-def _(store: str, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+def _(store: str, *args, **kwargs) -> ZarrGroup | H5Group:
     return as_group(Path(store), *args, **kwargs)
 
 
@@ -135,7 +131,7 @@ def _(store, *args, **kwargs):
 ###################
 
 
-def read_as_backed(group: Union[ZarrGroup, H5Group]):
+def read_as_backed(group: ZarrGroup | H5Group):
     """
     Read the group until
     BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
@@ -156,7 +152,7 @@ def read_as_backed(group: Union[ZarrGroup, H5Group]):
     return read_dispatched(group, callback=callback)
 
 
-def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
+def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
     index_key = df.attrs["_index"]
     return pd.Index(read_elem(df[index_key]))
 
@@ -167,9 +163,9 @@ def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
 
 
 def write_concat_dense(
-    arrays: Sequence[Union[ZarrArray, H5Array]],
-    output_group: Union[ZarrGroup, H5Group],
-    output_path: Union[ZarrGroup, H5Group],
+    arrays: Sequence[ZarrArray | H5Array],
+    output_group: ZarrGroup | H5Group,
+    output_path: ZarrGroup | H5Group,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
     fill_value=None,
@@ -196,8 +192,8 @@ def write_concat_dense(
 
 def write_concat_sparse(
     datasets: Sequence[BaseCompressedSparseDataset],
-    output_group: Union[ZarrGroup, H5Group],
-    output_path: Union[ZarrGroup, H5Group],
+    output_group: ZarrGroup | H5Group,
+    output_path: ZarrGroup | H5Group,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
@@ -235,7 +231,7 @@ def write_concat_sparse(
 
 def _write_concat_mappings(
     mappings,
-    output_group: Union[ZarrGroup, H5Group],
+    output_group: ZarrGroup | H5Group,
     keys,
     path,
     max_loaded_elems,
@@ -269,7 +265,7 @@ def _write_concat_mappings(
 
 
 def _write_concat_arrays(
-    arrays: Sequence[Union[ZarrArray, H5Array, BaseCompressedSparseDataset]],
+    arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
     output_group,
     output_path,
     max_loaded_elems,
@@ -314,9 +310,7 @@ def _write_concat_arrays(
 
 
 def _write_concat_sequence(
-    arrays: Sequence[
-        Union[pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray]
-    ],
+    arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
     output_group,
     output_path,
     max_loaded_elems,
@@ -401,26 +395,21 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
 
 
 def concat_on_disk(
-    in_files: Union[
-        Collection[Union[str, os.PathLike]],
-        MutableMapping[str, Union[str, os.PathLike]],
-    ],
-    out_file: Union[str, os.PathLike],
+    in_files: Collection[str | os.PathLike] | MutableMapping[str, str | os.PathLike],
+    out_file: str | os.PathLike,
     *,
     overwrite: bool = False,
     max_loaded_elems: int = 100_000_000,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[
-        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
-    ] = None,
-    uns_merge: Union[
-        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
-    ] = None,
-    label: Optional[str] = None,
-    keys: Optional[Collection[str]] = None,
-    index_unique: Optional[str] = None,
-    fill_value: Optional[Any] = None,
+    merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
+    uns_merge: StrategiesLiteral
+    | Callable[[Collection[Mapping]], Mapping]
+    | None = None,
+    label: str | None = None,
+    keys: Collection[str] | None = None,
+    index_unique: str | None = None,
+    fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> None:
     """Concatenates multiple AnnData objects along a specified axis using their
