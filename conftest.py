@@ -1,15 +1,37 @@
-# This file exists just to allow ignoring warnings without test collection failing on CI
-# TODO: Fix that
+# This file exists
+# 1. to allow ignoring warnings without test collection failing on CI
+# 2. as a pytest plugin/config that applies to doctests as well
+# TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
+
+from pathlib import Path
+
 import pytest
+
+from anndata.compat import chdir
+
+
+doctest_marker = pytest.mark.usefixtures("doctest_env")
+
+
+@pytest.fixture
+def doctest_env(cache: pytest.Cache, tmp_path: Path) -> None:
+    from scanpy import settings
+
+    old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
+    with chdir(tmp_path):
+        yield
+    settings.datasetdir = old_dd
 
 
 def pytest_itemcollected(item):
-    """Defining behavior of pytest.mark.gpu"""
+    """Define behavior of pytest.mark.gpu and doctests."""
     from importlib.util import find_spec
 
-    gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
-
-    if gpu:
+    is_gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
+    if is_gpu:
         item.add_marker(
             pytest.mark.skipif(not find_spec("cupy"), reason="Cupy not installed.")
         )
+
+    if isinstance(item, pytest.DoctestItem):
+        item.add_marker(doctest_marker)
