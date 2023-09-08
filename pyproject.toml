@@ -107,7 +107,7 @@ omit = ["setup.py", "versioneer.py", "src/anndata/_version.py", "**/test_*.py"]
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
 python_files = "test_*.py"
-testpaths = ["anndata", "docs/concatenation.rst"]
+testpaths = ["src/anndata", "docs/concatenation.rst"]
 filterwarnings = ['ignore:X\.dtype being converted to np.float32:FutureWarning']
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
