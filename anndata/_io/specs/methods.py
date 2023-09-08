@@ -533,7 +533,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
     write_sparse_compressed(
         f,
         k,
-        elem.to_backed(),
+        elem._to_backed(),
         _writer,
         fmt=elem.format_str,
         dataset_kwargs=dataset_kwargs,

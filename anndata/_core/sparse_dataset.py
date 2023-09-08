@@ -22,7 +22,7 @@ import h5py
 import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
-import zarr
+from anndata.compat import ZarrGroup, H5Group
 
 from ..compat import _read_attr
 
@@ -246,15 +246,18 @@ class BaseCompressedSparseDataset(ABC):
     Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices.
     """
 
-    def __init__(self, group: h5py.Group | zarr.Group):
+    def __init__(self, group: h5py.Group | ZarrGroup):
         type(self)._check_group_format(group)
         self.group = group
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
-        if type(self.group) == zarr.Group:
+        if isinstance(self.group, ZarrGroup):
             return "zarr"
-        return "hdf5"
+        elif isinstance(self.group, H5Group):
+            return "hdf5"
+        else:
+            raise ValueError(f"Unknown group type {type(self.group)}")
 
     @property
     def dtype(self) -> np.dtype:
@@ -286,7 +289,7 @@ class BaseCompressedSparseDataset(ABC):
 
     def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
         row, col = self._normalize_index(index)
-        mtx = self.to_backed()
+        mtx = self._to_backed()
         sub = mtx[row, col]
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
@@ -311,7 +314,7 @@ class BaseCompressedSparseDataset(ABC):
             PendingDeprecationWarning,
         )
         row, col = self._normalize_index(index)
-        mock_matrix = self.to_backed()
+        mock_matrix = self._to_backed()
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
@@ -319,7 +322,7 @@ class BaseCompressedSparseDataset(ABC):
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, BaseCompressedSparseDataset):
-            sparse_matrix = sparse_matrix.to_backed()
+            sparse_matrix = sparse_matrix._to_backed()
 
         # Check input
         if not ss.isspmatrix(sparse_matrix):
@@ -376,7 +379,7 @@ class BaseCompressedSparseDataset(ABC):
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
 
-    def to_backed(self) -> BackedSparseMatrix:
+    def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format_str)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
@@ -401,7 +404,7 @@ class CSCDataset(BaseCompressedSparseDataset):
     format_str = "csc"
 
 
-def sparse_dataset(group: zarr.Group | h5py.Group) -> BaseCompressedSparseDataset:
+def sparse_dataset(group: ZarrGroup | H5Group) -> BaseCompressedSparseDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
@@ -416,6 +419,8 @@ def sparse_dataset(group: zarr.Group | h5py.Group) -> BaseCompressedSparseDatase
     Usage
     -----
 
+    >>> import zarr
+    >>> from anndata.experimental import sparse_dataset
     >>> group = zarr.open_group('./my_test_store.zarr')
     >>> group['data'] = [10, 20, 30, 40, 50, 60, 70, 80]
     >>> group['indices'] = [0, 1, 1, 3, 2, 3, 4, 5]

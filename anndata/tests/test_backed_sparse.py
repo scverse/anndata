@@ -53,7 +53,7 @@ def ondisk_equivalent_adata(tmp_path, diskfmt):
                         **{k: read_dispatched(v, callback) for k, v in elem.items()}
                     )
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
-                    return sparse_dataset(elem).to_backed()
+                    return sparse_dataset(elem)._to_backed()
                 return func(elem)
 
             adata = read_dispatched(f, callback=callback)

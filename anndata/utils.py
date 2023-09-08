@@ -27,7 +27,7 @@ def asarray_sparse(x):
 
 @asarray.register(BaseCompressedSparseDataset)
 def asarray_sparse_dataset(x):
-    return asarray(x.value)
+    return asarray(x.to_memory())
 
 
 @asarray.register(h5py.Dataset)
