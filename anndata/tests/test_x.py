@@ -1,15 +1,15 @@
 """Tests for the attribute .X"""
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
+import pytest
 from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
+from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
-
-import pytest
-
-from anndata.tests.helpers import gen_adata, assert_equal
 
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),

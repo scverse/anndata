@@ -3,34 +3,37 @@ Code for merging/ concatenating AnnData objects.
 """
 from __future__ import annotations
 
+import typing
 from collections import OrderedDict
 from collections.abc import (
     Callable,
     Collection,
+    Iterable,
     Mapping,
     MutableSet,
-    Iterable,
     Sequence,
 )
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Any, Optional, TypeVar, Union, Literal
-import typing
-from warnings import warn, filterwarnings
+from typing import Any, Literal, TypeVar
+from warnings import filterwarnings, warn
 
-from natsort import natsorted
 import numpy as np
 import pandas as pd
-from pandas.api.extensions import ExtensionDtype
+from natsort import natsorted
 from scipy import sparse
 from scipy.sparse import spmatrix
 
-from .anndata import AnnData
-from ..compat import AwkArray, DaskArray, CupySparseMatrix, CupyArray, CupyCSRMatrix
-from ..utils import asarray, dim_len
-from .index import _subset, make_slice
 from anndata._warnings import ExperimentalFeatureWarning
+
+from ..compat import AwkArray, CupyArray, CupyCSRMatrix, CupySparseMatrix, DaskArray
+from ..utils import asarray, dim_len
+from .anndata import AnnData
+from .index import _subset, make_slice
+
+if typing.TYPE_CHECKING:
+    from pandas.api.extensions import ExtensionDtype
 
 T = TypeVar("T")
 
@@ -62,14 +65,14 @@ class OrderedSet(MutableSet):
     def add(self, val):
         self.dict[val] = None
 
-    def union(self, *vals) -> "OrderedSet":
+    def union(self, *vals) -> OrderedSet:
         return reduce(or_, vals, self)
 
     def discard(self, val):
         if val in self:
             del self.dict[val]
 
-    def difference(self, *vals) -> "OrderedSet":
+    def difference(self, *vals) -> OrderedSet:
         return reduce(sub, vals, self)
 
 
@@ -341,6 +344,7 @@ def _cp_block_diag(mats, format=None, dtype=None):
 
 def _dask_block_diag(mats):
     from itertools import permutations
+
     import dask.array as da
 
     blocks = np.zeros((len(mats), len(mats)), dtype=object)
@@ -361,7 +365,7 @@ def _dask_block_diag(mats):
 ###################
 
 
-def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
+def unique_value(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -373,7 +377,7 @@ def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
     return unique_val
 
 
-def first(vals: Collection[T]) -> Union[T, MissingVal]:
+def first(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection of vals, return the first non-missing one.If they're all missing,
     return MissingVal.
@@ -384,7 +388,7 @@ def first(vals: Collection[T]) -> Union[T, MissingVal]:
     return MissingVal
 
 
-def only(vals: Collection[T]) -> Union[T, MissingVal]:
+def only(vals: Collection[T]) -> T | MissingVal:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -457,7 +461,7 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
-    strategy: Union[str, Callable, None]
+    strategy: str | Callable | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
@@ -1017,16 +1021,16 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 
 
 def concat(
-    adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
+    adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[StrategiesLiteral, Callable, None] = None,
-    uns_merge: Union[StrategiesLiteral, Callable, None] = None,
-    label: Optional[str] = None,
-    keys: Optional[Collection] = None,
-    index_unique: Optional[str] = None,
-    fill_value: Optional[Any] = None,
+    merge: StrategiesLiteral | Callable | None = None,
+    uns_merge: StrategiesLiteral | Callable | None = None,
+    label: str | None = None,
+    keys: Collection | None = None,
+    index_unique: str | None = None,
+    fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.

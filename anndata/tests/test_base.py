@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from itertools import product
 import re
 import warnings
+from itertools import product
 
 import numpy as np
-from numpy import ma
 import pandas as pd
 import pytest
+from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal, gen_adata
-
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))

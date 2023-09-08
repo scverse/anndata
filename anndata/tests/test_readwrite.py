@@ -1,28 +1,32 @@
+from __future__ import annotations
+
+import re
+import warnings
 from contextlib import contextmanager
 from importlib.util import find_spec
-from os import PathLike
 from pathlib import Path
-import re
 from string import ascii_letters
-import warnings
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
 import pandas as pd
 import pytest
-from scipy.sparse import csr_matrix, csc_matrix
 import zarr
+from scipy.sparse import csc_matrix, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import _read_attr, DaskArray
-
+from anndata.compat import DaskArray, _read_attr
 from anndata.tests.helpers import (
-    gen_adata,
-    assert_equal,
     as_dense_dask_array,
+    assert_equal,
+    gen_adata,
     pytest_8_raises,
 )
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 HERE = Path(__file__).parent
 
@@ -481,7 +485,7 @@ def test_write_csv_view(typ, tmp_path):
 
     def md5_path(pth: PathLike) -> bytes:
         checksum = hashlib.md5()
-        with open(pth, "rb") as f:
+        with pth.open("rb") as f:
             while True:
                 buf = f.read(checksum.block_size * 100)
                 if not buf:
@@ -489,7 +493,7 @@ def test_write_csv_view(typ, tmp_path):
                 checksum.update(buf)
         return checksum.digest()
 
-    def hash_dir_contents(dir: Path) -> "dict[str, bytes]":
+    def hash_dir_contents(dir: Path) -> dict[str, bytes]:
         root_pth = str(dir)
         return {
             str(k)[len(root_pth) :]: md5_path(k) for k in dir.rglob("*") if k.is_file()
@@ -652,7 +656,7 @@ def test_write_string_types(tmp_path, diskfmt):
     with pytest_8_raises(TypeError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
 
-    assert str("b'c'") in str(exc_info.value)
+    assert "b'c'" in str(exc_info.value)
 
 
 @pytest.mark.parametrize(

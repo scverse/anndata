@@ -1,11 +1,14 @@
-import pandas as pd
-from scipy import sparse
+from __future__ import annotations
+
 from itertools import repeat
+
+import pandas as pd
 import pytest
+from scipy import sparse
 
 import anndata as ad
-from anndata.utils import make_index_unique
 from anndata.tests.helpers import gen_typed_df
+from anndata.utils import make_index_unique
 
 
 def test_make_index_unique():

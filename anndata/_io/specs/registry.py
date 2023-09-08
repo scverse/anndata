@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any
 
+from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata.compat import _read_attr
-from anndata._types import StorageType, GroupStorageType
-from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
+
+if TYPE_CHECKING:
+    from anndata._types import GroupStorageType, StorageType
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
 # TODO: Should filetype be included in the IOSpec if it changes the encoding? Or does the intent that these things be "the same" overrule that?
@@ -66,7 +68,7 @@ class IORegistry:
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
         ] = {}
-        self.write_specs: dict[Union[type, tuple[type, str]], IOSpec] = {}
+        self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
 
     def register_write(
         self,
@@ -226,9 +228,7 @@ def _iter_patterns(elem):
 
 
 class Reader:
-    def __init__(
-        self, registry: IORegistry, callback: Union[Callable, None] = None
-    ) -> None:
+    def __init__(self, registry: IORegistry, callback: Callable | None = None) -> None:
         self.registry = registry
         self.callback = callback
 
@@ -255,18 +255,16 @@ class Writer:
     def __init__(
         self,
         registry: IORegistry,
-        callback: Union[
-            Callable[
-                [
-                    GroupStorageType,
-                    str,
-                    StorageType,
-                    dict,
-                ],
-                None,
+        callback: Callable[
+            [
+                GroupStorageType,
+                str,
+                StorageType,
+                dict,
             ],
             None,
-        ] = None,
+        ]
+        | None = None,
     ):
         self.registry = registry
         self.callback = callback
@@ -290,6 +288,7 @@ class Writer:
     ):
         from functools import partial
         from pathlib import PurePosixPath
+
         import h5py
 
         if isinstance(store, h5py.File):

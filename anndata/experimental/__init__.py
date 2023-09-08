@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from .multi_files import AnnCollection
-from .pytorch import AnnLoader
+from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
+from anndata._io.specs import IOSpec, read_elem, write_elem
 
-from anndata._io.specs import read_elem, write_elem, IOSpec
-from anndata._core.sparse_dataset import sparse_dataset, CSRDataset, CSCDataset
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
+from .multi_files import AnnCollection
+from .pytorch import AnnLoader
 
 __all__ = [
     "AnnCollection",

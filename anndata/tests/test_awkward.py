@@ -1,15 +1,16 @@
 """Tests related to awkward arrays"""
-import pytest
+from __future__ import annotations
+
 import numpy as np
 import numpy.testing as npt
-
-from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
-from anndata.compat import awkward as ak
-from anndata import ImplicitModificationWarning
-from anndata.utils import dim_len
-from anndata import AnnData, read_h5ad
-import anndata
 import pandas as pd
+import pytest
+
+import anndata
+from anndata import AnnData, ImplicitModificationWarning, read_h5ad
+from anndata.compat import awkward as ak
+from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
+from anndata.utils import dim_len
 
 
 @pytest.mark.parametrize(

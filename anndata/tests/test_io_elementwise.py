@@ -9,19 +9,18 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 import zarr
+from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import _REGISTRY, get_spec, IOSpec
+from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import _read_attr, H5Group, ZarrGroup
-from anndata._io.specs import write_elem, read_elem
+from anndata.compat import H5Group, ZarrGroup, _read_attr
 from anndata.tests.helpers import (
-    assert_equal,
     as_cupy_type,
-    pytest_8_raises,
+    assert_equal,
     gen_adata,
+    pytest_8_raises,
 )
 
 

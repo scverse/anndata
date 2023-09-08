@@ -1,32 +1,36 @@
-from collections.abc import MutableMapping
+from __future__ import annotations
+
 from pathlib import Path
-from typing import TypeVar, Union
+from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
 import numpy as np
-from scipy import sparse
 import pandas as pd
 import zarr
+from scipy import sparse
+
+from anndata._warnings import OldFormatWarning
 
 from .._core.anndata import AnnData
 from ..compat import (
-    _from_fixed_length_strings,
     _clean_uns,
+    _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched, write_dispatched
-from .utils import (
-    report_read_key_on_error,
-    _read_legacy_raw,
-)
 from .specs import read_elem
-from anndata._warnings import OldFormatWarning
+from .utils import (
+    _read_legacy_raw,
+    report_read_key_on_error,
+)
 
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 T = TypeVar("T")
 
 
 def write_zarr(
-    store: Union[MutableMapping, str, Path],
+    store: MutableMapping | str | Path,
     adata: AnnData,
     chunks=None,
     **ds_kwargs,
@@ -50,7 +54,7 @@ def write_zarr(
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
 
 
-def read_zarr(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:
+def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 

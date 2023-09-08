@@ -1,18 +1,21 @@
+from __future__ import annotations
+
 import collections.abc as cabc
+from collections.abc import Sequence
 from functools import singledispatch
 from itertools import repeat
-from typing import Union, Sequence, Optional, Tuple
 
 import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix, issparse, csc_matrix
+from scipy.sparse import csc_matrix, issparse, spmatrix
+
 from ..compat import AwkArray, DaskArray, Index, Index1D
 
 
 def _normalize_indices(
-    index: Optional[Index], names0: pd.Index, names1: pd.Index
-) -> Tuple[slice, slice]:
+    index: Index | None, names0: pd.Index, names1: pd.Index
+) -> tuple[slice, slice]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
@@ -35,17 +38,15 @@ def _normalize_indices(
 
 
 def _normalize_index(
-    indexer: Union[
-        slice,
-        np.integer,
-        int,
-        str,
-        Sequence[Union[int, np.integer]],
-        np.ndarray,
-        pd.Index,
-    ],
+    indexer: slice
+    | np.integer
+    | int
+    | str
+    | Sequence[int | np.integer]
+    | np.ndarray
+    | pd.Index,
     index: pd.Index,
-) -> Union[slice, int, np.ndarray]:  # ndarray of int
+) -> slice | int | np.ndarray:  # ndarray of int
     if not isinstance(index, pd.RangeIndex):
         assert (
             index.dtype != float and index.dtype != int
@@ -104,7 +105,7 @@ def _normalize_index(
         raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
-def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
+def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     if not isinstance(index, tuple):
         return index, slice(None)
     elif len(index) == 2:
@@ -116,7 +117,7 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
 
 
 @singledispatch
-def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
+def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
