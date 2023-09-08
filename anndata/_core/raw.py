@@ -9,7 +9,6 @@ from scipy.sparse import issparse
 
 from ..compat import CupyArray, CupySparseMatrix
 from .aligned_mapping import AxisArrays
-from .anndata import AnnData
 from .index import _normalize_index, _subset, get_vector, unpack_index
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 
@@ -17,6 +16,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from scipy import sparse
+
+    from .anndata import AnnData
 
 
 # TODO: Implement views for Raw
@@ -154,6 +155,8 @@ class Raw:
 
     def to_adata(self):
         """Create full AnnData object."""
+        from anndata import AnnData
+
         return AnnData(
             X=self.X.copy(),
             var=self.var.copy(),
