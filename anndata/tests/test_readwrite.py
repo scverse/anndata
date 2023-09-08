@@ -481,7 +481,7 @@ def test_write_csv_view(typ, tmp_path):
 
     def md5_path(pth: PathLike) -> bytes:
         checksum = hashlib.md5()
-        with open(pth, "rb") as f:
+        with pth.open("rb") as f:
             while True:
                 buf = f.read(checksum.block_size * 100)
                 if not buf:

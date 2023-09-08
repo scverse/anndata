@@ -129,7 +129,8 @@ select = [
     "UP",  # pyupgrade
     "I",   # isort
     "TCH", # manage type checking blocks
-    "ICN", # manage import blocks
+    "ICN", # Follow import conventions
+    "PTH", # Pathlib instead of os.path
 ]
 [tool.ruff.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
