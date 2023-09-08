@@ -9,7 +9,7 @@ from scipy.sparse import issparse
 from . import anndata
 from .index import _normalize_index, _subset, unpack_index, get_vector
 from .aligned_mapping import AxisArrays
-from .sparse_dataset import SparseDataset
+from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 
 from ..compat import CupyArray, CupySparseMatrix
 
@@ -34,7 +34,10 @@ class Raw:
                 self._X = X.get()
             else:
                 self._X = X
-            self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
+            n_var = None if self._X is None else self._X.shape[1]
+            self._var = _gen_dataframe(
+                var, ["var_names"], source="X", attr="var", length=n_var
+            )
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
@@ -53,7 +56,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> Union[SparseDataset, np.ndarray, sparse.spmatrix]:
+    def X(self) -> Union[BaseCompressedSparseDataset, np.ndarray, sparse.spmatrix]:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -70,7 +73,7 @@ class Raw:
                 f"{self._adata.file.filename}."
             )
         if isinstance(X, h5py.Group):
-            X = SparseDataset(X)
+            X = sparse_dataset(X)
         # Check if we need to subset
         if self._adata.is_view:
             # TODO: As noted above, implement views of raw

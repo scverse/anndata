@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
+from dataclasses import dataclass, field
+
 from functools import singledispatch, wraps
 from codecs import decode
 from inspect import signature, Parameter
+import os
+from pathlib import Path
 from typing import Any, Tuple, Union, Mapping, Optional
 from warnings import warn
 
@@ -24,7 +29,31 @@ H5Group = h5py.Group
 H5Array = h5py.Dataset
 
 
-# try importing zarr, dask, and zappy
+#############################
+# stdlib
+#############################
+
+
+try:
+    from contextlib import chdir
+except ImportError:  # Python < 3.11
+
+    @dataclass
+    class chdir(AbstractContextManager):
+        path: Path
+        _old_cwd: list[Path] = field(default_factory=list)
+
+        def __enter__(self) -> None:
+            self._old_cwd.append(Path())
+            os.chdir(self.path)
+
+        def __exit__(self, *_exc_info) -> None:
+            os.chdir(self._old_cwd.pop())
+
+
+#############################
+# Optional deps
+#############################
 
 try:
     from zarr.core import Array as ZarrArray
@@ -103,6 +132,11 @@ except ImportError:
         @staticmethod
         def __repr__():
             return "mock cupy.ndarray"
+
+
+#############################
+# IO helpers
+#############################
 
 
 @singledispatch

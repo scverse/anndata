@@ -8,7 +8,8 @@ import numpy as np
 from scipy import sparse
 
 from .logging import get_logger
-from ._core.sparse_dataset import SparseDataset
+
+from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import CupyArray, CupySparseMatrix, DaskArray
 
 logger = get_logger(__name__)
@@ -25,9 +26,9 @@ def asarray_sparse(x):
     return x.toarray()
 
 
-@asarray.register(SparseDataset)
+@asarray.register(BaseCompressedSparseDataset)
 def asarray_sparse_dataset(x):
-    return asarray(x.value)
+    return asarray(x.to_memory())
 
 
 @asarray.register(h5py.Dataset)

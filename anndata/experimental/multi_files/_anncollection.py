@@ -11,7 +11,7 @@ from ..._core.anndata import AnnData
 from ..._core.index import _normalize_indices, _normalize_index, Index
 from ..._core.views import _resolve_idx
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
-from ..._core.sparse_dataset import SparseDataset
+from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.aligned_mapping import AxisArrays
 
 ATTRS = ["obs", "obsm", "layers"]
@@ -360,7 +360,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                     # todo: fix
                     arr = X[oidx][:, vidx]
                 Xs.append(arr if reverse is None else arr[reverse])
-            elif isinstance(X, SparseDataset):
+            elif isinstance(X, BaseCompressedSparseDataset):
                 # very slow indexing with two arrays
                 if isinstance(vidx, slice) or len(vidx) <= 1000:
                     Xs.append(X[oidx, vidx])
