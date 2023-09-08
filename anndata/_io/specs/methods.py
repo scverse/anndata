@@ -525,6 +525,21 @@ for store_type, (cls, spec, func) in product(
     _REGISTRY.register_write(store_type, cls, spec)(func)
 
 
+@_REGISTRY.register_write(H5Group, sparse.coo_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(H5Group, sparse.lil_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(H5Group, sparse.dia_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(H5Group, sparse.bsr_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(H5Group, sparse.dok_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, sparse.coo_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, sparse.lil_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, sparse.dia_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, sparse.bsr_matrix, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, sparse.dok_matrix, IOSpec("csr_matrix", "0.1.0"))
+def write_sparse_non_compressed(f, k, elem, dataset_kwargs=MappingProxyType({})):
+    elem = elem.tocsr()
+    write_sparse_compressed(f, k, elem, fmt="csr", dataset_kwargs=dataset_kwargs)
+
+
 @_REGISTRY.register_write(H5Group, SparseDataset, IOSpec("", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, SparseDataset, IOSpec("", "0.1.0"))
 def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):

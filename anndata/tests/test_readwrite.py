@@ -10,7 +10,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-from scipy.sparse import csr_matrix, csc_matrix
+from scipy.sparse import csr_matrix, csc_matrix, coo_matrix
 import zarr
 
 import anndata as ad
@@ -101,7 +101,7 @@ diskfmt2 = diskfmt
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, coo_matrix, as_dense_dask_array])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
     pth1 = tmpdir / f"first.{diskfmt}"
