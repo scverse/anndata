@@ -535,11 +535,11 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
         k,
         elem._to_backed(),
         _writer,
-        fmt=elem.format_str,
+        fmt=elem.format,
         dataset_kwargs=dataset_kwargs,
     )
     # TODO: Cleaner way to do this
-    f[k].attrs["encoding-type"] = f"{elem.format_str}_matrix"
+    f[k].attrs["encoding-type"] = f"{elem.format}_matrix"
     f[k].attrs["encoding-version"] = "0.1.0"
 
 

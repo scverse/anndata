@@ -36,7 +36,7 @@ from .index import unpack_index, Index, _subset
 
 
 class BackedFormat(NamedTuple):
-    format_str: str
+    format: str
     backed_type: Type["BackedSparseMatrix"]
     memory_type: Type[ss.spmatrix]
 
@@ -210,25 +210,25 @@ def get_compressed_vector(
     return data, indices, indptr
 
 
-def get_format_str(data: ss.spmatrix) -> str:
+def get_format(data: ss.spmatrix) -> str:
     for fmt, _, memory_class in FORMATS:
         if isinstance(data, memory_class):
             return fmt
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
-def get_memory_class(format_str: str) -> Type[ss.spmatrix]:
+def get_memory_class(format: str) -> Type[ss.spmatrix]:
     for fmt, _, memory_class in FORMATS:
-        if format_str == fmt:
+        if format == fmt:
             return memory_class
-    raise ValueError(f"Format string {format_str} is not supported.")
+    raise ValueError(f"Format string {format} is not supported.")
 
 
-def get_backed_class(format_str: str) -> Type[BackedSparseMatrix]:
+def get_backed_class(format: str) -> Type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
-        if format_str == fmt:
+        if format == fmt:
             return backed_class
-    raise ValueError(f"Format string {format_str} is not supported.")
+    raise ValueError(f"Format string {format} is not supported.")
 
 
 def _get_group_format(group) -> str:
@@ -266,7 +266,16 @@ class BaseCompressedSparseDataset(ABC):
     @classmethod
     def _check_group_format(cls, group):
         group_format = _get_group_format(group)
-        assert group_format == cls.format_str
+        assert group_format == cls.format
+
+    @property
+    def format_str(self) -> Literal["csc", "csr"]:
+        warnings.warn(
+            "The attribute .format_str is deprecated and will be removed in the anndata 0.11.0. "
+            "Please use .format instead.",
+            FutureWarning,
+        )
+        return self.format
 
     @property
     def name(self) -> str:
@@ -282,6 +291,11 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def value(self) -> ss.spmatrix:
+        warnings.warn(
+            "The .value attribute is deprecated and will be removed in the anndata 0.11.0. "
+            "Please use .to_memory() instead.",
+            FutureWarning,
+        )
         return self.to_memory()
 
     def __repr__(self) -> str:
@@ -294,7 +308,7 @@ class BaseCompressedSparseDataset(ABC):
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         if isinstance(sub, BackedSparseMatrix):
-            return get_memory_class(self.format_str)(sub)
+            return get_memory_class(self.format)(sub)
         else:
             return sub
 
@@ -330,24 +344,23 @@ class BaseCompressedSparseDataset(ABC):
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
             )
-        if self.format_str not in {"csr", "csc"}:
+        if self.format not in {"csr", "csc"}:
             raise NotImplementedError(
-                f"The append method for format {self.format_str} "
-                f"is not implemented."
+                f"The append method for format {self.format} " f"is not implemented."
             )
-        if self.format_str != get_format_str(sparse_matrix):
+        if self.format != get_format(sparse_matrix):
             raise ValueError(
                 f"Matrices must have same format. Currently are "
-                f"{self.format_str!r} and {get_format_str(sparse_matrix)!r}"
+                f"{self.format!r} and {get_format(sparse_matrix)!r}"
             )
 
         # shape
-        if self.format_str == "csr":
+        if self.format == "csr":
             assert (
                 shape[1] == sparse_matrix.shape[1]
             ), "CSR matrices must have same size of dimension 1 to be appended."
             new_shape = (shape[0] + sparse_matrix.shape[0], shape[1])
-        elif self.format_str == "csc":
+        elif self.format == "csc":
             assert (
                 shape[0] == sparse_matrix.shape[0]
             ), "CSC matrices must have same size of dimension 0 to be appended."
@@ -380,7 +393,7 @@ class BaseCompressedSparseDataset(ABC):
         indices[orig_data_size:] = sparse_matrix.indices
 
     def _to_backed(self) -> BackedSparseMatrix:
-        format_class = get_backed_class(self.format_str)
+        format_class = get_backed_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
@@ -388,7 +401,7 @@ class BaseCompressedSparseDataset(ABC):
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
-        format_class = get_memory_class(self.format_str)
+        format_class = get_memory_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
@@ -397,11 +410,11 @@ class BaseCompressedSparseDataset(ABC):
 
 
 class CSRDataset(BaseCompressedSparseDataset):
-    format_str = "csr"
+    format = "csr"
 
 
 class CSCDataset(BaseCompressedSparseDataset):
-    format_str = "csc"
+    format = "csc"
 
 
 def sparse_dataset(group: ZarrGroup | H5Group) -> BaseCompressedSparseDataset:

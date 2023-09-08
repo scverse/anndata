@@ -293,7 +293,7 @@ def _write_concat_arrays(
 
     if isinstance(init_elem, BaseCompressedSparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
-        if all(a.format_str == expected_sparse_fmt for a in arrays):
+        if all(a.format == expected_sparse_fmt for a in arrays):
             write_concat_sparse(
                 arrays,
                 output_group,
@@ -305,7 +305,7 @@ def _write_concat_arrays(
             )
         else:
             raise NotImplementedError(
-                f"Concat of following not supported: {[a.format_str for a in arrays]}"
+                f"Concat of following not supported: {[a.format for a in arrays]}"
             )
     else:
         write_concat_dense(
