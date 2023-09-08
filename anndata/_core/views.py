@@ -300,6 +300,15 @@ def as_view_zappy(z, view_args):
     return z
 
 
+@as_view.register(AwkArray)
+def as_view_awkarray(array, view_args):
+    # We don't need any specific view behavior for awkward arrays. A slice of an awkward array is always a
+    # shallow copy of the original. This implies that setting a record field on a slice never modifies the original.
+    # Other fields than records are entirely immutable anyway.
+    # See also https://github.com/scverse/anndata/issues/1035#issuecomment-1687619270.
+    return AwkArray(array)
+
+
 @as_view.register(CupyArray)
 def as_view_cupy(array, view_args):
     return CupyArrayView(array, view_args=view_args)
@@ -313,69 +322,6 @@ def as_view_cupy_csr(mtx, view_args):
 @as_view.register(CupyCSCMatrix)
 def as_view_cupy_csc(mtx, view_args):
     return CupySparseCSCView(mtx, view_args=view_args)
-
-
-try:
-    from ..compat import awkward as ak
-    import weakref
-
-    # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
-    _registry = weakref.WeakValueDictionary()
-    _PARAM_NAME = "_view_args"
-
-    class AwkwardArrayView(_ViewMixin, AwkArray):
-        @property
-        def _view_args(self):
-            """Override _view_args to retrieve the values from awkward arrays parameters.
-
-            Awkward arrays cannot be subclassed like other python objects. Instead subclasses need
-            to be attached as "behavior". These "behaviors" cannot take any additional parameters (as we do
-            for other data types to store `_view_args`). Therefore, we need to store `_view_args` using awkward's
-            parameter mechanism. These parameters need to be json-serializable, which is why we can't store
-            ElementRef directly, but need to replace the reference to the parent AnnDataView container with a weak
-            reference.
-            """
-            parent_key, attrname, keys = self.layout.parameter(_PARAM_NAME)
-            parent = _registry[parent_key]
-            return ElementRef(parent, attrname, keys)
-
-        def __copy__(self) -> AwkArray:
-            """
-            Turn the AwkwardArrayView into an actual AwkwardArray with no special behavior.
-
-            Need to override __copy__ instead of `.copy()` as awkward arrays don't implement `.copy()`
-            and are copied using python's standard copy mechanism in `aligned_mapping.py`.
-            """
-            array = self
-            # makes a shallow copy and removes the reference to the original AnnData object
-            array = ak.with_parameter(self, _PARAM_NAME, None)
-            array = ak.with_parameter(array, "__list__", None)
-            return array
-
-    @as_view.register(AwkArray)
-    def as_view_awkarray(array, view_args):
-        parent, attrname, keys = view_args
-        parent_key = f"target-{id(parent)}"
-        _registry[parent_key] = parent
-        # TODO: See https://github.com/scverse/anndata/pull/647#discussion_r963494798_ for more details and
-        # possible strategies to stack behaviors.
-        # A better solution might be based on xarray-style "attrs", once this is implemented
-        # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
-        if type(array).__name__ != "Array":
-            raise NotImplementedError(
-                "Cannot create a view of an awkward array with __array__ parameter. "
-                "Please open an issue in the AnnData repo and describe your use-case."
-            )
-        array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
-        array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
-        return array
-
-    ak.behavior["AwkwardArrayView"] = AwkwardArrayView
-
-except ImportError:
-
-    class AwkwardArrayView:
-        pass
 
 
 def _resolve_idxs(old, new, adata):
