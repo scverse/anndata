@@ -608,7 +608,7 @@ def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
 
 
 @singledispatch
-def as_sparse_dask_array(a):
+def as_sparse_dask_array(a) -> DaskArray:
     import dask.array as da
 
     return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
@@ -703,7 +703,7 @@ def as_cupy_type(val, typ=None):
 
 
 @singledispatch
-def shares_memory(x, y):
+def shares_memory(x, y) -> bool:
     return np.shares_memory(x, y)
 
 
