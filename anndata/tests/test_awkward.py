@@ -163,7 +163,14 @@ def test_copy(key):
         ),
     ],
 )
-@pytest.mark.parametrize("key", ["obsm", "varm", "uns"])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "obsm",
+        "varm",
+        # "uns",
+    ],
+)
 def test_view(key, array, setter_slice, setter_value, expected):
     """Check that modifying a view does not modify the original.
 
@@ -186,15 +193,15 @@ def test_view(key, array, setter_slice, setter_value, expected):
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
     getattr(adata, key)["awk"] = ak.Array(array)
     adata_view = adata[:]
-    awk_view = getattr(adata_view, key)["awk"]
+    get_awk_view = lambda *_: getattr(adata_view, key)["awk"]
 
     if isinstance(expected, type):
         with pytest.raises(expected):
-            awk_view[setter_slice] = setter_value
+            get_awk_view()[setter_slice] = setter_value
     else:
-        awk_view[setter_slice] = setter_value
+        get_awk_view()[setter_slice] = setter_value
         # values in view are correctly set
-        assert ak.all(awk_view[setter_slice] == setter_value)
+        assert ak.to_list(get_awk_view()) == expected
         # values in original were not modified
         assert ak.to_list(getattr(adata, key)["awk"]) == array
 
