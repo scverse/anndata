@@ -23,6 +23,7 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
+from anndata._core.index import _normalize_slice
 from anndata.compat import H5Group, ZarrGroup
 
 from ..compat import _read_attr
@@ -123,6 +124,21 @@ class BackedSparseMatrix(_cs_matrix):
             )
         return offsets
 
+    def _get_contiguous_compressed_slice(
+        self, s: slice
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        new_indptr = self.indptr[s.start : s.stop + 1]
+
+        start = new_indptr[0]
+        stop = new_indptr[-1]
+
+        new_indptr -= start
+
+        new_data = self.data[start:stop]
+        new_indices = self.indices[start:stop]
+
+        return new_data, new_indices, new_indptr
+
 
 class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
     def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:
@@ -131,13 +147,21 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
         )[:, col]
 
     def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:
+        row = _normalize_slice(row, self.shape[0])
+        col = _normalize_slice(col, self.shape[1])
+
         out_shape = (
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
         )
+
         if out_shape[0] == 1:
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
         elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
+            if row.step == 1:
+                return ss.csr_matrix(
+                    self._get_contiguous_compressed_slice(row), shape=out_shape
+                )
             return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
         return super()._get_sliceXslice(row, col)
 
@@ -157,13 +181,21 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
         )[row, :]
 
     def _get_sliceXslice(self, row: slice, col: slice) -> ss.csc_matrix:
+        row = _normalize_slice(row, self.shape[0])
+        col = _normalize_slice(col, self.shape[1])
+
         out_shape = (
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
         )
+
         if out_shape[1] == 1:
             return self._get_sliceXint(row, slice_as_int(col, self.shape[1]))
         elif out_shape[0] == self.shape[0] and out_shape[1] < self.shape[1]:
+            if col.step == 1:
+                return ss.csc_matrix(
+                    self._get_contiguous_compressed_slice(col), shape=out_shape
+                )
             return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
         return super()._get_sliceXslice(row, col)
 
