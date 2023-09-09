@@ -427,6 +427,7 @@ def concat_on_disk(
     arrays use the max_loaded_elems argument; for dense arrays
     see the Dask documentation, as the Dask concatenation function is used
     to concatenate dense arrays in this function
+
     Params
     ------
     in_files
