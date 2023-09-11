@@ -210,4 +210,5 @@ def test_anndata_sparse_compat(tmp_path, diskfmt):
         f = h5py.File(path, "a")
 
     ad._io.specs.write_elem(f, "/", base)
-    ad.AnnData(sparse_dataset(f["/"]))
+    adata = ad.AnnData(sparse_dataset(f["/"]))
+    assert_equal(adata.X, base)
