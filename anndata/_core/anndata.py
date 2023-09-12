@@ -351,6 +351,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         oidx: Index1D = None,
         vidx: Index1D = None,
+        check_unique: bool = True,
     ):
         if asview:
             if not isinstance(X, AnnData):
@@ -371,6 +372,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varp=varp,
                 filename=filename,
                 filemode=filemode,
+                check_unique=check_unique,
             )
 
     def _init_as_view(self, adata_ref: AnnData, oidx: Index, vidx: Index):
@@ -445,6 +447,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         shape=None,
         filename=None,
         filemode=None,
+        check_unique=None,
     ):
         # view attributes
         self._is_view = False
@@ -553,7 +556,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
 
         self._check_dimensions()
-        self._check_uniqueness()
+        if check_unique:
+            self._check_uniqueness()
 
         if self.filename:
             assert not isinstance(
