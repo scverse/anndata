@@ -662,7 +662,7 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
     # Check arguments
     for reserved in ("_index",):
         if reserved in df.columns:
-            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")  
+            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
     group = _require_group_write_dataframe(f, key, df)
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names

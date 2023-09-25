@@ -801,8 +801,6 @@ def test_h5py_attr_limit(tmp_path):
     N = 10_000
     a = ad.AnnData(np.ones((5, 10)))
     a.obsm["df"] = pd.DataFrame(
-        np.ones((5, N)),
-        index=a.obs_names,
-        columns=[str(i) for i in range(N)]
+        np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
     )
     a.write(tmp_path / "tmp.h5ad")
