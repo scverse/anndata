@@ -249,6 +249,32 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
+# TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
+# See https://github.com/h5py/h5py/pull/2311#issuecomment-1734102238 for why this is done this way.
+@singledispatch
+def _require_group_write_dataframe(
+    f: Any, name: str, df: pd.DataFrame, *args, **kwargs
+):
+    return f.require_group(name, *args, **kwargs)
+
+
+@_require_group_write_dataframe.register(H5Group)
+def _require_group_write_dataframe_hdf5(
+    f: H5Group, name: str, df: pd.DataFrame, *args, **kwargs
+):
+    # Again see this https://github.com/scverse/anndata/issues/874
+    if len(df.columns) > 5_000:
+        # actually 64kb is the limit, but this should be a conservative estimate
+        if name in f:
+            # TODO: One possible solution is to delete the group and recreate it
+            raise ValueError(
+                f"Group {name} already exists in {f} and has too many columns to be added."
+            )
+        else:
+            return f.create_group(name, track_order=True, *args, **kwargs)
+    return f.require_group(name, *args, **kwargs)
+
+
 #############################
 # Dealing with uns
 #############################
