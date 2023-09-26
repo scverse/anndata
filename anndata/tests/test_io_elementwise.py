@@ -161,9 +161,7 @@ def test_categorical_order_type(store):
     write_elem(store, "unordered", cat.set_ordered(False))
 
     assert read_elem(store["ordered"]).ordered is True
-    assert type(read_elem(store["ordered"]).ordered) == bool
     assert read_elem(store["unordered"]).ordered is False
-    assert type(read_elem(store["unordered"]).ordered) == bool
 
 
 def test_override_specification():
