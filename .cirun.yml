@@ -7,6 +7,5 @@ runners:
     preemptible:
       - true
       - false
-    workflow: .github/workflows/test-gpu.yml
     labels:
       - cirun-aws-gpu
