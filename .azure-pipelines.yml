@@ -38,13 +38,13 @@ jobs:
 
       - script: |
           python -m pip install --upgrade pip wheel
-          pip install .[dev,test]
+          pip install -e .[dev,test]
         displayName: "Install dependencies"
         condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'no')
 
       - script: |
           python -m pip install --pre --upgrade pip wheel
-          pip install --pre .[dev,test]
+          pip install -e --pre .[dev,test]
         displayName: "Install dependencies release candidates"
         condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'yes')
 
