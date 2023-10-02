@@ -44,7 +44,7 @@ jobs:
 
       - script: |
           python -m pip install --pre --upgrade pip wheel
-          pip install -e --pre .[dev,test]
+          pip install --pre -e .[dev,test]
         displayName: "Install dependencies release candidates"
         condition: eq(variables['PRERELEASE_DEPENDENCIES'], 'yes')
 
