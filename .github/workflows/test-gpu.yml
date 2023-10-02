@@ -62,7 +62,7 @@ jobs:
           generate-run-shell: false
 
       - name: Install AnnData
-        run: pip install .[dev,test,gpu]
+        run: pip install -e .[dev,test,gpu]
 
       - name: Mamba list
         run: micromamba list
