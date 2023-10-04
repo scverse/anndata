@@ -78,7 +78,7 @@ def test_obsvar_vector_Xlayer(adata):
 # This should break in 0.9
 def test_dtype_warning():
     # Tests a warning is thrown
-    with pytest.warns(PendingDeprecationWarning):
+    with pytest.warns(FutureWarning):
         a = AnnData(np.ones((3, 3)), dtype=np.float32)
     assert a.X.dtype == np.float32
 
@@ -91,7 +91,7 @@ def test_dtype_warning():
     assert b.X.dtype == np.float64
 
     # Should warn, should copy
-    with pytest.warns(PendingDeprecationWarning):
+    with pytest.warns(FutureWarning):
         c_X = np.ones((3, 3), dtype=np.float32)
         c = AnnData(c_X, dtype=np.float64)
         assert not record

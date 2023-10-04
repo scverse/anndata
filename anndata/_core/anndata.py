@@ -520,8 +520,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # if type doesn’t match, a copy is made, otherwise, use a view
             if dtype is not None:
                 warnings.warn(
-                    "The dtype argument will be deprecated in anndata 0.10.0",
-                    PendingDeprecationWarning,
+                    "The dtype argument is deprecated and will be removed in late 2024.",
+                    FutureWarning,
                 )
                 if issparse(X) or isinstance(X, ma.MaskedArray):
                     # TODO: maybe use view on data attribute of sparse matrix
