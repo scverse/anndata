@@ -23,7 +23,7 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from anndata._core.index import _normalize_slice
+from anndata._core.index import _fix_slice_bounds
 from anndata.compat import H5Group, ZarrGroup
 
 from ..compat import _read_attr
@@ -147,8 +147,8 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
         )[:, col]
 
     def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:
-        row = _normalize_slice(row, self.shape[0])
-        col = _normalize_slice(col, self.shape[1])
+        row = _fix_slice_bounds(row, self.shape[0])
+        col = _fix_slice_bounds(col, self.shape[1])
 
         out_shape = (
             slice_len(row, self.shape[0]),
@@ -181,8 +181,8 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
         )[row, :]
 
     def _get_sliceXslice(self, row: slice, col: slice) -> ss.csc_matrix:
-        row = _normalize_slice(row, self.shape[0])
-        col = _normalize_slice(col, self.shape[1])
+        row = _fix_slice_bounds(row, self.shape[0])
+        col = _fix_slice_bounds(col, self.shape[1])
 
         out_shape = (
             slice_len(row, self.shape[0]),

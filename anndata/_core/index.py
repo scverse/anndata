@@ -105,10 +105,10 @@ def _normalize_index(
         raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
-def _normalize_slice(s: slice, length: int):
-    """Normalize a slice for a given length.
+def _fix_slice_bounds(s: slice, length: int) -> slice:
+    """The slice will be clipped to length, and the step won't be None.
 
-    This means that the slice will be clipped to the length of the object, and the step won't be None.
+    E.g. infer None valued attributes.
     """
     step = s.step if s.step is not None else 1
 
