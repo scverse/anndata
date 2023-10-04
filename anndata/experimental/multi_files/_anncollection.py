@@ -574,7 +574,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
 
 DictCallable = dict[str, Callable]
-ConvertType = Union[Callable, DictCallable, dict[str, DictCallable]]
+ConvertType = Union[Callable, dict[str, Union[Callable, DictCallable]]]
 
 
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
