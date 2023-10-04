@@ -196,3 +196,19 @@ def test_wrong_formats(tmp_path, diskfmt):
 
     # Check nothing changed
     assert not np.any((pre_checks != post_checks).toarray())
+
+
+def test_anndata_sparse_compat(tmp_path, diskfmt):
+    path = (
+        tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    )  # diskfmt is either h5ad or zarr
+    base = sparse.random(100, 100, format="csr")
+
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+
+    ad._io.specs.write_elem(f, "/", base)
+    adata = ad.AnnData(sparse_dataset(f["/"]))
+    assert_equal(adata.X, base)

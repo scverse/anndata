@@ -52,7 +52,7 @@ from .aligned_mapping import (
 from .file_backing import AnnDataFileManager, to_memory
 from .index import Index, Index1D, _normalize_indices, _subset, get_vector
 from .raw import Raw
-from .sparse_dataset import sparse_dataset
+from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .views import (
     ArrayView,
     DataFrameView,
@@ -74,6 +74,7 @@ class StorageType(Enum):
     DaskArray = DaskArray
     CupyArray = CupyArray
     CupySparseMatrix = CupySparseMatrix
+    BackedSparseMAtrix = BaseCompressedSparseDataset
 
     @classmethod
     def classes(cls):
