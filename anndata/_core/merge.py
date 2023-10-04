@@ -765,6 +765,12 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     elif any(isinstance(a, CupySparseMatrix) for a in arrays):
         import cupyx.scipy.sparse as cpsparse
 
+        if not all(
+            isinstance(a, (CupySparseMatrix, CupyArray)) or 0 in a.shape for a in arrays
+        ):
+            raise NotImplementedError(
+                "Cannot concatenate a cupy array with other array types."
+            )
         sparse_stack = (cpsparse.vstack, cpsparse.hstack)[axis]
         return sparse_stack(
             [
