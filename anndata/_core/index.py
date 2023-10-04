@@ -105,6 +105,25 @@ def _normalize_index(
         raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
+def _fix_slice_bounds(s: slice, length: int) -> slice:
+    """The slice will be clipped to length, and the step won't be None.
+
+    E.g. infer None valued attributes.
+    """
+    step = s.step if s.step is not None else 1
+
+    # slice constructor would have errored if step was 0
+    if step > 0:
+        start = s.start if s.start is not None else 0
+        stop = s.stop if s.stop is not None else length
+    elif step < 0:
+        # Reverse
+        start = s.start if s.start is not None else length
+        stop = s.stop if s.stop is not None else 0
+
+    return slice(start, stop, step)
+
+
 def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     if not isinstance(index, tuple):
         return index, slice(None)
