@@ -518,7 +518,7 @@ def concat_on_disk(
     >>> import anndata as ad
     >>> ad.experimental.concat_on_disk(
     ...     dict(b_cells=path_b_cells, fetal=path_fetal),
-    ...     sc.settings.datasetdir / 'merged.h5ad',
+    ...     'merged.h5ad',
     ...     overwrite=True,
     ... )
     """
