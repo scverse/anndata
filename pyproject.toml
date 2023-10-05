@@ -88,6 +88,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy",
+    "httpx", # For data downloading
     "dask[array,distributed]",
     "awkward>=2.3",
     "pytest_memray",
