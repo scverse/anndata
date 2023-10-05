@@ -105,7 +105,9 @@ def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
 
 
 @as_group.register(os.PathLike)
-def _(store: os.PathLike, *args, **kwargs) -> ZarrGroup | H5Group:
+@as_group.register(str)
+def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
+    store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
 
@@ -113,11 +115,6 @@ def _(store: os.PathLike, *args, **kwargs) -> ZarrGroup | H5Group:
     import zarr
 
     return zarr.open_group(store, *args, **kwargs)
-
-
-@as_group.register(str)
-def _(store: str, *args, **kwargs) -> ZarrGroup | H5Group:
-    return as_group(Path(store), *args, **kwargs)
 
 
 @as_group.register(ZarrGroup)
@@ -549,7 +546,7 @@ def concat_on_disk(
         in_files = list(in_files)
 
     if len(in_files) == 1:
-        if not overwrite and Path(out_file).is_file():
+        if not overwrite and out_file.is_file():
             raise FileExistsError(
                 f"File “{out_file}” already exists and `overwrite` is set to False"
             )
