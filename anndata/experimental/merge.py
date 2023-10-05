@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from functools import singledispatch
 from pathlib import Path
 from typing import (
@@ -395,7 +395,7 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
 
 
 def concat_on_disk(
-    in_files: Collection[str | os.PathLike] | MutableMapping[str, str | os.PathLike],
+    in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],
     out_file: str | os.PathLike,
     *,
     overwrite: bool = False,
@@ -417,12 +417,12 @@ def concat_on_disk(
     corresponding stores or paths, and writes the resulting AnnData object
     to a target location on disk.
 
-    Unlike the `concat` function, this method does not require
+    Unlike :func:`anndata.concat`, this method does not require
     loading the input AnnData objects into memory,
     making it a memory-efficient alternative for large datasets.
     The resulting object written to disk should be equivalent
     to the concatenation of the loaded AnnData objects using
-    the `concat` function.
+    :func:`anndata.concat`.
 
     To adjust the maximum amount of data loaded in memory; for sparse
     arrays use the max_loaded_elems argument; for dense arrays
@@ -444,12 +444,12 @@ def concat_on_disk(
         The maximum number of elements to load in memory when concatenating
         sparse arrays. Note that this number also includes the empty entries.
         Set to 100m by default meaning roughly 400mb will be loaded
-        to memory at simultaneously.
+        to memory simultaneously.
     axis
         Which axis to concatenate along.
     join
-        How to align values when concatenating. If "outer", the union of the other axis
-        is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
+        How to align values when concatenating. If `"outer"`, the union of the other axis
+        is taken. If `"inner"`, the intersection. See :doc:`concatenation <../concatenation>`
         for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.
@@ -472,7 +472,7 @@ def concat_on_disk(
         incrementing integer labels.
     index_unique
         Whether to make the index unique by using the keys. If provided, this
-        is the delimiter between "{orig_idx}{index_unique}{key}". When `None`,
+        is the delimiter between `"{orig_idx}{index_unique}{key}"`. When `None`,
         the original indices are kept.
     fill_value
         When `join="outer"`, this is the value that will be used to fill the introduced
@@ -488,6 +488,41 @@ def concat_on_disk(
        If you use `join='outer'` this fills 0s for sparse data when
        variables are absent in a batch. Use this with care. Dense data is
        filled with `NaN`.
+
+    Examples
+    --------
+
+    See :func:`anndata.concat` for the semantics.
+    The following examples highlight the differences this function has.
+
+    First, let’s get some “big” datasets with a compatible ``var`` axis:
+
+    >>> import httpx
+    >>> import scanpy as sc
+    >>> api_url = "https://api.cellxgene.cziscience.com/curation/v1"
+    >>> def get_cellxgene_data(id_: str):
+    ...     out_path = sc.settings.datasetdir / f'{id_}.h5ad'
+    ...     if out_path.exists():
+    ...         return out_path
+    ...     ds_versions = httpx.get(f'{api_url}/datasets/{id_}/versions').raise_for_status().json()
+    ...     ds = ds_versions[0]  # newest
+    ...     file_url = next(a['url'] for a in ds['assets'] if a['filetype'] == 'H5AD')
+    ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
+    ...     with httpx.stream('GET', file_url) as r, out_path.open('wb') as f:
+    ...         r.raise_for_status()
+    ...         for data in r.iter_bytes():
+    ...             f.write(data)
+    ...     return out_path
+    >>> path_b_cells = get_cellxgene_data('0895c838-e550-48a3-a777-dbcd35d30272')
+    >>> path_fetal = get_cellxgene_data('08e94873-c2a6-4f7d-ab72-aeaff3e3f929')
+
+    Now we can concatenate them on-disk:
+
+    >>> import anndata as ad
+    >>> ad.experimental.concat_on_disk(dict(
+    ...     b_cells=path_b_cells,
+    ...     fetal=path_fetal,
+    ... ), 'data/merged.h5ad', overwrite=True)
     """
     # Argument normalization
     if pairwise:
