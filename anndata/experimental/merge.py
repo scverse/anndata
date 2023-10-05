@@ -519,11 +519,15 @@ def concat_on_disk(
     Now we can concatenate them on-disk:
 
     >>> import anndata as ad
-    >>> ad.experimental.concat_on_disk(dict(
-    ...     b_cells=path_b_cells,
-    ...     fetal=path_fetal,
-    ... ), 'data/merged.h5ad', overwrite=True)
+    >>> ad.experimental.concat_on_disk(
+    ...     dict(b_cells=path_b_cells, fetal=path_fetal),
+    ...     sc.settings.datasetdir / 'merged.h5ad',
+    ...     overwrite=True,
+    ... )
     """
+    if len(in_files) == 0:
+        return
+
     # Argument normalization
     if pairwise:
         raise NotImplementedError("pairwise concatenation not yet implemented")
@@ -532,8 +536,8 @@ def concat_on_disk(
 
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
-    if len(in_files) == 0:
-        return
+    out_file = Path(out_file)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(in_files, Mapping):
         if keys is not None:
             raise TypeError(
