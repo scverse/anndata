@@ -527,7 +527,7 @@ def concat_on_disk(
     Name: count, dtype: int64
     """
     if len(in_files) == 0:
-        return
+        raise ValueError("No objects to concatenate.")
 
     # Argument normalization
     if pairwise:
@@ -537,8 +537,11 @@ def concat_on_disk(
 
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
+
     out_file = Path(out_file)
-    out_file.parent.mkdir(parents=True, exist_ok=True)
+    if not out_file.parent.exists():
+        raise FileNotFoundError(f"Parent directory of {out_file} does not exist.")
+
     if isinstance(in_files, Mapping):
         if keys is not None:
             raise TypeError(
