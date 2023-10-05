@@ -250,3 +250,18 @@ def obsm_adatas():
 
 def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
     assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
+
+
+def test_output_dir_exists(tmp_path):
+    in_pth = tmp_path / "in.h5ad"
+    out_pth = tmp_path / "does_not_exist" / "out.h5ad"
+
+    AnnData(X=np.ones((5, 1))).write_h5ad(in_pth)
+
+    with pytest.raises(FileNotFoundError, match=f"{out_pth}"):
+        concat_on_disk([in_pth], out_pth)
+
+
+def test_failure_w_no_args(tmp_path):
+    with pytest.raises(ValueError, match="No objects to concatenate"):
+        concat_on_disk([], tmp_path / "out.h5ad")
