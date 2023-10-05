@@ -21,6 +21,7 @@ See {doc}`/release-notes/index` for more.
 :maxdepth: 1
 
 tutorials/index
+guides/index
 api
 concatenation
 fileformat-prose
