@@ -520,7 +520,16 @@ def concat_on_disk(
     ...     dict(b_cells=path_b_cells, fetal=path_fetal),
     ...     'merged.h5ad',
     ...     overwrite=True,
+    ...     label='dataset',
     ... )
+    >>> adata = ad.read_h5ad('merged.h5ad', backed=True)
+    >>> adata.X.shape
+    (490, 15585)
+    >>> adata.obs['dataset'].value_counts()
+    dataset
+    fetal      344
+    b_cells    146
+    Name: count, dtype: int64
     """
     if len(in_files) == 0:
         return
