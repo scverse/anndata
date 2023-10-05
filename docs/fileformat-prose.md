@@ -1,7 +1,7 @@
 # On-disk format
 
 ```{note}
-These docs are written for anndata 0.8.
+These docs are written for anndata 0.8+.
 Files written before this version may differ in some conventions,
 but will still be read by newer versions of the library.
 ```
@@ -501,6 +501,7 @@ then writing these arrays using `anndata`’s methods.
 :sync: hdf5
 
 ```python
+>>> store["varm/transcript"].visititems(print)
 node1-mask <HDF5 dataset "node1-mask": shape (5019,), type "|u1">
 node10-data <HDF5 dataset "node10-data": shape (250541,), type "<i8">
 node11-mask <HDF5 dataset "node11-mask": shape (5019,), type "|u1">
