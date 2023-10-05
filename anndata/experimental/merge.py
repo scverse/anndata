@@ -403,16 +403,17 @@ def concat_on_disk(
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
     merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
-    uns_merge: StrategiesLiteral
-    | Callable[[Collection[Mapping]], Mapping]
-    | None = None,
+    uns_merge: (
+        StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None
+    ) = None,
     label: str | None = None,
     keys: Collection[str] | None = None,
     index_unique: str | None = None,
     fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> None:
-    """Concatenates multiple AnnData objects along a specified axis using their
+    """\
+    Concatenates multiple AnnData objects along a specified axis using their
     corresponding stores or paths, and writes the resulting AnnData object
     to a target location on disk.
 
@@ -483,12 +484,10 @@ def concat_on_disk(
 
     Notes
     -----
-
     .. warning::
-
-        If you use `join='outer'` this fills 0s for sparse data when
-        variables are absent in a batch. Use this with care. Dense data is
-        filled with `NaN`.
+       If you use `join='outer'` this fills 0s for sparse data when
+       variables are absent in a batch. Use this with care. Dense data is
+       filled with `NaN`.
     """
     # Argument normalization
     if pairwise:
@@ -498,13 +497,7 @@ def concat_on_disk(
 
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
-    if len(in_files) <= 1:
-        if len(in_files) == 1:
-            if not overwrite and Path(out_file).is_file():
-                raise FileExistsError(
-                    f"File “{out_file}” already exists and `overwrite` is set to False"
-                )
-            shutil.copy2(in_files[0], out_file)
+    if len(in_files) == 0:
         return
     if isinstance(in_files, Mapping):
         if keys is not None:
@@ -515,6 +508,14 @@ def concat_on_disk(
         keys, in_files = list(in_files.keys()), list(in_files.values())
     else:
         in_files = list(in_files)
+
+    if len(in_files) == 1:
+        if not overwrite and Path(out_file).is_file():
+            raise FileExistsError(
+                f"File “{out_file}” already exists and `overwrite` is set to False"
+            )
+        shutil.copy2(in_files[0], out_file)
+        return
 
     if keys is None:
         keys = np.arange(len(in_files)).astype(str)
