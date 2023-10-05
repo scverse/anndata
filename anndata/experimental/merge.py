@@ -395,7 +395,6 @@ def concat_on_disk(
     in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],
     out_file: str | os.PathLike,
     *,
-    overwrite: bool = False,
     max_loaded_elems: int = 100_000_000,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
@@ -434,9 +433,6 @@ def concat_on_disk(
         argument and values are concatenated.
     out_file
         The target path or store to write the result in.
-    overwrite
-        If `False` while a file already exists it will raise an error,
-        otherwise it will overwrite.
     max_loaded_elems
         The maximum number of elements to load in memory when concatenating
         sparse arrays. Note that this number also includes the empty entries.
@@ -519,7 +515,6 @@ def concat_on_disk(
     >>> ad.experimental.concat_on_disk(
     ...     dict(b_cells=path_b_cells, fetal=path_fetal),
     ...     'merged.h5ad',
-    ...     overwrite=True,
     ...     label='dataset',
     ... )
     >>> adata = ad.read_h5ad('merged.h5ad', backed=True)
@@ -555,10 +550,6 @@ def concat_on_disk(
         in_files = list(in_files)
 
     if len(in_files) == 1:
-        if not overwrite and out_file.is_file():
-            raise FileExistsError(
-                f"File “{out_file}” already exists and `overwrite` is set to False"
-            )
         shutil.copy2(in_files[0], out_file)
         return
 
@@ -568,9 +559,7 @@ def concat_on_disk(
     _, dim = _resolve_dim(axis=axis)
     _, alt_dim = _resolve_dim(axis=1 - axis)
 
-    mode = "w" if overwrite else "w-"
-
-    output_group = as_group(out_file, mode=mode)
+    output_group = as_group(out_file, mode="w")
     groups = [as_group(f) for f in in_files]
 
     use_reindexing = False
