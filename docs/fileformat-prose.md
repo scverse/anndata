@@ -232,6 +232,7 @@ ensembl_id <HDF5 dataset "ensembl_id": shape (40145,), type "|O">
 feature_biotype <HDF5 group "/var/feature_biotype" (2 members)>
 feature_biotype/categories <HDF5 dataset "categories": shape (1,), type "|O">
 feature_biotype/codes <HDF5 dataset "codes": shape (40145,), type "|i1">
+feature_is_filtered <HDF5 dataset "feature_is_filtered": shape (40145,), type "|b1">
 ...
 ```
 
