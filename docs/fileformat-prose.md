@@ -100,7 +100,7 @@ We can see an example of this with dimensionality reductions stored in the `obsm
 :sync: hdf5
 
 ```python
->>> f["obsm/X_pca"]
+>>> store["obsm/X_pca"]
 <HDF5 dataset "X_pca": shape (164114, 50), type "<f4">
 ```
 
@@ -221,6 +221,39 @@ We save a little more information in the attributes here.
 These attributes identify the index of the dataframe, as well as the original order of the columns.
 Each column in this dataframe is encoded as its own array.
 
+`````{tab-set}
+
+````{tab-item} HDF5
+:sync: hdf5
+
+```python
+>>> store["var"].visititems(print)
+ensembl_id <HDF5 dataset "ensembl_id": shape (40145,), type "|O">
+feature_biotype <HDF5 group "/var/feature_biotype" (2 members)>
+feature_biotype/categories <HDF5 dataset "categories": shape (1,), type "|O">
+feature_biotype/codes <HDF5 dataset "codes": shape (40145,), type "|i1">
+...
+```
+
+````
+
+````{tab-item} Zarr
+:sync: zarr
+
+```python
+>>> store["var"].visititems(print)
+ensembl_id <zarr.core.Array '/var/ensembl_id' (40145,) object read-only>
+feature_biotype <zarr.hierarchy.Group '/var/feature_biotype' read-only>
+feature_biotype/categories <zarr.core.Array '/var/feature_biotype/categories' (1,) object read-only>
+feature_biotype/codes <zarr.core.Array '/var/feature_biotype/codes' (40145,) int8 read-only>
+feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool read-only>
+...
+```
+
+````
+
+`````
+
 ```python
 >>> dict(store["var"]["feature_name"].attrs)
 {'encoding-type': 'categorical', 'encoding-version': '0.2.0', 'ordered': False}
@@ -233,7 +266,7 @@ Each column in this dataframe is encoded as its own array.
 
 * A dataframe MUST be stored as a group
 * The group's metadata:
-    * MUST contain the field `"_index"`, whose value is the key of the array to be used as an index
+    * MUST contain the field `"_index"`, whose value is the key of the array to be used as an index/ row labels
     * MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.2.0"`
     * MUST contain `"column-order"` an array of strings denoting the order of column entries
 * The group MUST contain an array for the index
@@ -325,7 +358,7 @@ random_state <zarr.core.Array '/uns/neighbors/params/random_state' () int64 read
 ```python
 >>> store["uns/neighbors/params/metric"][()]
 'euclidean'
->>> dict(f["uns/neighbors/params/metric"].attrs)
+>>> dict(store["uns/neighbors/params/metric"].attrs)
 {'encoding-type': 'string', 'encoding-version': '0.2.0'}
 ```
 
@@ -393,6 +426,30 @@ codes <zarr.core.Array '/obs/development_stage/codes' (164114,) int8 read-only>
 
 Arrays of strings are handled differently than numeric arrays since numpy doesn't really have a good way of representing arrays of unicode strings.
 `anndata` assumes strings are text-like data, so uses a variable length encoding.
+
+`````{tab-set}
+
+````{tab-item} HDF5
+:sync: hdf5
+
+```python
+>>> store["var"][store["var"].attrs["_index"]]
+<HDF5 dataset "ensembl_id": shape (40145,), type "|O">
+```
+
+````
+
+````{tab-item} Zarr
+:sync: zarr
+
+```python
+>>> store["var"][store["var"].attrs["_index"]]
+<zarr.core.Array '/var/ensembl_id' (40145,) object read-only>
+```
+
+````
+
+`````
 
 ```python
 >>> dict(categorical["categories"].attrs)
