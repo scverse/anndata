@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+import numpy as np
+import pytest
 from scipy import sparse
 
-import pytest
-
-from anndata.tests.helpers import gen_adata, assert_equal
+import anndata as ad
+from anndata.tests.helpers import assert_equal, gen_adata, shares_memory
 
 
 def test_transpose_orig():
@@ -39,6 +42,34 @@ def _add_raw(adata, *, var_subset=slice(None)):
 )
 def adata(request):
     return request.param
+
+
+def test_transpose_doesnt_copy():
+    adata = ad.AnnData(
+        sparse.random(50, 20, format="csr"),
+        layers={
+            "sparse": sparse.random(50, 20, format="csc"),
+            "dense": np.random.rand(50, 20),
+        },
+        obsm={
+            "sparse": sparse.random(50, 10, format="csc"),
+            "dense": np.random.rand(50, 10),
+        },
+        obsp={
+            "sparse": sparse.random(50, 50, format="csc"),
+            "dense": np.random.rand(50, 50),
+        },
+    )
+
+    t = adata.T
+
+    assert shares_memory(adata.X, t.X)
+    for k in adata.obsm:
+        assert shares_memory(adata.obsm[k], t.varm[k])
+    for k in adata.obsp:
+        assert shares_memory(adata.obsp[k], t.varp[k])
+    for k in adata.layers:
+        assert shares_memory(adata.layers[k], t.layers[k])
 
 
 def test_transpose_removes_raw(adata):

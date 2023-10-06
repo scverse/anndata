@@ -1,27 +1,31 @@
+from __future__ import annotations
+
 from copy import deepcopy
 from operator import mul
 
 import joblib
 import numpy as np
-from scipy import sparse
 import pandas as pd
 import pytest
+from dask.base import normalize_token, tokenize
+from scipy import sparse
 
 import anndata as ad
 from anndata._core.index import _normalize_index
-from anndata._core.views import ArrayView, SparseCSRView, SparseCSCView
-from anndata.compat import DaskArray
-from dask.base import tokenize, normalize_token
-from anndata.utils import asarray
+from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
+from anndata.compat import CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
-    gen_adata,
-    subset_func,
-    slice_subset,
-    single_subset,
-    assert_equal,
-    as_dense_dask_array,
+    BASE_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
     GEN_ADATA_DASK_ARGS,
+    assert_equal,
+    gen_adata,
+    single_subset,
+    slice_subset,
+    subset_func,
 )
+from anndata.utils import asarray
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -57,28 +61,20 @@ def adata():
     return adata
 
 
-@pytest.fixture(params=[asarray, sparse.csr_matrix, sparse.csc_matrix])
-def adata_parameterized(request):
-    return gen_adata(shape=(200, 300), X_type=request.param)
-
-
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
+    params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS,
 )
 def matrix_type(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix],
-    ids=[
-        "np_array",
-        "scipy_csr",
-        "scipy_csc",
-    ],
-)
-def matrix_type_no_dask(request):
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+def matrix_type_no_gpu(request):
+    return request.param
+
+
+@pytest.fixture(params=BASE_MATRIX_PARAMS)
+def matrix_type_base(request):
     return request.param
 
 
@@ -113,12 +109,27 @@ def test_views():
     assert adata_subset.obs["foo"].tolist() == list(range(2))
 
 
+def test_view_subset_shapes():
+    adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
+
+    view = adata[:, ::2]
+    assert view.var.shape == (5, 8)
+    assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
+
+
 def test_modify_view_component(matrix_type, mapping_name):
     adata = ad.AnnData(
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
-    init_hash = joblib.hash(adata)
+    # Fix if and when dask supports tokenizing GPU arrays
+    # https://github.com/dask/dask/issues/6718
+    if isinstance(matrix_type(np.zeros((1, 1))), DaskArray):
+        hash_func = tokenize
+    else:
+        hash_func = joblib.hash
+
+    init_hash = hash_func(adata)
 
     subset = adata[:5, :][:, :5]
     assert subset.is_view
@@ -127,7 +138,7 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert not subset.is_view
     assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
-    assert init_hash == joblib.hash(adata)
+    assert init_hash == hash_func(adata)
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
@@ -256,8 +267,8 @@ def test_set_varm(adata):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X(matrix_type_no_dask, subset_func):
-    adata = ad.AnnData(matrix_type_no_dask(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X(matrix_type_base, subset_func):
+    adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -296,8 +307,8 @@ def tokenize_anndata(adata: ad.AnnData):
 
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
-def test_not_set_subset_X_dask(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(asarray(sparse.random(20, 20))))
+def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
+    adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -330,8 +341,14 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     assert adata_subset.is_view
     assert np.all(asarray(adata[subset_idx, :].X) == 1)
-
-    assert asarray((orig_X_val != adata.X)).sum() == mul(*adata_subset.shape)
+    if isinstance(adata.X, CupyCSCMatrix):
+        # Comparison broken for CSC matrices
+        # https://github.com/cupy/cupy/issues/7757
+        assert asarray(orig_X_val.tocsr() != adata.X.tocsr()).sum() == mul(
+            *adata_subset.shape
+        )
+    else:
+        assert asarray(orig_X_val != adata.X).sum() == mul(*adata_subset.shape)
 
 
 # TODO: Use different kind of subsetting for adata and view
@@ -650,3 +667,14 @@ def test_copy_X_dtype():
     adata = ad.AnnData(sparse.eye(50, dtype=np.float64, format="csr"))
     adata_c = adata[::2].copy()
     assert adata_c.X.dtype == adata.X.dtype
+
+
+def test_x_none():
+    orig = ad.AnnData(obs=pd.DataFrame(index=np.arange(50)))
+    assert orig.shape == (50, 0)
+    view = orig[2:4]
+    assert view.shape == (2, 0)
+    assert view.obs_names.tolist() == ["2", "3"]
+    new = view.copy()
+    assert new.shape == (2, 0)
+    assert new.obs_names.tolist() == ["2", "3"]

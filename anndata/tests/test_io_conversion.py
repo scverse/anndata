@@ -1,13 +1,15 @@
 """\
 This file contains tests for conversion made during io.
 """
+from __future__ import annotations
+
 import h5py
 import numpy as np
 import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, assert_equal
+from anndata.tests.helpers import assert_equal, gen_adata
 
 
 @pytest.fixture(

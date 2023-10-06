@@ -1,25 +1,36 @@
 from __future__ import annotations
 
+import warnings
 from contextlib import contextmanager
 from copy import deepcopy
-from collections.abc import Sequence, KeysView, Callable, Iterable, Mapping
 from functools import reduce, singledispatch, wraps
-from typing import Any, Literal
-import warnings
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
-import anndata
 from anndata._warnings import ImplicitModificationWarning
+
+from ..compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+    DaskArray,
+    ZappyArray,
+)
 from .access import ElementRef
-from ..compat import ZappyArray, AwkArray, DaskArray
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, KeysView, Sequence
+
+    from anndata import AnnData
 
 
 @contextmanager
-def view_update(adata_view: anndata.AnnData, attr_name: str, keys: tuple[str, ...]):
+def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
     """Context manager for updating a view of an AnnData object.
 
     Contains logic for "actualizing" a view. Yields the object to be modified in-place.
@@ -72,7 +83,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -93,7 +104,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -165,7 +176,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple["anndata.AnnData", str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
     ):
         arr = super().__new__(
             cls,
@@ -203,6 +214,37 @@ class SparseCSCView(_ViewMixin, sparse.csc_matrix):
     # https://github.com/scverse/anndata/issues/656
     def copy(self) -> sparse.csc_matrix:
         return sparse.csc_matrix(self).copy()
+
+
+class CupySparseCSRView(_ViewMixin, CupyCSRMatrix):
+    def copy(self) -> CupyCSRMatrix:
+        return CupyCSRMatrix(self).copy()
+
+
+class CupySparseCSCView(_ViewMixin, CupyCSCMatrix):
+    def copy(self) -> CupyCSCMatrix:
+        return CupyCSCMatrix(self).copy()
+
+
+class CupyArrayView(_ViewMixin, CupyArray):
+    def __new__(
+        cls,
+        input_array: Sequence[Any],
+        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+    ):
+        import cupy as cp
+
+        arr = cp.asarray(input_array).view(type=cls)
+
+        if view_args is not None:
+            view_args = ElementRef(*view_args)
+        arr._view_args = view_args
+        return arr
+
+    def copy(self) -> CupyArray:
+        import cupy as cp
+
+        return cp.array(self).copy()
 
 
 class DictView(_ViewMixin, dict):
@@ -262,9 +304,25 @@ def as_view_zappy(z, view_args):
     return z
 
 
+@as_view.register(CupyArray)
+def as_view_cupy(array, view_args):
+    return CupyArrayView(array, view_args=view_args)
+
+
+@as_view.register(CupyCSRMatrix)
+def as_view_cupy_csr(mtx, view_args):
+    return CupySparseCSRView(mtx, view_args=view_args)
+
+
+@as_view.register(CupyCSCMatrix)
+def as_view_cupy_csc(mtx, view_args):
+    return CupySparseCSCView(mtx, view_args=view_args)
+
+
 try:
-    from ..compat import awkward as ak
     import weakref
+
+    from ..compat import awkward as ak
 
     # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
     _registry = weakref.WeakValueDictionary()
@@ -296,7 +354,7 @@ try:
             array = self
             # makes a shallow copy and removes the reference to the original AnnData object
             array = ak.with_parameter(self, _PARAM_NAME, None)
-            array = ak.with_parameter(array, "__array__", None)
+            array = ak.with_parameter(array, "__list__", None)
             return array
 
     @as_view.register(AwkArray)
@@ -314,7 +372,7 @@ try:
                 "Please open an issue in the AnnData repo and describe your use-case."
             )
         array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
-        array = ak.with_parameter(array, "__array__", "AwkwardArrayView")
+        array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
         return array
 
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView

@@ -1,17 +1,21 @@
+from __future__ import annotations
+
 from string import ascii_letters
 
+import numpy as np
 import pandas as pd
 import pytest
-import numpy as np
 from scipy import sparse
 
 import anndata as ad
+from anndata.compat import add_note
 from anndata.tests.helpers import (
-    assert_equal,
-    gen_awkward,
-    report_name,
-    gen_adata,
     asarray,
+    assert_equal,
+    gen_adata,
+    gen_awkward,
+    pytest_8_raises,
+    report_name,
 )
 from anndata.utils import dim_len
 
@@ -77,7 +81,7 @@ def test_gen_awkward(shape, datashape):
 # Does this work for every warning?
 def test_report_name():
     def raise_error():
-        raise Exception("an error occured!")
+        raise Exception("an error occurred!")
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))
@@ -246,3 +250,30 @@ def test_assert_equal_dask_sparse_arrays():
 
     assert_equal(x, y)
     assert_equal(y, x)
+
+
+@pytest.mark.parametrize(
+    "error, match",
+    [
+        (Exception("test"), "test"),
+        (add_note(AssertionError("foo"), "bar"), "bar"),
+        (add_note(add_note(AssertionError("foo"), "bar"), "baz"), "bar"),
+        (add_note(add_note(AssertionError("foo"), "bar"), "baz"), "baz"),
+    ],
+)
+def test_check_error_notes_success(error, match):
+    with pytest_8_raises(Exception, match=match):
+        raise error
+
+
+@pytest.mark.parametrize(
+    "error, match",
+    [
+        (Exception("test"), "foo"),
+        (add_note(AssertionError("foo"), "bar"), "baz"),
+    ],
+)
+def test_check_error_notes_failure(error, match):
+    with pytest.raises(AssertionError):
+        with pytest_8_raises(Exception, match=match):
+            raise error

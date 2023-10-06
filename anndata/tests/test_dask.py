@@ -1,17 +1,22 @@
 """
 For tests using dask
 """
-import anndata as ad
+from __future__ import annotations
+
 import pandas as pd
-from anndata._core.anndata import AnnData
 import pytest
-from anndata.tests.helpers import (
-    as_dense_dask_array,
-    GEN_ADATA_DASK_ARGS,
-    gen_adata,
-    assert_equal,
-)
+
+import anndata as ad
+from anndata._core.anndata import AnnData
 from anndata.compat import DaskArray
+from anndata.experimental import read_elem, write_elem
+from anndata.experimental.merge import as_group
+from anndata.tests.helpers import (
+    GEN_ADATA_DASK_ARGS,
+    as_dense_dask_array,
+    assert_equal,
+    gen_adata,
+)
 
 pytest.importorskip("dask.array")
 
@@ -79,6 +84,44 @@ def test_dask_write(adata, tmp_path, diskfmt):
     orig = adata
     write(orig, pth)
     curr = read(pth)
+
+    with pytest.raises(Exception):
+        assert_equal(curr.obsm["a"], curr.obsm["b"])
+
+    assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(curr.obsm["a"], orig.obsm["a"])
+
+    assert isinstance(curr.X, np.ndarray)
+    assert isinstance(curr.obsm["a"], np.ndarray)
+    assert isinstance(curr.varm["a"], np.ndarray)
+    assert isinstance(orig.X, DaskArray)
+    assert isinstance(orig.obsm["a"], DaskArray)
+    assert isinstance(orig.varm["a"], DaskArray)
+
+
+def test_dask_distributed_write(adata, tmp_path, diskfmt):
+    import dask.array as da
+    import dask.distributed as dd
+    import numpy as np
+
+    pth = tmp_path / f"test_write.{diskfmt}"
+    g = as_group(pth, mode="w")
+
+    with dd.LocalCluster(n_workers=1, threads_per_worker=1, processes=False) as cluster:
+        with dd.Client(cluster):
+            M, N = adata.X.shape
+            adata.obsm["a"] = da.random.random((M, 10))
+            adata.obsm["b"] = da.random.random((M, 10))
+            adata.varm["a"] = da.random.random((N, 10))
+            orig = adata
+            if diskfmt == "h5ad":
+                with pytest.raises(
+                    ValueError, match="Cannot write dask arrays to hdf5"
+                ):
+                    write_elem(g, "", orig)
+                return
+            write_elem(g, "", orig)
+            curr = read_elem(g)
 
     with pytest.raises(Exception):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
@@ -203,6 +246,7 @@ def test_assign_X(adata):
     """Check if assignment works"""
     import dask.array as da
     import numpy as np
+
     from anndata.compat import DaskArray
 
     adata.X = da.ones(adata.X.shape)
@@ -266,8 +310,8 @@ def test_dask_to_memory_copy_unbacked():
 
 
 def test_to_memory_raw():
-    import numpy as np
     import dask.array as da
+    import numpy as np
 
     orig = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
     orig.X = da.ones((20, 10))
@@ -287,8 +331,8 @@ def test_to_memory_raw():
 
 
 def test_to_memory_copy_raw():
-    import numpy as np
     import dask.array as da
+    import numpy as np
 
     orig = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
     orig.X = da.ones((20, 10))

@@ -11,12 +11,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        shell: bash -e {0} # -e to fail on error
+        shell: bash -el {0} # -e to fail on error, -l for mamba
 
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10"]
+        python: ["3.11"]
         os: [ubuntu-latest]
 
     env:
@@ -33,12 +33,15 @@ jobs:
         if: ${{ github.ref_name != 'main' }}
         # Errors on main branch
 
-      - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v4
+      - uses: mamba-org/setup-micromamba@v1
         with:
-          python-version: ${{ matrix.python }}
-          cache: "pip"
-          cache-dependency-path: "**/pyproject.toml"
+          environment-name: asv
+          cache-environment: true
+          create-args: >-
+            python=3.11
+            asv
+            mamba
+            packaging
 
       - name: Cache datasets
         uses: actions/cache@v3
@@ -47,12 +50,8 @@ jobs:
             ~/.cache
           key: benchmark-state-${{ hashFiles('benchmarks/**') }}
 
-      - name: Install dependencies
-        run: |
-          pip install asv
-
       - name: Quick benchmark run
         working-directory: ${{ env.ASV_DIR }}
         run: |
           asv machine --yes
-          asv run -qev --strict
+          asv run --quick --show-stderr --verbose

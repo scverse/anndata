@@ -1,31 +1,34 @@
+from __future__ import annotations
+
+import warnings
 from collections.abc import Hashable
 from copy import deepcopy
-from itertools import chain, product
 from functools import partial, singledispatch
-from typing import Any, List, Callable
-import warnings
+from itertools import chain, permutations, product
+from typing import Any, Callable
 
 import numpy as np
-from numpy import ma
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
 import pytest
+from boltons.iterutils import default_exit, remap, research
+from numpy import ma
 from scipy import sparse
-from boltons.iterutils import research, remap, default_exit
-
 
 from anndata import AnnData, Raw, concat
-from anndata._core.index import _subset
 from anndata._core import merge
+from anndata._core.index import _subset
+from anndata.compat import AwkArray, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
-    assert_equal,
-    as_dense_dask_array,
-    gen_adata,
+    BASE_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
     GEN_ADATA_DASK_ARGS,
+    as_dense_dask_array,
+    assert_equal,
+    gen_adata,
 )
 from anndata.utils import asarray
-from anndata.compat import DaskArray, AwkArray
 
 
 @singledispatch
@@ -74,10 +77,7 @@ def make_idx_tuple(idx, axis):
 
 # Will call func(sparse_matrix) so these types should be sparse compatible
 # See array_type if only dense arrays are expected as input.
-@pytest.fixture(
-    params=[asarray, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
-)
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS)
 def array_type(request):
     return request.param
 
@@ -128,7 +128,7 @@ def fix_known_differences(orig, result, backwards_compat=True):
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for k, dtype in orig.obs.dtypes.items():
-        if is_categorical_dtype(dtype) and dtype.ordered:
+        if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
             result.obs[k] = result.obs[k].astype(dtype)
 
     return orig, result
@@ -819,6 +819,9 @@ def test_pairwise_concat(axis, array_type):
         orig_arr = getattr(adatas[k], dim_attr)["arr"]
         full_arr = getattr(w_pairwise, dim_attr)["arr"]
 
+        if isinstance(full_arr, DaskArray):
+            full_arr = full_arr.compute()
+
         # Check original values are intact
         assert_equal(orig_arr, _subset(full_arr, (inds, inds)))
         # Check that entries are filled with zeroes
@@ -961,12 +964,12 @@ def map_values(mapping, path, key, old_parent, new_parent, new_items):
     return ret
 
 
-def permute_nested_values(dicts: "List[dict]", gen_val: "Callable[[int], Any]"):
+def permute_nested_values(dicts: list[dict], gen_val: Callable[[int], Any]):
     """
     This function permutes the values of a nested mapping, for testing that out merge
     method work regardless of the values types.
 
-    Assumes the intial dictionary had integers for values.
+    Assumes the initial dictionary had integers for values.
     """
     dicts = deepcopy(dicts)
     initial_values = [
@@ -1184,8 +1187,8 @@ def test_concat_categories_maintain_dtype():
 
     result = concat({"a": a, "b": b, "c": c}, join="outer")
 
-    assert pd.api.types.is_categorical_dtype(
-        result.obs["cat"]
+    assert isinstance(
+        result.obs["cat"].dtype, pd.CategoricalDtype
     ), f"Was {result.obs['cat'].dtype}"
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
@@ -1212,7 +1215,7 @@ def test_concat_ordered_categoricals_retained():
 
     c = concat([a, b])
 
-    assert pd.api.types.is_categorical_dtype(c.obs["cat_ordered"])
+    assert isinstance(c.obs["cat_ordered"].dtype, pd.CategoricalDtype)
     assert c.obs["cat_ordered"].cat.ordered
 
 
@@ -1387,9 +1390,10 @@ def test_concat_X_dtype():
 
 # Tests how dask plays with other types on concatenation.
 def test_concat_different_types_dask(merge_strategy, array_type):
-    from scipy import sparse
-    import anndata as ad
     import dask.array as da
+    from scipy import sparse
+
+    import anndata as ad
 
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
 
@@ -1450,3 +1454,44 @@ def test_concat_duplicated_columns(join_type):
 
     with pytest.raises(pd.errors.InvalidIndexError, match=r"'a'"):
         concat([a, b], join=join_type)
+
+
+@pytest.mark.gpu
+def test_error_on_mixed_device():
+    """https://github.com/scverse/anndata/issues/1083"""
+    import cupy
+    import cupyx.scipy.sparse as cupy_sparse
+
+    cp_adata = AnnData(
+        cupy.random.randn(10, 10),
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
+    )
+    cp_sparse_adata = AnnData(
+        cupy_sparse.random(10, 10, format="csr", density=0.2),
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10, 20)]),
+    )
+    np_adata = AnnData(
+        np.random.randn(10, 10),
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(20, 30)]),
+    )
+    sparse_adata = AnnData(
+        sparse.random(10, 10, format="csr", density=0.2),
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(30, 40)]),
+    )
+
+    adatas = {
+        "cupy": cp_adata,
+        "cupy_sparse": cp_sparse_adata,
+        "numpy": np_adata,
+        "sparse": sparse_adata,
+    }
+
+    for p in map(dict, permutations(adatas.items())):
+        print(list(p.keys()))
+        with pytest.raises(
+            NotImplementedError, match="Cannot concatenate a cupy array with other"
+        ):
+            concat(p)
+
+    for p in permutations([cp_adata, cp_sparse_adata]):
+        concat(p)

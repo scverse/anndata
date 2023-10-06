@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from warnings import warn
 
 warn("Please only import from anndata, not anndata.readwrite", DeprecationWarning)

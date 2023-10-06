@@ -1,5 +1,7 @@
-import os
+from __future__ import annotations
+
 import logging
+import os
 
 _previous_memory_usage = None
 

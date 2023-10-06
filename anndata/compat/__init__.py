@@ -1,16 +1,22 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from functools import reduce, singledispatch, wraps
+import os
 from codecs import decode
-from inspect import signature, Parameter
-from typing import Any, Tuple, Union, Mapping, MutableMapping, Optional
+from collections.abc import Mapping
+from contextlib import AbstractContextManager
+from dataclasses import dataclass, field
+from functools import singledispatch, wraps
+from inspect import Parameter, signature
+from pathlib import Path
+from typing import Any, Union
 from warnings import warn
 
 import h5py
-from scipy.sparse import spmatrix
 import numpy as np
 import pandas as pd
+from scipy.sparse import issparse, spmatrix
+
+from .exceptiongroups import add_note  # noqa: F401
 
 
 class Empty:
@@ -18,12 +24,36 @@ class Empty:
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, Tuple[Index1D, Index1D], spmatrix]
+Index = Union[Index1D, tuple[Index1D, Index1D], spmatrix]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 
 
-# try importing zarr, dask, and zappy
+#############################
+# stdlib
+#############################
+
+
+try:
+    from contextlib import chdir
+except ImportError:  # Python < 3.11
+
+    @dataclass
+    class chdir(AbstractContextManager):
+        path: Path
+        _old_cwd: list[Path] = field(default_factory=list)
+
+        def __enter__(self) -> None:
+            self._old_cwd.append(Path())
+            os.chdir(self.path)
+
+        def __exit__(self, *_exc_info) -> None:
+            os.chdir(self._old_cwd.pop())
+
+
+#############################
+# Optional deps
+#############################
 
 try:
     from zarr.core import Array as ZarrArray
@@ -74,8 +104,47 @@ except ImportError:
             return "mock dask.array.core.Array"
 
 
+try:
+    from cupy import ndarray as CupyArray
+    from cupyx.scipy.sparse import (
+        csc_matrix as CupyCSCMatrix,
+    )
+    from cupyx.scipy.sparse import (
+        csr_matrix as CupyCSRMatrix,
+    )
+    from cupyx.scipy.sparse import (
+        spmatrix as CupySparseMatrix,
+    )
+except ImportError:
+
+    class CupySparseMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.spmatrix"
+
+    class CupyCSRMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csr_matrix"
+
+    class CupyCSCMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csc_matrix"
+
+    class CupyArray:
+        @staticmethod
+        def __repr__():
+            return "mock cupy.ndarray"
+
+
+#############################
+# IO helpers
+#############################
+
+
 @singledispatch
-def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
+def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
     if default is Empty:
         return attrs[name]
     else:
@@ -84,7 +153,7 @@ def _read_attr(attrs: Mapping, name: str, default: Optional[Any] = Empty):
 
 @_read_attr.register(h5py.AttributeManager)
 def _read_attr_hdf5(
-    attrs: h5py.AttributeManager, name: str, default: Optional[Any] = Empty
+    attrs: h5py.AttributeManager, name: str, default: Any | None = Empty
 ):
     """
     Read an HDF5 attribute and perform all necessary conversions.
@@ -114,7 +183,7 @@ def _from_fixed_length_strings(value):
     """\
     Convert from fixed length strings to unicode.
 
-    For backwards compatability with older h5ad and zarr files.
+    For backwards compatibility with older h5ad and zarr files.
     """
     new_dtype = []
     for dt in value.dtype.descr:
@@ -135,7 +204,7 @@ def _from_fixed_length_strings(value):
 
 
 def _decode_structured_array(
-    arr: np.ndarray, dtype: Optional[np.dtype] = None, copy: bool = False
+    arr: np.ndarray, dtype: np.dtype | None = None, copy: bool = False
 ) -> np.ndarray:
     """
     h5py 3.0 now reads all strings as bytes. There is a helper method which can convert these to strings,
@@ -185,7 +254,7 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
 #############################
 
 
-def _clean_uns(adata: "AnnData"):  # noqa: F821
+def _clean_uns(adata: AnnData):  # noqa: F821
     """
     Compat function for when categorical keys were stored in uns.
     This used to be buggy because when storing categorical columns in obs and var with
@@ -277,7 +346,7 @@ def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.
 
             # extra_args > 0
             args_msg = [
-                "{}={}".format(name, arg)
+                f"{name}={arg}"
                 for name, arg in zip(kwonly_args[:extra_args], args[-extra_args:])
             ]
             args_msg = ", ".join(args_msg)
@@ -295,3 +364,30 @@ def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.
         return _inner_deprecate_positional_args(func)
 
     return _inner_deprecate_positional_args
+
+
+def _transpose_by_block(dask_array: DaskArray) -> DaskArray:
+    import dask.array as da
+
+    b = dask_array.blocks
+    b_raveled = b.ravel()
+    block_layout = np.zeros(b.shape, dtype=object)
+
+    for i in range(block_layout.size):
+        block_layout.flat[i] = b_raveled[i].map_blocks(
+            lambda x: x.T, chunks=b_raveled[i].chunks[::-1]
+        )
+
+    return da.block(block_layout.T.tolist())
+
+
+def _safe_transpose(x):
+    """Safely transpose x
+
+    This is a workaround for: https://github.com/scipy/scipy/issues/19161
+    """
+
+    if isinstance(x, DaskArray) and issparse(x._meta):
+        return _transpose_by_block(x)
+    else:
+        return x.T

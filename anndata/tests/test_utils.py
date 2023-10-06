@@ -1,11 +1,14 @@
-import pandas as pd
-from scipy import sparse
+from __future__ import annotations
+
 from itertools import repeat
+
+import pandas as pd
 import pytest
+from scipy import sparse
 
 import anndata as ad
-from anndata.utils import import_function, make_index_unique
 from anndata.tests.helpers import gen_typed_df
+from anndata.utils import make_index_unique
 
 
 def test_make_index_unique():
@@ -52,33 +55,3 @@ def test_adata_unique_indices():
 
     pd.testing.assert_index_equal(v.obsm["df"].index, v.obs_names)
     pd.testing.assert_index_equal(v.varm["df"].index, v.var_names)
-
-
-def test_import_function_no_import_error():
-    """/
-    A TypeError is expected if the `write_zarr` function is imported
-    correctly because `write_zarr` requires two arguments.
-    """
-    with pytest.raises(TypeError):
-        write_zarr = import_function("anndata._io.zarr", "write_zarr")
-        write_zarr()
-
-
-def test_import_function_missing_module():
-    """/
-    A ModuleNotFoundError is expected because there is no module called
-    `should_not_exist`.
-    """
-    with pytest.raises(ModuleNotFoundError):
-        some_function = import_function("should_not_exist", "some_function")
-        some_function()
-
-
-def test_import_function_missing_function():
-    """/
-    An AttributeError is expected because the `anndata` module exists but it
-    does not export a function called `some_function`.
-    """
-    with pytest.raises(AttributeError):
-        some_function = import_function("anndata", "some_function")
-        some_function()
