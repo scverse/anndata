@@ -264,7 +264,7 @@ def try_unifying_dtype(
                 dtypes.add(dtype)
                 ordered = ordered | dtype.ordered
             elif not pd.isnull(dtype):
-                return False
+                return None
         if len(dtypes) > 0 and not ordered:
             categories = reduce(
                 lambda x, y: x.union(y),
