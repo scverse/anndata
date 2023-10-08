@@ -1219,6 +1219,32 @@ def test_concat_ordered_categoricals_retained():
     assert c.obs["cat_ordered"].cat.ordered
 
 
+def test_concat_categorical_dtype_promotion():
+    """https://github.com/scverse/anndata/issues/1170
+
+    When concatenating categorical with other dtype, defer to pandas.
+    """
+    a = AnnData(
+        np.ones((3, 3)),
+        obs=pd.DataFrame(
+            {"col": pd.Categorical(["a", "a", "b"])},
+            index=[f"cell_{i:02d}" for i in range(3)],
+        ),
+    )
+    b = AnnData(
+        np.ones((3, 3)),
+        obs=pd.DataFrame(
+            {"col": ["c", "c", "c"]},
+            index=[f"cell_{i:02d}" for i in range(3, 6)],
+        ),
+    )
+
+    result = concat([a, b])
+    expected = pd.concat([a.obs, b.obs])
+
+    assert_equal(result.obs, expected)
+
+
 def test_bool_promotion():
     np_bool = AnnData(
         np.ones((5, 1)),
