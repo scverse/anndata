@@ -1262,7 +1262,6 @@ def concat(
     concat_annot = concat_with_unified_dtypes(
         [getattr(a, dim) for a in adatas],
         join=join,
-        ignore_index=True,
     )
     concat_annot.index = concat_indices
     if label is not None:
