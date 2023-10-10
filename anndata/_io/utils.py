@@ -213,7 +213,7 @@ def report_read_key_on_error(func):
 
 def report_write_key_on_error(func):
     """\
-    A decorator for hdf6/zarr element writing which makes keys involved in errors get reported.
+    A decorator for hdf5/zarr element writing which makes keys involved in errors get reported.
 
     Example
     -------
