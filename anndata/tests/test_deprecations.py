@@ -38,26 +38,24 @@ def test_get_obsvar_array_warn(adata):
         adata._get_var_array("s1")
 
 
-# TODO: Why doesn’t this mark work?
-# @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_get_obsvar_array(adata):
-    with pytest.warns(DeprecationWarning):  # Just to hide warnings
-        assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
-        assert np.allclose(
-            adata._get_obs_array("a", layer="x2"),
-            adata.obs_vector("a", layer="x2"),
-        )
-        assert np.allclose(
-            adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
-        )
-        assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
-        assert np.allclose(
-            adata._get_var_array("s1", layer="x2"),
-            adata.var_vector("s1", layer="x2"),
-        )
-        assert np.allclose(
-            adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
-        )
+    assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
+    assert np.allclose(
+        adata._get_obs_array("a", layer="x2"),
+        adata.obs_vector("a", layer="x2"),
+    )
+    assert np.allclose(
+        adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
+    )
+    assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
+    assert np.allclose(
+        adata._get_var_array("s1", layer="x2"),
+        adata.var_vector("s1", layer="x2"),
+    )
+    assert np.allclose(
+        adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
+    )
 
 
 def test_obsvar_vector_Xlayer(adata):
@@ -123,7 +121,7 @@ def test_deprecated_read(tmp_path):
     memory.write_h5ad(tmp_path / "file.h5ad")
 
     with pytest.warns(FutureWarning, match="`anndata.read` is deprecated"):
-        from_disk = ad.read_h5ad(tmp_path / "file.h5ad")
+        from_disk = ad.read(tmp_path / "file.h5ad")
 
     assert_equal(memory, from_disk)
 

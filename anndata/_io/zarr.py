@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
@@ -9,19 +10,13 @@ import pandas as pd
 import zarr
 from scipy import sparse
 
-from anndata._warnings import OldFormatWarning
+from anndata._warnings import ExperimentalFeatureWarning, OldFormatWarning
 
 from .._core.anndata import AnnData
-from ..compat import (
-    _clean_uns,
-    _from_fixed_length_strings,
-)
+from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
-from .utils import (
-    _read_legacy_raw,
-    report_read_key_on_error,
-)
+from .utils import _read_legacy_raw, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -74,13 +69,15 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            return AnnData(
-                **{
-                    k: read_dispatched(v, callback)
-                    for k, v in elem.items()
-                    if not k.startswith("raw.")
-                }
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+                return AnnData(
+                    **{
+                        k: read_dispatched(v, callback)
+                        for k, v in elem.items()
+                        if not k.startswith("raw.")
+                    }
+                )
         elif elem_name.startswith("/raw."):
             return None
         elif elem_name in {"/obs", "/var"}:

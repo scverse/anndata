@@ -153,7 +153,9 @@ def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
 
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
-    adata = AnnData(**d)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
+        adata = AnnData(**d)
 
     # Backwards compat to <0.7
     if isinstance(f["obs"], h5py.Dataset):

@@ -1,13 +1,20 @@
 """Tests related to awkward arrays"""
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import pytest
 
 import anndata
-from anndata import AnnData, ImplicitModificationWarning, read_h5ad
+from anndata import (
+    AnnData,
+    ExperimentalFeatureWarning,
+    ImplicitModificationWarning,
+    read_h5ad,
+)
 from anndata.compat import awkward as ak
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
 from anndata.utils import dim_len
@@ -95,8 +102,11 @@ def test_set_awkward(field, value, valid):
     """
     adata = gen_adata((10, 20), varm_types=(), obsm_types=(), layers_types=())
 
+    ctx = pytest.warns(ExperimentalFeatureWarning) if field != "uns" else nullcontext()
+
     def _assign():
-        getattr(adata, field)["test"] = value
+        with ctx:
+            getattr(adata, field)["test"] = value
 
     if not valid:
         with pytest.raises(ValueError):
@@ -109,7 +119,9 @@ def test_set_awkward(field, value, valid):
 def test_copy(key):
     """Check that modifying a copy does not modify the original"""
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
-    getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
+    ctx = pytest.warns(ExperimentalFeatureWarning) if key != "uns" else nullcontext()
+    with ctx:
+        getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
     adata_copy = adata.copy()
     getattr(adata_copy, key)["awk"]["c"] = np.full((3, 1), 4)
     getattr(adata_copy, key)["awk"]["d"] = np.full((3, 1), 5)
@@ -128,7 +140,8 @@ def test_copy(key):
 def test_view(key):
     """Check that modifying a view does not modify the original"""
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
-    getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
+    with pytest.warns(ExperimentalFeatureWarning):
+        getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
     adata_view = adata[:2, :2]
 
     with pytest.warns(ImplicitModificationWarning, match="initializing view as actual"):
@@ -159,9 +172,10 @@ def test_view_of_awkward_array_with_custom_behavior():
 
     ak.behavior[BEHAVIOUR_ID] = ReversibleArray
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
-    adata.obsm["awk_string"] = ak.with_parameter(
-        ak.Array(["AAA", "BBB", "CCC"]), "__list__", BEHAVIOUR_ID
-    )
+    with pytest.warns(ExperimentalFeatureWarning):
+        adata.obsm["awk_string"] = ak.with_parameter(
+            ak.Array(["AAA", "BBB", "CCC"]), "__list__", BEHAVIOUR_ID
+        )
     adata_view = adata[:2]
 
     with pytest.raises(NotImplementedError):
@@ -370,7 +384,13 @@ def test_concat_mixed_types(key, arrays, expected, join):
                     tmp_adata.obs_names if key == "obsm" else tmp_adata.var_names,
                     inplace=True,
                 )
-            getattr(tmp_adata, key)["test"] = a
+            ctx = (
+                pytest.warns(ExperimentalFeatureWarning)
+                if isinstance(a, ak.Array)
+                else nullcontext()
+            )
+            with ctx:
+                getattr(tmp_adata, key)["test"] = a
 
         to_concat.append(tmp_adata)
 
@@ -379,6 +399,12 @@ def test_concat_mixed_types(key, arrays, expected, join):
             anndata.concat(to_concat, axis=axis, join=join)
     else:
         print(to_concat)
-        result_adata = anndata.concat(to_concat, axis=axis, join=join)
+        ctx = (
+            pytest.warns(ExperimentalFeatureWarning)
+            if join == "outer"
+            else nullcontext()
+        )
+        with ctx:
+            result_adata = anndata.concat(to_concat, axis=axis, join=join)
         result = getattr(result_adata, key).get("test", None)
         assert_equal(expected, result, exact=True)

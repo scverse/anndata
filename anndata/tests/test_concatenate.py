@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
+from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
 from itertools import chain, permutations, product
@@ -14,7 +15,7 @@ from boltons.iterutils import default_exit, remap, research
 from numpy import ma
 from scipy import sparse
 
-from anndata import AnnData, Raw, concat
+from anndata import AnnData, ExperimentalFeatureWarning, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
 from anndata.compat import AwkArray, DaskArray
@@ -29,6 +30,10 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 from anndata.utils import asarray
+
+mark_legacy_concatenate = pytest.mark.filterwarnings(
+    r"ignore:The AnnData\.concatenate method is deprecated:FutureWarning"
+)
 
 
 @singledispatch
@@ -145,9 +150,7 @@ def test_concat_interface_errors():
         concat([])
 
 
-@pytest.mark.filterwarnings(
-    r"ignore:The AnnData\.concatenate method is deprecated:FutureWarning"
-)
+@mark_legacy_concatenate
 @pytest.mark.parametrize(
     ["concat_func", "backwards_compat"],
     [
@@ -176,6 +179,7 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
     assert_equal(result[orig.obs_names].copy(), orig)
 
 
+@mark_legacy_concatenate
 def test_concatenate_dense():
     # dense data
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -251,6 +255,7 @@ def test_concatenate_dense():
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
 
 
+@mark_legacy_concatenate
 def test_concatenate_layers(array_type, join_type):
     adatas = []
     for _ in range(5):
@@ -310,6 +315,7 @@ def obsm_adatas():
     ]
 
 
+@mark_legacy_concatenate
 def test_concatenate_obsm_inner(obsm_adatas):
     adata = obsm_adatas[0].concatenate(obsm_adatas[1:], join="inner")
 
@@ -339,6 +345,7 @@ def test_concatenate_obsm_inner(obsm_adatas):
     pd.testing.assert_frame_equal(true_df, cur_df)
 
 
+@mark_legacy_concatenate
 def test_concatenate_obsm_outer(obsm_adatas, fill_val):
     outer = obsm_adatas[0].concatenate(
         obsm_adatas[1:], join="outer", fill_value=fill_val
@@ -409,6 +416,7 @@ def test_concat_annot_join(obsm_adatas, join_type):
     )
 
 
+@mark_legacy_concatenate
 def test_concatenate_layers_misaligned(array_type, join_type):
     adatas = []
     for _ in range(5):
@@ -422,6 +430,7 @@ def test_concatenate_layers_misaligned(array_type, join_type):
     assert_equal(merged.X, merged.layers["a"])
 
 
+@mark_legacy_concatenate
 def test_concatenate_layers_outer(array_type, fill_val):
     # Testing that issue #368 is fixed
     a = AnnData(
@@ -437,6 +446,7 @@ def test_concatenate_layers_outer(array_type, fill_val):
     )
 
 
+@mark_legacy_concatenate
 def test_concatenate_fill_value(fill_val):
     def get_obs_els(adata):
         return {
@@ -482,6 +492,7 @@ def test_concatenate_fill_value(fill_val):
         ptr += orig.n_obs
 
 
+@mark_legacy_concatenate
 def test_concatenate_dense_duplicates():
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
     X2 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -533,6 +544,7 @@ def test_concatenate_dense_duplicates():
     ]
 
 
+@mark_legacy_concatenate
 def test_concatenate_sparse():
     # sparse data
     from scipy.sparse import csr_matrix
@@ -578,6 +590,7 @@ def test_concatenate_sparse():
     ]
 
 
+@mark_legacy_concatenate
 def test_concatenate_mixed():
     X1 = sparse.csr_matrix(np.array([[1, 2, 0], [4, 0, 6], [0, 0, 9]]))
     X2 = sparse.csr_matrix(np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]]))
@@ -613,6 +626,7 @@ def test_concatenate_mixed():
     assert isinstance(adata_all.layers["counts"], sparse.csr_matrix)
 
 
+@mark_legacy_concatenate
 def test_concatenate_with_raw():
     # dense data
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -702,8 +716,9 @@ def test_concatenate_awkward(join_type):
         ]
     )
 
-    adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
-    adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
+    with pytest.warns(ExperimentalFeatureWarning):
+        adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
+        adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
 
     if join_type == "inner":
         expected = ak.Array(
@@ -746,7 +761,13 @@ def test_concatenate_awkward(join_type):
             ]
         )
 
-    result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
+    ctx = (
+        pytest.warns(ExperimentalFeatureWarning)
+        if join_type == "outer"
+        else nullcontext()
+    )
+    with ctx:
+        result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
 
     assert_equal(expected, result)
 
@@ -766,11 +787,12 @@ def test_awkward_does_not_mix(join_type, other):
         [[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]]
     )
 
-    adata_a = AnnData(
-        np.zeros((2, 3), dtype=float),
-        obs=pd.DataFrame(index=list("ab")),
-        obsm={"val": awk},
-    )
+    with pytest.warns(ExperimentalFeatureWarning):
+        adata_a = AnnData(
+            np.zeros((2, 3), dtype=float),
+            obs=pd.DataFrame(index=list("ab")),
+            obsm={"val": awk},
+        )
     adata_b = AnnData(
         np.zeros((3, 3), dtype=float),
         obs=pd.DataFrame(index=list("cde")),
@@ -1318,14 +1340,24 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
     dim = ("obs", "var")[axis]
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
-    result = concat(
-        {"a": a, "b": b},
-        axis=axis,
-        join=join_type,
-        merge=merge_strategy,
-        pairwise=True,
-        index_unique="-",
+
+    ctx = (
+        pytest.warns(
+            ExperimentalFeatureWarning,
+            match=r"Outer joins on awkward.Arrays will have different return values in the future.",
+        )
+        if join_type == "outer"
+        else nullcontext()
     )
+    with ctx:
+        result = concat(
+            {"a": a, "b": b},
+            axis=axis,
+            join=join_type,
+            merge=merge_strategy,
+            pairwise=True,
+            index_unique="-",
+        )
     assert result.shape == expected_size
 
     if join_type == "outer":
@@ -1374,6 +1406,7 @@ def test_concat_outer_aligned_mapping(elem):
     check_filled_like(result, elem_name=f"obsm/{elem}")
 
 
+@mark_legacy_concatenate
 def test_concatenate_size_0_dim():
     # https://github.com/scverse/anndata/issues/526
 

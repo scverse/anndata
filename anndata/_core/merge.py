@@ -4,6 +4,7 @@ Code for merging/ concatenating AnnData objects.
 from __future__ import annotations
 
 import typing
+import warnings
 from collections import OrderedDict
 from collections.abc import (
     Callable,
@@ -13,7 +14,7 @@ from collections.abc import (
     MutableSet,
     Sequence,
 )
-from functools import reduce, singledispatch
+from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
 from typing import Any, Literal, TypeVar
@@ -814,7 +815,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
 
 
-def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
+def inner_concat_aligned_mapping(mappings, *, reindexers=None, index=None, axis=0):
     result = {}
 
     for k in intersect_keys(mappings):
@@ -874,7 +875,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
                 "Cannot concatenate an AwkwardArray with other array types."
             )
         warn_once(
-            "Outer joins on awkward.Arrays will have different return values in the future."
+            "Outer joins on awkward.Arrays will have different return values in the future. "
             "For details, and to offer input, please see:\n\n\t"
             "https://github.com/scverse/anndata/issues/898",
             ExperimentalFeatureWarning,
@@ -902,7 +903,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
 
 
 def outer_concat_aligned_mapping(
-    mappings, reindexers=None, index=None, fill_value=None, axis=0
+    mappings, *, reindexers=None, index=None, axis=0, fill_value=None
 ):
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
@@ -1267,37 +1268,30 @@ def concat(
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
-        layers = inner_concat_aligned_mapping(
-            [a.layers for a in adatas], axis=axis, reindexers=reindexers
-        )
-        concat_mapping = inner_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
-        )
-        if pairwise:
-            concat_pairwise = concat_pairwise_mapping(
-                mappings=[getattr(a, f"{dim}p") for a in adatas],
-                shapes=[a.shape[axis] for a in adatas],
-                join_keys=intersect_keys,
-            )
-        else:
-            concat_pairwise = {}
+        concat_aligned_mapping = inner_concat_aligned_mapping
+        join_keys = intersect_keys
     elif join == "outer":
-        layers = outer_concat_aligned_mapping(
-            [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
+        concat_aligned_mapping = partial(
+            outer_concat_aligned_mapping, fill_value=fill_value
         )
-        concat_mapping = outer_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas],
-            index=concat_indices,
-            fill_value=fill_value,
+        join_keys = union_keys
+    else:
+        assert False
+
+    layers = concat_aligned_mapping(
+        [a.layers for a in adatas], axis=axis, reindexers=reindexers
+    )
+    concat_mapping = concat_aligned_mapping(
+        [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
+    )
+    if pairwise:
+        concat_pairwise = concat_pairwise_mapping(
+            mappings=[getattr(a, f"{dim}p") for a in adatas],
+            shapes=[a.shape[axis] for a in adatas],
+            join_keys=join_keys,
         )
-        if pairwise:
-            concat_pairwise = concat_pairwise_mapping(
-                mappings=[getattr(a, f"{dim}p") for a in adatas],
-                shapes=[a.shape[axis] for a in adatas],
-                join_keys=union_keys,
-            )
-        else:
-            concat_pairwise = {}
+    else:
+        concat_pairwise = {}
 
     # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
     alt_mapping = merge(
@@ -1340,17 +1334,19 @@ def concat(
             "not concatenating `.raw` attributes.",
             UserWarning,
         )
-    return AnnData(
-        **{
-            "X": X,
-            "layers": layers,
-            dim: concat_annot,
-            alt_dim: alt_annot,
-            f"{dim}m": concat_mapping,
-            f"{alt_dim}m": alt_mapping,
-            f"{dim}p": concat_pairwise,
-            f"{alt_dim}p": alt_pairwise,
-            "uns": uns,
-            "raw": raw,
-        }
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
+        return AnnData(
+            **{
+                "X": X,
+                "layers": layers,
+                dim: concat_annot,
+                alt_dim: alt_annot,
+                f"{dim}m": concat_mapping,
+                f"{alt_dim}m": alt_mapping,
+                f"{dim}p": concat_pairwise,
+                f"{alt_dim}p": alt_pairwise,
+                "uns": uns,
+                "raw": raw,
+            }
+        )
