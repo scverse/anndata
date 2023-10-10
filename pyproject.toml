@@ -75,6 +75,7 @@ doc = [
     "awkward>=2.0.7",
     "IPython",                          # For syntax highlighting in notebooks
     "myst_parser",
+    "sphinx_design>=0.5.0",
 ]
 test = [
     "loompy>=3.0.5",
@@ -87,6 +88,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy",
+    "httpx", # For data downloading
     "dask[array,distributed]",
     "awkward>=2.3",
     "pytest_memray",
