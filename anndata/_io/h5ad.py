@@ -29,6 +29,7 @@ from ..compat import (
 )
 from ..experimental import read_dispatched
 from .specs import read_elem, write_elem
+from .specs.registry import IOSpec, write_spec
 from .utils import (
     H5PY_V3,
     _read_legacy_raw,
@@ -110,6 +111,7 @@ def write_h5ad(
 
 
 @report_write_key_on_error
+@write_spec(IOSpec("array", "0.2.0"))
 def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
     real_key = None  # Flag for if temporary key was used
     if key in f:

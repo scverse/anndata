@@ -206,7 +206,9 @@ def as_cp_sparse(x) -> CupySparseMatrix:
         return cpsparse.csr_matrix(x)
 
 
-def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
+def unify_dtypes(
+    dfs: Iterable[pd.DataFrame], *, prune: bool = True
+) -> list[pd.DataFrame]:
     """
     Attempts to unify datatypes from multiple dataframes.
 
@@ -237,7 +239,7 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
             if col in df:
                 df[col] = df[col].astype(dtype)
 
-    return dfs
+    return [df for df in dfs if len(df)] if prune else dfs
 
 
 def try_unifying_dtype(
@@ -1239,7 +1241,9 @@ def concat(
         [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(
+            label_col.map(str, na_action=None), sep=index_unique
+        )
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = merge_indices(

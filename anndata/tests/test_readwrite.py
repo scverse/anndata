@@ -430,7 +430,7 @@ def test_readloom_deprecations(tmp_path):
         depr_result = ad.read_loom(loom_pth, obsm_names=obsm_mapping)
     actual_result = ad.read_loom(loom_pth, obsm_mapping=obsm_mapping)
     assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match="ambiguous"):
+    with pytest.raises(ValueError, match="ambiguous"), pytest.warns(FutureWarning):
         ad.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
 
     # varm_names -> varm_mapping
@@ -439,7 +439,7 @@ def test_readloom_deprecations(tmp_path):
         depr_result = ad.read_loom(loom_pth, varm_names=varm_mapping)
     actual_result = ad.read_loom(loom_pth, varm_mapping=varm_mapping)
     assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match="ambiguous"):
+    with pytest.raises(ValueError, match="ambiguous"), pytest.warns(FutureWarning):
         ad.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
 
     # positional -> keyword

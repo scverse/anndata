@@ -88,9 +88,10 @@ test = [
     "joblib",
     "boltons",
     "scanpy",
-    "httpx", # For data downloading
+    "httpx",                   # For data downloading
     "dask[array,distributed]",
     "awkward>=2.3",
+    "pyarrow",                 # For non-deprecated awkward array functionality
     "pytest_memray",
 ]
 gpu = ["cupy"]
@@ -104,13 +105,31 @@ version-file = "anndata/_version.py"
 
 [tool.coverage.run]
 source = ["anndata"]
-omit = ["setup.py", "versioneer.py", "anndata/_version.py", "**/test_*.py"]
+omit = ["anndata/_version.py", "**/test_*.py"]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules"
+addopts = [
+    "--strict-markers",
+    "--doctest-modules",
+    "--ignore=anndata/core.py",      # deprecated
+    "--ignore=anndata/readwrite.py", # deprecated
+]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]
-filterwarnings = ['ignore:X\.dtype being converted to np.float32:FutureWarning']
+filterwarnings = [
+    'error',
+    # We still test deprecated functions
+    'ignore:AnnData\.concatenate method is deprecated:FutureWarning',
+    'ignore:`anndata\.read` is deprecated:FutureWarning',
+    # We test our experimental features too
+    'ignore::anndata._warnings.ExperimentalFeatureWarning',
+    # TODO: catch these in tests instead, makes sure they aren’t triggered accidentally
+    'ignore::anndata._warnings.ImplicitModificationWarning',
+    'ignore:.*names are not unique. To make them unique:UserWarning',
+    'ignore::scipy.sparse._base.SparseEfficiencyWarning',
+    # Third party issues
+    'ignore::numba.core.errors.NumbaDeprecationWarning', # we don’t import numba
+]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
 markers = ["gpu: mark test to run on GPU"]

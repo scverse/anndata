@@ -196,8 +196,8 @@ def test_view_of_awkward_array_with_custom_behavior():
             ]
         ),
         # categorical array
-        ak.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
-        ak.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
+        ak.str.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
+        ak.str.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
         # tyical record type with AIRR data consisting of different dtypes
         ak.Array(
             [
