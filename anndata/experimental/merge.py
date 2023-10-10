@@ -1,18 +1,14 @@
+from __future__ import annotations
+
 import os
 import shutil
+from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
 from functools import singledispatch
 from pathlib import Path
 from typing import (
     Any,
     Callable,
-    Collection,
-    Iterable,
     Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
-    MutableMapping,
 )
 
 import numpy as np
@@ -34,7 +30,7 @@ from .._core.merge import (
     resolve_merge_strategy,
     unify_dtypes,
 )
-from .._core.sparse_dataset import SparseDataset
+from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched
@@ -66,7 +62,7 @@ def _indices_equal(indices: Iterable[pd.Index]) -> bool:
 
 
 def _gen_slice_to_append(
-    datasets: Sequence[SparseDataset],
+    datasets: Sequence[BaseCompressedSparseDataset],
     reindexers,
     max_loaded_elems: int,
     axis=0,
@@ -104,12 +100,12 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
     raise NotImplementedError("This is not yet implemented.")
 
 
-@as_group.register
-def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+@as_group.register(os.PathLike)
+def _(store: os.PathLike, *args, **kwargs) -> ZarrGroup | H5Group:
     if store.suffix == ".h5ad":
         import h5py
 
@@ -119,8 +115,8 @@ def _(store: os.PathLike, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
     return zarr.open_group(store, *args, **kwargs)
 
 
-@as_group.register
-def _(store: str, *args, **kwargs) -> Union[ZarrGroup, H5Group]:
+@as_group.register(str)
+def _(store: str, *args, **kwargs) -> ZarrGroup | H5Group:
     return as_group(Path(store), *args, **kwargs)
 
 
@@ -135,15 +131,15 @@ def _(store, *args, **kwargs):
 ###################
 
 
-def read_as_backed(group: Union[ZarrGroup, H5Group]):
+def read_as_backed(group: ZarrGroup | H5Group):
     """
     Read the group until
-    SparseDataset, Array or EAGER_TYPES are encountered.
+    BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
     """
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in SPARSE_MATRIX:
-            return SparseDataset(elem)
+            return sparse_dataset(elem)
         elif iospec.encoding_type in EAGER_TYPES:
             return read_elem(elem)
         elif iospec.encoding_type == "array":
@@ -156,7 +152,7 @@ def read_as_backed(group: Union[ZarrGroup, H5Group]):
     return read_dispatched(group, callback=callback)
 
 
-def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
+def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
     index_key = df.attrs["_index"]
     return pd.Index(read_elem(df[index_key]))
 
@@ -167,9 +163,9 @@ def _df_index(df: Union[ZarrGroup, H5Group]) -> pd.Index:
 
 
 def write_concat_dense(
-    arrays: Sequence[Union[ZarrArray, H5Array]],
-    output_group: Union[ZarrGroup, H5Group],
-    output_path: Union[ZarrGroup, H5Group],
+    arrays: Sequence[ZarrArray | H5Array],
+    output_group: ZarrGroup | H5Group,
+    output_path: ZarrGroup | H5Group,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
     fill_value=None,
@@ -195,9 +191,9 @@ def write_concat_dense(
 
 
 def write_concat_sparse(
-    datasets: Sequence[SparseDataset],
-    output_group: Union[ZarrGroup, H5Group],
-    output_path: Union[ZarrGroup, H5Group],
+    datasets: Sequence[BaseCompressedSparseDataset],
+    output_group: ZarrGroup | H5Group,
+    output_path: ZarrGroup | H5Group,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer = None,
@@ -207,7 +203,7 @@ def write_concat_sparse(
     Writes and concatenates sparse datasets into a single output dataset.
 
     Args:
-        datasets (Sequence[SparseDataset]): A sequence of SparseDataset objects to be concatenated.
+        datasets (Sequence[BaseCompressedSparseDataset]): A sequence of BaseCompressedSparseDataset objects to be concatenated.
         output_group (Union[ZarrGroup, H5Group]): The output group where the concatenated dataset will be written.
         output_path (Union[ZarrGroup, H5Group]): The output path where the concatenated dataset will be written.
         max_loaded_elems (int): The maximum number of sparse elements to load at once.
@@ -227,7 +223,7 @@ def write_concat_sparse(
     init_elem = next(elems)
     write_elem(output_group, output_path, init_elem)
     del init_elem
-    out_dataset: SparseDataset = read_as_backed(output_group[output_path])
+    out_dataset: BaseCompressedSparseDataset = read_as_backed(output_group[output_path])
     for temp_elem in elems:
         out_dataset.append(temp_elem)
         del temp_elem
@@ -235,7 +231,7 @@ def write_concat_sparse(
 
 def _write_concat_mappings(
     mappings,
-    output_group: Union[ZarrGroup, H5Group],
+    output_group: ZarrGroup | H5Group,
     keys,
     path,
     max_loaded_elems,
@@ -269,7 +265,7 @@ def _write_concat_mappings(
 
 
 def _write_concat_arrays(
-    arrays: Sequence[Union[ZarrArray, H5Array, SparseDataset]],
+    arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
     output_group,
     output_path,
     max_loaded_elems,
@@ -291,9 +287,9 @@ def _write_concat_arrays(
         else:
             raise NotImplementedError("Cannot reindex arrays with outer join.")
 
-    if isinstance(init_elem, SparseDataset):
+    if isinstance(init_elem, BaseCompressedSparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
-        if all(a.format_str == expected_sparse_fmt for a in arrays):
+        if all(a.format == expected_sparse_fmt for a in arrays):
             write_concat_sparse(
                 arrays,
                 output_group,
@@ -305,7 +301,7 @@ def _write_concat_arrays(
             )
         else:
             raise NotImplementedError(
-                f"Concat of following not supported: {[a.format_str for a in arrays]}"
+                f"Concat of following not supported: {[a.format for a in arrays]}"
             )
     else:
         write_concat_dense(
@@ -314,7 +310,7 @@ def _write_concat_arrays(
 
 
 def _write_concat_sequence(
-    arrays: Sequence[Union[pd.DataFrame, SparseDataset, H5Array, ZarrArray]],
+    arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
     output_group,
     output_path,
     max_loaded_elems,
@@ -349,7 +345,8 @@ def _write_concat_sequence(
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, (pd.DataFrame, SparseDataset, H5Array, ZarrArray)) for a in arrays
+        isinstance(a, (pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray))
+        for a in arrays
     ):
         _write_concat_arrays(
             arrays,
@@ -398,26 +395,21 @@ def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col
 
 
 def concat_on_disk(
-    in_files: Union[
-        Collection[Union[str, os.PathLike]],
-        MutableMapping[str, Union[str, os.PathLike]],
-    ],
-    out_file: Union[str, os.PathLike],
+    in_files: Collection[str | os.PathLike] | MutableMapping[str, str | os.PathLike],
+    out_file: str | os.PathLike,
     *,
     overwrite: bool = False,
     max_loaded_elems: int = 100_000_000,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[
-        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
-    ] = None,
-    uns_merge: Union[
-        StrategiesLiteral, Callable[[Collection[Mapping]], Mapping], None
-    ] = None,
-    label: Optional[str] = None,
-    keys: Optional[Collection[str]] = None,
-    index_unique: Optional[str] = None,
-    fill_value: Optional[Any] = None,
+    merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
+    uns_merge: StrategiesLiteral
+    | Callable[[Collection[Mapping]], Mapping]
+    | None = None,
+    label: str | None = None,
+    keys: Collection[str] | None = None,
+    index_unique: str | None = None,
+    fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> None:
     """Concatenates multiple AnnData objects along a specified axis using their
@@ -435,6 +427,7 @@ def concat_on_disk(
     arrays use the max_loaded_elems argument; for dense arrays
     see the Dask documentation, as the Dask concatenation function is used
     to concatenate dense arrays in this function
+
     Params
     ------
     in_files

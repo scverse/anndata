@@ -1,22 +1,20 @@
-from typing import Mapping
+from __future__ import annotations
+
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
 
-from anndata.experimental.merge import concat_on_disk, as_group
-from anndata.experimental import write_elem, read_elem
-
 from anndata import AnnData, concat
+from anndata.experimental import read_elem, write_elem
+from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
 )
-
-
 from anndata.utils import asarray
-
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
     obsm_types=(

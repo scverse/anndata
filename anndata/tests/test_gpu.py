@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 from scipy import sparse
 
@@ -16,8 +18,8 @@ def test_gpu():
 
 @pytest.mark.gpu
 def test_adata_raw_gpu():
-    from cupyx.scipy import sparse as cupy_sparse
     import cupy as cp
+    from cupyx.scipy import sparse as cupy_sparse
 
     adata = AnnData(
         X=cupy_sparse.random(500, 50, density=0.01, format="csr", dtype=cp.float32)
@@ -28,8 +30,8 @@ def test_adata_raw_gpu():
 
 @pytest.mark.gpu
 def test_raw_gpu():
-    from cupyx.scipy import sparse as cupy_sparse
     import cupy as cp
+    from cupyx.scipy import sparse as cupy_sparse
 
     adata = AnnData(
         X=cupy_sparse.random(500, 50, density=0.01, format="csr", dtype=cp.float32)
