@@ -166,7 +166,10 @@ class AlignedViewMixin:
             new_mapping[key] = value
 
     def __delitem__(self, key: str):
-        _ = key in self  # Make sure it exists before bothering with a copy
+        if key not in self:
+            raise KeyError(
+                "'{key!r}' not found in view of {self.attrname}"
+            )  # Make sure it exists before bothering with a copy
         warnings.warn(
             f"Removing element `.{self.attrname}['{key}']` of view, "
             "initializing view as actual.",
