@@ -13,6 +13,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+from packaging.version import parse as parse_version
 from scipy.sparse import csc_matrix, csr_matrix
 
 from .._core.file_backing import to_memory
@@ -596,7 +597,15 @@ def concat_on_disk(
         [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        if parse_version(pd.__version__) >= parse_version("2.0"):
+            # Argument added in pandas 2.0
+            concat_indices = concat_indices.str.cat(
+                label_col.map(str, na_action="ignore"), sep=index_unique
+            )
+        else:
+            concat_indices = concat_indices.str.cat(
+                label_col.map(str), sep=index_unique
+            )
 
     # Resulting indices for {dim} and {alt_dim}
     concat_indices = pd.Index(concat_indices)

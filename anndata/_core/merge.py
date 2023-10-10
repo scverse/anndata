@@ -22,6 +22,7 @@ from warnings import filterwarnings, warn
 import numpy as np
 import pandas as pd
 from natsort import natsorted
+from packaging.version import parse as parse_version
 from scipy import sparse
 from scipy.sparse import spmatrix
 
@@ -1239,9 +1240,15 @@ def concat(
         [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(
-            label_col.map(str, na_action="ignore"), sep=index_unique
-        )
+        if parse_version(pd.__version__) >= parse_version("2.0"):
+            # Argument added in pandas 2.0
+            concat_indices = concat_indices.str.cat(
+                label_col.map(str, na_action="ignore"), sep=index_unique
+            )
+        else:
+            concat_indices = concat_indices.str.cat(
+                label_col.map(str), sep=index_unique
+            )
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = merge_indices(
