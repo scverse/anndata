@@ -172,7 +172,10 @@ def write_concat_dense(
     """
     import dask.array as da
 
-    darrays = (da.from_array(a, chunks="auto") for a in arrays)
+    darrays = (
+        da.from_array(a, chunks="auto" if a.chunks is None else a.chunks)
+        for a in arrays
+    )
 
     res = da.concatenate(
         [
