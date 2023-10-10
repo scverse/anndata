@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Callable
+from typing import Callable, Literal
 from warnings import warn
 
 from packaging import version
 import h5py
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from anndata.compat import H5Group, ZarrGroup
+from anndata.compat import H5Group, ZarrGroup, add_note
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
@@ -164,6 +164,21 @@ def _get_parent(elem):
     return parent
 
 
+def re_raise_error(e, elem, key, op=Literal["read", "writ"]):
+    if any(
+        f"Error raised while {op}ing key" in note
+        for note in getattr(e, "__notes__", [])
+    ):
+        raise
+    else:
+        parent = _get_parent(elem)
+        add_note(
+            e,
+            f"Error raised while {op}ing key {key!r} of {type(elem)} to " f"{parent}",
+        )
+        raise e
+
+
 def report_read_key_on_error(func):
     """\
     A decorator for zarr element reading which makes keys involved in errors get reported.
@@ -179,16 +194,6 @@ def report_read_key_on_error(func):
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
 
-    def re_raise_error(e, elem):
-        if isinstance(e, AnnDataReadError):
-            raise e
-        else:
-            parent = _get_parent(elem)
-            raise AnnDataReadError(
-                f"Above error raised while reading key {elem.name!r} of "
-                f"type {type(elem)} from {parent}."
-            ) from e
-
     @wraps(func)
     def func_wrapper(*args, **kwargs):
         from anndata._io.specs import Reader
@@ -200,7 +205,7 @@ def report_read_key_on_error(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            re_raise_error(e, elem)
+            re_raise_error(e, elem, elem.name, "read")
 
     return func_wrapper
 
@@ -220,17 +225,6 @@ def report_write_key_on_error(func):
     >>> write_arr(z, "X", X)  # doctest: +SKIP
     """
 
-    def re_raise_error(e, elem, key):
-        if "Above error raised while writing key" in format(e):
-            raise
-        else:
-            parent = _get_parent(elem)
-            raise type(e)(
-                f"{e}\n\n"
-                f"Above error raised while writing key {key!r} of {type(elem)} "
-                f"to {parent}"
-            ) from e
-
     @wraps(func)
     def func_wrapper(*args, **kwargs):
         from anndata._io.specs import Writer
@@ -244,7 +238,7 @@ def report_write_key_on_error(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            re_raise_error(e, elem, key)
+            re_raise_error(e, elem, key, "writ")
 
     return func_wrapper
 

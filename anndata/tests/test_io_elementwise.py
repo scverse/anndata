@@ -15,10 +15,14 @@ import zarr
 import anndata as ad
 from anndata._io.specs import _REGISTRY, get_spec, IOSpec
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.utils import AnnDataReadError
 from anndata.compat import _read_attr, H5Group, ZarrGroup
 from anndata._io.specs import write_elem, read_elem
-from anndata.tests.helpers import assert_equal, gen_adata, as_cupy_type
+from anndata.tests.helpers import (
+    assert_equal,
+    as_cupy_type,
+    pytest_8_raises,
+    gen_adata,
+)
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -134,7 +138,7 @@ def test_io_spec_raw(store):
     assert_equal(from_disk.raw, adata.raw)
 
 
-def test_write_to_root(store):
+def test_write_anndata_to_root(store):
     adata = gen_adata((3, 2))
 
     write_elem(store, "/", adata)
@@ -157,11 +161,9 @@ def test_read_iospec_not_found(store, attribute, value):
     write_elem(store, "/", adata)
     store["obs"].attrs.update({attribute: value})
 
-    with pytest.raises(
-        AnnDataReadError, match=r"while reading key '/(obs)?'"
-    ) as exc_info:
+    with pytest.raises(IORegistryError) as exc_info:
         read_elem(store)
-    msg = str(exc_info.value.__cause__)
+    msg = str(exc_info.value)
 
     assert "No read method registered for IOSpec" in msg
     assert f"{attribute.replace('-', '_')}='{value}'" in msg
@@ -175,9 +177,11 @@ def test_write_io_error(store, obj):
     full_pattern = re.compile(
         rf"No method registered for writing {type(obj)} into .*Group"
     )
-    with pytest.raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
+
+    with pytest_8_raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
         write_elem(store, "/el", obj)
-    msg = str(exc_info.value.__cause__)
+
+    msg = str(exc_info.value)
     assert re.search(full_pattern, msg)
 
 
@@ -187,10 +191,10 @@ def test_categorical_order_type(store):
     write_elem(store, "ordered", cat)
     write_elem(store, "unordered", cat.set_ordered(False))
 
+    assert isinstance(read_elem(store["ordered"]).ordered, bool)
     assert read_elem(store["ordered"]).ordered is True
-    assert type(read_elem(store["ordered"]).ordered) == bool
+    assert isinstance(read_elem(store["unordered"]).ordered, bool)
     assert read_elem(store["unordered"]).ordered is False
-    assert type(read_elem(store["unordered"]).ordered) == bool
 
 
 def test_override_specification():
@@ -208,6 +212,50 @@ def test_override_specification():
         )
         def _(store, key, adata):
             pass
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param({"a": 1}, id="dict"),
+        pytest.param(gen_adata((3, 2)), id="anndata"),
+        pytest.param(sparse.random(5, 3, format="csr", density=0.5), id="csr_matrix"),
+        pytest.param(sparse.random(5, 3, format="csc", density=0.5), id="csc_matrix"),
+        pytest.param(pd.DataFrame({"a": [1, 2, 3]}), id="dataframe"),
+        pytest.param(pd.Categorical(list("aabccedd")), id="categorical"),
+        pytest.param(
+            pd.Categorical(list("aabccedd"), ordered=True), id="categorical-ordered"
+        ),
+        pytest.param(
+            pd.Categorical([1, 2, 1, 3], ordered=True), id="categorical-numeric"
+        ),
+        pytest.param(
+            pd.arrays.IntegerArray(
+                np.ones(5, dtype=int), mask=np.array([True, False, True, False, True])
+            ),
+            id="nullable-integer",
+        ),
+        pytest.param(pd.array([1, 2, 3]), id="nullable-integer-no-nulls"),
+        pytest.param(
+            pd.arrays.BooleanArray(
+                np.random.randint(0, 2, size=5, dtype=bool),
+                mask=np.random.randint(0, 2, size=5, dtype=bool),
+            ),
+            id="nullable-boolean",
+        ),
+        pytest.param(
+            pd.array([True, False, True, True]), id="nullable-boolean-no-nulls"
+        ),
+    ],
+)
+def test_write_to_root(store, value):
+    """
+    Test that elements which are written as groups can we written to the root group.
+    """
+    write_elem(store, "/", value)
+    result = read_elem(store)
+
+    assert_equal(result, value)
 
 
 @pytest.mark.parametrize("consolidated", [True, False])

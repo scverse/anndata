@@ -37,10 +37,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas>=1.1.1",  # pandas <1.1.1 has pandas/issues/35446
+    # pandas <1.1.1 has pandas/issues/35446
+    # pandas 2.1.0rc0 has pandas/issues/54622
+    "pandas >=1.1.1, !=2.1.0rc0",
     "numpy>=1.16.5",  # required by pandas 1.x
     "scipy>1.4",
     "h5py>=3",
+    "exceptiongroup; python_version<'3.11'",
     "natsort",
     "packaging>=20",
     "array_api_compat",
@@ -85,7 +88,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy",
-    "dask[array]",
+    "dask[array,distributed]",
     "awkward>=2.3",
     "pytest_memray",
     "xarray>=2023.1.0",

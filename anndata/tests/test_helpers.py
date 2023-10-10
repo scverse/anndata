@@ -12,8 +12,10 @@ from anndata.tests.helpers import (
     report_name,
     gen_adata,
     asarray,
+    pytest_8_raises,
 )
 from anndata.utils import dim_len
+from anndata.compat import add_note
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -246,3 +248,30 @@ def test_assert_equal_dask_sparse_arrays():
 
     assert_equal(x, y)
     assert_equal(y, x)
+
+
+@pytest.mark.parametrize(
+    "error, match",
+    [
+        (Exception("test"), "test"),
+        (add_note(AssertionError("foo"), "bar"), "bar"),
+        (add_note(add_note(AssertionError("foo"), "bar"), "baz"), "bar"),
+        (add_note(add_note(AssertionError("foo"), "bar"), "baz"), "baz"),
+    ],
+)
+def test_check_error_notes_success(error, match):
+    with pytest_8_raises(Exception, match=match):
+        raise error
+
+
+@pytest.mark.parametrize(
+    "error, match",
+    [
+        (Exception("test"), "foo"),
+        (add_note(AssertionError("foo"), "bar"), "baz"),
+    ],
+)
+def test_check_error_notes_failure(error, match):
+    with pytest.raises(AssertionError):
+        with pytest_8_raises(Exception, match=match):
+            raise error

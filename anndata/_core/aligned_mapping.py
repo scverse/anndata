@@ -246,12 +246,17 @@ class AxisArraysBase(AlignedMapping):
         if (
             hasattr(val, "index")
             and isinstance(val.index, cabc.Collection)
-            and not (val.index == self.dim_names).all()
+            and not val.index.equals(self.dim_names)
         ):
             # Could probably also re-order index if it’s contained
-            raise ValueError(
-                f"value.index does not match parent’s axis {self.axes[0]} names"
-            )
+            try:
+                pd.testing.assert_index_equal(val.index, self.dim_names)
+            except AssertionError as e:
+                msg = f"value.index does not match parent’s axis {self.axes[0]} names:\n{e}"
+                raise ValueError(msg) from None
+            else:
+                msg = "Index.equals and pd.testing.assert_index_equal disagree"
+                raise AssertionError(msg)
         return super()._validate_value(val, key)
 
     @property
