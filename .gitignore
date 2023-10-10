@@ -1,6 +1,7 @@
 # Temp files
 .DS_Store
 *~
+venv/
 
 # Compiled files
 __pycache__/

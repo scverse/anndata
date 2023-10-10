@@ -46,7 +46,7 @@ from .views import (
     as_view,
     _resolve_idxs,
 )
-from .sparse_dataset import SparseDataset
+from .sparse_dataset import sparse_dataset
 from .. import utils
 from ..utils import convert_to_dict, ensure_df_homogeneous, dim_len
 from ..logging import anndata_logger as logger
@@ -58,6 +58,7 @@ from ..compat import (
     CupySparseMatrix,
     _move_adj_mtx,
 )
+from .sparse_dataset import BaseCompressedSparseDataset
 
 
 class StorageType(Enum):
@@ -67,6 +68,7 @@ class StorageType(Enum):
     ZarrArray = ZarrArray
     ZappyArray = ZappyArray
     DaskArray = DaskArray
+    BaseCompressedSparseDataset = BaseCompressedSparseDataset
     CupyArray = CupyArray
     CupySparseMatrix = CupySparseMatrix
 
@@ -609,11 +611,13 @@ class AnnData(AbstractAnnData):
                 self.file.open()
             X = self.file["X"]
             if isinstance(X, h5py.Group):
-                X = SparseDataset(X)
+                X = sparse_dataset(X)
             # This is so that we can index into a backed dense dataset with
             # indices that aren’t strictly increasing
             if self.is_view:
                 X = _subset(X, (self._oidx, self._vidx))
+                if isinstance(X, BaseCompressedSparseDataset):
+                    X = X.to_memory()
         elif self.is_view and self._adata_ref.X is None:
             X = None
         elif self.is_view:
@@ -674,7 +678,7 @@ class AnnData(AbstractAnnData):
                 if self.is_view:
                     X = self.file["X"]
                     if isinstance(X, h5py.Group):
-                        X = SparseDataset(X)
+                        X = sparse_dataset(X)
                     X[oidx, vidx] = value
                 else:
                     self._set_backed("X", value)

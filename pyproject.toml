@@ -91,6 +91,7 @@ test = [
     "dask[array,distributed]",
     "awkward>=2.3",
     "pytest_memray",
+    "xarray>=2023.1.0",
 ]
 gpu = [
     "cupy",

@@ -10,17 +10,21 @@ See the copyright and license note in this directory source code.
 
 # TODO:
 # - think about supporting the COO format
+from abc import ABC
 import collections.abc as cabc
 from itertools import accumulate, chain
+from pathlib import Path
 from typing import Union, NamedTuple, Tuple, Sequence, Iterable, Type
-from warnings import warn
 
 import h5py
+import zarr
 import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from ..compat import _read_attr
+from anndata._core.views import _resolve_idx, as_view
+
+from ..compat import _read_attr, ZarrArray
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -45,9 +49,17 @@ class BackedSparseMatrix(_cs_matrix):
     since that calls copy on `.data`, `.indices`, and `.indptr`.
     """
 
+    _cached_indptr = None
+
     def copy(self) -> ss.spmatrix:
         if isinstance(self.data, h5py.Dataset):
-            return SparseDataset(self.data.parent).to_memory()
+            return sparse_dataset(self.data.parent).to_memory()
+        if isinstance(self.data, ZarrArray):
+            return sparse_dataset(
+                zarr.open(
+                    store=self.data.store, path=Path(self.data.path).parent, mode="r"
+                )
+            ).to_memory()
         else:
             return super().copy()
 
@@ -114,6 +126,17 @@ class BackedSparseMatrix(_cs_matrix):
                 M, N, self.indptr, self.indices, n_samples, i, j, offsets
             )
         return offsets
+
+    @property
+    def indptr(self):
+        if self._cached_indptr is None:
+            self._cached_indptr = self._indptr[:]
+        return self._cached_indptr
+
+    @indptr.setter
+    def indptr(self, indptr):
+        self._indptr = indptr
+        self._cached_indptr = None
 
 
 class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
@@ -227,45 +250,119 @@ def get_backed_class(format_str: str) -> Type[BackedSparseMatrix]:
     raise ValueError(f"Format string {format_str} is not supported.")
 
 
-class SparseDataset:
-    """Analogous to :class:`h5py.Dataset <h5py:Dataset>`, but for sparse matrices."""
+def _get_group_format(group) -> str:
+    if "h5sparse_format" in group.attrs:
+        # TODO: Warn about an old format
+        # If this is only just going to be public, I could insist it's not like this
+        return _read_attr(group.attrs, "h5sparse_format")
+    else:
+        # Should this be an extra field?
+        return _read_attr(group.attrs, "encoding-type").replace("_matrix", "")
 
-    def __init__(self, group: h5py.Group):
+
+class BaseCompressedSparseDataset(ABC):
+    """
+    Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices.
+    """
+
+    def __init__(self, group: Union[h5py.Group, zarr.Group]):
+        type(self)._check_group_format(group)
         self.group = group
+        self._row_subset_idx = slice(None, None, None)
+        self._col_subset_idx = slice(None, None, None)
+
+    @property
+    def row_subset_idx(self):
+        if isinstance(self._row_subset_idx, np.ndarray):
+            return self._row_subset_idx.flatten()  # why????
+        return self._row_subset_idx
+
+    @property
+    def has_no_subset_idx(self):
+        return self.has_no_col_subset_idx and self.has_no_row_subset_idx
+
+    @property
+    def has_no_col_subset_idx(self):
+        if isinstance(self.col_subset_idx, slice):
+            if self.col_subset_idx == slice(
+                None, None, None
+            ) or self.col_subset_idx == slice(0, self.get_backing_shape()[1], 1):
+                return True
+        return False
+
+    @property
+    def has_no_row_subset_idx(self):
+        if isinstance(self.row_subset_idx, slice):
+            if self.row_subset_idx == slice(
+                None, None, None
+            ) or self.row_subset_idx == slice(0, self.get_backing_shape()[0], 1):
+                return True
+        return False
+
+    @row_subset_idx.setter
+    def row_subset_idx(self, new_idx):
+        self._row_subset_idx = (
+            new_idx
+            if self.row_subset_idx is None
+            else _resolve_idx(self.row_subset_idx, new_idx, self.shape[0])
+        )
+
+    @property
+    def col_subset_idx(self):
+        if isinstance(self._col_subset_idx, np.ndarray):
+            return self._col_subset_idx.flatten()
+        return self._col_subset_idx
+
+    @col_subset_idx.setter
+    def col_subset_idx(self, new_idx):
+        self._col_subset_idx = (
+            new_idx
+            if self.col_subset_idx is None
+            else _resolve_idx(self.col_subset_idx, new_idx, self.shape[1])
+        )
 
     @property
     def dtype(self) -> np.dtype:
         return self.group["data"].dtype
 
-    @property
-    def format_str(self) -> str:
-        if "h5sparse_format" in self.group.attrs:
-            return _read_attr(self.group.attrs, "h5sparse_format")
-        else:
-            # Should this be an extra field?
-            return _read_attr(self.group.attrs, "encoding-type").replace("_matrix", "")
-
-    @property
-    def h5py_group(self) -> h5py.Group:
-        warn(
-            "Attribute `h5py_group` of SparseDatasets is deprecated. "
-            "Use `group` instead.",
-            DeprecationWarning,
-        )
-        return self.group
+    @classmethod
+    def _check_group_format(cls, group):
+        group_format = _get_group_format(group)
+        assert group_format == cls.format_str
 
     @property
     def name(self) -> str:
         return self.group.name
 
-    @property
-    def file(self) -> h5py.File:
-        return self.group.file
+    def get_backing_shape(self) -> Tuple[int, int]:
+        shape = _read_attr(self.group.attrs, "shape", None)
+        if shape is None:
+            # TODO warn
+            shape = self.group.attrs.get("h5sparse_shape")
+        return tuple(shape)
 
     @property
     def shape(self) -> Tuple[int, int]:
-        shape = self.group.attrs.get("h5sparse_shape")
-        return tuple(self.group.attrs["shape"] if shape is None else shape)
+        shape = self.get_backing_shape()
+        if self.has_no_subset_idx:
+            return tuple(shape)
+        row_length = 0
+        col_length = 0
+        if isinstance(self.row_subset_idx, slice):
+            if self.row_subset_idx == slice(None, None, None):
+                row_length = shape[0]
+            else:
+                row_length = self.row_subset_idx.stop - self.row_subset_idx.start
+        else:
+            row_length = len(self.row_subset_idx)  # can we assume a flatten method?
+        if isinstance(self.col_subset_idx, slice):
+            if self.col_subset_idx == slice(None, None, None):
+                col_length = shape[1]
+            else:
+                col_length = self.col_subset_idx.stop - self.col_subset_idx.start
+        else:
+            col_length = len(self.col_subset_idx)  # can we assume a flatten method?
+        return (row_length, col_length)
 
     @property
     def value(self) -> ss.spmatrix:
@@ -273,26 +370,19 @@ class SparseDataset:
 
     def __repr__(self) -> str:
         return (
-            f"<HDF5 sparse dataset: format {self.format_str!r}, "
+            f"<Backed sparse dataset: format {self.format_str!r}, "
             f"shape {self.shape}, "
             f'type {self.group["data"].dtype.str!r}>'
         )
 
     def __getitem__(self, index: Union[Index, Tuple[()]]) -> Union[float, ss.spmatrix]:
         row, col = self._normalize_index(index)
-        mtx = self.to_backed()
-        sub = mtx[row, col]
-        # If indexing is array x array it returns a backed_sparse_matrix
-        # Not sure what the performance is on that operation
-        if isinstance(sub, BackedSparseMatrix):
-            return get_memory_class(self.format_str)(sub)
-        else:
-            return sub
-
-    def __setitem__(self, index: Union[Index, Tuple[()]], value):
-        row, col = self._normalize_index(index)
-        mock_matrix = self.to_backed()
-        mock_matrix[row, col] = value
+        new_mtx = sparse_dataset(self.group)
+        new_mtx.row_subset_idx = self.row_subset_idx
+        new_mtx.row_subset_idx = row
+        new_mtx.col_subset_idx = self.col_subset_idx
+        new_mtx.col_subset_idx = col
+        return new_mtx
 
     def _normalize_index(
         self, index: Union[Index, Tuple[()]]
@@ -304,10 +394,17 @@ class SparseDataset:
             row, col = np.ix_(row, col)
         return row, col
 
+    # def __setitem__(self, index: Union[Index, Tuple[()]], value):
+
+    #     row, col = self._normalize_index(index)
+    #     mock_matrix = self._to_backed()
+    #     mock_matrix[row, col] = value
+
+    # TODO: split to other classes?
     def append(self, sparse_matrix: ss.spmatrix):
         # Prep variables
         shape = self.shape
-        if isinstance(sparse_matrix, SparseDataset):
+        if isinstance(sparse_matrix, BaseCompressedSparseDataset):
             sparse_matrix = sparse_matrix.to_backed()
 
         # Check input
@@ -367,21 +464,56 @@ class SparseDataset:
 
     def to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format_str)
-        mtx = format_class(self.shape, dtype=self.dtype)
+        mtx = format_class(self.get_backing_shape(), dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.group["indptr"][:]
+        mtx.indptr = self.group["indptr"]
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
-        format_class = get_memory_class(self.format_str)
-        mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self.group["data"][...]
-        mtx.indices = self.group["indices"][...]
-        mtx.indptr = self.group["indptr"][...]
-        return mtx
+        # Could not get row idx with csc and vice versa working without reading into memory but shouldn't matter
+        if (self.format_str == "csr" and self.has_no_row_subset_idx) or (
+            self.format_str == "csc" and self.has_no_col_subset_idx
+        ):
+            format_class = get_memory_class(self.format_str)
+            mtx = format_class(self.get_backing_shape(), dtype=self.dtype)
+            mtx.data = self.group["data"][...]
+            mtx.indices = self.group["indices"][...]
+            mtx.indptr = self.group["indptr"][...]
+            if self.has_no_subset_idx:
+                return mtx
+        else:
+            mtx = self.to_backed()
+        if self.format_str == "csr":
+            return mtx[self.row_subset_idx, :][:, self.col_subset_idx]
+        return mtx[:, self.col_subset_idx][self.row_subset_idx, :]
+
+    def toarray(self) -> np.ndarray:
+        return self.to_memory().toarray()
 
 
-@_subset.register(SparseDataset)
+class CSRDataset(BaseCompressedSparseDataset):
+    format_str = "csr"
+
+
+class CSCDataset(BaseCompressedSparseDataset):
+    format_str = "csc"
+
+
+def sparse_dataset(group) -> BaseCompressedSparseDataset:
+    # encoding_type = _read_attr(group, "encoding-type")
+    encoding_type = _get_group_format(group)
+    if encoding_type == "csr":
+        return CSRDataset(group)
+    elif encoding_type == "csc":
+        return CSCDataset(group)
+
+
+@_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(d, subset_idx):
     return d[subset_idx]
+
+
+@as_view.register(BaseCompressedSparseDataset)
+def _view_masked(a: BaseCompressedSparseDataset, view_args):
+    return a

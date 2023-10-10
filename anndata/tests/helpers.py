@@ -18,7 +18,7 @@ import random
 
 from anndata import AnnData, Raw
 from anndata._core.views import ArrayView
-from anndata._core.sparse_dataset import SparseDataset
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata.utils import asarray
 from anndata.compat import (
@@ -421,7 +421,7 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
     assert_equal(asarray(a), asarray(b), exact=exact, elem_name=elem_name)
 
 
-@assert_equal.register(SparseDataset)
+@assert_equal.register(BaseCompressedSparseDataset)
 @assert_equal.register(sparse.spmatrix)
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)

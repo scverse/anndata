@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, issparse
-from ..compat import AwkArray, DaskArray, Index, Index1D
+from ..compat import AwkArray, DaskArray, Index, Index1D, ZarrArray
 
 
 def _normalize_indices(
@@ -116,7 +116,7 @@ def unpack_index(index: Index) -> Tuple[Index1D, Index1D]:
 
 
 @singledispatch
-def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
+def _subset(a: np.ndarray, subset_idx: Index):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
@@ -124,8 +124,17 @@ def _subset(a: Union[np.ndarray, pd.DataFrame], subset_idx: Index):
     return a[subset_idx]
 
 
+@_subset.register(ZarrArray)
+def _subset_zarr(a: ZarrArray, subset_idx: Index):
+    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+        subset_idx = np.ix_(*subset_idx)
+    return a.oindex[subset_idx]
+
+
 @_subset.register(DaskArray)
 def _subset_dask(a: DaskArray, subset_idx: Index):
+    if isinstance(subset_idx, slice):
+        return a[subset_idx]
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
         return a.vindex[subset_idx]
@@ -147,6 +156,8 @@ def _subset_df(df: pd.DataFrame, subset_idx: Index):
 
 @_subset.register(AwkArray)
 def _subset_awkarray(a: AwkArray, subset_idx: Index):
+    if isinstance(subset_idx, slice):
+        return a[subset_idx]
     if all(isinstance(x, cabc.Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
