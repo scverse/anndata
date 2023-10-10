@@ -513,7 +513,7 @@ def subset_sparsedataset(d, subset_idx):
 ## Backwards compat
 
 _sparsedataset_depr_msg = """\
-SparseDataset is deprecated and will be removed in the future. It has been replaced by the public classes CSRDataset and CSCDataset.
+SparseDataset is deprecated and will be removed in late 2024. It has been replaced by the public classes CSRDataset and CSCDataset.
 
 For instance checks, use `isinstance(X, (anndata.experimental.CSRDataset, anndata.experimental.CSCDataset))` instead.
 
