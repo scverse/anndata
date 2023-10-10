@@ -1242,7 +1242,7 @@ def concat(
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
-            label_col.map(str, na_action=None), sep=index_unique
+            label_col.map(str, na_action="ignore"), sep=index_unique
         )
     concat_indices = pd.Index(concat_indices)
 
