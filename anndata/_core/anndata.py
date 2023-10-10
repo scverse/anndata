@@ -1687,7 +1687,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Examples
         --------
-        Joining on intersection of variables.
+        Joining on intersection of variables. First, prepare example data:
 
         >>> adata1 = AnnData(
         ...     np.array([[1, 2, 3], [4, 5, 6]]),
@@ -1703,6 +1703,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ...     np.array([[1, 2, 3], [4, 5, 6]]),
         ...     dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 2, 3], annoB=[0, 1, 2]),
+        ... )
+
+        They can now be concatenated. Since this method is deprecated, it will raise a warning:
+
+        >>> warnings.filterwarnings(
+        ...     'ignore',
+        ...     r'The AnnData\\.concatenate method is deprecated',
+        ...     FutureWarning,
         ... )
         >>> adata = adata1.concatenate(adata2, adata3)
         >>> adata
