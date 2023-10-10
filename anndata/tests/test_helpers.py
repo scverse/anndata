@@ -1,21 +1,23 @@
+from __future__ import annotations
+
 from string import ascii_letters
 
+import numpy as np
 import pandas as pd
 import pytest
-import numpy as np
 from scipy import sparse
 
 import anndata as ad
+from anndata.compat import add_note
 from anndata.tests.helpers import (
-    assert_equal,
-    gen_awkward,
-    report_name,
-    gen_adata,
     asarray,
+    assert_equal,
+    gen_adata,
+    gen_awkward,
     pytest_8_raises,
+    report_name,
 )
 from anndata.utils import dim_len
-from anndata.compat import add_note
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -79,7 +81,7 @@ def test_gen_awkward(shape, datashape):
 # Does this work for every warning?
 def test_report_name():
     def raise_error():
-        raise Exception("an error occured!")
+        raise Exception("an error occurred!")
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))

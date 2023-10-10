@@ -3,34 +3,37 @@ Code for merging/ concatenating AnnData objects.
 """
 from __future__ import annotations
 
+import typing
 from collections import OrderedDict
 from collections.abc import (
     Callable,
     Collection,
+    Iterable,
     Mapping,
     MutableSet,
-    Iterable,
     Sequence,
 )
 from functools import reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Any, Optional, TypeVar, Union, Literal
-import typing
-from warnings import warn, filterwarnings
+from typing import Any, Literal, TypeVar
+from warnings import filterwarnings, warn
 
-from natsort import natsorted
 import numpy as np
 import pandas as pd
-from pandas.api.extensions import ExtensionDtype
+from natsort import natsorted
 from scipy import sparse
 from scipy.sparse import spmatrix
 
-from .anndata import AnnData
-from ..compat import AwkArray, DaskArray, CupySparseMatrix, CupyArray, CupyCSRMatrix
-from ..utils import asarray, dim_len
-from .index import _subset, make_slice
 from anndata._warnings import ExperimentalFeatureWarning
+
+from ..compat import AwkArray, CupyArray, CupyCSRMatrix, CupySparseMatrix, DaskArray
+from ..utils import asarray, dim_len
+from .anndata import AnnData
+from .index import _subset, make_slice
+
+if typing.TYPE_CHECKING:
+    from pandas.api.extensions import ExtensionDtype
 
 T = TypeVar("T")
 
@@ -62,14 +65,14 @@ class OrderedSet(MutableSet):
     def add(self, val):
         self.dict[val] = None
 
-    def union(self, *vals) -> "OrderedSet":
+    def union(self, *vals) -> OrderedSet:
         return reduce(or_, vals, self)
 
     def discard(self, val):
         if val in self:
             del self.dict[val]
 
-    def difference(self, *vals) -> "OrderedSet":
+    def difference(self, *vals) -> OrderedSet:
         return reduce(sub, vals, self)
 
 
@@ -94,7 +97,7 @@ def not_missing(v) -> bool:
 
 
 # We need to be able to check for equality of arrays to know which are the same.
-# Unfortunatley equality of arrays is poorly defined.
+# Unfortunately equality of arrays is poorly defined.
 # * `np.array_equal` does not work for sparse arrays
 # * `np.array_equal(..., equal_nan=True)` does not work for null values at the moment
 #   (see https://github.com/numpy/numpy/issues/16377)
@@ -122,7 +125,11 @@ def equal_dask_array(a, b) -> bool:
     if isinstance(b, DaskArray):
         if tokenize(a) == tokenize(b):
             return True
-    return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
+    if isinstance(a._meta, spmatrix):
+        # TODO: Maybe also do this in the other case?
+        return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
+    else:
+        return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
 @equal.register(np.ndarray)
@@ -257,7 +264,7 @@ def try_unifying_dtype(
                 dtypes.add(dtype)
                 ordered = ordered | dtype.ordered
             elif not pd.isnull(dtype):
-                return False
+                return None
         if len(dtypes) > 0 and not ordered:
             categories = reduce(
                 lambda x, y: x.union(y),
@@ -299,7 +306,7 @@ def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"])
 
 
 # TODO: open PR or feature request to cupy
-def _cpblock_diag(mats, format=None, dtype=None):
+def _cp_block_diag(mats, format=None, dtype=None):
     """
     Modified version of scipy.sparse.block_diag for cupy sparse.
     """
@@ -335,12 +342,30 @@ def _cpblock_diag(mats, format=None, dtype=None):
     ).asformat(format)
 
 
+def _dask_block_diag(mats):
+    from itertools import permutations
+
+    import dask.array as da
+
+    blocks = np.zeros((len(mats), len(mats)), dtype=object)
+    for i, j in permutations(range(len(mats)), 2):
+        blocks[i, j] = da.from_array(
+            sparse.csr_matrix((mats[i].shape[0], mats[j].shape[1]))
+        )
+    for i, x in enumerate(mats):
+        if not isinstance(x._meta, sparse.csr_matrix):
+            x = x.map_blocks(sparse.csr_matrix)
+        blocks[i, i] = x
+
+    return da.block(blocks.tolist())
+
+
 ###################
 # Per element logic
 ###################
 
 
-def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
+def unique_value(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -352,7 +377,7 @@ def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
     return unique_val
 
 
-def first(vals: Collection[T]) -> Union[T, MissingVal]:
+def first(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection of vals, return the first non-missing one.If they're all missing,
     return MissingVal.
@@ -363,7 +388,7 @@ def first(vals: Collection[T]) -> Union[T, MissingVal]:
     return MissingVal
 
 
-def only(vals: Collection[T]) -> Union[T, MissingVal]:
+def only(vals: Collection[T]) -> T | MissingVal:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -436,7 +461,7 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
-    strategy: Union[str, Callable, None]
+    strategy: str | Callable | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
@@ -740,6 +765,12 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     elif any(isinstance(a, CupySparseMatrix) for a in arrays):
         import cupyx.scipy.sparse as cpsparse
 
+        if not all(
+            isinstance(a, (CupySparseMatrix, CupyArray)) or 0 in a.shape for a in arrays
+        ):
+            raise NotImplementedError(
+                "Cannot concatenate a cupy array with other array types."
+            )
         sparse_stack = (cpsparse.vstack, cpsparse.hstack)[axis]
         return sparse_stack(
             [
@@ -911,7 +942,9 @@ def concat_pairwise_mapping(
             for m, s in zip(mappings, shapes)
         ]
         if all(isinstance(el, (CupySparseMatrix, CupyArray)) for el in els):
-            result[k] = _cpblock_diag(els, format="csr")
+            result[k] = _cp_block_diag(els, format="csr")
+        elif all(isinstance(el, DaskArray) for el in els):
+            result[k] = _dask_block_diag(els)
         else:
             result[k] = sparse.block_diag(els, format="csr")
     return result
@@ -994,16 +1027,16 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 
 
 def concat(
-    adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
+    adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[StrategiesLiteral, Callable, None] = None,
-    uns_merge: Union[StrategiesLiteral, Callable, None] = None,
-    label: Optional[str] = None,
-    keys: Optional[Collection] = None,
-    index_unique: Optional[str] = None,
-    fill_value: Optional[Any] = None,
+    merge: StrategiesLiteral | Callable | None = None,
+    uns_merge: StrategiesLiteral | Callable | None = None,
+    label: str | None = None,
+    keys: Collection | None = None,
+    index_unique: str | None = None,
+    fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
@@ -1042,7 +1075,7 @@ def concat(
         incrementing integer labels.
     index_unique
         Whether to make the index unique by using the keys. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
+        is the delimiter between "{orig_idx}{index_unique}{key}". When `None`,
         the original indices are kept.
     fill_value
         When `join="outer"`, this is the value that will be used to fill the introduced

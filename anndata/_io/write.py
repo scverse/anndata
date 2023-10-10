@@ -1,15 +1,20 @@
-import warnings
-from pathlib import Path
-from os import PathLike, fspath
+from __future__ import annotations
 
-import pandas as pd
 import math
+import warnings
+from os import PathLike, fspath
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import numpy as np
+import pandas as pd
 from scipy.sparse import issparse
 
-from .. import AnnData
-from ..logging import get_logger
 from .._warnings import WriteWarning
+from ..logging import get_logger
+
+if TYPE_CHECKING:
+    from .. import AnnData
 
 logger = get_logger(__name__)
 

@@ -1,22 +1,20 @@
-from typing import Mapping
+from __future__ import annotations
+
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
 
-from anndata.experimental.merge import concat_on_disk, as_group
-from anndata.experimental import write_elem, read_elem
-
 from anndata import AnnData, concat
+from anndata.experimental import read_elem, write_elem
+from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
 )
-
-
 from anndata.utils import asarray
-
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
     obsm_types=(
@@ -252,3 +250,18 @@ def obsm_adatas():
 
 def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
     assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
+
+
+def test_output_dir_exists(tmp_path):
+    in_pth = tmp_path / "in.h5ad"
+    out_pth = tmp_path / "does_not_exist" / "out.h5ad"
+
+    AnnData(X=np.ones((5, 1))).write_h5ad(in_pth)
+
+    with pytest.raises(FileNotFoundError, match=f"{out_pth}"):
+        concat_on_disk([in_pth], out_pth)
+
+
+def test_failure_w_no_args(tmp_path):
+    with pytest.raises(ValueError, match="No objects to concatenate"):
+        concat_on_disk([], tmp_path / "out.h5ad")

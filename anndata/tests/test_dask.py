@@ -1,19 +1,22 @@
 """
 For tests using dask
 """
-import anndata as ad
+from __future__ import annotations
+
 import pandas as pd
-from anndata._core.anndata import AnnData
 import pytest
-from anndata.tests.helpers import (
-    as_dense_dask_array,
-    GEN_ADATA_DASK_ARGS,
-    gen_adata,
-    assert_equal,
-)
-from anndata.experimental import write_elem, read_elem
-from anndata.experimental.merge import as_group
+
+import anndata as ad
+from anndata._core.anndata import AnnData
 from anndata.compat import DaskArray
+from anndata.experimental import read_elem, write_elem
+from anndata.experimental.merge import as_group
+from anndata.tests.helpers import (
+    GEN_ADATA_DASK_ARGS,
+    as_dense_dask_array,
+    assert_equal,
+    gen_adata,
+)
 
 pytest.importorskip("dask.array")
 
@@ -243,6 +246,7 @@ def test_assign_X(adata):
     """Check if assignment works"""
     import dask.array as da
     import numpy as np
+
     from anndata.compat import DaskArray
 
     adata.X = da.ones(adata.X.shape)
@@ -306,8 +310,8 @@ def test_dask_to_memory_copy_unbacked():
 
 
 def test_to_memory_raw():
-    import numpy as np
     import dask.array as da
+    import numpy as np
 
     orig = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
     orig.X = da.ones((20, 10))
@@ -327,8 +331,8 @@ def test_to_memory_raw():
 
 
 def test_to_memory_copy_raw():
-    import numpy as np
     import dask.array as da
+    import numpy as np
 
     orig = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
     orig.X = da.ones((20, 10))

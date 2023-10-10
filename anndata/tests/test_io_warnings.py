@@ -1,6 +1,8 @@
+from __future__ import annotations
+
+import warnings
 from importlib.util import find_spec
 from pathlib import Path
-import warnings
 
 import pytest
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from os import PathLike
 from collections.abc import Mapping
-from itertools import product
 from functools import partial
-from typing import Union, Literal
+from itertools import product
 from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal
 from warnings import warn
 
 import h5py
@@ -15,23 +14,29 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData, Raw
+from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
-from anndata._core.sparse_dataset import SparseDataset
-from anndata._core import views
+from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
+from anndata._io.utils import H5PY_V3, check_key
+from anndata._warnings import OldFormatWarning
 from anndata.compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+    DaskArray,
     ZarrArray,
     ZarrGroup,
-    DaskArray,
-    _read_attr,
-    _from_fixed_length_strings,
     _decode_structured_array,
+    _from_fixed_length_strings,
+    _read_attr,
 )
-from anndata._io.utils import check_key, H5PY_V3
-from anndata._warnings import OldFormatWarning
-from anndata.compat import AwkArray, CupyArray, CupyCSRMatrix, CupyCSCMatrix
 
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group
@@ -116,7 +121,7 @@ def read_basic(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_memory()
+            return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, h5py.Dataset):
         return h5ad.read_dataset(elem)  # TODO: Handle legacy
@@ -136,7 +141,7 @@ def read_basic_zarr(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_memory()
+            return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, ZarrArray):
         return zarr.read_dataset(elem)  # TODO: Handle legacy
@@ -350,7 +355,7 @@ def write_basic_dask_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({
     da.store(elem, g, lock=GLOBAL_LOCK)
 
 
-# Adding this seperately because h5py isn't serializable
+# Adding this separately because h5py isn't serializable
 # https://github.com/pydata/xarray/issues/4242
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
@@ -525,20 +530,70 @@ for store_type, (cls, spec, func) in product(
     _REGISTRY.register_write(store_type, cls, spec)(func)
 
 
-@_REGISTRY.register_write(H5Group, SparseDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, SparseDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, CSCDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, CSCDataset, IOSpec("", "0.1.0"))
 def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
         f,
         k,
-        elem.to_backed(),
+        elem._to_backed(),
         _writer,
-        fmt=elem.format_str,
+        fmt=elem.format,
         dataset_kwargs=dataset_kwargs,
     )
     # TODO: Cleaner way to do this
-    f[k].attrs["encoding-type"] = f"{elem.format_str}_matrix"
+    f[k].attrs["encoding-type"] = f"{elem.format}_matrix"
     f[k].attrs["encoding-version"] = "0.1.0"
+
+
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
+)
+def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+    sparse_format = elem._meta.format
+    if sparse_format == "csr":
+        axis = 0
+    elif sparse_format == "csc":
+        axis = 1
+    else:
+        raise NotImplementedError(
+            f"Cannot write dask sparse arrays with format {sparse_format}"
+        )
+
+    def chunk_slice(start: int, stop: int) -> tuple[slice | None, slice | None]:
+        result = [slice(None), slice(None)]
+        result[axis] = slice(start, stop)
+        return tuple(result)
+
+    axis_chunks = elem.chunks[axis]
+    chunk_start = 0
+    chunk_stop = axis_chunks[0]
+
+    _writer.write_elem(
+        f,
+        k,
+        elem[chunk_slice(chunk_start, chunk_stop)].compute(),
+        dataset_kwargs=dataset_kwargs,
+    )
+
+    disk_mtx = sparse_dataset(f[k])
+
+    for chunk_size in axis_chunks[1:]:
+        chunk_start = chunk_stop
+        chunk_stop += chunk_size
+
+        disk_mtx.append(elem[chunk_slice(chunk_start, chunk_stop)].compute())
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -546,7 +601,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse(elem, _reader):
-    return SparseDataset(elem).to_memory()
+    return sparse_dataset(elem).to_memory()
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -554,7 +609,7 @@ def read_sparse(elem, _reader):
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
-    return SparseDataset(elem)[indices]
+    return sparse_dataset(elem)[indices]
 
 
 #################
@@ -686,7 +741,7 @@ def read_dataframe_0_1_0(elem, _reader):
     return df
 
 
-def read_series(dataset: h5py.Dataset) -> Union[np.ndarray, pd.Categorical]:
+def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
     # For reading older dataframes
     if "categories" in dataset.attrs:
         if isinstance(dataset, ZarrArray):

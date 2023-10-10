@@ -9,19 +9,18 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 import zarr
+from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import _REGISTRY, get_spec, IOSpec
+from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import _read_attr, H5Group, ZarrGroup
-from anndata._io.specs import write_elem, read_elem
+from anndata.compat import H5Group, ZarrGroup, _read_attr
 from anndata.tests.helpers import (
-    assert_equal,
     as_cupy_type,
-    pytest_8_raises,
+    assert_equal,
     gen_adata,
+    pytest_8_raises,
 )
 
 
@@ -124,6 +123,29 @@ def test_io_spec_cupy(store, value, encoding_type):
     from_disk = as_cupy_type(read_elem(store[key]))
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+
+
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+def test_dask_write_sparse(store, sparse_format):
+    import dask.array as da
+
+    X = sparse.random(
+        1000,
+        1000,
+        format=sparse_format,
+        density=0.01,
+        random_state=np.random.default_rng(),
+    )
+    X_dask = da.from_array(X, chunks=(100, 100))
+
+    write_elem(store, "X", X)
+    write_elem(store, "X_dask", X_dask)
+
+    X_from_disk = read_elem(store["X"])
+    X_dask_from_disk = read_elem(store["X_dask"])
+
+    assert_equal(X_from_disk, X_dask_from_disk)
+    assert_equal(dict(store["X"].attrs), dict(store["X_dask"].attrs))
 
 
 def test_io_spec_raw(store):

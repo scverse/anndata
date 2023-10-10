@@ -1,27 +1,33 @@
-from typing import Union, Mapping, Sequence, Tuple
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
 import pandas as pd
-from scipy import sparse
 from scipy.sparse import issparse
 
-from . import anndata
-from .index import _normalize_index, _subset, unpack_index, get_vector
-from .aligned_mapping import AxisArrays
-from .sparse_dataset import SparseDataset
-
 from ..compat import CupyArray, CupySparseMatrix
+from .aligned_mapping import AxisArrays
+from .index import _normalize_index, _subset, get_vector, unpack_index
+from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from scipy import sparse
+
+    from .anndata import AnnData
 
 
 # TODO: Implement views for Raw
 class Raw:
     def __init__(
         self,
-        adata: "anndata.AnnData",
-        X: Union[np.ndarray, sparse.spmatrix, None] = None,
-        var: Union[pd.DataFrame, Mapping[str, Sequence], None] = None,
-        varm: Union[AxisArrays, Mapping[str, np.ndarray], None] = None,
+        adata: AnnData,
+        X: np.ndarray | sparse.spmatrix | None = None,
+        var: pd.DataFrame | Mapping[str, Sequence] | None = None,
+        varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ):
         from .anndata import _gen_dataframe
 
@@ -29,8 +35,15 @@ class Raw:
         self._n_obs = adata.n_obs
         # construct manually
         if adata.isbacked == (X is None):
-            self._X = X
-            self._var = _gen_dataframe(var, self.X.shape[1], ["var_names"])
+            # Move from GPU to CPU since it's large and not always used
+            if isinstance(X, (CupyArray, CupySparseMatrix)):
+                self._X = X.get()
+            else:
+                self._X = X
+            n_var = None if self._X is None else self._X.shape[1]
+            self._var = _gen_dataframe(
+                var, ["var_names"], source="X", attr="var", length=n_var
+            )
             self._varm = AxisArrays(self, 1, varm)
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
@@ -49,7 +62,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> Union[SparseDataset, np.ndarray, sparse.spmatrix]:
+    def X(self) -> BaseCompressedSparseDataset | np.ndarray | sparse.spmatrix:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -66,7 +79,7 @@ class Raw:
                 f"{self._adata.file.filename}."
             )
         if isinstance(X, h5py.Group):
-            X = SparseDataset(X)
+            X = sparse_dataset(X)
         # Check if we need to subset
         if self._adata.is_view:
             # TODO: As noted above, implement views of raw
@@ -142,7 +155,9 @@ class Raw:
 
     def to_adata(self):
         """Create full AnnData object."""
-        return anndata.AnnData(
+        from anndata import AnnData
+
+        return AnnData(
             X=self.X.copy(),
             var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
@@ -184,12 +199,12 @@ class Raw:
 # This exists to accommodate AlignedMappings,
 # until we implement a proper RawView or get rid of Raw in favor of modes.
 class _RawViewHack:
-    def __init__(self, raw: Raw, vidx: Union[slice, np.ndarray]):
+    def __init__(self, raw: Raw, vidx: slice | np.ndarray):
         self.parent_raw = raw
         self.vidx = vidx
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         return self.parent_raw.n_obs, len(self.var_names)
 
     @property

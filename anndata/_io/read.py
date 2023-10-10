@@ -1,11 +1,12 @@
-from pathlib import Path
-from os import PathLike, fspath
-from types import MappingProxyType
-from typing import Union, Optional, Mapping, Tuple
-from typing import Iterable, Iterator, Generator
-from collections import OrderedDict
-import gzip
+from __future__ import annotations
+
 import bz2
+import gzip
+from collections import OrderedDict
+from os import PathLike, fspath
+from pathlib import Path
+from types import MappingProxyType
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import h5py
@@ -17,6 +18,9 @@ from .. import AnnData
 from ..compat import _deprecate_positional_args
 from .utils import is_float
 
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable, Iterator, Mapping
+
 try:
     from .zarr import read_zarr
 except ImportError as _e:
@@ -27,9 +31,9 @@ except ImportError as _e:
 
 
 def read_csv(
-    filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str] = ",",
-    first_column_names: Optional[bool] = None,
+    filename: PathLike | Iterator[str],
+    delimiter: str | None = ",",
+    first_column_names: bool | None = None,
     dtype: str = "float32",
 ) -> AnnData:
     """\
@@ -53,9 +57,7 @@ def read_csv(
     return read_text(filename, delimiter, first_column_names, dtype)
 
 
-def read_excel(
-    filename: PathLike, sheet: Union[str, int], dtype: str = "float32"
-) -> AnnData:
+def read_excel(filename: PathLike, sheet: str | int, dtype: str = "float32") -> AnnData:
     """\
     Read `.xlsx` (Excel) file.
 
@@ -137,7 +139,7 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
 
 def _fmt_loom_axis_attrs(
     input: Mapping, idx_name: str, dimm_mapping: Mapping[str, Iterable[str]]
-) -> Tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
+) -> tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
     axis_df = pd.DataFrame()
     axis_mapping = {}
     for key, names in dimm_mapping.items():
@@ -163,9 +165,9 @@ def read_loom(
     cleanup: bool = False,
     X_name: str = "spliced",
     obs_names: str = "CellID",
-    obsm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    obsm_names: Mapping[str, Iterable[str]] | None = None,
     var_names: str = "Gene",
-    varm_names: Optional[Mapping[str, Iterable[str]]] = None,
+    varm_names: Mapping[str, Iterable[str]] | None = None,
     dtype: str = "float32",
     obsm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
     varm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
@@ -320,9 +322,9 @@ def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
 
 
 def read_text(
-    filename: Union[PathLike, Iterator[str]],
-    delimiter: Optional[str] = None,
-    first_column_names: Optional[bool] = None,
+    filename: PathLike | Iterator[str],
+    delimiter: str | None = None,
+    first_column_names: bool | None = None,
     dtype: str = "float32",
 ) -> AnnData:
     """\
@@ -368,8 +370,8 @@ def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
 
 def _read_text(
     f: Iterator[str],
-    delimiter: Optional[str],
-    first_column_names: Optional[bool],
+    delimiter: str | None,
+    first_column_names: bool | None,
     dtype: str,
 ) -> AnnData:
     comments = []
@@ -441,7 +443,7 @@ def _read_text(
         else:
             data.append(np.array(line_list, dtype=dtype))
     # logg.msg("    read data into list of lists", t=True, v=4)
-    # transfrom to array, this takes a long time and a lot of memory
+    # transform to array, this takes a long time and a lot of memory
     # but it’s actually the same thing as np.genfromtxt does
     # - we don’t use the latter as it would involve another slicing step
     #   in the end, to separate row_names from float data, slicing takes

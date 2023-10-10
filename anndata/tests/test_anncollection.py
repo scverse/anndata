@@ -1,10 +1,11 @@
-import pytest
-import anndata as ad
+from __future__ import annotations
+
 import numpy as np
-
+import pytest
 from scipy.sparse import csr_matrix, issparse
-
 from sklearn.preprocessing import LabelEncoder
+
+import anndata as ad
 from anndata.experimental.multi_files import AnnCollection
 
 _dense = lambda a: a.toarray() if issparse(a) else a

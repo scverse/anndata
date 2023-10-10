@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import sys
-from pathlib import Path
 from datetime import datetime
 from importlib import metadata
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from sphinx.application import Sphinx
+if TYPE_CHECKING:
+    from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
 sys.path[:0] = [str(HERE / "extensions")]
@@ -47,6 +51,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
+    "sphinx_design",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",

@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 from scipy import sparse
 
 from anndata.tests.helpers import (
+    as_dense_dask_array,
     assert_equal,
     gen_adata,
-    as_dense_dask_array,
 )
 from anndata.utils import asarray
 

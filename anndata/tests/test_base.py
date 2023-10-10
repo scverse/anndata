@@ -1,16 +1,18 @@
-from itertools import product
+from __future__ import annotations
+
+import re
 import warnings
+from itertools import product
 
 import numpy as np
-from numpy import ma
 import pandas as pd
 import pytest
+from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal, gen_adata
-
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
@@ -39,15 +41,51 @@ def test_creation():
     assert adata.raw.X.tolist() == X.tolist()
     assert adata.raw.var_names.tolist() == ["a", "b", "c"]
 
-    with pytest.raises(ValueError):
-        AnnData(np.array([[1, 2], [3, 4]]), dict(TooLong=[1, 2, 3, 4]))
-
     # init with empty data matrix
     shape = (3, 5)
     adata = AnnData(None, uns=dict(test=np.array((3, 3))), shape=shape)
     assert adata.X is None
     assert adata.shape == shape
     assert "test" in adata.uns
+
+
+@pytest.mark.parametrize(
+    ("src", "src_arg", "dim_msg"),
+    [
+        pytest.param(
+            "X",
+            adata_dense.X,
+            "`{dim}` must have as many rows as `X` has {mat_dim}s",
+            id="x",
+        ),
+        pytest.param(
+            "shape", (2, 2), "`shape` is inconsistent with `{dim}`", id="shape"
+        ),
+    ],
+)
+@pytest.mark.parametrize("dim", ["obs", "var"])
+@pytest.mark.parametrize(
+    ("dim_arg", "msg"),
+    [
+        pytest.param(
+            lambda _: dict(TooLong=[1, 2, 3, 4]),
+            "Length of values (4) does not match length of index (2)",
+            id="too_long_col",
+        ),
+        pytest.param(
+            lambda dim: {f"{dim}_names": ["a", "b", "c"]}, None, id="too_many_names"
+        ),
+        pytest.param(
+            lambda _: pd.DataFrame(index=["a", "b", "c"]), None, id="too_long_df"
+        ),
+    ],
+)
+def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
+    if msg is None:
+        mat_dim = "row" if dim == "obs" else "column"
+        msg = dim_msg.format(dim=dim, mat_dim=mat_dim)
+    with pytest.raises(ValueError, match=re.escape(msg)):
+        AnnData(**{src: src_arg, dim: dim_arg(dim)})
 
 
 def test_create_with_dfs():

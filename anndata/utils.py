@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import warnings
-from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union
+from functools import singledispatch, wraps
+from typing import TYPE_CHECKING, Any
 
 import h5py
-import pandas as pd
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
+from ._core.sparse_dataset import BaseCompressedSparseDataset
+from .compat import CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
-from ._core.sparse_dataset import SparseDataset
-from .compat import CupyArray, CupySparseMatrix
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 logger = get_logger(__name__)
 
@@ -25,9 +30,9 @@ def asarray_sparse(x):
     return x.toarray()
 
 
-@asarray.register(SparseDataset)
+@asarray.register(BaseCompressedSparseDataset)
 def asarray_sparse_dataset(x):
-    return asarray(x.value)
+    return asarray(x.to_memory())
 
 
 @asarray.register(h5py.Dataset)
@@ -43,6 +48,11 @@ def asarray_cupy(x):
 @asarray.register(CupySparseMatrix)
 def asarray_cupy_sparse(x):
     return x.toarray().get()
+
+
+@asarray.register(DaskArray)
+def asarray_dask(x):
+    return asarray(x.compute())
 
 
 @singledispatch
@@ -253,7 +263,7 @@ def warn_names_duplicates(attr: str):
 
 def ensure_df_homogeneous(
     df: pd.DataFrame, name: str
-) -> Union[np.ndarray, sparse.csr_matrix]:
+) -> np.ndarray | sparse.csr_matrix:
     # TODO: rename this function, I would not expect this to return a non-dataframe
     if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
         arr = df.sparse.to_coo().tocsr()

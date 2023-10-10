@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
-from scipy import sparse
 import pytest
+from scipy import sparse
 
 import anndata as ad
 

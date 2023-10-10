@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any
 
+from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata.compat import _read_attr
-from anndata._types import StorageType, GroupStorageType
-from anndata._io.utils import report_write_key_on_error, report_read_key_on_error
+
+if TYPE_CHECKING:
+    from anndata._types import GroupStorageType, StorageType
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
 # TODO: Should filetype be included in the IOSpec if it changes the encoding? Or does the intent that these things be "the same" overrule that?
@@ -66,7 +68,7 @@ class IORegistry:
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
         ] = {}
-        self.write_specs: dict[Union[type, tuple[type, str]], IOSpec] = {}
+        self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
 
     def register_write(
         self,
@@ -211,10 +213,22 @@ def get_spec(
     )
 
 
+def _iter_patterns(elem):
+    """Iterates over possible patterns for an element in order of precedence."""
+    from anndata.compat import DaskArray
+
+    t = type(elem)
+
+    if isinstance(elem, DaskArray):
+        yield (t, type(elem._meta), elem.dtype.kind)
+        yield (t, type(elem._meta))
+    if hasattr(elem, "dtype"):
+        yield (t, elem.dtype.kind)
+    yield t
+
+
 class Reader:
-    def __init__(
-        self, registry: IORegistry, callback: Union[Callable, None] = None
-    ) -> None:
+    def __init__(self, registry: IORegistry, callback: Callable | None = None) -> None:
         self.registry = registry
         self.callback = callback
 
@@ -241,21 +255,26 @@ class Writer:
     def __init__(
         self,
         registry: IORegistry,
-        callback: Union[
-            Callable[
-                [
-                    GroupStorageType,
-                    str,
-                    StorageType,
-                    dict,
-                ],
-                None,
+        callback: Callable[
+            [
+                GroupStorageType,
+                str,
+                StorageType,
+                dict,
             ],
             None,
-        ] = None,
+        ]
+        | None = None,
     ):
         self.registry = registry
         self.callback = callback
+
+    def find_writer(self, dest_type, elem, modifiers):
+        for pattern in _iter_patterns(elem):
+            if self.registry.has_writer(dest_type, pattern, modifiers):
+                return self.registry.get_writer(dest_type, pattern, modifiers)
+        # Raises IORegistryError
+        return self.registry.get_writer(dest_type, type(elem), modifiers)
 
     @report_write_key_on_error
     def write_elem(
@@ -270,13 +289,17 @@ class Writer:
         from functools import partial
         from pathlib import PurePosixPath
 
+        import h5py
+
+        if isinstance(store, h5py.File):
+            store = store["/"]
+
         dest_type = type(store)
-        t = type(elem)
 
         if elem is None:
             return lambda *_, **__: None
 
-        # Normalize k to abosulte path
+        # Normalize k to absolute path
         if not PurePosixPath(k).is_absolute():
             k = str(PurePosixPath(store.name) / k)
 
@@ -284,19 +307,11 @@ class Writer:
             store.clear()
         elif k in store:
             del store[k]
-        if (
-            hasattr(elem, "dtype")
-            and (dest_type, (t, elem.dtype.kind), modifiers) in self.registry.write
-        ):
-            write_func = partial(
-                self.registry.get_writer(dest_type, (t, elem.dtype.kind), modifiers),
-                _writer=self,
-            )
-        else:
-            write_func = partial(
-                self.registry.get_writer(dest_type, t, modifiers),
-                _writer=self,
-            )
+
+        write_func = partial(
+            self.find_writer(dest_type, elem, modifiers),
+            _writer=self,
+        )
 
         if self.callback is not None:
             return self.callback(
