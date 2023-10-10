@@ -1681,7 +1681,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 1, 2]),
         ... )
         >>> adata3 = AnnData(
-        ... np.array([[1, 2, 3], [4, 5, 6]]),
+        ...     np.array([[1, 2, 3], [4, 5, 6]]),
         ...     dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 2, 3], annoB=[0, 1, 2]),
         ... )
