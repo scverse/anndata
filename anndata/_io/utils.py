@@ -165,19 +165,17 @@ def _get_parent(elem):
     return parent
 
 
-def re_raise_error(e, elem, key, op=Literal["read", "writ"]):
+def add_key_note(e: BaseException, elem, key, op=Literal["read", "writ"]) -> None:
     if any(
         f"Error raised while {op}ing key" in note
         for note in getattr(e, "__notes__", [])
     ):
-        raise
-    else:
-        parent = _get_parent(elem)
-        add_note(
-            e,
-            f"Error raised while {op}ing key {key!r} of {type(elem)} to " f"{parent}",
-        )
-        raise e
+        return
+    parent = _get_parent(elem)
+    add_note(
+        e,
+        f"Error raised while {op}ing key {key!r} of {type(elem)} to " f"{parent}",
+    )
 
 
 def report_read_key_on_error(func):
@@ -206,7 +204,8 @@ def report_read_key_on_error(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            re_raise_error(e, elem, elem.name, "read")
+            add_key_note(e, elem, elem.name, "read")
+            raise
 
     return func_wrapper
 
@@ -239,7 +238,8 @@ def report_write_key_on_error(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            re_raise_error(e, elem, key, "writ")
+            add_key_note(e, elem, key, "writ")
+            raise
 
     return func_wrapper
 

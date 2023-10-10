@@ -123,7 +123,7 @@ def test_deprecated_read(tmp_path):
     memory.write_h5ad(tmp_path / "file.h5ad")
 
     with pytest.warns(FutureWarning, match="`anndata.read` is deprecated"):
-        from_disk = ad.read(tmp_path / "file.h5ad")
+        from_disk = ad.read_h5ad(tmp_path / "file.h5ad")
 
     assert_equal(memory, from_disk)
 

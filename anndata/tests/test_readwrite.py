@@ -88,7 +88,7 @@ def rw(backing_h5ad):
     M, N = 100, 101
     orig = gen_adata((M, N))
     orig.write(backing_h5ad)
-    curr = ad.read(backing_h5ad)
+    curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
 
 
@@ -139,7 +139,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
 
     if storage == "h5ad":
         adata_src.write(backing_h5ad, **dataset_kwargs)
-        adata_mid = ad.read(backing_h5ad)
+        adata_mid = ad.read_h5ad(backing_h5ad)
         adata_mid.write(tmp_path / "mid.h5ad", **dataset_kwargs)
         adata = ad.read_h5ad(tmp_path / "mid.h5ad")
     else:
@@ -179,7 +179,7 @@ def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
-    adata = ad.read(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -212,7 +212,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_one = adata_src[:, 0].copy()
     adata_one.write(backing_h5ad)
-    adata = ad.read(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad)
     assert adata.shape == (3, 1)
     assert_equal(adata, adata_one)
 
@@ -224,7 +224,7 @@ def test_readwrite_backed(typ, backing_h5ad):
     adata_src.filename = backing_h5ad  # change to backed mode
     adata_src.write()
 
-    adata = ad.read(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad)
     assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
     assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
@@ -728,10 +728,13 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
     import scanpy as sc
 
-    orig = sc.datasets.krumsiek11()
+    # TODO: this should be fixed in scanpy instead
+    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+        orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
     getattr(orig, f"write_{diskfmt}")(filepth)
-    read = getattr(ad, f"read_{diskfmt}")(filepth)
+    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+        read = getattr(ad, f"read_{diskfmt}")(filepth)
 
     assert_equal(orig, read, exact=True)
 

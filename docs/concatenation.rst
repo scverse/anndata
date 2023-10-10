@@ -33,7 +33,7 @@ Let's start off with an example:
 
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 
-    >>> groups = pbmc.obs.groupby("louvain").indices
+    >>> groups = pbmc.obs.groupby("louvain", observed=True).indices
     >>> pbmc_concat = ad.concat([pbmc[inds] for inds in groups.values()], merge="same")
     >>> assert np.array_equal(pbmc.X, pbmc_concat[pbmc.obs_names].X)
     >>> pbmc_concat

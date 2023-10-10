@@ -145,6 +145,9 @@ def test_concat_interface_errors():
         concat([])
 
 
+@pytest.mark.filterwarnings(
+    r"ignore:The AnnData\.concatenate method is deprecated:FutureWarning"
+)
 @pytest.mark.parametrize(
     ["concat_func", "backwards_compat"],
     [

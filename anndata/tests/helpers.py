@@ -4,7 +4,7 @@ import random
 import re
 import warnings
 from collections.abc import Collection, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
 
@@ -15,7 +15,7 @@ import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-from anndata import AnnData, Raw
+from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
@@ -256,17 +256,25 @@ def gen_adata(
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    adata = AnnData(
-        X=X,
-        obs=obs,
-        var=var,
-        obsm=obsm,
-        varm=varm,
-        layers=layers,
-        obsp=obsp,
-        varp=varp,
-        uns=uns,
+
+    ctx = (
+        pytest.warns(ExperimentalFeatureWarning)
+        if AwkArray in {*obsm_types, *varm_types}
+        else nullcontext()
     )
+
+    with ctx:
+        adata = AnnData(
+            X=X,
+            obs=obs,
+            var=var,
+            obsm=obsm,
+            varm=varm,
+            layers=layers,
+            obsp=obsp,
+            varp=varp,
+            uns=uns,
+        )
     return adata
 
 

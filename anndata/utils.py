@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 import warnings
 from functools import singledispatch, wraps
 from typing import TYPE_CHECKING, Any
@@ -309,6 +311,14 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
         arr[name] = np.array(cols[i], dtype=dtype_list[i][1])
 
     return arr
+
+
+def warn_once(msg: str, category: type[Warning], stacklevel: int = 1):
+    warnings.warn(msg, category, stacklevel=stacklevel)
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        # Prevent from showing up every time an awkward array is used
+        # You'd think `'once'` works, but it doesn't at the repl and in notebooks
+        warnings.filterwarnings("ignore", category=category, message=re.escape(msg))
 
 
 def deprecated(new_name: str):

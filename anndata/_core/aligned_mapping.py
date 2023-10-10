@@ -19,7 +19,7 @@ from scipy.sparse import spmatrix
 from anndata._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from anndata.compat import AwkArray
 
-from ..utils import deprecated, dim_len, ensure_df_homogeneous
+from ..utils import deprecated, dim_len, ensure_df_homogeneous, warn_once
 from .access import ElementRef
 from .index import _subset
 from .views import as_view, view_update
@@ -61,18 +61,11 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         if isinstance(val, AwkArray):
-            warnings.warn(
+            warn_once(
                 "Support for Awkward Arrays is currently experimental. "
                 "Behavior may change in the future. Please report any issues you may encounter!",
                 ExperimentalFeatureWarning,
                 # stacklevel=3,
-            )
-            # Prevent from showing up every time an awkward array is used
-            # You'd think `once` works, but it doesn't at the repl and in notebooks
-            warnings.filterwarnings(
-                "ignore",
-                category=ExperimentalFeatureWarning,
-                message="Support for Awkward Arrays is currently experimental.*",
             )
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] != dim_len(val, i):
@@ -122,7 +115,9 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         for k, v in self.items():
             if isinstance(v, AwkArray):
                 # Shallow copy since awkward array buffers are immutable
-                d[k] = copy(v)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+                    d[k] = copy(v)
             else:
                 d[k] = v.copy()
         return d

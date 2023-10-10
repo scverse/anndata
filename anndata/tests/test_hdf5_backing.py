@@ -89,11 +89,11 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
     orig.write(orig_pth)
 
-    backed = ad.read(orig_pth, backed=backed_mode)
+    backed = ad.read_h5ad(orig_pth, backed=backed_mode)
     backed.write(backed_pth, as_dense=as_dense)
     backed.file.close()
 
-    from_backed = ad.read(backed_pth)
+    from_backed = ad.read_h5ad(backed_pth)
     assert np.all(asarray(orig.X) == asarray(from_backed.X))
 
 

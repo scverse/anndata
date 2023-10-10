@@ -116,21 +116,6 @@ addopts = [
 ]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]
-filterwarnings = [
-    'error',
-    # We still test deprecated functions
-    'ignore:The AnnData\.concatenate method is deprecated:FutureWarning',
-    'ignore:`anndata\.read` is deprecated:FutureWarning',
-    # We test our experimental features too
-    'ignore::anndata._warnings.ExperimentalFeatureWarning',
-    # Third party issues
-    'ignore::numba.core.errors.NumbaDeprecationWarning', # we don’t import numba
-    # TODO: Catch the following ones in tests or fix them
-    'default::anndata._warnings.ImplicitModificationWarning',
-    'default:.*names are not unique. To make them unique:UserWarning',
-    'default::scipy.sparse._base.SparseEfficiencyWarning',
-    'default::dask.array.core.PerformanceWarning',
-]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
 markers = ["gpu: mark test to run on GPU"]

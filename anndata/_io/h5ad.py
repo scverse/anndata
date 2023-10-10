@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
@@ -17,7 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from anndata._warnings import OldFormatWarning
+from anndata._warnings import ExperimentalFeatureWarning, OldFormatWarning
 
 from .._core.anndata import AnnData
 from .._core.file_backing import AnnDataFileManager, filename
@@ -231,15 +232,17 @@ def read_h5ad(
 
         def callback(func, elem_name: str, elem, iospec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                return AnnData(
-                    **{
-                        # This is covering up backwards compat in the anndata initializer
-                        # In most cases we should be able to call `func(elen[k])` instead
-                        k: read_dispatched(elem[k], callback)
-                        for k in elem.keys()
-                        if not k.startswith("raw.")
-                    }
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+                    return AnnData(
+                        **{
+                            # This is covering up backwards compat in the anndata initializer
+                            # In most cases we should be able to call `func(elen[k])` instead
+                            k: read_dispatched(elem[k], callback)
+                            for k in elem.keys()
+                            if not k.startswith("raw.")
+                        }
+                    )
             elif elem_name.startswith("/raw."):
                 return None
             elif elem_name == "/X" and "X" in as_sparse:
