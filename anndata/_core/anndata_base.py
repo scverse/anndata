@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from abc import abstractmethod
-from typing import Tuple
 
 from ..utils import DeprecationMixinMeta
 
@@ -119,6 +120,6 @@ class AbstractAnnData(metaclass=DeprecationMixinMeta):
         pass
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         """Shape of data matrix (:attr:`n_obs`, :attr:`n_vars`)."""
         return self.n_obs, self.n_vars
