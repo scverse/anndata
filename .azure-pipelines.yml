@@ -63,10 +63,12 @@ jobs:
         condition: and(eq(variables['RUN_COVERAGE'], 'yes'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
 
       # TODO: fix all the exceptions here
+      # replacing “:initializing view as actual:UserWarning“ with “::anndata._warnings.ImplicitModificationWarning”
+      # breaks because we’re not using editable installs or a src/ layout
       - script: >
           pytest
           -W error
-          -W 'default::anndata._warnings.ImplicitModificationWarning'
+          -W 'default:initializing view as actual:UserWarning'
           -W 'default:Observation names are not unique. To make them unique:UserWarning'
           -W 'default:Variable names are not unique. To make them unique:UserWarning'
           -W 'default::scipy.sparse._base.SparseEfficiencyWarning'
