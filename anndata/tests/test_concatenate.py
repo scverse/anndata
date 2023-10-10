@@ -814,7 +814,8 @@ def test_pairwise_concat(axis, array_type):
 
     # Check values of included elements
     full_inds = np.arange(w_pairwise.shape[axis])
-    groups = getattr(w_pairwise, dim).groupby("orig").indices
+    obs_var: pd.DataFrame = getattr(w_pairwise, dim)
+    groups = obs_var.groupby("orig", observed=True).indices
     for k, inds in groups.items():
         orig_arr = getattr(adatas[k], dim_attr)["arr"]
         full_arr = getattr(w_pairwise, dim_attr)["arr"]

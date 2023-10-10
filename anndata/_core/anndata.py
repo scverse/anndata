@@ -875,23 +875,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             value = pd.Index(value)
             if not isinstance(value.name, (str, type(None))):
                 value.name = None
-        # fmt: off
         if (
-            not isinstance(value, pd.RangeIndex)
+            len(value) > 0
+            and not isinstance(value, pd.RangeIndex)
             and infer_dtype(value) not in ("string", "bytes")
         ):
             sample = list(value[: min(len(value), 5)])
-            warnings.warn(dedent(
+            msg = dedent(
                 f"""
                 AnnData expects .{attr}.index to contain strings, but got values like:
                     {sample}
 
                     Inferred to be: {infer_dtype(value)}
                 """
-                ), # noqa
-                stacklevel=2,
             )
-        # fmt: on
+            warnings.warn(msg, stacklevel=2)
         return value
 
     def _set_dim_index(self, value: pd.Index, attr: str):
