@@ -8,7 +8,6 @@ from typing import Callable, Literal, Union
 import numpy as np
 import pandas as pd
 from h5py import Dataset
-from packaging.version import parse as parse_version
 
 from ..._core.aligned_mapping import AxisArrays
 from ..._core.anndata import AnnData
@@ -16,6 +15,7 @@ from ..._core.index import Index, _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
+from ...compat import _map_cat_to_str
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -721,15 +721,9 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             categories=keys,
         )
         if index_unique is not None:
-            if parse_version(pd.__version__) >= parse_version("2.0"):
-                # Argument added in pandas 2.0
-                concat_indices = concat_indices.str.cat(
-                    label_col.map(str, na_action="ignore"), sep=index_unique
-                )
-            else:
-                concat_indices = concat_indices.str.cat(
-                    label_col.map(str), sep=index_unique
-                )
+            concat_indices = concat_indices.str.cat(
+                _map_cat_to_str(label_col), sep=index_unique
+            )
         self.obs_names = pd.Index(concat_indices)
 
         if not self.obs_names.is_unique:

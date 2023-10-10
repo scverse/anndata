@@ -14,6 +14,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+from packaging.version import parse as _parse_version
 from scipy.sparse import issparse, spmatrix
 
 from .exceptiongroups import add_note  # noqa: F401
@@ -391,3 +392,11 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
+
+
+def _map_cat_to_str(cat: pd.Categorical):
+    if _parse_version(pd.__version__) >= _parse_version("2.0"):
+        # Argument added in pandas 2.0
+        return cat.map(str, na_action="ignore")
+    else:
+        return cat.map(str)
