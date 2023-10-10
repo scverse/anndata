@@ -91,7 +91,7 @@ test = [
     "httpx",                   # For data downloading
     "dask[array,distributed]",
     "awkward>=2.3",
-    "pyarrow",                 # For non-deprecated awkward array functionality
+    "pyarrow",
     "pytest_memray",
 ]
 gpu = ["cupy"]
