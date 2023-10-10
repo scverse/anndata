@@ -10,10 +10,12 @@ import warnings
 import h5py
 import numpy as np
 import pytest
+import zarr
 from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
+from anndata.experimental import CSRDataset, write_elem
 from anndata.tests.helpers import assert_equal
 
 
@@ -144,3 +146,18 @@ def test_deprecated_sparse_dataset_values():
 
     with pytest.warns(FutureWarning, match="Please use .format"):
         mtx_backed.format_str
+
+
+def test_deprecated_sparse_dataset():
+    from anndata._core.sparse_dataset import SparseDataset
+
+    mem_X = sparse.random(50, 50, format="csr")
+    g = zarr.group()
+    write_elem(g, "X", mem_X)
+    with pytest.warns(FutureWarning, match="SparseDataset is deprecated"):
+        X = SparseDataset(g["X"])
+
+    assert isinstance(X, CSRDataset)
+
+    with pytest.warns(FutureWarning, match="SparseDataset is deprecated"):
+        assert isinstance(X, SparseDataset)
