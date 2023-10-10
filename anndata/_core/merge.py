@@ -1239,7 +1239,9 @@ def concat(
         [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(
+            label_col.map(str, na_action="ignore"), sep=index_unique
+        )
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = merge_indices(
