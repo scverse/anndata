@@ -6,7 +6,7 @@ from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
 from itertools import chain, permutations, product
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -98,7 +98,7 @@ def fill_val(request):
 
 
 @pytest.fixture(params=[0, 1])
-def axis(request):
+def axis(request) -> Literal[0, 1]:
     return request.param
 
 
@@ -1341,7 +1341,7 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
-    ctx = (
+    ctx_awk = (
         pytest.warns(
             ExperimentalFeatureWarning,
             match=r"Outer joins on awkward.Arrays will have different return values in the future.",
@@ -1349,10 +1349,15 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
         if join_type == "outer"
         else nullcontext()
     )
-    with ctx, pytest.warns(
-        FutureWarning,
-        match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
-    ):
+    ctx_concat_empty = (
+        pytest.warns(
+            FutureWarning,
+            match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
+        )
+        if join_type == "inner" and shape[axis] == 0
+        else nullcontext()
+    )
+    with ctx_awk, ctx_concat_empty:
         result = concat(
             {"a": a, "b": b},
             axis=axis,
