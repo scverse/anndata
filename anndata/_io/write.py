@@ -103,11 +103,7 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
     for key in adata.layers.keys():
         layers[key] = adata.layers[key].T
 
-    from numba.core.errors import NumbaDeprecationWarning
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", NumbaDeprecationWarning)
-        from loompy import create
+    from loompy import create
 
     if filename.exists():
         filename.unlink()
