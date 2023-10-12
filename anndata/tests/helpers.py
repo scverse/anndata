@@ -4,7 +4,7 @@ import random
 import re
 import warnings
 from collections.abc import Collection, Mapping
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
 
