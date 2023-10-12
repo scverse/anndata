@@ -1349,7 +1349,10 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
         if join_type == "outer"
         else nullcontext()
     )
-    with ctx:
+    with ctx, pytest.warns(
+        FutureWarning,
+        match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
+    ):
         result = concat(
             {"a": a, "b": b},
             axis=axis,

@@ -395,7 +395,15 @@ def test_concat_mixed_types(key, arrays, expected, join):
         to_concat.append(tmp_adata)
 
     if isinstance(expected, type) and issubclass(expected, Exception):
-        with pytest.raises(expected):
+        ctx = (
+            pytest.warns(
+                FutureWarning,
+                match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
+            )
+            if any(df.empty for df in arrays if isinstance(df, pd.DataFrame))
+            else nullcontext()
+        )
+        with pytest.raises(expected), ctx:
             anndata.concat(to_concat, axis=axis, join=join)
     else:
         print(to_concat)
