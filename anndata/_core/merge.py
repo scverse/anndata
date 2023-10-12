@@ -36,7 +36,7 @@ from ..compat import (
     DaskArray,
     _map_cat_to_str,
 )
-from ..utils import asarray, dim_len
+from ..utils import asarray, dim_len, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 
@@ -220,6 +220,7 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
 
     For catching cases where pandas would convert to object dtype.
     """
+    dfs = list(dfs)
     # Get shared categorical columns
     df_dtypes = [dict(df.dtypes) for df in dfs]
     columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
