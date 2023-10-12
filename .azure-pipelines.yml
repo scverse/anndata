@@ -63,12 +63,13 @@ jobs:
         condition: and(eq(variables['RUN_COVERAGE'], 'yes'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
 
       # TODO: fix all the exceptions here
-      # replacing “:Trying to modify attribute” and “:Transforming to str index”
+      # replacing “:Setting element”, “:Trying to modify attribute” and “:Transforming to str index”
       # with “::anndata._warnings.ImplicitModificationWarning” breaks,
       # because we’re neither using editable installs nor a src/ layout
       - script: >
           pytest
           -W error
+          -W 'default:Setting element:UserWarning'
           -W 'default:Trying to modify attribute:UserWarning'
           -W 'default:Transforming to str index:UserWarning'
           -W 'default:Observation names are not unique. To make them unique:UserWarning'

@@ -6,6 +6,7 @@ from importlib.util import find_spec
 import numpy as np
 import pandas as pd
 import pytest
+from numba.core.errors import NumbaDeprecationWarning
 
 from anndata import AnnData, read_h5ad, read_loom
 from anndata.tests.helpers import gen_typed_df_t2_size
@@ -78,7 +79,10 @@ def test_readwrite(backing_h5ad):
 def test_readwrite_loom(tmp_path):
     loom_path = tmp_path / "test.loom"
     adata = AnnData(X=X, layers=dict(L=L.copy()))
-    adata.write_loom(loom_path)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NumbaDeprecationWarning)
+        adata.write_loom(loom_path)
     adata_read = read_loom(loom_path, X_name="")
 
     assert adata.layers.keys() == adata_read.layers.keys()
