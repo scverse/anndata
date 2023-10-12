@@ -115,9 +115,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         for k, v in self.items():
             if isinstance(v, AwkArray):
                 # Shallow copy since awkward array buffers are immutable
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", ExperimentalFeatureWarning)
-                    d[k] = copy(v)
+                d[k] = copy(v)
             else:
                 d[k] = v.copy()
         return d

@@ -820,8 +820,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @raw.setter
     def raw(self, value: AnnData):
-        from .._warnings import ExperimentalFeatureWarning
-
         if value is None:
             del self.raw
         elif not isinstance(value, AnnData):
@@ -829,9 +827,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             if self.is_view:
                 self._init_as_actual(self.copy())
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", ExperimentalFeatureWarning)
-                self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
+            self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
 
     @raw.deleter
     def raw(self):
@@ -1588,21 +1584,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def copy(self, filename: PathLike | None = None) -> AnnData:
         """Full copy, optionally on disk."""
-        from .._warnings import ExperimentalFeatureWarning
-
         if not self.isbacked:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", ExperimentalFeatureWarning)
-                if self.is_view and self._has_X():
-                    # TODO: How do I unambiguously check if this is a copy?
-                    # Subsetting this way means we don’t have to have a view type
-                    # defined for the matrix, which is needed for some of the
-                    # current distributed backend. Specifically Dask.
-                    return self._mutated_copy(
-                        X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
-                    )
-                else:
-                    return self._mutated_copy()
+            if self.is_view and self._has_X():
+                # TODO: How do I unambiguously check if this is a copy?
+                # Subsetting this way means we don’t have to have a view type
+                # defined for the matrix, which is needed for some of the
+                # current distributed backend. Specifically Dask.
+                return self._mutated_copy(
+                    X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
+                )
+            else:
+                return self._mutated_copy()
         else:
             from .._io import read_h5ad, write_h5ad
 

@@ -502,6 +502,10 @@ def test_layers_view():
     assert view_hash != joblib.hash(view_adata)
 
 
+# This is thrown on too many lines to filter it with pytest.warns
+@pytest.mark.filterwarnings(
+    "ignore:Support for Awkward Arrays is currently experimental:anndata._warnings.ExperimentalFeatureWarning"
+)
 # TODO: This can be flaky. Make that stop
 def test_view_of_view(matrix_type, subset_func, subset_func2):
     adata = gen_adata((30, 15), X_type=matrix_type)

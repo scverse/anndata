@@ -3,6 +3,8 @@ For tests using dask
 """
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 import pytest
 
@@ -107,21 +109,21 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
     pth = tmp_path / f"test_write.{diskfmt}"
     g = as_group(pth, mode="w")
 
-    with dd.LocalCluster(n_workers=1, threads_per_worker=1, processes=False) as cluster:
-        with dd.Client(cluster):
-            M, N = adata.X.shape
-            adata.obsm["a"] = da.random.random((M, 10))
-            adata.obsm["b"] = da.random.random((M, 10))
-            adata.varm["a"] = da.random.random((N, 10))
-            orig = adata
-            if diskfmt == "h5ad":
-                with pytest.raises(
-                    ValueError, match="Cannot write dask arrays to hdf5"
-                ):
-                    write_elem(g, "", orig)
-                return
-            write_elem(g, "", orig)
-            curr = read_elem(g)
+    with dd.LocalCluster(
+        n_workers=1, threads_per_worker=1, processes=False
+    ) as cluster, dd.Client(cluster), warnings.catch_warnings():
+        warnings.simplefilter("ignore", ad.ExperimentalFeatureWarning)
+        M, N = adata.X.shape
+        adata.obsm["a"] = da.random.random((M, 10))
+        adata.obsm["b"] = da.random.random((M, 10))
+        adata.varm["a"] = da.random.random((N, 10))
+        orig = adata
+        if diskfmt == "h5ad":
+            with pytest.raises(ValueError, match="Cannot write dask arrays to hdf5"):
+                write_elem(g, "", orig)
+            return
+        write_elem(g, "", orig)
+        curr = read_elem(g)
 
     with pytest.raises(Exception):
         assert_equal(curr.obsm["a"], curr.obsm["b"])

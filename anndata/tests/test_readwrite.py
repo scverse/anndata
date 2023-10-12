@@ -89,7 +89,8 @@ def rw(backing_h5ad):
     M, N = 100, 101
     orig = gen_adata((M, N))
     orig.write(backing_h5ad)
-    curr = ad.read_h5ad(backing_h5ad)
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
 
 
@@ -240,12 +241,14 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
 
     M, N = 100, 101
     adata = gen_adata((M, N), X_type=typ)
-    adata.raw = adata
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        adata.raw = adata
 
     adata.write_h5ad(h5ad_pth)
     adata.write_zarr(zarr_pth)
-    from_h5ad = ad.read_h5ad(h5ad_pth)
-    from_zarr = ad.read_zarr(zarr_pth)
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        from_h5ad = ad.read_h5ad(h5ad_pth)
+        from_zarr = ad.read_zarr(zarr_pth)
 
     assert_equal(from_h5ad, from_zarr, exact=True)
 
@@ -325,7 +328,9 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
         msg = "\n\t".join(not_compressed)
         raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
 
-    assert_equal(adata, ad.read_h5ad(pth))
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        expected = ad.read_h5ad(pth)
+    assert_equal(adata, expected)
 
 
 def test_zarr_compression(tmp_path):
@@ -350,7 +355,9 @@ def test_zarr_compression(tmp_path):
         msg = "\n\t".join(not_compressed)
         raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
 
-    assert_equal(adata, ad.read_zarr(pth))
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        expected = ad.read_zarr(pth)
+    assert_equal(adata, expected)
 
 
 def test_changed_obs_var_names(tmp_path, diskfmt):
@@ -359,12 +366,14 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
     orig = gen_adata((10, 10))
     orig.obs_names.name = "obs"
     orig.var_names.name = "var"
-    modified = orig.copy()
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        modified = orig.copy()
     modified.obs_names.name = "cells"
     modified.var_names.name = "genes"
 
     getattr(orig, f"write_{diskfmt}")(filepth)
-    read = getattr(ad, f"read_{diskfmt}")(filepth)
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        read = getattr(ad, f"read_{diskfmt}")(filepth)
 
     assert_equal(orig, read, exact=True)
     assert orig.var.index.name == "var"
@@ -690,7 +699,8 @@ def test_zarr_chunk_X(tmp_path):
 
     z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
     assert z["X"].chunks == (10, 10)
-    from_zarr = ad.read_zarr(zarr_pth)
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
 
 
@@ -782,11 +792,13 @@ def test_adata_in_uns(tmp_path, diskfmt):
         "b": gen_adata((12, 8)),
     }
     another_one = gen_adata((2, 5))
-    another_one.raw = gen_adata((2, 7))
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        another_one.raw = gen_adata((2, 7))
     orig.uns["adatas"]["b"].uns["another_one"] = another_one
 
     write(orig, pth)
-    curr = read(pth)
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        curr = read(pth)
 
     assert_equal(orig, curr)
 

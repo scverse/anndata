@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from scipy import sparse
 
+from anndata import ExperimentalFeatureWarning
 from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
@@ -32,9 +33,10 @@ def test_inplace_subset_var(matrix_type, subset_func):
     orig = gen_adata((30, 30), X_type=matrix_type)
     subset_idx = subset_func(orig.var_names)
 
-    modified = orig.copy()
-    from_view = orig[:, subset_idx].copy()
-    modified._inplace_subset_var(subset_idx)
+    with pytest.warns(ExperimentalFeatureWarning):
+        modified = orig.copy()
+        from_view = orig[:, subset_idx].copy()
+        modified._inplace_subset_var(subset_idx)
 
     assert_equal(asarray(from_view.X), asarray(modified.X), exact=True)
     assert_equal(from_view.obs, modified.obs, exact=True)
@@ -52,9 +54,10 @@ def test_inplace_subset_obs(matrix_type, subset_func):
     orig = gen_adata((30, 30), X_type=matrix_type)
     subset_idx = subset_func(orig.obs_names)
 
-    modified = orig.copy()
-    from_view = orig[subset_idx, :].copy()
-    modified._inplace_subset_obs(subset_idx)
+    with pytest.warns(ExperimentalFeatureWarning):
+        modified = orig.copy()
+        from_view = orig[subset_idx, :].copy()
+        modified._inplace_subset_obs(subset_idx)
 
     assert_equal(asarray(from_view.X), asarray(modified.X), exact=True)
     assert_equal(from_view.obs, modified.obs, exact=True)
@@ -75,8 +78,9 @@ def test_inplace_subset_no_X(subset_func, dim):
 
     subset_idx = subset_func(getattr(orig, f"{dim}_names"))
 
-    modified = orig.copy()
-    from_view = subset_dim(orig, **{dim: subset_idx}).copy()
-    getattr(modified, f"_inplace_subset_{dim}")(subset_idx)
+    with pytest.warns(ExperimentalFeatureWarning):
+        modified = orig.copy()
+        from_view = subset_dim(orig, **{dim: subset_idx}).copy()
+        getattr(modified, f"_inplace_subset_{dim}")(subset_idx)
 
     assert_equal(modified, from_view, exact=True)

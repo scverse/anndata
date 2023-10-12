@@ -122,7 +122,7 @@ def test_copy(key):
     ctx = pytest.warns(ExperimentalFeatureWarning) if key != "uns" else nullcontext()
     with ctx:
         getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
-    adata_copy = adata.copy()
+        adata_copy = adata.copy()
     getattr(adata_copy, key)["awk"]["c"] = np.full((3, 1), 4)
     getattr(adata_copy, key)["awk"]["d"] = np.full((3, 1), 5)
 

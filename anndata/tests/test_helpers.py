@@ -106,8 +106,9 @@ def test_assert_equal():
         assert_equal(np.array(list(ascii_letters)), np.array(list(ascii_letters))[::-1])
 
     adata = gen_adata((10, 10))
-    adata.raw = adata.copy()
-    assert_equal(adata, adata.copy(), exact=True)
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        adata.raw = adata.copy()
+        assert_equal(adata, adata.copy(), exact=True)
     # TODO: I’m not sure this is good behaviour, I’ve disabled in for now.
     # assert_equal(
     #     adata,
@@ -117,14 +118,16 @@ def test_assert_equal():
     #     ].copy(),
     #     exact=False,
     # )
-    adata2 = adata.copy()
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        adata2 = adata.copy()
     to_modify = list(adata2.layers.keys())[0]
     del adata2.layers[to_modify]
     with pytest.raises(AssertionError) as missing_layer_error:
         assert_equal(adata, adata2)
     assert "layers" in str(missing_layer_error.value)
     # `to_modify` will be in pytest info
-    adata2 = adata.copy()
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        adata2 = adata.copy()
     adata2.layers[to_modify][0, 0] = adata2.layers[to_modify][0, 0] + 1
     with pytest.raises(AssertionError) as changed_layer_error:
         assert_equal(adata, adata2)
@@ -150,6 +153,10 @@ def test_assert_equal():
         assert_equal(ordered_cat, unordered_cat, exact=True)
 
 
+# This is thrown on too many lines to filter it with pytest.warns
+@pytest.mark.filterwarnings(
+    "ignore:Support for Awkward Arrays is currently experimental:anndata._warnings.ExperimentalFeatureWarning"
+)
 def test_assert_equal_raw():
     base = gen_adata((10, 10))
     orig = base.copy()
@@ -173,8 +180,9 @@ def test_assert_equal_raw_presence():
     # This was causing some testing issues during
     # https://github.com/scverse/anndata/pull/542
     a = gen_adata((10, 20))
-    b = a.copy()
-    a.raw = a.copy()
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        b = a.copy()
+        a.raw = a.copy()
     assert b.raw is None
 
     with pytest.raises(AssertionError):
@@ -187,7 +195,8 @@ def test_assert_equal_raw_presence():
 # Should they not be if an exact comparison is made?
 def test_assert_equal_aligned_mapping():
     adata1 = gen_adata((10, 10))
-    adata2 = adata1.copy()
+    with pytest.warns(ad.ExperimentalFeatureWarning):
+        adata2 = adata1.copy()
 
     for attr in ["obsm", "varm", "layers", "obsp", "varp"]:
         assert_equal(getattr(adata1, attr), getattr(adata2, attr))

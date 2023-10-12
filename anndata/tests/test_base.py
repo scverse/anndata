@@ -11,7 +11,7 @@ from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
-from anndata import AnnData
+from anndata import AnnData, ExperimentalFeatureWarning
 from anndata.tests.helpers import assert_equal, gen_adata
 
 # some test objects that we use below
@@ -224,9 +224,10 @@ def test_setting_dim_index(dim):
     mapping_attr = f"{dim}m"
 
     orig = gen_adata((5, 5))
-    orig.raw = orig
-    curr = orig.copy()
-    view = orig[:, :]
+    with pytest.warns(ExperimentalFeatureWarning):
+        orig.raw = orig
+        curr = orig.copy()
+        view = orig[:, :]
     new_idx = pd.Index(list("abcde"), name="letters")
 
     setattr(curr, index_attr, new_idx)

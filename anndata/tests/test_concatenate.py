@@ -1382,7 +1382,8 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
             check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
 
         if shape[axis] > 0:
-            b_result = result[axis_idx].copy()
+            with pytest.warns(ExperimentalFeatureWarning):
+                b_result = result[axis_idx].copy()
             mapping_elem = f"{dim}m"
             setattr(b_result, f"{dim}_names", getattr(b, f"{dim}_names"))
             for k, result_elem in getattr(b_result, mapping_elem).items():
@@ -1430,7 +1431,8 @@ def test_concat_null_X():
     adatas_orig = {k: gen_adata((20, 10)) for k in list("abc")}
     adatas_no_X = {}
     for k, v in adatas_orig.items():
-        v = v.copy()
+        with pytest.warns(ExperimentalFeatureWarning):
+            v = v.copy()
         del v.X
         adatas_no_X[k] = v
 

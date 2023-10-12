@@ -177,6 +177,10 @@ def test_backed_raw(tmp_path):
     assert_equal(final_adata, mem_adata)
 
 
+# This is thrown on too many lines to filter it with pytest.warns
+@pytest.mark.filterwarnings(
+    "ignore:Support for Awkward Arrays is currently experimental:anndata._warnings.ExperimentalFeatureWarning"
+)
 @pytest.mark.parametrize(
     "array_type",
     [
