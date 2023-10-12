@@ -22,13 +22,13 @@ from .._core.merge import (
     StrategiesLiteral,
     _resolve_dim,
     concat_arrays,
-    concat_with_unified_dtypes,
     gen_inner_reindexers,
     gen_reindexer,
     intersect_keys,
     merge_dataframes,
     merge_indices,
     resolve_merge_strategy,
+    unify_dtypes,
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
@@ -383,9 +383,10 @@ def _write_alt_annot(groups, output_group, alt_dim, alt_indices, merge):
 
 
 def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col, join):
-    concat_annot = concat_with_unified_dtypes(
-        [read_elem(g[dim]) for g in groups],
+    concat_annot = pd.concat(
+        unify_dtypes(read_elem(g[dim]) for g in groups),
         join=join,
+        ignore_index=True,
     )
     concat_annot.index = concat_indices
     if label is not None:

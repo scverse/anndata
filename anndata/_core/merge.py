@@ -214,7 +214,7 @@ def as_cp_sparse(x) -> CupySparseMatrix:
         return cpsparse.csr_matrix(x)
 
 
-def _unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
+def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
     """
     Attempts to unify datatypes from multiple dataframes.
 
@@ -246,17 +246,6 @@ def _unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
                 df[col] = df[col].astype(dtype)
 
     return dfs
-
-
-def concat_with_unified_dtypes(
-    dfs: Iterable[pd.DataFrame],
-    *,
-    join: Literal["inner", "outer"] = "outer",
-    axis: Literal[0, 1] = 0,
-) -> pd.DataFrame:
-    dfs = _unify_dtypes(dfs)
-    nonempty_dfs = [df for df in dfs if len(df)]
-    return pd.concat(nonempty_dfs, ignore_index=True, join=join, axis=axis)
 
 
 def try_unifying_dtype(
@@ -763,9 +752,10 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
                 "Cannot concatenate a dataframe with other array types."
             )
         # TODO: behaviour here should be chosen through a merge strategy
-        df = concat_with_unified_dtypes(
-            [f(x) for f, x in zip(reindexers, arrays)],
+        df = pd.concat(
+            unify_dtypes(f(x) for f, x in zip(reindexers, arrays)),
             axis=axis,
+            ignore_index=True,
         )
         df.index = index
         return df
@@ -1266,9 +1256,10 @@ def concat(
 
     # Annotation for concatenation axis
     check_combinable_cols([getattr(a, dim).columns for a in adatas], join=join)
-    concat_annot = concat_with_unified_dtypes(
-        [getattr(a, dim) for a in adatas],
+    concat_annot = pd.concat(
+        unify_dtypes(getattr(a, dim) for a in adatas),
         join=join,
+        ignore_index=True,
     )
     concat_annot.index = concat_indices
     if label is not None:
