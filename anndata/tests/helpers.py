@@ -256,14 +256,12 @@ def gen_adata(
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-
-    ctx = (
-        pytest.warns(ExperimentalFeatureWarning)
-        if AwkArray in {*obsm_types, *varm_types}
-        else nullcontext()
-    )
-
-    with ctx:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            "Support for Awkward Arrays is currently experimental",
+            ExperimentalFeatureWarning,
+        )
         adata = AnnData(
             X=X,
             obs=obs,
