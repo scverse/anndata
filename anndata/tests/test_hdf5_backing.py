@@ -81,6 +81,7 @@ def as_dense(request):
 
 
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
+@pytest.mark.filterwarnings("error")
 def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.h5ad"

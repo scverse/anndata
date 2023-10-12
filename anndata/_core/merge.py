@@ -28,8 +28,15 @@ from scipy.sparse import spmatrix
 
 from anndata._warnings import ExperimentalFeatureWarning
 
-from ..compat import AwkArray, CupyArray, CupyCSRMatrix, CupySparseMatrix, DaskArray
-from ..utils import asarray, dim_len, warn_once
+from ..compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSRMatrix,
+    CupySparseMatrix,
+    DaskArray,
+    _map_cat_to_str,
+)
+from ..utils import asarray, dim_len
 from .anndata import AnnData
 from .index import _subset, make_slice
 
@@ -1246,7 +1253,7 @@ def concat(
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
-            label_col.map(str, na_action="ignore"), sep=index_unique
+            _map_cat_to_str(label_col), sep=index_unique
         )
     concat_indices = pd.Index(concat_indices)
 
