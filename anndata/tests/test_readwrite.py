@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_matrix, csr_matrix
 
 import anndata as ad
@@ -388,7 +389,9 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
     adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
 
-    adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NumbaDeprecationWarning)
+        adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
 
     adata = ad.read_loom(
         tmp_path / "test.loom",
