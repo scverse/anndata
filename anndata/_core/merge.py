@@ -1282,7 +1282,7 @@ def concat(
         )
         join_keys = union_keys
     else:
-        assert False
+        assert False, f"{join=} should have been validated above by pd.concat"
 
     layers = concat_aligned_mapping(
         [a.layers for a in adatas], axis=axis, reindexers=reindexers
