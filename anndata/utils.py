@@ -349,9 +349,10 @@ def deprecated(
     """
 
     def decorator(func):
+        name = func.__qualname__
         msg = (
-            f"Use {new_name} instead of {func.__name__}, "
-            f"{func.__name__} will be removed in the future."
+            f"Use {new_name} instead of {name}, "
+            f"{name} is deprecated and will be removed in the future."
         )
         if add_msg:
             msg += f" {add_msg}"
