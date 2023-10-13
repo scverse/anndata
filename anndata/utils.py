@@ -21,6 +21,24 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def import_name(name: str) -> Any:
+    from importlib import import_module
+
+    parts = name.split(".")
+    obj = import_module(parts[0])
+    for i, name in enumerate(parts[1:]):
+        try:
+            obj = import_module(f"{obj.__name__}.{name}")
+        except ModuleNotFoundError:
+            break
+    for name in parts[i + 1 :]:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError:
+            raise RuntimeError(f"{parts[:i]}, {parts[i+1:]}, {obj} {name}")
+    return obj
+
+
 @singledispatch
 def asarray(x):
     """Convert x to a numpy array"""
@@ -321,7 +339,9 @@ def warn_once(msg: str, category: type[Warning], stacklevel: int = 1):
         warnings.filterwarnings("ignore", category=category, message=re.escape(msg))
 
 
-def deprecated(new_name: str):
+def deprecated(
+    new_name: str, category: type[Warning] = DeprecationWarning, add_msg: str = ""
+):
     """\
     This is a decorator which can be used to mark functions
     as deprecated. It will result in a warning being emitted
@@ -329,20 +349,19 @@ def deprecated(new_name: str):
     """
 
     def decorator(func):
+        msg = (
+            f"Use {new_name} instead of {func.__name__}, "
+            f"{func.__name__} will be removed in the future."
+        )
+        if add_msg:
+            msg += f" {add_msg}"
+
         @wraps(func)
         def new_func(*args, **kwargs):
-            # turn off filter
-            warnings.simplefilter("always", DeprecationWarning)
-            warnings.warn(
-                f"Use {new_name} instead of {func.__name__}, "
-                f"{func.__name__} will be removed in the future.",
-                category=DeprecationWarning,
-                stacklevel=2,
-            )
-            warnings.simplefilter("default", DeprecationWarning)  # reset filter
+            warnings.warn(msg, category=category, stacklevel=2)
             return func(*args, **kwargs)
 
-        setattr(new_func, "__deprecated", True)
+        setattr(new_func, "__deprecated", (category, msg))
         return new_func
 
     return decorator

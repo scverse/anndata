@@ -124,7 +124,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
-    @deprecated("dict(obj)")
+    @deprecated("dict(obj)", FutureWarning)
     def as_dict(self) -> dict:
         return dict(self)
 

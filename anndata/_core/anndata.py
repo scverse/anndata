@@ -40,7 +40,7 @@ from ..compat import (
     _move_adj_mtx,
 )
 from ..logging import anndata_logger as logger
-from ..utils import convert_to_dict, dim_len, ensure_df_homogeneous
+from ..utils import convert_to_dict, deprecated, dim_len, ensure_df_homogeneous
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -1608,6 +1608,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
+    @deprecated(
+        "anndata.concat",
+        FutureWarning,
+        "See the tutorial for concat at: "
+        "https://anndata.readthedocs.io/en/latest/concatenation.html",
+    )
     def concatenate(
         self,
         *adatas: AnnData,
@@ -1679,7 +1685,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Examples
         --------
-        Joining on intersection of variables. First, prepare example data:
+        Joining on intersection of variables.
 
         >>> adata1 = AnnData(
         ...     np.array([[1, 2, 3], [4, 5, 6]]),
@@ -1695,14 +1701,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ...     np.array([[1, 2, 3], [4, 5, 6]]),
         ...     dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 2, 3], annoB=[0, 1, 2]),
-        ... )
-
-        They can now be concatenated. Since this method is deprecated, it will raise a warning:
-
-        >>> warnings.filterwarnings(
-        ...     'ignore',
-        ...     r'The AnnData\\.concatenate method is deprecated',
-        ...     FutureWarning,
         ... )
         >>> adata = adata1.concatenate(adata2, adata3)
         >>> adata
@@ -1838,14 +1836,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 6., 5., 0.]], dtype=float32)
         """
         from .merge import concat, merge_dataframes, merge_outer, merge_same
-
-        warnings.warn(
-            "The AnnData.concatenate method is deprecated in favour of the "
-            "anndata.concat function. Please use anndata.concat instead.\n\n"
-            "See the tutorial for concat at: "
-            "https://anndata.readthedocs.io/en/latest/concatenation.html",
-            FutureWarning,
-        )
 
         if self.isbacked:
             raise ValueError("Currently, concatenate only works in memory mode.")

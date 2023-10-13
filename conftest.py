@@ -4,11 +4,14 @@
 # TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
 from __future__ import annotations
 
+import re
+import warnings
 from typing import TYPE_CHECKING
 
 import pytest
 
 from anndata.compat import chdir
+from anndata.utils import import_name
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -17,8 +20,15 @@ doctest_marker = pytest.mark.usefixtures("doctest_env")
 
 
 @pytest.fixture
-def doctest_env(cache: pytest.Cache, tmp_path: Path) -> None:
+def doctest_env(
+    request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
+) -> None:
     from scanpy import settings
+
+    func = import_name(request.node.name)
+    if warning_detail := getattr(func, "__deprecated", None):
+        cat, msg = warning_detail  # type: tuple[type[Warning], str]
+        warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
 
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
