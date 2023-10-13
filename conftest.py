@@ -27,7 +27,7 @@ def doctest_env(
 
     func = import_name(request.node.name)
     if warning_detail := getattr(func, "__deprecated", None):
-        cat, msg = warning_detail  # type: tuple[type[Warning], str]
+        cat, msg, _ = warning_detail  # type: tuple[type[Warning], str, bool]
         warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
 
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")

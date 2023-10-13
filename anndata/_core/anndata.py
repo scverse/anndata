@@ -1613,6 +1613,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         FutureWarning,
         "See the tutorial for concat at: "
         "https://anndata.readthedocs.io/en/latest/concatenation.html",
+        hide=False,
     )
     def concatenate(
         self,

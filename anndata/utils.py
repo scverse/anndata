@@ -340,7 +340,10 @@ def warn_once(msg: str, category: type[Warning], stacklevel: int = 1):
 
 
 def deprecated(
-    new_name: str, category: type[Warning] = DeprecationWarning, add_msg: str = ""
+    new_name: str,
+    category: type[Warning] = DeprecationWarning,
+    add_msg: str = "",
+    hide: bool = True,
 ):
     """\
     This is a decorator which can be used to mark functions
@@ -362,7 +365,7 @@ def deprecated(
             warnings.warn(msg, category=category, stacklevel=2)
             return func(*args, **kwargs)
 
-        setattr(new_func, "__deprecated", (category, msg))
+        setattr(new_func, "__deprecated", (category, msg, hide))
         return new_func
 
     return decorator
@@ -375,13 +378,14 @@ class DeprecationMixinMeta(type):
     """
 
     def __dir__(cls):
-        def is_deprecated(attr):
+        def is_hidden(attr) -> bool:
             if isinstance(attr, property):
                 attr = attr.fget
-            return getattr(attr, "__deprecated", False)
+            _, _, hide = getattr(attr, "__deprecated", (None, None, False))
+            return hide
 
         return [
             item
             for item in type.__dir__(cls)
-            if not is_deprecated(getattr(cls, item, None))
+            if not is_hidden(getattr(cls, item, None))
         ]
