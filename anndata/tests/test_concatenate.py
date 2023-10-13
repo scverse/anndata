@@ -32,7 +32,7 @@ from anndata.tests.helpers import (
 from anndata.utils import asarray
 
 mark_legacy_concatenate = pytest.mark.filterwarnings(
-    r"ignore:The AnnData\.concatenate method is deprecated:FutureWarning"
+    r"ignore:AnnData\.concatenate is deprecated:FutureWarning"
 )
 
 
