@@ -25,7 +25,8 @@ def test_old_format_warning_not_thrown(tmp_path):
     adata.write_h5ad(pth)
 
     with warnings.catch_warnings(record=True) as record:
-        warnings.simplefilter("always", ad._warnings.OldFormatWarning)
+        warnings.simplefilter("always", ad.OldFormatWarning)
+        warnings.simplefilter("ignore", ad.ExperimentalFeatureWarning)
 
         ad.read_h5ad(pth)
 
