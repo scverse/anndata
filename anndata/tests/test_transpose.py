@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
 import pytest
 from scipy import sparse
@@ -25,10 +23,8 @@ def test_transpose_orig():
 
 
 def _add_raw(adata, *, var_subset=slice(None)):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", ad.ExperimentalFeatureWarning)
-        new = adata[:, var_subset].copy()
-        new.raw = adata
+    new = adata[:, var_subset].copy()
+    new.raw = adata
     return new
 
 

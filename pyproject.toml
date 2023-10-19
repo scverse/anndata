@@ -114,6 +114,9 @@ addopts = [
     "--ignore=anndata/core.py",      # deprecated
     "--ignore=anndata/readwrite.py", # deprecated
 ]
+filterwarnings = [
+    "ignore::anndata._warnings.ExperimentalFeatureWarning",
+]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]
 # For some reason this effects how logging is shown when tests are run

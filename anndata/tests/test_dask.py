@@ -112,7 +112,6 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
     with dd.LocalCluster(
         n_workers=1, threads_per_worker=1, processes=False
     ) as cluster, dd.Client(cluster), warnings.catch_warnings():
-        warnings.simplefilter("ignore", ad.ExperimentalFeatureWarning)
         M, N = adata.X.shape
         adata.obsm["a"] = da.random.random((M, 10))
         adata.obsm["b"] = da.random.random((M, 10))

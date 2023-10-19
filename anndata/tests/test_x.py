@@ -7,7 +7,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata import AnnData, ExperimentalFeatureWarning
+from anndata import AnnData
 from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
 
@@ -52,8 +52,7 @@ def test_del_set_equiv_X():
     """Tests that `del adata.X` is equivalent to `adata.X = None`"""
     # test setter and deleter
     orig = gen_adata((10, 10))
-    with pytest.warns(ad.ExperimentalFeatureWarning):
-        copy = orig.copy()
+    copy = orig.copy()
 
     del orig.X
     copy.X = None
@@ -135,7 +134,6 @@ def test_io_missing_X(tmp_path, diskfmt):
 
     write(adata, file_pth)
 
-    with pytest.warns(ExperimentalFeatureWarning):
-        from_disk = read(file_pth)
+    from_disk = read(file_pth)
 
     assert_equal(from_disk, adata)

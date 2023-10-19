@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import warnings
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
@@ -18,7 +17,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from anndata._warnings import ExperimentalFeatureWarning, OldFormatWarning
+from anndata._warnings import OldFormatWarning
 
 from .._core.anndata import AnnData
 from .._core.file_backing import AnnDataFileManager, filename
@@ -153,9 +152,7 @@ def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
 
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-        adata = AnnData(**d)
+    adata = AnnData(**d)
 
     # Backwards compat to <0.7
     if isinstance(f["obs"], h5py.Dataset):

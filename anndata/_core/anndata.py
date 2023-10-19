@@ -30,7 +30,6 @@ from scipy.sparse import csr_matrix, issparse
 from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
-from .._warnings import ExperimentalFeatureWarning
 from ..compat import (
     CupyArray,
     CupySparseMatrix,
@@ -896,9 +895,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def _set_dim_index(self, value: pd.Index, attr: str):
         # Assumes _prep_dim_index has been run
         if self.is_view:
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-                self._init_as_actual(self.copy())
+            self._init_as_actual(self.copy())
         getattr(self, attr).index = value
         for v in getattr(self, f"{attr}m").values():
             if isinstance(v, pd.DataFrame):
@@ -1305,9 +1302,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         adata_subset = self[:, index].copy()
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-            self._init_as_actual(adata_subset)
+        self._init_as_actual(adata_subset)
 
     def _inplace_subset_obs(self, index: Index1D):
         """\
@@ -1317,9 +1312,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         adata_subset = self[index].copy()
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-            self._init_as_actual(adata_subset)
+        self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
     def __setitem__(
@@ -1357,20 +1350,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 "which is currently not implemented. Call `.copy()` before transposing."
             )
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-            return AnnData(
-                X=_safe_transpose(X) if X is not None else None,
-                layers={k: _safe_transpose(v) for k, v in self.layers.items()},
-                obs=self.var,
-                var=self.obs,
-                uns=self._uns,
-                obsm=self._varm,
-                varm=self._obsm,
-                obsp=self._varp,
-                varp=self._obsp,
-                filename=self.filename,
-            )
+        return AnnData(
+            X=_safe_transpose(X) if X is not None else None,
+            layers={k: _safe_transpose(v) for k, v in self.layers.items()},
+            obs=self.var,
+            var=self.obs,
+            uns=self._uns,
+            obsm=self._varm,
+            varm=self._obsm,
+            obsp=self._varp,
+            varp=self._obsp,
+            filename=self.filename,
+        )
 
     T = property(transpose)
 
@@ -1578,9 +1569,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if self.isbacked:
             self.file.close()
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-            return AnnData(**new)
+        return AnnData(**new)
 
     def copy(self, filename: PathLike | None = None) -> AnnData:
         """Full copy, optionally on disk."""

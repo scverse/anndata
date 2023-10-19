@@ -4,7 +4,6 @@ Code for merging/ concatenating AnnData objects.
 from __future__ import annotations
 
 import typing
-import warnings
 from collections import OrderedDict
 from collections.abc import (
     Callable,
@@ -1340,19 +1339,17 @@ def concat(
             "not concatenating `.raw` attributes.",
             UserWarning,
         )
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-        return AnnData(
-            **{
-                "X": X,
-                "layers": layers,
-                dim: concat_annot,
-                alt_dim: alt_annot,
-                f"{dim}m": concat_mapping,
-                f"{alt_dim}m": alt_mapping,
-                f"{dim}p": concat_pairwise,
-                f"{alt_dim}p": alt_pairwise,
-                "uns": uns,
-                "raw": raw,
-            }
-        )
+    return AnnData(
+        **{
+            "X": X,
+            "layers": layers,
+            dim: concat_annot,
+            alt_dim: alt_annot,
+            f"{dim}m": concat_mapping,
+            f"{alt_dim}m": alt_mapping,
+            f"{dim}p": concat_pairwise,
+            f"{alt_dim}p": alt_pairwise,
+            "uns": uns,
+            "raw": raw,
+        }
+    )

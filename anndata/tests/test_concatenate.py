@@ -15,7 +15,7 @@ from boltons.iterutils import default_exit, remap, research
 from numpy import ma
 from scipy import sparse
 
-from anndata import AnnData, ExperimentalFeatureWarning, Raw, concat
+from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
 from anndata.compat import AwkArray, DaskArray
@@ -716,9 +716,8 @@ def test_concatenate_awkward(join_type):
         ]
     )
 
-    with pytest.warns(ExperimentalFeatureWarning):
-        adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
-        adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
+    adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
+    adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
 
     if join_type == "inner":
         expected = ak.Array(
@@ -761,13 +760,7 @@ def test_concatenate_awkward(join_type):
             ]
         )
 
-    ctx = (
-        pytest.warns(ExperimentalFeatureWarning)
-        if join_type == "outer"
-        else nullcontext()
-    )
-    with ctx:
-        result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
+    result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
 
     assert_equal(expected, result)
 
@@ -787,12 +780,11 @@ def test_awkward_does_not_mix(join_type, other):
         [[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]]
     )
 
-    with pytest.warns(ExperimentalFeatureWarning):
-        adata_a = AnnData(
-            np.zeros((2, 3), dtype=float),
-            obs=pd.DataFrame(index=list("ab")),
-            obsm={"val": awk},
-        )
+    adata_a = AnnData(
+        np.zeros((2, 3), dtype=float),
+        obs=pd.DataFrame(index=list("ab")),
+        obsm={"val": awk},
+    )
     adata_b = AnnData(
         np.zeros((3, 3), dtype=float),
         obs=pd.DataFrame(index=list("cde")),
@@ -1341,23 +1333,15 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
-    ctx_awk = (
-        pytest.warns(
-            ExperimentalFeatureWarning,
-            match=r"Outer joins on awkward.Arrays will have different return values in the future.",
-        )
-        if join_type == "outer"
-        else nullcontext()
-    )
     ctx_concat_empty = (
         pytest.warns(
             FutureWarning,
             match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
         )
-        if join_type == "inner" and shape[axis] == 0
+        if shape[axis] == 0
         else nullcontext()
     )
-    with ctx_awk, ctx_concat_empty:
+    with ctx_concat_empty:
         result = concat(
             {"a": a, "b": b},
             axis=axis,
@@ -1382,8 +1366,7 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
             check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
 
         if shape[axis] > 0:
-            with pytest.warns(ExperimentalFeatureWarning):
-                b_result = result[axis_idx].copy()
+            b_result = result[axis_idx].copy()
             mapping_elem = f"{dim}m"
             setattr(b_result, f"{dim}_names", getattr(b, f"{dim}_names"))
             for k, result_elem in getattr(b_result, mapping_elem).items():
@@ -1431,8 +1414,7 @@ def test_concat_null_X():
     adatas_orig = {k: gen_adata((20, 10)) for k in list("abc")}
     adatas_no_X = {}
     for k, v in adatas_orig.items():
-        with pytest.warns(ExperimentalFeatureWarning):
-            v = v.copy()
+        v = v.copy()
         del v.X
         adatas_no_X[k] = v
 

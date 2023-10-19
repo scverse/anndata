@@ -150,8 +150,7 @@ def test_dask_write_sparse(store, sparse_format):
 
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
-    with pytest.warns(ad.ExperimentalFeatureWarning):
-        adata.raw = adata
+    adata.raw = adata
 
     write_elem(store, "adata", adata)
 
@@ -298,6 +297,6 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     else:
         read_func = zarr.open
 
-    with read_func(pth) as z, pytest.warns(ad.ExperimentalFeatureWarning):
+    with read_func(pth) as z:
         expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)

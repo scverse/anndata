@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping
 from functools import partial
 from itertools import product
@@ -20,7 +19,7 @@ from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._io.utils import H5PY_V3, check_key
-from anndata._warnings import ExperimentalFeatureWarning, OldFormatWarning
+from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
     CupyArray,
@@ -283,9 +282,7 @@ def read_anndata(elem, _reader):
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=ExperimentalFeatureWarning)
-        return AnnData(**d)
+    return AnnData(**d)
 
 
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
