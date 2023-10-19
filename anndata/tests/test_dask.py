@@ -3,8 +3,6 @@ For tests using dask
 """
 from __future__ import annotations
 
-import warnings
-
 import pandas as pd
 import pytest
 
