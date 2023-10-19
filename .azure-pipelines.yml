@@ -63,20 +63,7 @@ jobs:
         condition: and(eq(variables['RUN_COVERAGE'], 'yes'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
 
       # TODO: fix all the exceptions here
-      # TODO: centralize using a custom pytes CLI arg, because:
-      #       1. This allows to easily locally run with the same settings as this job
-      #       2. Otherwise we can’t filter anndata warning classes directly,
-      #          because we’re neither using editable installs nor a src/ layout.
-      #          This is better because it’s a more specific filter and we don’t need one line per message.
-      #          Setting the filters in code instead of per `-W` fixes that.
-      #          This affects:
-      #          - `anndata._warnings.ExperimentalFeatureWarning`
-      #            - “Support for Awkward Arrays”
-      #            - “Outer joins on awkward.Arrays”
-      #          - `anndata._warnings.ImplicitModificationWarning`
-      #            - “Trying to modify attribute”
-      #            - “Transforming to str index”
-      #       3. The 'ignore' lines need to be kept in sync with `filterwarnings` config in pyproject.toml
+      # TODO: Centralize, see https://github.com/scverse/anndata/issues/1204
       - script: >
           pytest
           -W error
