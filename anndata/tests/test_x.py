@@ -133,7 +133,6 @@ def test_io_missing_X(tmp_path, diskfmt):
     del adata.X
 
     write(adata, file_pth)
-
     from_disk = read(file_pth)
 
     assert_equal(from_disk, adata)
