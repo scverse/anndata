@@ -15,7 +15,7 @@ import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-from anndata import AnnData, Raw
+from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
