@@ -281,7 +281,6 @@ def read_anndata(elem, _reader):
     ]:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
-
     return AnnData(**d)
 
 
