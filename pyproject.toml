@@ -115,7 +115,8 @@ addopts = [
     "--ignore=anndata/readwrite.py", # deprecated
 ]
 filterwarnings = [
-    "ignore::anndata._warnings.ExperimentalFeatureWarning",
+    'ignore:Support for Awkward Arrays is currently experimental',
+    'ignore:Outer joins on awkward\.Arrays',
 ]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]
