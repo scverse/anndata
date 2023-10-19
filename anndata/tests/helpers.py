@@ -256,17 +256,19 @@ def gen_adata(
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    adata = AnnData(
-        X=X,
-        obs=obs,
-        var=var,
-        obsm=obsm,
-        varm=varm,
-        layers=layers,
-        obsp=obsp,
-        varp=varp,
-        uns=uns,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+        adata = AnnData(
+            X=X,
+            obs=obs,
+            var=var,
+            obsm=obsm,
+            varm=varm,
+            layers=layers,
+            obsp=obsp,
+            varp=varp,
+            uns=uns,
+        )
     return adata
 
 
