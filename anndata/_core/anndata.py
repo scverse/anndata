@@ -39,7 +39,7 @@ from ..compat import (
     _move_adj_mtx,
 )
 from ..logging import anndata_logger as logger
-from ..utils import convert_to_dict, dim_len, ensure_df_homogeneous
+from ..utils import convert_to_dict, deprecated, dim_len, ensure_df_homogeneous
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -875,23 +875,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             value = pd.Index(value)
             if not isinstance(value.name, (str, type(None))):
                 value.name = None
-        # fmt: off
         if (
-            not isinstance(value, pd.RangeIndex)
+            len(value) > 0
+            and not isinstance(value, pd.RangeIndex)
             and infer_dtype(value) not in ("string", "bytes")
         ):
             sample = list(value[: min(len(value), 5)])
-            warnings.warn(dedent(
+            msg = dedent(
                 f"""
                 AnnData expects .{attr}.index to contain strings, but got values like:
                     {sample}
 
                     Inferred to be: {infer_dtype(value)}
                 """
-                ), # noqa
-                stacklevel=2,
             )
-        # fmt: on
+            warnings.warn(msg, stacklevel=2)
         return value
 
     def _set_dim_index(self, value: pd.Index, attr: str):
@@ -1303,6 +1301,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
+
         self._init_as_actual(adata_subset)
 
     def _inplace_subset_obs(self, index: Index1D):
@@ -1312,6 +1311,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
+
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
@@ -1597,6 +1597,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
+    @deprecated(
+        "anndata.concat",
+        FutureWarning,
+        "See the tutorial for concat at: "
+        "https://anndata.readthedocs.io/en/latest/concatenation.html",
+        hide=False,
+    )
     def concatenate(
         self,
         *adatas: AnnData,
@@ -1819,14 +1826,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 6., 5., 0.]], dtype=float32)
         """
         from .merge import concat, merge_dataframes, merge_outer, merge_same
-
-        warnings.warn(
-            "The AnnData.concatenate method is deprecated in favour of the "
-            "anndata.concat function. Please use anndata.concat instead.\n\n"
-            "See the tutorial for concat at: "
-            "https://anndata.readthedocs.io/en/latest/concatenation.html",
-            FutureWarning,
-        )
 
         if self.isbacked:
             raise ValueError("Currently, concatenate only works in memory mode.")

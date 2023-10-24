@@ -274,16 +274,16 @@ def read_loom(
         uns = {}
         if cleanup:
             uns_obs = {}
-            for key in list(obs.keys()):
-                if len(set(obs[key])) == 1:
-                    uns_obs[f"{key}"] = obs[key][0]
+            for key in obs.columns:
+                if len(obs[key].unique()) == 1:
+                    uns_obs[key] = obs[key].iloc[0]
                     del obs[key]
             if uns_obs:
                 uns["loom-obs"] = uns_obs
             uns_var = {}
-            for key in list(var.keys()):
-                if len(set(var[key])) == 1:
-                    uns_var[f"{key}"] = var[key][0]
+            for key in var.columns:
+                if len(var[key].unique()) == 1:
+                    uns_var[key] = var[key].iloc[0]
                     del var[key]
             if uns_var:
                 uns["loom-var"] = uns_var

@@ -91,6 +91,7 @@ test = [
     "httpx", # For data downloading
     "dask[array,distributed]",
     "awkward>=2.3",
+    "pyarrow",
     "pytest_memray",
 ]
 gpu = ["cupy"]
@@ -104,13 +105,21 @@ version-file = "anndata/_version.py"
 
 [tool.coverage.run]
 source = ["anndata"]
-omit = ["setup.py", "versioneer.py", "anndata/_version.py", "**/test_*.py"]
+omit = ["anndata/_version.py", "**/test_*.py"]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules"
+addopts = [
+    "--strict-markers",
+    "--doctest-modules",
+    "--ignore=anndata/core.py",      # deprecated
+    "--ignore=anndata/readwrite.py", # deprecated
+]
+filterwarnings = [
+    'ignore:Support for Awkward Arrays is currently experimental',
+    'ignore:Outer joins on awkward\.Arrays',
+]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]
-filterwarnings = ['ignore:X\.dtype being converted to np.float32:FutureWarning']
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
 markers = ["gpu: mark test to run on GPU"]
