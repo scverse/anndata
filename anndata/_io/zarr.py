@@ -12,16 +12,10 @@ from scipy import sparse
 from anndata._warnings import OldFormatWarning
 
 from .._core.anndata import AnnData
-from ..compat import (
-    _clean_uns,
-    _from_fixed_length_strings,
-)
+from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
-from .utils import (
-    _read_legacy_raw,
-    report_read_key_on_error,
-)
+from .utils import _read_legacy_raw, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping

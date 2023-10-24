@@ -81,7 +81,7 @@ def test_raw_of_view(adata_raw: ad.AnnData):
 
 def test_raw_rw(adata_raw: ad.AnnData, backing_h5ad):
     adata_raw.write(backing_h5ad)
-    adata_read = ad.read(backing_h5ad)
+    adata_read = ad.read_h5ad(backing_h5ad)
 
     assert_equal(adata_read, adata_raw, exact=True)
 
@@ -96,7 +96,7 @@ def test_raw_view_rw(adata_raw: ad.AnnData, backing_h5ad):
     assert_equal(adata_raw_view, adata_raw)
     with pytest.warns(ImplicitModificationWarning, match="initializing view as actual"):
         adata_raw_view.write(backing_h5ad)
-    adata_read = ad.read(backing_h5ad)
+    adata_read = ad.read_h5ad(backing_h5ad)
 
     assert_equal(adata_read, adata_raw_view, exact=True)
 

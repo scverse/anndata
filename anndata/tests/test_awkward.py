@@ -1,13 +1,19 @@
 """Tests related to awkward arrays"""
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import pytest
 
 import anndata
-from anndata import AnnData, ImplicitModificationWarning, read_h5ad
+from anndata import (
+    AnnData,
+    ImplicitModificationWarning,
+    read_h5ad,
+)
 from anndata.compat import awkward as ak
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
 from anndata.utils import dim_len
@@ -196,8 +202,8 @@ def test_view_of_awkward_array_with_custom_behavior():
             ]
         ),
         # categorical array
-        ak.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
-        ak.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
+        ak.str.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
+        ak.str.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
         # tyical record type with AIRR data consisting of different dtypes
         ak.Array(
             [
@@ -375,10 +381,17 @@ def test_concat_mixed_types(key, arrays, expected, join):
         to_concat.append(tmp_adata)
 
     if isinstance(expected, type) and issubclass(expected, Exception):
-        with pytest.raises(expected):
+        ctx = (
+            pytest.warns(
+                FutureWarning,
+                match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
+            )
+            if any(df.empty for df in arrays if isinstance(df, pd.DataFrame))
+            else nullcontext()
+        )
+        with pytest.raises(expected), ctx:
             anndata.concat(to_concat, axis=axis, join=join)
     else:
-        print(to_concat)
         result_adata = anndata.concat(to_concat, axis=axis, join=join)
         result = getattr(result_adata, key).get("test", None)
         assert_equal(expected, result, exact=True)
