@@ -131,6 +131,7 @@ html_theme_options = dict(
     use_repository_button=True,
     repository_url="https://github.com/scverse/anndata",
     repository_branch="main",
+    navigation_with_keys=False,  # https://github.com/pydata/pydata-sphinx-theme/issues/1492
 )
 html_logo = "_static/img/anndata_schema.svg"
 issues_github_path = "scverse/anndata"
