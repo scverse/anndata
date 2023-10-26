@@ -55,12 +55,29 @@ jobs:
       - script: |
           pytest
         displayName: "PyTest"
-        condition: eq(variables['RUN_COVERAGE'], 'no')
+        condition: and(eq(variables['RUN_COVERAGE'], 'no'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
 
       - script: |
           pytest --cov --cov-report=xml --cov-context=test
         displayName: "PyTest (coverage)"
-        condition: eq(variables['RUN_COVERAGE'], 'yes')
+        condition: and(eq(variables['RUN_COVERAGE'], 'yes'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
+
+      # TODO: fix all the exceptions here
+      # TODO: Centralize, see https://github.com/scverse/anndata/issues/1204
+      - script: >
+          pytest
+          -W error
+          -W 'ignore:Support for Awkward Arrays is currently experimental'
+          -W 'ignore:Outer joins on awkward.Arrays'
+          -W 'default:Setting element:UserWarning'
+          -W 'default:Trying to modify attribute:UserWarning'
+          -W 'default:Transforming to str index:UserWarning'
+          -W 'default:Observation names are not unique. To make them unique:UserWarning'
+          -W 'default:Variable names are not unique. To make them unique:UserWarning'
+          -W 'default::scipy.sparse._base.SparseEfficiencyWarning'
+          -W 'default::dask.array.core.PerformanceWarning'
+        displayName: "PyTest (treat warnings as errors)"
+        condition: and(eq(variables['RUN_COVERAGE'], 'no'), eq(variables['PRERELEASE_DEPENDENCIES'], 'yes'))
 
       - task: PublishCodeCoverageResults@1
         inputs:

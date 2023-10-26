@@ -384,7 +384,7 @@ def _write_alt_annot(groups, output_group, alt_dim, alt_indices, merge):
 
 def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col, join):
     concat_annot = pd.concat(
-        unify_dtypes([read_elem(g[dim]) for g in groups]),
+        unify_dtypes(read_elem(g[dim]) for g in groups),
         join=join,
         ignore_index=True,
     )
