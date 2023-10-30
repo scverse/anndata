@@ -304,10 +304,13 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert adata.filename == backing_h5ad
     assert adata.isbacked
 
-    adata.X[0, [0, 2]] = 10
-    adata.X[1, [0, 2]] = [11, 12]
-    with pytest.raises(ValueError):
-        adata.X[2, 1] = 13
+    with pytest.warns(
+        PendingDeprecationWarning, match=r"__setitem__ will likely be removed"
+    ):
+        adata.X[0, [0, 2]] = 10
+        adata.X[1, [0, 2]] = [11, 12]
+        with pytest.raises(ValueError):
+            adata.X[2, 1] = 13
 
     assert adata.isbacked
 

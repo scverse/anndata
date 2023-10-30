@@ -5,7 +5,7 @@ from typing import Callable, Literal
 from warnings import warn
 
 import h5py
-from packaging import version
+from packaging.version import Version
 
 from anndata.compat import H5Group, ZarrGroup, add_note
 
@@ -13,7 +13,7 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
-H5PY_V3 = version.parse(h5py.__version__).major >= 3
+H5PY_V3 = Version(h5py.__version__).major >= 3
 
 # -------------------------------------------------------------------------------
 # Type conversion
