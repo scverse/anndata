@@ -115,9 +115,9 @@ addopts = [
     "--ignore=anndata/core.py",      # deprecated
     "--ignore=anndata/readwrite.py", # deprecated
 ]
+# See conftest.py for the warning filters that get applied when --strict-warnings in passed
 filterwarnings = [
-    'ignore:Support for Awkward Arrays is currently experimental',
-    'ignore:Outer joins on awkward\.Arrays',
+    'ignore::anndata._warnings.ExperimentalFeatureWarning',
 ]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]
