@@ -11,7 +11,7 @@ jobs:
     permissions:
       id-token: write # to authenticate as Trusted Publisher to pypi.org
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: "3.x"
