@@ -115,7 +115,7 @@ addopts = [
     "--ignore=anndata/core.py",      # deprecated
     "--ignore=anndata/readwrite.py", # deprecated
 ]
-# See conftest.py for the warning filters that get applied when --strict-warnings in passed
+# See conftest.py for the warning filters that get applied when --strict-warnings is passed
 filterwarnings = [
     'ignore:Support for Awkward Arrays is currently experimental',
     'ignore:Outer joins on awkward\.Arrays',
