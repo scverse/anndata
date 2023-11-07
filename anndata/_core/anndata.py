@@ -594,15 +594,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __sizeof__(self, show_stratified=None) -> int:
         def get_size(X):
-            def csr_to_bytes(X_csr):
-                return X_csr.data.nbytes + X_csr.indptr.nbytes + X_csr.indices.nbytes
+            def cs_to_bytes(X):
+                return X.data.nbytes + X.indptr.nbytes + X.indices.nbytes
 
-            if isinstance(X, h5py._hl.dataset.Dataset):
+            if isinstance(X, h5py.Dataset):
                 return np.array(X.shape).prod() * X.dtype.itemsize
-            elif isinstance(X, sparse._csr.csr_matrix):
-                return csr_to_bytes(X)
+            elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
+                return cs_to_bytes(X)
             elif isinstance(X, BaseCompressedSparseDataset):
-                return csr_to_bytes(X._to_backed())
+                return cs_to_bytes(X._to_backed())
             else:
                 return X.__sizeof__()
 
