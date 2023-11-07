@@ -25,7 +25,7 @@ from natsort import natsorted
 from numpy import ma
 from pandas.api.types import infer_dtype, is_string_dtype
 from scipy import sparse
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import issparse
 
 from anndata._warnings import ImplicitModificationWarning
 
@@ -594,14 +594,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __sizeof__(self, show_stratified=None) -> int:
         def get_size(X):
-            if issparse(X):
-                X_csr = csr_matrix(X)
+            def csr_to_bytes(X_csr):
                 return X_csr.data.nbytes + X_csr.indptr.nbytes + X_csr.indices.nbytes
+
+            if isinstance(X, h5py._hl.dataset.Dataset):
+                return np.array(X.shape).prod() * X.dtype.itemsize
+            elif isinstance(X, sparse._csr.csr_matrix):
+                return csr_to_bytes(X)
+            elif isinstance(X, BaseCompressedSparseDataset):
+                return csr_to_bytes(X._to_backed())
             else:
                 return X.__sizeof__()
 
         size = 0
-        attrs = list(["_X", "_obs", "_var"])
+        attrs = list(["X", "_obs", "_var"])
         attrs_multi = list(["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"])
         for attr in attrs + attrs_multi:
             if attr in attrs_multi:
