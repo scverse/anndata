@@ -112,8 +112,6 @@ omit = ["anndata/_version.py", "**/test_*.py"]
 addopts = [
     "--strict-markers",
     "--doctest-modules",
-    "--ignore=anndata/core.py",      # deprecated
-    "--ignore=anndata/readwrite.py", # deprecated
 ]
 filterwarnings = [
     'ignore:Support for Awkward Arrays is currently experimental',
