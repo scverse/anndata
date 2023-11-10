@@ -343,7 +343,21 @@ class BaseCompressedSparseDataset(ABC):
     def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
         row, col = self._normalize_index(index)
         mtx = self._to_backed()
-        sub = mtx[row, col]
+
+        # see https://github.com/scverse/anndata/issues/1224 for special handling of boolean masks
+        def mask_to_slices_or_ints(mask):
+            slices = np.ma.extras._ezclump(mask)
+            for s in slices:
+                if s.stop - s.start < 10:
+                    yield list(range(s.start, s.stop))
+                yield s
+
+        if self.format == "csr" and np.array(row).dtype == bool:
+            sub = ss.vstack([mtx[s, col] for s in mask_to_slices_or_ints(row)])
+        elif self.format == "csc" and np.array(col).dtype == bool:
+            sub = ss.vstack([mtx[row, s] for s in mask_to_slices_or_ints(row)])
+        else:
+            sub = mtx[row, col]
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         if isinstance(sub, BackedSparseMatrix):
