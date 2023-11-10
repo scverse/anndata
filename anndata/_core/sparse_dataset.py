@@ -345,17 +345,13 @@ class BaseCompressedSparseDataset(ABC):
         mtx = self._to_backed()
 
         # see https://github.com/scverse/anndata/issues/1224 for special handling of boolean masks
-        def mask_to_slices_or_ints(mask):
-            slices = np.ma.extras._ezclump(mask)
-            for s in slices:
-                if s.stop - s.start < 10:
-                    yield list(range(s.start, s.stop))
-                yield s
+        def make_slices(mask):
+            return np.ma.extras._ezclump(mask)
 
         if self.format == "csr" and np.array(row).dtype == bool:
-            sub = ss.vstack([mtx[s, col] for s in mask_to_slices_or_ints(row)])
+            sub = ss.vstack([mtx[s, col] for s in make_slices(row)])
         elif self.format == "csc" and np.array(col).dtype == bool:
-            sub = ss.vstack([mtx[row, s] for s in mask_to_slices_or_ints(row)])
+            sub = ss.vstack([mtx[row, s] for s in make_slices(row)])
         else:
             sub = mtx[row, col]
         # If indexing is array x array it returns a backed_sparse_matrix
