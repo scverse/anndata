@@ -212,3 +212,13 @@ def test_anndata_sparse_compat(tmp_path, diskfmt):
     ad._io.specs.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))
     assert_equal(adata.X, base)
+
+
+def test_backed_sizeof(ondisk_equivalent_adata):
+    csr_mem, csr_disk, csc_disk, dense_disk = ondisk_equivalent_adata
+
+    dense = dense_disk.__sizeof__()
+
+    assert dense - 128 <= csr_mem.__sizeof__() <= dense
+    assert dense - 128 <= csr_disk.__sizeof__() <= dense
+    assert dense - 128 <= csc_disk.__sizeof__() <= dense
