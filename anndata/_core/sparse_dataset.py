@@ -155,7 +155,6 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
         )
-
         if out_shape[0] == 1:
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
         elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
@@ -349,22 +348,23 @@ class BaseCompressedSparseDataset(ABC):
         def make_slices(mask):
             return np.ma.extras._ezclump(mask)
 
-        def average_slice_length(slices):
+        def mean_slice_length(slices):
             return floor((slices[-1].stop - slices[0].start) / len(slices))
 
-        if self.format == "csr" and np.array(row).dtype == bool:
-            slices = make_slices(row)
-            # This is the break-even point at which this optimization no longer is faster.
-            if average_slice_length(slices) > 7:
-                sub = ss.vstack([mtx[s, col] for s in make_slices(row)])
-            else:
-                sub = mtx[row, col]
-        elif self.format == "csc" and np.array(col).dtype == bool:
-            slices = make_slices(col)
-            if average_slice_length(slices) > 7:
-                sub = ss.vstack([mtx[row, s] for s in make_slices(col)])
-            else:
-                sub = mtx[row, col]
+        slices = make_slices(row)
+        is_mean_slice_length_large = mean_slice_length(slices) > 7  # heuristic
+        if (
+            self.format == "csr"
+            and np.array(row).dtype == bool
+            and is_mean_slice_length_large
+        ):
+            sub = ss.vstack([mtx[s, col] for s in make_slices(row)])
+        elif (
+            self.format == "csc"
+            and np.array(col).dtype == bool
+            and is_mean_slice_length_large
+        ):
+            sub = ss.vstack([mtx[row, s] for s in make_slices(col)])
         else:
             sub = mtx[row, col]
         # If indexing is array x array it returns a backed_sparse_matrix
