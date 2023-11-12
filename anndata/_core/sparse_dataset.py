@@ -16,6 +16,7 @@ import collections.abc as cabc
 import warnings
 from abc import ABC
 from itertools import accumulate, chain
+from math import floor
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import h5py
@@ -348,10 +349,22 @@ class BaseCompressedSparseDataset(ABC):
         def make_slices(mask):
             return np.ma.extras._ezclump(mask)
 
+        def average_slice_length(slices):
+            return floor((slices[-1].stop - slices[0].start) / len(slices))
+
         if self.format == "csr" and np.array(row).dtype == bool:
-            sub = ss.vstack([mtx[s, col] for s in make_slices(row)])
+            slices = make_slices(row)
+            # This is the break-even point at which this optimization no longer is faster.
+            if average_slice_length(slices) > 7:
+                sub = ss.vstack([mtx[s, col] for s in make_slices(row)])
+            else:
+                sub = mtx[row, col]
         elif self.format == "csc" and np.array(col).dtype == bool:
-            sub = ss.vstack([mtx[row, s] for s in make_slices(row)])
+            slices = make_slices(col)
+            if average_slice_length(slices) > 7:
+                sub = ss.vstack([mtx[row, s] for s in make_slices(col)])
+            else:
+                sub = mtx[row, col]
         else:
             sub = mtx[row, col]
         # If indexing is array x array it returns a backed_sparse_matrix
