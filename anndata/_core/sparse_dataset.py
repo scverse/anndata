@@ -351,18 +351,16 @@ class BaseCompressedSparseDataset(ABC):
         def mean_slice_length(slices):
             return floor((slices[-1].stop - slices[0].start) / len(slices))
 
-        slices = make_slices(row)
-        is_mean_slice_length_large = mean_slice_length(slices) > 7  # heuristic
         if (
             self.format == "csr"
             and np.array(row).dtype == bool
-            and is_mean_slice_length_large
+            and mean_slice_length(make_slices(row)) > 7
         ):
             sub = ss.vstack([mtx[s, col] for s in make_slices(row)])
         elif (
             self.format == "csc"
             and np.array(col).dtype == bool
-            and is_mean_slice_length_large
+            and mean_slice_length(make_slices(col)) > 7
         ):
             sub = ss.vstack([mtx[row, s] for s in make_slices(col)])
         else:
