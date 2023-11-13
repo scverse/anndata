@@ -218,12 +218,18 @@ def test_dense_sizeof(ondisk_equivalent_adata):
     _, _, _, dense_disk = ondisk_equivalent_adata
 
     sza = np.array(dense_disk.X.shape).prod() * dense_disk.X.dtype.itemsize
-    for x in ("_obs", "_var", "_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"):
+    for x in ("_obs", "_var"):
         sza += getattr(dense_disk, x).__sizeof__()
+    for x in ("_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"):
+        sza += sum(
+            [
+                getattr(dense_disk, x)[k].__sizeof__()
+                for k in getattr(dense_disk, x).keys()
+            ]
+        )
 
     res = dense_disk.__sizeof__()
-
-    assert res <= sza <= res + 256
+    assert res - 128 <= sza <= res
 
 
 def test_backed_sizeof(ondisk_equivalent_adata):
