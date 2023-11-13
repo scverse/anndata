@@ -592,10 +592,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # layers
         self._layers = Layers(self, layers)
 
-    def __sizeof__(self, show_stratified=None) -> int:
+    def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
         def get_size(X):
             def cs_to_bytes(X):
                 return X.data.nbytes + X.indptr.nbytes + X.indices.nbytes
+
+            if not with_disk:
+                return X.__sizeof__()
 
             if isinstance(X, h5py.Dataset):
                 return np.array(X.shape).prod() * X.dtype.itemsize

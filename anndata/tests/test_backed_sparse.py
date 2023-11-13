@@ -214,22 +214,32 @@ def test_anndata_sparse_compat(tmp_path, diskfmt):
     assert_equal(adata.X, base)
 
 
-def test_dense_sizeof(ondisk_equivalent_adata):
+def test_dense_sizeof(ondisk_equivalent_adata, diskfmt):
     _, _, _, dense_disk = ondisk_equivalent_adata
 
-    sza = np.array(dense_disk.X.shape).prod() * dense_disk.X.dtype.itemsize
+    size_on_disk = np.array(dense_disk.X.shape).prod() * dense_disk.X.dtype.itemsize
+
+    size_nested_objects = 0
     for x in ("_obs", "_var"):
-        sza += getattr(dense_disk, x).__sizeof__()
+        size_nested_objects += getattr(dense_disk, x).__sizeof__()
     for x in ("_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"):
-        sza += sum(
+        size_nested_objects += sum(
             [
                 getattr(dense_disk, x)[k].__sizeof__()
                 for k in getattr(dense_disk, x).keys()
             ]
         )
 
-    res = dense_disk.__sizeof__()
-    assert res - 128 <= sza <= res
+    dense_with_disk = dense_disk.__sizeof__(with_disk=True)
+    dense_without_disk = dense_disk.__sizeof__(with_disk=False)
+
+    assert (
+        dense_with_disk - 128 <= size_on_disk + size_nested_objects <= dense_with_disk
+    )
+    if diskfmt == "h5ad":
+        assert dense_without_disk - 128 <= size_nested_objects <= dense_without_disk
+    else:
+        assert_equal(dense_with_disk, dense_without_disk)
 
 
 def test_backed_sizeof(ondisk_equivalent_adata):
@@ -238,3 +248,13 @@ def test_backed_sizeof(ondisk_equivalent_adata):
     assert_equal(csr_mem.__sizeof__(), csr_disk.__sizeof__())
     assert_equal(csr_mem.__sizeof__(), csc_disk.__sizeof__())
     assert_equal(csr_disk.__sizeof__(), csc_disk.__sizeof__())
+
+    assert_equal(
+        csr_mem.__sizeof__(with_disk=True), csr_disk.__sizeof__(with_disk=True)
+    )
+    assert_equal(
+        csr_mem.__sizeof__(with_disk=True), csc_disk.__sizeof__(with_disk=True)
+    )
+    assert_equal(
+        csr_disk.__sizeof__(with_disk=True), csc_disk.__sizeof__(with_disk=True)
+    )
