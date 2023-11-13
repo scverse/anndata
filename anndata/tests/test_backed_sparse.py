@@ -214,11 +214,21 @@ def test_anndata_sparse_compat(tmp_path, diskfmt):
     assert_equal(adata.X, base)
 
 
+def test_dense_sizeof(ondisk_equivalent_adata):
+    _, _, _, dense_disk = ondisk_equivalent_adata
+
+    sza = np.array(dense_disk.X.shape).prod() * dense_disk.X.dtype.itemsize
+    for x in ("_obs", "_var", "_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"):
+        sza += getattr(dense_disk, x).__sizeof__()
+
+    res = dense_disk.__sizeof__()
+
+    assert res <= sza <= res + 256
+
+
 def test_backed_sizeof(ondisk_equivalent_adata):
-    csr_mem, csr_disk, csc_disk, dense_disk = ondisk_equivalent_adata
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
-    dense = dense_disk.__sizeof__()
-
-    assert dense - 128 <= csr_mem.__sizeof__() <= dense
-    assert dense - 128 <= csr_disk.__sizeof__() <= dense
-    assert dense - 128 <= csc_disk.__sizeof__() <= dense
+    assert_equal(csr_mem.__sizeof__(), csr_disk.__sizeof__())
+    assert_equal(csr_mem.__sizeof__(), csc_disk.__sizeof__())
+    assert_equal(csr_disk.__sizeof__(), csc_disk.__sizeof__())
