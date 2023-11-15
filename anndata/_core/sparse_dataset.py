@@ -345,6 +345,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = self._to_backed()
 
         # see https://github.com/scverse/anndata/issues/1224 for special handling of boolean masks
+        # scipy internally converts boolean masks to integer indices so this needs to occur before access to `mtx`.
         def make_slices(mask):
             return np.ma.extras._ezclump(mask)
 
