@@ -597,10 +597,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             def cs_to_bytes(X):
                 return X.data.nbytes + X.indptr.nbytes + X.indices.nbytes
 
-            if not with_disk:
-                return X.__sizeof__()
-
-            if isinstance(X, h5py.Dataset):
+            if isinstance(X, h5py.Dataset) and with_disk:
                 return np.array(X.shape).prod() * X.dtype.itemsize
             elif isinstance(X, BaseCompressedSparseDataset):
                 return cs_to_bytes(X._to_backed())
@@ -620,7 +617,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 s = get_size(getattr(self, attr))
             if s > 0 and show_stratified:
                 str_attr = attr.replace("_", ".") + " " * (7 - len(attr))
-                print(f"Size of {str_attr}: {'%3.2f' % (s / (1024 ** 2))} MB")
+                # print(f"Size of {str_attr}: {'%3.2f' % (s / (1024 ** 2))} MB")
+                print(f"Size of {str_attr}: {'%3.2f' % s}")
             size += s
         return size
 
