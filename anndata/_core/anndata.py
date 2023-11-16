@@ -3,8 +3,8 @@ Main class and helper functions.
 """
 from __future__ import annotations
 
-import sys
 import collections.abc as cabc
+import sys
 import warnings
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
@@ -619,7 +619,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 s = get_size(getattr(self, attr))
             if s > 0 and show_stratified:
-                print(f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}")
+                print(
+                    f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}"
+                )
             size += s
         return size
 
