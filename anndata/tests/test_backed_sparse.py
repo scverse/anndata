@@ -237,7 +237,7 @@ def test_dense_sizeof(ondisk_equivalent_adata, diskfmt):
     if diskfmt == "h5ad":
         assert dense_without_disk - 128 <= size_nested_objects <= dense_without_disk
     else:
-        assert_equal(dense_with_disk, dense_without_disk)
+        dense_with_disk == dense_without_disk
 
 
 def test_backed_sizeof(ondisk_equivalent_adata):
