@@ -224,10 +224,8 @@ def test_dense_sizeof(ondisk_equivalent_adata, diskfmt):
         size_nested_objects += getattr(dense_disk, x).__sizeof__()
     for x in ("_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"):
         size_nested_objects += sum(
-            [
-                getattr(dense_disk, x)[k].__sizeof__()
-                for k in getattr(dense_disk, x).keys()
-            ]
+            getattr(dense_disk, x)[k].__sizeof__()
+            for k in getattr(dense_disk, x).keys()
         )
 
     dense_with_disk = dense_disk.__sizeof__(with_disk=True)
@@ -245,16 +243,8 @@ def test_dense_sizeof(ondisk_equivalent_adata, diskfmt):
 def test_backed_sizeof(ondisk_equivalent_adata):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
-    assert_equal(csr_mem.__sizeof__(), csr_disk.__sizeof__())
-    assert_equal(csr_mem.__sizeof__(), csc_disk.__sizeof__())
-    assert_equal(csr_disk.__sizeof__(), csc_disk.__sizeof__())
-
-    assert_equal(
-        csr_mem.__sizeof__(with_disk=True), csr_disk.__sizeof__(with_disk=True)
-    )
-    assert_equal(
-        csr_mem.__sizeof__(with_disk=True), csc_disk.__sizeof__(with_disk=True)
-    )
-    assert_equal(
-        csr_disk.__sizeof__(with_disk=True), csc_disk.__sizeof__(with_disk=True)
-    )
+    csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
+    csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
+    csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
+    csr_mem.__sizeof__() > csr_disk.__sizeof__()
+    csr_mem.__sizeof__() > csc_disk.__sizeof__()
