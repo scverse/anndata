@@ -609,7 +609,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 return sys.getsizeof(X)
 
-        size = 0
+        sizes = {}
         attrs = ["X", "_obs", "_var"]
         attrs_multi = ["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"]
         for attr in attrs + attrs_multi:
@@ -622,8 +622,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 print(
                     f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}"
                 )
-            size += s
-        return size
+            sizes[attr] = s
+        return sum(sizes.values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         if self.isbacked:

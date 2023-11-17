@@ -219,14 +219,13 @@ def test_dense_sizeof(ondisk_equivalent_adata, diskfmt):
 
     size_on_disk = np.array(dense_disk.X.shape).prod() * dense_disk.X.dtype.itemsize
 
-    size_nested_objects = 0
-    for x in ("_obs", "_var"):
-        size_nested_objects += getattr(dense_disk, x).__sizeof__()
-    for x in ("_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"):
-        size_nested_objects += sum(
-            getattr(dense_disk, x)[k].__sizeof__()
-            for k in getattr(dense_disk, x).keys()
-        )
+    size_nested_objects = sum(
+        getattr(dense_disk, x).__sizeof__() for x in ("_obs", "_var")
+    ) + sum(
+        getattr(dense_disk, x)[k].__sizeof__()
+        for x in ("_uns", "_obsm", "_varm", "varp", "_obsp", "_layers")
+        for k in getattr(dense_disk, x).keys()
+    )
 
     dense_with_disk = dense_disk.__sizeof__(with_disk=True)
     dense_without_disk = dense_disk.__sizeof__(with_disk=False)
@@ -234,17 +233,20 @@ def test_dense_sizeof(ondisk_equivalent_adata, diskfmt):
     assert (
         dense_with_disk - 128 <= size_on_disk + size_nested_objects <= dense_with_disk
     )
-    if diskfmt == "h5ad":
+    try:
         assert dense_without_disk - 128 <= size_nested_objects <= dense_without_disk
-    else:
-        dense_with_disk == dense_without_disk
+    except AssertionError:
+        if diskfmt == "zarr":
+            # TODO: Zarr backed mode https://github.com/scverse/anndata/issues/219
+            pytest.xfail("Backed zarr not really supported yet")
+        raise
 
 
 def test_backed_sizeof(ondisk_equivalent_adata):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
-    csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
-    csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
-    csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
-    csr_mem.__sizeof__() > csr_disk.__sizeof__()
-    csr_mem.__sizeof__() > csc_disk.__sizeof__()
+    assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
+    assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
+    assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
+    assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
+    assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
