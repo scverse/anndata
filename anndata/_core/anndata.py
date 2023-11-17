@@ -593,8 +593,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._layers = Layers(self, layers)
 
     def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
-        from tqdm import tqdm
-
         def get_size(X) -> int:
             def cs_to_bytes(X) -> int:
                 return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
@@ -618,6 +616,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 s = get_size(getattr(self, attr))
             if s > 0 and show_stratified:
+                from tqdm import tqdm
+
                 print(
                     f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}"
                 )
