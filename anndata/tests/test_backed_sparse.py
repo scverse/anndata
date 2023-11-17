@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Callable, Literal
+
 import h5py
 import numpy as np
 import pytest
@@ -12,6 +15,11 @@ from anndata._core.sparse_dataset import sparse_dataset
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import assert_equal, subset_func
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from numpy.typing import ArrayLike
+
 subset_func2 = subset_func
 
 
@@ -21,7 +29,9 @@ def diskfmt(request):
 
 
 @pytest.fixture(scope="function")
-def ondisk_equivalent_adata(tmp_path, diskfmt):
+def ondisk_equivalent_adata(
+    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
+) -> tuple[AnnData, AnnData, AnnData, AnnData]:
     csr_path = tmp_path / f"csr.{diskfmt}"
     csc_path = tmp_path / f"csc.{diskfmt}"
     dense_path = tmp_path / f"dense.{diskfmt}"
@@ -68,7 +78,11 @@ def ondisk_equivalent_adata(tmp_path, diskfmt):
     return csr_mem, csr_disk, csc_disk, dense_disk
 
 
-def test_backed_indexing(ondisk_equivalent_adata, subset_func, subset_func2):
+def test_backed_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    subset_func,
+    subset_func2,
+):
     csr_mem, csr_disk, csc_disk, dense_disk = ondisk_equivalent_adata
 
     obs_idx = subset_func(csr_mem.obs_names)
@@ -87,7 +101,12 @@ def test_backed_indexing(ondisk_equivalent_adata, subset_func, subset_func2):
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
-def test_dataset_append_memory(tmp_path, sparse_format, append_method, diskfmt):
+def test_dataset_append_memory(
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    diskfmt: Literal["h5ad", "zarr"],
+):
     path = (
         tmp_path / f"test.{diskfmt.replace('ad', '')}"
     )  # diskfmt is either h5ad or zarr
@@ -115,7 +134,12 @@ def test_dataset_append_memory(tmp_path, sparse_format, append_method, diskfmt):
         pytest.param(sparse.csc_matrix, sparse.hstack),
     ],
 )
-def test_dataset_append_disk(tmp_path, sparse_format, append_method, diskfmt):
+def test_dataset_append_disk(
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    diskfmt: Literal["h5ad", "zarr"],
+):
     path = (
         tmp_path / f"test.{diskfmt.replace('ad', '')}"
     )  # diskfmt is either h5ad or zarr
@@ -146,7 +170,13 @@ def test_dataset_append_disk(tmp_path, sparse_format, append_method, diskfmt):
         pytest.param("csc", (100, 100), (200, 100)),
     ],
 )
-def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape, diskfmt):
+def test_wrong_shape(
+    tmp_path: Path,
+    sparse_format: Literal["csr", "csc"],
+    a_shape: tuple[int, int],
+    b_shape: tuple[int, int],
+    diskfmt: Literal["h5ad", "zarr"],
+):
     path = (
         tmp_path / f"test.{diskfmt.replace('ad', '')}"
     )  # diskfmt is either h5ad or zarr
@@ -167,7 +197,7 @@ def test_wrong_shape(tmp_path, sparse_format, a_shape, b_shape, diskfmt):
         a_disk.append(b_disk)
 
 
-def test_wrong_formats(tmp_path, diskfmt):
+def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = (
         tmp_path / f"test.{diskfmt.replace('ad', '')}"
     )  # diskfmt is either h5ad or zarr
@@ -198,7 +228,7 @@ def test_wrong_formats(tmp_path, diskfmt):
     assert not np.any((pre_checks != post_checks).toarray())
 
 
-def test_anndata_sparse_compat(tmp_path, diskfmt):
+def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = (
         tmp_path / f"test.{diskfmt.replace('ad', '')}"
     )  # diskfmt is either h5ad or zarr
@@ -212,3 +242,28 @@ def test_anndata_sparse_compat(tmp_path, diskfmt):
     ad._io.specs.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))
     assert_equal(adata.X, base)
+
+
+@contextmanager
+def xfail_if_zarr(diskfmt: Literal["h5ad", "zarr"]):
+    if diskfmt == "zarr":
+        with pytest.raises(AssertionError):
+            yield
+        # TODO: Zarr backed mode https://github.com/scverse/anndata/issues/219
+        pytest.xfail("Backed zarr not really supported yet")
+    else:
+        yield
+
+
+def test_backed_sizeof(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    diskfmt: Literal["h5ad", "zarr"],
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
+    assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
+    assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
+    with xfail_if_zarr(diskfmt):
+        assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
+        assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
