@@ -25,7 +25,7 @@ from natsort import natsorted
 from numpy import ma
 from pandas.api.types import infer_dtype, is_string_dtype
 from scipy import sparse
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import issparse
 
 from anndata._warnings import ImplicitModificationWarning
 
@@ -592,28 +592,37 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # layers
         self._layers = Layers(self, layers)
 
-    def __sizeof__(self, show_stratified=None) -> int:
-        def get_size(X):
-            if issparse(X):
-                X_csr = csr_matrix(X)
-                return X_csr.data.nbytes + X_csr.indptr.nbytes + X_csr.indices.nbytes
+    def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
+        def get_size(X) -> int:
+            def cs_to_bytes(X) -> int:
+                return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
+
+            if isinstance(X, h5py.Dataset) and with_disk:
+                return int(np.array(X.shape).prod() * X.dtype.itemsize)
+            elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
+                return cs_to_bytes(X._to_backed())
+            elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
+                return cs_to_bytes(X)
             else:
                 return X.__sizeof__()
 
-        size = 0
-        attrs = list(["_X", "_obs", "_var"])
-        attrs_multi = list(["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"])
+        sizes = {}
+        attrs = ["X", "_obs", "_var"]
+        attrs_multi = ["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"]
         for attr in attrs + attrs_multi:
             if attr in attrs_multi:
                 keys = getattr(self, attr).keys()
-                s = sum([get_size(getattr(self, attr)[k]) for k in keys])
+                s = sum(get_size(getattr(self, attr)[k]) for k in keys)
             else:
                 s = get_size(getattr(self, attr))
             if s > 0 and show_stratified:
-                str_attr = attr.replace("_", ".") + " " * (7 - len(attr))
-                print(f"Size of {str_attr}: {'%3.2f' % (s / (1024 ** 2))} MB")
-            size += s
-        return size
+                from tqdm import tqdm
+
+                print(
+                    f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}"
+                )
+            sizes[attr] = s
+        return sum(sizes.values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         if self.isbacked:
