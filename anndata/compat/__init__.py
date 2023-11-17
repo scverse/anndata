@@ -395,8 +395,8 @@ def _safe_transpose(x):
 
 
 def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
-    if Version(pd.__version__) >= Version("2.0"):
-        # Argument added in pandas 2.0
+    if Version(pd.__version__) >= Version("2.1"):
+        # Argument added in pandas 2.1
         return cat.map(str, na_action="ignore")
     else:
         return cat.map(str)

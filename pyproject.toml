@@ -112,8 +112,6 @@ omit = ["anndata/_version.py", "**/test_*.py"]
 addopts = [
     "--strict-markers",
     "--doctest-modules",
-    "--ignore=anndata/core.py",      # deprecated
-    "--ignore=anndata/readwrite.py", # deprecated
 ]
 # See conftest.py for the warning filters that get applied when --strict-warnings is passed
 filterwarnings = [
