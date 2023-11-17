@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Callable, Literal
 
 import h5py
@@ -243,6 +244,17 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     assert_equal(adata.X, base)
 
 
+@contextmanager
+def xfail_if_zarr(diskfmt: Literal["h5ad", "zarr"]):
+    if diskfmt == "zarr":
+        with pytest.raises(AssertionError):
+            yield
+        # TODO: Zarr backed mode https://github.com/scverse/anndata/issues/219
+        pytest.xfail("Backed zarr not really supported yet")
+    else:
+        yield
+
+
 def test_dense_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     diskfmt: Literal["h5ad", "zarr"],
@@ -263,13 +275,8 @@ def test_dense_sizeof(
     assert (
         dense_with_disk - 128 <= size_on_disk + sum(sizes.values()) <= dense_with_disk
     )
-    try:
+    with xfail_if_zarr(diskfmt):
         assert dense_without_disk - 128 <= sum(sizes.values()) <= dense_without_disk
-    except AssertionError:
-        if diskfmt == "zarr":
-            # TODO: Zarr backed mode https://github.com/scverse/anndata/issues/219
-            pytest.xfail("Backed zarr not really supported yet")
-        raise
 
 
 def test_backed_sizeof(
@@ -281,11 +288,6 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
     assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
     assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
-    try:
+    with xfail_if_zarr(diskfmt):
         assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
         assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
-    except AssertionError:
-        if diskfmt == "zarr":
-            # TODO: Zarr backed mode https://github.com/scverse/anndata/issues/219
-            pytest.xfail("Backed zarr not really supported yet")
-        raise
