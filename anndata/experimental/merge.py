@@ -32,7 +32,7 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
-from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
+from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _map_cat_to_str
 from . import read_dispatched
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
@@ -384,7 +384,7 @@ def _write_alt_annot(groups, output_group, alt_dim, alt_indices, merge):
 
 def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col, join):
     concat_annot = pd.concat(
-        unify_dtypes([read_elem(g[dim]) for g in groups]),
+        unify_dtypes(read_elem(g[dim]) for g in groups),
         join=join,
         ignore_index=True,
     )
@@ -596,7 +596,9 @@ def concat_on_disk(
         [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(
+            _map_cat_to_str(label_col), sep=index_unique
+        )
 
     # Resulting indices for {dim} and {alt_dim}
     concat_indices = pd.Index(concat_indices)

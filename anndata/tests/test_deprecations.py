@@ -10,10 +10,12 @@ import warnings
 import h5py
 import numpy as np
 import pytest
+import zarr
 from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
+from anndata.experimental import CSRDataset, write_elem
 from anndata.tests.helpers import assert_equal
 
 
@@ -38,26 +40,24 @@ def test_get_obsvar_array_warn(adata):
         adata._get_var_array("s1")
 
 
-# TODO: Why doesn’t this mark work?
-# @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_get_obsvar_array(adata):
-    with pytest.warns(DeprecationWarning):  # Just to hide warnings
-        assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
-        assert np.allclose(
-            adata._get_obs_array("a", layer="x2"),
-            adata.obs_vector("a", layer="x2"),
-        )
-        assert np.allclose(
-            adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
-        )
-        assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
-        assert np.allclose(
-            adata._get_var_array("s1", layer="x2"),
-            adata.var_vector("s1", layer="x2"),
-        )
-        assert np.allclose(
-            adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
-        )
+    assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
+    assert np.allclose(
+        adata._get_obs_array("a", layer="x2"),
+        adata.obs_vector("a", layer="x2"),
+    )
+    assert np.allclose(
+        adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
+    )
+    assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
+    assert np.allclose(
+        adata._get_var_array("s1", layer="x2"),
+        adata.var_vector("s1", layer="x2"),
+    )
+    assert np.allclose(
+        adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
+    )
 
 
 def test_obsvar_vector_Xlayer(adata):
@@ -144,3 +144,18 @@ def test_deprecated_sparse_dataset_values():
 
     with pytest.warns(FutureWarning, match="Please use .format"):
         mtx_backed.format_str
+
+
+def test_deprecated_sparse_dataset():
+    from anndata._core.sparse_dataset import SparseDataset
+
+    mem_X = sparse.random(50, 50, format="csr")
+    g = zarr.group()
+    write_elem(g, "X", mem_X)
+    with pytest.warns(FutureWarning, match="SparseDataset is deprecated"):
+        X = SparseDataset(g["X"])
+
+    assert isinstance(X, CSRDataset)
+
+    with pytest.warns(FutureWarning, match="SparseDataset is deprecated"):
+        assert isinstance(X, SparseDataset)

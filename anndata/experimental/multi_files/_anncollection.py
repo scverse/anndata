@@ -15,6 +15,7 @@ from ..._core.index import Index, _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
+from ...compat import _map_cat_to_str
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -208,7 +209,7 @@ class MapObsView:
             else:
                 if vidx is not None:
                     idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
-                arrs.append(arr[idx])
+                arrs.append(arr.iloc[idx] if isinstance(arr, pd.Series) else arr[idx])
 
         if len(arrs) > 1:
             _arr = _merge(arrs)
@@ -721,7 +722,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         )
         if index_unique is not None:
             concat_indices = concat_indices.str.cat(
-                label_col.map(str), sep=index_unique
+                _map_cat_to_str(label_col), sep=index_unique
             )
         self.obs_names = pd.Index(concat_indices)
 
