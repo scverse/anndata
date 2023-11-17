@@ -4,7 +4,6 @@ Main class and helper functions.
 from __future__ import annotations
 
 import collections.abc as cabc
-import sys
 import warnings
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
@@ -607,7 +606,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
                 return cs_to_bytes(X)
             else:
-                return sys.getsizeof(X)
+                return X.__sizeof__()
 
         sizes = {}
         attrs = ["X", "_obs", "_var"]
