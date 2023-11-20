@@ -55,7 +55,6 @@ from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .views import (
     ArrayView,
-    DataFrameView,
     DictView,
     _resolve_idxs,
     as_view,
@@ -354,6 +353,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx: Index1D = None,
         vidx: Index1D = None,
     ):
+        if "Dataset2D" in str(type(obs)):
+            from ..experimental.backed._xarray import Dataset2D
+
+            @_gen_dataframe.register(Dataset2D)
+            def _gen_dataframe_xr(
+                anno: Dataset2D,
+                index_names: Iterable[str],
+                *,
+                source: Literal["X", "shape"],
+                attr: Literal["obs", "var"],
+                length: int | None = None,
+            ):
+                return anno
+
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError("`X` has to be an AnnData object.")
@@ -413,11 +426,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns)
+        # self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        # self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
-        self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
-        self._var = DataFrameView(var_sub, view_args=(self, "var"))
+        self._obs = as_view(obs_sub, view_args=(self, "obs"))
+        self._var = as_view(var_sub, view_args=(self, "var"))
         self._uns = uns
 
         # set data
@@ -571,7 +584,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
 
         self._check_dimensions()
-        self._check_uniqueness()
+        # self._check_uniqueness()
 
         if self.filename:
             assert not isinstance(
@@ -926,7 +939,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def obs_names(self) -> pd.Index:
         """Names of observations (alias for `.obs.index`)."""
-        return self.obs.index
+        if hasattr(self.obs, "index"):
+            return self.obs.index
+        return pd.Index(
+            self.obs["obs_names"].data.compute()
+            if isinstance(self.obs["obs_names"].data, DaskArray)
+            else self.obs["obs_names"].data
+        )
 
     @obs_names.setter
     def obs_names(self, names: Sequence[str]):
@@ -949,7 +968,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def var_names(self) -> pd.Index:
         """Names of variables (alias for `.var.index`)."""
-        return self.var.index
+        if hasattr(self.var, "index"):
+            return self.var.index
+        return pd.Index(
+            self.var["var_names"].data.compute()
+            if isinstance(self.var["var_names"].data, DaskArray)
+            else self.var["var_names"].data
+        )
 
     @var_names.setter
     def var_names(self, names: Sequence[str]):
