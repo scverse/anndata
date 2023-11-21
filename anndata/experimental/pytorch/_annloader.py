@@ -57,14 +57,14 @@ class BatchIndexSampler(Sampler):
 
 def default_converter(arr, device, pin_memory):
     if isinstance(arr, torch.Tensor):
-        if device != "cpu":
+        if device is not None:
             arr = arr.to(device)
         elif pin_memory:
             arr = arr.pin_memory()
     elif arr.dtype.name != "category" and np.issubdtype(arr.dtype, np.number):
         if issparse(arr):
             arr = arr.toarray()
-        if device != "cpu":
+        if device is not None:
             arr = torch.tensor(arr, device=device)
         else:
             arr = torch.tensor(arr)
