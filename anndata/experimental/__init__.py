@@ -5,6 +5,7 @@ from anndata._io.specs import IOSpec, read_elem, write_elem
 
 from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_backed
+from .backed import to_memory as backed_to_memory
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
@@ -22,4 +23,5 @@ __all__ = [
     "CSRDataset",
     "CSCDataset",
     "read_backed",
+    "backed_to_memory",
 ]
