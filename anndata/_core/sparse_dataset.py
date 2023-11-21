@@ -16,6 +16,7 @@ import collections.abc as cabc
 import warnings
 from abc import ABC
 from itertools import accumulate, chain
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import h5py
@@ -24,9 +25,8 @@ import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
 from anndata._core.index import _fix_slice_bounds
-from anndata.compat import H5Group, ZarrGroup
 
-from ..compat import _read_attr
+from ..compat import H5Group, ZarrArray, ZarrGroup, _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -57,6 +57,14 @@ class BackedSparseMatrix(_cs_matrix):
     def copy(self) -> ss.spmatrix:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
+        if isinstance(self.data, ZarrArray):
+            import zarr
+
+            return sparse_dataset(
+                zarr.open(
+                    store=self.data.store, path=Path(self.data.path).parent, mode="r"
+                )
+            ).to_memory()
         else:
             return super().copy()
 
