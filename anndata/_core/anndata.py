@@ -426,7 +426,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        # self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        # self._remove_unused_categories(adata_ref.obs, obs_sub, uns)  # not going to work with xarray
         # self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = as_view(obs_sub, view_args=(self, "obs"))
