@@ -57,10 +57,10 @@ var                      Group
 varm                     Group
 ``` -->
 
-In general, `AnnData` objects are comprised of a various types of elements.
+In general, `AnnData` objects are comprised of various types of elements.
 Each element is encoded as either an Array (or Dataset in hdf5 terminology) or a collection of elements (e.g. Group) in the store.
-We record the type of an element using the `encoding-type` and `encoding-version` keys in it's attributes.
-For example, we can this file represents an `AnnData` object from this metadata:
+We record the type of an element using the `encoding-type` and `encoding-version` keys in its attributes.
+For example, we can see that this file represents an `AnnData` object from its metadata:
 
 ```python
 >>> dict(store.attrs)
@@ -319,7 +319,7 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 ### Mapping specifications (v0.1.0)
 
 * Each mapping MUST be its own group
-* The groups metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
+* The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
 
 ## Scalars
 
@@ -426,7 +426,7 @@ codes <zarr.core.Array '/obs/development_stage/codes' (164114,) int8 read-only>
 ## String arrays
 
 Arrays of strings are handled differently than numeric arrays since numpy doesn't really have a good way of representing arrays of unicode strings.
-`anndata` assumes strings are text-like data, so uses a variable length encoding.
+`anndata` assumes strings are text-like data, so it uses a variable length encoding.
 
 `````{tab-set}
 
