@@ -78,6 +78,7 @@ def to_memory(adata, exclude=[]):
     varp = backed_dict_to_memory(convert_to_dict(adata.varp), "varp")
     obsp = backed_dict_to_memory(convert_to_dict(adata.obsp), "obsp")
     layers = backed_dict_to_memory(dict(adata.layers), "layers")
+    uns = backed_dict_to_memory(convert_to_dict(adata.uns), "uns")
     X = None
     if "X" not in exclude:
         if isinstance(adata.X, BaseCompressedSparseDataset):
@@ -95,7 +96,7 @@ def to_memory(adata, exclude=[]):
         obsp=obsp,
         varp=varp,
         layers=layers,
-        uns=adata.uns,
+        uns=uns,
     )
 
 
@@ -130,7 +131,18 @@ def read_backed(
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            cols = ["obs", "var", "obsm", "varm", "obsp", "varp", "layers", "X", "raw"]
+            cols = [
+                "obs",
+                "var",
+                "obsm",
+                "varm",
+                "obsp",
+                "varp",
+                "layers",
+                "X",
+                "raw",
+                "uns",
+            ]
             iter_object = (
                 elem.items() if has_keys else [(k, elem[k]) for k in cols if k in elem]
             )

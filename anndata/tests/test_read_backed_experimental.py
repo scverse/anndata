@@ -22,6 +22,8 @@ from anndata.tests.helpers import (
     gen_typed_df,
 )
 
+EXEMPT_STANDARD_ZARR_KEYS = {".zarray", ".zgroup", ".zattrs"}
+
 
 class AccessTrackingStore(DirectoryStore):
     def __init__(self, *args, **kwargs):
@@ -31,7 +33,9 @@ class AccessTrackingStore(DirectoryStore):
 
     def __getitem__(self, key):
         for tracked in self._access_count:
-            if tracked in key:
+            if tracked in key and not any(
+                zarr_key in key for zarr_key in EXEMPT_STANDARD_ZARR_KEYS
+            ):
                 # import traceback
                 # traceback.print_stack()
                 self._access_count[tracked] += 1
