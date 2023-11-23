@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -63,7 +63,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--strict-warnings",
         action="store_true",
         default=False,
-        help="Turn most warnings into errors",
+        help="Turn warnings into errors that are not overridden by `filterwarnings` or `filterwarnings_when_strict`.",
     )
 
     parser.addini(
@@ -81,15 +81,17 @@ def pytest_collection_modifyitems(
         return
 
     warning_filters = [
-        r"error",
+        "error",
         *_config_get_strlist(config, "filterwarnings"),
         *_config_get_strlist(config, "filterwarnings_when_strict"),
     ]
     warning_marks = [pytest.mark.filterwarnings(f) for f in warning_filters]
 
+    # Add warning filters defined in the config to all tests items.
+    # Test items might already have @pytest.mark.filterwarnings applied,
+    # so we prepend ours to ensure that an item’s explicit filters override these.
+    # Reversing then individually prepending ensures that the order is preserved.
     for item in items:
-        # reverse and then prepend means essentially `marks[0:0] = warning_marks`
-        # this ensures that markers that are applied later override these
         for mark in reversed(warning_marks):
             item.add_marker(mark, append=False)
 
@@ -97,5 +99,6 @@ def pytest_collection_modifyitems(
 def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
     if strs := config.getini(name):
         assert isinstance(strs, list)
-        return [str(f) for f in strs]
+        assert all(isinstance(item, str) for item in strs)
+        return cast(list[str], strs)
     return []
