@@ -5,8 +5,6 @@ from typing import (
     TYPE_CHECKING,
 )
 
-import pandas as pd
-
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
@@ -16,88 +14,11 @@ import xarray as xr
 import zarr
 
 from ..._core.anndata import AnnData
-from ..._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+from ..._core.sparse_dataset import sparse_dataset
 from ...compat import DaskArray
-from ...utils import convert_to_dict
 from .. import read_dispatched
 from ._lazy_arrays import LazyCategoricalArray, LazyMaskedArray
 from ._xarray import Dataset2D
-
-
-def to_memory(adata, exclude=[]):
-    # nullable and categoricals need special handling because xarray will convert them to numpy arrays first with dtype object
-    def get_nullable_and_categorical_cols(ds):
-        cols = []
-        for c in ds:
-            dtype = ds[c].dtype
-            if (
-                isinstance(dtype, pd.CategoricalDtype)
-                or dtype == pd.arrays.BooleanArray
-                or dtype == pd.arrays.IntegerArray
-            ):
-                cols += [c]
-        return cols
-
-    def to_df(ds, exclude_vars=[]):
-        nullable_and_categorical_df_cols = get_nullable_and_categorical_cols(ds)
-        drop_vars = [
-            k for k in set(exclude_vars + nullable_and_categorical_df_cols) if k in ds
-        ]
-        df = ds.drop_vars(drop_vars).to_dataframe()
-        for c in nullable_and_categorical_df_cols:
-            if c not in exclude_vars:
-                df[c] = ds[c].data[()]
-        df.index.name = None  # matches old AnnData object
-        if len(exclude_vars) == 0:
-            df = df[list(ds.keys())]
-        return df
-
-    # handling for AxisArrays
-    def backed_dict_to_memory(d, prefix):
-        res = {}
-        for k, v in d.items():
-            full_key = prefix + "/" + k
-            if any([full_key == exclude_key for exclude_key in exclude]):
-                continue
-            if isinstance(v, DaskArray):
-                res[k] = v.compute()
-            elif isinstance(v, BaseCompressedSparseDataset):
-                res[k] = v.to_memory()
-            elif isinstance(v, Dataset2D):
-                res[k] = to_df(v)
-            else:
-                res[k] = v
-        return res
-
-    exclude_obs = [key.replace("obs/", "") for key in exclude if key.startswith("obs/")]
-    obs = to_df(adata.obs, exclude_obs)
-    exclude_var = [key.replace("var/", "") for key in exclude if key.startswith("var/")]
-    var = to_df(adata.var, exclude_var)
-    obsm = backed_dict_to_memory(convert_to_dict(adata.obsm), "obsm")
-    varm = backed_dict_to_memory(convert_to_dict(adata.varm), "varm")
-    varp = backed_dict_to_memory(convert_to_dict(adata.varp), "varp")
-    obsp = backed_dict_to_memory(convert_to_dict(adata.obsp), "obsp")
-    layers = backed_dict_to_memory(dict(adata.layers), "layers")
-    uns = backed_dict_to_memory(convert_to_dict(adata.uns), "uns")
-    X = None
-    if "X" not in exclude:
-        if isinstance(adata.X, BaseCompressedSparseDataset):
-            X = adata.X.to_memory()
-        elif isinstance(adata.X, DaskArray):
-            X = adata.X.compute()
-        else:
-            X = adata.X
-    return AnnData(
-        X=X,
-        obs=obs,
-        var=var,
-        obsm=obsm,
-        varm=varm,
-        obsp=obsp,
-        varp=varp,
-        layers=layers,
-        uns=uns,
-    )
 
 
 def read_backed(

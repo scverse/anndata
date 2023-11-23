@@ -10,6 +10,7 @@ import pandas as pd
 import xarray as xr
 
 from ..._core.anndata import _gen_dataframe, _remove_unused_categories
+from ..._core.file_backing import to_memory
 from ..._core.index import Index, _subset
 from ..._core.views import as_view
 
@@ -78,3 +79,23 @@ def _remove_unused_categories_xr(
     df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
 ):
     pass  # for now?
+
+
+@to_memory.register(Dataset2D)
+def to_memory(ds: Dataset2D, copy=False):
+    # nullable and categoricals need special handling because xarray will convert them to numpy arrays first with dtype object
+    def get_nullable_and_categorical_cols(ds):
+        for c in ds:
+            dtype = ds[c].dtype
+            if (
+                isinstance(dtype, pd.CategoricalDtype)
+                or dtype == pd.arrays.BooleanArray
+                or dtype == pd.arrays.IntegerArray
+            ):
+                yield c
+
+    df = ds.to_dataframe()[list(ds.keys())]
+    for c in get_nullable_and_categorical_cols(ds):
+        df[c] = ds[c].data[()]
+    df.index.name = None  # matches old AnnData object
+    return df

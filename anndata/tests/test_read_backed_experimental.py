@@ -10,7 +10,7 @@ from scipy import sparse
 from zarr import DirectoryStore
 
 from anndata._core.anndata import AnnData
-from anndata.experimental import backed_to_memory, read_backed
+from anndata.experimental import read_backed
 from anndata.experimental.backed._lazy_arrays import (
     LazyCategoricalArray,
     LazyMaskedArray,
@@ -256,22 +256,8 @@ def test_to_memory(tmp_path, mtx_format, dskfmt):
     write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
     write(adata)
     remote = read_backed(orig_pth)
-    remote_to_memory = backed_to_memory(remote)
+    remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
-
-
-def test_to_memory_exclude(tmp_path, mtx_format, dskfmt):
-    adata = gen_adata((1000, 1000), mtx_format)
-    base_pth = Path(tmp_path)
-    orig_pth = base_pth / f"orig.{dskfmt}"
-    write = lambda x: getattr(x, f"write_{dskfmt}")(orig_pth)
-    write(adata)
-    remote = read_backed(orig_pth)
-    remote_to_memory = backed_to_memory(
-        remote, exclude=["obs/nullable-bool", "obsm/sparse"]
-    )
-    assert "nullable-bool" not in remote_to_memory.obs
-    assert "sparse" not in remote_to_memory.obsm
 
 
 def test_view_to_memory(tmp_path, mtx_format, dskfmt):
@@ -282,10 +268,10 @@ def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     write(adata)
     remote = read_backed(orig_pth)
     subset_obs = adata.obs["obs_cat"] == "a"
-    assert_equal(adata[subset_obs, :], backed_to_memory(remote[subset_obs, :]))
+    assert_equal(adata[subset_obs, :], remote[subset_obs, :].to_memory())
 
     subset_var = adata.var["var_cat"] == "a"
-    assert_equal(adata[:, subset_var], backed_to_memory(remote[:, subset_var]))
+    assert_equal(adata[:, subset_var], remote[:, subset_var].to_memory())
 
 
 def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
@@ -301,7 +287,7 @@ def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
     subsetted_subsetted_adata = subsetted_adata[subset_subset_obs, :]
     assert_equal(
         subsetted_subsetted_adata,
-        backed_to_memory(remote[subset_obs, :][subset_subset_obs, :]),
+        remote[subset_obs, :][subset_subset_obs, :].to_memory(),
     )
 
     subset_var = (adata.var["var_cat"] == "a") | (adata.var["var_cat"] == "b")
@@ -310,7 +296,7 @@ def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
     subsetted_subsetted_adata = subsetted_adata[:, subset_subset_var]
     assert_equal(
         subsetted_subsetted_adata,
-        backed_to_memory(remote[:, subset_var][:, subset_subset_var]),
+        remote[:, subset_var][:, subset_subset_var].to_memory(),
     )
 
 
