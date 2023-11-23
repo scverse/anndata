@@ -74,13 +74,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
-    if strs := config.getini("filterwarnings"):
-        assert isinstance(strs, list)
-        return [str(f) for f in strs]
-    return []
-
-
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: Iterable[pytest.Item]
 ):
@@ -99,3 +92,10 @@ def pytest_collection_modifyitems(
         # this ensures that markers that are applied later override these
         for mark in reversed(warning_marks):
             item.add_marker(mark, append=False)
+
+
+def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
+    if strs := config.getini(name):
+        assert isinstance(strs, list)
+        return [str(f) for f in strs]
+    return []
