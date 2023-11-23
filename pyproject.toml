@@ -114,11 +114,13 @@ addopts = [
     "--doctest-modules",
 ]
 filterwarnings = [
-    # TODO: replace both `ignore` lines below with this one once we figured out how prevent ImportPathMismatchError
-    # 'ignore::anndata._warnings.ExperimentalFeatureWarning',
     'ignore:Support for Awkward Arrays is currently experimental',
     'ignore:Outer joins on awkward\.Arrays',
-    # When `--strict-warnings` is used, all warnings are treated as errors, except those:
+    # TODO: replace both lines above with this one once we figured out how prevent ImportPathMismatchError
+    # 'ignore::anndata._warnings.ExperimentalFeatureWarning',
+]
+# When `--strict-warnings` is used, all warnings are treated as errors, except those:
+filterwarnings_when_strict = [
     "default::anndata._warnings.ImplicitModificationWarning",
     "default:Transforming to str index:UserWarning",
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
