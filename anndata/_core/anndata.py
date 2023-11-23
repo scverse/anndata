@@ -199,6 +199,32 @@ def _gen_dataframe_1d(
     raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
 
 
+@singledispatch
+def _remove_unused_categories(
+    df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
+):
+    for k in df_full:
+        if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
+            continue
+        all_categories = df_full[k].cat.categories
+        with pd.option_context("mode.chained_assignment", None):
+            df_sub[k] = df_sub[k].cat.remove_unused_categories()
+        # also correct the colors...
+        color_key = f"{k}_colors"
+        if color_key not in uns:
+            continue
+        color_vec = uns[color_key]
+        if np.array(color_vec).ndim == 0:
+            # Make 0D arrays into 1D ones
+            uns[color_key] = np.array(color_vec)[(None,)]
+        elif len(color_vec) != len(all_categories):
+            # Reset colors
+            del uns[color_key]
+        else:
+            idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
+            uns[color_key] = np.array(color_vec)[(idx,)]
+
+
 class AnnData(metaclass=utils.DeprecationMixinMeta):
     """\
     An annotated data matrix.
@@ -353,20 +379,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx: Index1D = None,
         vidx: Index1D = None,
     ):
-        if "Dataset2D" in str(type(obs)):
-            from ..experimental.backed._xarray import Dataset2D
-
-            @_gen_dataframe.register(Dataset2D)
-            def _gen_dataframe_xr(
-                anno: Dataset2D,
-                index_names: Iterable[str],
-                *,
-                source: Literal["X", "shape"],
-                attr: Literal["obs", "var"],
-                length: int | None = None,
-            ):
-                return anno
-
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError("`X` has to be an AnnData object.")
@@ -426,8 +438,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        # self._remove_unused_categories(adata_ref.obs, obs_sub, uns)  # not going to work with xarray
-        # self._remove_unused_categories(adata_ref.var, var_sub, uns)
+        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+        self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = as_view(obs_sub, view_args=(self, "obs"))
         self._var = as_view(var_sub, view_args=(self, "var"))
@@ -584,7 +596,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
 
         self._check_dimensions()
-        # self._check_uniqueness()
+        self._check_uniqueness()
 
         if self.filename:
             assert not isinstance(
@@ -939,13 +951,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def obs_names(self) -> pd.Index:
         """Names of observations (alias for `.obs.index`)."""
-        if hasattr(self.obs, "index"):
-            return self.obs.index
-        return pd.Index(
-            self.obs["obs_names"].data.compute()
-            if isinstance(self.obs["obs_names"].data, DaskArray)
-            else self.obs["obs_names"].data
-        )
+        return self.obs.index
 
     @obs_names.setter
     def obs_names(self, names: Sequence[str]):
@@ -968,13 +974,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def var_names(self) -> pd.Index:
         """Names of variables (alias for `.var.index`)."""
-        if hasattr(self.var, "index"):
-            return self.var.index
-        return pd.Index(
-            self.var["var_names"].data.compute()
-            if isinstance(self.var["var_names"].data, DaskArray)
-            else self.var["var_names"].data
-        )
+        return self.var.index
 
     @var_names.setter
     def var_names(self, names: Sequence[str]):
@@ -1203,28 +1203,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
     def _remove_unused_categories(
-        self, df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
+        self,
+        df_full: pd.DataFrame,
+        df_sub: pd.DataFrame,
+        uns: dict[str, Any],  # types are wrong now...
     ):
-        for k in df_full:
-            if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
-                continue
-            all_categories = df_full[k].cat.categories
-            with pd.option_context("mode.chained_assignment", None):
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
-            # also correct the colors...
-            color_key = f"{k}_colors"
-            if color_key not in uns:
-                continue
-            color_vec = uns[color_key]
-            if np.array(color_vec).ndim == 0:
-                # Make 0D arrays into 1D ones
-                uns[color_key] = np.array(color_vec)[(None,)]
-            elif len(color_vec) != len(all_categories):
-                # Reset colors
-                del uns[color_key]
-            else:
-                idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
-                uns[color_key] = np.array(color_vec)[(idx,)]
+        _remove_unused_categories(df_full, df_sub, uns)
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\

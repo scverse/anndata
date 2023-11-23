@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+
+import pandas as pd
 import xarray as xr
 
-from anndata._core.index import Index, _subset
-from anndata._core.views import as_view
+from ..._core.anndata import _gen_dataframe, _remove_unused_categories
+from ..._core.index import Index, _subset
+from ..._core.views import as_view
 
 
 def get_index_dim(ds):
@@ -14,6 +22,11 @@ def get_index_dim(ds):
 
 
 class Dataset2D(xr.Dataset):
+    @property
+    def index(self) -> pd.Index:
+        coord = list(self.coords.keys())[0]
+        return pd.Index(self.coords[coord].data)
+
     @property
     def shape(
         self,
@@ -27,8 +40,8 @@ class Dataset2D(xr.Dataset):
                 self._ds = ds
 
             def __getitem__(self, idx):
-                coords = list(self._ds.coords.keys())[0]
-                return self._ds.isel(**{coords: idx})
+                coord = list(self._ds.coords.keys())[0]
+                return self._ds.isel(**{coord: idx})
 
         return IlocGetter(self)
 
@@ -46,3 +59,22 @@ def _(a: xr.DataArray, subset_idx: Index):
 @as_view.register(Dataset2D)
 def _(a: Dataset2D, view_args):
     return a
+
+
+@_gen_dataframe.register(Dataset2D)
+def _gen_dataframe_xr(
+    anno: Dataset2D,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+):
+    return anno
+
+
+@_remove_unused_categories.register(Dataset2D)
+def _remove_unused_categories_xr(
+    df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
+):
+    pass  # for now?
