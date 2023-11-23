@@ -24,7 +24,7 @@ from ._xarray import Dataset2D
 def read_backed(
     store: str | Path | MutableMapping | zarr.Group | h5py.Dataset,
 ) -> AnnData:
-    """Lazily read in on-disk/in-cloud AnnData stores.  A new, but familiar, AnnData object will be returned.
+    """Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
     No array data should need to be read into memory, with exception of non-obs/var dataframes and Awkward Arrays.
 
     Args:
