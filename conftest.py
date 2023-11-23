@@ -66,20 +66,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="Turn most warnings into errors",
     )
 
-    parser.addini(
-        "filterwarnings_when_strict",
-        "Filters to apply after `-Werror` when --strict-warnings is active",
-        type="linelist",
-        default=[],
-    )
-
-
-def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
-    if strs := config.getini("filterwarnings"):
-        assert isinstance(strs, list)
-        return [str(f) for f in strs]
-    return []
-
 
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: Iterable[pytest.Item]
@@ -90,7 +76,6 @@ def pytest_collection_modifyitems(
     warning_filters = [
         r"error",
         *_config_get_strlist(config, "filterwarnings"),
-        *_config_get_strlist(config, "filterwarnings_when_strict"),
     ]
     warning_marks = [pytest.mark.filterwarnings(f) for f in warning_filters]
 
@@ -99,3 +84,10 @@ def pytest_collection_modifyitems(
         # this ensures that markers that are applied later override these
         for mark in reversed(warning_marks):
             item.add_marker(mark, append=False)
+
+
+def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
+    if strs := config.getini(name):
+        assert isinstance(strs, list)
+        return [str(f) for f in strs]
+    return []
