@@ -78,7 +78,7 @@ def _gen_dataframe_xr(
 def _remove_unused_categories_xr(
     df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
 ):
-    pass  # for now?
+    pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
 
 
 @to_memory.register(Dataset2D)
