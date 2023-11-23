@@ -179,7 +179,9 @@ def read_backed(
                     d_with_xr[k] = v
             return Dataset2D(d_with_xr)
         elif iospec.encoding_type == "categorical":
-            drop_unused_cats = False  # always don't because the `AnnData` object cannot drop them for us, so getting tests to pass means we need to leave this.
+            drop_unused_cats = not (
+                elem_name.startswith("/obsm") or elem_name.startswith("/varm")
+            )
             return LazyCategoricalArray(
                 elem["codes"], elem["categories"], elem.attrs, drop_unused_cats
             )
