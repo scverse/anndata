@@ -58,12 +58,27 @@ def pytest_itemcollected(item: pytest.Item) -> None:
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
+    """Hook to register custom CLI options and config values"""
     parser.addoption(
         "--strict-warnings",
         action="store_true",
         default=False,
         help="Turn most warnings into errors",
     )
+
+    parser.addini(
+        "filterwarnings_when_strict",
+        "Filters to apply after `-Werror` when --strict-warnings is active",
+        type="linelist",
+        default=[],
+    )
+
+
+def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
+    if strs := config.getini("filterwarnings"):
+        assert isinstance(strs, list)
+        return [str(f) for f in strs]
+    return []
 
 
 def pytest_collection_modifyitems(
@@ -72,19 +87,10 @@ def pytest_collection_modifyitems(
     if not config.getoption("--strict-warnings"):
         return
 
-    filters_from_config: list[str] = []
-    if fs := config.getini("filterwarnings"):
-        assert isinstance(fs, list)
-        filters_from_config = [str(f) for f in fs]
-
     warning_filters = [
         r"error",
-        *filters_from_config,
-        r"default::anndata._warnings.ImplicitModificationWarning",
-        r"default:Transforming to str index:UserWarning",
-        r"default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
-        r"default::scipy.sparse.SparseEfficiencyWarning",
-        r"default::dask.array.core.PerformanceWarning",
+        *_config_get_strlist(config, "filterwarnings"),
+        *_config_get_strlist(config, "filterwarnings_when_strict"),
     ]
     warning_marks = [pytest.mark.filterwarnings(f) for f in warning_filters]
 
