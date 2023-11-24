@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
+from zarr import DirectoryStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMapping
@@ -28,6 +29,39 @@ from anndata.compat import (
     DaskArray,
 )
 from anndata.utils import asarray
+
+STANDARD_DOT_ZARR_KEYS = {".zarray", ".zgroup", ".zattrs"}
+
+
+# Store for tracking access to files.
+class AccessTrackingStore(DirectoryStore):
+    def __init__(self, *args, **kwargs):
+        self._exclude_dot_files = kwargs.pop("exclude_dot_files")
+        super().__init__(*args, **kwargs)
+        self._access_count = {}
+        self._accessed_keys = set()
+
+    def __getitem__(self, key):
+        for tracked in self._access_count:
+            if tracked in key:
+                if (
+                    self._exclude_dot_files
+                    and not any(zarr_key in key for zarr_key in STANDARD_DOT_ZARR_KEYS)
+                ) or not self._exclude_dot_files:
+                    self._access_count[tracked] += 1
+                    self._accessed_keys.add(key)
+        return super().__getitem__(key)
+
+    def get_access_count(self, key):
+        return self._access_count[key]
+
+    def get_subkeys_accessed(self, key):
+        return [k for k in self._accessed_keys if key in k]
+
+    def set_key_trackers(self, keys_to_track):
+        for k in keys_to_track:
+            self._access_count[k] = 0
+
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(

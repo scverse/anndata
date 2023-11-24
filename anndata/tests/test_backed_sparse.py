@@ -13,7 +13,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata.experimental import read_dispatched
-from anndata.tests.helpers import assert_equal, subset_func
+from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -242,6 +242,71 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     ad._io.specs.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))
     assert_equal(adata.X, base)
+
+
+def test_sparse_indexing(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+    path = (
+        tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    )  # diskfmt is either h5ad or zarr
+    base = sparse.random(100, 100, format="csr")
+
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+
+    ad._io.specs.write_elem(f, "/", base)
+    backed = sparse_dataset(f["/"])
+    assert_equal(backed[0:75, :].to_memory(), base[0:75, :])
+    assert_equal(backed[0:75, :][0:20, :].to_memory(), base[0:20, :])
+    assert_equal(backed[0:75, 10:20].to_memory(), base[0:75, 10:20])
+    assert_equal(backed[0:75, :][:, 10:20].to_memory(), base[0:75, :][:, 10:20])
+
+
+def test_sparse_access(tmp_path: Path):
+    path = tmp_path / "test.zarr"
+    base = sparse.random(
+        1000000, 5, density=0.1, format="csr"
+    )  # large enough to ensure chunking
+    store = AccessTrackingStore(path, exclude_dot_files=True)
+    store.set_key_trackers(["data"])
+    f = zarr.open_group(store, "a")
+    ad._io.specs.write_elem(f, "/", base)
+    backed = sparse_dataset(f["/"])
+    backed[0:10, :]
+    assert store.get_access_count("data") == 0, store.get_subkeys_accessed(
+        "data"
+    )  # no access to data yet necessary, just zarray
+    backed[0:10, :].to_memory()
+    assert store.get_access_count("data") == 1, store.get_subkeys_accessed(
+        "data"
+    )  # should only be one chunk and zarray
+    backed[-999999:, :][-10:, :]
+    assert store.get_access_count("data") == 1, store.get_subkeys_accessed(
+        "data"
+    )  # still at one for the first `to_memory` call
+    backed[-999999:, :][-10:, :].to_memory()
+    assert store.get_access_count("data") == 2, store.get_subkeys_accessed(
+        "data"
+    )  # now only one more for the end of the array
+
+
+def test_sparse_shape(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+    path = (
+        tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    )  # diskfmt is either h5ad or zarr
+    base = sparse.random(100, 100, format="csr")
+
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+
+    ad._io.specs.write_elem(f, "/", base)
+    backed = sparse_dataset(f["/"])
+    assert_equal(backed[0:75, :].shape, (75, 100))
+    assert_equal(backed[0:75, :][0:20, :].shape, (20, 100))
+    assert_equal(backed[0:75, :][0:20, :].get_backing_shape(), (100, 100))
 
 
 @contextmanager
