@@ -314,9 +314,9 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
 
     assert adata.isbacked
 
-    assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
-    assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
-    assert np.all(adata.X[2, :] == np.array([7, 0, 9]))
+    assert np.all(adata.X[0, :].to_memory() == np.array([10, 0, 10]))
+    assert np.all(adata.X[1, :].to_memory() == np.array([11, 0, 12]))
+    assert np.all(adata.X[2, :].to_memory() == np.array([7, 0, 9]))
 
 
 # TODO: Work around h5py not supporting this

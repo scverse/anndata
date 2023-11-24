@@ -538,7 +538,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
     write_sparse_compressed(
         f,
         k,
-        elem._to_backed(),
+        elem.to_memory(),  # if there is a subset on the elem, to_memory lazily reads in __only__ the subset
         _writer,
         fmt=elem.format,
         dataset_kwargs=dataset_kwargs,
@@ -609,7 +609,7 @@ def read_sparse(elem, _reader):
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
-    return sparse_dataset(elem)[indices]
+    return sparse_dataset(elem)[indices].to_memory()
 
 
 #################

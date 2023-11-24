@@ -600,7 +600,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if isinstance(X, h5py.Dataset) and with_disk:
                 return int(np.array(X.shape).prod() * X.dtype.itemsize)
             elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
-                return cs_to_bytes(X._to_backed())
+                return cs_to_bytes(X.to_backed())
             elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
                 return cs_to_bytes(X)
             else:
@@ -676,6 +676,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # indices that aren’t strictly increasing
             if self.is_view:
                 X = _subset(X, (self._oidx, self._vidx))
+                if isinstance(X, BaseCompressedSparseDataset):
+                    X = X.to_memory()
         elif self.is_view and self._adata_ref.X is None:
             X = None
         elif self.is_view:
