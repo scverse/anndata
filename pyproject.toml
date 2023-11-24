@@ -118,6 +118,16 @@ addopts = [
 filterwarnings = [
     'ignore:Support for Awkward Arrays is currently experimental',
     'ignore:Outer joins on awkward\.Arrays',
+    # TODO: replace both lines above with this one once we figured out how prevent ImportPathMismatchError
+    # 'ignore::anndata._warnings.ExperimentalFeatureWarning',
+]
+# When `--strict-warnings` is used, all warnings are treated as errors, except those:
+filterwarnings_when_strict = [
+    "default::anndata._warnings.ImplicitModificationWarning",
+    "default:Transforming to str index:UserWarning",
+    "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
+    "default::scipy.sparse.SparseEfficiencyWarning",
+    "default::dask.array.core.PerformanceWarning",
 ]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]

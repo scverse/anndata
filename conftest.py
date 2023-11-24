@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -14,7 +14,9 @@ from anndata.compat import chdir
 from anndata.utils import import_name
 
 if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable
     from pathlib import Path
+
 
 doctest_marker = pytest.mark.usefixtures("doctest_env")
 
@@ -22,15 +24,17 @@ doctest_marker = pytest.mark.usefixtures("doctest_env")
 @pytest.fixture
 def doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
-) -> None:
+) -> Generator[None, None, None]:
     from scanpy import settings
 
+    assert isinstance(request.node.parent, pytest.Module)
     # request.node.parent is either a DoctestModule or a DoctestTextFile.
     # Only DoctestModule has a .obj attribute (the imported module).
     if request.node.parent.obj:
         func = import_name(request.node.name)
+        warning_detail: tuple[type[Warning], str, bool] | None
         if warning_detail := getattr(func, "__deprecated", None):
-            cat, msg, _ = warning_detail  # type: tuple[type[Warning], str, bool]
+            cat, msg, _ = warning_detail
             warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
 
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
@@ -39,7 +43,7 @@ def doctest_env(
     settings.datasetdir = old_dd
 
 
-def pytest_itemcollected(item):
+def pytest_itemcollected(item: pytest.Item) -> None:
     """Define behavior of pytest.mark.gpu and doctests."""
     from importlib.util import find_spec
 
@@ -51,3 +55,50 @@ def pytest_itemcollected(item):
 
     if isinstance(item, pytest.DoctestItem):
         item.add_marker(doctest_marker)
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Hook to register custom CLI options and config values"""
+    parser.addoption(
+        "--strict-warnings",
+        action="store_true",
+        default=False,
+        help="Turn warnings into errors that are not overridden by `filterwarnings` or `filterwarnings_when_strict`.",
+    )
+
+    parser.addini(
+        "filterwarnings_when_strict",
+        "Filters to apply after `-Werror` when --strict-warnings is active",
+        type="linelist",
+        default=[],
+    )
+
+
+def pytest_collection_modifyitems(
+    session: pytest.Session, config: pytest.Config, items: Iterable[pytest.Item]
+):
+    if not config.getoption("--strict-warnings"):
+        return
+
+    warning_filters = [
+        "error",
+        *_config_get_strlist(config, "filterwarnings"),
+        *_config_get_strlist(config, "filterwarnings_when_strict"),
+    ]
+    warning_marks = [pytest.mark.filterwarnings(f) for f in warning_filters]
+
+    # Add warning filters defined in the config to all tests items.
+    # Test items might already have @pytest.mark.filterwarnings applied,
+    # so we prepend ours to ensure that an item’s explicit filters override these.
+    # Reversing then individually prepending ensures that the order is preserved.
+    for item in items:
+        for mark in reversed(warning_marks):
+            item.add_marker(mark, append=False)
+
+
+def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
+    if strs := config.getini(name):
+        assert isinstance(strs, list)
+        assert all(isinstance(item, str) for item in strs)
+        return cast(list[str], strs)
+    return []
