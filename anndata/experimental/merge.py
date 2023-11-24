@@ -83,9 +83,9 @@ def _gen_slice_to_append(
             while rem_slices > 0:
                 ds_part = None
                 if axis == 0:
-                    ds_part = ds[idx : idx + slice_size, :]
+                    ds_part = ds[idx : idx + slice_size, :].to_memory()
                 elif axis == 1:
-                    ds_part = ds[:, idx : idx + slice_size]
+                    ds_part = ds[:, idx : idx + slice_size].to_memory()
 
                 yield (csr_matrix, csc_matrix)[axis](
                     ri(ds_part, axis=1 - axis, fill_value=fill_value)
