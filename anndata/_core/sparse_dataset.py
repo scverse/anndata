@@ -62,8 +62,10 @@ class BackedSparseMatrix(_cs_matrix):
 
             return sparse_dataset(
                 zarr.open(
-                    store=self.data.store, path=Path(self.data.path).parent, mode="r"
-                )
+                    store=self.data.store,
+                    mode="r",
+                    chunk_store=self.data.chunk_store,  # chunk_store is needed, not clear why
+                )[Path(self.data.path).parent]
             ).to_memory()
         else:
             return super().copy()
