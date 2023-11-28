@@ -693,3 +693,18 @@ def test_x_none():
     new = view.copy()
     assert new.shape == (2, 0)
     assert new.obs_names.tolist() == ["2", "3"]
+
+
+def test_empty_list_subset():
+    orig = gen_adata((10, 10))
+    subset = orig[:, []]
+    assert subset.X.shape == (10, 0)
+    assert subset.obsm["sparse"].shape == (10, 100)
+    assert subset.varm["sparse"].shape == (0, 100)
+
+
+def test_mixed_subset():
+    orig = gen_adata((10, 10))
+    with pytest.raises(ValueError) as exc:
+        orig[:, [1, "cell_c"]].X
+    assert exc.value.args[0] == "invalid literal for int() with base 10: 'cell_c'"
