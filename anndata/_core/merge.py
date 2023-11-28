@@ -978,7 +978,9 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     return out
 
 
-def _resolve_dim(*, dim: str = None, axis: int = None) -> tuple[int, str]:
+def _resolve_dim(
+    *, dim: Literal["obs", "var"] | None = None, axis: Literal[0, 1] | None = None
+) -> tuple[Literal[0], Literal["obs"]] | tuple[Literal[1], Literal["var"]]:
     _dims = ("obs", "var")
     if (dim is None and axis is None) or (dim is not None and axis is not None):
         raise ValueError(
@@ -1032,7 +1034,8 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 def concat(
     adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
     *,
-    axis: Literal[0, 1] = 0,
+    dim: Literal["obs", "var"] | None = None,
+    axis: Literal[0, 1] | None = None,
     join: Literal["inner", "outer"] = "inner",
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
@@ -1051,8 +1054,9 @@ def concat(
     adatas
         The objects to be concatenated. If a Mapping is passed, keys are used for the `keys`
         argument and values are concatenated.
+    dim
     axis
-        Which axis to concatenate along.
+        Which dimension/axis to concatenate along. Defaults to `"obs"`/`0`.
     join
         How to align values when concatenating. If "outer", the union of the other axis
         is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
@@ -1133,6 +1137,8 @@ def concat(
     s2     2     3
     s3     4     5
     s4     7     8
+    >>> # ad.concat([a, c], dim="var").to_df()
+    >>> # or
     >>> ad.concat([a, c], axis=1).to_df()
         var1  var2  var3  var4
     s1     0     1    10    11
@@ -1228,7 +1234,9 @@ def concat(
     if keys is None:
         keys = np.arange(len(adatas)).astype(str)
 
-    axis, dim = _resolve_dim(axis=axis)
+    if dim is None and axis is None:
+        dim = "obs"
+    axis, dim = _resolve_dim(axis=axis, dim=dim)
     alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
 
     # Label column
