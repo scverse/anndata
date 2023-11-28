@@ -97,9 +97,17 @@ def fill_val(request):
     return request.param
 
 
-@pytest.fixture(params=[0, 1])
-def axis(request) -> Literal[0, 1]:
+@pytest.fixture(params=["obs", "var"])
+def dim(request) -> Literal["obs", "var"]:
     return request.param
+
+
+def axis(dim) -> Literal[0, 1]:
+    return 0 if dim == "obs" else 1
+
+
+def alt_dim(dim) -> Literal["obs", "var"]:
+    return "var" if dim == "obs" else "obs"
 
 
 @pytest.fixture(params=list(merge.MERGE_STRATEGIES.keys()))
@@ -798,15 +806,13 @@ def test_awkward_does_not_mix(join_type, other):
         concat([adata_a, adata_b], join=join_type)
 
 
-def test_pairwise_concat(axis, array_type):
+def test_pairwise_concat(dim, axis, alt_dim, array_type):
     dim_sizes = [[100, 200, 50], [50, 50, 50]]
-    if axis:
+    if dim == "var":
         dim_sizes.reverse()
     Ms, Ns = dim_sizes
-    dim = ("obs", "var")[axis]
-    alt = ("var", "obs")[axis]
     dim_attr = f"{dim}p"
-    alt_attr = f"{alt}p"
+    alt_attr = f"{alt_dim}p"
 
     def gen_dim_array(m):
         return array_type(sparse.random(m, m, format="csr", density=0.1))
@@ -822,8 +828,8 @@ def test_pairwise_concat(axis, array_type):
         for k, m, n in zip("abc", Ms, Ns)
     }
 
-    w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)
-    wo_pairwise = concat(adatas, axis=axis, label="orig", pairwise=False)
+    w_pairwise = concat(adatas, dim=dim, label="orig", pairwise=True)
+    wo_pairwise = concat(adatas, dim=dim, label="orig", pairwise=False)
 
     # Check that argument controls whether elements are included
     assert getattr(wo_pairwise, dim_attr) == {}
@@ -858,9 +864,7 @@ def test_pairwise_concat(axis, array_type):
     )
 
 
-def test_nan_merge(axis, join_type, array_type):
-    # concat_dim = ("obs", "var")[axis]
-    alt_dim = ("var", "obs")[axis]
+def test_nan_merge(dim, axis, alt_dim, join_type, array_type):
     mapping_attr = f"{alt_dim}m"
     adata_shape = (20, 10)
 
@@ -878,7 +882,7 @@ def test_nan_merge(axis, join_type, array_type):
     _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)
     orig2 = AnnData(**_data)
-    result = concat([orig1, orig2], axis=axis, merge="same")
+    result = concat([orig1, orig2], dim=dim, merge="same")
 
     assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
 
@@ -1324,12 +1328,11 @@ def expected_shape(a, b, axis, join):
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
+def test_concat_size_0_dim(axis, dim, join_type, merge_strategy, shape):
     # https://github.com/scverse/anndata/issues/526
     a = gen_adata((5, 7))
     b = gen_adata(shape)
     alt_axis = 1 - axis
-    dim = ("obs", "var")[axis]
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 

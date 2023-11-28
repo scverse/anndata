@@ -1056,7 +1056,7 @@ def concat(
         argument and values are concatenated.
     dim
     axis
-        Which dimension/axis to concatenate along. Defaults to `"obs"`/`0`.
+        Which dimension/axis to concatenate along. Defaults to `dim="obs"` aka `axis=0`.
     join
         How to align values when concatenating. If "outer", the union of the other axis
         is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
