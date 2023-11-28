@@ -1128,11 +1128,11 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
     assert_equal(a, b)
 
 
-def test_batch_key(axis, array_type):
+def test_batch_key(axis, dim, array_type):
     """Test that concat only adds a label if the key is provided"""
 
     def get_annot(adata):
-        return getattr(adata, ("obs", "var")[axis])
+        return getattr(adata, dim)
 
     lhs = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     rhs = gen_adata((10, 12), **GEN_ADATA_DASK_ARGS)
@@ -1148,7 +1148,7 @@ def test_batch_key(axis, array_type):
         == []
     )
 
-    batch_annot = get_annot(concat([lhs, rhs], axis=axis, label="batch"))
+    batch_annot = get_annot(concat([lhs, rhs], dim=dim, label="batch"))
     assert list(
         batch_annot.columns.difference(
             get_annot(lhs).columns.union(get_annot(rhs).columns)
@@ -1295,15 +1295,15 @@ def test_bool_promotion():
     assert result.obs["bool"].dtype == np.dtype(bool)
 
 
-def test_concat_names(axis):
+def test_concat_names(axis, dim):
     def get_annot(adata):
-        return getattr(adata, ("obs", "var")[axis])
+        return getattr(adata, dim)
 
     lhs = gen_adata((10, 10))
     rhs = gen_adata((10, 10))
 
     assert not get_annot(concat([lhs, rhs], axis=axis)).index.is_unique
-    assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
+    assert get_annot(concat([lhs, rhs], dim=dim, index_unique="-")).index.is_unique
 
 
 def axis_labels(adata, axis):
