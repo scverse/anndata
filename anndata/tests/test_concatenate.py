@@ -102,10 +102,12 @@ def dim(request) -> Literal["obs", "var"]:
     return request.param
 
 
+@pytest.fixture
 def axis(dim) -> Literal[0, 1]:
     return 0 if dim == "obs" else 1
 
 
+@pytest.fixture
 def alt_dim(dim) -> Literal["obs", "var"]:
     return "var" if dim == "obs" else "obs"
 
