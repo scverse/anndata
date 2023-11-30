@@ -85,11 +85,11 @@ def _normalize_index(
                 all(isinstance(x, str) for x in indexer) and len(indexer) > 0
             ):  # if not all, but any, then dtype=int will cause an error
                 dtype = "object"
-            elif (
-                any(isinstance(x, str) for x in indexer) and len(indexer) > 0
-            ):  # if not all, but any, there must be more than one type.
-                raise ValueError("Mixed type list indexers not supported.")
+        try:
             indexer = np.array(indexer, dtype=dtype)
+        except ValueError as e:
+            msg = "Mixed type list indexers not supported."
+            raise ValueError(msg) from e
         if issubclass(indexer.dtype.type, (np.integer, np.floating)):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
