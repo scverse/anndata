@@ -707,4 +707,4 @@ def test_mixed_subset():
     orig = gen_adata((10, 10))
     with pytest.raises(ValueError) as exc:
         orig[:, [1, "cell_c"]].X
-    assert exc.value.args[0] == "invalid literal for int() with base 10: 'cell_c'"
+    assert exc.value.args[0] == "Mixed type list indexers not supported."
