@@ -88,8 +88,10 @@ def _normalize_index(
             try:
                 indexer = np.array(indexer, dtype=dtype)
             except ValueError as e:
-                msg = "Mixed type list indexers not supported."
-                raise ValueError(msg) from e
+                if e.args[0].startswith("invalid literal for"):
+                    msg = "Mixed type list indexers not supported."
+                    raise ValueError(msg) from e
+                raise e
         if issubclass(indexer.dtype.type, (np.integer, np.floating)):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):

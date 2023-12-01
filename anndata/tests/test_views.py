@@ -708,3 +708,13 @@ def test_mixed_subset():
     with pytest.raises(ValueError) as exc:
         orig[:, [1, "cell_c"]].X
     assert exc.value.args[0] == "Mixed type list indexers not supported."
+
+
+def test_nested_array_subset():
+    orig = gen_adata((10, 10))
+    with pytest.raises(ValueError) as exc:
+        orig[[[1, 2], [2]], :]
+    assert (
+        exc.value.args[0]
+        == "setting an array element with a sequence. The requested array has an inhomogeneous shape after 1 dimensions. The detected shape was (2,) + inhomogeneous part."
+    )
