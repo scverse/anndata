@@ -714,7 +714,7 @@ def test_empty_list_subset():
 def test_subset_errors(dim, idx, pat):
     orig = gen_adata((10, 10))
     with pytest.raises(ValueError, match=pat):
-        if dim == "obs": 
+        if dim == "obs":
             orig[idx, :].X
         elif dim == "var":
             orig[:, idx].X
