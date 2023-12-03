@@ -703,7 +703,7 @@ def test_empty_list_subset():
     assert subset.varm["sparse"].shape == (0, 100)
 
 
-@pytest.mark.parametrize("dim", ["obs", "var])
+@pytest.mark.parametrize("dim", ["obs", "var"])
 @pytest.mark.parametrize(
     ("idx", "pat"),
     [
