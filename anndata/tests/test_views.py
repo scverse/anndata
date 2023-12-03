@@ -707,8 +707,12 @@ def test_empty_list_subset():
 @pytest.mark.parametrize(
     ("idx", "pat"),
     [
-        pytest.param([1, "cell_c"], r"Mixed type list indexers not supported", id="mixed"),
-        pytest.param([[1, 2], [2]], r"setting an array element with a sequence", id="nested"),
+        pytest.param(
+            [1, "cell_c"], r"Mixed type list indexers not supported", id="mixed"
+        ),
+        pytest.param(
+            [[1, 2], [2]], r"setting an array element with a sequence", id="nested"
+        ),
     ],
 )
 def test_subset_errors(dim, idx, pat):
