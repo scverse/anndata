@@ -94,6 +94,7 @@ test = [
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
+    "xarray",
 ]
 gpu = ["cupy"]
 
