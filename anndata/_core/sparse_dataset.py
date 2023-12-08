@@ -237,11 +237,12 @@ def get_compressed_vectors(
 
 
 def get_compressed_vectors_for_slices(
-    x: BackedSparseMatrix, row_idxs: Iterable[slice]
+    x: BackedSparseMatrix, slices: Iterable[slice]
 ) -> tuple[Sequence, Sequence, Sequence]:
-    indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in row_idxs]
+    indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
     data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_sels])
     indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_sels])
+    # Need to track the size of the gaps in the slices to each indptr subselection
     total = indptr_sels[0][0]
     offsets = [total]
     for i, sel in enumerate(indptr_sels[1:]):
