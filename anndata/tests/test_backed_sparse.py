@@ -94,6 +94,38 @@ def test_backed_indexing(
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
+def test_consecutive_bool(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    randomized_mask = np.zeros(csr_disk.shape[0], dtype=bool)
+    inds = np.random.choice(csr_disk.shape[0], 20, replace=False)
+    inds.sort()
+    for i in range(0, len(inds) - 1, 2):
+        randomized_mask[inds[i] : inds[i + 1]] = True
+
+    # non-random indices, with alternating one false and n true
+    def make_alternating_mask(n):
+        mask_alternating = np.ones(csr_disk.shape[0], dtype=bool)
+        for i in range(0, csr_disk.shape[0], n):
+            mask_alternating[i] = False
+        return mask_alternating
+
+    alternating_mask = make_alternating_mask(10)
+
+    assert_equal(
+        csr_disk[alternating_mask, :].X, csr_disk[np.where(alternating_mask)].X
+    )
+    assert_equal(
+        csc_disk[:, alternating_mask].X, csc_disk[:, np.where(alternating_mask)[0]].X
+    )
+    assert_equal(csr_disk[randomized_mask, :].X, csr_disk[np.where(randomized_mask)].X)
+    assert_equal(
+        csc_disk[:, randomized_mask].X, csc_disk[:, np.where(randomized_mask)[0]].X
+    )
+
+
 @pytest.mark.parametrize(
     ["sparse_format", "append_method"],
     [
