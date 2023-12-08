@@ -360,51 +360,60 @@ class BaseCompressedSparseDataset(ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
+    @property
+    def _efficient_axis(self):
+        """The axis over which the sparse matrix is efficient (i.e., row for csr)"""
+        formats = ["csr", "csc"]
+        return formats.index(self.format)
+
+    def _efficient_index(self, indices):
+        """returns the index from the indices based on the efficient axis"""
+        return indices[self._efficient_axis]
+
+    def _off_efficient_axis_index(self, indices):
+        """returns the index from the indices based on the non-efficient axis"""
+        return indices[(self._efficient_axis + 1) % 2]
+
+    def _bool_to_slice(self, mask):
+        return np.ma.extras._ezclump(mask)
+
+    def select_bool_as_slice_along_efficient_axis(
+        self, bool_to_slice_indexer, other_indexer, mtx
+    ):
+        output_shape_before_other_indexer = list(mtx.shape)
+        output_shape_before_other_indexer[self._efficient_axis] = sum(
+            bool_to_slice_indexer
+        )
+        off_efficient_axis_sel = [
+            slice(None, None, None),
+            slice(None, None, None),
+        ]
+        off_efficient_axis_sel[(self._efficient_axis + 1) % 2] = other_indexer
+        return get_memory_class(self.format)(
+            get_compressed_vectors_for_slices(
+                mtx, self._bool_to_slice(bool_to_slice_indexer)
+            ),
+            shape=output_shape_before_other_indexer,
+        )[tuple(off_efficient_axis_sel)]
+
     def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
-        row, col = self._normalize_index(index)
+        indices = self._normalize_index(index)
+        row, col = indices
         mtx = self._to_backed()
 
-        # see https://github.com/scverse/anndata/issues/1224 for special handling of boolean masks
-        # scipy internally converts boolean masks to integer indices so this needs to occur before access to `mtx`.
-        def make_slices(mask):
-            return np.ma.extras._ezclump(mask)
+        maybe_bool_to_slice_indexer = self._efficient_index(indices)
+        other_indexer = self._off_efficient_axis_index(indices)
 
         def mean_slice_length(slices):
             return floor((slices[-1].stop - slices[0].start) / len(slices))
 
-        formats = ["csr", "csc"]
-        mtx_type = [ss.csr_matrix, ss.csc_matrix]
-        indices = [row, col]
-        format_index = formats.index(self.format)
-        maybe_bool_to_slice_indexer = indices[format_index]
-        other_indexer = indices[(format_index + 1) % 2]
         if (
-            self.format in formats
-            and np.array(maybe_bool_to_slice_indexer).dtype == bool
-            and mean_slice_length(make_slices(maybe_bool_to_slice_indexer)) > 7
+            np.array(maybe_bool_to_slice_indexer).dtype == bool
+            and mean_slice_length(self._bool_to_slice(maybe_bool_to_slice_indexer)) > 7
         ):
-
-            def make_sel(other_indexer):
-                sel = [
-                    None,
-                    None,
-                ]  # format_index could be 1, not 0, so we need the two values
-                sel[format_index] = slice(None, None, None)
-                sel[(format_index + 1) % 2] = other_indexer
-                return tuple(sel)  # tuples don't support assignment
-
-            def make_shape(bool_indexer):
-                shape = list(mtx.shape)
-                shape[format_index] = sum(bool_indexer)
-                return tuple(shape)  # tuples don't support assignment
-
-            sub = mtx_type[format_index](
-                get_compressed_vectors_for_slices(
-                    mtx, make_slices(maybe_bool_to_slice_indexer)
-                ),
-                shape=make_shape(maybe_bool_to_slice_indexer),
-            )[make_sel(other_indexer)]
-            # sub = ss.vstack([mtx[make_sel(s, other_indexer)] for s in make_slices(maybe_bool_to_slice_indexer)])
+            sub = self.select_bool_as_slice_along_efficient_axis(
+                maybe_bool_to_slice_indexer, other_indexer, mtx
+            )
         else:
             sub = mtx[row, col]
         # If indexing is array x array it returns a backed_sparse_matrix
