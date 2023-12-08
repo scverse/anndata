@@ -236,6 +236,25 @@ def get_compressed_vectors(
     return data, indices, indptr
 
 
+def get_compressed_vectors_for_slices(
+    x: BackedSparseMatrix, row_idxs: Iterable[slice]
+) -> tuple[Sequence, Sequence, Sequence]:
+    indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in row_idxs]
+    data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_sels])
+    indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_sels])
+    total = indptr_sels[0][0]
+    offsets = [total]
+    for i, sel in enumerate(indptr_sels[1:]):
+        total = (sel[0] - indptr_sels[i][-1]) + total
+        offsets.append(total)
+    start_indptr = indptr_sels[0] - offsets[0]
+    end_indptr = np.concatenate(
+        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_sels[1:])]
+    )
+    indptr = np.concatenate([start_indptr, end_indptr])
+    return data, indices, indptr
+
+
 def get_compressed_vector(
     x: BackedSparseMatrix, idx: int
 ) -> tuple[Sequence, Sequence, Sequence]:
@@ -352,18 +371,39 @@ class BaseCompressedSparseDataset(ABC):
         def mean_slice_length(slices):
             return floor((slices[-1].stop - slices[0].start) / len(slices))
 
+        formats = ["csr", "csc"]
+        mtx_type = [ss.csr_matrix, ss.csc_matrix]
+        indices = [row, col]
+        format_index = formats.index(self.format)
+        maybe_bool_to_slice_indexer = indices[format_index]
+        other_indexer = indices[(format_index + 1) % 2]
         if (
-            self.format == "csr"
-            and np.array(row).dtype == bool
-            and mean_slice_length(make_slices(row)) > 7
+            self.format in formats
+            and np.array(maybe_bool_to_slice_indexer).dtype == bool
+            and mean_slice_length(make_slices(maybe_bool_to_slice_indexer)) > 7
         ):
-            sub = ss.vstack([mtx[s, col] for s in make_slices(row)])
-        elif (
-            self.format == "csc"
-            and np.array(col).dtype == bool
-            and mean_slice_length(make_slices(col)) > 7
-        ):
-            sub = ss.vstack([mtx[row, s] for s in make_slices(col)])
+
+            def make_sel(other_indexer):
+                sel = [
+                    None,
+                    None,
+                ]  # format_index could be 1, not 0, so we need the two values
+                sel[format_index] = slice(None, None, None)
+                sel[(format_index + 1) % 2] = other_indexer
+                return tuple(sel)  # tuples don't support assignment
+
+            def make_shape(bool_indexer):
+                shape = list(mtx.shape)
+                shape[format_index] = sum(bool_indexer)
+                return tuple(shape)  # tuples don't support assignment
+
+            sub = mtx_type[format_index](
+                get_compressed_vectors_for_slices(
+                    mtx, make_slices(maybe_bool_to_slice_indexer)
+                ),
+                shape=make_shape(maybe_bool_to_slice_indexer),
+            )[make_sel(other_indexer)]
+            # sub = ss.vstack([mtx[make_sel(s, other_indexer)] for s in make_slices(maybe_bool_to_slice_indexer)])
         else:
             sub = mtx[row, col]
         # If indexing is array x array it returns a backed_sparse_matrix
