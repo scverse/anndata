@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-import anndata
+from anndata import AnnData
 from anndata.tests.helpers import gen_typed_df_t2_size
 from anndata.utils import asarray
 
@@ -24,10 +24,10 @@ def adata():
         index=[f"cell{i:03d}" for i in range(M)],
     )
     var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
-    return anndata.AnnData(X, obs=obs, var=var)
+    return AnnData(X, obs=obs, var=var)
 
 
-def test_assigmnent_dict(adata):
+def test_assigmnent_dict(adata: AnnData):
     d_obsp = dict(
         a=pd.DataFrame(np.ones((M, M)), columns=adata.obs_names, index=adata.obs_names),
         b=np.zeros((M, M)),
@@ -46,7 +46,7 @@ def test_assigmnent_dict(adata):
         assert np.all(asarray(adata.varp[k]) == asarray(v))
 
 
-def test_setting_ndarray(adata):
+def test_setting_ndarray(adata: AnnData):
     adata.obsp["a"] = np.ones((M, M))
     adata.varp["a"] = np.ones((N, N))
     assert np.all(adata.obsp["a"] == np.ones((M, M)))
@@ -64,7 +64,7 @@ def test_setting_ndarray(adata):
     assert h == joblib.hash(adata)
 
 
-def test_setting_sparse(adata):
+def test_setting_sparse(adata: AnnData):
     obsp_sparse = sparse.random(M, M)
     adata.obsp["a"] = obsp_sparse
     assert not np.any((adata.obsp["a"] != obsp_sparse).data)
@@ -95,7 +95,7 @@ def test_setting_sparse(adata):
     ],
     ids=["heterogeneous", "homogeneous"],
 )
-def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
+def test_setting_dataframe(adata: AnnData, field, dim, homogenous, df, dtype):
     if homogenous:
         with pytest.warns(UserWarning, match=rf"{field.title()} 'df'.*dtype object"):
             getattr(adata, field)["df"] = df(dim)
@@ -107,7 +107,7 @@ def test_setting_dataframe(adata, field, dim, homogenous, df, dtype):
     assert np.issubdtype(getattr(adata, field)["df"].dtype, dtype)
 
 
-def test_setting_daskarray(adata):
+def test_setting_daskarray(adata: AnnData):
     import dask.array as da
 
     adata.obsp["a"] = da.ones((M, M))
@@ -127,3 +127,15 @@ def test_setting_daskarray(adata):
     with pytest.raises(ValueError):
         adata.varp["b"] = da.ones((N, int(N * 2)))
     assert h == joblib.hash(adata)
+
+
+def test_shape_error(adata: AnnData):
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Value passed for key 'a' is of incorrect shape\. "
+            r"Values of obsp must match dimensions \('obs', 'obs'\) of parent\. "
+            r"Value had shape \(201, 200\) while it should have had \(200, 200\)\."
+        ),
+    ):
+        adata.obsp["a"] = np.zeros((adata.shape[0] + 1, adata.shape[0]))
