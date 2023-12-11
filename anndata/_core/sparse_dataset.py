@@ -361,48 +361,50 @@ class BaseCompressedSparseDataset(ABC):
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
     @property
-    def _efficient_axis(self):
-        """The axis over which the sparse matrix is efficient (i.e., row for csr)"""
-        formats = ["csr", "csc"]
-        return formats.index(self.format)
+    def _compressed_axis(self):
+        """The axis over which the sparse matrix is compressed (i.e., row for csr)"""
+        for ind, (fmt, _, _) in enumerate(FORMATS):
+            if fmt == self.format:
+                return ind
+        raise ValueError(f"Format string {self.format} is not supported.")
 
-    def _efficient_index(self, indices):
-        """returns the index from the indices based on the efficient axis"""
-        return indices[self._efficient_axis]
+    def _compressed_index(self, indices):
+        """returns the index from the indices based on the compressed axis"""
+        return indices[self._compressed_axis]
 
-    def _off_efficient_axis_index(self, indices):
-        """returns the index from the indices based on the non-efficient axis"""
-        return indices[(self._efficient_axis + 1) % 2]
+    def _off_compressed_axis_index(self, indices):
+        """returns the index from the indices based on the non-compressed axis"""
+        return indices[(self._compressed_axis + 1) % 2]
 
     def _bool_to_slice(self, mask):
         return np.ma.extras._ezclump(mask)
 
-    def select_bool_as_slice_along_efficient_axis(
+    def select_bool_as_slice_along_compressed_axis(
         self, bool_to_slice_indexer, other_indexer, mtx
     ):
         output_shape_before_other_indexer = list(mtx.shape)
-        output_shape_before_other_indexer[self._efficient_axis] = sum(
+        output_shape_before_other_indexer[self._compressed_axis] = sum(
             bool_to_slice_indexer
         )
-        off_efficient_axis_sel = [
+        off_compressed_axis_sel = [
             slice(None, None, None),
             slice(None, None, None),
         ]
-        off_efficient_axis_sel[(self._efficient_axis + 1) % 2] = other_indexer
+        off_compressed_axis_sel[(self._compressed_axis + 1) % 2] = other_indexer
         return get_memory_class(self.format)(
             get_compressed_vectors_for_slices(
                 mtx, self._bool_to_slice(bool_to_slice_indexer)
             ),
             shape=output_shape_before_other_indexer,
-        )[tuple(off_efficient_axis_sel)]
+        )[tuple(off_compressed_axis_sel)]
 
     def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
 
-        maybe_bool_to_slice_indexer = self._efficient_index(indices)
-        other_indexer = self._off_efficient_axis_index(indices)
+        maybe_bool_to_slice_indexer = self._compressed_index(indices)
+        other_indexer = self._off_compressed_axis_index(indices)
 
         def mean_slice_length(slices):
             return floor((slices[-1].stop - slices[0].start) / len(slices))
@@ -411,7 +413,7 @@ class BaseCompressedSparseDataset(ABC):
             np.array(maybe_bool_to_slice_indexer).dtype == bool
             and mean_slice_length(self._bool_to_slice(maybe_bool_to_slice_indexer)) > 7
         ):
-            sub = self.select_bool_as_slice_along_efficient_axis(
+            sub = self.select_bool_as_slice_along_compressed_axis(
                 maybe_bool_to_slice_indexer, other_indexer, mtx
             )
         else:
