@@ -426,7 +426,7 @@ class BaseCompressedSparseDataset(ABC):
     def _normalize_index(
         self, index: Index | tuple[()]
     ) -> tuple[np.ndarray, np.ndarray]:
-        if index == ():
+        if isinstance(index, tuple) and not len(index):
             index = slice(None)
         row, col = unpack_index(index)
         if all(isinstance(x, cabc.Iterable) for x in (row, col)):
