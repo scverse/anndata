@@ -7,13 +7,26 @@ from scipy import sparse
 from anndata.experimental import sparse_dataset, write_elem
 
 
+def make_alternating_mask(n):
+    mask_alternating = np.ones(10_000, dtype=bool)
+    for i in range(0, 10_000, n):
+        mask_alternating[i] = False
+    return mask_alternating
+
+
 class SparseCSRContiguousSlice:
     params = (
         [
             (10_000, 10_000),
             # (10_000, 500)
         ],
-        [slice(0, 1000), slice(0, 9000), slice(None, 9000, -1), slice(None, None, 2)],
+        [
+            slice(0, 1000),
+            slice(0, 9000),
+            slice(None, 9000, -1),
+            slice(None, None, 2),
+            make_alternating_mask(10),
+        ],
     )
     param_names = ["shape", "slice"]
 
