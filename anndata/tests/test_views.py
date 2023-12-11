@@ -693,3 +693,32 @@ def test_x_none():
     new = view.copy()
     assert new.shape == (2, 0)
     assert new.obs_names.tolist() == ["2", "3"]
+
+
+def test_empty_list_subset():
+    orig = gen_adata((10, 10))
+    subset = orig[:, []]
+    assert subset.X.shape == (10, 0)
+    assert subset.obsm["sparse"].shape == (10, 100)
+    assert subset.varm["sparse"].shape == (0, 100)
+
+
+@pytest.mark.parametrize("dim", ["obs", "var"])
+@pytest.mark.parametrize(
+    ("idx", "pat"),
+    [
+        pytest.param(
+            [1, "cell_c"], r"Mixed type list indexers not supported", id="mixed"
+        ),
+        pytest.param(
+            [[1, 2], [2]], r"setting an array element with a sequence", id="nested"
+        ),
+    ],
+)
+def test_subset_errors(dim, idx, pat):
+    orig = gen_adata((10, 10))
+    with pytest.raises(ValueError, match=pat):
+        if dim == "obs":
+            orig[idx, :].X
+        elif dim == "var":
+            orig[:, idx].X
