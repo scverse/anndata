@@ -99,3 +99,16 @@ def test_copy():
     bdata = adata.copy()
     adata.layers["L"] += 10
     assert np.all(adata.layers["L"] != bdata.layers["L"])  # 201
+
+
+def test_shape_error():
+    adata = AnnData(X=X)
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Value passed for key 'L' is of incorrect shape\. "
+            r"Values of layers must match dimensions \('obs', 'var'\) of parent\. "
+            r"Value had shape \(4, 3\) while it should have had \(3, 3\)\."
+        ),
+    ):
+        adata.layers["L"] = np.zeros((X.shape[0] + 1, X.shape[1]))
