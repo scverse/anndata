@@ -91,6 +91,7 @@ def test_backed_indexing(
     assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
     assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
     assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
+    assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
