@@ -500,7 +500,9 @@ def write_sparse_compressed(
 
     g.create_dataset("data", data=value.data, **dataset_kwargs)
     g.create_dataset("indices", data=value.indices, **dataset_kwargs)
-    g.create_dataset("indptr", data=value.indptr, **dataset_kwargs)
+    g.create_dataset(
+        "indptr", data=value.indptr.astype(np.int64, copy=False), **dataset_kwargs
+    )
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
