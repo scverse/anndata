@@ -283,7 +283,7 @@ class BaseCompressedSparseDataset(ABC):
 
     def __init__(self, group: h5py.Group | ZarrGroup):
         type(self)._check_group_format(group)
-        self.group = group
+        self._group = group
 
     shape: tuple[int, int]
     """Shape of the matrix."""
