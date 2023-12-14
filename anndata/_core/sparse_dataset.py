@@ -444,7 +444,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @cached_property
     def indptr(self):
-        self.group["indptr"][...]
+        return self.group["indptr"][...]
 
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
