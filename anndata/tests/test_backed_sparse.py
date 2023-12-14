@@ -177,19 +177,21 @@ def test_indptr_cache(
 ):
     path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
     a = sparse_format(sparse.random(10, 10))
+    f = zarr.open_group(path, "a")
+    ad._io.specs.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
-    store.set_key_trackers("indptr")
+    store.set_key_trackers(["X/indptr"])
     f = zarr.open_group(store, "a")
-    ad._io.specs.write_elem(f, "a", a)
-    a_disk = sparse_dataset(f["a"])
+    a_disk = sparse_dataset(f["X"])
     a_disk[:1]
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    a_disk[...]
     assert (
-        store.get_access_count("indptr") == 3
-    )  # one each for .zarray, .zattrs, and actual access
+        store.get_access_count("X/indptr") == 2
+    )  # one each for .zarray and actual access
+    a_disk[...]  # BackedSparseMatrix.calls copy, so that is two more accesses
+    assert store.get_access_count("X/indptr") == 2
 
 
 @pytest.mark.parametrize(
