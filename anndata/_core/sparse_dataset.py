@@ -15,6 +15,7 @@ from __future__ import annotations
 import collections.abc as cabc
 import warnings
 from abc import ABC
+from functools import cached_property
 from itertools import accumulate, chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple
@@ -292,10 +293,20 @@ class BaseCompressedSparseDataset(ABC):
 
     def __init__(self, group: h5py.Group | ZarrGroup):
         type(self)._check_group_format(group)
-        self.group = group
+        self._group = group
 
     shape: tuple[int, int]
     """Shape of the matrix."""
+
+    @property
+    def group(self):
+        return self._group
+
+    @group.setter
+    def group(self, val):
+        raise TypeError(
+            f"Do not reset group on a {type(self)}.  Instead use `sparse_dataset` to make a new class."
+        )
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
@@ -441,12 +452,16 @@ class BaseCompressedSparseDataset(ABC):
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
 
+    @cached_property
+    def indptr(self):
+        return self.group["indptr"][...]
+
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.group["indptr"][:]
+        mtx.indptr = self.indptr
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
@@ -454,7 +469,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
-        mtx.indptr = self.group["indptr"][...]
+        mtx.indptr = self.indptr
         return mtx
 
 
