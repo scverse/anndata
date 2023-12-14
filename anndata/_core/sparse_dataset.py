@@ -289,6 +289,16 @@ class BaseCompressedSparseDataset(ABC):
     """Shape of the matrix."""
 
     @property
+    def group(self):
+        return self._group
+
+    @group.setter
+    def group(self, val):
+        raise TypeError(
+            f"Do not reset group on a {type(self)}.  Instead use `sparse_dataset` to make a new class."
+        )
+
+    @property
     def backend(self) -> Literal["zarr", "hdf5"]:
         if isinstance(self.group, ZarrGroup):
             return "zarr"
