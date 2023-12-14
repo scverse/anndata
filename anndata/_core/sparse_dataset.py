@@ -15,6 +15,7 @@ from __future__ import annotations
 import collections.abc as cabc
 import warnings
 from abc import ABC
+from functools import cached_property
 from itertools import accumulate, chain
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
@@ -431,12 +432,16 @@ class BaseCompressedSparseDataset(ABC):
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
 
+    @cached_property
+    def indptr(self):
+        self.group["indptr"][...]
+
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.group["indptr"][:]
+        mtx.indptr = self.indptr
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
@@ -444,7 +449,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
-        mtx.indptr = self.group["indptr"][...]
+        mtx.indptr = self.indptr
         return mtx
 
 
