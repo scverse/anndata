@@ -37,7 +37,7 @@ bibliography: [./paper.bib]
 # Summary
 
 anndata is a Python package for handling annotated data matrices in memory and on disk ([github.com/scverse/anndata](https://github.com/scverse/anndata)), positioned between pandas and xarray.
-anndata offers a broad range of computationally efficient features including, among others, sparse data support, lazy operations, and a PyTorch interface.
+anndata offers generic data access features including, among others, sparse data support, lazy operations, and a PyTorch interface.
 
 
 # Statement of need
@@ -112,13 +112,10 @@ A reduced dimensional representation obtained through, say Principal Component A
 Storing low-dimensional manifold structure within a desired reduced representation is achieved through a k-nearest neighbor graph in form of a sparse adjacency matrix: a matrix of pairwise relationships of observations (`obsp`, \autoref{fig:overview}d).
 Subsetting the data by observations produces a memory-efficient view of `AnnData` (\autoref{fig:overview}e).
 
-## The efficiency of data operations
+## Data access principles
 
-Due to the increasing scale of data, we emphasized efficient operations with low memory and runtime overhead.
-To this end, anndata offers sparse data support, out of core conversions between dense and sparse data, lazy subsetting ("views"), per-element operations for low total memory usage, in-place subsetting, combining `AnnData` objects with various merge strategies, lazy concatenation, batching, and a backed out-of-memory mode.
-Furthermore, anndata is systematically benchmarked for performance using airspeed velocity [@Droettboom13], with the results linked from the docs.
+anndata offers sparse data support, out of core conversions between dense and sparse data, lazy subsetting ("views"), per-element operations for low total memory usage, in-place subsetting, combining `AnnData` objects with various merge strategies, lazy concatenation, batching, and a backed out-of-memory mode.
 
-In particular, `AnnData` takes great pains to support efficient operations with sparse data.
 While there is no production-ready API for working with sparse and dense data in the python ecosystem, `AnnData` abstracts over the existing APIs making it much easier for novices to handle each.
 This concerns handling data both on-disk and in-memory with operations for out-of-core access.
 When access patterns are expected to be observation/row-based as in batched learning algorithms, the user can store data matrices as CSR sparse matrices or C-order dense matrices.
