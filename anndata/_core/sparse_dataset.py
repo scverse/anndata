@@ -128,7 +128,7 @@ class BackedSparseMatrix(_cs_matrix):
     def _get_contiguous_compressed_slice(
         self, s: slice
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        new_indptr = self.indptr[s.start : s.stop + 1]
+        new_indptr = self.indptr[s.start : s.stop + 1].copy()
 
         start = new_indptr[0]
         stop = new_indptr[-1]
@@ -444,7 +444,9 @@ class BaseCompressedSparseDataset(ABC):
 
     @cached_property
     def indptr(self):
-        return self.group["indptr"][...]
+        arr = self.group["indptr"][...]
+        arr.flags.writeable = False
+        return arr
 
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
