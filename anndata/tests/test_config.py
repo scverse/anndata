@@ -9,6 +9,7 @@ from anndata._config import (
     check_and_get_environ_var,
     describe_option,
     get_option,
+    reset_option,
     set_option,
 )
 
@@ -56,6 +57,8 @@ def test__register_option_default():
 def test_set_option():
     set_option(test_option, not default_val)
     assert get_option(test_option) == (not default_val)
+    reset_option(test_option)
+    assert get_option(test_option) == default_val
 
 
 def test_get_unregistered_option():
