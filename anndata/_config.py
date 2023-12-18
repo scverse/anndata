@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import os
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, Generic, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 # Heavily inspired by pandas' options mechanism, but stripped down.
 # https://github.com/pandas-dev/pandas/blob/86488f700ead42d75dae169032a010c6058e0602/pandas/_config/config.py
-
-config = {}
+T = TypeVar("T")
 
 
 class DeprecatedOption(NamedTuple):
@@ -19,11 +18,11 @@ class DeprecatedOption(NamedTuple):
     removal_ver: str | None
 
 
-class RegisteredOption(NamedTuple):
+class RegisteredOption(NamedTuple, Generic[T]):
     key: str
     defval: object
     doc: str
-    validator: Callable[[object], Any] | None
+    validator: Callable[[T], None] | None
 
 
 _registered_options: dict[str, RegisteredOption] = {}
@@ -32,7 +31,7 @@ config: dict[str, object] = {}
 
 
 def _register_option(
-    key: str, defval: object, doc: str, validator: Callable[[object], Any]
+    key: str, defval: object, doc: str, validator: Callable[[T], None]
 ):
     """Register an option so it can be set/described etc. by end-users
 
@@ -92,8 +91,8 @@ def check_and_get_environ_var(
     key: str,
     default_value: str,
     allowed_values: Sequence[str] | None = None,
-    cast: Callable[[object], object] = lambda x: x,
-) -> object:
+    cast: Callable[[Any], T] = lambda x: x,
+) -> T:
     """Get the environment variable and return it is a (potentially) non-string, usable value.
 
     Parameters
@@ -121,8 +120,6 @@ def check_and_get_environ_var(
         return cast(default_value)
     return cast(environ_val)
 
-
-T = TypeVar("T")
 
 _describe_option_tmpl = """
 Describe and print (optional) the option(s).
@@ -227,7 +224,7 @@ class CallableDynamicDoc(Generic[T]):
         options_description = _describe_option(print_description=False)
         return self.__doc_tmpl__.format(
             options_description=options_description,
-            available_options=str(", ".join(list(_registered_options.keys))),
+            available_options=str(", ".join(list(_registered_options.keys()))),
         )
 
 
