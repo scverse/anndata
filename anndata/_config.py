@@ -18,7 +18,8 @@ class DeprecatedOption(NamedTuple):
     removal_ver: str | None
 
 
-class RegisteredOption(NamedTuple, Generic[T]):
+# TODO: inherit from Generic[T] as well after python 3.9 is no longer supported
+class RegisteredOption(NamedTuple):
     key: str
     defval: object
     doc: str
