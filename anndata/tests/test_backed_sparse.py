@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from typing import TYPE_CHECKING, Callable, Literal
 
 import h5py
@@ -64,7 +63,7 @@ def ondisk_equivalent_adata(
                         **{k: read_dispatched(v, callback) for k, v in elem.items()}
                     )
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
-                    return sparse_dataset(elem)._to_backed()
+                    return sparse_dataset(elem)
                 return func(elem)
 
             adata = read_dispatched(f, callback=callback)
@@ -90,6 +89,7 @@ def test_backed_indexing(
 
     assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
     assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
+    assert_equal(csr_mem.X[...], csc_disk.X[...])
     assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
     assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
@@ -288,17 +288,6 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     assert_equal(adata.X, base)
 
 
-@contextmanager
-def xfail_if_zarr(diskfmt: Literal["h5ad", "zarr"]):
-    if diskfmt == "zarr":
-        with pytest.raises(AssertionError):
-            yield
-        # TODO: Zarr backed mode https://github.com/scverse/anndata/issues/219
-        pytest.xfail("Backed zarr not really supported yet")
-    else:
-        yield
-
-
 def test_backed_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     diskfmt: Literal["h5ad", "zarr"],
@@ -308,6 +297,5 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
     assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
     assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
-    with xfail_if_zarr(diskfmt):
-        assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
-        assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
+    assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
+    assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
