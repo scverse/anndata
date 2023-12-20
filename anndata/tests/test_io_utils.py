@@ -39,10 +39,10 @@ def test_key_error(tmp_path, group_fn):
         group["X"] = [1, 2, 3]
         group.create_group("group")
 
-        with pytest_8_raises(NotImplementedError, match=r"/X"):
+        with pytest_8_raises(NotImplementedError, match=r".*/X$"):
             read_attr(group["X"])
 
-        with pytest_8_raises(NotImplementedError, match=r"/group"):
+        with pytest_8_raises(NotImplementedError, match=r".*/group$"):
             read_attr(group["group"])
 
 
@@ -91,7 +91,7 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
     # (?!...) is a negative lookahead
     # (?s) enables the dot to match newlines
     # https://stackoverflow.com/a/406408/130164 <- copilot suggested lol
-    pattern = r"(?s)((?!Error raised while writing key '/?a').)*$"
+    pattern = r"(?s)^((?!Error raised while writing key '/?a').)*$"
 
     with pytest_8_raises(IORegistryError, match=pattern):
         write_elem(group, "/", {"a": {"b": Foo()}})

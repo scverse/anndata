@@ -651,8 +651,7 @@ def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Patter
     import traceback
 
     message = "".join(traceback.format_exception_only(e.type, e.value))
-    # To match pytest semantics, this must be `match`, not `search`.
-    assert re.match(
+    assert re.search(
         pattern, message
     ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
 
