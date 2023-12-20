@@ -493,9 +493,12 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         ::
 
             {
-                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
-                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
-                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+                # densify .X
+                "X": lambda a: a.toarray() if issparse(a) else a,
+                # change dtype for all keys of .obsm
+                "obsm": lambda a: np.asarray(a, dtype="float32"),
+                # change type only for one key of .obs
+                "obs": dict(key1=lambda c: c.astype(str)),
             }
         """
         return self._convert
@@ -817,9 +820,12 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         ::
 
             {
-                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
-                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
-                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+                # densify .X
+                "X": lambda a: a.toarray() if issparse(a) else a,
+                # change dtype for all keys of .obsm
+                "obsm": lambda a: np.asarray(a, dtype="float32"),
+                # change type only for one key of .obs
+                "obs": dict(key1=lambda c: c.astype(str)),
             }
         """
         return self._convert
