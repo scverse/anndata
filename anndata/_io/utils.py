@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Callable, Literal
+from typing import Callable, Literal, Union, cast
 from warnings import warn
 
 import h5py
 from packaging.version import Version
 
-from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup, add_note
-
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, add_note
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
 H5PY_V3 = Version(h5py.__version__).major >= 3
+
+Elem = Union[ZarrGroup, ZarrArray, H5Group, H5Array, BaseCompressedSparseDataset]
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -151,9 +152,7 @@ class AnnDataReadError(OSError):
     pass
 
 
-def _get_path(
-    elem: ZarrGroup | ZarrArray | H5Group | H5Array | BaseCompressedSparseDataset,
-) -> str:
+def _get_path(elem: Elem) -> str:
     try:
         import zarr
     except ImportError:
@@ -168,10 +167,7 @@ def _get_path(
 
 
 def add_key_note(
-    e: BaseException,
-    elem: ZarrGroup | ZarrArray | H5Group | H5Array | BaseCompressedSparseDataset,
-    key: str,
-    op: Literal["read", "writ"],
+    e: BaseException, elem: Elem, path: str, key: str, op: Literal["read", "writ"]
 ) -> None:
     if any(
         f"Error raised while {op}ing key" in note
@@ -179,7 +175,8 @@ def add_key_note(
     ):
         return
 
-    msg = f"Error raised while {op}ing key {key!r} of {type(elem)} to {_get_path(elem)}"
+    dir = "to" if op == "writ" else "from"
+    msg = f"Error raised while {op}ing key {key!r} of {type(elem)} {dir} {path}"
     add_note(e, msg)
 
 
@@ -203,13 +200,18 @@ def report_read_key_on_error(func):
         from anndata._io.specs import Reader
 
         # Figure out signature (method vs function) by going through args
-        for elem in args:
-            if not isinstance(elem, Reader):
+        elem: Elem
+        for arg in args:
+            if not isinstance(arg, Reader):
+                elem = cast(Elem, arg)
                 break
+        else:
+            raise ValueError("No element found in args.")
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            add_key_note(e, elem, elem.name, "read")
+            path, key = _get_path(elem).rsplit("/", 1)
+            add_key_note(e, elem, path or "/", key, "read")
             raise
 
     return func_wrapper
@@ -236,14 +238,18 @@ def report_write_key_on_error(func):
 
         # Figure out signature (method vs function) by going through args
         for i in range(len(args)):
-            elem = args[i]
+            arg = args[i]
             key = args[i + 1]
-            if not isinstance(elem, Writer):
+            if not isinstance(arg, Writer):
+                elem = cast(Elem, arg)
                 break
+        else:
+            raise ValueError("No element found in args.")
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            add_key_note(e, elem, key, "writ")
+            path = _get_path(elem)
+            add_key_note(e, elem, path, key, "writ")
             raise
 
     return func_wrapper
