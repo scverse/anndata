@@ -7,7 +7,7 @@ from warnings import warn
 import h5py
 from packaging.version import Version
 
-from anndata.compat import H5Group, ZarrGroup, add_note
+from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup, add_note
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 
@@ -151,31 +151,36 @@ class AnnDataReadError(OSError):
     pass
 
 
-def _get_parent(elem):
+def _get_path(
+    elem: ZarrGroup | ZarrArray | H5Group | H5Array | BaseCompressedSparseDataset,
+) -> str:
     try:
         import zarr
     except ImportError:
         zarr = None
     if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-        parent = elem.store  # Not sure how to always get a name out of this
-    elif isinstance(elem, BaseCompressedSparseDataset):
-        parent = elem.group.file.name
+        path = elem.path
+    if isinstance(elem, BaseCompressedSparseDataset):
+        path = elem.group.name
     else:
-        parent = elem.file.name
-    return parent
+        path = elem.name
+    return f'/{path.removeprefix("/")}'
 
 
-def add_key_note(e: BaseException, elem, key, op=Literal["read", "writ"]) -> None:
+def add_key_note(
+    e: BaseException,
+    elem: ZarrGroup | ZarrArray | H5Group | H5Array | BaseCompressedSparseDataset,
+    key: str,
+    op: Literal["read", "writ"],
+) -> None:
     if any(
         f"Error raised while {op}ing key" in note
         for note in getattr(e, "__notes__", [])
     ):
         return
-    parent = _get_parent(elem)
-    add_note(
-        e,
-        f"Error raised while {op}ing key {key!r} of {type(elem)} to " f"{parent}",
-    )
+
+    msg = f"Error raised while {op}ing key {key!r} of {type(elem)} to {_get_path(elem)}"
+    add_note(e, msg)
 
 
 def report_read_key_on_error(func):

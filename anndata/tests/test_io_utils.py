@@ -53,7 +53,9 @@ def test_write_error_info(diskfmt, tmp_path):
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
-    with pytest_8_raises(IORegistryError, match=r"Error raised while writing key 'c'"):
+    with pytest_8_raises(
+        IORegistryError, match=r"Error raised while writing key 'c'.*to /uns/a/b"
+    ):
         write(a)
 
 
