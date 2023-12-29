@@ -96,6 +96,10 @@ def set_option(key: str, val: object):
 
     {available_options}
 
+    Options descriptions:
+
+    {options_description}
+
     Parameters
     ----------
     key
@@ -107,10 +111,6 @@ def set_option(key: str, val: object):
     ------
     KeyError
         If the option has not been registered, this function will raise an error.
-
-    Options descriptions:
-
-    {options_description}
     """
     if key not in _registered_options:
         raise KeyError(
@@ -131,6 +131,10 @@ def get_option(option: str) -> object:
 
     {available_options}
 
+    Options descriptions:
+
+    {options_description}
+
     Parameters
     ----------
     option
@@ -140,10 +144,6 @@ def get_option(option: str) -> object:
     -------
     object
         Value of the option.
-
-    Options descriptions:
-
-    {options_description}
     """
     return config[option]
 
@@ -157,14 +157,14 @@ def reset_option(option: str):
 
     {available_options}
 
+    Options descriptions:
+
+    {options_description}
+
     Parameters
     ----------
     option
         The option to be reset.
-
-    Options descriptions:
-
-    {options_description}
     """
     config[option] = _registered_options[option].defval
 
@@ -178,6 +178,10 @@ def describe_option(option: str | None = None, print_description=True) -> str:
 
     {available_options}
 
+    Options descriptions:
+
+    {options_description}
+
     Parameters
     ----------
     option
@@ -189,10 +193,6 @@ def describe_option(option: str | None = None, print_description=True) -> str:
     -------
     str
         The description
-
-    Options descriptions:
-
-    {options_description}
     """
     return _describe_option(option, print_description)
 
