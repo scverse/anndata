@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import os
 import warnings
-from typing import TYPE_CHECKING, Any, Generic, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+T = TypeVar("T")
+
+
 # Heavily inspired by pandas' options mechanism, but stripped down.
 # https://github.com/pandas-dev/pandas/blob/86488f700ead42d75dae169032a010c6058e0602/pandas/_config/config.py
-T = TypeVar("T")
 
 
 class DeprecatedOption(NamedTuple):
@@ -26,9 +28,27 @@ class RegisteredOption(NamedTuple):
     validator: Callable[[T], None] | None
 
 
+# These objects and _describe_option needs to come before docstring_parameterize so they can be used by it and the imports it decorates.
 _registered_options: dict[str, RegisteredOption] = {}
 _deprecated_options: dict[str, DeprecatedOption] = {}
 config: dict[str, object] = {}
+
+
+def _describe_option(option: str | None = None, print_description=True) -> str:
+    if option is not None:
+        doc = _registered_options[option].doc
+        if option in _deprecated_options:
+            doc += "\n"
+            opt = _deprecated_options[option]
+            doc += opt.msg + "\n"
+            doc += f"{option} will be removed in {opt.removal_ver}"
+        if print_description:
+            print(doc)
+        return doc
+    else:
+        return "\n".join(
+            [_describe_option(k, print_description) for k in _registered_options]
+        )
 
 
 def _register_option(
@@ -52,7 +72,46 @@ def _register_option(
     config[key] = defval
 
 
-def _set_option(key: str, val: object):
+def docstring_parameterize():
+    """This decorator injects the current options into the docstrings of wrapped functions."""
+
+    def dec(obj):
+        options_description = _describe_option(print_description=False)
+        obj.__doc__ = obj.__doc__.format(
+            options_description=options_description,
+            available_options=str(", ".join(list(_registered_options.keys()))),
+        )
+        return obj
+
+    return dec
+
+
+@docstring_parameterize()
+def set_option(key: str, val: object):
+    """
+    Set an option to a value.  To see the allowed options to be set and their description,
+    use describe_option.
+
+    Available options:
+
+    {available_options}
+
+    Parameters
+    ----------
+    key
+        Option to be set.
+    val
+        Value with which to set the option.
+
+    Raises
+    ------
+    KeyError
+        If the option has not been registered, this function will raise an error.
+
+    Options descriptions:
+
+    {options_description}
+    """
     if key not in _registered_options:
         raise KeyError(
             f"{key} is not an available option for anndata.\
@@ -63,29 +122,79 @@ def _set_option(key: str, val: object):
     config[key] = val
 
 
-def _get_option(option: str) -> object:
+@docstring_parameterize()
+def get_option(option: str) -> object:
+    """
+    Gets the option's value.
+
+    Available options:
+
+    {available_options}
+
+    Parameters
+    ----------
+    option
+        Option to be got.
+
+    Returns
+    -------
+    object
+        Value of the option.
+
+    Options descriptions:
+
+    {options_description}
+    """
     return config[option]
 
 
-def _reset_option(option: str):
+@docstring_parameterize()
+def reset_option(option: str):
+    """
+    Resets an option to its default value.
+
+    Available options:
+
+    {available_options}
+
+    Parameters
+    ----------
+    option
+        The option to be reset.
+
+    Options descriptions:
+
+    {options_description}
+    """
     config[option] = _registered_options[option].defval
 
 
-def _describe_option(option: str | None = None, print_description=True) -> str:
-    if option is not None:
-        doc = _registered_options[option].doc
-        if option in _deprecated_options:
-            doc += "\n"
-            opt = _deprecated_options[option]
-            doc += opt.msg + "\n"
-            doc += f"{option} will be removed in {opt.removal_ver}"
-        if print_description:
-            print(doc)
-        return doc
-    else:
-        return "\n".join(
-            [_describe_option(k, print_description) for k in _registered_options]
-        )
+@docstring_parameterize()
+def describe_option(option: str | None = None, print_description=True) -> str:
+    """
+    Describe and print (optional) the option(s).
+
+    Available options:
+
+    {available_options}
+
+    Parameters
+    ----------
+    option
+        Option to be described, by default None
+    print_description
+        Whether or not to also print the description, by default True
+
+    Returns
+    -------
+    str
+        The description
+
+    Options descriptions:
+
+    {options_description}
+    """
+    return _describe_option(option, print_description)
 
 
 def check_and_get_environ_var(
@@ -120,116 +229,3 @@ def check_and_get_environ_var(
         )
         return cast(default_value)
     return cast(environ_val)
-
-
-_describe_option_tmpl = """
-Describe and print (optional) the option(s).
-
-Available options:
-
-{available_options}
-
-Parameters
-----------
-option : str | None, optional
-    Option to be described, by default None
-print_description : bool, optional
-    Whether or not to also print the description, by default True
-
-Returns
--------
-str
-    The description
-
-Options descriptions:
-
-{options_description}
-"""
-
-_reset_option_tmpl = """
-Resets an option to its default value.
-
-Available options:
-
-{available_options}
-
-Parameters
-----------
-option : str
-    The option to be reset.
-
-Options descriptions:
-
-{options_description}
-"""
-
-_set_option_tmpl = """
-Set an option to a value.  To see the allowed options to be set and their description,
-use describe_option.
-
-Available options:
-
-{available_options}
-
-Parameters
-----------
-key : str
-    Option to be set.
-val : object
-    Value with which to set the option.
-
-Raises
-------
-KeyError
-    If the option has not been registered, this function will raise an error.
-
-Options descriptions:
-
-{options_description}
-"""
-
-_get_option_tmpl = """
-Gets the option's value.
-
-Available options:
-
-{available_options}
-
-Parameters
-----------
-option : str
-    Option to be got.
-
-Returns
--------
-object
-    Value of the option.
-
-Options descriptions:
-
-{options_description}
-"""
-
-
-# Largely vendored from pandas: https://github.com/pandas-dev/pandas/blob/86488f700ead42d75dae169032a010c6058e0602/pandas/_config/config.py#L212
-class CallableDynamicDoc(Generic[T]):
-    def __init__(self, func: Callable[..., T], doc_tmpl: str) -> None:
-        self.__doc_tmpl__ = doc_tmpl
-        self.__func__ = func
-
-    def __call__(self, *args, **kwargs) -> T:
-        return self.__func__(*args, **kwargs)
-
-    @property
-    def __doc__(self) -> str:
-        options_description = _describe_option(print_description=False)
-        return self.__doc_tmpl__.format(
-            options_description=options_description,
-            available_options=str(", ".join(list(_registered_options.keys()))),
-        )
-
-
-get_option = CallableDynamicDoc(_get_option, _get_option_tmpl)
-set_option = CallableDynamicDoc(_set_option, _set_option_tmpl)
-reset_option = CallableDynamicDoc(_reset_option, _reset_option_tmpl)
-describe_option = CallableDynamicDoc(_describe_option, _describe_option_tmpl)
