@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Callable, Literal, Union, cast
+from typing import TYPE_CHECKING, Callable, Literal, Union, cast
 from warnings import warn
 
 import h5py
@@ -10,11 +10,12 @@ from packaging.version import Version
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, add_note
 
+if TYPE_CHECKING:
+    Elem = Union[ZarrGroup, ZarrArray, H5Group, H5Array, BaseCompressedSparseDataset]
+
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
 H5PY_V3 = Version(h5py.__version__).major >= 3
-
-Elem = Union[ZarrGroup, ZarrArray, H5Group, H5Array, BaseCompressedSparseDataset]
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -153,16 +154,9 @@ class AnnDataReadError(OSError):
 
 
 def _get_path(elem: Elem) -> str:
-    try:
-        import zarr
-    except ImportError:
-        zarr = None
-    if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-        path = elem.path
     if isinstance(elem, BaseCompressedSparseDataset):
-        path = elem.group.name
-    else:
-        path = elem.name
+        elem = elem.group
+    path = elem.name or "??"  # can be None
     return f'/{path.removeprefix("/")}'
 
 
