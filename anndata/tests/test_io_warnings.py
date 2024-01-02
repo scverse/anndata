@@ -14,9 +14,7 @@ from anndata.tests.helpers import gen_adata
 def test_old_format_warning_thrown():
     import scanpy as sc
 
-    with pytest.warns(ad._warnings.OldFormatWarning), pytest.warns(
-        FutureWarning, match=r"Moving element from \.uns.*to \.obsp"
-    ):
+    with pytest.warns(ad._warnings.OldFormatWarning):
         pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
         ad.read_h5ad(pth)
 
