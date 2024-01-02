@@ -154,6 +154,7 @@ class AnnDataReadError(OSError):
 
 
 def _get_path(elem: Elem) -> str:
+    """Return an absolute path of an element (always starts with “/”)."""
     if isinstance(elem, BaseCompressedSparseDataset):
         elem = elem.group
     path = elem.name or "??"  # can be None
@@ -197,7 +198,7 @@ def report_read_key_on_error(func):
         elem: Elem
         for arg in args:
             if not isinstance(arg, Reader):
-                elem = cast(Elem, arg)
+                elem = cast("Elem", arg)
                 break
         else:
             raise ValueError("No element found in args.")
@@ -235,7 +236,7 @@ def report_write_key_on_error(func):
             arg = args[i]
             key = args[i + 1]
             if not isinstance(arg, Writer):
-                elem = cast(Elem, arg)
+                elem = cast("Elem", arg)
                 break
         else:
             raise ValueError("No element found in args.")
