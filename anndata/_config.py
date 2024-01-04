@@ -12,15 +12,15 @@ T = TypeVar("T")
 
 
 class DeprecatedOption(NamedTuple):
-    key: str
-    msg: str | None
-    removal_ver: str | None
+    option: str
+    message: str | None
+    removal_version: str | None
 
 
 # TODO: inherit from Generic[T] as well after python 3.9 is no longer supported
 class RegisteredOption(NamedTuple):
-    key: str
-    defval: object
+    option: str
+    default_value: object
     doc: str
     validator: Callable[[T], None] | None
 
@@ -44,13 +44,28 @@ class SettingsManager:
     _config: dict[str, object] = {}
 
     def describe(self, option: str | None = None, print_description=True) -> str:
+        """Print and/or return a (string) description of the option(s).
+
+        Parameters
+        ----------
+        option
+            Option to be described, by default None (i.e., do all options)
+        print_description
+            Whether or not to print the description in addition to returning it., by default True
+
+        Returns
+        -------
+        str
+            The description.
+        """
         if option is not None:
             doc = self._registered_options[option].doc
             if option in self._deprecated_options:
                 doc += "\n"
                 opt = self._deprecated_options[option]
-                doc += opt.msg + "\n"
-                doc += f"{option} will be removed in {opt.removal_ver}"
+                if opt.message is not None:
+                    doc += opt.message + "\n"
+                doc += f"{option} will be removed in {opt.removal_version}"
             if print_description:
                 print(doc)
             return doc
@@ -58,49 +73,57 @@ class SettingsManager:
             return "\n".join(
                 [self.describe(k, print_description) for k in self._registered_options]
             )
-        
-    def deprecate(self, option: str,  removal_version: str, message: str | None = None):
+
+    def deprecate(self, option: str, removal_version: str, message: str | None = None):
         """Deprecate options with a message at a version.
 
         Parameters
         ----------
-        option 
+        option
             Which option should be deprecated.
-        removal_version 
+        removal_version
             The version targeted for removal.
         message
             A custom message.
         """
-        self._deprecated_options[option] = DeprecatedOption(option, message, removal_version)
+        self._deprecated_options[option] = DeprecatedOption(
+            option, message, removal_version
+        )
 
     def register(
-        self, key: str, defval: object, doc: str, validator: Callable[[T], None]
+        self,
+        option: str,
+        default_value: object,
+        doc: str,
+        validator: Callable[[T], None],
     ):
         """Register an option so it can be set/described etc. by end-users
 
         Parameters
         ----------
-        key : str
+        option
             Option to be set.
-        defval : object
+        default_value
             Default value with which to set the option.
-        doc : str
+        doc
             Docstring for the option
-        validator : Callable[[object], Any]
+        validator
             A function which asserts that the option's value is valid.
         """
-        validator(defval)
-        self._registered_options[key] = RegisteredOption(key, defval, doc, validator)
-        self._config[key] = defval
+        validator(default_value)
+        self._registered_options[option] = RegisteredOption(
+            option, default_value, doc, validator
+        )
+        self._config[option] = default_value
 
-    def __setitem__(self, key: str, val: object):
+    def __setitem__(self, option: str, val: object):
         """
         Set an option to a value.  To see the allowed options to be set and their description,
         use describe_option.
 
         Parameters
         ----------
-        key
+        option
             Option to be set.
         val
             Value with which to set the option.
@@ -110,14 +133,14 @@ class SettingsManager:
         KeyError
             If the option has not been registered, this function will raise an error.
         """
-        if key not in self._registered_options:
+        if option not in self._registered_options:
             raise KeyError(
-                f"{key} is not an available option for anndata.\
+                f"{option} is not an available option for anndata.\
                 Please open an issue if you believe this is a mistake."
             )
-        option = self._registered_options[key]
-        option.validator(val)
-        self._config[key] = val
+        registered_option = self._registered_options[option]
+        registered_option.validator(val)
+        self._config[option] = val
 
     def __getitem__(self, option: str) -> object:
         """
@@ -144,7 +167,7 @@ class SettingsManager:
         option
             The option to be reset.
         """
-        self._config[option] = self._registered_options[option].defval
+        self._config[option] = self._registered_options[option].default_value
 
     @contextmanager
     def override(self, **overrides):
