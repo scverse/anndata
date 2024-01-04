@@ -27,7 +27,7 @@ class RegisteredOption(NamedTuple):
 
 class SettingsManager:
     """
-    This manager allows user to customize settings for the anndata package.
+    This manager allows users to customize settings for the anndata package.
 
     Available options:
 
