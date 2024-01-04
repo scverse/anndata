@@ -58,6 +58,20 @@ class SettingsManager:
             return "\n".join(
                 [self.describe(k, print_description) for k in self._registered_options]
             )
+        
+    def deprecate(self, option: str,  removal_version: str, message: str | None = None):
+        """Deprecate options with a message at a version.
+
+        Parameters
+        ----------
+        option 
+            Which option should be deprecated.
+        removal_version 
+            The version targeted for removal.
+        message
+            A custom message.
+        """
+        self._deprecated_options[option] = DeprecatedOption(option, message, removal_version)
 
     def register(
         self, key: str, defval: object, doc: str, validator: Callable[[T], None]

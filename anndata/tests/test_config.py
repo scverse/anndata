@@ -66,3 +66,19 @@ def test_override():
     with settings.override(**{test_option: not default_val}):
         assert settings[test_option] == (not default_val)
     assert settings[test_option] == default_val
+
+def test_deprecation():
+    warning = "This is a deprecation warning!"
+    version = "0.1.0"
+    settings.deprecate(test_option, version, warning)
+    described_option = settings.describe(print_description=False).split("\n")
+    assert len(described_option) == 3 # first line is message, second two from deprecation
+    assert described_option[1] == warning
+    assert described_option[2] == f"{test_option} will be removed in {version}"
+
+def test_deprecation_no_message():
+    version = "0.1.0"
+    settings.deprecate(test_option, version)
+    described_option = settings.describe(print_description=False).split("\n")
+    assert len(described_option) == 2 # first line is message, second from deprecation version
+    assert described_option[1] == f"{test_option} will be removed in {version}"
