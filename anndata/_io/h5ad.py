@@ -6,6 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
+    Any,
     Callable,
     Literal,
     TypeVar,
@@ -116,7 +117,8 @@ def write_sparse_as_dense(
     f: h5py.Group,
     key: str,
     value: sparse.spmatrix | BaseCompressedSparseDataset,
-    dataset_kwargs=MappingProxyType({}),
+    *,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     real_key = None  # Flag for if temporary key was used
     if key in f:
