@@ -5,12 +5,8 @@ import os
 import pytest
 
 from anndata._config import (
-    _register_option,
     check_and_get_environ_var,
-    describe_option,
-    get_option,
-    reset_option,
-    set_option,
+    settings,
 )
 
 test_option_doc = "doc string!"
@@ -24,7 +20,7 @@ def validate_bool(val, option):
     assert val in [True, False], f"{val} not valid boolean for option {option}."
 
 
-_register_option(
+settings.register(
     test_option, default_val, test_doc, lambda v: validate_bool(v, test_option)
 )
 
@@ -50,17 +46,23 @@ def test_check_and_get_environ_var():
 
 
 def test__register_option_default():
-    assert get_option(test_option) == default_val
-    assert describe_option(test_option) == test_doc
+    assert settings[test_option] == default_val
+    assert settings.describe(test_option) == test_doc
 
 
 def test_set_option():
-    set_option(test_option, not default_val)
-    assert get_option(test_option) == (not default_val)
-    reset_option(test_option)
-    assert get_option(test_option) == default_val
+    settings[test_option] = not default_val
+    assert settings[test_option] == (not default_val)
+    settings.reset(test_option)
+    assert settings[test_option] == default_val
 
 
 def test_get_unregistered_option():
     with pytest.raises(KeyError):
-        set_option(test_option + "_different", default_val)
+        settings[test_option + "_different"] = default_val
+
+
+def test_override():
+    with settings.override(**{test_option: not default_val}):
+        assert settings[test_option] == (not default_val)
+    assert settings[test_option] == default_val
