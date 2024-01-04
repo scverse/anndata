@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import wraps
+from itertools import pairwise
 from typing import TYPE_CHECKING, Callable, Literal, Union, cast
 from warnings import warn
 
@@ -8,10 +9,12 @@ import h5py
 from packaging.version import Version
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, add_note
+from ..compat import H5Group, ZarrGroup, add_note
 
 if TYPE_CHECKING:
-    Elem = Union[ZarrGroup, ZarrArray, H5Group, H5Array, BaseCompressedSparseDataset]
+    from .._types import StorageType
+
+    Storage = Union[StorageType, BaseCompressedSparseDataset]
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
@@ -153,16 +156,16 @@ class AnnDataReadError(OSError):
     pass
 
 
-def _get_path(elem: Elem) -> str:
+def _get_display_path(store: Storage) -> str:
     """Return an absolute path of an element (always starts with “/”)."""
-    if isinstance(elem, BaseCompressedSparseDataset):
-        elem = elem.group
-    path = elem.name or "??"  # can be None
+    if isinstance(store, BaseCompressedSparseDataset):
+        store = store.group
+    path = store.name or "??"  # can be None
     return f'/{path.removeprefix("/")}'
 
 
 def add_key_note(
-    e: BaseException, elem: Elem, path: str, key: str, op: Literal["read", "writ"]
+    e: BaseException, store: Storage, path: str, key: str, op: Literal["read", "writ"]
 ) -> None:
     if any(
         f"Error raised while {op}ing key" in note
@@ -171,7 +174,7 @@ def add_key_note(
         return
 
     dir = "to" if op == "writ" else "from"
-    msg = f"Error raised while {op}ing key {key!r} of {type(elem)} {dir} {path}"
+    msg = f"Error raised while {op}ing key {key!r} of {type(store)} {dir} {path}"
     add_note(e, msg)
 
 
@@ -195,18 +198,17 @@ def report_read_key_on_error(func):
         from anndata._io.specs import Reader
 
         # Figure out signature (method vs function) by going through args
-        elem: Elem
         for arg in args:
             if not isinstance(arg, Reader):
-                elem = cast("Elem", arg)
+                store = cast("Storage", arg)
                 break
         else:
             raise ValueError("No element found in args.")
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            path, key = _get_path(elem).rsplit("/", 1)
-            add_key_note(e, elem, path or "/", key, "read")
+            path, key = _get_display_path(store).rsplit("/", 1)
+            add_key_note(e, store, path or "/", key, "read")
             raise
 
     return func_wrapper
@@ -232,19 +234,17 @@ def report_write_key_on_error(func):
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
-        for i in range(len(args)):
-            arg = args[i]
-            key = args[i + 1]
+        for arg, key in pairwise(args):
             if not isinstance(arg, Writer):
-                elem = cast("Elem", arg)
+                store = cast("Storage", arg)
                 break
         else:
             raise ValueError("No element found in args.")
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            path = _get_path(elem)
-            add_key_note(e, elem, path, key, "writ")
+            path = _get_display_path(store)
+            add_key_note(e, store, path, key, "writ")
             raise
 
     return func_wrapper
