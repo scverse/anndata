@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import wraps
-from itertools import pairwise
 from typing import TYPE_CHECKING, Callable, Literal, Union, cast
 from warnings import warn
 
@@ -9,7 +8,7 @@ import h5py
 from packaging.version import Version
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from ..compat import H5Group, ZarrGroup, add_note
+from ..compat import H5Group, ZarrGroup, add_note, pairwise
 
 if TYPE_CHECKING:
     from .._types import StorageType
