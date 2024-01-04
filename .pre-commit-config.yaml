@@ -11,6 +11,8 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
+        exclude_types:
+          - markdown
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:

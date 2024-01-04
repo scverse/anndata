@@ -1,7 +1,7 @@
 """Tests related to awkward arrays"""
 from __future__ import annotations
 
-from contextlib import nullcontext
+import warnings
 
 import numpy as np
 import numpy.testing as npt
@@ -381,15 +381,12 @@ def test_concat_mixed_types(key, arrays, expected, join):
         to_concat.append(tmp_adata)
 
     if isinstance(expected, type) and issubclass(expected, Exception):
-        ctx = (
-            pytest.warns(
+        with pytest.raises(expected), warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
                 FutureWarning,
-                match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
             )
-            if any(df.empty for df in arrays if isinstance(df, pd.DataFrame))
-            else nullcontext()
-        )
-        with pytest.raises(expected), ctx:
             anndata.concat(to_concat, axis=axis, join=join)
     else:
         result_adata = anndata.concat(to_concat, axis=axis, join=join)
