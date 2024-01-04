@@ -6,6 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
+    Any,
     Callable,
     Literal,
     TypeVar,
@@ -112,7 +113,13 @@ def write_h5ad(
 
 @report_write_key_on_error
 @write_spec(IOSpec("array", "0.2.0"))
-def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
+def write_sparse_as_dense(
+    f: h5py.Group,
+    key: str,
+    value: sparse.spmatrix | BaseCompressedSparseDataset,
+    *,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     real_key = None  # Flag for if temporary key was used
     if key in f:
         if isinstance(value, BaseCompressedSparseDataset) and (
@@ -269,7 +276,7 @@ def read_h5ad(
 def _read_raw(
     f: h5py.File | AnnDataFileManager,
     as_sparse: Collection[str] = (),
-    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] = None,
+    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
 ) -> dict:
@@ -286,7 +293,7 @@ def _read_raw(
 
 
 @report_read_key_on_error
-def read_dataframe_legacy(dataset) -> pd.DataFrame:
+def read_dataframe_legacy(dataset: h5py.Dataset) -> pd.DataFrame:
     """Read pre-anndata 0.7 dataframes."""
     warn(
         f"'{dataset.name}' was written with a very old version of AnnData. "
@@ -305,7 +312,7 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
     return df
 
 
-def read_dataframe(group) -> pd.DataFrame:
+def read_dataframe(group: h5py.Group | h5py.Dataset) -> pd.DataFrame:
     """Backwards compat function"""
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
@@ -352,7 +359,7 @@ def read_dense_as_sparse(
         raise ValueError(f"Cannot read dense array as type: {sparse_format}")
 
 
-def read_dense_as_csr(dataset, axis_chunk=6000):
+def read_dense_as_csr(dataset: h5py.Dataset, axis_chunk: int = 6000):
     sub_matrices = []
     for idx in idx_chunks_along_axis(dataset.shape, 0, axis_chunk):
         dense_chunk = dataset[idx]
@@ -361,7 +368,7 @@ def read_dense_as_csr(dataset, axis_chunk=6000):
     return sparse.vstack(sub_matrices, format="csr")
 
 
-def read_dense_as_csc(dataset, axis_chunk=6000):
+def read_dense_as_csc(dataset: h5py.Dataset, axis_chunk: int = 6000):
     sub_matrices = []
     for idx in idx_chunks_along_axis(dataset.shape, 1, axis_chunk):
         sub_matrix = sparse.csc_matrix(dataset[idx])

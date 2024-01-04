@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Callable, Literal
+from typing import TYPE_CHECKING, Callable, Literal, Union, cast
 from warnings import warn
 
 import h5py
 from packaging.version import Version
 
-from anndata.compat import H5Group, ZarrGroup, add_note
-
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from ..compat import H5Group, ZarrGroup, add_note, pairwise
+
+if TYPE_CHECKING:
+    from .._types import StorageType
+
+    Storage = Union[StorageType, BaseCompressedSparseDataset]
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
@@ -151,31 +155,26 @@ class AnnDataReadError(OSError):
     pass
 
 
-def _get_parent(elem):
-    try:
-        import zarr
-    except ImportError:
-        zarr = None
-    if zarr and isinstance(elem, (zarr.Group, zarr.Array)):
-        parent = elem.store  # Not sure how to always get a name out of this
-    elif isinstance(elem, BaseCompressedSparseDataset):
-        parent = elem.group.file.name
-    else:
-        parent = elem.file.name
-    return parent
+def _get_display_path(store: Storage) -> str:
+    """Return an absolute path of an element (always starts with “/”)."""
+    if isinstance(store, BaseCompressedSparseDataset):
+        store = store.group
+    path = store.name or "??"  # can be None
+    return f'/{path.removeprefix("/")}'
 
 
-def add_key_note(e: BaseException, elem, key, op=Literal["read", "writ"]) -> None:
+def add_key_note(
+    e: BaseException, store: Storage, path: str, key: str, op: Literal["read", "writ"]
+) -> None:
     if any(
         f"Error raised while {op}ing key" in note
         for note in getattr(e, "__notes__", [])
     ):
         return
-    parent = _get_parent(elem)
-    add_note(
-        e,
-        f"Error raised while {op}ing key {key!r} of {type(elem)} to " f"{parent}",
-    )
+
+    dir = "to" if op == "writ" else "from"
+    msg = f"Error raised while {op}ing key {key!r} of {type(store)} {dir} {path}"
+    add_note(e, msg)
 
 
 def report_read_key_on_error(func):
@@ -198,13 +197,17 @@ def report_read_key_on_error(func):
         from anndata._io.specs import Reader
 
         # Figure out signature (method vs function) by going through args
-        for elem in args:
-            if not isinstance(elem, Reader):
+        for arg in args:
+            if not isinstance(arg, Reader):
+                store = cast("Storage", arg)
                 break
+        else:
+            raise ValueError("No element found in args.")
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            add_key_note(e, elem, elem.name, "read")
+            path, key = _get_display_path(store).rsplit("/", 1)
+            add_key_note(e, store, path or "/", key, "read")
             raise
 
     return func_wrapper
@@ -230,15 +233,17 @@ def report_write_key_on_error(func):
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
-        for i in range(len(args)):
-            elem = args[i]
-            key = args[i + 1]
-            if not isinstance(elem, Writer):
+        for arg, key in pairwise(args):
+            if not isinstance(arg, Writer):
+                store = cast("Storage", arg)
                 break
+        else:
+            raise ValueError("No element found in args.")
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            add_key_note(e, elem, key, "writ")
+            path = _get_display_path(store)
+            add_key_note(e, store, path, key, "writ")
             raise
 
     return func_wrapper

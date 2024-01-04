@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
@@ -10,12 +10,13 @@ from anndata._io.utils import report_read_key_on_error, report_write_key_on_erro
 from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Generator, Iterable
+
     from anndata._types import GroupStorageType, StorageType
+
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
 # TODO: Should filetype be included in the IOSpec if it changes the encoding? Or does the intent that these things be "the same" overrule that?
-
-
 @dataclass(frozen=True)
 class IOSpec:
     encoding_type: str
@@ -25,7 +26,9 @@ class IOSpec:
 # TODO: Should this subclass from LookupError?
 class IORegistryError(Exception):
     @classmethod
-    def _from_write_parts(cls, dest_type, typ, modifiers) -> IORegistryError:
+    def _from_write_parts(
+        cls, dest_type: type, typ: type, modifiers: frozenset[str]
+    ) -> IORegistryError:
         msg = f"No method registered for writing {typ} into {dest_type}"
         if modifiers:
             msg += f" with {modifiers}"
@@ -36,7 +39,7 @@ class IORegistryError(Exception):
         cls,
         method: str,
         registry: Mapping,
-        src_typ: StorageType,
+        src_typ: type[StorageType],
         spec: IOSpec,
     ) -> IORegistryError:
         # TODO: Improve error message if type exists, but version does not
@@ -50,7 +53,7 @@ class IORegistryError(Exception):
 def write_spec(spec: IOSpec):
     def decorator(func: Callable):
         @wraps(func)
-        def wrapper(g, k, *args, **kwargs):
+        def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
@@ -193,12 +196,12 @@ def proc_spec(spec) -> IOSpec:
 
 
 @proc_spec.register(IOSpec)
-def proc_spec_spec(spec) -> IOSpec:
+def proc_spec_spec(spec: IOSpec) -> IOSpec:
     return spec
 
 
 @proc_spec.register(Mapping)
-def proc_spec_mapping(spec) -> IOSpec:
+def proc_spec_mapping(spec: Mapping[str, str]) -> IOSpec:
     return IOSpec(**{k.replace("-", "_"): v for k, v in spec.items()})
 
 
@@ -213,7 +216,9 @@ def get_spec(
     )
 
 
-def _iter_patterns(elem):
+def _iter_patterns(
+    elem,
+) -> Generator[tuple[type, type | str] | tuple[type, type, str], None, None]:
     """Iterates over possible patterns for an element in order of precedence."""
     from anndata.compat import DaskArray
 
@@ -236,40 +241,27 @@ class Reader:
     def read_elem(
         self,
         elem: StorageType,
-        modifiers: frozenset(str) = frozenset(),
+        modifiers: frozenset[str] = frozenset(),
     ) -> Any:
         """Read an element from a store. See exported function for more details."""
         from functools import partial
 
-        read_func = self.registry.get_reader(
-            type(elem), get_spec(elem), frozenset(modifiers)
+        iospec = get_spec(elem)
+        read_func = partial(
+            self.registry.get_reader(type(elem), iospec, modifiers),
+            _reader=self,
         )
-        read_func = partial(read_func, _reader=self)
-        if self.callback is not None:
-            return self.callback(read_func, elem.name, elem, iospec=get_spec(elem))
-        else:
+        if self.callback is None:
             return read_func(elem)
+        return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
 class Writer:
-    def __init__(
-        self,
-        registry: IORegistry,
-        callback: Callable[
-            [
-                GroupStorageType,
-                str,
-                StorageType,
-                dict,
-            ],
-            None,
-        ]
-        | None = None,
-    ):
+    def __init__(self, registry: IORegistry, callback: Callable | None = None):
         self.registry = registry
         self.callback = callback
 
-    def find_writer(self, dest_type, elem, modifiers):
+    def find_writer(self, dest_type: type, elem, modifiers: frozenset[str]):
         for pattern in _iter_patterns(elem):
             if self.registry.has_writer(dest_type, pattern, modifiers):
                 return self.registry.get_writer(dest_type, pattern, modifiers)
@@ -281,10 +273,10 @@ class Writer:
         self,
         store: GroupStorageType,
         k: str,
-        elem,
+        elem: Any,
         *,
-        dataset_kwargs=MappingProxyType({}),
-        modifiers=frozenset(),
+        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+        modifiers: frozenset[str] = frozenset(),
     ):
         from functools import partial
         from pathlib import PurePosixPath
@@ -313,17 +305,16 @@ class Writer:
             _writer=self,
         )
 
-        if self.callback is not None:
-            return self.callback(
-                write_func,
-                store,
-                k,
-                elem,
-                dataset_kwargs=dataset_kwargs,
-                iospec=self.registry.get_spec(elem),
-            )
-        else:
+        if self.callback is None:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        return self.callback(
+            write_func,
+            store,
+            k,
+            elem,
+            dataset_kwargs=dataset_kwargs,
+            iospec=self.registry.get_spec(elem),
+        )
 
 
 def read_elem(elem: StorageType) -> Any:
@@ -346,7 +337,7 @@ def write_elem(
     k: str,
     elem: Any,
     *,
-    dataset_kwargs: Mapping = MappingProxyType({}),
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
     """
     Write an element to a storage group using anndata encoding.
