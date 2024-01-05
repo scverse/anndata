@@ -24,7 +24,14 @@ except ImportError:
 # Custom sampler to get proper batches instead of joined separate indices
 # maybe move to multi_files
 class BatchIndexSampler(Sampler):
-    def __init__(self, n_obs, batch_size, shuffle=False, drop_last=False):
+    def __init__(
+        self,
+        n_obs: int,
+        *,
+        batch_size: int,
+        shuffle: bool = False,
+        drop_last: bool = False,
+    ) -> None:
         self.n_obs = n_obs
         self.batch_size = batch_size if batch_size < n_obs else n_obs
         self.shuffle = shuffle
@@ -128,6 +135,7 @@ class AnnLoader(DataLoader):
     def __init__(
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
+        *,
         batch_size: int = 1,
         shuffle: bool = False,
         use_default_converter: bool = True,

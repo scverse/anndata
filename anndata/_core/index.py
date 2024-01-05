@@ -4,6 +4,7 @@ import collections.abc as cabc
 from collections.abc import Sequence
 from functools import singledispatch
 from itertools import repeat
+from typing import TYPE_CHECKING, Literal
 
 import h5py
 import numpy as np
@@ -11,6 +12,9 @@ import pandas as pd
 from scipy.sparse import csc_matrix, issparse, spmatrix
 
 from ..compat import AwkArray, DaskArray, Index, Index1D
+
+if TYPE_CHECKING:
+    from .. import AnnData
 
 
 def _normalize_indices(
@@ -211,7 +215,13 @@ def make_slice(idx, dimidx, n=2):
     return tuple(mut)
 
 
-def get_vector(adata, k, coldim, idxdim, layer=None):
+def get_vector(
+    adata: AnnData,
+    k: str,
+    coldim: Literal["obs", "var"],
+    idxdim: Literal["obs", "var"],
+    layer: str | None = None,
+) -> np.ndarray:
     # adata could be self if Raw and AnnData shared a parent
     dims = ("obs", "var")
     col = getattr(adata, coldim).columns

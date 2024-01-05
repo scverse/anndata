@@ -341,6 +341,7 @@ def deprecated(
     new_name: str,
     category: type[Warning] = DeprecationWarning,
     add_msg: str = "",
+    *,
     hide: bool = True,
 ):
     """\

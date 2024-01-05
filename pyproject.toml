@@ -146,6 +146,7 @@ select = [
     "TCH", # manage type checking blocks
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
+    "FBT", # No positional parameters that are booleans
 ]
 ignore = [
     # line too long -> we accept long comment lines; formatter gets rid of long code lines
@@ -158,6 +159,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
 "anndata/tests/test_readwrite.py" = ["E721"]
+# test_* functions use dependency injection and aren’t called
+"anndata/tests/**/*.py" = ["FBT"]
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
