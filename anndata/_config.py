@@ -220,13 +220,13 @@ def check_and_get_environ_var(
 
     Parameters
     ----------
-    key : str
+    key
         The environment variable name.
-    default_value : str
+    default_value
         The default value for `os.environ.get`.
-    allowed_values : Sequence[str] | None, optional
+    allowed_values
         Allowable string values., by default None
-    cast : _type_, optional
+    cast
         Casting from the string to a (potentially different) python object, by default lambdax:x
 
     Returns

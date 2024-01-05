@@ -74,9 +74,8 @@ def test_deprecation():
     version = "0.1.0"
     settings.deprecate(test_option, version, warning)
     described_option = settings.describe(print_description=False).split("\n")
-    assert (
-        len(described_option) == 3
-    )  # first line is message, second two from deprecation
+    # first line is message, second two from deprecation
+    assert len(described_option) == 3
     assert described_option[1] == warning
     assert described_option[2] == f"{test_option} will be removed in {version}"
 
@@ -85,7 +84,6 @@ def test_deprecation_no_message():
     version = "0.1.0"
     settings.deprecate(test_option, version)
     described_option = settings.describe(print_description=False).split("\n")
-    assert (
-        len(described_option) == 2
-    )  # first line is message, second from deprecation version
+    # first line is message, second from deprecation version
+    assert len(described_option) == 2
     assert described_option[1] == f"{test_option} will be removed in {version}"
