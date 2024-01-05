@@ -183,6 +183,9 @@ class SettingsManager:
             return self._config[option]
         return super().__getattr__(option)
 
+    def __dir__(self) -> Iterable[str]:
+        return sorted(super().__dir__() + list(self._config.keys()))
+
     def reset(self, option: Iterable[str] | str) -> None:
         """
         Resets option(s) to its (their) default value.
