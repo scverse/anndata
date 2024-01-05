@@ -43,7 +43,9 @@ class SettingsManager:
     _deprecated_options: dict[str, DeprecatedOption] = {}
     _config: dict[str, object] = {}
 
-    def describe(self, option: str | None = None, print_description: bool = True) -> str:
+    def describe(
+        self, option: str | None = None, print_description: bool = True
+    ) -> str:
         """Print and/or return a (string) description of the option(s).
 
         Parameters
@@ -74,7 +76,9 @@ class SettingsManager:
             print(doc)
         return doc
 
-    def deprecate(self, option: str, removal_version: str, message: str | None = None) -> None:
+    def deprecate(
+        self, option: str, removal_version: str, message: str | None = None
+    ) -> None:
         """Deprecate options with a message at a version.
 
         Parameters
