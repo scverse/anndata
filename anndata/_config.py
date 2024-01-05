@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import warnings
+from collections.abc import Iterable
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
@@ -44,14 +45,17 @@ class SettingsManager:
     _config: dict[str, object] = {}
 
     def describe(
-        self, option: str | None = None, *, print_description: bool = True
+        self,
+        option: str | Iterable[str] | None = None,
+        *,
+        print_description: bool = True,
     ) -> str:
         """Print and/or return a (string) description of the option(s).
 
         Parameters
         ----------
         option
-            Option to be described, by default None (i.e., do all options)
+            Option(s) to be described, by default None (i.e., do all option)
         print_description
             Whether or not to print the description in addition to returning it., by default True
 
@@ -62,9 +66,15 @@ class SettingsManager:
         """
         if option is None:
             return "\n".join(
-                [self.describe(k, print_description) for k in self._registered_options]
+                [
+                    self.describe(k, print_description=print_description)
+                    for k in self._registered_options
+                ]
             )
-
+        if isinstance(option, Iterable) and not isinstance(option, str):
+            return "\n".join(
+                [self.describe(k, print_description=print_description) for k in option]
+            )
         doc = self._registered_options[option].doc
         if option in self._deprecated_options:
             doc += "\n"
@@ -122,7 +132,7 @@ class SettingsManager:
 
     def __setattr__(self, option: str, val: object) -> None:
         """
-        Set an option to a value.  To see the allowed options to be set and their description,
+        Set an option to a value.  To see the allowed option to be set and their description,
         use describe_option.
 
         Parameters
@@ -173,16 +183,20 @@ class SettingsManager:
             return self._config[option]
         return super().__getattr__(option)
 
-    def reset(self, option: str) -> None:
+    def reset(self, option: Iterable[str] | str) -> None:
         """
-        Resets an option to its default value.
+        Resets option(s) to its (their) default value.
 
         Parameters
         ----------
         option
-            The option to be reset.
+            The option(s) to be reset.
         """
-        self._config[option] = self._registered_options[option].default_value
+        if isinstance(option, Iterable) and not isinstance(option, str):
+            for opt in option:
+                self.reset(opt)
+        else:
+            self._config[option] = self._registered_options[option].default_value
 
     @contextmanager
     def override(self, **overrides):

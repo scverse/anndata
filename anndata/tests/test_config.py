@@ -15,6 +15,12 @@ test_option = "test_var"
 default_val = False
 test_doc = """My doc string!"""
 
+test_option_doc_2 = "doc string 2!"
+test_option_env_var_2 = "ANNDATA_TEST_VAR 2"
+test_option_2 = "test_var_2"
+default_val_2 = False
+test_doc_2 = """My doc string 2!"""
+
 
 def validate_bool(val, option):
     assert val in [True, False], f"{val} not valid boolean for option {option}."
@@ -23,6 +29,10 @@ def validate_bool(val, option):
 settings = SettingsManager()
 settings.register(
     test_option, default_val, test_doc, lambda v: validate_bool(v, test_option)
+)
+
+settings.register(
+    test_option_2, default_val_2, test_doc_2, lambda v: validate_bool(v, test_option_2)
 )
 
 
@@ -58,6 +68,14 @@ def test_set_option():
     assert getattr(settings, test_option) == default_val
 
 
+def test_reset_multiple():
+    setattr(settings, test_option, not default_val)
+    setattr(settings, test_option_2, not default_val_2)
+    settings.reset([test_option, test_option_2])
+    assert getattr(settings, test_option) == default_val
+    assert getattr(settings, test_option_2) == default_val_2
+
+
 def test_get_unregistered_option():
     with pytest.raises(KeyError):
         setattr(settings, test_option + "_different", default_val)
@@ -69,11 +87,23 @@ def test_override():
     assert getattr(settings, test_option) == default_val
 
 
+def test_override_multiple():
+    with settings.override(
+        **{test_option: not default_val, test_option_2: not default_val_2}
+    ):
+        assert getattr(settings, test_option) == (not default_val)
+        assert getattr(settings, test_option_2) == (not default_val_2)
+    assert getattr(settings, test_option) == default_val
+    assert getattr(settings, test_option_2) == default_val_2
+
+
 def test_deprecation():
     warning = "This is a deprecation warning!"
     version = "0.1.0"
     settings.deprecate(test_option, version, warning)
-    described_option = settings.describe(print_description=False).split("\n")
+    described_option = settings.describe(test_option, print_description=False).split(
+        "\n"
+    )
     # first line is message, second two from deprecation
     assert len(described_option) == 3
     assert described_option[1] == warning
@@ -85,7 +115,9 @@ def test_deprecation():
 def test_deprecation_no_message():
     version = "0.1.0"
     settings.deprecate(test_option, version)
-    described_option = settings.describe(print_description=False).split("\n")
+    described_option = settings.describe(test_option, print_description=False).split(
+        "\n"
+    )
     # first line is message, second from deprecation version
     assert len(described_option) == 2
     assert described_option[1] == f"{test_option} will be removed in {version}"
