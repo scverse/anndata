@@ -44,7 +44,7 @@ class SettingsManager:
     _config: dict[str, object] = {}
 
     def describe(
-        self, option: str | None = None, print_description: bool = True
+        self, option: str | None = None, *, print_description: bool = True
     ) -> str:
         """Print and/or return a (string) description of the option(s).
 
