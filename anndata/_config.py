@@ -120,7 +120,7 @@ class SettingsManager:
         )
         self._config[option] = default_value
 
-    def __setitem__(self, option: str, val: object) -> None:
+    def __setattr__(self, option: str, val: object) -> None:
         """
         Set an option to a value.  To see the allowed options to be set and their description,
         use describe_option.
@@ -137,16 +137,19 @@ class SettingsManager:
         KeyError
             If the option has not been registered, this function will raise an error.
         """
-        if option not in self._registered_options:
+        if hasattr(super(), option):
+            super().__setattr__(option, val)
+        elif option not in self._registered_options:
             raise KeyError(
                 f"{option} is not an available option for anndata.\
                 Please open an issue if you believe this is a mistake."
             )
-        registered_option = self._registered_options[option]
-        registered_option.validator(val)
-        self._config[option] = val
+        else:
+            registered_option = self._registered_options[option]
+            registered_option.validator(val)
+            self._config[option] = val
 
-    def __getitem__(self, option: str) -> object:
+    def __getattr__(self, option: str) -> object:
         """
         Gets the option's value.
 
@@ -160,7 +163,15 @@ class SettingsManager:
         object
             Value of the option.
         """
-        return self._config[option]
+        if option in self._deprecated_options:
+            deprecated = self._deprecated_options[option]
+            raise DeprecationWarning(
+                f"{option} will be removed in {deprecated.removal_version}. "
+                + deprecated.message
+            )
+        if option in self._config:
+            return self._config[option]
+        return super().__getattr__(option)
 
     def reset(self, option: str) -> None:
         """
@@ -182,14 +193,14 @@ class SettingsManager:
         ------
         None
         """
-        restore = {a: self[a] for a in overrides}
+        restore = {a: getattr(self, a) for a in overrides}
         try:
             for attr, value in overrides.items():
-                self[attr] = value
+                setattr(self, attr, value)
             yield None
         finally:
             for attr, value in restore.items():
-                self[attr] = value
+                setattr(self, attr, value)
 
 
 settings = SettingsManager()

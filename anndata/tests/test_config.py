@@ -47,26 +47,26 @@ def test_check_and_get_environ_var():
 
 
 def test__register_option_default():
-    assert settings[test_option] == default_val
+    assert getattr(settings, test_option) == default_val
     assert settings.describe(test_option) == test_doc
 
 
 def test_set_option():
-    settings[test_option] = not default_val
-    assert settings[test_option] == (not default_val)
+    setattr(settings, test_option, not default_val)
+    assert getattr(settings, test_option) == (not default_val)
     settings.reset(test_option)
-    assert settings[test_option] == default_val
+    assert getattr(settings, test_option) == default_val
 
 
 def test_get_unregistered_option():
     with pytest.raises(KeyError):
-        settings[test_option + "_different"] = default_val
+        setattr(settings, test_option + "_different", default_val)
 
 
 def test_override():
     with settings.override(**{test_option: not default_val}):
-        assert settings[test_option] == (not default_val)
-    assert settings[test_option] == default_val
+        assert getattr(settings, test_option) == (not default_val)
+    assert getattr(settings, test_option) == default_val
 
 
 def test_deprecation():
@@ -78,6 +78,8 @@ def test_deprecation():
     assert len(described_option) == 3
     assert described_option[1] == warning
     assert described_option[2] == f"{test_option} will be removed in {version}"
+    with pytest.raises(DeprecationWarning):
+        getattr(settings, test_option)
 
 
 def test_deprecation_no_message():
