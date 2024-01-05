@@ -21,7 +21,7 @@ class DeprecatedOption(NamedTuple):
 # TODO: inherit from Generic[T] as well after python 3.9 is no longer supported
 class RegisteredOption(NamedTuple):
     option: str
-    default_value: object
+    default_value: T
     doc: str
     validator: Callable[[T], None] | None
 
