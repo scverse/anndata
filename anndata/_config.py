@@ -43,7 +43,7 @@ class SettingsManager:
     _deprecated_options: dict[str, DeprecatedOption] = {}
     _config: dict[str, object] = {}
 
-    def describe(self, option: str | None = None, print_description=True) -> str:
+    def describe(self, option: str | None = None, print_description: bool = True) -> str:
         """Print and/or return a (string) description of the option(s).
 
         Parameters
@@ -58,23 +58,23 @@ class SettingsManager:
         str
             The description.
         """
-        if option is not None:
-            doc = self._registered_options[option].doc
-            if option in self._deprecated_options:
-                doc += "\n"
-                opt = self._deprecated_options[option]
-                if opt.message is not None:
-                    doc += opt.message + "\n"
-                doc += f"{option} will be removed in {opt.removal_version}"
-            if print_description:
-                print(doc)
-            return doc
-        else:
+        if option is None:
             return "\n".join(
                 [self.describe(k, print_description) for k in self._registered_options]
             )
 
-    def deprecate(self, option: str, removal_version: str, message: str | None = None):
+        doc = self._registered_options[option].doc
+        if option in self._deprecated_options:
+            doc += "\n"
+            opt = self._deprecated_options[option]
+            if opt.message is not None:
+                doc += opt.message + "\n"
+            doc += f"{option} will be removed in {opt.removal_version}"
+        if print_description:
+            print(doc)
+        return doc
+
+    def deprecate(self, option: str, removal_version: str, message: str | None = None) -> None:
         """Deprecate options with a message at a version.
 
         Parameters
@@ -96,7 +96,7 @@ class SettingsManager:
         default_value: object,
         doc: str,
         validator: Callable[[T], None],
-    ):
+    ) -> None:
         """Register an option so it can be set/described etc. by end-users
 
         Parameters
@@ -116,7 +116,7 @@ class SettingsManager:
         )
         self._config[option] = default_value
 
-    def __setitem__(self, option: str, val: object):
+    def __setitem__(self, option: str, val: object) -> None:
         """
         Set an option to a value.  To see the allowed options to be set and their description,
         use describe_option.
@@ -158,7 +158,7 @@ class SettingsManager:
         """
         return self._config[option]
 
-    def reset(self, option: str):
+    def reset(self, option: str) -> None:
         """
         Resets an option to its default value.
 
