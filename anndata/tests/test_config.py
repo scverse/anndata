@@ -13,13 +13,19 @@ test_option_doc = "doc string!"
 test_option_env_var = "ANNDATA_TEST_VAR"
 test_option = "test_var"
 default_val = False
-test_doc = """My doc string!"""
+test_doc = f"""\
+{test_option}: bool
+    My doc string!
+"""
 
 test_option_doc_2 = "doc string 2!"
 test_option_env_var_2 = "ANNDATA_TEST_VAR 2"
 test_option_2 = "test_var_2"
 default_val_2 = False
-test_doc_2 = """My doc string 2!"""
+test_doc_2 = f"""\
+{test_option_2}: bool
+    My doc string 2!
+"""
 
 
 def validate_bool(val, option):
@@ -56,7 +62,7 @@ def test_check_and_get_environ_var():
         )
 
 
-def test__register_option_default():
+def test_register_option_default():
     assert getattr(settings, test_option) == default_val
     assert settings.describe(test_option) == test_doc
 
@@ -105,9 +111,9 @@ def test_deprecation():
         "\n"
     )
     # first line is message, second two from deprecation
-    assert len(described_option) == 3
-    assert described_option[1] == warning
-    assert described_option[2] == f"{test_option} will be removed in {version}"
+    assert len(described_option) == 5
+    assert described_option[-2] == warning
+    assert described_option[-1] == f"{test_option} will be removed in {version}"
     with pytest.raises(DeprecationWarning):
         getattr(settings, test_option)
 
@@ -119,5 +125,5 @@ def test_deprecation_no_message():
         "\n"
     )
     # first line is message, second from deprecation version
-    assert len(described_option) == 2
-    assert described_option[1] == f"{test_option} will be removed in {version}"
+    assert len(described_option) == 4
+    assert described_option[-1] == f"{test_option} will be removed in {version}"

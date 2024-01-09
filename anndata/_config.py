@@ -26,23 +26,21 @@ class RegisteredOption(NamedTuple):
     validator: Callable[[T], None] | None
 
 
+_docstring = """
+This manager allows users to customize settings for the anndata package.
+
+Parameters
+----------
+
+{options_description}
+"""
+
+
 class SettingsManager:
-    """
-    This manager allows users to customize settings for the anndata package.
-
-    Available options:
-
-    {available_options}
-
-    Options descriptions:
-
-    {options_description}
-
-    """
-
     _registered_options: dict[str, RegisteredOption] = {}
     _deprecated_options: dict[str, DeprecatedOption] = {}
     _config: dict[str, object] = {}
+    __doc_tmpl__: str = _docstring
 
     def describe(
         self,
@@ -65,11 +63,8 @@ class SettingsManager:
             The description.
         """
         if option is None:
-            return "\n".join(
-                [
-                    self.describe(k, print_description=print_description)
-                    for k in self._registered_options
-                ]
+            return self.describe(
+                self._registered_options.keys(), print_description=print_description
             )
         if isinstance(option, Iterable) and not isinstance(option, str):
             return "\n".join(
@@ -181,7 +176,7 @@ class SettingsManager:
             )
         if option in self._config:
             return self._config[option]
-        return super().__getattr__(option)
+        raise AttributeError(f"{option} not found.")
 
     def __dir__(self) -> Iterable[str]:
         return sorted(super().__dir__() + list(self._config.keys()))
@@ -219,6 +214,13 @@ class SettingsManager:
             for attr, value in restore.items():
                 setattr(self, attr, value)
 
+    @property
+    def __doc__(self):
+        options_description = self.describe(print_description=False)
+        return self.__doc_tmpl__.format(
+            options_description=options_description,
+        )
+
 
 settings = SettingsManager()
 
@@ -226,16 +228,8 @@ settings = SettingsManager()
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
 
-
 ##################################################################################
 ##################################################################################
-
-
-options_description = settings.describe(print_description=False)
-settings.__doc__ = settings.__doc__.format(
-    options_description=options_description,
-    available_options=str(", ".join(list(settings._registered_options.keys()))),
-)
 
 
 def check_and_get_environ_var(
