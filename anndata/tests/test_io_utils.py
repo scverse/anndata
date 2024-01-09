@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from contextlib import suppress
+from contextlib import AbstractContextManager, suppress
+from typing import TYPE_CHECKING
 
 import h5py
 import pandas as pd
@@ -9,12 +10,14 @@ import zarr
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.utils import (
-    report_read_key_on_error,
-)
+from anndata._io.utils import report_read_key_on_error
 from anndata.compat import _clean_uns
 from anndata.experimental import read_elem, write_elem
 from anndata.tests.helpers import pytest_8_raises
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -29,20 +32,32 @@ def diskfmt(request):
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-def test_key_error(tmp_path, group_fn):
+@pytest.mark.parametrize("nested", [True, False], ids=["nested", "root"])
+def test_key_error(
+    tmp_path, group_fn: Callable[[Path], zarr.Group | h5py.Group], nested: bool
+):
     @report_read_key_on_error
     def read_attr(_):
         raise NotImplementedError()
 
     group = group_fn(tmp_path)
-    with group if hasattr(group, "__enter__") else suppress():
+    with group if isinstance(group, AbstractContextManager) else suppress():
+        if nested:
+            group = group.create_group("nested")
+            path = "/nested"
+        else:
+            path = "/"
         group["X"] = [1, 2, 3]
         group.create_group("group")
 
-        with pytest_8_raises(NotImplementedError, match=r"/X"):
+        with pytest_8_raises(
+            NotImplementedError, match=rf"reading key 'X'.*from {path}$"
+        ):
             read_attr(group["X"])
 
-        with pytest_8_raises(NotImplementedError, match=r"/group"):
+        with pytest_8_raises(
+            NotImplementedError, match=rf"reading key 'group'.*from {path}$"
+        ):
             read_attr(group["group"])
 
 
@@ -53,7 +68,9 @@ def test_write_error_info(diskfmt, tmp_path):
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
-    with pytest_8_raises(IORegistryError, match=r"Error raised while writing key 'c'"):
+    with pytest_8_raises(
+        IORegistryError, match=r"Error raised while writing key 'c'.*to /uns/a/b"
+    ):
         write(a)
 
 
@@ -89,7 +106,7 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
     # (?!...) is a negative lookahead
     # (?s) enables the dot to match newlines
     # https://stackoverflow.com/a/406408/130164 <- copilot suggested lol
-    pattern = r"(?s)((?!Error raised while writing key '/?a').)*$"
+    pattern = r"(?s)^((?!Error raised while writing key '/?a').)*$"
 
     with pytest_8_raises(IORegistryError, match=pattern):
         write_elem(group, "/", {"a": {"b": Foo()}})

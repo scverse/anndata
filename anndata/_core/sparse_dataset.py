@@ -16,6 +16,7 @@ import collections.abc as cabc
 import warnings
 from abc import ABC
 from itertools import accumulate, chain
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import h5py
@@ -24,7 +25,7 @@ import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
 from anndata._core.index import _fix_slice_bounds
-from anndata.compat import H5Group, ZarrGroup
+from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
 from ..compat import _read_attr
 
@@ -57,8 +58,17 @@ class BackedSparseMatrix(_cs_matrix):
     def copy(self) -> ss.spmatrix:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
-        else:
-            return super().copy()
+        if isinstance(self.data, ZarrArray):
+            import zarr
+
+            return sparse_dataset(
+                zarr.open(
+                    store=self.data.store,
+                    mode="r",
+                    chunk_store=self.data.chunk_store,  # chunk_store is needed, not clear why
+                )[Path(self.data.path).parent]
+            ).to_memory()
+        return super().copy()
 
     def _set_many(self, i: Iterable[int], j: Iterable[int], x):
         """\
@@ -489,12 +499,12 @@ def sparse_dataset(group: ZarrGroup | H5Group) -> CSRDataset | CSCDataset:
 
     >>> import zarr
     >>> from anndata.experimental import sparse_dataset
-    >>> group = zarr.open_group('./my_test_store.zarr')
-    >>> group['data'] = [10, 20, 30, 40, 50, 60, 70, 80]
-    >>> group['indices'] = [0, 1, 1, 3, 2, 3, 4, 5]
-    >>> group['indptr'] = [0, 2, 4, 7, 8]
-    >>> group.attrs['shape'] = (4, 6)
-    >>> group.attrs['encoding-type'] = 'csr_matrix'
+    >>> group = zarr.open_group("./my_test_store.zarr")
+    >>> group["data"] = [10, 20, 30, 40, 50, 60, 70, 80]
+    >>> group["indices"] = [0, 1, 1, 3, 2, 3, 4, 5]
+    >>> group["indptr"] = [0, 2, 4, 7, 8]
+    >>> group.attrs["shape"] = (4, 6)
+    >>> group.attrs["encoding-type"] = "csr_matrix"
     >>> sparse_dataset(group)
     CSRDataset: backend zarr, shape (4, 6), data_dtype int64
     """

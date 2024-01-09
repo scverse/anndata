@@ -1112,12 +1112,18 @@ def concat(
     ...     X=sparse.csr_matrix(np.array([[0, 1], [2, 3]])),
     ...     obs=pd.DataFrame({"group": ["a", "b"]}, index=["s1", "s2"]),
     ...     var=pd.DataFrame(index=["var1", "var2"]),
-    ...     varm={"ones": np.ones((2, 5)), "rand": np.random.randn(2, 3), "zeros": np.zeros((2, 5))},
+    ...     varm={
+    ...         "ones": np.ones((2, 5)),
+    ...         "rand": np.random.randn(2, 3),
+    ...         "zeros": np.zeros((2, 5)),
+    ...     },
     ...     uns={"a": 1, "b": 2, "c": {"c.a": 3, "c.b": 4}},
     ... )
     >>> b = ad.AnnData(
     ...     X=sparse.csr_matrix(np.array([[4, 5, 6], [7, 8, 9]])),
-    ...     obs=pd.DataFrame({"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]),
+    ...     obs=pd.DataFrame(
+    ...         {"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]
+    ...     ),
     ...     var=pd.DataFrame(index=["var1", "var2", "var3"]),
     ...     varm={"ones": np.ones((3, 5)), "rand": np.random.randn(3, 5)},
     ...     uns={"a": 1, "b": 3, "c": {"c.b": 4}},
@@ -1153,7 +1159,7 @@ def concat(
     >>> (inner.obs_names, inner.var_names)  # doctest: +NORMALIZE_WHITESPACE
     (Index(['s1', 's2', 's3', 's4'], dtype='object'),
     Index(['var1', 'var2'], dtype='object'))
-    >>> outer = ad.concat([a, b], join="outer") # Joining on union of variables
+    >>> outer = ad.concat([a, b], join="outer")  # Joining on union of variables
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
