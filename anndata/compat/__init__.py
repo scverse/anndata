@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from codecs import decode
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
@@ -35,9 +36,9 @@ H5Array = h5py.Dataset
 #############################
 
 
-try:
+if sys.version_info >= (3, 11):
     from contextlib import chdir
-except ImportError:  # Python < 3.11
+else:
 
     @dataclass
     class chdir(AbstractContextManager):
@@ -50,6 +51,18 @@ except ImportError:  # Python < 3.11
 
         def __exit__(self, *_exc_info) -> None:
             os.chdir(self._old_cwd.pop())
+
+
+if sys.version_info >= (3, 10):
+    from itertools import pairwise
+else:
+
+    def pairwise(iterable):
+        from itertools import tee
+
+        a, b = tee(iterable)
+        next(b, None)
+        return zip(a, b)
 
 
 #############################
