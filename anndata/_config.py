@@ -79,12 +79,12 @@ def update_override_kwargs(register: Callable):
 
 
 _docstring = """
-This manager allows users to customize settings for the anndata package.
+        This manager allows users to customize settings for the anndata package.
 
-Parameters
-----------
+        Parameters
+        ----------
 
-{options_description}
+        {options_description}
 """
 
 

@@ -74,7 +74,7 @@ class StorageType(Enum):
     DaskArray = DaskArray
     CupyArray = CupyArray
     CupySparseMatrix = CupySparseMatrix
-    BackedSparseMAtrix = BaseCompressedSparseDataset
+    BackedSparseMatrix = BaseCompressedSparseDataset
 
     @classmethod
     def classes(cls):
