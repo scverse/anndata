@@ -254,6 +254,9 @@ class SettingsManager:
         """
         Provides local override via keyword arguments.
 
+        Parameters
+        ----------
+
         Yields
         ------
         None
@@ -283,6 +286,15 @@ settings = SettingsManager()
 
 ##################################################################################
 ##################################################################################
+
+insert_index = settings.override.__doc__.find("\n        Yields")
+options = "\t" + "\t".join(settings.describe(print_description=False).splitlines(True))
+settings.override.__func__.__doc__ = (
+    settings.override.__doc__[:insert_index]
+    + "\n"
+    + options
+    + settings.override.__doc__[insert_index:]
+)
 
 
 def check_and_get_environ_var(
