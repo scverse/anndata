@@ -4,6 +4,8 @@ import os
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
+from functools import wraps
+from inspect import Parameter, signature
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
@@ -26,13 +28,63 @@ class RegisteredOption(NamedTuple):
     validator: Callable[[T], None] | None
 
 
+def update_override_kwargs(register: Callable):
+    """This function updates the keyword arguments of the `SettingsManager.override` function
+    for type hints and tab autocompletion where appropriate as the `SettingsManager.register` method is called.
+
+    Parameters
+    ----------
+    register
+        This is a reference to the register function of `SettingsManager`
+
+    Returns
+    -------
+    Callable
+        The wrapped `SettingsManager.register` function.
+    """
+
+    @wraps(register)
+    def _impl(
+        self,
+        option: str,
+        default_value: object,
+        doc: str,
+        validator: Callable[[T], None],
+    ):
+        method_output = register(self, option, default_value, doc, validator)
+        # Update annotations for type checking.
+        self.override.__annotations__[option] = type(default_value)
+        # __signature__ needs to be updated for tab autocompletion in IPython.
+        # See https://github.com/ipython/ipython/issues/11624 for inspiration.
+        setattr(
+            self.override.__func__,  # Attributes of a method are immutable, so need to use __func__.
+            "__signature__",
+            signature(self.override).replace(
+                parameters=[
+                    Parameter(name="self", kind=Parameter.POSITIONAL_ONLY),
+                    *[
+                        Parameter(
+                            name=k,
+                            annotation=type(default_value),
+                            kind=Parameter.KEYWORD_ONLY,
+                        )
+                        for k in self._registered_options
+                    ],
+                ]
+            ),
+        )
+        return method_output
+
+    return _impl
+
+
 _docstring = """
-This manager allows users to customize settings for the anndata package.
+        This manager allows users to customize settings for the anndata package.
 
-Parameters
-----------
+        Parameters
+        ----------
 
-{options_description}
+        {options_description}
 """
 
 
@@ -99,6 +151,7 @@ class SettingsManager:
             option, message, removal_version
         )
 
+    @update_override_kwargs
     def register(
         self,
         option: str,
