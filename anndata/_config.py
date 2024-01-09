@@ -28,9 +28,8 @@ class RegisteredOption(NamedTuple):
     validator: Callable[[T], None] | None
 
 
-def update_override_kwargs(register: Callable):
-    """This function updates the keyword arguments of the `SettingsManager.override` function
-    for type hints and tab autocompletion where appropriate as the `SettingsManager.register` method is called.
+def update_override_function(register: Callable):
+    """This function updates the keyword arguments, docstring, and annotations of the `SettingsManager.override` function as the `SettingsManager.register` method is called.
 
     Parameters
     ----------
@@ -72,6 +71,17 @@ def update_override_kwargs(register: Callable):
                     ],
                 ]
             ),
+        )
+        # Update docstring for `SettingsManager.override` as well.
+        insert_index = self.override.__doc__.find("\n        Yields")
+        options = "\t" + "\t".join(
+            self.describe(option, print_description=False).splitlines(True)
+        )
+        self.override.__func__.__doc__ = (
+            self.override.__doc__[:insert_index]
+            + "\n"
+            + options
+            + self.override.__doc__[insert_index:]
         )
         return method_output
 
@@ -151,7 +161,7 @@ class SettingsManager:
             option, message, removal_version
         )
 
-    @update_override_kwargs
+    @update_override_function
     def register(
         self,
         option: str,
@@ -286,15 +296,6 @@ settings = SettingsManager()
 
 ##################################################################################
 ##################################################################################
-
-insert_index = settings.override.__doc__.find("\n        Yields")
-options = "\t" + "\t".join(settings.describe(print_description=False).splitlines(True))
-settings.override.__func__.__doc__ = (
-    settings.override.__doc__[:insert_index]
-    + "\n"
-    + options
-    + settings.override.__doc__[insert_index:]
-)
 
 
 def check_and_get_environ_var(
