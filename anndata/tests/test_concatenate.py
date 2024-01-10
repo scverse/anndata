@@ -1550,3 +1550,22 @@ def test_error_on_mixed_device():
 
     for p in permutations([cp_adata, cp_sparse_adata]):
         concat(p)
+
+
+def test_concat_on_var_outer_join(array_type):
+    # https://github.com/scverse/anndata/issues/1286
+    a = AnnData(
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
+        var=pd.DataFrame(index=[f"gene_{i:02d}" for i in range(10)]),
+        layers={
+            "X": array_type(np.ones((10, 10))),
+        },
+    )
+    b = AnnData(
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
+        var=pd.DataFrame(index=[f"gene_{i:02d}" for i in range(10, 20)]),
+    )
+
+    # This shouldn't error
+    # TODO: specify expected result while accounting for null value
+    _ = concat([a, b], join="outer", axis=1)
