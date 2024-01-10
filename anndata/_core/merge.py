@@ -913,6 +913,13 @@ def outer_concat_aligned_mapping(
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
 
+    def missing_element(n: int, axis: Literal[0, 1] = 0) -> np.ndarray:
+        """Generates value to use when there is a missing element."""
+        if axis == 0:
+            return np.zeros((n, 0), dtype=bool)
+        else:
+            return np.zeros((0, n), dtype=bool)
+
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
         if reindexers is None:
@@ -924,7 +931,7 @@ def outer_concat_aligned_mapping(
         # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
-                el if not_missing(el) else np.zeros((n, 0), dtype=bool)
+                el if not_missing(el) else missing_element(n, axis=axis)
                 for el, n in zip(els, ns)
             ],
             cur_reindexers,
