@@ -237,7 +237,7 @@ def test_reset_group(tmp_path: Path):
 
     ad._io.specs.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
-    with pytest.raises(TypeError):
+    with pytest.raises(AttributeError):
         disk_mtx.group = f
 
 

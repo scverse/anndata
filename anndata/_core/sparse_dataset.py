@@ -299,13 +299,19 @@ class BaseCompressedSparseDataset(ABC):
     """Shape of the matrix."""
 
     @property
-    def group(self):
+    def group(self) -> h5py.Group | ZarrGroup:
+        """The group underlying the backed matrix.
+
+        Returns
+        -------
+        h5py.Group | ZarrGroup
+        """
         return self._group
 
     @group.setter
     def group(self, val):
-        raise TypeError(
-            f"Do not reset group on a {type(self)}.  Instead use `sparse_dataset` to make a new class."
+        raise AttributeError(
+            f"Do not reset group on a {type(self)} with {val}.  Instead use `sparse_dataset` to make a new class."
         )
 
     @property
