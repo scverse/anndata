@@ -95,6 +95,41 @@ def test_backed_indexing(
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
+# test behavior from https://github.com/scverse/anndata/pull/1233
+def test_consecutive_bool(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    randomized_mask = np.zeros(csr_disk.shape[0], dtype=bool)
+    inds = np.random.choice(csr_disk.shape[0], 20, replace=False)
+    inds.sort()
+    for i in range(0, len(inds) - 1, 2):
+        randomized_mask[inds[i] : inds[i + 1]] = True
+
+    # non-random indices, with alternating one false and n true
+    def make_alternating_mask(n):
+        mask_alternating = np.ones(csr_disk.shape[0], dtype=bool)
+        for i in range(0, csr_disk.shape[0], n):
+            mask_alternating[i] = False
+        return mask_alternating
+
+    alternating_mask = make_alternating_mask(10)
+
+    # indexing needs to be on `X` directly to trigger the optimization.
+    # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
+    assert_equal(
+        csr_disk.X[alternating_mask, :], csr_disk.X[np.where(alternating_mask)]
+    )
+    assert_equal(
+        csc_disk.X[:, alternating_mask], csc_disk.X[:, np.where(alternating_mask)[0]]
+    )
+    assert_equal(csr_disk.X[randomized_mask, :], csr_disk.X[np.where(randomized_mask)])
+    assert_equal(
+        csc_disk.X[:, randomized_mask], csc_disk.X[:, np.where(randomized_mask)[0]]
+    )
+
+
 @pytest.mark.parametrize(
     ["sparse_format", "append_method"],
     [
