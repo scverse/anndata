@@ -304,7 +304,7 @@ class BaseCompressedSparseDataset(ABC):
 
         Returns
         -------
-        h5py.Group | ZarrGroup
+            The group.
         """
         return self._group
 
