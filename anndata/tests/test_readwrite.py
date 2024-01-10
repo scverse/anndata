@@ -277,7 +277,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
         store["obs"].attrs["encoding-type"] = "invalid"
     with pytest_8_raises(
         IORegistryError,
-        match=r"raised while reading key '/obs'",
+        match=r"raised while reading key 'obs'.*from /$",
     ) as exc_info:
         read(path)
     assert re.search(

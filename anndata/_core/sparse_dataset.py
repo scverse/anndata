@@ -521,12 +521,12 @@ def sparse_dataset(group: ZarrGroup | H5Group) -> CSRDataset | CSCDataset:
 
     >>> import zarr
     >>> from anndata.experimental import sparse_dataset
-    >>> group = zarr.open_group('./my_test_store.zarr')
-    >>> group['data'] = [10, 20, 30, 40, 50, 60, 70, 80]
-    >>> group['indices'] = [0, 1, 1, 3, 2, 3, 4, 5]
-    >>> group['indptr'] = [0, 2, 4, 7, 8]
-    >>> group.attrs['shape'] = (4, 6)
-    >>> group.attrs['encoding-type'] = 'csr_matrix'
+    >>> group = zarr.open_group("./my_test_store.zarr")
+    >>> group["data"] = [10, 20, 30, 40, 50, 60, 70, 80]
+    >>> group["indices"] = [0, 1, 1, 3, 2, 3, 4, 5]
+    >>> group["indptr"] = [0, 2, 4, 7, 8]
+    >>> group.attrs["shape"] = (4, 6)
+    >>> group.attrs["encoding-type"] = "csr_matrix"
     >>> sparse_dataset(group)
     CSRDataset: backend zarr, shape (4, 6), data_dtype int64
     """
