@@ -276,6 +276,21 @@ def get_compressed_vector(
     return data, indices, indptr
 
 
+def subset_by_major_axis_mask(
+    mtx: ss.spmatrix, mask: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    slices = np.ma.extras._ezclump(mask)
+
+    def mean_slice_length(slices):
+        return floor((slices[-1].stop - slices[0].start) / len(slices))
+
+    # heuristic for whether slicing should be optimized
+    if mean_slice_length(slices) <= 7:
+        return get_compressed_vectors(mtx, np.where(mask)[0])
+    else:
+        return get_compressed_vectors_for_slices(mtx, slices)
+
+
 def get_format(data: ss.spmatrix) -> str:
     for fmt, _, memory_class in FORMATS:
         if isinstance(data, memory_class):
@@ -370,37 +385,23 @@ class BaseCompressedSparseDataset(ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def _bool_to_slice(self, mask):
-        return np.ma.extras._ezclump(mask)
-
-    def _mask_major_axis(
-        self, mtx: ss.spmatrix, mask: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        slices = self._bool_to_slice(mask)
-
-        def mean_slice_length(slices):
-            return floor((slices[-1].stop - slices[0].start) / len(slices))
-
-        if mean_slice_length(slices) <= 7:
-            return get_compressed_vectors(mtx, np.where(mask)[0])
-        else:
-            return get_compressed_vectors_for_slices(mtx, slices)
-
     def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
 
+        # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
             sub = ss.csr_matrix(
-                self._mask_major_axis(mtx, row), shape=(row.sum(), mtx.shape[1])
+                subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
             )[:, col]
         elif self.format == "csc" and np.array(col).dtype == bool:
             sub = ss.csc_matrix(
-                self._mask_major_axis(mtx, col), shape=(mtx.shape[0], col.sum())
+                subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
             )[row, :]
         else:
             sub = mtx[row, col]
+
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         if isinstance(sub, BackedSparseMatrix):
