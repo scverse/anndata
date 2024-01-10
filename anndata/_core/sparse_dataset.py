@@ -41,6 +41,8 @@ from .index import Index, _subset, unpack_index
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from .._types import GroupStorageType
+
 
 class BackedFormat(NamedTuple):
     format: str
@@ -291,7 +293,9 @@ def _get_group_format(group) -> str:
 class BaseCompressedSparseDataset(ABC):
     """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
 
-    def __init__(self, group: h5py.Group | ZarrGroup):
+    _group: GroupStorageType
+
+    def __init__(self, group: GroupStorageType):
         type(self)._check_group_format(group)
         self._group = group
 
@@ -299,13 +303,8 @@ class BaseCompressedSparseDataset(ABC):
     """Shape of the matrix."""
 
     @property
-    def group(self) -> h5py.Group | ZarrGroup:
-        """The group underlying the backed matrix.
-
-        Returns
-        -------
-            The group.
-        """
+    def group(self):
+        """The group underlying the backed matrix."""
         return self._group
 
     @group.setter
@@ -504,7 +503,7 @@ class CSCDataset(BaseCompressedSparseDataset):
     format = "csc"
 
 
-def sparse_dataset(group: ZarrGroup | H5Group) -> CSRDataset | CSCDataset:
+def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
