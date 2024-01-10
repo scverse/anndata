@@ -455,7 +455,6 @@ class BaseCompressedSparseDataset(ABC):
     @cached_property
     def indptr(self):
         arr = self.group["indptr"][...]
-        arr.flags.writeable = False
         return arr
 
     def _to_backed(self) -> BackedSparseMatrix:
