@@ -16,6 +16,7 @@ import collections.abc as cabc
 import warnings
 from abc import ABC
 from itertools import accumulate, chain
+from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
@@ -164,7 +165,6 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
         )
-
         if out_shape[0] == 1:
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
         elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
@@ -246,6 +246,26 @@ def get_compressed_vectors(
     return data, indices, indptr
 
 
+def get_compressed_vectors_for_slices(
+    x: BackedSparseMatrix, slices: Iterable[slice]
+) -> tuple[Sequence, Sequence, Sequence]:
+    indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_sels])
+    indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_sels])
+    # Need to track the size of the gaps in the slices to each indptr subselection
+    total = indptr_sels[0][0]
+    offsets = [total]
+    for i, sel in enumerate(indptr_sels[1:]):
+        total = (sel[0] - indptr_sels[i][-1]) + total
+        offsets.append(total)
+    start_indptr = indptr_sels[0] - offsets[0]
+    end_indptr = np.concatenate(
+        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_sels[1:])]
+    )
+    indptr = np.concatenate([start_indptr, end_indptr])
+    return data, indices, indptr
+
+
 def get_compressed_vector(
     x: BackedSparseMatrix, idx: int
 ) -> tuple[Sequence, Sequence, Sequence]:
@@ -254,6 +274,21 @@ def get_compressed_vector(
     indices = x.indices[s]
     indptr = [0, len(data)]
     return data, indices, indptr
+
+
+def subset_by_major_axis_mask(
+    mtx: ss.spmatrix, mask: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    slices = np.ma.extras._ezclump(mask)
+
+    def mean_slice_length(slices):
+        return floor((slices[-1].stop - slices[0].start) / len(slices))
+
+    # heuristic for whether slicing should be optimized
+    if mean_slice_length(slices) <= 7:
+        return get_compressed_vectors(mtx, np.where(mask)[0])
+    else:
+        return get_compressed_vectors_for_slices(mtx, slices)
 
 
 def get_format(data: ss.spmatrix) -> str:
@@ -351,9 +386,22 @@ class BaseCompressedSparseDataset(ABC):
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
     def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
-        row, col = self._normalize_index(index)
+        indices = self._normalize_index(index)
+        row, col = indices
         mtx = self._to_backed()
-        sub = mtx[row, col]
+
+        # Handle masked indexing along major axis
+        if self.format == "csr" and np.array(row).dtype == bool:
+            sub = ss.csr_matrix(
+                subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
+            )[:, col]
+        elif self.format == "csc" and np.array(col).dtype == bool:
+            sub = ss.csc_matrix(
+                subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
+            )[row, :]
+        else:
+            sub = mtx[row, col]
+
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         if isinstance(sub, BackedSparseMatrix):
