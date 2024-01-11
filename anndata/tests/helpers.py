@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -743,3 +744,22 @@ CUPY_MATRIX_PARAMS = [
         marks=pytest.mark.gpu,
     ),
 ]
+
+
+class AccessTrackingStore(zarr.DirectoryStore):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._access_count = {}
+
+    def __getitem__(self, key):
+        for tracked in self._access_count:
+            if tracked in key:
+                self._access_count[tracked] += 1
+        return super().__getitem__(key)
+
+    def get_access_count(self, key):
+        return self._access_count[key]
+
+    def set_key_trackers(self, keys_to_track):
+        for k in keys_to_track:
+            self._access_count[k] = 0
