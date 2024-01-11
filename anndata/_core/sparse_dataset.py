@@ -506,7 +506,7 @@ class BaseCompressedSparseDataset(ABC):
         indices[orig_data_size:] = sparse_matrix.indices
 
     @cached_property
-    def indptr(self):
+    def indptr(self) -> np.ndarray:
         arr = self.group["indptr"][...]
         return arr
 
