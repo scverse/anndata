@@ -15,6 +15,7 @@ from __future__ import annotations
 import collections.abc as cabc
 import warnings
 from abc import ABC
+from functools import cached_property
 from itertools import accumulate, chain
 from math import floor
 from pathlib import Path
@@ -40,6 +41,8 @@ from .index import Index, _subset, unpack_index
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+
+    from .._types import GroupStorageType
 
 
 class BackedFormat(NamedTuple):
@@ -138,7 +141,7 @@ class BackedSparseMatrix(_cs_matrix):
     def _get_contiguous_compressed_slice(
         self, s: slice
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        new_indptr = self.indptr[s.start : s.stop + 1]
+        new_indptr = self.indptr[s.start : s.stop + 1].copy()
 
         start = new_indptr[0]
         stop = new_indptr[-1]
@@ -325,12 +328,25 @@ def _get_group_format(group) -> str:
 class BaseCompressedSparseDataset(ABC):
     """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
 
-    def __init__(self, group: h5py.Group | ZarrGroup):
+    _group: GroupStorageType
+
+    def __init__(self, group: GroupStorageType):
         type(self)._check_group_format(group)
-        self.group = group
+        self._group = group
 
     shape: tuple[int, int]
     """Shape of the matrix."""
+
+    @property
+    def group(self):
+        """The group underlying the backed matrix."""
+        return self._group
+
+    @group.setter
+    def group(self, val):
+        raise AttributeError(
+            f"Do not reset group on a {type(self)} with {val}.  Instead use `sparse_dataset` to make a new class."
+        )
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
@@ -489,12 +505,17 @@ class BaseCompressedSparseDataset(ABC):
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
 
+    @cached_property
+    def indptr(self) -> np.ndarray:
+        arr = self.group["indptr"][...]
+        return arr
+
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.group["indptr"][:]
+        mtx.indptr = self.indptr
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
@@ -502,7 +523,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
-        mtx.indptr = self.group["indptr"][...]
+        mtx.indptr = self.indptr
         return mtx
 
 
@@ -530,7 +551,7 @@ class CSCDataset(BaseCompressedSparseDataset):
     format = "csc"
 
 
-def sparse_dataset(group: ZarrGroup | H5Group) -> CSRDataset | CSCDataset:
+def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
