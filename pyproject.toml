@@ -80,7 +80,7 @@ doc = [
 ]
 test = [
     "loompy>=3.0.5",
-    "pytest >=6.0, !=8.0.0rc1", # https://github.com/pytest-dev/pytest/issues/11759
+    "pytest >=6.0",
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
