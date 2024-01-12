@@ -1084,6 +1084,16 @@ def gen_concat_params(unss, compat2result):
             [{"a": 1} for i in range(10)] + [{"a": 2}],
             {None: {}, "first": {"a": 1}, "unique": {}, "same": {}, "only": {}},
         ),
+        gen_concat_params(  # https://github.com/scverse/anndata/issues/1300
+            [{"a": np.ones((3, 3, 3))} for _ in range(2)],
+            {
+                None: {},
+                "first": {"a": np.ones((3, 3, 3))},
+                "unique": {"a": np.ones((3, 3, 3))},
+                "same": {"a": np.ones((3, 3, 3))},
+                "only": {},
+            },
+        ),
     ),
 )
 def test_concatenate_uns(unss, merge_strategy, result, value_gen):
