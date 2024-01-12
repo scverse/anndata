@@ -18,11 +18,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-doctest_marker = pytest.mark.usefixtures("doctest_env")
+@pytest.fixture(autouse=True)
+def _suppress_env_for_doctests(request: pytest.FixtureRequest) -> None:
+    if not isinstance(request.node, pytest.DoctestItem):
+        request.getfixturevalue("_doctest_env")
 
 
-@pytest.fixture
-def doctest_env(
+@pytest.fixture()
+def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
 ) -> Generator[None, None, None]:
     from scanpy import settings
@@ -44,7 +47,7 @@ def doctest_env(
 
 
 def pytest_itemcollected(item: pytest.Item) -> None:
-    """Define behavior of pytest.mark.gpu and doctests."""
+    """Define behavior of pytest.mark.gpu."""
     from importlib.util import find_spec
 
     is_gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
@@ -52,9 +55,6 @@ def pytest_itemcollected(item: pytest.Item) -> None:
         item.add_marker(
             pytest.mark.skipif(not find_spec("cupy"), reason="Cupy not installed.")
         )
-
-    if isinstance(item, pytest.DoctestItem):
-        item.add_marker(doctest_marker)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
