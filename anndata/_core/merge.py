@@ -155,7 +155,7 @@ def equal_array(a, b) -> bool:
     else:
         # For non numeric types use pandas to compare
         # Reshapeing allows us to compare inputs with >2 dimensions
-        return equal(pd.DataFrame(a.reshape(-1)), pd.DataFrame(asarray(b).reshape(-1)))
+        return equal(pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)))
 
 
 @equal.register(CupyArray)
