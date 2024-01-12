@@ -38,7 +38,8 @@ classifiers = [
 dependencies = [
     # pandas <1.1.1 has pandas/issues/35446
     # pandas 2.1.0rc0 has pandas/issues/54622
-    "pandas >=1.1.1, !=2.1.0rc0",
+    # pandas 2.1.2 has pandas/issues/52927
+    "pandas >=1.1.1, !=2.1.0rc0, !=2.1.2",
     "numpy>=1.16.5",                         # required by pandas 1.x
     "scipy>1.4",
     "h5py>=3",
@@ -79,7 +80,7 @@ doc = [
 ]
 test = [
     "loompy>=3.0.5",
-    "pytest>=6.0",
+    "pytest >=6.0, !=8.0.0rc1", # https://github.com/pytest-dev/pytest/issues/11759
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
@@ -91,6 +92,7 @@ test = [
     "httpx", # For data downloading
     "dask[array,distributed]",
     "awkward>=2.3",
+    "pyarrow",
     "pytest_memray",
 ]
 gpu = ["cupy"]
@@ -104,27 +106,40 @@ version-file = "src/anndata/_version.py"
 
 [tool.coverage.run]
 source = ["src/anndata"]
-omit = ["setup.py", "versioneer.py", "src/anndata/_version.py", "**/test_*.py"]
+omit = ["src/anndata/_version.py", "**/test_*.py"]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules"
+addopts = [
+    "--strict-markers",
+    "--doctest-modules",
+]
+filterwarnings = [
+    'ignore:Support for Awkward Arrays is currently experimental',
+    'ignore:Outer joins on awkward\.Arrays',
+    # TODO: replace both lines above with this one once we figured out how prevent ImportPathMismatchError
+    # 'ignore::anndata._warnings.ExperimentalFeatureWarning',
+]
+# When `--strict-warnings` is used, all warnings are treated as errors, except those:
+filterwarnings_when_strict = [
+    "default::anndata._warnings.ImplicitModificationWarning",
+    "default:Transforming to str index:UserWarning",
+    "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
+    "default::scipy.sparse.SparseEfficiencyWarning",
+    "default::dask.array.core.PerformanceWarning",
+]
 python_files = "test_*.py"
 testpaths = ["src/anndata", "docs/concatenation.rst"]
-filterwarnings = ['ignore:X\.dtype being converted to np.float32:FutureWarning']
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
 markers = ["gpu: mark test to run on GPU"]
 
 [tool.ruff]
 src = ["src"]
-ignore = [
-    # line too long -> we accept long comment lines; black gets rid of long code lines
-    "E501",
-    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
-    "E731",
-    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
-    "E741",
-]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
 select = [
     "E",   # Error detected by Pycodestyle
     "F",   # Errors detected by Pyflakes
@@ -135,10 +150,18 @@ select = [
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
 ]
-[tool.ruff.per-file-ignores]
+ignore = [
+    # line too long -> we accept long comment lines; formatter gets rid of long code lines
+    "E501",
+    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
+    "E731",
+    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
+    "E741",
+]
+[tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
 "src/anndata/tests/test_readwrite.py" = ["E721"]
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
 

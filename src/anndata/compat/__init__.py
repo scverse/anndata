@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from codecs import decode
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
@@ -14,6 +15,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+from packaging.version import Version
 from scipy.sparse import issparse, spmatrix
 
 from .exceptiongroups import add_note  # noqa: F401
@@ -34,9 +36,9 @@ H5Array = h5py.Dataset
 #############################
 
 
-try:
+if sys.version_info >= (3, 11):
     from contextlib import chdir
-except ImportError:  # Python < 3.11
+else:
 
     @dataclass
     class chdir(AbstractContextManager):
@@ -49,6 +51,18 @@ except ImportError:  # Python < 3.11
 
         def __exit__(self, *_exc_info) -> None:
             os.chdir(self._old_cwd.pop())
+
+
+if sys.version_info >= (3, 10):
+    from itertools import pairwise
+else:
+
+    def pairwise(iterable):
+        from itertools import tee
+
+        a, b = tee(iterable)
+        next(b, None)
+        return zip(a, b)
 
 
 #############################
@@ -391,3 +405,11 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
+
+
+def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
+    if Version(pd.__version__) >= Version("2.1"):
+        # Argument added in pandas 2.1
+        return cat.map(str, na_action="ignore")
+    else:
+        return cat.map(str)

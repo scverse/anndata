@@ -12,10 +12,11 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-from anndata import AnnData, Raw
+from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
@@ -256,17 +257,19 @@ def gen_adata(
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    adata = AnnData(
-        X=X,
-        obs=obs,
-        var=var,
-        obsm=obsm,
-        varm=varm,
-        layers=layers,
-        obsp=obsp,
-        varp=varp,
-        uns=uns,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+        adata = AnnData(
+            X=X,
+            obs=obs,
+            var=var,
+            obsm=obsm,
+            varm=varm,
+            layers=layers,
+            obsp=obsp,
+            varp=varp,
+            uns=uns,
+        )
     return adata
 
 
@@ -741,3 +744,22 @@ CUPY_MATRIX_PARAMS = [
         marks=pytest.mark.gpu,
     ),
 ]
+
+
+class AccessTrackingStore(zarr.DirectoryStore):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._access_count = {}
+
+    def __getitem__(self, key):
+        for tracked in self._access_count:
+            if tracked in key:
+                self._access_count[tracked] += 1
+        return super().__getitem__(key)
+
+    def get_access_count(self, key):
+        return self._access_count[key]
+
+    def set_key_trackers(self, keys_to_track):
+        for k in keys_to_track:
+            self._access_count[k] = 0

@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-import anndata
+from anndata import AnnData
 
 M, N = (100, 100)
 
@@ -19,10 +19,10 @@ def adata():
         index=[f"cell{i:03d}" for i in range(N)],
     )
     var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
-    return anndata.AnnData(X, obs=obs, var=var)
+    return AnnData(X, obs=obs, var=var)
 
 
-def test_assignment_dict(adata):
+def test_assignment_dict(adata: AnnData):
     d_obsm = dict(
         a=pd.DataFrame(
             dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]),
@@ -45,7 +45,7 @@ def test_assignment_dict(adata):
         assert np.all(adata.varm[k] == v)
 
 
-def test_setting_ndarray(adata):
+def test_setting_ndarray(adata: AnnData):
     adata.obsm["a"] = np.ones((M, 10))
     adata.varm["a"] = np.ones((N, 10))
     assert np.all(adata.obsm["a"] == np.ones((M, 10)))
@@ -63,7 +63,7 @@ def test_setting_ndarray(adata):
     assert h == joblib.hash(adata)
 
 
-def test_setting_dataframe(adata):
+def test_setting_dataframe(adata: AnnData):
     obsm_df = pd.DataFrame(dict(b_1=np.ones(M), b_2=["a"] * M), index=adata.obs_names)
     varm_df = pd.DataFrame(dict(b_1=np.ones(N), b_2=["a"] * N), index=adata.var_names)
 
@@ -83,7 +83,7 @@ def test_setting_dataframe(adata):
         adata.varm["c"] = bad_varm_df
 
 
-def test_setting_sparse(adata):
+def test_setting_sparse(adata: AnnData):
     obsm_sparse = sparse.random(M, 100)
     adata.obsm["a"] = obsm_sparse
     assert not np.any((adata.obsm["a"] != obsm_sparse).data)
@@ -105,7 +105,7 @@ def test_setting_sparse(adata):
     assert h == joblib.hash(adata)
 
 
-def test_setting_daskarray(adata):
+def test_setting_daskarray(adata: AnnData):
     import dask.array as da
 
     adata.obsm["a"] = da.ones((M, 10))
@@ -125,3 +125,15 @@ def test_setting_daskarray(adata):
     with pytest.raises(ValueError):
         adata.varm["b"] = da.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)
+
+
+def test_shape_error(adata: AnnData):
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Value passed for key 'b' is of incorrect shape\. "
+            r"Values of obsm must match dimensions \('obs',\) of parent\. "
+            r"Value had shape \(101,\) while it should have had \(100,\)\."
+        ),
+    ):
+        adata.obsm["b"] = np.zeros((adata.shape[0] + 1, adata.shape[0]))
