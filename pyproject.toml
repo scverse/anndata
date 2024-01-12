@@ -112,6 +112,7 @@ omit = ["src/anndata/_version.py", "**/test_*.py"]
 addopts = [
     "--strict-markers",
     "--doctest-modules",
+    "--pyargs",
 ]
 filterwarnings = [
     'ignore:Support for Awkward Arrays is currently experimental',
@@ -128,7 +129,11 @@ filterwarnings_when_strict = [
     "default::dask.array.core.PerformanceWarning",
 ]
 python_files = "test_*.py"
-testpaths = ["src/anndata", "docs/concatenation.rst"]
+testpaths = [
+    "anndata", # doctests in docstrings (module name due to --pyargs)
+    "./src/anndata/tests", # unit tests
+    "./docs/concatenation.rst", # further doctests
+]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
 markers = ["gpu: mark test to run on GPU"]
