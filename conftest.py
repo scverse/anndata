@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _suppress_env_for_doctests(request: pytest.FixtureRequest) -> None:
-    if not isinstance(request.node, pytest.DoctestItem):
+    if isinstance(request.node, pytest.DoctestItem):
         request.getfixturevalue("_doctest_env")
 
 
