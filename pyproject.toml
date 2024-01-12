@@ -110,6 +110,7 @@ omit = ["src/anndata/_version.py", "**/test_*.py"]
 
 [tool.pytest.ini_options]
 addopts = [
+    "--import-mode=importlib",
     "--strict-markers",
     "--doctest-modules",
     "--pyargs",
