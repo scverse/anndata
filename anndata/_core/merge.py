@@ -141,21 +141,13 @@ def equal_dask_array(a, b) -> bool:
 
 @equal.register(np.ndarray)
 def equal_array(a, b) -> bool:
-    def _is_numeric_or_bool(x) -> bool:
-        """array_equal with equal_nan=True only works for these types."""
-        return np.issubdtype(x, np.number) or np.issubdtype(x, np.bool_)
-
+    # Reshaping allows us to compare inputs with >2 dimensions
+    # We cast to pandas since it will still work with non-numeric types
     b = asarray(b)
-
     if a.shape != b.shape:
         return False
 
-    if _is_numeric_or_bool(a.dtype) and _is_numeric_or_bool(b.dtype):
-        return np.array_equal(a, b, equal_nan=True)
-    else:
-        # For non numeric types use pandas to compare
-        # Reshapeing allows us to compare inputs with >2 dimensions
-        return equal(pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)))
+    return equal(pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)))
 
 
 @equal.register(CupyArray)
