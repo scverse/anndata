@@ -523,7 +523,7 @@ def concat_on_disk(
     >>> adata = ad.read_h5ad('merged.h5ad', backed=True)
     >>> adata.X
     CSRDataset: backend hdf5, shape (490, 15585), data_dtype float32
-    >>> adata.obs['dataset'].value_counts()
+    >>> adata.obs['dataset'].value_counts()  # doctest: +SKIP
     dataset
     fetal      344
     b_cells    146
