@@ -33,7 +33,7 @@ Let's start off with an example:
 
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 
-    >>> groups = pbmc.obs.groupby("louvain").indices
+    >>> groups = pbmc.obs.groupby("louvain", observed=True).indices
     >>> pbmc_concat = ad.concat([pbmc[inds] for inds in groups.values()], merge="same")
     >>> assert np.array_equal(pbmc.X, pbmc_concat[pbmc.obs_names].X)
     >>> pbmc_concat
@@ -69,7 +69,7 @@ For example, given two anndata objects with differing variables:
            [0., 1., 0.],
            [1., 0., 0.]])
 
-The join argument is used for any element which has both (1) an axis being concatenated and (2) has an axis not being concatenated.
+The join argument is used for any element which has both (1) an axis being concatenated and (2) an axis not being concatenated.
 When concatenating along the `obs` dimension, this means elements of `.X`, `obs`, `.layers`, and `.obsm` will be affected by the choice of `join`.
 
 To demonstrate this, let's say we're trying to combine a droplet based experiment with a spatial one.
@@ -153,7 +153,7 @@ We provide a few strategies for merging elements aligned to the alternative axes
 * `None`: No elements aligned to alternative axes are present in the result object.
 * `"same"`: Elements that are the same in each of the objects.
 * `"unique"`: Elements for which there is only one possible value.
-* `"first"`: The first element seen at each from each position.
+* `"first"`: The first element seen in each from each position.
 * `"only"`: Elements that show up in only one of the objects.
 
 We'll show how this works with elements aligned to the alternative axis, and then how merging works with `.uns`.
@@ -187,7 +187,7 @@ Now we will split this object by the categorical `"blobs"` and recombine it to i
 
 `adatas` is now a list of datasets with disjoint sets of observations and a common set of variables.
 Each object has had QC metrics computed, with observation-wise metrics stored under `"qc"` in `.obsm`, and variable-wise metrics stored with a unique key for each subset.
-Taking a look at how this effects concatenation:
+Taking a look at how this affects concatenation:
 
     >>> ad.concat(adatas)
     AnnData object with n_obs × n_vars = 640 × 30

@@ -6,6 +6,7 @@ from importlib.util import find_spec
 import numpy as np
 import pandas as pd
 import pytest
+from numba.core.errors import NumbaDeprecationWarning
 
 from anndata import AnnData, read_h5ad, read_loom
 from anndata.tests.helpers import gen_typed_df_t2_size
@@ -78,7 +79,10 @@ def test_readwrite(backing_h5ad):
 def test_readwrite_loom(tmp_path):
     loom_path = tmp_path / "test.loom"
     adata = AnnData(X=X, layers=dict(L=L.copy()))
-    adata.write_loom(loom_path)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NumbaDeprecationWarning)
+        adata.write_loom(loom_path)
     adata_read = read_loom(loom_path, X_name="")
 
     assert adata.layers.keys() == adata_read.layers.keys()
@@ -95,3 +99,16 @@ def test_copy():
     bdata = adata.copy()
     adata.layers["L"] += 10
     assert np.all(adata.layers["L"] != bdata.layers["L"])  # 201
+
+
+def test_shape_error():
+    adata = AnnData(X=X)
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Value passed for key 'L' is of incorrect shape\. "
+            r"Values of layers must match dimensions \('obs', 'var'\) of parent\. "
+            r"Value had shape \(4, 3\) while it should have had \(3, 3\)\."
+        ),
+    ):
+        adata.layers["L"] = np.zeros((X.shape[0] + 1, X.shape[1]))

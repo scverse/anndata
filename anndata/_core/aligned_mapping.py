@@ -8,6 +8,7 @@ from copy import copy
 from typing import (
     TYPE_CHECKING,
     ClassVar,
+    Literal,
     TypeVar,
     Union,
 )
@@ -19,7 +20,7 @@ from scipy.sparse import spmatrix
 from anndata._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from anndata.compat import AwkArray
 
-from ..utils import deprecated, dim_len, ensure_df_homogeneous
+from ..utils import deprecated, dim_len, ensure_df_homogeneous, warn_once
 from .access import ElementRef
 from .index import _subset
 from .views import as_view, view_update
@@ -61,35 +62,31 @@ class AlignedMapping(cabc.MutableMapping, ABC):
     def _validate_value(self, val: V, key: str) -> V:
         """Raises an error if value is invalid"""
         if isinstance(val, AwkArray):
-            warnings.warn(
+            warn_once(
                 "Support for Awkward Arrays is currently experimental. "
                 "Behavior may change in the future. Please report any issues you may encounter!",
                 ExperimentalFeatureWarning,
                 # stacklevel=3,
             )
-            # Prevent from showing up every time an awkward array is used
-            # You'd think `once` works, but it doesn't at the repl and in notebooks
-            warnings.filterwarnings(
-                "ignore",
-                category=ExperimentalFeatureWarning,
-                message="Support for Awkward Arrays is currently experimental.*",
-            )
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] != dim_len(val, i):
-                right_shape = tuple(self.parent.shape[a] for a in self.axes)
-                actual_shape = tuple(dim_len(val, a) for a, _ in enumerate(self.axes))
-                if actual_shape[i] is None and isinstance(val, AwkArray):
-                    raise ValueError(
-                        f"The AwkwardArray is of variable length in dimension {i}.",
-                        f"Try ak.to_regular(array, {i}) before including the array in AnnData",
-                    )
-                else:
-                    raise ValueError(
-                        f"Value passed for key {key!r} is of incorrect shape. "
-                        f"Values of {self.attrname} must match dimensions "
-                        f"{self.axes} of parent. Value had shape {actual_shape} while "
-                        f"it should have had {right_shape}."
-                    )
+            if self.parent.shape[axis] == dim_len(val, i):
+                continue
+            right_shape = tuple(self.parent.shape[a] for a in self.axes)
+            actual_shape = tuple(dim_len(val, a) for a, _ in enumerate(self.axes))
+            if actual_shape[i] is None and isinstance(val, AwkArray):
+                dim = ("obs", "var")[i]
+                msg = (
+                    f"The AwkwardArray is of variable length in dimension {dim}.",
+                    f"Try ak.to_regular(array, {i}) before including the array in AnnData",
+                )
+            else:
+                dims = tuple(("obs", "var")[ax] for ax in self.axes)
+                msg = (
+                    f"Value passed for key {key!r} is of incorrect shape. "
+                    f"Values of {self.attrname} must match dimensions {dims} of parent. "
+                    f"Value had shape {actual_shape} while it should have had {right_shape}."
+                )
+            raise ValueError(msg)
 
         if not self._allow_df and isinstance(val, pd.DataFrame):
             name = self.attrname.title().rstrip("s")
@@ -104,7 +101,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
 
     @property
     @abstractmethod
-    def axes(self) -> tuple[int, ...]:
+    def axes(self) -> tuple[Literal[0, 1], ...]:
         """Which axes of the parent is this aligned to?"""
         pass
 
@@ -131,7 +128,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
-    @deprecated("dict(obj)")
+    @deprecated("dict(obj)", FutureWarning)
     def as_dict(self) -> dict:
         return dict(self)
 
@@ -166,7 +163,10 @@ class AlignedViewMixin:
             new_mapping[key] = value
 
     def __delitem__(self, key: str):
-        _ = key in self  # Make sure it exists before bothering with a copy
+        if key not in self:
+            raise KeyError(
+                "'{key!r}' not found in view of {self.attrname}"
+            )  # Make sure it exists before bothering with a copy
         warnings.warn(
             f"Removing element `.{self.attrname}['{key}']` of view, "
             "initializing view as actual.",
@@ -226,7 +226,7 @@ class AxisArraysBase(AlignedMapping):
         return f"{self.dim}m"
 
     @property
-    def axes(self) -> tuple[int]:
+    def axes(self) -> tuple[Literal[0, 1]]:
         """Axes of the parent this is aligned to"""
         return (self._axis,)
 
@@ -260,7 +260,7 @@ class AxisArraysBase(AlignedMapping):
             try:
                 pd.testing.assert_index_equal(val.index, self.dim_names)
             except AssertionError as e:
-                msg = f"value.index does not match parent’s axis {self.axes[0]} names:\n{e}"
+                msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
                 raise ValueError(msg) from None
             else:
                 msg = "Index.equals and pd.testing.assert_index_equal disagree"
@@ -361,7 +361,7 @@ class PairwiseArraysBase(AlignedMapping):
         return f"{self.dim}p"
 
     @property
-    def axes(self) -> tuple[int, int]:
+    def axes(self) -> tuple[Literal[0], Literal[0]] | tuple[Literal[1], Literal[1]]:
         """Axes of the parent this is aligned to"""
         return self._axis, self._axis
 

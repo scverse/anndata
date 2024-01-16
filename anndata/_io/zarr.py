@@ -12,16 +12,10 @@ from scipy import sparse
 from anndata._warnings import OldFormatWarning
 
 from .._core.anndata import AnnData
-from ..compat import (
-    _clean_uns,
-    _from_fixed_length_strings,
-)
+from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
-from .utils import (
-    _read_legacy_raw,
-    report_read_key_on_error,
-)
+from .utils import _read_legacy_raw, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -139,7 +133,7 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 
 
 @report_read_key_on_error
-def read_dataframe(group) -> pd.DataFrame:
+def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
     # Fast paths
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import warnings
 from importlib.util import find_spec
 from pathlib import Path
@@ -14,9 +15,25 @@ from anndata.tests.helpers import gen_adata
 def test_old_format_warning_thrown():
     import scanpy as sc
 
-    with pytest.warns(ad._warnings.OldFormatWarning):
-        pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
+    pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
+    # TODO: with Pytest 8, all this can be a
+    #       `with pytest.warns(...), pytest.warns(...):`
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always", ad.OldFormatWarning)
+        warnings.simplefilter("always", FutureWarning)
         ad.read_h5ad(pth)
+
+    assert any(issubclass(w.category, ad.OldFormatWarning) for w in record), [
+        w.message for w in record if not issubclass(w.category, FutureWarning)
+    ]
+    assert any(
+        issubclass(w.category, FutureWarning)
+        and re.match(
+            r"Moving element from \.uns\['neighbors']\['distances'] to \.obsp\['distances']\.",
+            str(w.message),
+        )
+        for w in record
+    ), [w.message for w in record if not issubclass(w.category, ad.OldFormatWarning)]
 
 
 def test_old_format_warning_not_thrown(tmp_path):
@@ -25,7 +42,7 @@ def test_old_format_warning_not_thrown(tmp_path):
     adata.write_h5ad(pth)
 
     with warnings.catch_warnings(record=True) as record:
-        warnings.simplefilter("always", ad._warnings.OldFormatWarning)
+        warnings.simplefilter("always", ad.OldFormatWarning)
 
         ad.read_h5ad(pth)
 

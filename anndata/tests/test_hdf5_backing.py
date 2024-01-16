@@ -81,6 +81,7 @@ def as_dense(request):
 
 
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
+@pytest.mark.filterwarnings("error")
 def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.h5ad"
@@ -89,11 +90,11 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
     orig.write(orig_pth)
 
-    backed = ad.read(orig_pth, backed=backed_mode)
+    backed = ad.read_h5ad(orig_pth, backed=backed_mode)
     backed.write(backed_pth, as_dense=as_dense)
     backed.file.close()
 
-    from_backed = ad.read(backed_pth)
+    from_backed = ad.read_h5ad(backed_pth)
     assert np.all(asarray(orig.X) == asarray(from_backed.X))
 
 
@@ -303,10 +304,13 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert adata.filename == backing_h5ad
     assert adata.isbacked
 
-    adata.X[0, [0, 2]] = 10
-    adata.X[1, [0, 2]] = [11, 12]
-    with pytest.raises(ValueError):
-        adata.X[2, 1] = 13
+    with pytest.warns(
+        PendingDeprecationWarning, match=r"__setitem__ will likely be removed"
+    ):
+        adata.X[0, [0, 2]] = 10
+        adata.X[1, [0, 2]] = [11, 12]
+        with pytest.raises(ValueError):
+            adata.X[2, 1] = 13
 
     assert adata.isbacked
 

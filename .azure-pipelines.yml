@@ -55,12 +55,17 @@ jobs:
       - script: |
           pytest
         displayName: "PyTest"
-        condition: eq(variables['RUN_COVERAGE'], 'no')
+        condition: and(eq(variables['RUN_COVERAGE'], 'no'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
 
       - script: |
           pytest --cov --cov-report=xml --cov-context=test
         displayName: "PyTest (coverage)"
-        condition: eq(variables['RUN_COVERAGE'], 'yes')
+        condition: and(eq(variables['RUN_COVERAGE'], 'yes'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
+
+      - script: |
+          pytest --strict-warnings
+        displayName: "PyTest (treat warnings as errors)"
+        condition: and(eq(variables['RUN_COVERAGE'], 'no'), eq(variables['PRERELEASE_DEPENDENCIES'], 'yes'))
 
       - task: PublishCodeCoverageResults@1
         inputs:
