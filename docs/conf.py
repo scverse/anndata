@@ -15,9 +15,6 @@ sys.path[:0] = [str(HERE / "extensions")]
 
 # -- General configuration ------------------------------------------------
 
-
-needs_sphinx = "1.7"  # autosummary bugfix
-
 # General information
 project = "anndata"
 author = f"{project} developers"
