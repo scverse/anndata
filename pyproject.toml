@@ -39,7 +39,7 @@ dependencies = [
     # pandas <1.4 has pandas/issues/35446
     # pandas 2.1.0rc0 has pandas/issues/54622
     "pandas >=1.4, !=2.1.0rc0, !=2.1.2",
-    "numpy>=1.21",
+    "numpy>=1.23",
     "scipy>1.8",
     "h5py>=3.1",
     "exceptiongroup; python_version<'3.11'",

@@ -11,7 +11,7 @@ PACKAGES=`python3 ci/scripts/min-deps.py pyproject.toml --extra dev test`
 
 echo Installing $PACKAGES
 conda run -n anndata-min-deps-test pip install $PACKAGES
-conda run -n anndata-min-deps-test pip install pytest-xdist cupy-cuda12x
+conda run -n anndata-min-deps-test pip install pytest-xdist # cupy-cuda12x
 conda run -n anndata-min-deps-test pip install -e . --no-deps
 conda run -n anndata-min-deps-test pytest -n auto
 
