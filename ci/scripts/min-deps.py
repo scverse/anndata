@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-
 import sys
+from pathlib import Path
 
 if sys.version_info >= (3, 11):
     import tomllib
