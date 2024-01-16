@@ -50,7 +50,7 @@ jobs:
         condition: eq(variables['DEPENDENCIES_VERSION'], 'latest')
 
       - script: |
-          python -m pip install pip wheel tomli
+          python -m pip install pip wheel tomli packaging
           pip install `python3 ci/scripts/min-deps.py pyproject.toml --extra dev test`
           pip install --no-deps .
         displayName: "Install minimum dependencies"
