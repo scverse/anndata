@@ -80,7 +80,7 @@ doc = [
 ]
 test = [
     "loompy>=3.0.5",
-    "pytest >=6.0, !=8.0.0rc1", # https://github.com/pytest-dev/pytest/issues/11759
+    "pytest >=6.0",
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
@@ -91,7 +91,7 @@ test = [
     "scanpy",
     "httpx", # For data downloading
     "dask[array,distributed]",
-    "awkward>=2.3",
+    "awkward>=2.3, !=2.5.2",
     "pyarrow",
     "pytest_memray",
 ]
@@ -107,6 +107,11 @@ version-file = "anndata/_version.py"
 [tool.coverage.run]
 source = ["anndata"]
 omit = ["anndata/_version.py", "**/test_*.py"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+]
 
 [tool.pytest.ini_options]
 addopts = [
