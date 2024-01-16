@@ -35,7 +35,7 @@ from ..compat import (
     DaskArray,
     _map_cat_to_str,
 )
-from ..utils import asarray, dim_len, warn_once
+from ..utils import asarray, axis_len, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 
@@ -520,7 +520,7 @@ class Reindexer:
 
         Missing values are to be replaced with `fill_value`.
         """
-        if self.no_change and (dim_len(el, axis) == len(self.old_idx)):
+        if self.no_change and (axis_len(el, axis) == len(self.old_idx)):
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
@@ -978,33 +978,25 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     return out
 
 
-def _resolve_dim(
-    *, dim: Literal["obs", "var"] | None = None, axis: Literal[0, 1] | None = None
+def _resolve_axis(
+    axis: Literal["obs", 0, "var", 1],
 ) -> tuple[Literal[0], Literal["obs"]] | tuple[Literal[1], Literal["var"]]:
-    _dims = ("obs", "var")
-    if (dim is None and axis is None) or (dim is not None and axis is not None):
-        raise ValueError(
-            f"Must pass exactly one of `dim` or `axis`. Got: dim={dim}, axis={axis}."
-        )
-    elif dim is not None and dim not in _dims:
-        raise ValueError(f"`dim` must be one of ('obs', 'var'), was {dim}")
-    elif axis is not None and axis not in (0, 1):
-        raise ValueError(f"`axis` must be either 0 or 1, was {axis}")
-    if dim is not None:
-        return _dims.index(dim), dim
-    else:
-        return axis, _dims[axis]
+    if axis is None:
+        raise ValueError("Must pass `axis` != None.")
+    elif axis not in (0, 1, "obs", "var"):
+        raise ValueError(f"`axis` must be either 0, 1, 'obs', or 'var', was {axis}")
+    return (0, "obs") if axis in {0, "obs"} else (1, "var")
 
 
-def dim_indices(adata, *, axis=None, dim=None) -> pd.Index:
+def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     """Helper function to get adata.{dim}_names."""
-    _, dim = _resolve_dim(axis=axis, dim=dim)
-    return getattr(adata, f"{dim}_names")
+    _, axis_name = _resolve_axis(axis)
+    return getattr(adata, f"{axis_name}_names")
 
 
-def dim_size(adata, *, axis=None, dim=None) -> int:
+def axis_size(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> int:
     """Helper function to get adata.shape[dim]."""
-    ax, _ = _resolve_dim(axis, dim)
+    ax, _ = _resolve_axis(axis)
     return adata.shape[ax]
 
 
@@ -1034,8 +1026,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 def concat(
     adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
     *,
-    dim: Literal["obs", "var"] | None = None,
-    axis: Literal[0, 1] | None = None,
+    axis: Literal["obs", 0, "var", 1] = "obs",
     join: Literal["inner", "outer"] = "inner",
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
@@ -1054,9 +1045,8 @@ def concat(
     adatas
         The objects to be concatenated. If a Mapping is passed, keys are used for the `keys`
         argument and values are concatenated.
-    dim
     axis
-        Which dimension/axis to concatenate along. Defaults to `dim="obs"` aka `axis=0`.
+        Which axis to concatenate along.
     join
         How to align values when concatenating. If "outer", the union of the other axis
         is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
@@ -1143,7 +1133,7 @@ def concat(
     s2     2     3
     s3     4     5
     s4     7     8
-    >>> # ad.concat([a, c], dim="var").to_df()
+    >>> # ad.concat([a, c], axis="var").to_df()
     >>> # or
     >>> ad.concat([a, c], axis=1).to_df()
         var1  var2  var3  var4
@@ -1240,10 +1230,8 @@ def concat(
     if keys is None:
         keys = np.arange(len(adatas)).astype(str)
 
-    if dim is None and axis is None:
-        dim = "obs"
-    axis, dim = _resolve_dim(axis=axis, dim=dim)
-    alt_axis, alt_dim = _resolve_dim(axis=1 - axis)
+    axis, axis_name = _resolve_axis(axis)
+    alt_axis, alt_axis_name = _resolve_axis(axis=1 - axis)
 
     # Label column
     label_col = pd.Categorical.from_codes(
@@ -1253,7 +1241,7 @@ def concat(
 
     # Combining indexes
     concat_indices = pd.concat(
-        [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
+        [pd.Series(axis_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
@@ -1262,16 +1250,16 @@ def concat(
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = merge_indices(
-        [dim_indices(a, axis=alt_axis) for a in adatas], join=join
+        [axis_indices(a, axis=alt_axis) for a in adatas], join=join
     )
     reindexers = [
-        gen_reindexer(alt_indices, dim_indices(a, axis=alt_axis)) for a in adatas
+        gen_reindexer(alt_indices, axis_indices(a, axis=alt_axis)) for a in adatas
     ]
 
     # Annotation for concatenation axis
-    check_combinable_cols([getattr(a, dim).columns for a in adatas], join=join)
+    check_combinable_cols([getattr(a, axis_name).columns for a in adatas], join=join)
     concat_annot = pd.concat(
-        unify_dtypes(getattr(a, dim) for a in adatas),
+        unify_dtypes(getattr(a, axis_name) for a in adatas),
         join=join,
         ignore_index=True,
     )
@@ -1281,7 +1269,7 @@ def concat(
 
     # Annotation for other axis
     alt_annot = merge_dataframes(
-        [getattr(a, alt_dim) for a in adatas], alt_indices, merge
+        [getattr(a, alt_axis_name) for a in adatas], alt_indices, merge
     )
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
@@ -1301,11 +1289,11 @@ def concat(
         [a.layers for a in adatas], axis=axis, reindexers=reindexers
     )
     concat_mapping = concat_aligned_mapping(
-        [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
+        [getattr(a, f"{axis_name}m") for a in adatas], index=concat_indices
     )
     if pairwise:
         concat_pairwise = concat_pairwise_mapping(
-            mappings=[getattr(a, f"{dim}p") for a in adatas],
+            mappings=[getattr(a, f"{axis_name}p") for a in adatas],
             shapes=[a.shape[axis] for a in adatas],
             join_keys=join_keys,
         )
@@ -1315,13 +1303,16 @@ def concat(
     # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
     alt_mapping = merge(
         [
-            {k: r(v, axis=0) for k, v in getattr(a, f"{alt_dim}m").items()}
+            {k: r(v, axis=0) for k, v in getattr(a, f"{alt_axis_name}m").items()}
             for r, a in zip(reindexers, adatas)
         ],
     )
     alt_pairwise = merge(
         [
-            {k: r(r(v, axis=0), axis=1) for k, v in getattr(a, f"{alt_dim}p").items()}
+            {
+                k: r(r(v, axis=0), axis=1)
+                for k, v in getattr(a, f"{alt_axis_name}p").items()
+            }
             for r, a in zip(reindexers, adatas)
         ]
     )
@@ -1357,12 +1348,12 @@ def concat(
         **{
             "X": X,
             "layers": layers,
-            dim: concat_annot,
-            alt_dim: alt_annot,
-            f"{dim}m": concat_mapping,
-            f"{alt_dim}m": alt_mapping,
-            f"{dim}p": concat_pairwise,
-            f"{alt_dim}p": alt_pairwise,
+            axis_name: concat_annot,
+            alt_axis_name: alt_annot,
+            f"{axis_name}m": concat_mapping,
+            f"{alt_axis_name}m": alt_mapping,
+            f"{axis_name}p": concat_pairwise,
+            f"{alt_axis_name}p": alt_pairwise,
             "uns": uns,
             "raw": raw,
         }
