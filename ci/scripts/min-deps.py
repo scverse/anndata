@@ -4,7 +4,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import tomli
+import sys
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 from packaging.requirements import Requirement
 from packaging.version import Version
 
@@ -56,7 +61,7 @@ def main():
 
     args = parser.parse_args()
 
-    pyproject = tomli.loads(args.path.read_text())
+    pyproject = tomllib.loads(args.path.read_text())
 
     deps = pyproject["project"]["dependencies"]
 
