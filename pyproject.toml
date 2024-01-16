@@ -41,7 +41,7 @@ dependencies = [
     "pandas >=1.4, !=2.1.0rc0, !=2.1.2",
     "numpy>=1.21",
     "scipy>1.8",
-    "h5py>=3.0",
+    "h5py>=3.1",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
     "packaging>=20.0",
