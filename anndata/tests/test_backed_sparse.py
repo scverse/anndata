@@ -115,6 +115,11 @@ def test_consecutive_bool(
         return mask_alternating
 
     alternating_mask = make_alternating_mask(10)
+    one_group_mask = np.zeros(csr_disk.shape[0], dtype=bool)
+    one_group_mask[csr_disk.shape[0] // 4 : csr_disk.shape[0] // 2] = True
+
+    one_elem_mask = np.zeros(csr_disk.shape[0], dtype=bool)
+    one_elem_mask[csr_disk.shape[0] // 4] = True
 
     # indexing needs to be on `X` directly to trigger the optimization.
     # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
@@ -124,9 +129,20 @@ def test_consecutive_bool(
     assert_equal(
         csc_disk.X[:, alternating_mask], csc_disk.X[:, np.where(alternating_mask)[0]]
     )
+
     assert_equal(csr_disk.X[randomized_mask, :], csr_disk.X[np.where(randomized_mask)])
     assert_equal(
         csc_disk.X[:, randomized_mask], csc_disk.X[:, np.where(randomized_mask)[0]]
+    )
+
+    assert_equal(csr_disk.X[one_group_mask, :], csr_disk.X[np.where(one_group_mask)])
+    assert_equal(
+        csc_disk.X[:, one_group_mask], csc_disk.X[:, np.where(one_group_mask)[0]]
+    )
+
+    assert_equal(csr_disk.X[one_elem_mask, :], csr_disk.X[np.where(one_elem_mask)])
+    assert_equal(
+        csc_disk.X[:, one_elem_mask], csc_disk.X[:, np.where(one_elem_mask)[0]]
     )
 
 
