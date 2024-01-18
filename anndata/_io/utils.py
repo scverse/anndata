@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from functools import wraps
+from importlib.metadata import version
 from typing import TYPE_CHECKING, Callable, Literal, Union, cast
 from warnings import warn
 
-import h5py
 from packaging.version import Version
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
-H5PY_V3 = Version(h5py.__version__).major >= 3
+H5PY_V3 = Version(version("h5py")).major >= 3
 
 # -------------------------------------------------------------------------------
 # Type conversion

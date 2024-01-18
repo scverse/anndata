@@ -6,7 +6,8 @@ from codecs import decode
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from functools import singledispatch, wraps
+from functools import partial, singledispatch, wraps
+from importlib.metadata import version
 from inspect import Parameter, signature
 from pathlib import Path
 from typing import Any, Union
@@ -407,9 +408,8 @@ def _safe_transpose(x):
         return x.T
 
 
-def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
-    if Version(pd.__version__) >= Version("2.1"):
-        # Argument added in pandas 2.1
-        return cat.map(str, na_action="ignore")
-    else:
-        return cat.map(str)
+if Version(version("pandas")) >= Version("2.1"):
+    # Argument added in pandas 2.1
+    _map_cat_to_str = partial(pd.Categorical.map, mapper=str, na_action="ignore")
+else:
+    _map_cat_to_str = partial(pd.Categorical.map, mapper=str)
