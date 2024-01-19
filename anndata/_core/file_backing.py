@@ -66,9 +66,13 @@ class AnnDataFileManager:
 
     @filename.setter
     def filename(self, filename: PathLike | None):
-        self._filename = None if filename is None \
-            else filename if isinstance(filename, remfile.RemFile.RemFile) \
+        self._filename = (
+            None
+            if filename is None
+            else filename
+            if isinstance(filename, remfile.RemFile.RemFile)
             else Path(filename)
+        )
 
     def open(
         self,

@@ -799,13 +799,17 @@ def test_io_dtype(tmp_path, diskfmt, dtype):
     assert curr.X.dtype == dtype
 
 
-needs_remfile = pytest.mark.skipif(not find_spec("remfile"), reason="remfile is not installed")
+needs_remfile = pytest.mark.skipif(
+    not find_spec("remfile"), reason="remfile is not installed"
+)
+
 
 @needs_remfile
 def test_read_s3_remfile():
     import remfile
+
     # TODO: change to a different datafile?
     url_had = "https://allen-brain-cell-atlas.s3.us-west-2.amazonaws.com/expression_matrices/WMB-10Xv2/20230630/WMB-10Xv2-TH-log2.h5ad"
     file_had = remfile.File(url_had)
-    data = ad.read_h5ad(file_had, backed='r')
+    data = ad.read_h5ad(file_had, backed="r")
     assert data.X.shape == (131212, 32285)
