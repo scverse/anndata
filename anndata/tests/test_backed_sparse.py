@@ -87,8 +87,12 @@ def test_empty_backed_indexing(
 
     assert_equal(csr_mem.X[obs_idx], csr_disk.X[obs_idx])
     assert_equal(csr_mem.X[:, var_idx], csc_disk.X[:, var_idx])
-    assert_equal(csr_mem.X[obs_idx, var_idx], csr_disk.X[obs_idx, var_idx])
-    assert_equal(csr_mem.X[obs_idx, var_idx], csc_disk.X[obs_idx, var_idx])
+
+    # The following do not work because of https://github.com/scipy/scipy/issues/19919
+    # Our implementation returns a (0,0) sized matrix but scipy does (1,0).
+
+    # assert_equal(csr_mem.X[obs_idx, var_idx], csr_disk.X[obs_idx, var_idx])
+    # assert_equal(csr_mem.X[obs_idx, var_idx], csc_disk.X[obs_idx, var_idx])
 
 
 def test_backed_indexing(
