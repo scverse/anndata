@@ -180,6 +180,8 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
 
     def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
         idxs = np.asarray(row)
+        if len(idxs) == 0:
+            return ss.csr_matrix((0, self.shape[1]))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
         return ss.csr_matrix(
@@ -214,6 +216,8 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
 
     def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
         idxs = np.asarray(col)
+        if len(idxs) == 0:
+            return ss.csc_matrix((self.shape[0], 0))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
         return ss.csc_matrix(
@@ -409,11 +413,11 @@ class BaseCompressedSparseDataset(ABC):
         mtx = self._to_backed()
 
         # Handle masked indexing along major axis
-        if self.format == "csr" and np.array(row).dtype == bool:
+        if self.format == "csr" and np.array(row).dtype == bool and row.sum() != 0:
             sub = ss.csr_matrix(
                 subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
             )[:, col]
-        elif self.format == "csc" and np.array(col).dtype == bool:
+        elif self.format == "csc" and np.array(col).dtype == bool and col.sum() != 0:
             sub = ss.csc_matrix(
                 subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
             )[row, :]

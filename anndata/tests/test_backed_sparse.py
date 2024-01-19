@@ -77,6 +77,20 @@ def ondisk_equivalent_adata(
     return csr_mem, csr_disk, csc_disk, dense_disk
 
 
+def test_empty_backed_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    obs_idx = np.zeros(csr_disk.shape[0], dtype=bool)
+    var_idx = np.zeros(csr_disk.shape[1], dtype=bool)
+
+    assert_equal(csr_mem.X[obs_idx], csr_disk.X[obs_idx])
+    assert_equal(csr_mem.X[:, var_idx], csc_disk.X[:, var_idx])
+    assert_equal(csr_mem.X[obs_idx, var_idx], csr_disk.X[obs_idx, var_idx])
+    assert_equal(csr_mem.X[obs_idx, var_idx], csc_disk.X[obs_idx, var_idx])
+
+
 def test_backed_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     subset_func,
