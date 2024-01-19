@@ -28,6 +28,7 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
     gen_adata,
+    gen_vstr_recarray,
 )
 from anndata.utils import asarray
 
@@ -1024,6 +1025,15 @@ def gen_something(n):
     return np.random.choice(options)(n)
 
 
+def gen_3d_numeric_array(n):
+    return np.random.randn(n, n, n)
+
+
+def gen_3d_recarray(_):
+    # Ignoring n as it can get quite slow
+    return gen_vstr_recarray(8, 3).reshape(2, 2, 2)
+
+
 def gen_concat_params(unss, compat2result):
     value_generators = [
         lambda x: x,
@@ -1032,6 +1042,8 @@ def gen_concat_params(unss, compat2result):
         gen_list,
         gen_sparse,
         gen_something,
+        gen_3d_numeric_array,
+        gen_3d_recarray,
     ]
     for gen, (mode, result) in product(value_generators, compat2result.items()):
         yield pytest.param(unss, mode, result, gen)
@@ -1557,3 +1569,22 @@ def test_error_on_mixed_device():
 
     for p in permutations([cp_adata, cp_sparse_adata]):
         concat(p)
+
+
+def test_concat_on_var_outer_join(array_type):
+    # https://github.com/scverse/anndata/issues/1286
+    a = AnnData(
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
+        var=pd.DataFrame(index=[f"gene_{i:02d}" for i in range(10)]),
+        layers={
+            "X": array_type(np.ones((10, 10))),
+        },
+    )
+    b = AnnData(
+        obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
+        var=pd.DataFrame(index=[f"gene_{i:02d}" for i in range(10, 20)]),
+    )
+
+    # This shouldn't error
+    # TODO: specify expected result while accounting for null value
+    _ = concat([a, b], join="outer", axis=1)

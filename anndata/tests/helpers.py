@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -412,7 +413,11 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
         and len(a.dtype) > 1
         and len(b.dtype) > 0
     ):
-        assert_equal(pd.DataFrame(a), pd.DataFrame(b), exact, elem_name)
+        # Reshaping to allow >2d arrays
+        assert a.shape == b.shape, format_msg(elem_name)
+        assert_equal(
+            pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)), exact, elem_name
+        )
     else:
         assert np.all(a == b), format_msg(elem_name)
 
@@ -743,3 +748,22 @@ CUPY_MATRIX_PARAMS = [
         marks=pytest.mark.gpu,
     ),
 ]
+
+
+class AccessTrackingStore(zarr.DirectoryStore):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._access_count = {}
+
+    def __getitem__(self, key):
+        for tracked in self._access_count:
+            if tracked in key:
+                self._access_count[tracked] += 1
+        return super().__getitem__(key)
+
+    def get_access_count(self, key):
+        return self._access_count[key]
+
+    def set_key_trackers(self, keys_to_track):
+        for k in keys_to_track:
+            self._access_count[k] = 0
