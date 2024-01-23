@@ -31,6 +31,7 @@ from anndata.compat import (
     _decode_structured_array,
     _from_fixed_length_strings,
     _read_attr,
+    _require_group_write_dataframe,
 )
 
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -662,7 +663,7 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
     for reserved in ("_index",):
         if reserved in df.columns:
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
-    group = f.require_group(key)
+    group = _require_group_write_dataframe(f, key, df)
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
