@@ -1140,14 +1140,17 @@ def concat(
 
     Concatenating along different axes
 
-    >>> ad.concat([a, b]).to_df()
+    >>> ad.concat([a, b]).to_df()  # or `axis=0` or `axis="obs"`
         var1  var2
     s1     0     1
     s2     2     3
     s3     4     5
     s4     7     8
-    >>> # ad.concat([a, c], axis="var").to_df()
-    >>> # or
+    >>> ad.concat([a, c], axis="var").to_df()
+        var1  var2  var3  var4
+    s1     0     1    10    11
+    s2     2     3    12    13
+    >>> # or, equivalently
     >>> ad.concat([a, c], axis=1).to_df()
         var1  var2  var3  var4
     s1     0     1    10    11

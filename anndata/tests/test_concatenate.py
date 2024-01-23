@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
 from itertools import chain, permutations, product
+from operator import attrgetter
 from typing import Any, Callable, Literal
 
 import numpy as np
@@ -1145,8 +1146,7 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
 def test_batch_key(axis_name):
     """Test that concat only adds a label if the key is provided"""
 
-    def get_annot(adata):
-        return getattr(adata, axis_name)
+    get_annot = attrgetter(axis_name)
 
     lhs = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     rhs = gen_adata((10, 12), **GEN_ADATA_DASK_ARGS)
@@ -1162,7 +1162,7 @@ def test_batch_key(axis_name):
         == []
     )
 
-    batch_annot = get_annot(concat([lhs, rhs], axis=axis, label="batch"))
+    batch_annot = get_annot(concat([lhs, rhs], axis=axis_name, label="batch"))
     assert list(
         batch_annot.columns.difference(
             get_annot(lhs).columns.union(get_annot(rhs).columns)
