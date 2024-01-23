@@ -104,16 +104,6 @@ def axis_name(request) -> Literal["obs", "var"]:
     return request.param
 
 
-@pytest.fixture
-def axis(axis_name) -> Literal[0, 1]:
-    return 0 if axis_name == "obs" else 1
-
-
-@pytest.fixture
-def alt_axis_name(axis_name) -> Literal["obs", "var"]:
-    return "var" if axis_name == "obs" else "obs"
-
-
 @pytest.fixture(params=list(merge.MERGE_STRATEGIES.keys()))
 def merge_strategy(request):
     return request.param
@@ -825,7 +815,9 @@ def test_awkward_does_not_mix(join_type, other):
         concat([adata_a, adata_b], join=join_type)
 
 
-def test_pairwise_concat(axis, axis_name, alt_axis_name, array_type):
+def test_pairwise_concat(axis_name, array_type):
+    axis, axis_name = merge._resolve_axis(axis_name)
+    _, alt_axis_name = merge._resolve_axis(1 - axis)
     axis_sizes = [[100, 200, 50], [50, 50, 50]]
     if axis_name == "var":
         axis_sizes.reverse()
@@ -881,12 +873,14 @@ def test_pairwise_concat(axis, axis_name, alt_axis_name, array_type):
     )
 
 
-def test_nan_merge(axis, alt_axis_name, join_type, array_type):
+def test_nan_merge(axis_name, join_type, array_type):
+    axis, _ = merge._resolve_axis(axis_name)
+    alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
     mapping_attr = f"{alt_axis_name}m"
     adata_shape = (20, 10)
 
     arr = array_type(
-        sparse.random(adata_shape[1 - axis], 10, density=0.1, format="csr")
+        sparse.random(adata_shape[alt_axis], 10, density=0.1, format="csr")
     )
     arr_nan = arr.copy()
     with warnings.catch_warnings():
@@ -1144,14 +1138,14 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     assert_equal(merged, result, elem_name="uns")
 
 
-def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
+def test_transposed_concat(array_type, axis_name, join_type, merge_strategy):
+    axis, axis_name = merge._resolve_axis(axis_name)
+    alt_axis = 1 - axis
     lhs = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     rhs = gen_adata((10, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
 
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
-    b = concat(
-        [lhs.T, rhs.T], axis=abs(axis - 1), join=join_type, merge=merge_strategy
-    ).T
+    b = concat([lhs.T, rhs.T], axis=alt_axis, join=join_type, merge=merge_strategy).T
 
     assert_equal(a, b)
 
@@ -1341,14 +1335,15 @@ def axis_labels(adata: AnnData, axis: Literal[0, 1]) -> pd.Index:
 def expected_shape(
     a: AnnData, b: AnnData, axis: Literal[0, 1], join: Literal["inner", "outer"]
 ) -> tuple[int, int]:
-    labels = partial(axis_labels, axis=1 - axis)
+    alt_axis = 1 - axis
+    labels = partial(axis_labels, axis=alt_axis)
     shape = [None, None]
 
     shape[axis] = a.shape[axis] + b.shape[axis]
     if join == "inner":
-        shape[1 - axis] = len(labels(a).intersection(labels(b)))
+        shape[alt_axis] = len(labels(a).intersection(labels(b)))
     elif join == "outer":
-        shape[1 - axis] = len(labels(a).union(labels(b)))
+        shape[alt_axis] = len(labels(a).union(labels(b)))
     else:
         raise ValueError()
 
@@ -1358,11 +1353,12 @@ def expected_shape(
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-def test_concat_size_0_axis(axis, axis_name, join_type, merge_strategy, shape):
-    # https://github.com/scverse/anndata/issues/526
+def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
+    """Regression test for https://github.com/scverse/anndata/issues/526"""
+    axis, axis_name = merge._resolve_axis(axis_name)
+    alt_axis = 1 - axis
     a = gen_adata((5, 7))
     b = gen_adata(shape)
-    alt_axis = 1 - axis
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
