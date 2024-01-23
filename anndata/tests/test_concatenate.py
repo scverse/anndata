@@ -417,6 +417,21 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
     pd.testing.assert_frame_equal(true_df, cur_df)
 
 
+@pytest.mark.parametrize(
+    ("axis_val", "shape"),
+    [
+        pytest.param("obs", (20, 10), id="obs"),
+        pytest.param(0, (20, 10), id="0"),
+        pytest.param("var", (10, 20), id="var"),
+        pytest.param(1, (10, 20), id="1"),
+    ],
+)
+def test_concat_axis_param(axis_val, shape):
+    a, b = gen_adata((10, 10)), gen_adata((10, 10))
+    c = concat([a, b], axis=axis_val)
+    assert c.shape == shape
+
+
 def test_concat_annot_join(obsm_adatas, join_type):
     adatas = [
         AnnData(sparse.csr_matrix(a.shape), obs=a.obsm["df"], var=a.var)
@@ -823,11 +838,9 @@ def test_pairwise_concat(axis, axis_name, alt_axis_name, array_type):
 
     adatas = {
         k: AnnData(
-            **{
-                "X": sparse.csr_matrix((m, n)),
-                "obsp": {"arr": gen_axis_array(m)},
-                "varp": {"arr": gen_axis_array(n)},
-            }
+            X=sparse.csr_matrix((m, n)),
+            obsp={"arr": gen_axis_array(m)},
+            varp={"arr": gen_axis_array(n)},
         )
         for k, m, n in zip("abc", Ms, Ns)
     }
@@ -1310,8 +1323,7 @@ def test_bool_promotion():
 
 
 def test_concat_names(axis_name):
-    def get_annot(adata):
-        return getattr(adata, axis_name)
+    get_annot = attrgetter(axis_name)
 
     lhs = gen_adata((10, 10))
     rhs = gen_adata((10, 10))
@@ -1322,19 +1334,21 @@ def test_concat_names(axis_name):
     ).index.is_unique
 
 
-def axis_labels(adata, axis):
+def axis_labels(adata: AnnData, axis: Literal[0, 1]) -> pd.Index:
     return (adata.obs_names, adata.var_names)[axis]
 
 
-def expected_shape(a, b, axis, join):
-    labels = partial(axis_labels, axis=abs(axis - 1))
+def expected_shape(
+    a: AnnData, b: AnnData, axis: Literal[0, 1], join: Literal["inner", "outer"]
+) -> tuple[int, int]:
+    labels = partial(axis_labels, axis=1 - axis)
     shape = [None, None]
 
     shape[axis] = a.shape[axis] + b.shape[axis]
     if join == "inner":
-        shape[abs(axis - 1)] = len(labels(a).intersection(labels(b)))
+        shape[1 - axis] = len(labels(a).intersection(labels(b)))
     elif join == "outer":
-        shape[abs(axis - 1)] = len(labels(a).union(labels(b)))
+        shape[1 - axis] = len(labels(a).union(labels(b)))
     else:
         raise ValueError()
 
