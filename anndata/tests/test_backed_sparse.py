@@ -12,7 +12,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata.experimental import read_dispatched
-from anndata.tests.helpers import assert_equal, subset_func
+from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -200,6 +200,34 @@ def test_dataset_append_disk(
 
 
 @pytest.mark.parametrize(
+    ["sparse_format"],
+    [
+        pytest.param(sparse.csr_matrix),
+        pytest.param(sparse.csc_matrix),
+    ],
+)
+def test_indptr_cache(
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+):
+    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    a = sparse_format(sparse.random(10, 10))
+    f = zarr.open_group(path, "a")
+    ad._io.specs.write_elem(f, "X", a)
+    store = AccessTrackingStore(path)
+    store.set_key_trackers(["X/indptr"])
+    f = zarr.open_group(store, "a")
+    a_disk = sparse_dataset(f["X"])
+    a_disk[:1]
+    a_disk[3:5]
+    a_disk[6:7]
+    a_disk[8:9]
+    assert (
+        store.get_access_count("X/indptr") == 2
+    )  # one each for .zarray and actual access
+
+
+@pytest.mark.parametrize(
     ["sparse_format", "a_shape", "b_shape"],
     [
         pytest.param("csr", (100, 100), (100, 200)),
@@ -231,6 +259,21 @@ def test_wrong_shape(
 
     with pytest.raises(AssertionError):
         a_disk.append(b_disk)
+
+
+def test_reset_group(tmp_path: Path):
+    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    base = sparse.random(100, 100, format="csr")
+
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+
+    ad._io.specs.write_elem(f, "base", base)
+    disk_mtx = sparse_dataset(f["base"])
+    with pytest.raises(AttributeError):
+        disk_mtx.group = f
 
 
 def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
