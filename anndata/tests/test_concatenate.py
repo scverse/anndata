@@ -831,8 +831,8 @@ def test_pairwise_concat(axis, axis_name, alt_axis_name, array_type):
         for k, m, n in zip("abc", Ms, Ns)
     }
 
-    w_pairwise = concat(adatas, axis=axis_name, label="orig", pairwise=True)
-    wo_pairwise = concat(adatas, axis=axis_name, label="orig", pairwise=False)
+    w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)
+    wo_pairwise = concat(adatas, axis=axis, label="orig", pairwise=False)
 
     # Check that argument controls whether elements are included
     assert getattr(wo_pairwise, axis_attr) == {}
@@ -867,7 +867,7 @@ def test_pairwise_concat(axis, axis_name, alt_axis_name, array_type):
     )
 
 
-def test_nan_merge(axis_name, axis, alt_axis_name, join_type, array_type):
+def test_nan_merge(axis, alt_axis_name, join_type, array_type):
     mapping_attr = f"{alt_axis_name}m"
     adata_shape = (20, 10)
 
@@ -885,7 +885,7 @@ def test_nan_merge(axis_name, axis, alt_axis_name, join_type, array_type):
     _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)
     orig2 = AnnData(**_data)
-    result = concat([orig1, orig2], axis=axis_name, merge="same")
+    result = concat([orig1, orig2], axis=axis, join=join_type, merge="same")
 
     assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
 
@@ -1142,7 +1142,7 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
     assert_equal(a, b)
 
 
-def test_batch_key(axis, axis_name, array_type):
+def test_batch_key(axis_name):
     """Test that concat only adds a label if the key is provided"""
 
     def get_annot(adata):
@@ -1152,7 +1152,7 @@ def test_batch_key(axis, axis_name, array_type):
     rhs = gen_adata((10, 12), **GEN_ADATA_DASK_ARGS)
 
     # There is probably a prettier way to do this
-    annot = get_annot(concat([lhs, rhs], axis=axis))
+    annot = get_annot(concat([lhs, rhs], axis=axis_name))
     assert (
         list(
             annot.columns.difference(
@@ -1162,7 +1162,7 @@ def test_batch_key(axis, axis_name, array_type):
         == []
     )
 
-    batch_annot = get_annot(concat([lhs, rhs], axis=axis_name, label="batch"))
+    batch_annot = get_annot(concat([lhs, rhs], axis=axis, label="batch"))
     assert list(
         batch_annot.columns.difference(
             get_annot(lhs).columns.union(get_annot(rhs).columns)
