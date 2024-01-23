@@ -994,11 +994,11 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
 def _resolve_axis(
     axis: Literal["obs", 0, "var", 1],
 ) -> tuple[Literal[0], Literal["obs"]] | tuple[Literal[1], Literal["var"]]:
-    if axis is None:
-        raise ValueError("Must pass `axis` != None.")
-    elif axis not in (0, 1, "obs", "var"):
-        raise ValueError(f"`axis` must be either 0, 1, 'obs', or 'var', was {axis}")
-    return (0, "obs") if axis in {0, "obs"} else (1, "var")
+    if axis in {0, "obs"}:
+        return (0, "obs") 
+    if axis in {1, "var"}:
+        return (1, "var")
+    raise ValueError(f"`axis` must be either 0, 1, 'obs', or 'var', was {axis}")
 
 
 def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
