@@ -262,6 +262,8 @@ def get_compressed_vectors_for_slices(
         total = (sel[0] - indptr_sels[i][-1]) + total
         offsets.append(total)
     start_indptr = indptr_sels[0] - offsets[0]
+    if len(slices) < 2:  # there is only one slice so no need to concatenate
+        return data, indices, start_indptr
     end_indptr = np.concatenate(
         [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_sels[1:])]
     )
