@@ -15,7 +15,6 @@ from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
     from pathlib import Path
 
     from numpy.typing import ArrayLike
@@ -87,7 +86,7 @@ def ondisk_equivalent_adata(
 )
 def test_empty_backed_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
-    empty_mask: Iterable[bool],
+    empty_mask,
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
