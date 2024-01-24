@@ -92,7 +92,7 @@ test = [
     "scanpy",
     "httpx", # For data downloading
     "dask[array,distributed]",
-    "awkward>=2.3, !=2.5.2",
+    "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
 ]
