@@ -294,10 +294,12 @@ def subset_by_major_axis_mask(
         return floor((slices[-1].stop - slices[0].start) / len(slices))
 
     # heuristic for whether slicing should be optimized
-    if mean_slice_length(slices) <= 7:
-        return get_compressed_vectors(mtx, np.where(mask)[0])
-    else:
-        return get_compressed_vectors_for_slices(mtx, slices)
+    if len(slices) > 0:
+        if mean_slice_length(slices) <= 7:
+            return get_compressed_vectors(mtx, np.where(mask)[0])
+        else:
+            return get_compressed_vectors_for_slices(mtx, slices)
+    return [], [], [0]
 
 
 def get_format(data: ss.spmatrix) -> str:
@@ -413,11 +415,11 @@ class BaseCompressedSparseDataset(ABC):
         mtx = self._to_backed()
 
         # Handle masked indexing along major axis
-        if self.format == "csr" and np.array(row).dtype == bool and row.sum() != 0:
+        if self.format == "csr" and np.array(row).dtype == bool:
             sub = ss.csr_matrix(
                 subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
             )[:, col]
-        elif self.format == "csc" and np.array(col).dtype == bool and col.sum() != 0:
+        elif self.format == "csc" and np.array(col).dtype == bool:
             sub = ss.csc_matrix(
                 subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
             )[row, :]
