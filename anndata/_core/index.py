@@ -80,11 +80,16 @@ def _normalize_index(
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
         if not isinstance(indexer, (np.ndarray, pd.Index)):
-            dtype = "int"
-            if (
-                all(isinstance(x, str) for x in indexer) and len(indexer) > 0
-            ):  # if not all, but any, then dtype=int will cause an error
-                dtype = "object"
+            # Likely a plain list indexer
+            dtype = int
+            if len(indexer) > 0:
+                if all(isinstance(x, bool) for x in indexer):
+                    # For boolean indexers, indexer length must match axes length,
+                    # but we cannot test here
+                    dtype = bool
+                elif all(isinstance(x, str) for x in indexer):
+                    # if not all, but any, then dtype=int will cause an error
+                    dtype = object
             try:
                 indexer = np.array(indexer, dtype=dtype)
             except ValueError as e:
