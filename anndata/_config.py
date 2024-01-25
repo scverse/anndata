@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import textwrap
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
@@ -25,15 +26,18 @@ class RegisteredOption(NamedTuple):
     default_value: T
     doc: str
     validator: Callable[[T], None] | None
+    type: object
 
 
 _docstring = """
 This manager allows users to customize settings for the anndata package.
+Settings here will generally be for advanced use-cases and should be used with caution.
 
-Parameters
-----------
+The following options are available:
 
 {options_description}
+
+For setting an option please use :func:`~anndata.settings.override` (local) or set the above attributes directly (global) i.e., `anndata.settings.my_setting = foo`.
 """
 
 
@@ -70,13 +74,13 @@ class SettingsManager:
             return "\n".join(
                 [self.describe(k, print_description=print_description) for k in option]
             )
-        doc = self._registered_options[option].doc
+        registered_option = self._registered_options[option]
+        doc = registered_option.doc.rstrip("\n")
         if option in self._deprecated_options:
-            doc += "\n"
             opt = self._deprecated_options[option]
             if opt.message is not None:
-                doc += opt.message + "\n"
-            doc += f"{option} will be removed in {opt.removal_version}"
+                doc += " *" + opt.message
+            doc += f" {option} will be removed in {opt.removal_version}.*"
         if print_description:
             print(doc)
         return doc
@@ -102,9 +106,10 @@ class SettingsManager:
     def register(
         self,
         option: str,
-        default_value: object,
-        doc: str,
+        default_value: T,
+        description: str,
         validator: Callable[[T], None],
+        option_type: object | None = None,
     ) -> None:
         """Register an option so it can be set/described etc. by end-users
 
@@ -114,14 +119,25 @@ class SettingsManager:
             Option to be set.
         default_value
             Default value with which to set the option.
-        doc
-            Docstring for the option
+        description
+            Description to be used in the docstring.
         validator
             A function which asserts that the option's value is valid.
+        option
+            Optional override for the option type to be displayed.  Otherwise `type(default_value)`.
         """
         validator(default_value)
+        option_type_str = (
+            type(default_value).__name__ if option_type is None else str(option_type)
+        )
+        option_type = type(default_value) if option_type is None else option_type
+        doc = f"""\
+        {option}: {option_type_str}
+            {description} Default value of {default_value}.
+        """
+        doc = textwrap.dedent(doc)
         self._registered_options[option] = RegisteredOption(
-            option, default_value, doc, validator
+            option, default_value, doc, validator, option_type
         )
         self._config[option] = default_value
         self._update_override_function_for_new_option(option)
@@ -137,9 +153,9 @@ class SettingsManager:
         option
             The option being registered for which the override function needs updating.
         """
-        default_value = self._registered_options[option].default_value
+        option_type = self._registered_options[option].type
         # Update annotations for type checking.
-        self.override.__annotations__[option] = type(default_value)
+        self.override.__annotations__[option] = option_type
         # __signature__ needs to be updated for tab autocompletion in IPython.
         # See https://github.com/ipython/ipython/issues/11624 for inspiration.
         self.override.__func__.__signature__ = signature(self.override).replace(
@@ -148,7 +164,7 @@ class SettingsManager:
                 *[
                     Parameter(
                         name=k,
-                        annotation=type(default_value),
+                        annotation=option_type,
                         kind=Parameter.KEYWORD_ONLY,
                     )
                     for k in self._registered_options
@@ -271,6 +287,40 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
+
+
+test_option_doc = "doc string!"
+test_option_env_var = "ANNDATA_TEST_VAR"
+test_option = "test_var"
+default_val = False
+test_doc = "My doc string!"
+
+test_option_doc_2 = "doc string 2!"
+test_option_env_var_2 = "ANNDATA_TEST_VAR 2"
+test_option_2 = "test_var_2"
+default_val_2 = False
+test_doc_2 = "My doc string 2!"
+
+
+def validate_bool(val, option):
+    assert val in [True, False], f"{val} not valid boolean for option {option}."
+
+
+settings = SettingsManager()
+settings.register(
+    test_option,
+    default_val,
+    test_doc,
+    lambda v: validate_bool(v, test_option),
+    list[int],
+)
+warning = "This is a deprecation warning!"
+version = "0.1.0"
+settings.deprecate(test_option, version, warning)
+
+settings.register(
+    test_option_2, default_val_2, test_doc_2, lambda v: validate_bool(v, test_option_2)
+)
 
 ##################################################################################
 ##################################################################################

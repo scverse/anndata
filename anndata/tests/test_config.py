@@ -9,53 +9,61 @@ from anndata._config import (
     check_and_get_environ_var,
 )
 
-test_option_doc = "doc string!"
-test_option_env_var = "ANNDATA_TEST_VAR"
-test_option = "test_var"
+option_env_var = "ANNDATA_TEST_VAR"
+option = "test_var"
 default_val = False
-test_doc = f"""\
-{test_option}: bool
-    My doc string!
-"""
+description = "My doc string!"
 
-test_option_doc_2 = "doc string 2!"
-test_option_env_var_2 = "ANNDATA_TEST_VAR 2"
-test_option_2 = "test_var_2"
+option_env_var_2 = "ANNDATA_TEST_VAR 2"
+option_2 = "test_var_2"
 default_val_2 = False
-test_doc_2 = f"""\
-{test_option_2}: bool
-    My doc string 2!
-"""
+description_2 = "My doc string 2!"
+
+option_env_var_3 = "ANNDATA_TEST_VAR 3"
+option_3 = "test_var_3"
+default_val_3 = [1, 2]
+description_3 = "My doc string 3!"
+type_3 = list[int]
 
 
 def validate_bool(val, option):
     assert val in [True, False], f"{val} not valid boolean for option {option}."
 
 
+def validate_int_list(val, option):
+    assert [
+        isinstance(type(e), int) for e in val
+    ], f"{val} not valid int list for option {option}."
+
+
 settings = SettingsManager()
+settings.register(option, default_val, description, lambda v: validate_bool(v, option))
+
 settings.register(
-    test_option, default_val, test_doc, lambda v: validate_bool(v, test_option)
+    option_2, default_val_2, description_2, lambda v: validate_bool(v, option_2)
 )
 
 settings.register(
-    test_option_2, default_val_2, test_doc_2, lambda v: validate_bool(v, test_option_2)
+    option_3,
+    default_val_3,
+    description_3,
+    lambda v: validate_int_list(v, option_3),
+    type_3,
 )
 
 
 def test_check_and_get_environ_var():
     assert not check_and_get_environ_var(
-        test_option_env_var, str(default_val), {"True", "False"}, lambda x: x == "True"
+        option_env_var, str(default_val), {"True", "False"}, lambda x: x == "True"
     )
-    os.environ[test_option_env_var] = "True"
+    os.environ[option_env_var] = "True"
     assert check_and_get_environ_var(
-        test_option_env_var, str(default_val), {"True", "False"}, lambda x: x == "True"
+        option_env_var, str(default_val), {"True", "False"}, lambda x: x == "True"
     )
-    os.environ[test_option_env_var] = "Not a bool!"
-    with pytest.warns(
-        match=f'Value "{os.environ[test_option_env_var]}" is not in allowed'
-    ):
+    os.environ[option_env_var] = "Not a bool!"
+    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
         check_and_get_environ_var(
-            test_option_env_var,
+            option_env_var,
             str(default_val),
             {"True", "False"},
             lambda x: x == "True",
@@ -63,67 +71,67 @@ def test_check_and_get_environ_var():
 
 
 def test_register_option_default():
-    assert getattr(settings, test_option) == default_val
-    assert settings.describe(test_option) == test_doc
+    assert getattr(settings, option) == default_val
+    assert description in settings.describe(option)
 
 
 def test_set_option():
-    setattr(settings, test_option, not default_val)
-    assert getattr(settings, test_option) == (not default_val)
-    settings.reset(test_option)
-    assert getattr(settings, test_option) == default_val
+    setattr(settings, option, not default_val)
+    assert getattr(settings, option) == (not default_val)
+    settings.reset(option)
+    assert getattr(settings, option) == default_val
 
 
 def test_reset_multiple():
-    setattr(settings, test_option, not default_val)
-    setattr(settings, test_option_2, not default_val_2)
-    settings.reset([test_option, test_option_2])
-    assert getattr(settings, test_option) == default_val
-    assert getattr(settings, test_option_2) == default_val_2
+    setattr(settings, option, not default_val)
+    setattr(settings, option_2, not default_val_2)
+    settings.reset([option, option_2])
+    assert getattr(settings, option) == default_val
+    assert getattr(settings, option_2) == default_val_2
 
 
 def test_get_unregistered_option():
     with pytest.raises(AttributeError):
-        setattr(settings, test_option + "_different", default_val)
+        setattr(settings, option + "_different", default_val)
 
 
 def test_override():
-    with settings.override(**{test_option: not default_val}):
-        assert getattr(settings, test_option) == (not default_val)
-    assert getattr(settings, test_option) == default_val
+    with settings.override(**{option: not default_val}):
+        assert getattr(settings, option) == (not default_val)
+    assert getattr(settings, option) == default_val
 
 
 def test_override_multiple():
-    with settings.override(
-        **{test_option: not default_val, test_option_2: not default_val_2}
-    ):
-        assert getattr(settings, test_option) == (not default_val)
-        assert getattr(settings, test_option_2) == (not default_val_2)
-    assert getattr(settings, test_option) == default_val
-    assert getattr(settings, test_option_2) == default_val_2
+    with settings.override(**{option: not default_val, option_2: not default_val_2}):
+        assert getattr(settings, option) == (not default_val)
+        assert getattr(settings, option_2) == (not default_val_2)
+    assert getattr(settings, option) == default_val
+    assert getattr(settings, option_2) == default_val_2
 
 
 def test_deprecation():
     warning = "This is a deprecation warning!"
     version = "0.1.0"
-    settings.deprecate(test_option, version, warning)
-    described_option = settings.describe(test_option, print_description=False).split(
-        "\n"
-    )
+    settings.deprecate(option, version, warning)
+    described_option = settings.describe(option, print_description=False)
     # first line is message, second two from deprecation
-    assert len(described_option) == 5
-    assert described_option[-2] == warning
-    assert described_option[-1] == f"{test_option} will be removed in {version}"
+    default_deprecation_message = f"{option} will be removed in {version}.*"
+    assert described_option.endswith(default_deprecation_message)
+    described_option = (
+        described_option.rstrip().removesuffix(default_deprecation_message).rstrip()
+    )
+    assert described_option.endswith(warning)
     with pytest.raises(DeprecationWarning):
-        getattr(settings, test_option)
+        getattr(settings, option)
 
 
 def test_deprecation_no_message():
     version = "0.1.0"
-    settings.deprecate(test_option, version)
-    described_option = settings.describe(test_option, print_description=False).split(
-        "\n"
-    )
+    settings.deprecate(option, version)
+    described_option = settings.describe(option, print_description=False)
     # first line is message, second from deprecation version
-    assert len(described_option) == 4
-    assert described_option[-1] == f"{test_option} will be removed in {version}"
+    assert described_option.endswith(f"{option} will be removed in {version}.*")
+
+
+def test_option_typing():
+    assert settings._registered_options[option_3].type == type_3
