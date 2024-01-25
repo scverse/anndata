@@ -28,6 +28,7 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
     gen_adata,
+    gen_vstr_recarray,
 )
 from anndata.utils import asarray
 
@@ -1018,6 +1019,15 @@ def gen_something(n):
     return np.random.choice(options)(n)
 
 
+def gen_3d_numeric_array(n):
+    return np.random.randn(n, n, n)
+
+
+def gen_3d_recarray(_):
+    # Ignoring n as it can get quite slow
+    return gen_vstr_recarray(8, 3).reshape(2, 2, 2)
+
+
 def gen_concat_params(unss, compat2result):
     value_generators = [
         lambda x: x,
@@ -1026,6 +1036,8 @@ def gen_concat_params(unss, compat2result):
         gen_list,
         gen_sparse,
         gen_something,
+        gen_3d_numeric_array,
+        gen_3d_recarray,
     ]
     for gen, (mode, result) in product(value_generators, compat2result.items()):
         yield pytest.param(unss, mode, result, gen)
