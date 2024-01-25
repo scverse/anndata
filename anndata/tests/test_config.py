@@ -83,7 +83,7 @@ def test_reset_multiple():
 
 
 def test_get_unregistered_option():
-    with pytest.raises(KeyError):
+    with pytest.raises(AttributeError):
         setattr(settings, test_option + "_different", default_val)
 
 

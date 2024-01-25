@@ -200,13 +200,13 @@ class SettingsManager:
 
         Raises
         ------
-        KeyError
+        AttributeError
             If the option has not been registered, this function will raise an error.
         """
         if hasattr(super(), option):
             super().__setattr__(option, val)
         elif option not in self._registered_options:
-            raise KeyError(
+            raise AttributeError(
                 f"{option} is not an available option for anndata.\
                 Please open an issue if you believe this is a mistake."
             )
