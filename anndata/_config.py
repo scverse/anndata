@@ -157,13 +157,13 @@ class SettingsManager:
         )
         # Update docstring for `SettingsManager.override` as well.
         insert_index = self.override.__doc__.find("\n        Yields")
-        options = "\t" + "\t".join(
+        option_docstring = "\t" + "\t".join(
             self.describe(option, print_description=False).splitlines(True)
         )
         self.override.__func__.__doc__ = (
             self.override.__doc__[:insert_index]
             + "\n"
-            + options
+            + option_docstring
             + self.override.__doc__[insert_index:]
         )
 
