@@ -4,7 +4,6 @@ import os
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
-from functools import wraps
 from inspect import Parameter, signature
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
@@ -26,61 +25,6 @@ class RegisteredOption(NamedTuple):
     default_value: T
     doc: str
     validator: Callable[[T], None] | None
-
-
-def update_override_function(register: Callable):
-    """This function updates the keyword arguments, docstring, and annotations of the `SettingsManager.override` function as the `SettingsManager.register` method is called.
-
-    Parameters
-    ----------
-    register
-        This is a reference to the register function of `SettingsManager`
-
-    Returns
-    -------
-    The wrapped `SettingsManager.register` function.
-    """
-
-    @wraps(register)
-    def _impl(
-        self,
-        option: str,
-        default_value: object,
-        doc: str,
-        validator: Callable[[T], None],
-    ):
-        method_output = register(self, option, default_value, doc, validator)
-        # Update annotations for type checking.
-        self.override.__annotations__[option] = type(default_value)
-        # __signature__ needs to be updated for tab autocompletion in IPython.
-        # See https://github.com/ipython/ipython/issues/11624 for inspiration.
-        self.override.__func__.__signature__ = signature(self.override).replace(
-            parameters=[
-                Parameter(name="self", kind=Parameter.POSITIONAL_ONLY),
-                *[
-                    Parameter(
-                        name=k,
-                        annotation=type(default_value),
-                        kind=Parameter.KEYWORD_ONLY,
-                    )
-                    for k in self._registered_options
-                ],
-            ]
-        )
-        # Update docstring for `SettingsManager.override` as well.
-        insert_index = self.override.__doc__.find("\n        Yields")
-        options = "\t" + "\t".join(
-            self.describe(option, print_description=False).splitlines(True)
-        )
-        self.override.__func__.__doc__ = (
-            self.override.__doc__[:insert_index]
-            + "\n"
-            + options
-            + self.override.__doc__[insert_index:]
-        )
-        return method_output
-
-    return _impl
 
 
 _docstring = """
@@ -155,7 +99,6 @@ class SettingsManager:
             option, message, removal_version
         )
 
-    @update_override_function
     def register(
         self,
         option: str,
@@ -181,6 +124,48 @@ class SettingsManager:
             option, default_value, doc, validator
         )
         self._config[option] = default_value
+        self._update_override_function_for_new_option(option)
+
+    def _update_override_function_for_new_option(
+        self,
+        option: str,
+    ):
+        """This function updates the keyword arguments, docstring, and annotations of the `SettingsManager.override` function as the `SettingsManager.register` method is called.
+
+        Parameters
+        ----------
+        option
+            The option being registered for which the override function needs updating.
+        """
+        default_value = self._registered_options[option].default_value
+        # Update annotations for type checking.
+        self.override.__annotations__[option] = type(default_value)
+        # __signature__ needs to be updated for tab autocompletion in IPython.
+        # See https://github.com/ipython/ipython/issues/11624 for inspiration.
+        self.override.__func__.__signature__ = signature(self.override).replace(
+            parameters=[
+                Parameter(name="self", kind=Parameter.POSITIONAL_ONLY),
+                *[
+                    Parameter(
+                        name=k,
+                        annotation=type(default_value),
+                        kind=Parameter.KEYWORD_ONLY,
+                    )
+                    for k in self._registered_options
+                ],
+            ]
+        )
+        # Update docstring for `SettingsManager.override` as well.
+        insert_index = self.override.__doc__.find("\n        Yields")
+        options = "\t" + "\t".join(
+            self.describe(option, print_description=False).splitlines(True)
+        )
+        self.override.__func__.__doc__ = (
+            self.override.__doc__[:insert_index]
+            + "\n"
+            + options
+            + self.override.__doc__[insert_index:]
+        )
 
     def __setattr__(self, option: str, val: object) -> None:
         """
