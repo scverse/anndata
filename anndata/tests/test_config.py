@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import os
-
 import pytest
 
-from anndata._config import (
-    SettingsManager,
-    check_and_get_environ_var,
-)
+from anndata._config import SettingsManager
 
 option_env_var = "ANNDATA_TEST_VAR"
 option = "test_var"
@@ -50,24 +45,6 @@ settings.register(
     lambda v: validate_int_list(v, option_3),
     type_3,
 )
-
-
-def test_check_and_get_environ_var():
-    assert not check_and_get_environ_var(
-        option_env_var, str(default_val), {"True", "False"}, lambda x: x == "True"
-    )
-    os.environ[option_env_var] = "True"
-    assert check_and_get_environ_var(
-        option_env_var, str(default_val), {"True", "False"}, lambda x: x == "True"
-    )
-    os.environ[option_env_var] = "Not a bool!"
-    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
-        check_and_get_environ_var(
-            option_env_var,
-            str(default_val),
-            {"True", "False"},
-            lambda x: x == "True",
-        )
 
 
 def test_register_option_default():

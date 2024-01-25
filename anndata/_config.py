@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import os
 import textwrap
-import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
 from inspect import Parameter, signature
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable
 
 T = TypeVar("T")
 
@@ -288,72 +286,5 @@ settings = SettingsManager()
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
 
-
-test_option_doc = "doc string!"
-test_option_env_var = "ANNDATA_TEST_VAR"
-test_option = "test_var"
-default_val = False
-test_doc = "My doc string!"
-
-test_option_doc_2 = "doc string 2!"
-test_option_env_var_2 = "ANNDATA_TEST_VAR 2"
-test_option_2 = "test_var_2"
-default_val_2 = False
-test_doc_2 = "My doc string 2!"
-
-
-def validate_bool(val, option):
-    assert val in [True, False], f"{val} not valid boolean for option {option}."
-
-
-settings = SettingsManager()
-settings.register(
-    test_option,
-    default_val,
-    test_doc,
-    lambda v: validate_bool(v, test_option),
-    list[int],
-)
-warning = "This is a deprecation warning!"
-version = "0.1.0"
-settings.deprecate(test_option, version, warning)
-
-settings.register(
-    test_option_2, default_val_2, test_doc_2, lambda v: validate_bool(v, test_option_2)
-)
-
 ##################################################################################
 ##################################################################################
-
-
-def check_and_get_environ_var(
-    key: str,
-    default_value: str,
-    allowed_values: Sequence[str] | None = None,
-    cast: Callable[[Any], T] = lambda x: x,
-) -> T:
-    """Get the environment variable and return it is a (potentially) non-string, usable value.
-
-    Parameters
-    ----------
-    key
-        The environment variable name.
-    default_value
-        The default value for `os.environ.get`.
-    allowed_values
-        Allowable string values., by default None
-    cast
-        Casting from the string to a (potentially different) python object, by default lambdax:x
-
-    Returns
-    -------
-    The casted value.
-    """
-    environ_val = os.environ.get(key, default_value)
-    if allowed_values is not None and environ_val not in allowed_values:
-        warnings.warn(
-            f'Value "{environ_val}" is not in allowed {allowed_values} for environment variable {key}.\
-                      Default {default_value} will be used.'
-        )
-        return cast(default_value)
-    return cast(environ_val)
