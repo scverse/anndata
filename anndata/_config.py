@@ -54,22 +54,18 @@ def update_override_function(register: Callable):
         self.override.__annotations__[option] = type(default_value)
         # __signature__ needs to be updated for tab autocompletion in IPython.
         # See https://github.com/ipython/ipython/issues/11624 for inspiration.
-        setattr(
-            self.override.__func__,  # Attributes of a method are immutable, so need to use __func__.
-            "__signature__",
-            signature(self.override).replace(
-                parameters=[
-                    Parameter(name="self", kind=Parameter.POSITIONAL_ONLY),
-                    *[
-                        Parameter(
-                            name=k,
-                            annotation=type(default_value),
-                            kind=Parameter.KEYWORD_ONLY,
-                        )
-                        for k in self._registered_options
-                    ],
-                ]
-            ),
+        self.override.__func__.__signature__ = signature(self.override).replace(
+            parameters=[
+                Parameter(name="self", kind=Parameter.POSITIONAL_ONLY),
+                *[
+                    Parameter(
+                        name=k,
+                        annotation=type(default_value),
+                        kind=Parameter.KEYWORD_ONLY,
+                    )
+                    for k in self._registered_options
+                ],
+            ]
         )
         # Update docstring for `SettingsManager.override` as well.
         insert_index = self.override.__doc__.find("\n        Yields")
