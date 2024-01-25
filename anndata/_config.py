@@ -28,12 +28,12 @@ class RegisteredOption(NamedTuple):
 
 
 _docstring = """
-        This manager allows users to customize settings for the anndata package.
+This manager allows users to customize settings for the anndata package.
 
-        Parameters
-        ----------
+Parameters
+----------
 
-        {options_description}
+{options_description}
 """
 
 
