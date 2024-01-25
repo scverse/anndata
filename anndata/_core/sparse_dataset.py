@@ -180,6 +180,8 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
 
     def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
         idxs = np.asarray(row)
+        if len(idxs) == 0:
+            return ss.csr_matrix((0, self.shape[1]))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
         return ss.csr_matrix(
@@ -214,6 +216,8 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
 
     def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
         idxs = np.asarray(col)
+        if len(idxs) == 0:
+            return ss.csc_matrix((self.shape[0], 0))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
         return ss.csc_matrix(
@@ -290,10 +294,12 @@ def subset_by_major_axis_mask(
         return floor((slices[-1].stop - slices[0].start) / len(slices))
 
     # heuristic for whether slicing should be optimized
-    if mean_slice_length(slices) <= 7:
-        return get_compressed_vectors(mtx, np.where(mask)[0])
-    else:
-        return get_compressed_vectors_for_slices(mtx, slices)
+    if len(slices) > 0:
+        if mean_slice_length(slices) <= 7:
+            return get_compressed_vectors(mtx, np.where(mask)[0])
+        else:
+            return get_compressed_vectors_for_slices(mtx, slices)
+    return [], [], [0]
 
 
 def get_format(data: ss.spmatrix) -> str:
