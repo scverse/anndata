@@ -150,4 +150,5 @@ Utilities for customizing the IO process:
    :toctree: generated/
 
    settings
+   settings.override
 ```
