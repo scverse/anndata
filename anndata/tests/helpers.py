@@ -273,6 +273,10 @@ def gen_adata(
     return adata
 
 
+def list_bool_subset(index, min_size=2):
+    return array_bool_subset(index, min_size=min_size).tolist()
+
+
 def array_bool_subset(index, min_size=2):
     b = np.zeros(len(index), dtype=bool)
     selected = np.random.choice(
@@ -297,6 +301,10 @@ def spmatrix_bool_subset(index, min_size=2):
     return sparse.csr_matrix(
         array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
     )
+
+
+def list_int_subset(index, min_size=2):
+    return array_subset(index, min_size=min_size).tolist()
 
 
 def array_subset(index, min_size=2):
@@ -339,6 +347,8 @@ def single_subset(index):
         array_subset,
         slice_subset,
         single_subset,
+        list_int_subset,
+        list_bool_subset,
         array_int_subset,
         array_bool_subset,
         matrix_bool_subset,
