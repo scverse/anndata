@@ -38,8 +38,7 @@ def update_override_function(register: Callable):
 
     Returns
     -------
-    Callable
-        The wrapped `SettingsManager.register` function.
+    The wrapped `SettingsManager.register` function.
     """
 
     @wraps(register)
@@ -121,8 +120,7 @@ class SettingsManager:
 
         Returns
         -------
-        str
-            The description.
+        The description.
         """
         if option is None:
             return self.describe(
@@ -228,8 +226,7 @@ class SettingsManager:
 
         Returns
         -------
-        object
-            Value of the option.
+        Value of the option.
         """
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
@@ -319,8 +316,7 @@ def check_and_get_environ_var(
 
     Returns
     -------
-    object
-        The casted value.
+    The casted value.
     """
     environ_val = os.environ.get(key, default_value)
     if allowed_values is not None and environ_val not in allowed_values:
