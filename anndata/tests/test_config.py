@@ -112,3 +112,4 @@ def test_deprecation_no_message():
 
 def test_option_typing():
     assert settings._registered_options[option_3].type == type_3
+    assert str(type_3) in settings.describe(option_3, print_description=False)
