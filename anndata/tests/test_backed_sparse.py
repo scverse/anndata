@@ -27,6 +27,10 @@ def diskfmt(request):
     return request.param
 
 
+M = 50
+N = 50
+
+
 @pytest.fixture(scope="function")
 def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
@@ -37,7 +41,7 @@ def ondisk_equivalent_adata(
 
     write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
-    csr_mem = ad.AnnData(X=sparse.random(50, 50, format="csr", density=0.1))
+    csr_mem = ad.AnnData(X=sparse.random(M, N, format="csr", density=0.1))
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
     dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
@@ -75,6 +79,25 @@ def ondisk_equivalent_adata(
         dense_disk = read_zarr_backed(dense_path)
 
     return csr_mem, csr_disk, csc_disk, dense_disk
+
+
+@pytest.mark.parametrize(
+    "empty_mask", [[], np.zeros(M, dtype=bool)], ids=["empty_list", "empty_bool_mask"]
+)
+def test_empty_backed_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    empty_mask,
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
+    assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
+
+    # The following do not work because of https://github.com/scipy/scipy/issues/19919
+    # Our implementation returns a (0,0) sized matrix but scipy does (1,0).
+
+    # assert_equal(csr_mem.X[empty_mask, empty_mask], csr_disk.X[empty_mask, empty_mask])
+    # assert_equal(csr_mem.X[empty_mask, empty_mask], csc_disk.X[empty_mask, empty_mask])
 
 
 def test_backed_indexing(
