@@ -4,17 +4,14 @@ import pytest
 
 from anndata._config import SettingsManager
 
-option_env_var = "ANNDATA_TEST_VAR"
 option = "test_var"
 default_val = False
 description = "My doc string!"
 
-option_env_var_2 = "ANNDATA_TEST_VAR 2"
 option_2 = "test_var_2"
 default_val_2 = False
 description_2 = "My doc string 2!"
 
-option_env_var_3 = "ANNDATA_TEST_VAR 3"
 option_3 = "test_var_3"
 default_val_3 = [1, 2]
 description_3 = "My doc string 3!"
