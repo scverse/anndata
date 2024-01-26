@@ -30,6 +30,7 @@ from scipy.sparse import issparse
 from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
+from .._config import settings
 from ..compat import (
     CupyArray,
     CupySparseMatrix,
@@ -413,8 +414,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns)
+        if settings.remove_unused_categories:
+            self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+            self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))

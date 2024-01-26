@@ -12,6 +12,7 @@ from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
+from anndata._config import settings
 from anndata.tests.helpers import assert_equal, gen_adata
 
 # some test objects that we use below
@@ -397,6 +398,15 @@ def test_slicing_remove_unused_categories():
     )
     adata._sanitize()
     assert adata[2:4].obs["k"].cat.categories.tolist() == ["b"]
+
+
+def test_slicing_dont_remove_unused_categories():
+    with settings.override(remove_unused_categories=False):
+        adata = AnnData(
+            np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
+        )
+        adata._sanitize()
+        assert adata[2:4].obs["k"].cat.categories.tolist() == ["a", "b"]
 
 
 def test_get_subset_annotation():

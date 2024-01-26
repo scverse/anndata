@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import os
 import textwrap
+import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
 from inspect import Parameter, signature
-from typing import TYPE_CHECKING, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
 T = TypeVar("T")
 
@@ -36,6 +38,7 @@ The following options are available:
 {options_description}
 
 For setting an option please use :func:`~anndata.settings.override` (local) or set the above attributes directly (global) i.e., `anndata.settings.my_setting = foo`.
+For assignment by environment variable, use the variable name in all caps with `ANNDATA_` as the prefix before import of :mod:`anndata`.
 """
 
 
@@ -280,11 +283,75 @@ class SettingsManager:
         )
 
 
+def check_and_get_environ_var(
+    key: str,
+    default_value: str,
+    allowed_values: Sequence[str] | None = None,
+    cast: Callable[[Any], T] = lambda x: x,
+) -> T:
+    """Get the environment variable and return it is a (potentially) non-string, usable value.
+
+    Parameters
+    ----------
+    key
+        The environment variable name.
+    default_value
+        The default value for `os.environ.get`.
+    allowed_values
+        Allowable string values., by default None
+    cast
+        Casting from the string to a (potentially different) python object, by default lambdax:x
+
+    Returns
+    -------
+    The casted value.
+    """
+    environ_val = os.environ.get(key, default_value)
+    if allowed_values is not None and environ_val not in allowed_values:
+        warnings.warn(
+            f'Value "{environ_val}" is not in allowed {allowed_values} for environment variable {key}.\
+                      Default {default_value} will be used.'
+        )
+        return cast(default_value)
+    return cast(environ_val)
+
+
+def check_and_get_bool(option, default_value):
+    return check_and_get_environ_var(
+        "ANNDATA_" + option.upper(),
+        str(int(default_value)),
+        ["0", "1"],
+        lambda x: bool(int(x)),
+    )
+
+
 settings = SettingsManager()
 
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
+
+
+categories_option = "remove_unused_categories"
+categories_default_value = True
+categories_description = (
+    "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
+)
+
+
+def validate_bool(val, option):
+    assert val in [True, False], f"{val} not valid boolean for option {option}."
+
+
+settings.register(
+    categories_option,
+    categories_default_value,
+    categories_description,
+    lambda v: validate_bool(v, categories_option),
+)
+settings.remove_unused_categories = check_and_get_bool(
+    categories_option, categories_default_value
+)
 
 ##################################################################################
 ##################################################################################

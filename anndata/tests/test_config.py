@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
-from anndata._config import SettingsManager
+from anndata._config import (
+    SettingsManager,
+    check_and_get_bool,
+    check_and_get_environ_var,
+)
 
 option = "test_var"
 default_val = False
@@ -110,3 +116,29 @@ def test_deprecation_no_message():
 def test_option_typing():
     assert settings._registered_options[option_3].type == type_3
     assert str(type_3) in settings.describe(option_3, print_description=False)
+
+
+def test_check_and_get_environ_var():
+    option_env_var = "ANNDATA_OPTION"
+    assert hash("foo") == check_and_get_environ_var(
+        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+    )
+    os.environ[option_env_var] = "bar"
+    assert hash("bar") == check_and_get_environ_var(
+        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+    )
+    os.environ[option_env_var] = "Not foo or bar"
+    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+        check_and_get_environ_var(
+            option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+        )
+
+
+def test_check_and_get_bool():
+    option_env_var = "ANNDATA_" + option.upper()
+    assert not check_and_get_bool(option, default_val)
+    os.environ[option_env_var] = "1"
+    assert check_and_get_bool(option, default_val)
+    os.environ[option_env_var] = "Not 0 or 1"
+    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+        check_and_get_bool(option, default_val)
