@@ -132,6 +132,9 @@ def test_check_and_get_environ_var():
         check_and_get_environ_var(
             option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
         )
+    assert hash("Not foo or bar") == check_and_get_environ_var(
+        option_env_var, "foo", cast=lambda x: hash(x)
+    )
 
 
 def test_check_and_get_bool():
