@@ -284,6 +284,10 @@ def array_bool_subset(index, min_size=2):
     return b
 
 
+def list_bool_subset(index, min_size=2):
+    return array_bool_subset(index, min_size=min_size).tolist()
+
+
 def matrix_bool_subset(index, min_size=2):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", PendingDeprecationWarning)
@@ -321,6 +325,10 @@ def array_int_subset(index, min_size=2):
     )
 
 
+def list_int_subset(index, min_size=2):
+    return array_int_subset(index, min_size=min_size).tolist()
+
+
 def slice_subset(index, min_size=2):
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
@@ -340,7 +348,9 @@ def single_subset(index):
         slice_subset,
         single_subset,
         array_int_subset,
+        list_int_subset,
         array_bool_subset,
+        list_bool_subset,
         matrix_bool_subset,
         spmatrix_bool_subset,
     ]
