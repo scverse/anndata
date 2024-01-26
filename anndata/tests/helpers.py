@@ -781,7 +781,7 @@ try:
 except ImportError:
 
     class AccessTrackingStore:
-        def __init__(self) -> None:
+        def __init__(self, *_args, **_kwargs) -> None:
             raise ImportError(
                 "zarr must be imported to create an `AccessTrackingStore` instance."
             )
