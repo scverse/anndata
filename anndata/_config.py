@@ -254,7 +254,7 @@ class SettingsManager:
     @contextmanager
     def override(self, **overrides):
         """
-        Provides local override via keyword arguments.
+        Provides local override via keyword arguments as a context manager.
 
         Parameters
         ----------
