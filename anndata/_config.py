@@ -175,7 +175,7 @@ class SettingsManager:
         # Update docstring for `SettingsManager.override` as well.
         insert_index = self.override.__doc__.find("\n        Yields")
         option_docstring = "\t" + "\t".join(
-            self.describe(option, print_description=False).splitlines(True)
+            self.describe(option, print_description=False).splitlines(keepends=True)
         )
         self.override.__func__.__doc__ = (
             self.override.__doc__[:insert_index]
@@ -237,7 +237,7 @@ class SettingsManager:
         raise AttributeError(f"{option} not found.")
 
     def __dir__(self) -> Iterable[str]:
-        return sorted(super().__dir__() + list(self._config.keys()))
+        return sorted((*dir(super()), *self._config.keys()))
 
     def reset(self, option: Iterable[str] | str) -> None:
         """

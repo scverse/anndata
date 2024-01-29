@@ -1,5 +1,6 @@
 trigger:
   - main
+  - "*.*.x"
 
 variables:
   PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip

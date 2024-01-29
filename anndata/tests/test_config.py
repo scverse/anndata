@@ -62,6 +62,11 @@ def test_set_option():
     assert getattr(settings, option) == default_val
 
 
+def test_dir():
+    assert {option, option_2, option_3} <= set(dir(settings))
+    assert dir(settings) == sorted(dir(settings))
+
+
 def test_reset_multiple():
     setattr(settings, option, not default_val)
     setattr(settings, option_2, not default_val_2)
