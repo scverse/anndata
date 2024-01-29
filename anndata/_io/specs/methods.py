@@ -663,10 +663,23 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
         if reserved in df.columns:
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
     group = f.require_group(key)
+    if not df.columns.is_unique:
+        duplicates = list(df.columns[df.columns.duplicated()])
+        raise ValueError(
+            f"Found repeated column names: {duplicates}. Column names must be unique."
+        )
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
     if df.index.name is not None:
+        if df.index.name in col_names and not pd.Series(
+            df.index, index=df.index
+        ).equals(df[df.index.name]):
+            raise ValueError(
+                f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
+                "whose values are different. This is not supported. Please make sure "
+                "the values are the same, or use a different name."
+            )
         index_name = df.index.name
     else:
         index_name = "_index"
