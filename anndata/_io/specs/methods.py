@@ -647,7 +647,7 @@ def read_awkward(elem, _reader):
     length = _read_attr(elem.attrs, "length")
     container = {k: _reader.read_elem(elem[k]) for k in elem.keys()}
 
-    return ak.from_buffers(form, length, container)
+    return ak.from_buffers(form, int(length), container)
 
 
 ##############

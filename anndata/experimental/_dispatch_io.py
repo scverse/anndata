@@ -4,6 +4,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from anndata._io.specs import IOSpec
     from anndata._types import GroupStorageType, StorageType
 
@@ -55,7 +57,7 @@ def write_dispatched(
         None,
     ],
     *,
-    dataset_kwargs=MappingProxyType({}),
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
     """
     Write elem to store, recursively calling callback at each sub-element.

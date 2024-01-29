@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from typing import TYPE_CHECKING, Callable, Literal
 
 import h5py
@@ -13,7 +12,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata.experimental import read_dispatched
-from anndata.tests.helpers import assert_equal, subset_func
+from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -28,6 +27,10 @@ def diskfmt(request):
     return request.param
 
 
+M = 50
+N = 50
+
+
 @pytest.fixture(scope="function")
 def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
@@ -38,7 +41,7 @@ def ondisk_equivalent_adata(
 
     write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
-    csr_mem = ad.AnnData(X=sparse.random(50, 50, format="csr", density=0.1))
+    csr_mem = ad.AnnData(X=sparse.random(M, N, format="csr", density=0.1))
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
     dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
@@ -64,7 +67,7 @@ def ondisk_equivalent_adata(
                         **{k: read_dispatched(v, callback) for k, v in elem.items()}
                     )
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
-                    return sparse_dataset(elem)._to_backed()
+                    return sparse_dataset(elem)
                 return func(elem)
 
             adata = read_dispatched(f, callback=callback)
@@ -76,6 +79,25 @@ def ondisk_equivalent_adata(
         dense_disk = read_zarr_backed(dense_path)
 
     return csr_mem, csr_disk, csc_disk, dense_disk
+
+
+@pytest.mark.parametrize(
+    "empty_mask", [[], np.zeros(M, dtype=bool)], ids=["empty_list", "empty_bool_mask"]
+)
+def test_empty_backed_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    empty_mask,
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
+    assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
+
+    # The following do not work because of https://github.com/scipy/scipy/issues/19919
+    # Our implementation returns a (0,0) sized matrix but scipy does (1,0).
+
+    # assert_equal(csr_mem.X[empty_mask, empty_mask], csr_disk.X[empty_mask, empty_mask])
+    # assert_equal(csr_mem.X[empty_mask, empty_mask], csc_disk.X[empty_mask, empty_mask])
 
 
 def test_backed_indexing(
@@ -90,9 +112,63 @@ def test_backed_indexing(
 
     assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
     assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
+    assert_equal(csr_mem.X[...], csc_disk.X[...])
     assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
     assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
+
+
+def make_randomized_mask(size: int) -> np.ndarray:
+    randomized_mask = np.zeros(size, dtype=bool)
+    inds = np.random.choice(size, 20, replace=False)
+    inds.sort()
+    for i in range(0, len(inds) - 1, 2):
+        randomized_mask[inds[i] : inds[i + 1]] = True
+    return randomized_mask
+
+
+# non-random indices, with alternating one false and n true
+def make_alternating_mask(size: int) -> np.ndarray:
+    mask_alternating = np.ones(size, dtype=bool)
+    for i in range(0, size, 10):  # 10 is enough to trigger new behavior
+        mask_alternating[i] = False
+    return mask_alternating
+
+
+def make_one_group_mask(size: int) -> np.ndarray:
+    one_group_mask = np.zeros(size, dtype=bool)
+    one_group_mask[size // 4 : size // 2] = True
+    return one_group_mask
+
+
+def make_one_elem_mask(size: int) -> np.ndarray:
+    one_elem_mask = np.zeros(size, dtype=bool)
+    one_elem_mask[size // 4] = True
+    return one_elem_mask
+
+
+# test behavior from https://github.com/scverse/anndata/pull/1233
+@pytest.mark.parametrize(
+    "make_bool_mask",
+    [
+        make_randomized_mask,
+        make_alternating_mask,
+        make_one_group_mask,
+        make_one_elem_mask,
+    ],
+    ids=["randomized", "alternating", "one_group", "one_elem"],
+)
+def test_consecutive_bool(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    make_bool_mask: Callable[[int], np.ndarray],
+):
+    _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    mask = make_bool_mask(csr_disk.shape[0])
+
+    # indexing needs to be on `X` directly to trigger the optimization.
+    # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
+    assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
+    assert_equal(csc_disk.X[:, mask], csc_disk.X[:, np.where(mask)[0]])
 
 
 @pytest.mark.parametrize(
@@ -165,6 +241,34 @@ def test_dataset_append_disk(
 
 
 @pytest.mark.parametrize(
+    ["sparse_format"],
+    [
+        pytest.param(sparse.csr_matrix),
+        pytest.param(sparse.csc_matrix),
+    ],
+)
+def test_indptr_cache(
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+):
+    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    a = sparse_format(sparse.random(10, 10))
+    f = zarr.open_group(path, "a")
+    ad._io.specs.write_elem(f, "X", a)
+    store = AccessTrackingStore(path)
+    store.set_key_trackers(["X/indptr"])
+    f = zarr.open_group(store, "a")
+    a_disk = sparse_dataset(f["X"])
+    a_disk[:1]
+    a_disk[3:5]
+    a_disk[6:7]
+    a_disk[8:9]
+    assert (
+        store.get_access_count("X/indptr") == 2
+    )  # one each for .zarray and actual access
+
+
+@pytest.mark.parametrize(
     ["sparse_format", "a_shape", "b_shape"],
     [
         pytest.param("csr", (100, 100), (100, 200)),
@@ -196,6 +300,21 @@ def test_wrong_shape(
 
     with pytest.raises(AssertionError):
         a_disk.append(b_disk)
+
+
+def test_reset_group(tmp_path: Path):
+    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    base = sparse.random(100, 100, format="csr")
+
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+
+    ad._io.specs.write_elem(f, "base", base)
+    disk_mtx = sparse_dataset(f["base"])
+    with pytest.raises(AttributeError):
+        disk_mtx.group = f
 
 
 def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
@@ -245,17 +364,6 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     assert_equal(adata.X, base)
 
 
-@contextmanager
-def xfail_if_zarr(diskfmt: Literal["h5ad", "zarr"]):
-    if diskfmt == "zarr":
-        with pytest.raises(AssertionError):
-            yield
-        # TODO: Zarr backed mode https://github.com/scverse/anndata/issues/219
-        pytest.xfail("Backed zarr not really supported yet")
-    else:
-        yield
-
-
 def test_backed_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     diskfmt: Literal["h5ad", "zarr"],
@@ -265,6 +373,5 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
     assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
     assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
-    with xfail_if_zarr(diskfmt):
-        assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
-        assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
+    assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
+    assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
