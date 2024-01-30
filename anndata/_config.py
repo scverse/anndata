@@ -23,7 +23,7 @@ class RegisteredOption(NamedTuple):
     option: str
     default_value: T
     doc: str
-    validator: Callable[[T], None] | None
+    validate: Callable[[T], bool] | None
     type: object
 
 
@@ -106,7 +106,7 @@ class SettingsManager:
         option: str,
         default_value: T,
         description: str,
-        validator: Callable[[T], None],
+        validate: Callable[[T], bool],
         option_type: object | None = None,
     ) -> None:
         """Register an option so it can be set/described etc. by end-users
@@ -119,12 +119,16 @@ class SettingsManager:
             Default value with which to set the option.
         description
             Description to be used in the docstring.
-        validator
-            A function which asserts that the option's value is valid.
+        validate
+            A function which returns True if the option's value is valid and otherwise raises an exception.
         option
             Optional override for the option type to be displayed.  Otherwise `type(default_value)`.
         """
-        validator(default_value)
+        try:
+            validate(default_value)
+        except (ValueError, TypeError) as e:
+            e.add_note(f" for option {repr(option)}")
+            raise e
         option_type_str = (
             type(default_value).__name__ if option_type is None else str(option_type)
         )
@@ -135,7 +139,7 @@ class SettingsManager:
         """
         doc = textwrap.dedent(doc)
         self._registered_options[option] = RegisteredOption(
-            option, default_value, doc, validator, option_type
+            option, default_value, doc, validate, option_type
         )
         self._config[option] = default_value
         self._update_override_function_for_new_option(option)
@@ -207,7 +211,7 @@ class SettingsManager:
             )
         else:
             registered_option = self._registered_options[option]
-            registered_option.validator(val)
+            registered_option.validate(val)
             self._config[option] = val
 
     def __getattr__(self, option: str) -> object:
@@ -226,7 +230,7 @@ class SettingsManager:
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
             raise DeprecationWarning(
-                f"{option} will be removed in {deprecated.removal_version}. "
+                f"{repr(option)} will be removed in {deprecated.removal_version}. "
                 + deprecated.message
             )
         if option in self._config:
