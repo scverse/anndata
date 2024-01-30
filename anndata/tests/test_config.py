@@ -50,6 +50,25 @@ def test_register_option_default():
     assert description in settings.describe(option)
 
 
+def test_register_with_env(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env = "test_var_env"
+        default_val_env = False
+        description_env = "My doc string env!"
+        option_env_var = "ANNDATA_" + option_env.upper()
+        mp.setenv(option_env_var, "1")
+
+        settings.register(
+            option_env,
+            default_val_env,
+            description_env,
+            validate_bool,
+            get_from_env=check_and_get_bool,
+        )
+
+        assert settings.test_var_env
+
+
 def test_register_bad_option():
     with pytest.raises(TypeError, match="'foo' is not a valid int list"):
         settings.register(

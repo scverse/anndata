@@ -31,6 +31,48 @@ class RegisteredOption(NamedTuple):
     type: object
 
 
+def check_and_get_environ_var(
+    key: str,
+    default_value: str,
+    allowed_values: Sequence[str] | None = None,
+    cast: Callable[[Any], T] = lambda x: x,
+) -> T:
+    """Get the environment variable and return it is a (potentially) non-string, usable value.
+
+    Parameters
+    ----------
+    key
+        The environment variable name.
+    default_value
+        The default value for `os.environ.get`.
+    allowed_values
+        Allowable string values., by default None
+    cast
+        Casting from the string to a (potentially different) python object, by default lambdax:x
+
+    Returns
+    -------
+    The casted value.
+    """
+    environ_val = os.environ.get(key, default_value)
+    if allowed_values is not None and environ_val not in allowed_values:
+        warnings.warn(
+            f'Value "{environ_val}" is not in allowed {allowed_values} for environment variable {key}.\
+                      Default {default_value} will be used.'
+        )
+        return cast(default_value)
+    return cast(environ_val)
+
+
+def check_and_get_bool(option, default_value):
+    return check_and_get_environ_var(
+        "ANNDATA_" + option.upper(),
+        str(int(default_value)),
+        ["0", "1"],
+        lambda x: bool(int(x)),
+    )
+
+
 _docstring = """
 This manager allows users to customize settings for the anndata package.
 Settings here will generally be for advanced use-cases and should be used with caution.
@@ -114,6 +156,7 @@ class SettingsManager:
         description: str,
         validate: Callable[[T], bool],
         option_type: object | None = None,
+        get_from_env: Callable[[str, T], T] = lambda x, y: y,
     ) -> None:
         """Register an option so it can be set/described etc. by end-users
 
@@ -129,6 +172,9 @@ class SettingsManager:
             A function which returns True if the option's value is valid and otherwise should raise a `ValueError` or `TypeError`.
         option
             Optional override for the option type to be displayed.  Otherwise `type(default_value)`.
+        get_from_env
+            An optional function which takes as arguments the name of the option and a default value and returns the value from the environment variable `ANNDATA_CAPS_OPTION` (or default if not present).
+            Default behavior is to return `default_value` without checking the environment.
         """
         try:
             validate(default_value)
@@ -147,7 +193,7 @@ class SettingsManager:
         self._registered_options[option] = RegisteredOption(
             option, default_value, doc, validate, option_type
         )
-        self._config[option] = default_value
+        self._config[option] = get_from_env(option, default_value)
         self._update_override_function_for_new_option(option)
 
     def _update_override_function_for_new_option(
@@ -291,48 +337,6 @@ class SettingsManager:
         )
 
 
-def check_and_get_environ_var(
-    key: str,
-    default_value: str,
-    allowed_values: Sequence[str] | None = None,
-    cast: Callable[[Any], T] = lambda x: x,
-) -> T:
-    """Get the environment variable and return it is a (potentially) non-string, usable value.
-
-    Parameters
-    ----------
-    key
-        The environment variable name.
-    default_value
-        The default value for `os.environ.get`.
-    allowed_values
-        Allowable string values., by default None
-    cast
-        Casting from the string to a (potentially different) python object, by default lambdax:x
-
-    Returns
-    -------
-    The casted value.
-    """
-    environ_val = os.environ.get(key, default_value)
-    if allowed_values is not None and environ_val not in allowed_values:
-        warnings.warn(
-            f'Value "{environ_val}" is not in allowed {allowed_values} for environment variable {key}.\
-                      Default {default_value} will be used.'
-        )
-        return cast(default_value)
-    return cast(environ_val)
-
-
-def check_and_get_bool(option, default_value):
-    return check_and_get_environ_var(
-        "ANNDATA_" + option.upper(),
-        str(int(default_value)),
-        ["0", "1"],
-        lambda x: bool(int(x)),
-    )
-
-
 settings = SettingsManager()
 
 ##################################################################################
@@ -358,9 +362,7 @@ settings.register(
     categories_default_value,
     categories_description,
     validate_bool,
-)
-settings.remove_unused_categories = check_and_get_bool(
-    categories_option, categories_default_value
+    get_from_env=check_and_get_bool,
 )
 
 ##################################################################################
