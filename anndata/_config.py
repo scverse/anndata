@@ -238,7 +238,7 @@ class SettingsManager:
 
     def reset(self, option: Iterable[str] | str) -> None:
         """
-        Resets option(s) to its (their) default value.
+        Resets option(s) to its (their) default value(s).
 
         Parameters
         ----------
