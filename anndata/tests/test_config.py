@@ -112,11 +112,11 @@ def test_deprecation():
         described_option.rstrip().removesuffix(default_deprecation_message).rstrip()
     )
     assert described_option.endswith(warning)
-    with pytest.raises(
+    with pytest.warns(
         DeprecationWarning,
         match="'test_var' will be removed in 0.1.0. This is a deprecation warning!",
     ):
-        getattr(settings, option)
+        assert getattr(settings, option) == default_val
 
 
 def test_deprecation_no_message():

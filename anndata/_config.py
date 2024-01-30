@@ -214,10 +214,9 @@ class SettingsManager:
                 f"{option} is not an available option for anndata.\
                 Please open an issue if you believe this is a mistake."
             )
-        else:
-            registered_option = self._registered_options[option]
-            registered_option.validate(val)
-            self._config[option] = val
+        registered_option = self._registered_options[option]
+        registered_option.validate(val)
+        self._config[option] = val
 
     def __getattr__(self, option: str) -> object:
         """
@@ -234,9 +233,11 @@ class SettingsManager:
         """
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
-            raise DeprecationWarning(
-                f"{repr(option)} will be removed in {deprecated.removal_version}. "
-                + deprecated.message
+            warnings.warn(
+                DeprecationWarning(
+                    f"{repr(option)} will be removed in {deprecated.removal_version}. "
+                    + deprecated.message
+                )
             )
         if option in self._config:
             return self._config[option]
