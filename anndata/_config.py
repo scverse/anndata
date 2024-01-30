@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from inspect import Parameter, signature
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
+from anndata.compat.exceptiongroups import add_note
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
@@ -130,7 +132,7 @@ class SettingsManager:
         try:
             validate(default_value)
         except (ValueError, TypeError) as e:
-            e.add_note(f"for option {repr(option)}")
+            add_note(e, f"for option {repr(option)}")
             raise e
         option_type_str = (
             type(default_value).__name__ if option_type is None else str(option_type)
