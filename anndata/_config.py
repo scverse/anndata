@@ -211,10 +211,9 @@ class SettingsManager:
                 f"{option} is not an available option for anndata.\
                 Please open an issue if you believe this is a mistake."
             )
-        else:
-            registered_option = self._registered_options[option]
-            registered_option.validate(val)
-            self._config[option] = val
+        registered_option = self._registered_options[option]
+        registered_option.validate(val)
+        self._config[option] = val
 
     def __getattr__(self, option: str) -> object:
         """
