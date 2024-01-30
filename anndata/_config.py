@@ -12,6 +12,7 @@ from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from enum import Enum
 
 T = TypeVar("T")
 
@@ -35,7 +36,7 @@ def check_and_get_environ_var(
     key: str,
     default_value: str,
     allowed_values: Sequence[str] | None = None,
-    cast: Callable[[Any], T] = lambda x: x,
+    cast: Callable[[Any], T] | type[Enum] = lambda x: x,
 ) -> T:
     """Get the environment variable and return it is a (potentially) non-string, usable value.
 
