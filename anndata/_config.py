@@ -120,7 +120,7 @@ class SettingsManager:
         description
             Description to be used in the docstring.
         validate
-            A function which returns True if the option's value is valid and otherwise raises an exception.
+            A function which returns True if the option's value is valid and otherwise should raise a `ValueError` or `TypeError`.
         option
             Optional override for the option type to be displayed.  Otherwise `type(default_value)`.
         """
