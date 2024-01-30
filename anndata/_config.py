@@ -127,7 +127,7 @@ class SettingsManager:
         try:
             validate(default_value)
         except (ValueError, TypeError) as e:
-            e.add_note(f" for option {repr(option)}")
+            e.add_note(f"for option {repr(option)}")
             raise e
         option_type_str = (
             type(default_value).__name__ if option_type is None else str(option_type)
