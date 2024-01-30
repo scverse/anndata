@@ -24,28 +24,28 @@ description_3 = "My doc string 3!"
 type_3 = list[int]
 
 
-def validate_bool(val, option):
-    assert val in [True, False], f"{val} not valid boolean for option {option}."
+def validate_bool(val) -> bool:
+    if not isinstance(val, bool):
+        raise TypeError(f"{val} not valid boolean")
+    return True
 
 
-def validate_int_list(val, option):
-    assert [
-        isinstance(type(e), int) for e in val
-    ], f"{val} not valid int list for option {option}."
+def validate_int_list(val) -> bool:
+    if not isinstance(val, list) or not [isinstance(type(e), int) for e in val]:
+        raise TypeError(f"{repr(val)} is not a valid int list")
+    return True
 
 
 settings = SettingsManager()
-settings.register(option, default_val, description, lambda v: validate_bool(v, option))
+settings.register(option, default_val, description, validate_bool)
 
-settings.register(
-    option_2, default_val_2, description_2, lambda v: validate_bool(v, option_2)
-)
+settings.register(option_2, default_val_2, description_2, validate_bool)
 
 settings.register(
     option_3,
     default_val_3,
     description_3,
-    lambda v: validate_int_list(v, option_3),
+    validate_int_list,
     type_3,
 )
 
@@ -53,6 +53,17 @@ settings.register(
 def test_register_option_default():
     assert getattr(settings, option) == default_val
     assert description in settings.describe(option)
+
+
+def test_register_bad_option():
+    with pytest.raises(TypeError, match="'foo' is not a valid int list"):
+        settings.register(
+            "test_var_4",
+            "foo",  # should be a list of ints
+            description_3,
+            validate_int_list,
+            type_3,
+        )
 
 
 def test_set_option():
@@ -106,7 +117,10 @@ def test_deprecation():
         described_option.rstrip().removesuffix(default_deprecation_message).rstrip()
     )
     assert described_option.endswith(warning)
-    with pytest.raises(DeprecationWarning):
+    with pytest.raises(
+        DeprecationWarning,
+        match="'test_var' will be removed in 0.1.0. This is a deprecation warning!",
+    ):
         getattr(settings, option)
 
 
