@@ -343,15 +343,17 @@ categories_description = (
 )
 
 
-def validate_bool(val, option):
-    assert val in [True, False], f"{val} not valid boolean for option {option}."
+def validate_bool(val) -> bool:
+    if not isinstance(val, bool):
+        raise TypeError(f"{val} not valid boolean")
+    return True
 
 
 settings.register(
     categories_option,
     categories_default_value,
     categories_description,
-    lambda v: validate_bool(v, categories_option),
+    validate_bool,
 )
 settings.remove_unused_categories = check_and_get_bool(
     categories_option, categories_default_value

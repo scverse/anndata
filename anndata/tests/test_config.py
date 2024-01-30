@@ -8,6 +8,7 @@ from anndata._config import (
     SettingsManager,
     check_and_get_bool,
     check_and_get_environ_var,
+    validate_bool,
 )
 
 option = "test_var"
@@ -22,12 +23,6 @@ option_3 = "test_var_3"
 default_val_3 = [1, 2]
 description_3 = "My doc string 3!"
 type_3 = list[int]
-
-
-def validate_bool(val) -> bool:
-    if not isinstance(val, bool):
-        raise TypeError(f"{val} not valid boolean")
-    return True
 
 
 def validate_int_list(val) -> bool:
