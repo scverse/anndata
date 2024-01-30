@@ -41,6 +41,7 @@ The following options are available:
 
 For setting an option please use :func:`~anndata.settings.override` (local) or set the above attributes directly (global) i.e., `anndata.settings.my_setting = foo`.
 For assignment by environment variable, use the variable name in all caps with `ANNDATA_` as the prefix before import of :mod:`anndata`.
+For boolean environment variable setting, use 1 for `True` and 0 for `False`.
 """
 
 
