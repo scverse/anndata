@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
 from inspect import Parameter, signature
@@ -230,9 +231,11 @@ class SettingsManager:
         """
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
-            raise DeprecationWarning(
-                f"{repr(option)} will be removed in {deprecated.removal_version}. "
-                + deprecated.message
+            warnings.warn(
+                DeprecationWarning(
+                    f"{repr(option)} will be removed in {deprecated.removal_version}. "
+                    + deprecated.message
+                )
             )
         if option in self._config:
             return self._config[option]
