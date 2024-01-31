@@ -17,7 +17,6 @@ import warnings
 from abc import ABC
 from functools import cached_property
 from itertools import accumulate, chain
-
 from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple
