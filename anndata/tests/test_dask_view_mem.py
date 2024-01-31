@@ -135,7 +135,11 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
     subset = adata[:N, :N]
     assert subset.is_view
     m = subset.X
-    m[0, 0] = 100
+    with pytest.warns(
+        ad.ImplicitModificationWarning,
+        match="Trying to modify attribute `.X` of view, initializing view as actual.",
+    ):
+        m[0, 0] = 100
 
 
 # Normally should expect something around 90 kbs

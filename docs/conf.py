@@ -15,9 +15,6 @@ sys.path[:0] = [str(HERE / "extensions")]
 
 # -- General configuration ------------------------------------------------
 
-
-needs_sphinx = "1.7"  # autosummary bugfix
-
 # General information
 project = "anndata"
 author = f"{project} developers"
@@ -52,6 +49,7 @@ extensions = [
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
     "sphinx_design",
+    "sphinx_search.extension",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
@@ -126,7 +124,8 @@ ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "sphinx_book_theme"
+# The theme is sphinx-book-theme, with patches for readthedocs-sphinx-search
+html_theme = "scanpydoc"
 html_theme_options = dict(
     use_repository_button=True,
     repository_url="https://github.com/scverse/anndata",

@@ -277,7 +277,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
         store["obs"].attrs["encoding-type"] = "invalid"
     with pytest_8_raises(
         IORegistryError,
-        match=r"raised while reading key '/obs'",
+        match=r"raised while reading key 'obs'.*from /$",
     ) as exc_info:
         read(path)
     assert re.search(
@@ -526,15 +526,9 @@ def test_write_csv_view(typ, tmp_path):
             marks=pytest.mark.xfail(reason="Loom can’t handle 0×0 matrices"),
         ),
         pytest.param(ad.read_zarr, ad._io.write_zarr, "test_empty.zarr"),
-        pytest.param(
-            ad.read_zarr,
-            ad._io.write_zarr,
-            "test_empty.zip",
-            marks=pytest.mark.xfail(reason="Zarr zip storage doesn’t seem to work…"),
-        ),
     ],
 )
-def test_readwrite_hdf5_empty(read, write, name, tmp_path):
+def test_readwrite_empty(read, write, name, tmp_path):
     adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)

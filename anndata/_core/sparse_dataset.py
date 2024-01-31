@@ -15,7 +15,10 @@ from __future__ import annotations
 import collections.abc as cabc
 import warnings
 from abc import ABC
+from functools import cached_property
 from itertools import accumulate, chain
+
+from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
@@ -38,6 +41,8 @@ from .index import Index, _subset, unpack_index
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+
+    from .._types import GroupStorageType
 
 
 class BackedFormat(NamedTuple):
@@ -67,8 +72,7 @@ class BackedSparseMatrix(_cs_matrix):
                     chunk_store=self.data.chunk_store,  # chunk_store is needed, not clear why
                 )[Path(self.data.path).parent]
             ).to_memory()
-        else:
-            return super().copy()
+        return super().copy()
 
     def _set_many(self, i: Iterable[int], j: Iterable[int], x):
         """\
@@ -137,7 +141,7 @@ class BackedSparseMatrix(_cs_matrix):
     def _get_contiguous_compressed_slice(
         self, s: slice
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        new_indptr = self.indptr[s.start : s.stop + 1]
+        new_indptr = self.indptr[s.start : s.stop + 1].copy()
 
         start = new_indptr[0]
         stop = new_indptr[-1]
@@ -164,7 +168,6 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
         )
-
         if out_shape[0] == 1:
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
         elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
@@ -177,6 +180,8 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
 
     def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
         idxs = np.asarray(row)
+        if len(idxs) == 0:
+            return ss.csr_matrix((0, self.shape[1]))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
         return ss.csr_matrix(
@@ -211,6 +216,8 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
 
     def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
         idxs = np.asarray(col)
+        if len(idxs) == 0:
+            return ss.csc_matrix((self.shape[0], 0))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
         return ss.csc_matrix(
@@ -246,6 +253,28 @@ def get_compressed_vectors(
     return data, indices, indptr
 
 
+def get_compressed_vectors_for_slices(
+    x: BackedSparseMatrix, slices: Iterable[slice]
+) -> tuple[Sequence, Sequence, Sequence]:
+    indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_sels])
+    indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_sels])
+    # Need to track the size of the gaps in the slices to each indptr subselection
+    total = indptr_sels[0][0]
+    offsets = [total]
+    for i, sel in enumerate(indptr_sels[1:]):
+        total = (sel[0] - indptr_sels[i][-1]) + total
+        offsets.append(total)
+    start_indptr = indptr_sels[0] - offsets[0]
+    if len(slices) < 2:  # there is only one slice so no need to concatenate
+        return data, indices, start_indptr
+    end_indptr = np.concatenate(
+        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_sels[1:])]
+    )
+    indptr = np.concatenate([start_indptr, end_indptr])
+    return data, indices, indptr
+
+
 def get_compressed_vector(
     x: BackedSparseMatrix, idx: int
 ) -> tuple[Sequence, Sequence, Sequence]:
@@ -254,6 +283,23 @@ def get_compressed_vector(
     indices = x.indices[s]
     indptr = [0, len(data)]
     return data, indices, indptr
+
+
+def subset_by_major_axis_mask(
+    mtx: ss.spmatrix, mask: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    slices = np.ma.extras._ezclump(mask)
+
+    def mean_slice_length(slices):
+        return floor((slices[-1].stop - slices[0].start) / len(slices))
+
+    # heuristic for whether slicing should be optimized
+    if len(slices) > 0:
+        if mean_slice_length(slices) <= 7:
+            return get_compressed_vectors(mtx, np.where(mask)[0])
+        else:
+            return get_compressed_vectors_for_slices(mtx, slices)
+    return [], [], [0]
 
 
 def get_format(data: ss.spmatrix) -> str:
@@ -290,12 +336,25 @@ def _get_group_format(group) -> str:
 class BaseCompressedSparseDataset(ABC):
     """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
 
-    def __init__(self, group: h5py.Group | ZarrGroup):
+    _group: GroupStorageType
+
+    def __init__(self, group: GroupStorageType):
         type(self)._check_group_format(group)
-        self.group = group
+        self._group = group
 
     shape: tuple[int, int]
     """Shape of the matrix."""
+
+    @property
+    def group(self):
+        """The group underlying the backed matrix."""
+        return self._group
+
+    @group.setter
+    def group(self, val):
+        raise AttributeError(
+            f"Do not reset group on a {type(self)} with {val}.  Instead use `sparse_dataset` to make a new class."
+        )
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
@@ -351,9 +410,22 @@ class BaseCompressedSparseDataset(ABC):
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
     def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
-        row, col = self._normalize_index(index)
+        indices = self._normalize_index(index)
+        row, col = indices
         mtx = self._to_backed()
-        sub = mtx[row, col]
+
+        # Handle masked indexing along major axis
+        if self.format == "csr" and np.array(row).dtype == bool:
+            sub = ss.csr_matrix(
+                subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
+            )[:, col]
+        elif self.format == "csc" and np.array(col).dtype == bool:
+            sub = ss.csc_matrix(
+                subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
+            )[row, :]
+        else:
+            sub = mtx[row, col]
+
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         if isinstance(sub, BackedSparseMatrix):
@@ -364,7 +436,7 @@ class BaseCompressedSparseDataset(ABC):
     def _normalize_index(
         self, index: Index | tuple[()]
     ) -> tuple[np.ndarray, np.ndarray]:
-        if index == ():
+        if isinstance(index, tuple) and not len(index):
             index = slice(None)
         row, col = unpack_index(index)
         if all(isinstance(x, cabc.Iterable) for x in (row, col)):
@@ -441,12 +513,17 @@ class BaseCompressedSparseDataset(ABC):
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
 
+    @cached_property
+    def indptr(self) -> np.ndarray:
+        arr = self.group["indptr"][...]
+        return arr
+
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.group["indptr"][:]
+        mtx.indptr = self.indptr
         return mtx
 
     def to_memory(self) -> ss.spmatrix:
@@ -454,7 +531,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
-        mtx.indptr = self.group["indptr"][...]
+        mtx.indptr = self.indptr
         return mtx
 
 
@@ -482,7 +559,7 @@ class CSCDataset(BaseCompressedSparseDataset):
     format = "csc"
 
 
-def sparse_dataset(group: ZarrGroup | H5Group) -> CSRDataset | CSCDataset:
+def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
@@ -499,12 +576,12 @@ def sparse_dataset(group: ZarrGroup | H5Group) -> CSRDataset | CSCDataset:
 
     >>> import zarr
     >>> from anndata.experimental import sparse_dataset
-    >>> group = zarr.open_group('./my_test_store.zarr')
-    >>> group['data'] = [10, 20, 30, 40, 50, 60, 70, 80]
-    >>> group['indices'] = [0, 1, 1, 3, 2, 3, 4, 5]
-    >>> group['indptr'] = [0, 2, 4, 7, 8]
-    >>> group.attrs['shape'] = (4, 6)
-    >>> group.attrs['encoding-type'] = 'csr_matrix'
+    >>> group = zarr.open_group("./my_test_store.zarr")
+    >>> group["data"] = [10, 20, 30, 40, 50, 60, 70, 80]
+    >>> group["indices"] = [0, 1, 1, 3, 2, 3, 4, 5]
+    >>> group["indptr"] = [0, 2, 4, 7, 8]
+    >>> group.attrs["shape"] = (4, 6)
+    >>> group.attrs["encoding-type"] = "csr_matrix"
     >>> sparse_dataset(group)
     CSRDataset: backend zarr, shape (4, 6), data_dtype int64
     """
