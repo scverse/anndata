@@ -408,18 +408,15 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
 
 
 @pytest.mark.parametrize(
-    ("axis_val", "shape"),
-    [
-        pytest.param("obs", (20, 10), id="obs"),
-        pytest.param(0, (20, 10), id="0"),
-        pytest.param("var", (10, 20), id="var"),
-        pytest.param(1, (10, 20), id="1"),
-    ],
+    ("axis", "axis_name"),
+    [("obs", 0), ("var", 1)],
 )
-def test_concat_axis_param(axis_val, shape):
+def test_concat_axis_param(axis, axis_name):
     a, b = gen_adata((10, 10)), gen_adata((10, 10))
-    c = concat([a, b], axis=axis_val)
-    assert c.shape == shape
+    assert_equal(
+        concat([a, b], axis=axis),
+        concat([a, b], axis=axis_name)
+    )
 
 
 def test_concat_annot_join(obsm_adatas, join_type):
