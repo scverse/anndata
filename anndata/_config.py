@@ -5,6 +5,7 @@ import textwrap
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
+from enum import Enum
 from inspect import Parameter, signature
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
@@ -12,7 +13,6 @@ from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-    from enum import Enum
 
 T = TypeVar("T")
 
@@ -55,14 +55,21 @@ def check_and_get_environ_var(
     -------
     The casted value.
     """
-    environ_val = os.environ.get(key, default_value)
-    if allowed_values is not None and environ_val not in allowed_values:
+    environ_value_or_default_value = os.environ.get(key, default_value)
+    if (
+        allowed_values is not None
+        and environ_value_or_default_value not in allowed_values
+    ):
         warnings.warn(
-            f'Value "{environ_val}" is not in allowed {allowed_values} for environment variable {key}.\
+            f'Value "{environ_value_or_default_value}" is not in allowed {allowed_values} for environment variable {key}.\
                       Default {default_value} will be used.'
         )
-        return cast(default_value)
-    return cast(environ_val)
+        environ_value_or_default_value = default_value
+    return (
+        cast(environ_value_or_default_value)
+        if not isinstance(cast, type(Enum))
+        else cast[environ_value_or_default_value]
+    )
 
 
 def check_and_get_bool(option, default_value):

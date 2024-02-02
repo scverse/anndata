@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from enum import Enum
 
 import pytest
 
@@ -64,6 +65,34 @@ def test_register_with_env(monkeypatch):
             description_env,
             validate_bool,
             get_from_env=check_and_get_bool,
+        )
+
+        assert settings.test_var_env
+
+
+def test_register_with_env_enum(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env = "test_var_env"
+        default_val_env = False
+        description_env = "My doc string env!"
+        option_env_var = "ANNDATA_" + option_env.upper()
+        mp.setenv(option_env_var, "b")
+
+        class TestEnum(Enum):
+            a = False
+            b = True
+
+        def check_and_get_bool_enum(option, default_value):
+            return check_and_get_environ_var(
+                "ANNDATA_" + option.upper(), "a", cast=TestEnum
+            ).value
+
+        settings.register(
+            option_env,
+            default_val_env,
+            description_env,
+            validate_bool,
+            get_from_env=check_and_get_bool_enum,
         )
 
         assert settings.test_var_env
@@ -184,3 +213,15 @@ def test_check_and_get_bool(monkeypatch):
             match=f'Value "{os.environ[option_env_var]}" is not in allowed'
         ):
             check_and_get_bool(option, default_val)
+
+
+def test_check_and_get_bool_enum(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env_var = "ANNDATA_" + option.upper()
+        mp.setenv(option_env_var, "b")
+
+        class TestEnum(Enum):
+            a = False
+            b = True
+
+        assert check_and_get_environ_var(option_env_var, "a", cast=TestEnum).value
