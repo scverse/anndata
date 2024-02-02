@@ -413,10 +413,7 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
 )
 def test_concat_axis_param(axis, axis_name):
     a, b = gen_adata((10, 10)), gen_adata((10, 10))
-    assert_equal(
-        concat([a, b], axis=axis),
-        concat([a, b], axis=axis_name)
-    )
+    assert_equal(concat([a, b], axis=axis), concat([a, b], axis=axis_name))
 
 
 def test_concat_annot_join(obsm_adatas, join_type):
