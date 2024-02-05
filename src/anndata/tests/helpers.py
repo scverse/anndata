@@ -413,7 +413,11 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
         and len(a.dtype) > 1
         and len(b.dtype) > 0
     ):
-        assert_equal(pd.DataFrame(a), pd.DataFrame(b), exact, elem_name)
+        # Reshaping to allow >2d arrays
+        assert a.shape == b.shape, format_msg(elem_name)
+        assert_equal(
+            pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)), exact, elem_name
+        )
     else:
         assert np.all(a == b), format_msg(elem_name)
 

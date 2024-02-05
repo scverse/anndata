@@ -141,7 +141,13 @@ def equal_dask_array(a, b) -> bool:
 
 @equal.register(np.ndarray)
 def equal_array(a, b) -> bool:
-    return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
+    # Reshaping allows us to compare inputs with >2 dimensions
+    # We cast to pandas since it will still work with non-numeric types
+    b = asarray(b)
+    if a.shape != b.shape:
+        return False
+
+    return equal(pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)))
 
 
 @equal.register(CupyArray)
