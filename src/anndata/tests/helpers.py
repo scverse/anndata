@@ -12,7 +12,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-import zarr
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -284,6 +283,10 @@ def array_bool_subset(index, min_size=2):
     return b
 
 
+def list_bool_subset(index, min_size=2):
+    return array_bool_subset(index, min_size=min_size).tolist()
+
+
 def matrix_bool_subset(index, min_size=2):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", PendingDeprecationWarning)
@@ -321,6 +324,10 @@ def array_int_subset(index, min_size=2):
     )
 
 
+def list_int_subset(index, min_size=2):
+    return array_int_subset(index, min_size=min_size).tolist()
+
+
 def slice_subset(index, min_size=2):
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
@@ -340,7 +347,9 @@ def single_subset(index):
         slice_subset,
         single_subset,
         array_int_subset,
+        list_int_subset,
         array_bool_subset,
+        list_bool_subset,
         matrix_bool_subset,
         spmatrix_bool_subset,
     ]
@@ -749,21 +758,30 @@ CUPY_MATRIX_PARAMS = [
     ),
 ]
 
+try:
+    import zarr
 
-class AccessTrackingStore(zarr.DirectoryStore):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._access_count = {}
+    class AccessTrackingStore(zarr.DirectoryStore):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._access_count = {}
 
-    def __getitem__(self, key):
-        for tracked in self._access_count:
-            if tracked in key:
-                self._access_count[tracked] += 1
-        return super().__getitem__(key)
+        def __getitem__(self, key):
+            for tracked in self._access_count:
+                if tracked in key:
+                    self._access_count[tracked] += 1
+            return super().__getitem__(key)
 
-    def get_access_count(self, key):
-        return self._access_count[key]
+        def get_access_count(self, key):
+            return self._access_count[key]
 
-    def set_key_trackers(self, keys_to_track):
-        for k in keys_to_track:
-            self._access_count[k] = 0
+        def set_key_trackers(self, keys_to_track):
+            for k in keys_to_track:
+                self._access_count[k] = 0
+except ImportError:
+
+    class AccessTrackingStore:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise ImportError(
+                "zarr must be imported to create an `AccessTrackingStore` instance."
+            )

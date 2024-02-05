@@ -42,7 +42,7 @@ def _normalize_index(
     | np.integer
     | int
     | str
-    | Sequence[int | np.integer]
+    | Sequence[bool | int | np.integer]
     | np.ndarray
     | pd.Index,
     index: pd.Index,
@@ -80,18 +80,9 @@ def _normalize_index(
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
         if not isinstance(indexer, (np.ndarray, pd.Index)):
-            dtype = "int"
-            if (
-                all(isinstance(x, str) for x in indexer) and len(indexer) > 0
-            ):  # if not all, but any, then dtype=int will cause an error
-                dtype = "object"
-            try:
-                indexer = np.array(indexer, dtype=dtype)
-            except ValueError as e:
-                if str(e).startswith("invalid literal for"):
-                    msg = "Mixed type list indexers not supported."
-                    raise ValueError(msg) from e
-                raise e
+            indexer = np.array(indexer)
+            if len(indexer) == 0:
+                indexer = indexer.astype(int)
         if issubclass(indexer.dtype.type, (np.integer, np.floating)):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
