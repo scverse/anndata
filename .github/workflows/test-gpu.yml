@@ -35,9 +35,14 @@ jobs:
     name: GPU Tests
     needs: check
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
+    # Setting a timeout of 30 minutes, as the AWS costs money
+    # At time of writing, a typical run takes about 5 minutes
+    timeout-minutes: 30
+
     defaults:
       run:
         shell: bash -el {0}
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -57,8 +62,10 @@ jobs:
       - name: Install AnnData
         run: pip install .[dev,test,gpu]
 
-      - name: Mamba list
-        run: micromamba list
+      - name: Env list
+        run: |
+          micromamba list
+          pip list
 
       - name: Run test
         run: pytest -m gpu --cov --cov-report=xml --cov-context=test -n 4
