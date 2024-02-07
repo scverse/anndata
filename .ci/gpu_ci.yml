@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.12
-  - cuda-version=11.8
+  - cuda-version=12.3
   - cupy
   - numba
   - pytest
