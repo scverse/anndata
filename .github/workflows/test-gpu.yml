@@ -49,14 +49,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           micromamba-version: "1.3.1-0"
-          environment-name: anndata-gpu-ci
-          create-args: >-
-            python=3.11
-            cupy
-            numba
-            pytest
-            pytest-cov
-            pytest-xdist
+          environment-file: ci/gpu_ci.yml
           init-shell: >-
             bash
           generate-run-shell: false
