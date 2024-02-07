@@ -69,8 +69,10 @@ jobs:
       - name: Install AnnData
         run: pip install .[dev,test,gpu]
 
-      - name: Mamba list
-        run: micromamba list
+      - name: Env list
+        run: |
+          micromamba list
+          pip list
 
       - name: Run test
         run: pytest -m gpu --cov --cov-report=xml --cov-context=test -n 4
