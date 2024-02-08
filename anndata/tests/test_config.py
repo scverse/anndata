@@ -5,7 +5,7 @@ from enum import Enum
 
 import pytest
 
-from anndata._config import (
+from anndata._settings import (
     SettingsManager,
     check_and_get_bool,
     check_and_get_environ_var,

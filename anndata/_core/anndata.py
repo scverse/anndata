@@ -30,7 +30,7 @@ from scipy.sparse import issparse
 from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
-from .._config import settings
+from .._settings import settings
 from ..compat import (
     CupyArray,
     CupySparseMatrix,
