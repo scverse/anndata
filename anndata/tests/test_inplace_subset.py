@@ -68,6 +68,21 @@ def test_inplace_subset_obs(matrix_type, subset_func):
         assert_equal(from_view.layers[k], modified.layers[k], exact=True)
 
 
+def test_subset_different_types(matrix_type):
+    orig = gen_adata((30, 30), X_type=matrix_type)
+    boolean_array_mask = np.random.randint(0, 2, 30).astype("bool")
+    boolean_list_mask = boolean_array_mask.tolist()
+    integer_array_mask = np.where(boolean_array_mask)[0]
+    integer_list_mask = integer_array_mask.tolist()
+
+    assert_equal(orig[integer_array_mask, :], orig[boolean_array_mask, :])
+    assert_equal(orig[integer_list_mask, :], orig[boolean_list_mask, :])
+    assert_equal(orig[integer_list_mask, :], orig[integer_array_mask, :])
+    assert_equal(orig[:, integer_array_mask], orig[:, boolean_array_mask])
+    assert_equal(orig[:, integer_list_mask], orig[:, boolean_list_mask])
+    assert_equal(orig[:, integer_list_mask], orig[:, integer_array_mask])
+
+
 @pytest.mark.parametrize("dim", ("obs", "var"))
 def test_inplace_subset_no_X(subset_func, dim):
     orig = gen_adata((30, 30))
