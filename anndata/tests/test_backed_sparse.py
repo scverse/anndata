@@ -166,9 +166,10 @@ def test_consecutive_bool(
     mask = make_bool_mask(csr_disk.shape[0])
 
     # indexing needs to be on `X` directly to trigger the optimization.
-    # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
     assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
     assert_equal(csc_disk.X[:, mask], csc_disk.X[:, np.where(mask)[0]])
+    assert_equal(csr_disk[mask, :], csr_disk[np.where(mask)])
+    assert_equal(csc_disk[:, mask], csc_disk[:, np.where(mask)[0]])
 
 
 @pytest.mark.parametrize(
