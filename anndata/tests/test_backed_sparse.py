@@ -128,9 +128,16 @@ def make_randomized_mask(size: int) -> np.ndarray:
 
 
 # non-random indices, with alternating one false and n true
-def make_alternating_mask(size: int) -> np.ndarray:
+def make_alternating_mask_10(size: int) -> np.ndarray:
     mask_alternating = np.ones(size, dtype=bool)
     for i in range(0, size, 10):  # 10 is enough to trigger new behavior
+        mask_alternating[i] = False
+    return mask_alternating
+
+
+def make_alternating_mask_5(size: int) -> np.ndarray:
+    mask_alternating = np.ones(size, dtype=bool)
+    for i in range(0, size, 5):  # 5 is too low to trigger new behavior
         mask_alternating[i] = False
     return mask_alternating
 
@@ -149,26 +156,40 @@ def make_one_elem_mask(size: int) -> np.ndarray:
 
 # test behavior from https://github.com/scverse/anndata/pull/1233
 @pytest.mark.parametrize(
-    "make_bool_mask",
+    "make_bool_mask,should_trigger_optimization",
     [
-        make_randomized_mask,
-        make_alternating_mask,
-        make_one_group_mask,
-        make_one_elem_mask,
+        (make_randomized_mask, None),
+        (make_alternating_mask_10, True),
+        (make_alternating_mask_5, False),
+        (make_one_group_mask, True),
+        (make_one_elem_mask, False),
     ],
-    ids=["randomized", "alternating", "one_group", "one_elem"],
+    ids=["randomized", "alternating_10", "alternating_5", "one_group", "one_elem"],
 )
 def test_consecutive_bool(
+    mocker,
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     make_bool_mask: Callable[[int], np.ndarray],
+    should_trigger_optimization: bool | None,
 ):
     _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
     mask = make_bool_mask(csr_disk.shape[0])
 
     # indexing needs to be on `X` directly to trigger the optimization.
     # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
+    from anndata._core import sparse_dataset
+
+    spy = mocker.spy(sparse_dataset, "get_compressed_vectors_for_slices")
     assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 1 if should_trigger_optimization else not spy.call_count
+        )
     assert_equal(csc_disk.X[:, mask], csc_disk.X[:, np.where(mask)[0]])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 2 if should_trigger_optimization else not spy.call_count
+        )
 
 
 @pytest.mark.parametrize(
