@@ -4,6 +4,7 @@ from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._io.specs import IOSpec, read_elem, write_elem
 
 from ._dispatch_io import read_dispatched, write_dispatched
+from .backed import read_backed
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
@@ -20,4 +21,5 @@ __all__ = [
     "sparse_dataset",
     "CSRDataset",
     "CSCDataset",
+    "read_backed",
 ]
