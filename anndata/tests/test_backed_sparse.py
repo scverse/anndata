@@ -130,12 +130,14 @@ def make_randomized_mask(size: int) -> np.ndarray:
 # non-random indices, with alternating one false and n true
 from functools import partial
 
+
 def make_alternating_mask(size: int, step: int) -> np.ndarray:
     mask_alternating = np.ones(size, dtype=bool)
     for i in range(0, size, step):  # 5 is too low to trigger new behavior
         mask_alternating[i] = False
     return mask_alternating
-    
+
+
 make_alternating_mask_5 = partial(make_alternating_mask, step=5)
 make_alternating_mask_10 = partial(make_alternating_mask, step=10)
 
