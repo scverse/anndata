@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from numpy.typing import ArrayLike
+    from pytest_mock import MockerFixture
 
 subset_func2 = subset_func
 
@@ -167,11 +168,24 @@ def make_one_elem_mask(size: int) -> np.ndarray:
     ids=["randomized", "alternating_10", "alternating_5", "one_group", "one_elem"],
 )
 def test_consecutive_bool(
-    mocker,
+    mocker: MockerFixture,
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     make_bool_mask: Callable[[int], np.ndarray],
     should_trigger_optimization: bool | None,
 ):
+    """Tests for optimization from https://github.com/scverse/anndata/pull/1233
+
+    Parameters
+    ----------
+    mocker
+        Mocker object
+    ondisk_equivalent_adata
+        AnnData objects with sparse X for testing
+    make_bool_mask
+        Function for creating a boolean mask.
+    should_trigger_optimization
+        Whether or not a given mask should trigger the optimized behavior.
+    """
     _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
     mask = make_bool_mask(csr_disk.shape[0])
 
