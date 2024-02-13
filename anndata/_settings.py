@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import os
 import textwrap
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
+from enum import Enum
 from inspect import Parameter, signature
-from typing import TYPE_CHECKING, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
 from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
 T = TypeVar("T")
 
@@ -30,6 +32,55 @@ class RegisteredOption(NamedTuple):
     type: object
 
 
+def check_and_get_environ_var(
+    key: str,
+    default_value: str,
+    allowed_values: Sequence[str] | None = None,
+    cast: Callable[[Any], T] | type[Enum] = lambda x: x,
+) -> T:
+    """Get the environment variable and return it is a (potentially) non-string, usable value.
+
+    Parameters
+    ----------
+    key
+        The environment variable name.
+    default_value
+        The default value for `os.environ.get`.
+    allowed_values
+        Allowable string values., by default None
+    cast
+        Casting from the string to a (potentially different) python object, by default lambdax:x
+
+    Returns
+    -------
+    The casted value.
+    """
+    environ_value_or_default_value = os.environ.get(key, default_value)
+    if (
+        allowed_values is not None
+        and environ_value_or_default_value not in allowed_values
+    ):
+        warnings.warn(
+            f'Value "{environ_value_or_default_value}" is not in allowed {allowed_values} for environment variable {key}.\
+                      Default {default_value} will be used.'
+        )
+        environ_value_or_default_value = default_value
+    return (
+        cast(environ_value_or_default_value)
+        if not isinstance(cast, type(Enum))
+        else cast[environ_value_or_default_value]
+    )
+
+
+def check_and_get_bool(option, default_value):
+    return check_and_get_environ_var(
+        "ANNDATA_" + option.upper(),
+        str(int(default_value)),
+        ["0", "1"],
+        lambda x: bool(int(x)),
+    )
+
+
 _docstring = """
 This manager allows users to customize settings for the anndata package.
 Settings here will generally be for advanced use-cases and should be used with caution.
@@ -39,6 +90,8 @@ The following options are available:
 {options_description}
 
 For setting an option please use :func:`~anndata.settings.override` (local) or set the above attributes directly (global) i.e., `anndata.settings.my_setting = foo`.
+For assignment by environment variable, use the variable name in all caps with `ANNDATA_` as the prefix before import of :mod:`anndata`.
+For boolean environment variable setting, use 1 for `True` and 0 for `False`.
 """
 
 
@@ -111,6 +164,7 @@ class SettingsManager:
         description: str,
         validate: Callable[[T], bool],
         option_type: object | None = None,
+        get_from_env: Callable[[str, T], T] = lambda x, y: y,
     ) -> None:
         """Register an option so it can be set/described etc. by end-users
 
@@ -126,6 +180,9 @@ class SettingsManager:
             A function which returns True if the option's value is valid and otherwise should raise a `ValueError` or `TypeError`.
         option
             Optional override for the option type to be displayed.  Otherwise `type(default_value)`.
+        get_from_env
+            An optional function which takes as arguments the name of the option and a default value and returns the value from the environment variable `ANNDATA_CAPS_OPTION` (or default if not present).
+            Default behavior is to return `default_value` without checking the environment.
         """
         try:
             validate(default_value)
@@ -144,7 +201,7 @@ class SettingsManager:
         self._registered_options[option] = RegisteredOption(
             option, default_value, doc, validate, option_type
         )
-        self._config[option] = default_value
+        self._config[option] = get_from_env(option, default_value)
         self._update_override_function_for_new_option(option)
 
     def _update_override_function_for_new_option(
@@ -293,6 +350,28 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
+
+
+categories_option = "remove_unused_categories"
+categories_default_value = True
+categories_description = (
+    "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
+)
+
+
+def validate_bool(val) -> bool:
+    if not isinstance(val, bool):
+        raise TypeError(f"{val} not valid boolean")
+    return True
+
+
+settings.register(
+    categories_option,
+    categories_default_value,
+    categories_description,
+    validate_bool,
+    get_from_env=check_and_get_bool,
+)
 
 ##################################################################################
 ##################################################################################

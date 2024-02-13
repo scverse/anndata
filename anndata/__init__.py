@@ -20,7 +20,6 @@ if sys.version_info < (3, 11):
     # Backport package for exception groups
     import exceptiongroup  # noqa: F401
 
-from ._config import settings
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
@@ -35,6 +34,7 @@ from ._io import (
     read_umi_tools,
     read_zarr,
 )
+from ._settings import settings
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
