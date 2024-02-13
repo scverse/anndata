@@ -17,7 +17,7 @@ from ..._core.anndata import AnnData
 from ..._core.sparse_dataset import sparse_dataset
 from ...compat import DaskArray
 from .. import read_dispatched
-from ._lazy_arrays import LazyCategoricalArray, LazyMaskedArray
+from ._lazy_arrays import CategoricalArray, MaskedArray
 from ._xarray import Dataset2D
 
 
@@ -84,10 +84,13 @@ def read_backed(
                         v, coords=[d[elem.attrs["_index"]]], dims=[index_label], name=k
                     )
                 elif (
-                    type(v) == LazyCategoricalArray or type(v) == LazyMaskedArray
+                    type(v) == CategoricalArray or type(v) == MaskedArray
                 ) and k != elem.attrs["_index"]:
+                    variable = xr.Variable(
+                        data=xr.core.indexing.LazilyIndexedArray(v), dims=[index_label]
+                    )
                     d_with_xr[k] = xr.DataArray(
-                        xr.core.indexing.LazilyIndexedArray(v),
+                        variable,
                         coords=[d[elem.attrs["_index"]]],
                         dims=[index_label],
                         name=k,
@@ -103,14 +106,17 @@ def read_backed(
             drop_unused_cats = not (
                 elem_name.startswith("/obsm") or elem_name.startswith("/varm")
             )
-            return LazyCategoricalArray(
-                elem["codes"], elem["categories"], elem.attrs, drop_unused_cats
+            return CategoricalArray(
+                codes=elem["codes"],
+                categories=elem["categories"],
+                ordered=elem.attrs["ordered"],
+                drop_unused_cats=drop_unused_cats,
             )
         elif "nullable" in iospec.encoding_type:
-            return LazyMaskedArray(
-                elem["values"],
-                elem["mask"] if "mask" in elem else None,
-                iospec.encoding_type,
+            return MaskedArray(
+                values=elem["values"],
+                mask=elem["mask"] if "mask" in elem else None,
+                dtype_str=iospec.encoding_type,
             )
         elif iospec.encoding_type in {"array", "string-array"}:
             if is_h5:

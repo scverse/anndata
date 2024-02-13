@@ -12,8 +12,8 @@ from zarr import DirectoryStore
 from anndata._core.anndata import AnnData
 from anndata.experimental import read_backed
 from anndata.experimental.backed._lazy_arrays import (
-    LazyCategoricalArray,
-    LazyMaskedArray,
+    CategoricalArray,
+    MaskedArray,
 )
 from anndata.tests.helpers import (
     as_dense_dask_array,
@@ -79,7 +79,12 @@ def categorical_lazy_arr(tmp_path_factory):
     z["categories"] = np.array(["foo", "bar", "jazz"])
     z.attrs["ordered"] = False
     z = zarr.open(base_path)
-    return LazyCategoricalArray(z["codes"], z["categories"], z.attrs, True)
+    return CategoricalArray(
+        codes=z["codes"],
+        categories=z["categories"],
+        ordered=z.attrs["ordered"],
+        drop_unused_categories=True,
+    )
 
 
 @pytest.fixture()
@@ -127,7 +132,7 @@ def nullable_boolean_lazy_arr(tmp_path_factory):
         ]
     )
     z = zarr.open(base_path)
-    return LazyMaskedArray(z["values"], z["mask"], "nullable-boolean")
+    return MaskedArray(values=z["values"], mask=z["mask"], dtype_str="nullable-boolean")
 
 
 @pytest.fixture()
@@ -155,7 +160,7 @@ def nullable_boolean_lazy_arr_no_mask(tmp_path_factory):
         ]
     )
     z = zarr.open(base_path)
-    return LazyMaskedArray(z["values"], None, "nullable-boolean")
+    return MaskedArray(values=z["values"], mask=None, dtype_str="nullable-boolean")
 
 
 @pytest.fixture()
@@ -184,7 +189,7 @@ def nullable_integer_lazy_arr(tmp_path_factory):
         ]
     )
     z = zarr.open(base_path)
-    return LazyMaskedArray(z["values"], z["mask"], "nullable-integer")
+    return MaskedArray(values=z["values"], mask=z["mask"], dtype_str="nullable-integer")
 
 
 @pytest.fixture()
@@ -193,7 +198,7 @@ def nullable_integer_lazy_arr_no_mask(tmp_path_factory):
     z = zarr.open_group(base_path, mode="w")
     z["values"] = np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
     z = zarr.open(base_path)
-    return LazyMaskedArray(z["values"], None, "nullable-integer")
+    return MaskedArray(values=z["values"], mask=None, dtype_str="nullable-integer")
 
 
 def test_access_count_obs_var(tmp_path, mtx_format):

@@ -95,7 +95,7 @@ test = [
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
-    "xarray",
+    "xarray@git+https://github.com/ilan-gold/xarray#egg=extension_arrays",
 ]
 gpu = ["cupy"]
 
@@ -105,6 +105,8 @@ exclude = ["anndata/tests/test_*.py", "anndata/tests/data"]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "anndata/_version.py"
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.coverage.run]
 source = ["anndata"]
