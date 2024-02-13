@@ -387,8 +387,3 @@ class DeprecationMixinMeta(type):
             for item in type.__dir__(cls)
             if not is_hidden(getattr(cls, item, None))
         ]
-
-
-@deprecated("axis_len", FutureWarning)
-def dim_len(x, axis: Literal[0, 1]) -> int | None:
-    return axis_len(x, axis)

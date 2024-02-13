@@ -1007,12 +1007,6 @@ def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     return getattr(adata, f"{axis_name}_names")
 
 
-def axis_size(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> int:
-    """Helper function to get adata.shape[dim]."""
-    ax, _ = _resolve_axis(axis)
-    return adata.shape[ax]
-
-
 # TODO: Resolve https://github.com/scverse/anndata/issues/678 and remove this function
 def concat_Xs(adatas, reindexers, axis, fill_value):
     """

@@ -65,8 +65,8 @@ from anndata.utils import axis_len
         [ak.to_regular(ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), 1), (3, 2)],
     ],
 )
-def test_dim_len(array, shape):
-    """Test that dim_len returns the right value for awkward arrays."""
+def test_axis_len(array, shape):
+    """Test that axis_len returns the right value for awkward arrays."""
     for axis, size in enumerate(shape):
         assert size == axis_len(array, axis)
 
