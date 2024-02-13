@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Callable, Literal
 
 import h5py
@@ -128,10 +129,6 @@ def make_randomized_mask(size: int) -> np.ndarray:
     return randomized_mask
 
 
-# non-random indices, with alternating one false and n true
-from functools import partial
-
-
 def make_alternating_mask(size: int, step: int) -> np.ndarray:
     mask_alternating = np.ones(size, dtype=bool)
     for i in range(0, size, step):  # 5 is too low to trigger new behavior
@@ -139,6 +136,7 @@ def make_alternating_mask(size: int, step: int) -> np.ndarray:
     return mask_alternating
 
 
+# non-random indices, with alternating one false and n true
 make_alternating_mask_5 = partial(make_alternating_mask, step=5)
 make_alternating_mask_10 = partial(make_alternating_mask, step=10)
 
