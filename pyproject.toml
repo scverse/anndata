@@ -95,6 +95,7 @@ test = [
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
+    "pytest-mock"
 ]
 gpu = ["cupy"]
 
