@@ -54,8 +54,10 @@ class CategoricalArray(
             codes=codes, categories=self.categories, ordered=self._ordered
         )
         if self._drop_unused_cats:
-            return categorical_array.remove_unused_categories()
-        return categorical_array
+            return xr.core.indexing.ExtensionDuckArray(
+                categorical_array.remove_unused_categories()
+            )
+        return xr.core.indexing.ExtensionDuckArray(categorical_array)
 
 
 class MaskedArray(xr.backends.zarr.ZarrArrayWrapper):
@@ -75,15 +77,22 @@ class MaskedArray(xr.backends.zarr.ZarrArrayWrapper):
         self.dtype = pd.api.types.pandas_dtype(self._array.dtype)
 
     def __getitem__(self, key):
+        # HACK! TODO(ilan-gold): open issue about hdf5 compat that doesn't allow initialization!
+        self._array = self._values
         values = super().__getitem__(key)
         if self._mask is not None:
-            mask = self._mask[key]
+            self._array = self._mask
+            mask = super().__getitem__(key)
             if self._dtype_str == "nullable-integer":
                 # numpy does not support nan ints
-                return pd.arrays.IntegerArray(values, mask=mask)
+                return xr.core.indexing.ExtensionDuckArray(
+                    pd.arrays.IntegerArray(values, mask=mask)
+                )
             elif self._dtype_str == "nullable-boolean":
-                return pd.arrays.BooleanArray(values, mask=mask)
-        return values
+                return xr.core.indexing.ExtensionDuckArray(
+                    pd.arrays.BooleanArray(values, mask=mask)
+                )
+        return xr.core.indexing.ExtensionDuckArray(pd.array(values))
 
 
 @_subset.register(xr.DataArray)
