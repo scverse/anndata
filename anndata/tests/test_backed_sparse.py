@@ -199,11 +199,19 @@ def test_consecutive_bool(
             spy.call_count == 1 if should_trigger_optimization else not spy.call_count
         )
     assert_equal(csc_disk.X[:, mask], csc_disk.X[:, np.where(mask)[0]])
-    assert_equal(csr_disk[mask, :], csr_disk[np.where(mask)])
-    assert_equal(csc_disk[:, mask], csc_disk[:, np.where(mask)[0]])
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 2 if should_trigger_optimization else not spy.call_count
+        )
+    assert_equal(csr_disk[mask, :], csr_disk[np.where(mask)])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 3 if should_trigger_optimization else not spy.call_count
+        )
+    assert_equal(csc_disk[:, mask], csc_disk[:, np.where(mask)[0]])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 4 if should_trigger_optimization else not spy.call_count
         )
 
 
