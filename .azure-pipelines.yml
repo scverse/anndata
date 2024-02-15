@@ -28,6 +28,7 @@ jobs:
         minimum_versions:
           python.version: "3.9"
           DEPENDENCIES_VERSION: "minimum"
+          TEST_TYPE: "coverage"
     steps:
       - task: UsePythonVersion@0
         inputs:
@@ -50,7 +51,7 @@ jobs:
         condition: eq(variables['DEPENDENCIES_VERSION'], 'latest')
 
       - script: |
-          python -m pip install pip wheel tomli packaging
+          python -m pip install pip wheel tomli packaging pytest-cov
           pip install `python3 ci/scripts/min-deps.py pyproject.toml --extra dev test`
           pip install --no-deps .
         displayName: "Install minimum dependencies"
