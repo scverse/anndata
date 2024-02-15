@@ -5,6 +5,9 @@
 
 ## Version 0.10
 
+```{include} /release-notes/0.10.6.md
+```
+
 ```{include} /release-notes/0.10.5.md
 ```
 

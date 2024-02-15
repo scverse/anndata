@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Callable, Literal
 
 import h5py
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from numpy.typing import ArrayLike
+    from pytest_mock import MockerFixture
 
 subset_func2 = subset_func
 
@@ -25,6 +27,10 @@ subset_func2 = subset_func
 @pytest.fixture(params=["h5ad", "zarr"])
 def diskfmt(request):
     return request.param
+
+
+M = 50
+N = 50
 
 
 @pytest.fixture(scope="function")
@@ -37,7 +43,7 @@ def ondisk_equivalent_adata(
 
     write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
-    csr_mem = ad.AnnData(X=sparse.random(50, 50, format="csr", density=0.1))
+    csr_mem = ad.AnnData(X=sparse.random(M, N, format="csr", density=0.1))
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
     dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
@@ -77,6 +83,25 @@ def ondisk_equivalent_adata(
     return csr_mem, csr_disk, csc_disk, dense_disk
 
 
+@pytest.mark.parametrize(
+    "empty_mask", [[], np.zeros(M, dtype=bool)], ids=["empty_list", "empty_bool_mask"]
+)
+def test_empty_backed_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    empty_mask,
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
+    assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
+
+    # The following do not work because of https://github.com/scipy/scipy/issues/19919
+    # Our implementation returns a (0,0) sized matrix but scipy does (1,0).
+
+    # assert_equal(csr_mem.X[empty_mask, empty_mask], csr_disk.X[empty_mask, empty_mask])
+    # assert_equal(csr_mem.X[empty_mask, empty_mask], csc_disk.X[empty_mask, empty_mask])
+
+
 def test_backed_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     subset_func,
@@ -95,39 +120,88 @@ def test_backed_indexing(
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
-# test behavior from https://github.com/scverse/anndata/pull/1233
-def test_consecutive_bool(
-    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
-):
-    _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
-
-    randomized_mask = np.zeros(csr_disk.shape[0], dtype=bool)
-    inds = np.random.choice(csr_disk.shape[0], 20, replace=False)
+def make_randomized_mask(size: int) -> np.ndarray:
+    randomized_mask = np.zeros(size, dtype=bool)
+    inds = np.random.choice(size, 20, replace=False)
     inds.sort()
     for i in range(0, len(inds) - 1, 2):
         randomized_mask[inds[i] : inds[i + 1]] = True
+    return randomized_mask
 
-    # non-random indices, with alternating one false and n true
-    def make_alternating_mask(n):
-        mask_alternating = np.ones(csr_disk.shape[0], dtype=bool)
-        for i in range(0, csr_disk.shape[0], n):
-            mask_alternating[i] = False
-        return mask_alternating
 
-    alternating_mask = make_alternating_mask(10)
+def make_alternating_mask(size: int, step: int) -> np.ndarray:
+    mask_alternating = np.ones(size, dtype=bool)
+    for i in range(0, size, step):  # 5 is too low to trigger new behavior
+        mask_alternating[i] = False
+    return mask_alternating
+
+
+# non-random indices, with alternating one false and n true
+make_alternating_mask_5 = partial(make_alternating_mask, step=5)
+make_alternating_mask_10 = partial(make_alternating_mask, step=10)
+
+
+def make_one_group_mask(size: int) -> np.ndarray:
+    one_group_mask = np.zeros(size, dtype=bool)
+    one_group_mask[size // 4 : size // 2] = True
+    return one_group_mask
+
+
+def make_one_elem_mask(size: int) -> np.ndarray:
+    one_elem_mask = np.zeros(size, dtype=bool)
+    one_elem_mask[size // 4] = True
+    return one_elem_mask
+
+
+# test behavior from https://github.com/scverse/anndata/pull/1233
+@pytest.mark.parametrize(
+    "make_bool_mask,should_trigger_optimization",
+    [
+        (make_randomized_mask, None),
+        (make_alternating_mask_10, True),
+        (make_alternating_mask_5, False),
+        (make_one_group_mask, True),
+        (make_one_elem_mask, False),
+    ],
+    ids=["randomized", "alternating_10", "alternating_5", "one_group", "one_elem"],
+)
+def test_consecutive_bool(
+    mocker: MockerFixture,
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    make_bool_mask: Callable[[int], np.ndarray],
+    should_trigger_optimization: bool | None,
+):
+    """Tests for optimization from https://github.com/scverse/anndata/pull/1233
+
+    Parameters
+    ----------
+    mocker
+        Mocker object
+    ondisk_equivalent_adata
+        AnnData objects with sparse X for testing
+    make_bool_mask
+        Function for creating a boolean mask.
+    should_trigger_optimization
+        Whether or not a given mask should trigger the optimized behavior.
+    """
+    _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    mask = make_bool_mask(csr_disk.shape[0])
 
     # indexing needs to be on `X` directly to trigger the optimization.
     # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
-    assert_equal(
-        csr_disk.X[alternating_mask, :], csr_disk.X[np.where(alternating_mask)]
-    )
-    assert_equal(
-        csc_disk.X[:, alternating_mask], csc_disk.X[:, np.where(alternating_mask)[0]]
-    )
-    assert_equal(csr_disk.X[randomized_mask, :], csr_disk.X[np.where(randomized_mask)])
-    assert_equal(
-        csc_disk.X[:, randomized_mask], csc_disk.X[:, np.where(randomized_mask)[0]]
-    )
+    from anndata._core import sparse_dataset
+
+    spy = mocker.spy(sparse_dataset, "get_compressed_vectors_for_slices")
+    assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 1 if should_trigger_optimization else not spy.call_count
+        )
+    assert_equal(csc_disk.X[:, mask], csc_disk.X[:, np.where(mask)[0]])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 2 if should_trigger_optimization else not spy.call_count
+        )
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,7 @@ name: Benchmark
 
 on:
   push:
-    branches: [main]
+    branches: [main, "[0-9]+.[0-9]+.x"]
   pull_request:
     branches: [main]
 

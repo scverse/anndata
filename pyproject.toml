@@ -90,10 +90,11 @@ test = [
     "boltons",
     "scanpy",
     "httpx", # For data downloading
-    "dask[array,distributed]>=2022.09",
-    "awkward>=2.3, !=2.5.2",
+    "dask[array,distributed]>=2022.09.2",
+    "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
+    "pytest-mock"
 ]
 gpu = ["cupy"]
 
