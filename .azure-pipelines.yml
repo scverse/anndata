@@ -6,9 +6,8 @@ variables:
   PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
   RUN_COVERAGE: no
   PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml
-  # PRERELEASE_DEPENDENCIES: no
-  DEPENDENCIES_VERSION: "latest"
-  TEST_TYPE: "standard"
+  DEPENDENCIES_VERSION: "latest" # |"pre-release" | "minimum-version"
+  TEST_TYPE: "standard" # | "coverage"
 
 jobs:
   - job: PyTest
@@ -26,7 +25,7 @@ jobs:
           python.version: "3.11"
           DEPENDENCIES_VERSION: "pre-release"
           TEST_TYPE: "strict-warning"
-        MinDeps:
+        minimum_versions:
           python.version: "3.9"
           DEPENDENCIES_VERSION: "minimum"
     steps:
@@ -71,26 +70,22 @@ jobs:
           pytest
         displayName: "PyTest"
         condition: eq(variables['TEST_TYPE'], 'standard')
-        # and(eq(variables['RUN_COVERAGE'], 'no'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
 
       - script: |
           pytest --cov --cov-report=xml --cov-context=test
         displayName: "PyTest (coverage)"
         condition: eq(variables['TEST_TYPE'], 'coverage')
-        # condition: and(eq(variables['RUN_COVERAGE'], 'yes'), eq(variables['PRERELEASE_DEPENDENCIES'], 'no'))
 
       - script: |
           pytest --strict-warnings
         displayName: "PyTest (treat warnings as errors)"
         condition: eq(variables['TEST_TYPE'], 'strict-warning')
-        # condition: and(eq(variables['RUN_COVERAGE'], 'no'), eq(variables['PRERELEASE_DEPENDENCIES'], 'yes'))
 
       - task: PublishCodeCoverageResults@1
         inputs:
           codeCoverageTool: Cobertura
           summaryFileLocation: "test-data/coverage.xml"
         condition: eq(variables['TEST_TYPE'], 'coverage')
-        # eq(variables['RUN_COVERAGE'], 'yes')
 
       - task: PublishTestResults@2
         condition: succeededOrFailed()
@@ -102,7 +97,6 @@ jobs:
       - script: bash <(curl -s https://codecov.io/bash)
         displayName: "Upload to codecov.io"
         condition: eq(variables['TEST_TYPE'], 'coverage')
-        # eq(variables['RUN_COVERAGE'], 'yes')
 
   - job: CheckBuild
     pool:
