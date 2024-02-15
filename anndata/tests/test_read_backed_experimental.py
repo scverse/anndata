@@ -226,7 +226,9 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     remote.obs
     remote.obs["int64"]
     remote.var["int64"]
-    # only the `cat` should be read in
+    assert store.get_access_count("obs/cat/codes") == 0, store.get_subkeys_accessed(
+        "obs/cat/codes"
+    )
     subset = remote[
         (remote.obs["cat"] == "a").data, :
     ]  # `.data` for xarray, but should we handle internally?

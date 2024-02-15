@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import re
 import warnings
+from collections import defaultdict
 from collections.abc import Collection, Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
@@ -765,19 +766,28 @@ try:
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self._access_count = {}
+            self._accessed = defaultdict(set)
 
         def __getitem__(self, key):
             for tracked in self._access_count:
                 if tracked in key:
                     self._access_count[tracked] += 1
+                    self._accessed[tracked].add(key)
             return super().__getitem__(key)
 
         def get_access_count(self, key):
             return self._access_count[key]
 
         def set_key_trackers(self, keys_to_track):
+            if isinstance(keys_to_track, str):
+                keys_to_track = [keys_to_track]
             for k in keys_to_track:
                 self._access_count[k] = 0
+
+        def get_subkeys_accessed(self, key):
+            return self._accessed[key]
+
+
 except ImportError:
 
     class AccessTrackingStore:
