@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 import zarr
 from scipy import sparse
-from zarr import DirectoryStore
 
 from anndata._core.anndata import AnnData
 from anndata.experimental import read_backed
@@ -16,41 +15,12 @@ from anndata.experimental.backed._lazy_arrays import (
     MaskedArray,
 )
 from anndata.tests.helpers import (
+    AccessTrackingStore,
     as_dense_dask_array,
     assert_equal,
     gen_adata,
     gen_typed_df,
 )
-
-EXEMPT_STANDARD_ZARR_KEYS = {".zarray", ".zgroup", ".zattrs"}
-
-
-class AccessTrackingStore(DirectoryStore):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._access_count = {}
-        self._accessed_keys = set()
-
-    def __getitem__(self, key):
-        for tracked in self._access_count:
-            if tracked in key and not any(
-                zarr_key in key for zarr_key in EXEMPT_STANDARD_ZARR_KEYS
-            ):
-                # import traceback
-                # traceback.print_stack()
-                self._access_count[tracked] += 1
-                self._accessed_keys.add(key)
-        return super().__getitem__(key)
-
-    def get_access_count(self, key):
-        return self._access_count[key]
-
-    def get_subkeys_accessed(self, key):
-        return [k for k in self._accessed_keys if key in k]
-
-    def set_key_trackers(self, keys_to_track):
-        for k in keys_to_track:
-            self._access_count[k] = 0
 
 
 @pytest.fixture(

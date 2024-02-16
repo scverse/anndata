@@ -95,7 +95,7 @@ test = [
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
-    "xarray@git+https://github.com/ilan-gold/xarray#egg=extension_arrays",
+    "xarray@git+https://github.com/ilan-gold/xarray#egg=anndata_dev_branch",
 ]
 gpu = ["cupy"]
 

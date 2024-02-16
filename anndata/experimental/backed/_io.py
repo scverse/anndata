@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -45,6 +46,9 @@ def read_backed(
         try:
             f = zarr.open_consolidated(store, mode="r")
         except KeyError:
+            warnings.warn(
+                "Did not read zarr as consolidated. Consider consolidating your metadata."
+            )
             has_keys = False
             f = zarr.open(store, mode="r")
     else:
