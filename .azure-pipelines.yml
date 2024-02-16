@@ -15,14 +15,14 @@ jobs:
       vmImage: "ubuntu-22.04"
     strategy:
       matrix:
-        Python3.11:
-          python.version: "3.11"
+        Python3.12:
+          python.version: "3.12"
           RUN_COVERAGE: yes
           TEST_TYPE: "coverage"
         Python3.9:
           python.version: "3.9"
         PreRelease:
-          python.version: "3.11"
+          python.version: "3.12"
           DEPENDENCIES_VERSION: "pre-release"
           TEST_TYPE: "strict-warning"
         minimum_versions:
@@ -105,8 +105,8 @@ jobs:
     steps:
       - task: UsePythonVersion@0
         inputs:
-          versionSpec: "3.11"
-        displayName: "Use Python 3.11"
+          versionSpec: "3.12"
+        displayName: "Use Python 3.12"
 
       - script: |
           python -m pip install --upgrade pip
