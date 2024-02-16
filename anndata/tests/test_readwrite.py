@@ -432,7 +432,15 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
 def test_readloom_deprecations(tmp_path):
     loom_pth = tmp_path / "test.loom"
     adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
-    adata_src.write_loom(loom_pth, write_obsm_varm=True)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata_src.write_loom(loom_pth, write_obsm_varm=True)
 
     # obsm_names -> obsm_mapping
     obsm_mapping = {"df": adata_src.obs.columns}
@@ -541,7 +549,13 @@ def test_readwrite_empty(read, write, name, tmp_path):
 
 
 def test_read_excel():
-    adata = ad.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata = ad.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
     assert adata.X.tolist() == X_list
 
 
