@@ -392,7 +392,12 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", NumbaDeprecationWarning)
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
         adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
 
     adata = ad.read_loom(
