@@ -36,16 +36,15 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    # pandas <1.1.1 has pandas/issues/35446
+    # pandas <1.4 has pandas/issues/35446
     # pandas 2.1.0rc0 has pandas/issues/54622
-    # pandas 2.1.2 has pandas/issues/52927
-    "pandas >=1.1.1, !=2.1.0rc0, !=2.1.2",
-    "numpy>=1.16.5",                         # required by pandas 1.x
-    "scipy>1.4",
-    "h5py>=3",
+    "pandas >=1.4, !=2.1.0rc0, !=2.1.2",
+    "numpy>=1.23",
+    "scipy>1.8",
+    "h5py>=3.1",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
-    "packaging>=20",
+    "packaging>=20.0",
     "array_api_compat",
 ]
 dynamic = ["version"]
@@ -81,7 +80,7 @@ doc = [
 ]
 test = [
     "loompy>=3.0.5",
-    "pytest >=6.0",
+    "pytest>=7.3",
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
@@ -91,7 +90,7 @@ test = [
     "boltons",
     "scanpy",
     "httpx", # For data downloading
-    "dask[array,distributed]",
+    "dask[array,distributed]>=2022.09.2",
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
