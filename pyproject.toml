@@ -99,7 +99,11 @@ test = [
 gpu = ["cupy"]
 
 [tool.hatch.build]
-exclude = ["src/anndata/tests/test_*.py", "src/anndata/tests/data"]
+exclude = [
+    "src/anndata/tests/conftest.py",
+    "src/anndata/tests/test_*.py",
+    "src/anndata/tests/data",
+]
 [tool.hatch.version]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
