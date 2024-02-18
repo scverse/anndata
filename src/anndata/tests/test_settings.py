@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import os
+from enum import Enum
+
 import pytest
 
-from anndata._config import SettingsManager
+from anndata._settings import (
+    SettingsManager,
+    check_and_get_bool,
+    check_and_get_environ_var,
+    validate_bool,
+)
 
 option = "test_var"
 default_val = False
@@ -16,12 +24,6 @@ option_3 = "test_var_3"
 default_val_3 = [1, 2]
 description_3 = "My doc string 3!"
 type_3 = list[int]
-
-
-def validate_bool(val) -> bool:
-    if not isinstance(val, bool):
-        raise TypeError(f"{val} not valid boolean")
-    return True
 
 
 def validate_int_list(val) -> bool:
@@ -47,6 +49,53 @@ settings.register(
 def test_register_option_default():
     assert getattr(settings, option) == default_val
     assert description in settings.describe(option)
+
+
+def test_register_with_env(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env = "test_var_env"
+        default_val_env = False
+        description_env = "My doc string env!"
+        option_env_var = "ANNDATA_" + option_env.upper()
+        mp.setenv(option_env_var, "1")
+
+        settings.register(
+            option_env,
+            default_val_env,
+            description_env,
+            validate_bool,
+            get_from_env=check_and_get_bool,
+        )
+
+        assert settings.test_var_env
+
+
+def test_register_with_env_enum(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env = "test_var_env"
+        default_val_env = False
+        description_env = "My doc string env!"
+        option_env_var = "ANNDATA_" + option_env.upper()
+        mp.setenv(option_env_var, "b")
+
+        class TestEnum(Enum):
+            a = False
+            b = True
+
+        def check_and_get_bool_enum(option, default_value):
+            return check_and_get_environ_var(
+                "ANNDATA_" + option.upper(), "a", cast=TestEnum
+            ).value
+
+        settings.register(
+            option_env,
+            default_val_env,
+            description_env,
+            validate_bool,
+            get_from_env=check_and_get_bool_enum,
+        )
+
+        assert settings.test_var_env
 
 
 def test_register_bad_option():
@@ -129,3 +178,50 @@ def test_deprecation_no_message():
 def test_option_typing():
     assert settings._registered_options[option_3].type == type_3
     assert str(type_3) in settings.describe(option_3, print_description=False)
+
+
+def test_check_and_get_environ_var(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env_var = "ANNDATA_OPTION"
+        assert hash("foo") == check_and_get_environ_var(
+            option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+        )
+        mp.setenv(option_env_var, "bar")
+        assert hash("bar") == check_and_get_environ_var(
+            option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+        )
+        mp.setenv(option_env_var, "Not foo or bar")
+        with pytest.warns(
+            match=f'Value "{os.environ[option_env_var]}" is not in allowed'
+        ):
+            check_and_get_environ_var(
+                option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+            )
+        assert hash("Not foo or bar") == check_and_get_environ_var(
+            option_env_var, "foo", cast=lambda x: hash(x)
+        )
+
+
+def test_check_and_get_bool(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env_var = "ANNDATA_" + option.upper()
+        assert not check_and_get_bool(option, default_val)
+        mp.setenv(option_env_var, "1")
+        assert check_and_get_bool(option, default_val)
+        mp.setenv(option_env_var, "Not 0 or 1")
+        with pytest.warns(
+            match=f'Value "{os.environ[option_env_var]}" is not in allowed'
+        ):
+            check_and_get_bool(option, default_val)
+
+
+def test_check_and_get_bool_enum(monkeypatch):
+    with monkeypatch.context() as mp:
+        option_env_var = "ANNDATA_" + option.upper()
+        mp.setenv(option_env_var, "b")
+
+        class TestEnum(Enum):
+            a = False
+            b = True
+
+        assert check_and_get_environ_var(option_env_var, "a", cast=TestEnum).value
