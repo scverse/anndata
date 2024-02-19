@@ -1,48 +1,58 @@
+from __future__ import annotations
+
 import re
 from functools import partial
-from warnings import warn
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, Type, TypeVar, Union, Literal
-from typing import Collection, Sequence, Mapping
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Literal,
+    TypeVar,
+)
+from warnings import warn
 
 import h5py
 import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from .._core.sparse_dataset import SparseDataset
-from .._core.file_backing import AnnDataFileManager
+from anndata._warnings import OldFormatWarning
+
 from .._core.anndata import AnnData
+from .._core.file_backing import AnnDataFileManager, filename
+from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..compat import (
-    _from_fixed_length_strings,
-    _decode_structured_array,
     _clean_uns,
+    _decode_structured_array,
+    _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched
+from .specs import read_elem, write_elem
+from .specs.registry import IOSpec, write_spec
 from .utils import (
     H5PY_V3,
+    _read_legacy_raw,
+    idx_chunks_along_axis,
     report_read_key_on_error,
     report_write_key_on_error,
-    idx_chunks_along_axis,
-    _read_legacy_raw,
 )
-from .specs import read_elem, write_elem
-from anndata._warnings import OldFormatWarning
+
+if TYPE_CHECKING:
+    from collections.abc import Collection, Mapping, Sequence
 
 T = TypeVar("T")
 
 
 def write_h5ad(
-    filepath: Union[Path, str],
+    filepath: Path | str,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
     dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
-    from anndata.experimental import write_dispatched
-
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -72,13 +82,15 @@ def write_h5ad(
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
-        if "X" in as_dense and isinstance(adata.X, (sparse.spmatrix, SparseDataset)):
+        if "X" in as_dense and isinstance(
+            adata.X, (sparse.spmatrix, BaseCompressedSparseDataset)
+        ):
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
             write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
-            adata.raw.X, (sparse.spmatrix, SparseDataset)
+            adata.raw.X, (sparse.spmatrix, BaseCompressedSparseDataset)
         ):
             write_sparse_as_dense(
                 f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
@@ -100,12 +112,18 @@ def write_h5ad(
 
 
 @report_write_key_on_error
-def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
+@write_spec(IOSpec("array", "0.2.0"))
+def write_sparse_as_dense(
+    f: h5py.Group,
+    key: str,
+    value: sparse.spmatrix | BaseCompressedSparseDataset,
+    *,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     real_key = None  # Flag for if temporary key was used
     if key in f:
-        if (
-            isinstance(value, (h5py.Group, h5py.Dataset, SparseDataset))
-            and value.file.filename == f.file.filename
+        if isinstance(value, BaseCompressedSparseDataset) and (
+            filename(value.group) == filename(f)
         ):  # Write to temporary key before overwriting
             real_key = key
             # Transform key to temporary, e.g. raw/X -> raw/_X, or X -> _X
@@ -122,7 +140,7 @@ def write_sparse_as_dense(f, key, value, dataset_kwargs=MappingProxyType({})):
         del f[key]
 
 
-def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> AnnData:
+def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
     d = dict(filename=filename, filemode=mode)
 
     f = h5py.File(filename, mode)
@@ -151,11 +169,11 @@ def read_h5ad_backed(filename: Union[str, Path], mode: Literal["r", "r+"]) -> An
 
 
 def read_h5ad(
-    filename: Union[str, Path],
-    backed: Union[Literal["r", "r+"], bool, None] = None,
+    filename: str | Path,
+    backed: Literal["r", "r+"] | bool | None = None,
     *,
     as_sparse: Sequence[str] = (),
-    as_sparse_fmt: Type[sparse.spmatrix] = sparse.csr_matrix,
+    as_sparse_fmt: type[sparse.spmatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
     """\
@@ -256,9 +274,9 @@ def read_h5ad(
 
 
 def _read_raw(
-    f: Union[h5py.File, AnnDataFileManager],
+    f: h5py.File | AnnDataFileManager,
     as_sparse: Collection[str] = (),
-    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] = None,
+    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
 ) -> dict:
@@ -275,7 +293,7 @@ def _read_raw(
 
 
 @report_read_key_on_error
-def read_dataframe_legacy(dataset) -> pd.DataFrame:
+def read_dataframe_legacy(dataset: h5py.Dataset) -> pd.DataFrame:
     """Read pre-anndata 0.7 dataframes."""
     warn(
         f"'{dataset.name}' was written with a very old version of AnnData. "
@@ -294,7 +312,7 @@ def read_dataframe_legacy(dataset) -> pd.DataFrame:
     return df
 
 
-def read_dataframe(group) -> pd.DataFrame:
+def read_dataframe(group: h5py.Group | h5py.Dataset) -> pd.DataFrame:
     """Backwards compat function"""
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
@@ -341,7 +359,7 @@ def read_dense_as_sparse(
         raise ValueError(f"Cannot read dense array as type: {sparse_format}")
 
 
-def read_dense_as_csr(dataset, axis_chunk=6000):
+def read_dense_as_csr(dataset: h5py.Dataset, axis_chunk: int = 6000):
     sub_matrices = []
     for idx in idx_chunks_along_axis(dataset.shape, 0, axis_chunk):
         dense_chunk = dataset[idx]
@@ -350,7 +368,7 @@ def read_dense_as_csr(dataset, axis_chunk=6000):
     return sparse.vstack(sub_matrices, format="csr")
 
 
-def read_dense_as_csc(dataset, axis_chunk=6000):
+def read_dense_as_csc(dataset: h5py.Dataset, axis_chunk: int = 6000):
     sub_matrices = []
     for idx in idx_chunks_along_axis(dataset.shape, 1, axis_chunk):
         sub_matrix = sparse.csc_matrix(dataset[idx])

@@ -1,14 +1,19 @@
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
 from functools import singledispatch
-from os import PathLike
 from pathlib import Path
-from typing import Optional, Union, Iterator, Literal
-from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal
 
 import h5py
 
-from . import anndata
-from .sparse_dataset import SparseDataset
-from ..compat import ZarrArray, DaskArray, AwkArray
+from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
+from .sparse_dataset import BaseCompressedSparseDataset
+
+if TYPE_CHECKING:
+    from os import PathLike
+
+    from . import anndata
 
 
 class AnnDataFileManager:
@@ -16,9 +21,9 @@ class AnnDataFileManager:
 
     def __init__(
         self,
-        adata: "anndata.AnnData",
-        filename: Optional[PathLike] = None,
-        filemode: Optional[Literal["r", "r+"]] = None,
+        adata: anndata.AnnData,
+        filename: PathLike | None = None,
+        filemode: Literal["r", "r+"] | None = None,
     ):
         self._adata = adata
         self.filename = filename
@@ -39,11 +44,15 @@ class AnnDataFileManager:
     def __iter__(self) -> Iterator[str]:
         return iter(self._file)
 
-    def __getitem__(self, key: str) -> Union[h5py.Group, h5py.Dataset, SparseDataset]:
+    def __getitem__(
+        self, key: str
+    ) -> h5py.Group | h5py.Dataset | BaseCompressedSparseDataset:
         return self._file[key]
 
     def __setitem__(
-        self, key: str, value: Union[h5py.Group, h5py.Dataset, SparseDataset]
+        self,
+        key: str,
+        value: h5py.Group | h5py.Dataset | BaseCompressedSparseDataset,
     ):
         self._file[key] = value
 
@@ -55,13 +64,13 @@ class AnnDataFileManager:
         return self._filename
 
     @filename.setter
-    def filename(self, filename: Optional[PathLike]):
+    def filename(self, filename: PathLike | None):
         self._filename = None if filename is None else Path(filename)
 
     def open(
         self,
-        filename: Optional[PathLike] = None,
-        filemode: Optional[Literal["r", "r+"]] = None,
+        filename: PathLike | None = None,
+        filemode: Literal["r", "r+"] | None = None,
     ):
         if filename is not None:
             self.filename = filename
@@ -110,8 +119,8 @@ def _(x, copy=False):
     return x[...]
 
 
-@to_memory.register(SparseDataset)
-def _(x: SparseDataset, copy=False):
+@to_memory.register(BaseCompressedSparseDataset)
+def _(x: BaseCompressedSparseDataset, copy=True):
     return x.to_memory()
 
 
@@ -133,3 +142,20 @@ def _(x, copy=False):
         return _copy(x)
     else:
         return x
+
+
+@singledispatch
+def filename(x):
+    raise NotImplementedError(f"Not implemented for {type(x)}")
+
+
+@filename.register(h5py.Group)
+@filename.register(h5py.Dataset)
+def _(x):
+    return x.file.filename
+
+
+@filename.register(ZarrArray)
+@filename.register(ZarrGroup)
+def _(x):
+    return x.store.path

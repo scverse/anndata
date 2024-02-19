@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from os import PathLike
 from collections.abc import Mapping
 from functools import partial
-from typing import Union, Literal
+from itertools import product
 from types import MappingProxyType
+from typing import TYPE_CHECKING, Literal
 from warnings import warn
 
 import h5py
@@ -14,35 +14,46 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData, Raw
+from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
-from anndata._core.sparse_dataset import SparseDataset
-from anndata._core import views
+from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
+from anndata._io.utils import H5PY_V3, check_key
+from anndata._warnings import OldFormatWarning
 from anndata.compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+    DaskArray,
     ZarrArray,
     ZarrGroup,
-    DaskArray,
-    _read_attr,
-    _from_fixed_length_strings,
     _decode_structured_array,
+    _from_fixed_length_strings,
+    _read_attr,
 )
-from anndata._io.utils import report_write_key_on_error, check_key, H5PY_V3
-from anndata._warnings import OldFormatWarning
-from anndata.compat import AwkArray
 
-from .registry import (
-    _REGISTRY,
-    IOSpec,
-    get_spec,
-    read_elem,
-    read_elem_partial,
-    write_elem,
-)
+from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group
 H5File = h5py.File
 
+
+####################
+# Dask utils       #
+####################
+
+try:
+    from dask.utils import SerializableLock as Lock
+except ImportError:
+    from threading import Lock
+
+# to fix https://github.com/dask/distributed/issues/780
+GLOBAL_LOCK = Lock()
 
 ####################
 # Dispatch methods #
@@ -68,6 +79,26 @@ H5File = h5py.File
 #     return False
 
 
+def _to_cpu_mem_wrapper(write_func):
+    """
+    Wrapper to bring cupy types into cpu memory before writing.
+
+    Ideally we do direct writing at some point.
+    """
+
+    def wrapper(
+        f,
+        k,
+        cupy_val: CupyArray | CupyCSCMatrix | CupyCSRMatrix,
+        _writer,
+        *,
+        dataset_kwargs=MappingProxyType,
+    ):
+        return write_func(f, k, cupy_val.get(), _writer, dataset_kwargs=dataset_kwargs)
+
+    return wrapper
+
+
 ################################
 # Fallbacks / backwards compat #
 ################################
@@ -90,7 +121,7 @@ def read_basic(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_memory()
+            return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, h5py.Dataset):
         return h5ad.read_dataset(elem)  # TODO: Handle legacy
@@ -110,7 +141,7 @@ def read_basic_zarr(elem, _reader):
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
-            return SparseDataset(elem).to_memory()
+            return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in elem.items()}
     elif isinstance(elem, ZarrArray):
         return zarr.read_dataset(elem)  # TODO: Handle legacy
@@ -256,7 +287,7 @@ def read_anndata(elem, _reader):
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
 def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     _writer.write_elem(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
@@ -276,7 +307,7 @@ def read_mapping(elem, _reader):
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
 def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     for sub_k, sub_v in v.items():
         _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
 
@@ -302,15 +333,39 @@ def write_list(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
 def write_basic(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     """Write methods which underlying library handles natively."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
 
 
+_REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
+    _to_cpu_mem_wrapper(write_basic)
+)
+_REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
+    _to_cpu_mem_wrapper(write_basic)
+)
+
+
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_basic_dask_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     import dask.array as da
+
+    g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    da.store(elem, g, lock=GLOBAL_LOCK)
+
+
+# Adding this separately because h5py isn't serializable
+# https://github.com/pydata/xarray/issues/4242
+@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
+def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+    import dask.array as da
+    import dask.config as dc
+
+    if dc.get("scheduler", None) == "dask.distributed":
+        raise ValueError(
+            "Cannot write dask arrays to hdf5 when using distributed scheduler"
+        )
 
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g)
@@ -436,7 +491,7 @@ def write_sparse_compressed(
     fmt: Literal["csr", "csc"],
     dataset_kwargs=MappingProxyType({}),
 ):
-    g = f.create_group(key)
+    g = f.require_group(key)
     g.attrs["shape"] = value.shape
 
     # Allow resizing for hdf5
@@ -450,78 +505,102 @@ def write_sparse_compressed(
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
 write_csc = partial(write_sparse_compressed, fmt="csc")
-_REGISTRY.register_write(H5Group, sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(
-    H5Group, views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0")
-)(write_csr)
-_REGISTRY.register_write(H5Group, sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(
-    H5Group, views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0")
-)(write_csc)
-_REGISTRY.register_write(ZarrGroup, sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(
-    ZarrGroup, views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0")
-)(write_csr)
-_REGISTRY.register_write(ZarrGroup, sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(
-    ZarrGroup, views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0")
-)(write_csc)
-_REGISTRY.register_write(H5Group, sparse.csr_array, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(
-    H5Group, views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0")
-)(write_csr)
-_REGISTRY.register_write(H5Group, sparse.csc_array, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(
-    H5Group, views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0")
-)(write_csc)
-_REGISTRY.register_write(ZarrGroup, sparse.csr_array, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-_REGISTRY.register_write(
-    ZarrGroup, views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0")
-)(write_csr)
-_REGISTRY.register_write(ZarrGroup, sparse.csc_array, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(
-    ZarrGroup, views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0")
-)(write_csc)
+
+for store_type, (cls, spec, func) in product(
+    (H5Group, ZarrGroup),
+    [
+        # spmatrix
+        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        # sparray
+        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        # cupy spmatrix
+        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csr)),
+        (
+            views.CupySparseCSRView,
+            IOSpec("csr_matrix", "0.1.0"),
+            _to_cpu_mem_wrapper(write_csr),
+        ),
+        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csc)),
+        (
+            views.CupySparseCSCView,
+            IOSpec("csc_matrix", "0.1.0"),
+            _to_cpu_mem_wrapper(write_csc),
+        ),
+    ],
+):
+    _REGISTRY.register_write(store_type, cls, spec)(func)
 
 
-_REGISTRY.register_write(H5Group, sparse.csc_array, IOSpec("csc_matrix", "0.1.0"))(
-    write_csc
-)
-_REGISTRY.register_write(H5Group, sparse.csr_array, IOSpec("csr_matrix", "0.1.0"))(
-    write_csr
-)
-
-
-@_REGISTRY.register_write(H5Group, SparseDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, SparseDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, CSCDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, CSCDataset, IOSpec("", "0.1.0"))
 def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     write_sparse_compressed(
         f,
         k,
-        elem.to_backed(),
+        elem._to_backed(),
         _writer,
-        fmt=elem.format_str,
+        fmt=elem.format,
         dataset_kwargs=dataset_kwargs,
     )
     # TODO: Cleaner way to do this
-    f[k].attrs["encoding-type"] = f"{elem.format_str}_matrix"
+    f[k].attrs["encoding-type"] = f"{elem.format}_matrix"
     f[k].attrs["encoding-version"] = "0.1.0"
+
+
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
+)
+def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+    sparse_format = elem._meta.format
+    if sparse_format == "csr":
+        axis = 0
+    elif sparse_format == "csc":
+        axis = 1
+    else:
+        raise NotImplementedError(
+            f"Cannot write dask sparse arrays with format {sparse_format}"
+        )
+
+    def chunk_slice(start: int, stop: int) -> tuple[slice | None, slice | None]:
+        result = [slice(None), slice(None)]
+        result[axis] = slice(start, stop)
+        return tuple(result)
+
+    axis_chunks = elem.chunks[axis]
+    chunk_start = 0
+    chunk_stop = axis_chunks[0]
+
+    _writer.write_elem(
+        f,
+        k,
+        elem[chunk_slice(chunk_start, chunk_stop)].compute(),
+        dataset_kwargs=dataset_kwargs,
+    )
+
+    disk_mtx = sparse_dataset(f[k])
+
+    for chunk_size in axis_chunks[1:]:
+        chunk_start = chunk_stop
+        chunk_stop += chunk_size
+
+        disk_mtx.append(elem[chunk_slice(chunk_start, chunk_stop)].compute())
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -529,7 +608,7 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse(elem, _reader):
-    return SparseDataset(elem).to_memory()
+    return sparse_dataset(elem).to_memory()
 
 
 @_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -537,7 +616,7 @@ def read_sparse(elem, _reader):
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
-    return SparseDataset(elem)[indices]
+    return sparse_dataset(elem)[indices]
 
 
 #################
@@ -556,7 +635,7 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 def write_awkward(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
     from anndata.compat import awkward as ak
 
-    group = f.create_group(k)
+    group = f.require_group(k)
     form, length, container = ak.to_buffers(ak.to_packed(v))
     group.attrs["length"] = length
     group.attrs["form"] = form.to_json()
@@ -573,7 +652,7 @@ def read_awkward(elem, _reader):
     length = _read_attr(elem.attrs, "length")
     container = {k: _reader.read_elem(elem[k]) for k in elem.keys()}
 
-    return ak.from_buffers(form, length, container)
+    return ak.from_buffers(form, int(length), container)
 
 
 ##############
@@ -590,11 +669,24 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
     for reserved in ("_index",):
         if reserved in df.columns:
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
-    group = f.create_group(key)
+    group = f.require_group(key)
+    if not df.columns.is_unique:
+        duplicates = list(df.columns[df.columns.duplicated()])
+        raise ValueError(
+            f"Found repeated column names: {duplicates}. Column names must be unique."
+        )
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
     if df.index.name is not None:
+        if df.index.name in col_names and not pd.Series(
+            df.index, index=df.index
+        ).equals(df[df.index.name]):
+            raise ValueError(
+                f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
+                "whose values are different. This is not supported. Please make sure "
+                "the values are the same, or use a different name."
+            )
         index_name = df.index.name
     else:
         index_name = "_index"
@@ -669,7 +761,7 @@ def read_dataframe_0_1_0(elem, _reader):
     return df
 
 
-def read_series(dataset: h5py.Dataset) -> Union[np.ndarray, pd.Categorical]:
+def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
     # For reading older dataframes
     if "categories" in dataset.attrs:
         if isinstance(dataset, ZarrArray):
@@ -709,7 +801,7 @@ def read_partial_dataframe_0_1_0(
 @_REGISTRY.register_write(H5Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
 def write_categorical(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     g.attrs["ordered"] = bool(v.ordered)
 
     _writer.write_elem(g, "codes", v.codes, dataset_kwargs=dataset_kwargs)
@@ -756,7 +848,7 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
 def write_nullable_integer(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.create_group(k)
+    g = f.require_group(k)
     if v._mask is not None:
         _writer.write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "values", v._data, dataset_kwargs=dataset_kwargs)

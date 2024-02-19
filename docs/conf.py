@@ -1,32 +1,25 @@
-import sys
-import logging
-from pathlib import Path
-from datetime import datetime
+from __future__ import annotations
 
-from sphinx.application import Sphinx
+import sys
+from datetime import datetime
+from importlib import metadata
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE.parent), str(HERE / "extensions")]
-import anndata  # noqa
-
-
-logger = logging.getLogger(__name__)
-
-for generated in HERE.glob("anndata.*.rst"):
-    generated.unlink()
+sys.path[:0] = [str(HERE / "extensions")]
 
 
 # -- General configuration ------------------------------------------------
-
-
-needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
 author = f"{project} developers"
 copyright = f"{datetime.now():%Y}, {author}"
-version = anndata.__version__.replace(".dirty", "")
-release = version
+release = version = metadata.version("anndata")
 
 # default settings
 templates_path = ["_templates"]
@@ -45,6 +38,7 @@ pygments_style = "sphinx"
 
 extensions = [
     "myst_parser",
+    "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.doctest",
@@ -54,8 +48,11 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
+    "sphinx_design",
+    "sphinx_search.extension",
     "sphinxext.opengraph",
-    "scanpydoc",
+    "scanpydoc",  # needs to be before linkcode
+    "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
@@ -97,7 +94,7 @@ suppress_warnings = [
 
 def setup(app: Sphinx):
     # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = False
+    app.warningiserror = True
 
 
 intersphinx_mapping = dict(
@@ -127,16 +124,16 @@ ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema
 # -- Options for HTML output ----------------------------------------------
 
 
+# The theme is sphinx-book-theme, with patches for readthedocs-sphinx-search
 html_theme = "scanpydoc"
-html_theme_options = dict(navigation_depth=4)
-html_context = dict(
-    display_github=True,  # Integrate GitHub
-    github_user="scverse",  # Username
-    github_repo="anndata",  # Repo name
-    github_version="main",  # Version
-    conf_py_path="/docs/",  # Path in the checkout to the docs root
+html_theme_options = dict(
+    use_repository_button=True,
+    repository_url="https://github.com/scverse/anndata",
+    repository_branch="main",
+    navigation_with_keys=False,  # https://github.com/pydata/pydata-sphinx-theme/issues/1492
 )
-issues_github_path = "{github_user}/{github_repo}".format_map(html_context)
+html_logo = "_static/img/anndata_schema.svg"
+issues_github_path = "scverse/anndata"
 html_show_sphinx = False
 
 

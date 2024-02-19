@@ -1,24 +1,22 @@
-import warnings
-from pathlib import Path
-from os import PathLike, fspath
+from __future__ import annotations
 
-import pandas as pd
 import math
+import warnings
+from os import PathLike, fspath
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import numpy as np
+import pandas as pd
 from scipy.sparse import issparse
 
-from .. import AnnData
+from .._warnings import WriteWarning
 from ..logging import get_logger
-from anndata._warnings import WriteWarning
 
-# Exports
-from .h5ad import write_h5ad as _write_h5ad
-
-from ..utils import import_function
+if TYPE_CHECKING:
+    from .. import AnnData
 
 logger = get_logger(__name__)
-
-write_zarr = import_function("anndata._io.zarr", "write_zarr")
 
 
 def write_csvs(

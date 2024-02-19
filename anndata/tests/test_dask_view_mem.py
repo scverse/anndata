@@ -1,6 +1,13 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
 import anndata as ad
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 pytest.importorskip("pytest_memray")
 
@@ -43,8 +50,8 @@ def alloc_cache():
         **{
             "layers": dict(m=da.random.random(*size)),
             "obsm": dict(m=da.random.random(*size)),
-            "obs": dict(m=da.random.random((N))),
-            "var": dict(m=da.random.random((N))),
+            "obs": dict(m=da.random.random(N)),
+            "var": dict(m=da.random.random(N)),
             "varm": dict(m=da.random.random(*size)),
         },
     )
@@ -128,7 +135,11 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
     subset = adata[:N, :N]
     assert subset.is_view
     m = subset.X
-    m[0, 0] = 100
+    with pytest.warns(
+        ad.ImplicitModificationWarning,
+        match="Trying to modify attribute `.X` of view, initializing view as actual.",
+    ):
+        m[0, 0] = 100
 
 
 # Normally should expect something around 90 kbs
@@ -153,5 +164,5 @@ def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
     )
     subset = adata[:N, :N]
     assert subset.is_view
-    m = getattr(subset, attr_name)["m"]
-    m[0] = 100
+    m: pd.Series = getattr(subset, attr_name)["m"]
+    m.iloc[0] = 100

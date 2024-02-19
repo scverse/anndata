@@ -1,18 +1,21 @@
-from collections.abc import Mapping
+from __future__ import annotations
+
+import warnings
+from collections.abc import Mapping, Sequence
 from functools import reduce
-from h5py import Dataset
+from typing import Callable, Literal, Union
+
 import numpy as np
 import pandas as pd
-import warnings
+from h5py import Dataset
 
-from typing import Dict, Union, Optional, Sequence, Callable, Literal
-
-from ..._core.anndata import AnnData
-from ..._core.index import _normalize_indices, _normalize_index, Index
-from ..._core.views import _resolve_idx
-from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
-from ..._core.sparse_dataset import SparseDataset
 from ..._core.aligned_mapping import AxisArrays
+from ..._core.anndata import AnnData
+from ..._core.index import Index, _normalize_index, _normalize_indices
+from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
+from ..._core.sparse_dataset import BaseCompressedSparseDataset
+from ..._core.views import _resolve_idx
+from ...compat import _map_cat_to_str
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -206,7 +209,7 @@ class MapObsView:
             else:
                 if vidx is not None:
                     idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
-                arrs.append(arr[idx])
+                arrs.append(arr.iloc[idx] if isinstance(arr, pd.Series) else arr[idx])
 
         if len(arrs) > 1:
             _arr = _merge(arrs)
@@ -360,7 +363,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                     # todo: fix
                     arr = X[oidx][:, vidx]
                 Xs.append(arr if reverse is None else arr[reverse])
-            elif isinstance(X, SparseDataset):
+            elif isinstance(X, BaseCompressedSparseDataset):
                 # very slow indexing with two arrays
                 if isinstance(vidx, slice) or len(vidx) <= 1000:
                     Xs.append(X[oidx, vidx])
@@ -392,7 +395,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         The data matrix formed from the `.X` attributes of the underlying `adatas`,
         properly reindexed and lazily merged.
         Nothing is copied until `.X` is accessed, no real concatenation of the
-        unerlying `.X` attributes is done.
+        underlying `.X` attributes is done.
         """
         # inconsistent behavior here, _X can be changed,
         # but the other attributes can't be changed.
@@ -421,7 +424,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     def obsm(self):
         """Lazy subset of multi-dimensional annotation of observations.
 
-        Points to the `.obsm` attributes of the underlying adatas ot to `.obsm` of the parent
+        Points to the `.obsm` attributes of the underlying adatas to `.obsm` of the parent
         AnnCollection object depending on the `join_obsm` option of the AnnCollection object.
         See the docs of :class:`~anndata.experimental.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
@@ -437,7 +440,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     def obs(self):
         """Lazy suset of one-dimensional annotation of observations.
 
-        Points to the `.obs` attributes of the underlying adatas ot to `.obs` of the parent
+        Points to the `.obs` attributes of the underlying adatas to `.obs` of the parent
         AnnCollection object depending on the `join_obs` option of the AnnCollection object.
         See the docs of `~anndata.experimental.AnnCollection` for details.
         Copy rules are the same as for `.layers`, i.e. everything is lazy.
@@ -445,7 +448,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         To get `.obs` as a DataFrame, use `.obs.df`.
         To get `.obs` as a dictionary, use `.obs.to_dict()`. You can also specify keys
         to include in the dict `.obs.to_dict(keys=['key1', 'key2'])` and if you want
-        converters to be truned off when copying to dict `.obs.to_dict(use_convert=False)`.
+        converters to be turned off when copying to dict `.obs.to_dict(use_convert=False)`.
         """
         self._lazy_init_attr("obs")
         return self._obs_view
@@ -490,9 +493,12 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         ::
 
             {
-                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
-                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
-                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+                # densify .X
+                "X": lambda a: a.toarray() if issparse(a) else a,
+                # change dtype for all keys of .obsm
+                "obsm": lambda a: np.asarray(a, dtype="float32"),
+                # change type only for one key of .obs
+                "obs": dict(key1=lambda c: c.astype(str)),
             }
         """
         return self._convert
@@ -571,8 +577,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self.reference.attrs_keys
 
 
-DictCallable = Dict[str, Callable]
-ConvertType = Union[Callable, DictCallable, Dict[str, DictCallable]]
+DictCallable = dict[str, Callable]
+ConvertType = Union[Callable, dict[str, Union[Callable, DictCallable]]]
 
 
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
@@ -621,7 +627,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         incrementing integer labels.
     index_unique
         Whether to make the index unique by using the keys. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
+        is the delimiter between "{orig_idx}{index_unique}{key}". When `None`,
         the original indices are kept.
     convert
         You can pass a function or a Mapping of functions which will be applied
@@ -665,14 +671,14 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
 
     def __init__(
         self,
-        adatas: Union[Sequence[AnnData], Dict[str, AnnData]],
-        join_obs: Optional[Literal["inner", "outer"]] = "inner",
-        join_obsm: Optional[Literal["inner"]] = None,
-        join_vars: Optional[Literal["inner"]] = None,
-        label: Optional[str] = None,
-        keys: Optional[Sequence[str]] = None,
-        index_unique: Optional[str] = None,
-        convert: Optional[ConvertType] = None,
+        adatas: Sequence[AnnData] | dict[str, AnnData],
+        join_obs: Literal["inner", "outer"] | None = "inner",
+        join_obsm: Literal["inner"] | None = None,
+        join_vars: Literal["inner"] | None = None,
+        label: str | None = None,
+        keys: Sequence[str] | None = None,
+        index_unique: str | None = None,
+        convert: ConvertType | None = None,
         harmonize_dtypes: bool = True,
         indices_strict: bool = True,
     ):
@@ -719,7 +725,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         )
         if index_unique is not None:
             concat_indices = concat_indices.str.cat(
-                label_col.map(str), sep=index_unique
+                _map_cat_to_str(label_col), sep=index_unique
             )
         self.obs_names = pd.Index(concat_indices)
 
@@ -814,9 +820,12 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         ::
 
             {
-                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
-                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
-                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+                # densify .X
+                "X": lambda a: a.toarray() if issparse(a) else a,
+                # change dtype for all keys of .obsm
+                "obsm": lambda a: np.asarray(a, dtype="float32"),
+                # change type only for one key of .obs
+                "obs": dict(key1=lambda c: c.astype(str)),
             }
         """
         return self._convert
@@ -933,7 +942,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
 
 
 class LazyAttrData(_IterateViewMixin):
-    def __init__(self, adset: AnnCollection, attr: str, key: Optional[str] = None):
+    def __init__(self, adset: AnnCollection, attr: str, key: str | None = None):
         self.adset = adset
         self.attr = attr
         self.key = key

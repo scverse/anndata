@@ -19,20 +19,20 @@ Also interesting:
 * io for backed objects
 * Reading dense as sparse, writing sparse as dense
 """
+from __future__ import annotations
+
+import sys
 import tempfile
 from pathlib import Path
-import sys
 
-from memory_profiler import memory_usage
 import numpy as np
 import pooch
-
-from .utils import get_anndata_memsize, sedate, get_peak_mem, get_actualsize
+from memory_profiler import memory_usage
 
 # from . import datasets
-
 import anndata
 
+from .utils import get_actualsize, get_peak_mem, sedate
 
 PBMC_3K_URL = "http://falexwolf.de/data/pbmc3k_raw.h5ad"
 

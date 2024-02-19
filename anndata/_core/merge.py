@@ -3,36 +3,44 @@ Code for merging/ concatenating AnnData objects.
 """
 from __future__ import annotations
 
+import typing
 from collections import OrderedDict
-from collections.abc import Mapping, MutableSet
-from functools import reduce, singledispatch
-from itertools import repeat
-from operator import and_, or_, sub
-from typing import (
-    Any,
+from collections.abc import (
     Callable,
     Collection,
     Iterable,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-    Literal,
+    Mapping,
+    MutableSet,
+    Sequence,
 )
-import typing
-from warnings import warn, filterwarnings
+from functools import partial, reduce, singledispatch
+from itertools import repeat
+from operator import and_, or_, sub
+from typing import Any, Literal, TypeVar
+from warnings import warn
 
-from natsort import natsorted
 import numpy as np
 import pandas as pd
+from natsort import natsorted
 from scipy import sparse
 from scipy.sparse import spmatrix
 
-from .anndata import AnnData
-from ..compat import AwkArray, DaskArray
-from ..utils import asarray, dim_len
-from .index import _subset, make_slice
 from anndata._warnings import ExperimentalFeatureWarning
+
+from ..compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSRMatrix,
+    CupySparseMatrix,
+    DaskArray,
+    _map_cat_to_str,
+)
+from ..utils import asarray, dim_len, warn_once
+from .anndata import AnnData
+from .index import _subset, make_slice
+
+if typing.TYPE_CHECKING:
+    from pandas.api.extensions import ExtensionDtype
 
 T = TypeVar("T")
 
@@ -64,14 +72,14 @@ class OrderedSet(MutableSet):
     def add(self, val):
         self.dict[val] = None
 
-    def union(self, *vals) -> "OrderedSet":
+    def union(self, *vals) -> OrderedSet:
         return reduce(or_, vals, self)
 
     def discard(self, val):
         if val in self:
             del self.dict[val]
 
-    def difference(self, *vals) -> "OrderedSet":
+    def difference(self, *vals) -> OrderedSet:
         return reduce(sub, vals, self)
 
 
@@ -96,7 +104,7 @@ def not_missing(v) -> bool:
 
 
 # We need to be able to check for equality of arrays to know which are the same.
-# Unfortunatley equality of arrays is poorly defined.
+# Unfortunately equality of arrays is poorly defined.
 # * `np.array_equal` does not work for sparse arrays
 # * `np.array_equal(..., equal_nan=True)` does not work for null values at the moment
 #   (see https://github.com/numpy/numpy/issues/16377)
@@ -124,12 +132,29 @@ def equal_dask_array(a, b) -> bool:
     if isinstance(b, DaskArray):
         if tokenize(a) == tokenize(b):
             return True
-    return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
+    if isinstance(a._meta, spmatrix):
+        # TODO: Maybe also do this in the other case?
+        return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
+    else:
+        return da.equal(a, b, where=~(da.isnan(a) == da.isnan(b))).all()
 
 
 @equal.register(np.ndarray)
 def equal_array(a, b) -> bool:
-    return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
+    # Reshaping allows us to compare inputs with >2 dimensions
+    # We cast to pandas since it will still work with non-numeric types
+    b = asarray(b)
+    if a.shape != b.shape:
+        return False
+
+    return equal(pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)))
+
+
+@equal.register(CupyArray)
+def equal_cupyarray(a, b) -> bool:
+    import cupy as cp
+
+    return bool(cp.array_equal(a, b, equal_nan=True))
 
 
 @equal.register(pd.Series)
@@ -139,18 +164,30 @@ def equal_series(a, b) -> bool:
 
 @equal.register(sparse.spmatrix)
 @equal.register(sparse.sparray)
+@equal.register(CupySparseMatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
-    if isinstance(b, sparse.spmatrix):
+    import array_api_compat
+
+    xp = array_api_compat.array_namespace(a.data)
+
+    if isinstance(b, (CupySparseMatrix, sparse.spmatrix)):
+        if isinstance(a, CupySparseMatrix):
+            # Comparison broken for CSC matrices
+            # https://github.com/cupy/cupy/issues/7757
+            a, b = CupyCSRMatrix(a), CupyCSRMatrix(b)
         comp = a != b
         if isinstance(comp, bool):
             return not comp
+        if isinstance(comp, CupySparseMatrix):
+            # https://github.com/cupy/cupy/issues/7751
+            comp = comp.get()
         # fmt: off
         return (
             (len(comp.data) == 0)
             or (
-                np.isnan(a[comp]).all()
-                and np.isnan(b[comp]).all()
+                xp.isnan(a[comp]).all()
+                and xp.isnan(b[comp]).all()
             )
         )
         # fmt: on
@@ -172,17 +209,29 @@ def as_sparse(x):
         return x
 
 
+def as_cp_sparse(x) -> CupySparseMatrix:
+    import cupyx.scipy.sparse as cpsparse
+
+    if isinstance(x, cpsparse.spmatrix):
+        return x
+    elif isinstance(x, np.ndarray):
+        return cpsparse.csr_matrix(as_sparse(x))
+    else:
+        return cpsparse.csr_matrix(x)
+
+
 def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
     """
     Attempts to unify datatypes from multiple dataframes.
 
     For catching cases where pandas would convert to object dtype.
     """
+    dfs = list(dfs)
     # Get shared categorical columns
     df_dtypes = [dict(df.dtypes) for df in dfs]
     columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
 
-    dtypes = {col: list() for col in columns}
+    dtypes: dict[str, list[np.dtype | ExtensionDtype]] = {col: [] for col in columns}
     for col in columns:
         for df in df_dtypes:
             dtypes[col].append(df.get(col, None))
@@ -206,7 +255,9 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
     return dfs
 
 
-def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
+def try_unifying_dtype(
+    col: Sequence[np.dtype | ExtensionDtype],
+) -> pd.core.dtypes.base.ExtensionDtype | None:
     """
     If dtypes can be unified, returns the dtype they would be unified to.
 
@@ -219,26 +270,26 @@ def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
         A list of dtypes to unify. Can be numpy/ pandas dtypes, or None (which denotes
         a missing value)
     """
-    dtypes = set()
+    dtypes: set[pd.CategoricalDtype] = set()
     # Categorical
-    if any([pd.api.types.is_categorical_dtype(x) for x in col]):
+    if any(isinstance(dtype, pd.CategoricalDtype) for dtype in col):
         ordered = False
         for dtype in col:
-            if pd.api.types.is_categorical_dtype(dtype):
+            if isinstance(dtype, pd.CategoricalDtype):
                 dtypes.add(dtype)
                 ordered = ordered | dtype.ordered
             elif not pd.isnull(dtype):
-                return False
+                return None
         if len(dtypes) > 0 and not ordered:
             categories = reduce(
                 lambda x, y: x.union(y),
-                [x.categories for x in dtypes if not pd.isnull(x)],
+                [dtype.categories for dtype in dtypes if not pd.isnull(dtype)],
             )
 
             return pd.CategoricalDtype(natsorted(categories), ordered=False)
     # Boolean
-    elif all([pd.api.types.is_bool_dtype(x) or x is None for x in col]):
-        if any([x is None for x in col]):
+    elif all(pd.api.types.is_bool_dtype(dtype) or dtype is None for dtype in col):
+        if any(dtype is None for dtype in col):
             return pd.BooleanDtype()
         else:
             return None
@@ -246,12 +297,90 @@ def try_unifying_dtype(col: list) -> pd.core.dtypes.base.ExtensionDtype | None:
         return None
 
 
+def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"]):
+    """Given columns for a set of dataframes, checks if the can be combined.
+
+    Looks for if there are duplicated column names that would show up in the result.
+    """
+    repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
+    if join == "inner":
+        intersecting_cols = intersect_keys(cols)
+        problem_cols = repeated_cols.intersection(intersecting_cols)
+    elif join == "outer":
+        problem_cols = repeated_cols
+    else:
+        raise ValueError()
+
+    if len(problem_cols) > 0:
+        problem_cols = list(problem_cols)
+        raise pd.errors.InvalidIndexError(
+            f"Cannot combine dataframes as some contained duplicated column names - "
+            "causing ambiguity.\n\n"
+            f"The problem columns are: {problem_cols}"
+        )
+
+
+# TODO: open PR or feature request to cupy
+def _cp_block_diag(mats, format=None, dtype=None):
+    """
+    Modified version of scipy.sparse.block_diag for cupy sparse.
+    """
+    import cupy as cp
+    from cupyx.scipy import sparse as cpsparse
+
+    row = []
+    col = []
+    data = []
+    r_idx = 0
+    c_idx = 0
+    for a in mats:
+        # if isinstance(a, (list, numbers.Number)):
+        #     a = cpsparse.coo_matrix(a)
+        nrows, ncols = a.shape
+        if cpsparse.issparse(a):
+            a = a.tocoo()
+            row.append(a.row + r_idx)
+            col.append(a.col + c_idx)
+            data.append(a.data)
+        else:
+            a_row, a_col = cp.divmod(cp.arange(nrows * ncols), ncols)
+            row.append(a_row + r_idx)
+            col.append(a_col + c_idx)
+            data.append(a.reshape(-1))
+        r_idx += nrows
+        c_idx += ncols
+    row = cp.concatenate(row)
+    col = cp.concatenate(col)
+    data = cp.concatenate(data)
+    return cpsparse.coo_matrix(
+        (data, (row, col)), shape=(r_idx, c_idx), dtype=dtype
+    ).asformat(format)
+
+
+def _dask_block_diag(mats):
+    from itertools import permutations
+
+    import dask.array as da
+
+    blocks = np.zeros((len(mats), len(mats)), dtype=object)
+    for i, j in permutations(range(len(mats)), 2):
+        blocks[i, j] = da.from_array(
+            sparse.csr_matrix((mats[i].shape[0], mats[j].shape[1]))
+        )
+    for i, x in enumerate(mats):
+        if not isinstance(x._meta, sparse.csr_matrix):
+            x = x.map_blocks(sparse.csr_matrix)
+        blocks[i, i] = x
+
+    return da.block(blocks.tolist())
+
+
 ###################
 # Per element logic
 ###################
 
 
-def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
+def unique_value(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -263,7 +392,7 @@ def unique_value(vals: Collection[T]) -> Union[T, MissingVal]:
     return unique_val
 
 
-def first(vals: Collection[T]) -> Union[T, MissingVal]:
+def first(vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection of vals, return the first non-missing one.If they're all missing,
     return MissingVal.
@@ -274,7 +403,7 @@ def first(vals: Collection[T]) -> Union[T, MissingVal]:
     return MissingVal
 
 
-def only(vals: Collection[T]) -> Union[T, MissingVal]:
+def only(vals: Collection[T]) -> T | MissingVal:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -347,7 +476,7 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
-    strategy: Union[str, Callable, None]
+    strategy: str | Callable | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
@@ -408,6 +537,10 @@ class Reindexer:
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, DaskArray):
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, CupyArray):
+            return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, CupySparseMatrix):
+            return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -428,10 +561,38 @@ class Reindexer:
             return da.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.old_idx.get_indexer(self.new_idx)
-
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
-        sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+
+        if any(indexer == -1):
+            sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+
         return sub_el
+
+    def _apply_to_cupy_array(self, el, *, axis, fill_value=None):
+        import cupy as cp
+
+        if fill_value is None:
+            fill_value = default_fill_value([el])
+        if el.shape[axis] == 0:
+            # Presumably faster since it won't allocate the full array
+            shape = list(el.shape)
+            shape[axis] = len(self.new_idx)
+            return cp.broadcast_to(cp.asarray(fill_value), tuple(shape))
+
+        old_idx_tuple = [slice(None)] * len(el.shape)
+        old_idx_tuple[axis] = self.old_pos
+        old_idx_tuple = tuple(old_idx_tuple)
+        new_idx_tuple = [slice(None)] * len(el.shape)
+        new_idx_tuple[axis] = self.new_pos
+        new_idx_tuple = tuple(new_idx_tuple)
+
+        out_shape = list(el.shape)
+        out_shape[axis] = len(self.new_idx)
+
+        out = cp.full(tuple(out_shape), fill_value)
+        out[new_idx_tuple] = el[old_idx_tuple]
+
+        return out
 
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
@@ -453,12 +614,20 @@ class Reindexer:
     def _apply_to_sparse(
         self, el: sparse.spmatrix | sparse.sparray, *, axis, fill_value=None
     ) -> spmatrix:
+        if isinstance(el, CupySparseMatrix):
+            from cupyx.scipy import sparse
+        else:
+            from scipy import sparse
+        import array_api_compat
+
+        xp = array_api_compat.array_namespace(el.data)
+
         if fill_value is None:
             fill_value = default_fill_value([el])
         if fill_value != 0:
             to_fill = self.new_idx.get_indexer(self.new_idx.difference(self.old_idx))
         else:
-            to_fill = np.array([])
+            to_fill = xp.array([])
 
         # Fixing outer indexing for missing values
         if el.shape[axis] == 0:
@@ -468,18 +637,21 @@ class Reindexer:
             if fill_value == 0:
                 return sparse.csr_matrix(shape)
             else:
-                return np.broadcast_to(fill_value, shape)
+                return type(el)(xp.broadcast_to(xp.asarray(fill_value), shape))
 
         fill_idxer = None
 
-        if len(to_fill) > 0:
-            idxmtx_dtype = np.promote_types(el.dtype, np.array(fill_value).dtype)
+        if len(to_fill) > 0 or isinstance(el, CupySparseMatrix):
+            idxmtx_dtype = xp.promote_types(el.dtype, xp.array(fill_value).dtype)
         else:
             idxmtx_dtype = bool
 
         if axis == 1:
             idxmtx = sparse.coo_matrix(
-                (np.ones(len(self.new_pos), dtype=bool), (self.old_pos, self.new_pos)),
+                (
+                    xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
+                    (xp.asarray(self.old_pos), xp.asarray(self.new_pos)),
+                ),
                 shape=(len(self.old_idx), len(self.new_idx)),
                 dtype=idxmtx_dtype,
             )
@@ -490,7 +662,10 @@ class Reindexer:
                 fill_idxer = (slice(None), to_fill)
         elif axis == 0:
             idxmtx = sparse.coo_matrix(
-                (np.ones(len(self.new_pos), dtype=bool), (self.new_pos, self.old_pos)),
+                (
+                    xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
+                    (xp.asarray(self.new_pos), xp.asarray(self.old_pos)),
+                ),
                 shape=(len(self.new_idx), len(self.old_idx)),
                 dtype=idxmtx_dtype,
             )
@@ -588,9 +763,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
-            unify_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
-            ignore_index=True,
+            unify_dtypes(f(x) for f, x in zip(reindexers, arrays)),
             axis=axis,
+            ignore_index=True,
         )
         df.index = index
         return df
@@ -605,6 +780,37 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
 
         return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)], axis=axis)
+    elif any(isinstance(a, CupySparseMatrix) for a in arrays):
+        import cupyx.scipy.sparse as cpsparse
+
+        if not all(
+            isinstance(a, (CupySparseMatrix, CupyArray)) or 0 in a.shape for a in arrays
+        ):
+            raise NotImplementedError(
+                "Cannot concatenate a cupy array with other array types."
+            )
+        sparse_stack = (cpsparse.vstack, cpsparse.hstack)[axis]
+        return sparse_stack(
+            [
+                f(as_cp_sparse(a), axis=1 - axis, fill_value=fill_value)
+                for f, a in zip(reindexers, arrays)
+            ],
+            format="csr",
+        )
+    elif any(isinstance(a, CupyArray) for a in arrays):
+        import cupy as cp
+
+        if not all(isinstance(a, CupyArray) or 0 in a.shape for a in arrays):
+            raise NotImplementedError(
+                "Cannot concatenate a cupy array with other array types."
+            )
+        return cp.concatenate(
+            [
+                f(cp.asarray(x), fill_value=fill_value, axis=1 - axis)
+                for f, x in zip(reindexers, arrays)
+            ],
+            axis=axis,
+        )
     elif any(isinstance(a, (sparse.spmatrix, sparse.sparray)) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
@@ -624,7 +830,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
 
 
-def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
+def inner_concat_aligned_mapping(mappings, *, reindexers=None, index=None, axis=0):
     result = {}
 
     for k in intersect_keys(mappings):
@@ -683,16 +889,11 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
             )
-        warn(
-            "Outer joins on awkward.Arrays will have different return values in the future."
+        warn_once(
+            "Outer joins on awkward.Arrays will have different return values in the future. "
             "For details, and to offer input, please see:\n\n\t"
             "https://github.com/scverse/anndata/issues/898",
             ExperimentalFeatureWarning,
-        )
-        filterwarnings(
-            "ignore",
-            category=ExperimentalFeatureWarning,
-            message=r"Outer joins on awkward.Arrays will have different return values.*",
         )
         # all_keys = union_keys(el.fields for el in els if not_missing(el))
         reindexers = []
@@ -717,10 +918,17 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
 
 
 def outer_concat_aligned_mapping(
-    mappings, reindexers=None, index=None, fill_value=None, axis=0
+    mappings, *, reindexers=None, index=None, axis=0, fill_value=None
 ):
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
+
+    def missing_element(n: int, axis: Literal[0, 1] = 0) -> np.ndarray:
+        """Generates value to use when there is a missing element."""
+        if axis == 0:
+            return np.zeros((n, 0), dtype=bool)
+        else:
+            return np.zeros((0, n), dtype=bool)
 
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
@@ -733,7 +941,7 @@ def outer_concat_aligned_mapping(
         # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
-                el if not_missing(el) else np.zeros((n, 0), dtype=bool)
+                el if not_missing(el) else missing_element(n, axis=axis)
                 for el, n in zip(els, ns)
             ],
             cur_reindexers,
@@ -753,7 +961,12 @@ def concat_pairwise_mapping(
             m.get(k, sparse.csr_matrix((s, s), dtype=bool))
             for m, s in zip(mappings, shapes)
         ]
-        result[k] = sparse.block_diag(els, format="csr")
+        if all(isinstance(el, (CupySparseMatrix, CupyArray)) for el in els):
+            result[k] = _cp_block_diag(els, format="csr")
+        elif all(isinstance(el, DaskArray) for el in els):
+            result[k] = _dask_block_diag(els)
+        else:
+            result[k] = sparse.block_diag(els, format="csr")
     return result
 
 
@@ -782,7 +995,7 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     return out
 
 
-def _resolve_dim(*, dim: str = None, axis: int = None) -> Tuple[int, str]:
+def _resolve_dim(*, dim: str = None, axis: int = None) -> tuple[int, str]:
     _dims = ("obs", "var")
     if (dim is None and axis is None) or (dim is not None and axis is not None):
         raise ValueError(
@@ -834,16 +1047,16 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 
 
 def concat(
-    adatas: Union[Collection[AnnData], "typing.Mapping[str, AnnData]"],
+    adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
     *,
     axis: Literal[0, 1] = 0,
     join: Literal["inner", "outer"] = "inner",
-    merge: Union[StrategiesLiteral, Callable, None] = None,
-    uns_merge: Union[StrategiesLiteral, Callable, None] = None,
-    label: Optional[str] = None,
-    keys: Optional[Collection] = None,
-    index_unique: Optional[str] = None,
-    fill_value: Optional[Any] = None,
+    merge: StrategiesLiteral | Callable | None = None,
+    uns_merge: StrategiesLiteral | Callable | None = None,
+    label: str | None = None,
+    keys: Collection | None = None,
+    index_unique: str | None = None,
+    fill_value: Any | None = None,
     pairwise: bool = False,
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
@@ -882,7 +1095,7 @@ def concat(
         incrementing integer labels.
     index_unique
         Whether to make the index unique by using the keys. If provided, this
-        is the delimeter between "{orig_idx}{index_unique}{key}". When `None`,
+        is the delimiter between "{orig_idx}{index_unique}{key}". When `None`,
         the original indices are kept.
     fill_value
         When `join="outer"`, this is the value that will be used to fill the introduced
@@ -912,12 +1125,18 @@ def concat(
     ...     X=sparse.csr_matrix(np.array([[0, 1], [2, 3]])),
     ...     obs=pd.DataFrame({"group": ["a", "b"]}, index=["s1", "s2"]),
     ...     var=pd.DataFrame(index=["var1", "var2"]),
-    ...     varm={"ones": np.ones((2, 5)), "rand": np.random.randn(2, 3), "zeros": np.zeros((2, 5))},
+    ...     varm={
+    ...         "ones": np.ones((2, 5)),
+    ...         "rand": np.random.randn(2, 3),
+    ...         "zeros": np.zeros((2, 5)),
+    ...     },
     ...     uns={"a": 1, "b": 2, "c": {"c.a": 3, "c.b": 4}},
     ... )
     >>> b = ad.AnnData(
     ...     X=sparse.csr_matrix(np.array([[4, 5, 6], [7, 8, 9]])),
-    ...     obs=pd.DataFrame({"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]),
+    ...     obs=pd.DataFrame(
+    ...         {"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]
+    ...     ),
     ...     var=pd.DataFrame(index=["var1", "var2", "var3"]),
     ...     varm={"ones": np.ones((3, 5)), "rand": np.random.randn(3, 5)},
     ...     uns={"a": 1, "b": 3, "c": {"c.b": 4}},
@@ -951,7 +1170,7 @@ def concat(
     >>> (inner.obs_names, inner.var_names)  # doctest: +NORMALIZE_WHITESPACE
     (Index(['s1', 's2', 's3', 's4'], dtype='object'),
     Index(['var1', 'var2'], dtype='object'))
-    >>> outer = ad.concat([a, b], join="outer") # Joining on union of variables
+    >>> outer = ad.concat([a, b], join="outer")  # Joining on union of variables
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
@@ -1046,7 +1265,9 @@ def concat(
         [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(
+            _map_cat_to_str(label_col), sep=index_unique
+        )
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = merge_indices(
@@ -1057,8 +1278,9 @@ def concat(
     ]
 
     # Annotation for concatenation axis
+    check_combinable_cols([getattr(a, dim).columns for a in adatas], join=join)
     concat_annot = pd.concat(
-        unify_dtypes([getattr(a, dim) for a in adatas]),
+        unify_dtypes(getattr(a, dim) for a in adatas),
         join=join,
         ignore_index=True,
     )
@@ -1074,37 +1296,30 @@ def concat(
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
-        layers = inner_concat_aligned_mapping(
-            [a.layers for a in adatas], axis=axis, reindexers=reindexers
-        )
-        concat_mapping = inner_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
-        )
-        if pairwise:
-            concat_pairwise = concat_pairwise_mapping(
-                mappings=[getattr(a, f"{dim}p") for a in adatas],
-                shapes=[a.shape[axis] for a in adatas],
-                join_keys=intersect_keys,
-            )
-        else:
-            concat_pairwise = {}
+        concat_aligned_mapping = inner_concat_aligned_mapping
+        join_keys = intersect_keys
     elif join == "outer":
-        layers = outer_concat_aligned_mapping(
-            [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
+        concat_aligned_mapping = partial(
+            outer_concat_aligned_mapping, fill_value=fill_value
         )
-        concat_mapping = outer_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas],
-            index=concat_indices,
-            fill_value=fill_value,
+        join_keys = union_keys
+    else:
+        assert False, f"{join=} should have been validated above by pd.concat"
+
+    layers = concat_aligned_mapping(
+        [a.layers for a in adatas], axis=axis, reindexers=reindexers
+    )
+    concat_mapping = concat_aligned_mapping(
+        [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
+    )
+    if pairwise:
+        concat_pairwise = concat_pairwise_mapping(
+            mappings=[getattr(a, f"{dim}p") for a in adatas],
+            shapes=[a.shape[axis] for a in adatas],
+            join_keys=join_keys,
         )
-        if pairwise:
-            concat_pairwise = concat_pairwise_mapping(
-                mappings=[getattr(a, f"{dim}p") for a in adatas],
-                shapes=[a.shape[axis] for a in adatas],
-                join_keys=union_keys,
-            )
-        else:
-            concat_pairwise = {}
+    else:
+        concat_pairwise = {}
 
     # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
     alt_mapping = merge(

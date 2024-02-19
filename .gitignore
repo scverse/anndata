@@ -2,26 +2,22 @@
 .DS_Store
 *~
 
-# Compiled files
+# Caches for compiled and downloaded files
 __pycache__/
+/*cache/
+/node_modules/
+/data/
 
 # Distribution / packaging
-/build/
 /dist/
 /anndata/_version.py
-/*.egg-info/
 /requirements*.lock
 /.python-version
+/hatch.toml
 
-# Tests and coverage
-/.pytest_cache/
-/.cache/
-/data/
-/tmp.zarr/
-test.h5ad
-test.loom
-test.zarr
-.coverage
+# Test results (nunit/junit) and coverage
+/test-data/
+/*coverage*
 
 # jupyter
 .ipynb_checkpoints

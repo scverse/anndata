@@ -79,7 +79,7 @@ Writing to other formats.
 ## Experimental API
 
 ```{warning}
-API's in the experimenal module are currently in development and subject to change at any time.
+API's in the experimental module are currently in development and subject to change at any time.
 ```
 
 Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files. In paritcular, for pytorch-based models.
@@ -90,6 +90,26 @@ Two classes for working with batched access to collections of many `AnnData` obj
 
    experimental.AnnCollection
    experimental.AnnLoader
+```
+
+Interface for accessing on-disk sparse data:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   experimental.sparse_dataset
+   experimental.CSRDataset
+   experimental.CSCDataset
+```
+
+Out of core concatenation
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   experimental.concat_on_disk
 ```
 
 Low level methods for reading and writing elements of an `` AnnData` `` object to a store:
@@ -121,4 +141,14 @@ Utilities for customizing the IO process:
    :toctree: generated/
 
    ImplicitModificationWarning
+```
+
+## Settings
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   settings
+   settings.override
 ```

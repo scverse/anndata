@@ -1,16 +1,41 @@
+from __future__ import annotations
+
+import re
 import warnings
-from functools import wraps, singledispatch
-from typing import Mapping, Any, Sequence, Union, Callable
+from functools import singledispatch, wraps
+from typing import TYPE_CHECKING, Any
 
 import h5py
-import pandas as pd
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
+from ._core.sparse_dataset import BaseCompressedSparseDataset
+from .compat import CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
-from ._core.sparse_dataset import SparseDataset
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 logger = get_logger(__name__)
+
+
+def import_name(name: str) -> Any:
+    from importlib import import_module
+
+    parts = name.split(".")
+    obj = import_module(parts[0])
+    for i, name in enumerate(parts[1:]):
+        try:
+            obj = import_module(f"{obj.__name__}.{name}")
+        except ModuleNotFoundError:
+            break
+    for name in parts[i + 1 :]:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError:
+            raise RuntimeError(f"{parts[:i]}, {parts[i+1:]}, {obj} {name}")
+    return obj
 
 
 @singledispatch
@@ -25,14 +50,29 @@ def asarray_sparse(x):
     return x.toarray()
 
 
-@asarray.register(SparseDataset)
+@asarray.register(BaseCompressedSparseDataset)
 def asarray_sparse_dataset(x):
-    return asarray(x.value)
+    return asarray(x.to_memory())
 
 
 @asarray.register(h5py.Dataset)
 def asarray_h5py_dataset(x):
     return x[...]
+
+
+@asarray.register(CupyArray)
+def asarray_cupy(x):
+    return x.get()
+
+
+@asarray.register(CupySparseMatrix)
+def asarray_cupy_sparse(x):
+    return x.toarray().get()
+
+
+@asarray.register(DaskArray)
+def asarray_dask(x):
+    return asarray(x.compute())
 
 
 @singledispatch
@@ -243,7 +283,7 @@ def warn_names_duplicates(attr: str):
 
 def ensure_df_homogeneous(
     df: pd.DataFrame, name: str
-) -> Union[np.ndarray, sparse.csr_matrix]:
+) -> np.ndarray | sparse.csr_matrix:
     # TODO: rename this function, I would not expect this to return a non-dataframe
     if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
         arr = df.sparse.to_coo().tocsr()
@@ -291,7 +331,19 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     return arr
 
 
-def deprecated(new_name: str):
+def warn_once(msg: str, category: type[Warning], stacklevel: int = 1):
+    warnings.warn(msg, category, stacklevel=stacklevel)
+    # Prevent from showing up every time an awkward array is used
+    # You'd think `'once'` works, but it doesn't at the repl and in notebooks
+    warnings.filterwarnings("ignore", category=category, message=re.escape(msg))
+
+
+def deprecated(
+    new_name: str,
+    category: type[Warning] = DeprecationWarning,
+    add_msg: str = "",
+    hide: bool = True,
+):
     """\
     This is a decorator which can be used to mark functions
     as deprecated. It will result in a warning being emitted
@@ -299,20 +351,20 @@ def deprecated(new_name: str):
     """
 
     def decorator(func):
+        name = func.__qualname__
+        msg = (
+            f"Use {new_name} instead of {name}, "
+            f"{name} is deprecated and will be removed in the future."
+        )
+        if add_msg:
+            msg += f" {add_msg}"
+
         @wraps(func)
         def new_func(*args, **kwargs):
-            # turn off filter
-            warnings.simplefilter("always", DeprecationWarning)
-            warnings.warn(
-                f"Use {new_name} instead of {func.__name__}, "
-                f"{func.__name__} will be removed in the future.",
-                category=DeprecationWarning,
-                stacklevel=2,
-            )
-            warnings.simplefilter("default", DeprecationWarning)  # reset filter
+            warnings.warn(msg, category=category, stacklevel=2)
             return func(*args, **kwargs)
 
-        setattr(new_func, "__deprecated", True)
+        setattr(new_func, "__deprecated", (category, msg, hide))
         return new_func
 
     return decorator
@@ -325,42 +377,14 @@ class DeprecationMixinMeta(type):
     """
 
     def __dir__(cls):
-        def is_deprecated(attr):
+        def is_hidden(attr) -> bool:
             if isinstance(attr, property):
                 attr = attr.fget
-            return getattr(attr, "__deprecated", False)
+            _, _, hide = getattr(attr, "__deprecated", (None, None, False))
+            return hide
 
         return [
             item
             for item in type.__dir__(cls)
-            if not is_deprecated(getattr(cls, item, None))
+            if not is_hidden(getattr(cls, item, None))
         ]
-
-
-def import_function(module: str, name: str) -> Callable:
-    """\
-    Try to import function from module. If the module is not installed or
-    function is not part of the module, it returns a dummy function that raises
-    the respective import error once the function is called. This could be a
-    ModuleNotFoundError if the module is missing or an AttributeError if the
-    module is installed but the function is not exported by it.
-
-    Params
-    -------
-    module
-        Module to import from. Can be nested, e.g. "sklearn.utils".
-    name
-        Name of function to import from module.
-    """
-    from importlib import import_module
-
-    try:
-        module = import_module(module)
-        func = getattr(module, name)
-    except (ImportError, AttributeError) as e:
-        error = e
-
-        def func(*_, **__):
-            raise error
-
-    return func

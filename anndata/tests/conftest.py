@@ -1,13 +1,15 @@
-from functools import partial
-import warnings
+from __future__ import annotations
 
-from dask.base import normalize_seq, normalize_token, tokenize
+import warnings
+from functools import partial
+
 import joblib
-from scipy import sparse
 import pytest
+from dask.base import normalize_seq, normalize_token, tokenize
+from scipy import sparse
 
 import anndata as ad
-from anndata.tests.helpers import subset_func
+from anndata.tests.helpers import subset_func  # noqa: F401
 
 # TODO: Should be done in pyproject.toml, see anndata/conftest.py
 warnings.filterwarnings("ignore", category=ad.OldFormatWarning)

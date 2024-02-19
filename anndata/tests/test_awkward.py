@@ -1,15 +1,22 @@
 """Tests related to awkward arrays"""
-import pytest
+from __future__ import annotations
+
+import warnings
+
 import numpy as np
 import numpy.testing as npt
-
-from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
-from anndata.compat import awkward as ak
-from anndata import ImplicitModificationWarning
-from anndata.utils import dim_len
-from anndata import AnnData, read_h5ad
-import anndata
 import pandas as pd
+import pytest
+
+import anndata
+from anndata import (
+    AnnData,
+    ImplicitModificationWarning,
+    read_h5ad,
+)
+from anndata.compat import awkward as ak
+from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
+from anndata.utils import dim_len
 
 
 @pytest.mark.parametrize(
@@ -147,8 +154,20 @@ def test_view(key):
 def test_view_of_awkward_array_with_custom_behavior():
     """Currently can't create view of arrays with custom __name__ (in this case "string")
     See https://github.com/scverse/anndata/pull/647#discussion_r963494798_"""
+
+    from uuid import uuid4
+
+    BEHAVIOUR_ID = str(uuid4())
+
+    class ReversibleArray(ak.Array):
+        def reversed(self):
+            return self[..., ::-1]
+
+    ak.behavior[BEHAVIOUR_ID] = ReversibleArray
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
-    adata.obsm["awk_string"] = ak.Array(["AAA", "BBB", "CCC"])
+    adata.obsm["awk_string"] = ak.with_parameter(
+        ak.Array(["AAA", "BBB", "CCC"]), "__list__", BEHAVIOUR_ID
+    )
     adata_view = adata[:2]
 
     with pytest.raises(NotImplementedError):
@@ -183,8 +202,8 @@ def test_view_of_awkward_array_with_custom_behavior():
             ]
         ),
         # categorical array
-        ak.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
-        ak.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
+        ak.str.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
+        ak.str.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
         # tyical record type with AIRR data consisting of different dtypes
         ak.Array(
             [
@@ -362,10 +381,14 @@ def test_concat_mixed_types(key, arrays, expected, join):
         to_concat.append(tmp_adata)
 
     if isinstance(expected, type) and issubclass(expected, Exception):
-        with pytest.raises(expected):
+        with pytest.raises(expected), warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
+                FutureWarning,
+            )
             anndata.concat(to_concat, axis=axis, join=join)
     else:
-        print(to_concat)
         result_adata = anndata.concat(to_concat, axis=axis, join=join)
         result = getattr(result_adata, key).get("test", None)
         assert_equal(expected, result, exact=True)

@@ -1,21 +1,24 @@
-from scipy.sparse import issparse
-from math import ceil
+from __future__ import annotations
+
 from copy import copy
 from functools import partial
-from typing import Dict, Union, Sequence
+from math import ceil
+from typing import TYPE_CHECKING
 
 import numpy as np
-import warnings
+from scipy.sparse import issparse
 
 from ..._core.anndata import AnnData
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 try:
     import torch
-    from torch.utils.data import Sampler, BatchSampler, Dataset, DataLoader
+    from torch.utils.data import BatchSampler, DataLoader, Sampler
 except ImportError:
-    Sampler, BatchSampler, Dataset, DataLoader = object, object, object, object
+    Sampler, BatchSampler, DataLoader = object, object, object
 
 
 # Custom sampler to get proper batches instead of joined separate indices
@@ -124,7 +127,7 @@ class AnnLoader(DataLoader):
 
     def __init__(
         self,
-        adatas: Union[Sequence[AnnData], Dict[str, AnnData]],
+        adatas: Sequence[AnnData] | dict[str, AnnData],
         batch_size: int = 1,
         shuffle: bool = False,
         use_default_converter: bool = True,
