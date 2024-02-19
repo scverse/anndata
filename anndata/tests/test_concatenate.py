@@ -57,10 +57,15 @@ def _filled_array(a, fill_value=None):
 
 @filled_like.register(sparse.spmatrix)
 def _filled_sparse(a, fill_value=None):
+    return sparse.csr_matrix(filled_like(sparse.csr_array(a)))
+
+
+@filled_like.register(sparse.sparray)
+def _filled_sparse_array(a, fill_value=None):
     if fill_value is None:
-        return sparse.csr_matrix(a.shape)
+        return sparse.csr_array(a.shape)
     else:
-        return sparse.csr_matrix(np.broadcast_to(fill_value, a.shape))
+        return sparse.csr_array(np.broadcast_to(fill_value, a.shape))
 
 
 @filled_like.register(pd.DataFrame)
