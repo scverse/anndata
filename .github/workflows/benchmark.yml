@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11"]
+        python: ["3.12"]
         os: [ubuntu-latest]
 
     env:

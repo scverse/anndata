@@ -291,7 +291,7 @@ def subset_by_major_axis_mask(
     slices = np.ma.extras._ezclump(mask)
 
     def mean_slice_length(slices):
-        return floor((slices[-1].stop - slices[0].start) / len(slices))
+        return floor(sum(s.stop - s.start for s in slices) / len(slices))
 
     # heuristic for whether slicing should be optimized
     if len(slices) > 0:
