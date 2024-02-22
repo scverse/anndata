@@ -60,6 +60,7 @@ jobs:
       - script: |
           python -m pip install --pre --upgrade pip wheel
           pip install --pre .[dev,test]
+          pip install git+https://github.com/scverse/scanpy@fix-pytest-deprecation
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
