@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from functools import singledispatchmethod
+from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
 import pandas as pd
 import xarray as xr
@@ -12,10 +13,34 @@ from anndata.compat import H5Array, ZarrArray
 if TYPE_CHECKING:
     import numpy as np
 
+K = TypeVar("K", bound=Union[H5Array, ZarrArray])
 
-class CategoricalArray(
-    xr.backends.zarr.ZarrArrayWrapper
-):  # Zarr works for hdf5, xarray only supports integration hdf5 in the netcdf context
+
+class ZarrOrHDF5Wrapper(xr.backends.zarr.ZarrArrayWrapper, Generic[K]):
+    @singledispatchmethod  # type: ignore
+    def __init__(self, array: ZarrArray):
+        return super().__init__(array)
+
+    @__init__.register
+    def _(self, array: H5Array):
+        self._array = array
+        self.shape = self._array.shape
+        self.dtype = self._array.dtype
+
+    def __getitem__(self, key):
+        if isinstance(self._array, ZarrArray):
+            return super().__getitem__(key)
+        # adapted from https://github.com/pydata/xarray/blob/main/xarray/backends/h5netcdf_.py#L50-L58C13
+        # TODO: locks?
+        return xr.core.indexing.explicit_indexing_adapter(
+            key,
+            self.shape,
+            xr.core.indexing.IndexingSupport.OUTER_1VECTOR,
+            lambda key: self._array[key],
+        )
+
+
+class CategoricalArray(xr.backends.BackendArray):
     def __init__(
         self,
         codes: ZarrArray | H5Array,
@@ -29,8 +54,8 @@ class CategoricalArray(
         self._ordered = ordered
         self._drop_unused_cats = drop_unused_cats
         self._categories_cache = None
-        self._array = codes
-        self.shape = self._array.shape
+        self._codes = ZarrOrHDF5Wrapper[type(codes)](codes)
+        self.shape = self._codes.shape
         self.dtype = pd.CategoricalDtype(
             categories=self._categories, ordered=self._ordered
         )
@@ -49,7 +74,7 @@ class CategoricalArray(
         return self._categories_cache
 
     def __getitem__(self, key: xr.core.indexing.ExplicitIndexer) -> np.typing.ArrayLike:
-        codes = super().__getitem__(key)
+        codes = self._codes[key]
         categorical_array = pd.Categorical.from_codes(
             codes=codes, categories=self.categories, ordered=self._ordered
         )
@@ -60,29 +85,24 @@ class CategoricalArray(
         return xr.core.indexing.ExtensionDuckArray(categorical_array)
 
 
-class MaskedArray(xr.backends.zarr.ZarrArrayWrapper):
+class MaskedArray(xr.backends.BackendArray):
     def __init__(
         self,
         values: ZarrArray | H5Array,
         dtype_str: str,
-        *args,
         mask: ZarrArray | H5Array | None = None,
-        **kwargs,
     ):
-        self._mask = mask
-        self._values = values
+        self._mask = ZarrOrHDF5Wrapper[type(mask)](mask)
+        self._values = ZarrOrHDF5Wrapper[type(values)](values)
         self._dtype_str = dtype_str
-        self._array = values
-        self.shape = self._array.shape
-        self.dtype = pd.api.types.pandas_dtype(self._array.dtype)
+        self.shape = self._values.shape
+        self.dtype = pd.api.types.pandas_dtype(self._values.dtype)
 
     def __getitem__(self, key):
         # HACK! TODO(ilan-gold): open issue about hdf5 compat that doesn't allow initialization!
-        self._array = self._values
-        values = super().__getitem__(key)
+        values = self._values[key]
         if self._mask is not None:
-            self._array = self._mask
-            mask = super().__getitem__(key)
+            mask = self._mask[key]
             if self._dtype_str == "nullable-integer":
                 # numpy does not support nan ints
                 return xr.core.indexing.ExtensionDuckArray(
