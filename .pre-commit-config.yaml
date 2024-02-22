@@ -13,7 +13,6 @@ repos:
       - id: prettier
         exclude_types:
           - markdown
-        language_version: 21.5.0
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
