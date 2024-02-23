@@ -4,6 +4,7 @@ import numpy as np
 import zarr
 from scipy import sparse
 
+from anndata import AnnData
 from anndata.experimental import sparse_dataset, write_elem
 
 
@@ -38,9 +39,16 @@ class SparseCSRContiguousSlice:
         g = zarr.group()
         write_elem(g, "X", X)
         self.x = sparse_dataset(g["X"])
+        self.adata = AnnData(self.x)
 
     def time_getitem(self, shape, slice):
         self.x[self.slice]
 
     def peakmem_getitem(self, shape, slice):
         self.x[self.slice]
+
+    def time_getitem_adata(self, shape, slice):
+        self.adata[self.slice]
+
+    def peakmem_getitem_adata(self, shape, slice):
+        self.adata[self.slice]
