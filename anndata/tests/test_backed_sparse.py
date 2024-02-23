@@ -138,12 +138,12 @@ def make_alternating_mask(size: int, step: int) -> np.ndarray:
 
 # non-random indices, with alternating one false and n true
 make_alternating_mask_5 = partial(make_alternating_mask, step=5)
-make_alternating_mask_10 = partial(make_alternating_mask, step=10)
+make_alternating_mask_15 = partial(make_alternating_mask, step=15)
 
 
 def make_one_group_mask(size: int) -> np.ndarray:
     one_group_mask = np.zeros(size, dtype=bool)
-    one_group_mask[size // 4 : size // 2] = True
+    one_group_mask[1 : size // 2] = True
     return one_group_mask
 
 
@@ -158,12 +158,12 @@ def make_one_elem_mask(size: int) -> np.ndarray:
     "make_bool_mask,should_trigger_optimization",
     [
         (make_randomized_mask, None),
-        (make_alternating_mask_10, True),
+        (make_alternating_mask_15, True),
         (make_alternating_mask_5, False),
         (make_one_group_mask, True),
         (make_one_elem_mask, False),
     ],
-    ids=["randomized", "alternating_10", "alternating_5", "one_group", "one_elem"],
+    ids=["randomized", "alternating_15", "alternating_5", "one_group", "one_elem"],
 )
 def test_consecutive_bool(
     mocker: MockerFixture,
@@ -208,11 +208,25 @@ def test_consecutive_bool(
         assert (
             spy.call_count == 3 if should_trigger_optimization else not spy.call_count
         )
-    assert_equal(csc_disk[:, mask], csc_disk[:, np.where(mask)[0]])
+    subset = csc_disk[:, mask]
+    assert_equal(subset, csc_disk[:, np.where(mask)[0]])
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 4 if should_trigger_optimization else not spy.call_count
         )
+    if should_trigger_optimization is not None and not csc_disk.isbacked:
+        size = subset.shape[1]
+        if should_trigger_optimization:
+            subset_subset_mask = np.ones(size).astype("bool")
+            subset_subset_mask[size // 2] = False
+        else:
+            subset_subset_mask = make_one_elem_mask(size)
+        assert_equal(
+            subset[:, subset_subset_mask], subset[:, np.where(subset_subset_mask)[0]]
+        )
+        assert (
+            spy.call_count == 5 if should_trigger_optimization else not spy.call_count
+        ), f"Actual count: {spy.call_count}"
 
 
 @pytest.mark.parametrize(
