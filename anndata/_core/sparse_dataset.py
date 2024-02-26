@@ -479,7 +479,7 @@ class BaseCompressedSparseDataset(ABC):
             # This is difficult to test without requiring ~ 16GB of memory
             new_nnz = int(indptr_offset) + int(sparse_matrix.indptr[-1])
             if new_nnz >= np.iinfo(np.int32).max:
-                raise ValueError(
+                raise OverflowError(
                     "This array was written with a 32 bit intptr, but is now large "
                     "enough to require 64 bit values. Please recreate the array with "
                     "a 64 bit indptr."
