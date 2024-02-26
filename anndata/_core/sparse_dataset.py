@@ -474,6 +474,16 @@ class BaseCompressedSparseDataset(ABC):
                 f"Matrices must have same format. Currently are "
                 f"{self.format!r} and {get_format(sparse_matrix)!r}"
             )
+        indptr_offset = self.group["indptr"][-1]
+        if indptr_offset.dtype == np.int32:
+            # This is difficult to test without requiring ~ 16GB of memory
+            new_nnz = int(indptr_offset) + int(sparse_matrix.indptr[-1])
+            if new_nnz >= np.iinfo(np.int32).max:
+                raise ValueError(
+                    "This array was written with a 32 bit intptr, but is now large "
+                    "enough to require 64 bit values. Please recreate the array with "
+                    "a 64 bit indptr."
+                )
 
         # shape
         if self.format == "csr":
@@ -501,11 +511,13 @@ class BaseCompressedSparseDataset(ABC):
         # indptr
         indptr = self.group["indptr"]
         orig_data_size = indptr.shape[0]
-        append_offset = indptr[-1]
         indptr.resize((orig_data_size + sparse_matrix.indptr.shape[0] - 1,))
         indptr[orig_data_size:] = (
-            sparse_matrix.indptr[1:].astype(np.int64) + append_offset
+            sparse_matrix.indptr[1:].astype(np.int64) + indptr_offset
         )
+        # Clear cached property
+        if hasattr(self, "indptr"):
+            del self.indptr
 
         # indices
         indices = self.group["indices"]
