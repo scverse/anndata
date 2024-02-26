@@ -147,6 +147,9 @@ def test_dask_write_sparse(store, sparse_format):
     assert_equal(X_from_disk, X_dask_from_disk)
     assert_equal(dict(store["X"].attrs), dict(store["X_dask"].attrs))
 
+    assert store["X_dask/indptr"].dtype == np.int64
+    assert store["X_dask/indices"].dtype == np.int64
+
 
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
@@ -351,23 +354,6 @@ def sparse_dataset_as_dask(x, stride: int):
         chunks.append(make_dask_chunk(x, cur_pos, x.shape[0]))
 
     return da.concatenate(chunks, axis=0)
-
-
-def test_write_big_dask():
-    import dask.array as da
-
-    z = zarr.group()
-    # This needs to be something easily compressible to avoid writing a huge file
-    dense_dask = da.ones(
-        (np.iinfo(np.int32).max + 1, 1), chunks=(10_000_000, 1), dtype=bool
-    )
-    sparse_dask = dense_dask.map_blocks(sparse.csr_matrix)
-    write_elem(z, "sparse", sparse_dask)
-    from_disk = sparse_dataset_as_dask(
-        ad.experimental.sparse_dataset(z["sparse"]), 10_000_000
-    )
-    assert_equal(from_disk[-1, :].compute(), sparse_dask[-1, :].compute())
-    # assert_equal(from_disk, sparse_dask)  # Currently reads everything into memory before comparing
 
 
 def test_dataframe_column_uniqueness(store):
