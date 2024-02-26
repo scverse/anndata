@@ -12,7 +12,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.experimental import read_dispatched
+from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
@@ -433,3 +433,31 @@ def test_backed_sizeof(
     assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
     assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
     assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
+
+
+@pytest.mark.parametrize(
+    "group_fn",
+    [
+        pytest.param(lambda _: zarr.group(), id="zarr"),
+        pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
+    ],
+)
+def test_append_overflow_check(group_fn, tmpdir):
+    group = group_fn(tmpdir)
+    typemax_int32 = np.iinfo(np.int32).max
+    orig_mtx = sparse.csr_matrix(np.ones((1, 1), dtype=bool))
+    # Minimally allocating new matrix
+    new_mtx = sparse.csr_matrix(
+        (
+            np.broadcast_to(True, typemax_int32 - 1),
+            np.broadcast_to(np.int32(1), typemax_int32 - 1),
+            [0, typemax_int32 - 1],
+        ),
+        shape=(1, 2),
+    )
+
+    write_elem(group, "mtx", orig_mtx)
+    backed = sparse_dataset(group["mtx"])
+
+    with pytest.raises(OverflowError):
+        backed.append(new_mtx)
