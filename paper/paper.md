@@ -1,5 +1,5 @@
 ---
-title: "anndata: Annotated data"
+title: "anndata: Access and store annotated data matrices"
 tags:
   - Python
   - data structures
