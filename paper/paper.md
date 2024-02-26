@@ -17,10 +17,10 @@ authors:
   - name: Fabian J. Theis
     orcid: 0000-0002-2419-1943
     affiliation: "2,3"
-  - name: Philipp Angerer^[Co-creator; present affiliation at Cellarity, Cambridge, MA.]
+  - name: Philipp Angerer^[Co-creator]
     orcid: 0000-0002-0369-2888
     affiliation: "2"
-  - name: F. Alexander Wolf^[Co-creator.]
+  - name: F. Alexander Wolf^[Co-creator; present affiliation at Lamin Labs.]
     orcid: 0000-0002-8760-7838
     affiliation: "2"
 affiliations:
