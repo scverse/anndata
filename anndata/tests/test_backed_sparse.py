@@ -459,8 +459,14 @@ def test_append_overflow_check(group_fn, tmpdir):
     write_elem(group, "mtx", orig_mtx)
     backed = sparse_dataset(group["mtx"])
 
+    # Checking for correct caching behaviour
+    backed.indptr
+
     with pytest.raises(
         OverflowError,
         match=r"This array was written with a 32 bit intptr, but is now large.*",
     ):
         backed.append(new_mtx)
+
+    # Check for any modification
+    assert_equal(backed, orig_mtx)
