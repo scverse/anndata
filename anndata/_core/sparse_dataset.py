@@ -476,7 +476,6 @@ class BaseCompressedSparseDataset(ABC):
             )
         indptr_offset = self.group["indptr"][-1]
         if indptr_offset.dtype == np.int32:
-            # This is difficult to test without requiring ~ 16GB of memory
             new_nnz = int(indptr_offset) + int(sparse_matrix.indptr[-1])
             if new_nnz >= np.iinfo(np.int32).max:
                 raise OverflowError(
