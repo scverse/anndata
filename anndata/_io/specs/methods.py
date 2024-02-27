@@ -568,7 +568,6 @@ def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
         x.indices = x.indices.astype(np.int64, copy=False)
         return x
 
-    # elem = elem.map_blocks(with_int64_indptr, dtype=elem.dtype)
     if sparse_format == "csr":
         axis = 0
     elif sparse_format == "csc":
