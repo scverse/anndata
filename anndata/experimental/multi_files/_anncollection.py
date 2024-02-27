@@ -15,6 +15,7 @@ from ..._core.index import Index, _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
+from ...compat import _map_cat_to_str
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -208,7 +209,7 @@ class MapObsView:
             else:
                 if vidx is not None:
                     idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
-                arrs.append(arr[idx])
+                arrs.append(arr.iloc[idx] if isinstance(arr, pd.Series) else arr[idx])
 
         if len(arrs) > 1:
             _arr = _merge(arrs)
@@ -492,9 +493,12 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         ::
 
             {
-                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
-                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
-                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+                # densify .X
+                "X": lambda a: a.toarray() if issparse(a) else a,
+                # change dtype for all keys of .obsm
+                "obsm": lambda a: np.asarray(a, dtype="float32"),
+                # change type only for one key of .obs
+                "obs": dict(key1=lambda c: c.astype(str)),
             }
         """
         return self._convert
@@ -721,7 +725,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         )
         if index_unique is not None:
             concat_indices = concat_indices.str.cat(
-                label_col.map(str), sep=index_unique
+                _map_cat_to_str(label_col), sep=index_unique
             )
         self.obs_names = pd.Index(concat_indices)
 
@@ -816,9 +820,12 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         ::
 
             {
-                'X': lambda a: a.toarray() if issparse(a) else a, # densify .X
-                'obsm': lambda a: np.asarray(a, dtype='float32'), # change dtype for all keys of .obsm
-                'obs': dict(key1 = lambda c: c.astype(str)) # change type only for one key of .obs
+                # densify .X
+                "X": lambda a: a.toarray() if issparse(a) else a,
+                # change dtype for all keys of .obsm
+                "obsm": lambda a: np.asarray(a, dtype="float32"),
+                # change type only for one key of .obs
+                "obs": dict(key1=lambda c: c.astype(str)),
             }
         """
         return self._convert

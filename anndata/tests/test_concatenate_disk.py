@@ -109,7 +109,7 @@ def test_anndatas_without_reindex(
     M = 50
     sparse_fmt = "csr"
     adatas = []
-    for _ in range(5):
+    for i in range(5):
         if axis == 0:
             M = np.random.randint(1, 100)
         else:
@@ -122,6 +122,10 @@ def test_anndatas_without_reindex(
             sparse_fmt=sparse_fmt,
             **GEN_ADATA_OOC_CONCAT_ARGS,
         )
+        if axis == 0:
+            a.obs_names = f"{i}-" + a.obs_names
+        else:
+            a.var_names = f"{i}-" + a.var_names
         adatas.append(a)
 
     assert_eq_concat_on_disk(

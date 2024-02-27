@@ -13,11 +13,11 @@ from collections.abc import (
     MutableSet,
     Sequence,
 )
-from functools import reduce, singledispatch
+from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
 from typing import Any, Literal, TypeVar
-from warnings import filterwarnings, warn
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -27,8 +27,15 @@ from scipy.sparse import spmatrix
 
 from anndata._warnings import ExperimentalFeatureWarning
 
-from ..compat import AwkArray, CupyArray, CupyCSRMatrix, CupySparseMatrix, DaskArray
-from ..utils import asarray, dim_len
+from ..compat import (
+    AwkArray,
+    CupyArray,
+    CupyCSRMatrix,
+    CupySparseMatrix,
+    DaskArray,
+    _map_cat_to_str,
+)
+from ..utils import asarray, dim_len, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 
@@ -134,7 +141,13 @@ def equal_dask_array(a, b) -> bool:
 
 @equal.register(np.ndarray)
 def equal_array(a, b) -> bool:
-    return equal(pd.DataFrame(a), pd.DataFrame(asarray(b)))
+    # Reshaping allows us to compare inputs with >2 dimensions
+    # We cast to pandas since it will still work with non-numeric types
+    b = asarray(b)
+    if a.shape != b.shape:
+        return False
+
+    return equal(pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)))
 
 
 @equal.register(CupyArray)
@@ -212,6 +225,7 @@ def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
 
     For catching cases where pandas would convert to object dtype.
     """
+    dfs = list(dfs)
     # Get shared categorical columns
     df_dtypes = [dict(df.dtypes) for df in dfs]
     columns = reduce(lambda x, y: x.union(y), [df.columns for df in dfs])
@@ -264,7 +278,7 @@ def try_unifying_dtype(
                 dtypes.add(dtype)
                 ordered = ordered | dtype.ordered
             elif not pd.isnull(dtype):
-                return False
+                return None
         if len(dtypes) > 0 and not ordered:
             categories = reduce(
                 lambda x, y: x.union(y),
@@ -745,9 +759,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             )
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
-            unify_dtypes([f(x) for f, x in zip(reindexers, arrays)]),
-            ignore_index=True,
+            unify_dtypes(f(x) for f, x in zip(reindexers, arrays)),
             axis=axis,
+            ignore_index=True,
         )
         df.index = index
         return df
@@ -812,7 +826,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
 
 
-def inner_concat_aligned_mapping(mappings, reindexers=None, index=None, axis=0):
+def inner_concat_aligned_mapping(mappings, *, reindexers=None, index=None, axis=0):
     result = {}
 
     for k in intersect_keys(mappings):
@@ -871,16 +885,11 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             raise NotImplementedError(
                 "Cannot concatenate an AwkwardArray with other array types."
             )
-        warn(
-            "Outer joins on awkward.Arrays will have different return values in the future."
+        warn_once(
+            "Outer joins on awkward.Arrays will have different return values in the future. "
             "For details, and to offer input, please see:\n\n\t"
             "https://github.com/scverse/anndata/issues/898",
             ExperimentalFeatureWarning,
-        )
-        filterwarnings(
-            "ignore",
-            category=ExperimentalFeatureWarning,
-            message=r"Outer joins on awkward.Arrays will have different return values.*",
         )
         # all_keys = union_keys(el.fields for el in els if not_missing(el))
         reindexers = []
@@ -905,10 +914,17 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
 
 
 def outer_concat_aligned_mapping(
-    mappings, reindexers=None, index=None, fill_value=None, axis=0
+    mappings, *, reindexers=None, index=None, axis=0, fill_value=None
 ):
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
+
+    def missing_element(n: int, axis: Literal[0, 1] = 0) -> np.ndarray:
+        """Generates value to use when there is a missing element."""
+        if axis == 0:
+            return np.zeros((n, 0), dtype=bool)
+        else:
+            return np.zeros((0, n), dtype=bool)
 
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
@@ -921,7 +937,7 @@ def outer_concat_aligned_mapping(
         # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
-                el if not_missing(el) else np.zeros((n, 0), dtype=bool)
+                el if not_missing(el) else missing_element(n, axis=axis)
                 for el, n in zip(els, ns)
             ],
             cur_reindexers,
@@ -1105,12 +1121,18 @@ def concat(
     ...     X=sparse.csr_matrix(np.array([[0, 1], [2, 3]])),
     ...     obs=pd.DataFrame({"group": ["a", "b"]}, index=["s1", "s2"]),
     ...     var=pd.DataFrame(index=["var1", "var2"]),
-    ...     varm={"ones": np.ones((2, 5)), "rand": np.random.randn(2, 3), "zeros": np.zeros((2, 5))},
+    ...     varm={
+    ...         "ones": np.ones((2, 5)),
+    ...         "rand": np.random.randn(2, 3),
+    ...         "zeros": np.zeros((2, 5)),
+    ...     },
     ...     uns={"a": 1, "b": 2, "c": {"c.a": 3, "c.b": 4}},
     ... )
     >>> b = ad.AnnData(
     ...     X=sparse.csr_matrix(np.array([[4, 5, 6], [7, 8, 9]])),
-    ...     obs=pd.DataFrame({"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]),
+    ...     obs=pd.DataFrame(
+    ...         {"group": ["b", "c"], "measure": [1.2, 4.3]}, index=["s3", "s4"]
+    ...     ),
     ...     var=pd.DataFrame(index=["var1", "var2", "var3"]),
     ...     varm={"ones": np.ones((3, 5)), "rand": np.random.randn(3, 5)},
     ...     uns={"a": 1, "b": 3, "c": {"c.b": 4}},
@@ -1144,7 +1166,7 @@ def concat(
     >>> (inner.obs_names, inner.var_names)  # doctest: +NORMALIZE_WHITESPACE
     (Index(['s1', 's2', 's3', 's4'], dtype='object'),
     Index(['var1', 'var2'], dtype='object'))
-    >>> outer = ad.concat([a, b], join="outer") # Joining on union of variables
+    >>> outer = ad.concat([a, b], join="outer")  # Joining on union of variables
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
@@ -1239,7 +1261,9 @@ def concat(
         [pd.Series(dim_indices(a, axis=axis)) for a in adatas], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(label_col.map(str), sep=index_unique)
+        concat_indices = concat_indices.str.cat(
+            _map_cat_to_str(label_col), sep=index_unique
+        )
     concat_indices = pd.Index(concat_indices)
 
     alt_indices = merge_indices(
@@ -1252,7 +1276,7 @@ def concat(
     # Annotation for concatenation axis
     check_combinable_cols([getattr(a, dim).columns for a in adatas], join=join)
     concat_annot = pd.concat(
-        unify_dtypes([getattr(a, dim) for a in adatas]),
+        unify_dtypes(getattr(a, dim) for a in adatas),
         join=join,
         ignore_index=True,
     )
@@ -1268,37 +1292,30 @@ def concat(
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
-        layers = inner_concat_aligned_mapping(
-            [a.layers for a in adatas], axis=axis, reindexers=reindexers
-        )
-        concat_mapping = inner_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
-        )
-        if pairwise:
-            concat_pairwise = concat_pairwise_mapping(
-                mappings=[getattr(a, f"{dim}p") for a in adatas],
-                shapes=[a.shape[axis] for a in adatas],
-                join_keys=intersect_keys,
-            )
-        else:
-            concat_pairwise = {}
+        concat_aligned_mapping = inner_concat_aligned_mapping
+        join_keys = intersect_keys
     elif join == "outer":
-        layers = outer_concat_aligned_mapping(
-            [a.layers for a in adatas], reindexers, axis=axis, fill_value=fill_value
+        concat_aligned_mapping = partial(
+            outer_concat_aligned_mapping, fill_value=fill_value
         )
-        concat_mapping = outer_concat_aligned_mapping(
-            [getattr(a, f"{dim}m") for a in adatas],
-            index=concat_indices,
-            fill_value=fill_value,
+        join_keys = union_keys
+    else:
+        assert False, f"{join=} should have been validated above by pd.concat"
+
+    layers = concat_aligned_mapping(
+        [a.layers for a in adatas], axis=axis, reindexers=reindexers
+    )
+    concat_mapping = concat_aligned_mapping(
+        [getattr(a, f"{dim}m") for a in adatas], index=concat_indices
+    )
+    if pairwise:
+        concat_pairwise = concat_pairwise_mapping(
+            mappings=[getattr(a, f"{dim}p") for a in adatas],
+            shapes=[a.shape[axis] for a in adatas],
+            join_keys=join_keys,
         )
-        if pairwise:
-            concat_pairwise = concat_pairwise_mapping(
-                mappings=[getattr(a, f"{dim}p") for a in adatas],
-                shapes=[a.shape[axis] for a in adatas],
-                join_keys=union_keys,
-            )
-        else:
-            concat_pairwise = {}
+    else:
+        concat_pairwise = {}
 
     # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
     alt_mapping = merge(

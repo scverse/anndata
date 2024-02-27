@@ -5,6 +5,7 @@
 # Caches for compiled and downloaded files
 __pycache__/
 /*cache/
+/node_modules/
 /data/
 
 # Distribution / packaging

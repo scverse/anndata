@@ -298,4 +298,34 @@ def test_read_zarr_from_group(tmp_path, consolidated):
         read_func = zarr.open
 
     with read_func(pth) as z:
-        assert_equal(ad.read_zarr(z["table/table"]), adata)
+        expected = ad.read_zarr(z["table/table"])
+    assert_equal(adata, expected)
+
+
+def test_dataframe_column_uniqueness(store):
+    repeated_cols = pd.DataFrame(np.ones((3, 2)), columns=["a", "a"])
+
+    with pytest_8_raises(
+        ValueError,
+        match=r"Found repeated column names: \['a'\]\. Column names must be unique\.",
+    ):
+        write_elem(store, "repeated_cols", repeated_cols)
+
+    index_shares_col_name = pd.DataFrame(
+        {"col_name": [1, 2, 3]}, index=pd.Index([1, 3, 2], name="col_name")
+    )
+
+    with pytest_8_raises(
+        ValueError,
+        match=r"DataFrame\.index\.name \('col_name'\) is also used by a column whose values are different\.",
+    ):
+        write_elem(store, "index_shares_col_name", index_shares_col_name)
+
+    index_shared_okay = pd.DataFrame(
+        {"col_name": [1, 2, 3]}, index=pd.Index([1, 2, 3], name="col_name")
+    )
+
+    write_elem(store, "index_shared_okay", index_shared_okay)
+    result = read_elem(store["index_shared_okay"])
+
+    assert_equal(result, index_shared_okay)

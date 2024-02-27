@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_matrix, csr_matrix
 
 import anndata as ad
@@ -88,7 +89,7 @@ def rw(backing_h5ad):
     M, N = 100, 101
     orig = gen_adata((M, N))
     orig.write(backing_h5ad)
-    curr = ad.read(backing_h5ad)
+    curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
 
 
@@ -139,7 +140,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
 
     if storage == "h5ad":
         adata_src.write(backing_h5ad, **dataset_kwargs)
-        adata_mid = ad.read(backing_h5ad)
+        adata_mid = ad.read_h5ad(backing_h5ad)
         adata_mid.write(tmp_path / "mid.h5ad", **dataset_kwargs)
         adata = ad.read_h5ad(tmp_path / "mid.h5ad")
     else:
@@ -179,7 +180,7 @@ def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
-    adata = ad.read(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -212,7 +213,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_one = adata_src[:, 0].copy()
     adata_one.write(backing_h5ad)
-    adata = ad.read(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad)
     assert adata.shape == (3, 1)
     assert_equal(adata, adata_one)
 
@@ -224,7 +225,7 @@ def test_readwrite_backed(typ, backing_h5ad):
     adata_src.filename = backing_h5ad  # change to backed mode
     adata_src.write()
 
-    adata = ad.read(backing_h5ad)
+    adata = ad.read_h5ad(backing_h5ad)
     assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
     assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
@@ -276,7 +277,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
         store["obs"].attrs["encoding-type"] = "invalid"
     with pytest_8_raises(
         IORegistryError,
-        match=r"raised while reading key '/obs'",
+        match=r"raised while reading key 'obs'.*from /$",
     ) as exc_info:
         read(path)
     assert re.search(
@@ -324,7 +325,8 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
         msg = "\n\t".join(not_compressed)
         raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
 
-    assert_equal(adata, ad.read_h5ad(pth))
+    expected = ad.read_h5ad(pth)
+    assert_equal(adata, expected)
 
 
 def test_zarr_compression(tmp_path):
@@ -349,7 +351,8 @@ def test_zarr_compression(tmp_path):
         msg = "\n\t".join(not_compressed)
         raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
 
-    assert_equal(adata, ad.read_zarr(pth))
+    expected = ad.read_zarr(pth)
+    assert_equal(adata, expected)
 
 
 def test_changed_obs_var_names(tmp_path, diskfmt):
@@ -388,7 +391,14 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
     adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
 
-    adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
 
     adata = ad.read_loom(
         tmp_path / "test.loom",
@@ -422,7 +432,15 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
 def test_readloom_deprecations(tmp_path):
     loom_pth = tmp_path / "test.loom"
     adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
-    adata_src.write_loom(loom_pth, write_obsm_varm=True)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata_src.write_loom(loom_pth, write_obsm_varm=True)
 
     # obsm_names -> obsm_mapping
     obsm_mapping = {"df": adata_src.obs.columns}
@@ -430,7 +448,7 @@ def test_readloom_deprecations(tmp_path):
         depr_result = ad.read_loom(loom_pth, obsm_names=obsm_mapping)
     actual_result = ad.read_loom(loom_pth, obsm_mapping=obsm_mapping)
     assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match="ambiguous"):
+    with pytest.raises(ValueError, match="ambiguous"), pytest.warns(FutureWarning):
         ad.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
 
     # varm_names -> varm_mapping
@@ -439,7 +457,7 @@ def test_readloom_deprecations(tmp_path):
         depr_result = ad.read_loom(loom_pth, varm_names=varm_mapping)
     actual_result = ad.read_loom(loom_pth, varm_mapping=varm_mapping)
     assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match="ambiguous"):
+    with pytest.raises(ValueError, match="ambiguous"), pytest.warns(FutureWarning):
         ad.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
 
     # positional -> keyword
@@ -521,15 +539,9 @@ def test_write_csv_view(typ, tmp_path):
             marks=pytest.mark.xfail(reason="Loom can’t handle 0×0 matrices"),
         ),
         pytest.param(ad.read_zarr, ad._io.write_zarr, "test_empty.zarr"),
-        pytest.param(
-            ad.read_zarr,
-            ad._io.write_zarr,
-            "test_empty.zip",
-            marks=pytest.mark.xfail(reason="Zarr zip storage doesn’t seem to work…"),
-        ),
     ],
 )
-def test_readwrite_hdf5_empty(read, write, name, tmp_path):
+def test_readwrite_empty(read, write, name, tmp_path):
     adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
@@ -537,7 +549,13 @@ def test_readwrite_hdf5_empty(read, write, name, tmp_path):
 
 
 def test_read_excel():
-    adata = ad.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata = ad.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
     assert adata.X.tolist() == X_list
 
 
@@ -728,10 +746,13 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
     import scanpy as sc
 
-    orig = sc.datasets.krumsiek11()
+    # TODO: this should be fixed in scanpy instead
+    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+        orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
     getattr(orig, f"write_{diskfmt}")(filepth)
-    read = getattr(ad, f"read_{diskfmt}")(filepth)
+    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+        read = getattr(ad, f"read_{diskfmt}")(filepth)
 
     assert_equal(orig, read, exact=True)
 

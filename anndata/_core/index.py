@@ -42,11 +42,11 @@ def _normalize_index(
     | np.integer
     | int
     | str
-    | Sequence[int | np.integer]
+    | Sequence[bool | int | np.integer]
     | np.ndarray
     | pd.Index,
     index: pd.Index,
-) -> slice | int | np.ndarray:  # ndarray of int
+) -> slice | int | np.ndarray:  # ndarray of int or bool
     if not isinstance(index, pd.RangeIndex):
         assert (
             index.dtype != float and index.dtype != int
@@ -81,6 +81,8 @@ def _normalize_index(
             indexer = np.ravel(indexer)
         if not isinstance(indexer, (np.ndarray, pd.Index)):
             indexer = np.array(indexer)
+            if len(indexer) == 0:
+                indexer = indexer.astype(int)
         if issubclass(indexer.dtype.type, (np.integer, np.floating)):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
@@ -90,8 +92,7 @@ def _normalize_index(
                     f"dimension. Boolean index has shape {indexer.shape} while "
                     f"AnnData index has shape {index.shape}."
                 )
-            positions = np.where(indexer)[0]
-            return positions  # np.ndarray[int]
+            return indexer
         else:  # indexer should be string array
             positions = index.get_indexer(indexer)
             if np.any(positions < 0):
@@ -162,7 +163,10 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 def _subset_spmatrix(a: spmatrix, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, cabc.Iterable) for x in subset_idx):
-        subset_idx = (subset_idx[0].reshape(-1, 1), *subset_idx[1:])
+        first_idx = subset_idx[0]
+        if issubclass(first_idx.dtype.type, np.bool_):
+            first_idx = np.where(first_idx)[0]
+        subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
 
 
@@ -186,7 +190,9 @@ def _subset_dataset(d, subset_idx):
     ordered = list(subset_idx)
     rev_order = [slice(None) for _ in range(len(subset_idx))]
     for axis, axis_idx in enumerate(ordered.copy()):
-        if isinstance(axis_idx, np.ndarray) and axis_idx.dtype.type != bool:
+        if isinstance(axis_idx, np.ndarray):
+            if axis_idx.dtype == bool:
+                axis_idx = np.where(axis_idx)[0]
             order = np.argsort(axis_idx)
             ordered[axis] = axis_idx[order]
             rev_order[axis] = np.argsort(order)

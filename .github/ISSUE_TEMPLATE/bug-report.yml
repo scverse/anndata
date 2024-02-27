@@ -56,6 +56,6 @@ body:
         ```python
         >>> import anndata, session_info; session_info.show(html=False, dependencies=True)
         ```
-        render: python
+      render: python
     validations:
       required: true

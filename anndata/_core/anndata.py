@@ -25,11 +25,12 @@ from natsort import natsorted
 from numpy import ma
 from pandas.api.types import infer_dtype, is_string_dtype
 from scipy import sparse
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import issparse
 
 from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
+from .._settings import settings
 from ..compat import (
     CupyArray,
     CupySparseMatrix,
@@ -39,7 +40,7 @@ from ..compat import (
     _move_adj_mtx,
 )
 from ..logging import anndata_logger as logger
-from ..utils import convert_to_dict, dim_len, ensure_df_homogeneous
+from ..utils import convert_to_dict, deprecated, dim_len, ensure_df_homogeneous
 from .access import ElementRef
 from .aligned_mapping import (
     AxisArrays,
@@ -74,7 +75,7 @@ class StorageType(Enum):
     DaskArray = DaskArray
     CupyArray = CupyArray
     CupySparseMatrix = CupySparseMatrix
-    BackedSparseMAtrix = BaseCompressedSparseDataset
+    BackedSparseMatrix = BaseCompressedSparseDataset
 
     @classmethod
     def classes(cls):
@@ -413,8 +414,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
-        self._remove_unused_categories(adata_ref.var, var_sub, uns)
+        if settings.remove_unused_categories:
+            self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
+            self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
@@ -592,28 +594,37 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # layers
         self._layers = Layers(self, layers)
 
-    def __sizeof__(self, show_stratified=None) -> int:
-        def get_size(X):
-            if issparse(X):
-                X_csr = csr_matrix(X)
-                return X_csr.data.nbytes + X_csr.indptr.nbytes + X_csr.indices.nbytes
+    def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
+        def get_size(X) -> int:
+            def cs_to_bytes(X) -> int:
+                return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
+
+            if isinstance(X, h5py.Dataset) and with_disk:
+                return int(np.array(X.shape).prod() * X.dtype.itemsize)
+            elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
+                return cs_to_bytes(X._to_backed())
+            elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
+                return cs_to_bytes(X)
             else:
                 return X.__sizeof__()
 
-        size = 0
-        attrs = list(["_X", "_obs", "_var"])
-        attrs_multi = list(["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"])
+        sizes = {}
+        attrs = ["X", "_obs", "_var"]
+        attrs_multi = ["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"]
         for attr in attrs + attrs_multi:
             if attr in attrs_multi:
                 keys = getattr(self, attr).keys()
-                s = sum([get_size(getattr(self, attr)[k]) for k in keys])
+                s = sum(get_size(getattr(self, attr)[k]) for k in keys)
             else:
                 s = get_size(getattr(self, attr))
             if s > 0 and show_stratified:
-                str_attr = attr.replace("_", ".") + " " * (7 - len(attr))
-                print(f"Size of {str_attr}: {'%3.2f' % (s / (1024 ** 2))} MB")
-            size += s
-        return size
+                from tqdm import tqdm
+
+                print(
+                    f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}"
+                )
+            sizes[attr] = s
+        return sum(sizes.values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         if self.isbacked:
@@ -875,23 +886,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             value = pd.Index(value)
             if not isinstance(value.name, (str, type(None))):
                 value.name = None
-        # fmt: off
         if (
-            not isinstance(value, pd.RangeIndex)
+            len(value) > 0
+            and not isinstance(value, pd.RangeIndex)
             and infer_dtype(value) not in ("string", "bytes")
         ):
             sample = list(value[: min(len(value), 5)])
-            warnings.warn(dedent(
+            msg = dedent(
                 f"""
                 AnnData expects .{attr}.index to contain strings, but got values like:
                     {sample}
 
                     Inferred to be: {infer_dtype(value)}
                 """
-                ), # noqa
-                stacklevel=2,
             )
-        # fmt: on
+            warnings.warn(msg, stacklevel=2)
         return value
 
     def _set_dim_index(self, value: pd.Index, attr: str):
@@ -1303,6 +1312,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[:, index]`, but inplace.
         """
         adata_subset = self[:, index].copy()
+
         self._init_as_actual(adata_subset)
 
     def _inplace_subset_obs(self, index: Index1D):
@@ -1312,6 +1322,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         Same as `adata = adata[index, :]`, but inplace.
         """
         adata_subset = self[index].copy()
+
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
@@ -1597,6 +1608,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
+    @deprecated(
+        "anndata.concat",
+        FutureWarning,
+        "See the tutorial for concat at: "
+        "https://anndata.readthedocs.io/en/latest/concatenation.html",
+        hide=False,
+    )
     def concatenate(
         self,
         *adatas: AnnData,
@@ -1819,14 +1837,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                [0., 6., 5., 0.]], dtype=float32)
         """
         from .merge import concat, merge_dataframes, merge_outer, merge_same
-
-        warnings.warn(
-            "The AnnData.concatenate method is deprecated in favour of the "
-            "anndata.concat function. Please use anndata.concat instead.\n\n"
-            "See the tutorial for concat at: "
-            "https://anndata.readthedocs.io/en/latest/concatenation.html",
-            FutureWarning,
-        )
 
         if self.isbacked:
             raise ValueError("Currently, concatenate only works in memory mode.")

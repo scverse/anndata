@@ -34,6 +34,7 @@ from ._io import (
     read_umi_tools,
     read_zarr,
 )
+from ._settings import settings
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
@@ -75,4 +76,5 @@ __all__ = [
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
     "experimental",
+    "settings",
 ]

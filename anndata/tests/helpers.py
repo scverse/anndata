@@ -15,7 +15,7 @@ import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-from anndata import AnnData, Raw
+from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMapping
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
@@ -256,17 +256,19 @@ def gen_adata(
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    adata = AnnData(
-        X=X,
-        obs=obs,
-        var=var,
-        obsm=obsm,
-        varm=varm,
-        layers=layers,
-        obsp=obsp,
-        varp=varp,
-        uns=uns,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+        adata = AnnData(
+            X=X,
+            obs=obs,
+            var=var,
+            obsm=obsm,
+            varm=varm,
+            layers=layers,
+            obsp=obsp,
+            varp=varp,
+            uns=uns,
+        )
     return adata
 
 
@@ -279,6 +281,10 @@ def array_bool_subset(index, min_size=2):
     )
     b[selected] = True
     return b
+
+
+def list_bool_subset(index, min_size=2):
+    return array_bool_subset(index, min_size=min_size).tolist()
 
 
 def matrix_bool_subset(index, min_size=2):
@@ -318,6 +324,10 @@ def array_int_subset(index, min_size=2):
     )
 
 
+def list_int_subset(index, min_size=2):
+    return array_int_subset(index, min_size=min_size).tolist()
+
+
 def slice_subset(index, min_size=2):
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
@@ -337,7 +347,9 @@ def single_subset(index):
         slice_subset,
         single_subset,
         array_int_subset,
+        list_int_subset,
         array_bool_subset,
+        list_bool_subset,
         matrix_bool_subset,
         spmatrix_bool_subset,
     ]
@@ -410,7 +422,11 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
         and len(a.dtype) > 1
         and len(b.dtype) > 0
     ):
-        assert_equal(pd.DataFrame(a), pd.DataFrame(b), exact, elem_name)
+        # Reshaping to allow >2d arrays
+        assert a.shape == b.shape, format_msg(elem_name)
+        assert_equal(
+            pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)), exact, elem_name
+        )
     else:
         assert np.all(a == b), format_msg(elem_name)
 
@@ -741,3 +757,31 @@ CUPY_MATRIX_PARAMS = [
         marks=pytest.mark.gpu,
     ),
 ]
+
+try:
+    import zarr
+
+    class AccessTrackingStore(zarr.DirectoryStore):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._access_count = {}
+
+        def __getitem__(self, key):
+            for tracked in self._access_count:
+                if tracked in key:
+                    self._access_count[tracked] += 1
+            return super().__getitem__(key)
+
+        def get_access_count(self, key):
+            return self._access_count[key]
+
+        def set_key_trackers(self, keys_to_track):
+            for k in keys_to_track:
+                self._access_count[k] = 0
+except ImportError:
+
+    class AccessTrackingStore:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise ImportError(
+                "zarr must be imported to create an `AccessTrackingStore` instance."
+            )
