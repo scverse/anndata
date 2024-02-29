@@ -15,7 +15,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import DaskArray, H5Group, ZarrGroup, _read_attr
+from anndata.compat import H5Group, ZarrGroup, _read_attr
 from anndata.tests.helpers import (
     as_cupy_type,
     assert_equal,
@@ -303,57 +303,6 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     with read_func(pth) as z:
         expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
-
-
-# Test dask sparse array IO above int32 size limit
-
-
-class CSRCallable:
-    """Dummy class to bypass dask checks"""
-
-    def __new__(cls, shape, dtype) -> sparse.csr_matrix:
-        if len(shape) == 0:
-            shape = (0, 0)
-        if len(shape) == 1:
-            shape = (shape[0], 0)
-        elif len(shape) == 2:
-            pass
-        else:
-            raise ValueError(shape)
-        return sparse.csr_matrix(shape, dtype=dtype)
-
-
-def make_dask_chunk(
-    x: ad.experimental.SparseDataset, start: int, end: int
-) -> DaskArray:
-    import dask.array as da
-    from dask import delayed
-
-    def take_slice(x, idx):
-        return x[idx]
-
-    return da.from_delayed(
-        delayed(take_slice)(x, slice(start, end)),
-        dtype=x.dtype,
-        shape=(end - start, x.shape[1]),
-        meta=CSRCallable,
-    )
-
-
-def sparse_dataset_as_dask(x, stride: int):
-    import dask.array as da
-
-    n_chunks, rem = divmod(x.shape[0], stride)
-
-    chunks = []
-    cur_pos = 0
-    for i in range(n_chunks):
-        chunks.append(make_dask_chunk(x, cur_pos, cur_pos + stride))
-        cur_pos += stride
-    if rem:
-        chunks.append(make_dask_chunk(x, cur_pos, x.shape[0]))
-
-    return da.concatenate(chunks, axis=0)
 
 
 def test_dataframe_column_uniqueness(store):
