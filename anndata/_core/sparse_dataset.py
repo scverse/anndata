@@ -474,9 +474,9 @@ class BaseCompressedSparseDataset(ABC):
                 f"Matrices must have same format. Currently are "
                 f"{self.format!r} and {get_format(sparse_matrix)!r}"
             )
-        indptr_offset = self.group["indptr"][-1]
-        if indptr_offset.dtype == np.int32:
-            new_nnz = int(indptr_offset) + int(sparse_matrix.indptr[-1])
+        indptr_offset = len(self.group["indices"])
+        if self.group["indptr"].dtype == np.int32:
+            new_nnz = indptr_offset + len(sparse_matrix.indices)
             if new_nnz >= np.iinfo(np.int32).max:
                 raise OverflowError(
                     "This array was written with a 32 bit intptr, but is now large "
