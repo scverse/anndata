@@ -562,6 +562,12 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 )
 def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     sparse_format = elem._meta.format
+
+    def as_int64_indices(x):
+        x.indptr = x.indptr.astype(np.int64, copy=False)
+        x.indices = x.indices.astype(np.int64, copy=False)
+        return x
+
     if sparse_format == "csr":
         axis = 0
     elif sparse_format == "csc":
@@ -583,7 +589,7 @@ def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     _writer.write_elem(
         f,
         k,
-        elem[chunk_slice(chunk_start, chunk_stop)].compute(),
+        as_int64_indices(elem[chunk_slice(chunk_start, chunk_stop)].compute()),
         dataset_kwargs=dataset_kwargs,
     )
 
