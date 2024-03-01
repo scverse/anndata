@@ -147,6 +147,9 @@ def test_dask_write_sparse(store, sparse_format):
     assert_equal(X_from_disk, X_dask_from_disk)
     assert_equal(dict(store["X"].attrs), dict(store["X_dask"].attrs))
 
+    assert store["X_dask/indptr"].dtype == np.int64
+    assert store["X_dask/indices"].dtype == np.int64
+
 
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
