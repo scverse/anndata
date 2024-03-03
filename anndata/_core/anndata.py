@@ -1,6 +1,7 @@
 """\
 Main class and helper functions.
 """
+
 from __future__ import annotations
 
 import collections.abc as cabc
@@ -512,7 +513,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if isinstance(X, s_type.value):
                     break
             else:
-                class_names = ", ".join(c.__name__ for c in StorageType.classes())
+                class_names = ", ".join(
+                    f"{c.__module__}.{c.__name__}" for c in StorageType.classes()
+                )
+
                 raise ValueError(
                     f"`X` needs to be of one of {class_names}, not {type(X)}."
                 )
