@@ -8,6 +8,7 @@ import pandas as pd
 from scipy.sparse import issparse
 
 from ..compat import CupyArray, CupySparseMatrix
+from .aligned_df import _gen_dataframe
 from .aligned_mapping import AxisArrays
 from .index import _normalize_index, _subset, get_vector, unpack_index
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
@@ -29,8 +30,6 @@ class Raw:
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ):
-        from .anndata import _gen_dataframe
-
         self._adata = adata
         self._n_obs = adata.n_obs
         # construct manually
