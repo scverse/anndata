@@ -20,6 +20,9 @@ def write_zarr(*args, **kw):
     return write_zarr(*args, **kw)
 
 
+# We use this in test by attribute access
+from . import specs  # noqa: F401, E402
+
 __all__ = [
     "read_csv",
     "read_excel",
