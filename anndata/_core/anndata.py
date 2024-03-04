@@ -27,6 +27,7 @@ from pandas.api.types import infer_dtype, is_string_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 
+from anndata._core.anndata_base import AbstractAnnData
 from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
@@ -201,7 +202,7 @@ def _gen_dataframe_1d(
     raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
 
 
-class AnnData(metaclass=utils.DeprecationMixinMeta):
+class AnnData(AbstractAnnData):
     """\
     An annotated data matrix.
 
@@ -356,7 +357,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         vidx: Index1D = None,
     ):
         if asview:
-            if not isinstance(X, AnnData):
+            if not issubclass(type(X), AbstractAnnData):
                 raise ValueError("`X` has to be an AnnData object.")
             self._init_as_view(X, oidx, vidx)
         else:
@@ -471,7 +472,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self.file = AnnDataFileManager(self, None)
 
             # init from AnnData
-            if isinstance(X, AnnData):
+            if issubclass(type(X), AbstractAnnData):
                 if any((obs, var, uns, obsm, varm, obsp, varp)):
                     raise ValueError(
                         "If `X` is a dict no further arguments must be provided."
