@@ -513,9 +513,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if isinstance(X, s_type.value):
                     break
             else:
-                class_names = ", ".join(
-                    repr(c) for c in StorageType.classes()
-                )
+                class_names = ", ".join(repr(c) for c in StorageType.classes())
 
                 raise ValueError(
                     f"`X` needs to be of one of {class_names}, not {type(X)}."
