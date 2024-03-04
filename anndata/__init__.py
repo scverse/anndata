@@ -1,4 +1,5 @@
 """Annotated multivariate observation data."""
+
 from __future__ import annotations
 
 try:  # See https://github.com/maresb/hatch-vcs-footgun-example
@@ -43,6 +44,9 @@ from ._warnings import (
 
 # Experimental needs to be imported last
 from . import experimental  # isort: skip
+
+# We use these in tests by attribute access
+from . import _io, logging  # noqa: F401 isort: skip
 
 
 def read(*args, **kwargs):
