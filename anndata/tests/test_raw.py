@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 import anndata as ad
-from anndata._core.anndata import ImplicitModificationWarning
+from anndata import ImplicitModificationWarning
 from anndata.tests.helpers import GEN_ADATA_DASK_ARGS, assert_equal, gen_adata
 
 # -------------------------------------------------------------------------------
