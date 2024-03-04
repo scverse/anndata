@@ -514,7 +514,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     break
             else:
                 class_names = ", ".join(
-                    f"{c.__module__}.{c.__name__}" for c in StorageType.classes()
+                    repr(c) for c in StorageType.classes()
                 )
 
                 raise ValueError(
