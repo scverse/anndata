@@ -421,9 +421,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if isinstance(X, s_type.value):
                     break
             else:
-                class_names = ", ".join(c.__name__ for c in StorageType.classes())
                 raise ValueError(
-                    f"`X` needs to be of one of {class_names}, not {type(X)}."
+                    f"X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not {type(X)}."
                 )
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
