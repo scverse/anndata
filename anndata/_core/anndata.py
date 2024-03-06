@@ -1284,7 +1284,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     T = property(transpose)
 
-    def to_df(self, layer=None) -> pd.DataFrame:
+    def to_df(self, layer=None, obs: str | list[str] | None = None) -> pd.DataFrame:
         """\
         Generate shallow :class:`~pandas.DataFrame`.
 
@@ -1299,6 +1299,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ------
         layer : str
             Key for `.layers`.
+        obs
+            Column(s) of `.obs` to include in DataFrame.
         """
         if layer is not None:
             X = self.layers[layer]
@@ -1308,7 +1310,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = self.X
         if issparse(X):
             X = X.toarray()
-        return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
+
+        df = pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
+        if obs is not None:
+            df = df.merge(self.obs[obs], left_index=True, right_index=True)
+        return df
 
     def _get_X(self, use_raw=False, layer=None):
         """\
