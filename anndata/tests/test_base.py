@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from itertools import product
+import unittest
 
 import numpy as np
 import pandas as pd
@@ -18,6 +19,7 @@ from anndata.tests.helpers import assert_equal, gen_adata
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
 adata_dense.layers["test"] = adata_dense.X
+adata_dense.obsm["test"] = adata_dense.X[:, 0].reshape(-1, 1)
 adata_sparse = AnnData(
     csr_matrix([[0, 2, 3], [0, 5, 6]]),
     dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
@@ -522,11 +524,15 @@ def test_pickle():
 def test_to_df_dense():
     X_df = adata_dense.to_df()
     layer_df = adata_dense.to_df(layer="test")
+    obsm_df = adata_dense.to_df(obsm="test")
+    unittest.TestCase().assertRaises(ValueError, adata_dense.to_df, "test", "test")
 
     np.testing.assert_array_equal(adata_dense.layers["test"], layer_df.values)
+    np.testing.assert_array_equal(adata_dense.obsm["test"], obsm_df.values)
     np.testing.assert_array_equal(adata_dense.X, X_df.values)
     pd.testing.assert_index_equal(X_df.columns, layer_df.columns)
     pd.testing.assert_index_equal(X_df.index, layer_df.index)
+    pd.testing.assert_index_equal(X_df.index, obsm_df.index)
 
 
 def test_convenience():
