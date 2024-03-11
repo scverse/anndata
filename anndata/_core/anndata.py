@@ -1284,7 +1284,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     T = property(transpose)
 
-    def to_df(self, layer=None) -> pd.DataFrame:
+    def to_df(self, layer: str | None = None) -> pd.DataFrame:
         """\
         Generate shallow :class:`~pandas.DataFrame`.
 
@@ -1297,8 +1297,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Params
         ------
-        layer : str
+        layer
             Key for `.layers`.
+
+        Returns
+        -------
+        Pandas DataFrame of specified data matrix.
         """
         if layer is not None:
             X = self.layers[layer]
