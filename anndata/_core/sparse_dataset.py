@@ -346,7 +346,7 @@ class BaseCompressedSparseDataset(ABC):
     """Shape of the matrix."""
 
     @property
-    def group(self):
+    def group(self) -> GroupStorageType:
         """The group underlying the backed matrix."""
         return self._group
 
