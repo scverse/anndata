@@ -873,9 +873,9 @@ def test_nan_merge(axis, join_type, array_type):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=sparse.SparseEfficiencyWarning)
         for _ in range(10):
-            arr_nan[
-                np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])
-            ] = np.nan
+            arr_nan[np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])] = (
+                np.nan
+            )
 
     _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)

@@ -1,6 +1,7 @@
 """
 Code for merging/ concatenating AnnData objects.
 """
+
 from __future__ import annotations
 
 import typing
