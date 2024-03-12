@@ -1,6 +1,7 @@
 """
 For tests using dask
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -107,9 +108,10 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
     pth = tmp_path / f"test_write.{diskfmt}"
     g = as_group(pth, mode="w")
 
-    with dd.LocalCluster(
-        n_workers=1, threads_per_worker=1, processes=False
-    ) as cluster, dd.Client(cluster):
+    with (
+        dd.LocalCluster(n_workers=1, threads_per_worker=1, processes=False) as cluster,
+        dd.Client(cluster),
+    ):
         M, N = adata.X.shape
         adata.obsm["a"] = da.random.random((M, 10))
         adata.obsm["b"] = da.random.random((M, 10))
