@@ -112,8 +112,10 @@ source = "vcs"
 version-file = "src/anndata/_version.py"
 
 [tool.coverage.run]
-source = ["src/anndata"]
+source_pkgs = ["anndata"]
 omit = ["src/anndata/_version.py", "**/test_*.py"]
+[tool.coverage.paths]
+source = [".", "**/site-packages"]
 
 [tool.coverage.report]
 exclude_also = [
