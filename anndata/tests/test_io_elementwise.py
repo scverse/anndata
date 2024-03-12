@@ -1,6 +1,7 @@
 """
 Tests that each element in an anndata is written correctly
 """
+
 from __future__ import annotations
 
 import re
