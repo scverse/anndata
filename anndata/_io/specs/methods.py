@@ -427,6 +427,11 @@ def write_vlen_string_array_zarr(
 ):
     import numcodecs
 
+    # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
+    # TODO: Warn to upgrade numcodecs if fixed
+    if not elem.flags.writeable:
+        elem = elem.copy()
+
     f.create_dataset(
         k,
         shape=elem.shape,
