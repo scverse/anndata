@@ -1,6 +1,7 @@
 """
 Tests that each element in an anndata is written correctly
 """
+
 from __future__ import annotations
 
 import re
@@ -10,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -332,3 +334,15 @@ def test_dataframe_column_uniqueness(store):
     result = read_elem(store["index_shared_okay"])
 
     assert_equal(result, index_shared_okay)
+
+
+@pytest.mark.parametrize("copy_on_write", [True, False])
+def test_io_pd_cow(store, copy_on_write):
+    if Version(pd.__version__) < Version("2"):
+        pytest.xfail("copy_on_write option is not available in pandas < 2")
+    # https://github.com/zarr-developers/numcodecs/issues/514
+    with pd.option_context("mode.copy_on_write", copy_on_write):
+        orig = gen_adata((3, 2))
+        write_elem(store, "adata", orig)
+        from_store = read_elem(store["adata"])
+        assert_equal(orig, from_store)
