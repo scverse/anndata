@@ -124,6 +124,6 @@ jobs:
         displayName: "Build & Twine check"
 
       - script: |
-          uv pip install --system dist/*.whl
+          uv pip install --system "anndata @ `ls dist/*.whl`"
           python -c 'import anndata; print(anndata.__version__)'
         displayName: "Check runtime version"
