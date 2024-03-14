@@ -1,4 +1,5 @@
 """Annotated multivariate observation data."""
+
 from __future__ import annotations
 
 try:  # See https://github.com/maresb/hatch-vcs-footgun-example
@@ -34,6 +35,7 @@ from ._io import (
     read_umi_tools,
     read_zarr,
 )
+from ._settings import settings
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
@@ -43,6 +45,9 @@ from ._warnings import (
 
 # Experimental needs to be imported last
 from . import experimental  # isort: skip
+
+# We use these in tests by attribute access
+from . import _io, logging  # noqa: F401 isort: skip
 
 
 def read(*args, **kwargs):
@@ -75,4 +80,5 @@ __all__ = [
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
     "experimental",
+    "settings",
 ]

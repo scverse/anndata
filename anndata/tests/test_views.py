@@ -551,6 +551,30 @@ def test_double_index(subset_func, subset_func2):
     assert np.all(v1.var == v2.var)
 
 
+def test_view_different_type_indices(matrix_type):
+    orig = gen_adata((30, 30), X_type=matrix_type)
+    boolean_array_mask = np.random.randint(0, 2, 30).astype("bool")
+    boolean_list_mask = boolean_array_mask.tolist()
+    integer_array_mask = np.where(boolean_array_mask)[0]
+    integer_list_mask = integer_array_mask.tolist()
+
+    assert_equal(orig[integer_array_mask, :], orig[boolean_array_mask, :])
+    assert_equal(orig[integer_list_mask, :], orig[boolean_list_mask, :])
+    assert_equal(orig[integer_list_mask, :], orig[integer_array_mask, :])
+    assert_equal(orig[:, integer_array_mask], orig[:, boolean_array_mask])
+    assert_equal(orig[:, integer_list_mask], orig[:, boolean_list_mask])
+    assert_equal(orig[:, integer_list_mask], orig[:, integer_array_mask])
+    # check that X element is same independent of access
+    assert_equal(orig[:, integer_list_mask].X, orig.X[:, integer_list_mask])
+    assert_equal(orig[:, boolean_list_mask].X, orig.X[:, boolean_list_mask])
+    assert_equal(orig[:, integer_array_mask].X, orig.X[:, integer_array_mask])
+    assert_equal(orig[:, integer_list_mask].X, orig.X[:, integer_list_mask])
+    assert_equal(orig[integer_list_mask, :].X, orig.X[integer_list_mask, :])
+    assert_equal(orig[boolean_list_mask, :].X, orig.X[boolean_list_mask, :])
+    assert_equal(orig[integer_array_mask, :].X, orig.X[integer_array_mask, :])
+    assert_equal(orig[integer_list_mask, :].X, orig.X[integer_list_mask, :])
+
+
 def test_view_retains_ndarray_subclass():
     adata = ad.AnnData(np.zeros((10, 10)))
     adata.obsm["foo"] = np.zeros((10, 5)).view(NDArraySubclass)

@@ -85,6 +85,9 @@ nitpick_ignore = [
         for cls in "Layers AxisArrays PairwiseArrays".split()
         for kind in ["", "View"]
     ],
+    # TODO: sphinx’ builtin autodoc.typehints extension isn’t handled by `qualname_overrides` yet
+    # https://github.com/theislab/scanpydoc/issues/140
+    ("py:class", "h5py._hl.group.Group"),
 ]
 suppress_warnings = [
     "ref.citation",

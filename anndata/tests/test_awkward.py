@@ -1,4 +1,5 @@
 """Tests related to awkward arrays"""
+
 from __future__ import annotations
 
 import warnings

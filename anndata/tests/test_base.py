@@ -12,6 +12,7 @@ from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
 from anndata import AnnData
+from anndata._settings import settings
 from anndata.tests.helpers import assert_equal, gen_adata
 
 # some test objects that we use below
@@ -86,6 +87,16 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
         msg = dim_msg.format(dim=dim, mat_dim=mat_dim)
     with pytest.raises(ValueError, match=re.escape(msg)):
         AnnData(**{src: src_arg, dim: dim_arg(dim)})
+
+
+def test_invalid_X():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not <class 'str'>."
+        ),
+    ):
+        AnnData("string is not a valid X")
 
 
 def test_create_with_dfs():
@@ -397,6 +408,15 @@ def test_slicing_remove_unused_categories():
     )
     adata._sanitize()
     assert adata[2:4].obs["k"].cat.categories.tolist() == ["b"]
+
+
+def test_slicing_dont_remove_unused_categories():
+    with settings.override(remove_unused_categories=False):
+        adata = AnnData(
+            np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
+        )
+        adata._sanitize()
+        assert adata[2:4].obs["k"].cat.categories.tolist() == ["a", "b"]
 
 
 def test_get_subset_annotation():

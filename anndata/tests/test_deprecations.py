@@ -3,6 +3,7 @@ This file contains tests for deprecated functions.
 
 This includes correct behaviour as well as throwing warnings.
 """
+
 from __future__ import annotations
 
 import warnings

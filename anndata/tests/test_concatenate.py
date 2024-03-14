@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 from boltons.iterutils import default_exit, remap, research
 from numpy import ma
+from packaging.version import Version
 from scipy import sparse
 
 from anndata import AnnData, Raw, concat
@@ -872,9 +873,9 @@ def test_nan_merge(axis, join_type, array_type):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=sparse.SparseEfficiencyWarning)
         for _ in range(10):
-            arr_nan[
-                np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])
-            ] = np.nan
+            arr_nan[np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])] = (
+                np.nan
+            )
 
     _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)
@@ -1350,7 +1351,7 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
             FutureWarning,
             match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
         )
-        if shape[axis] == 0
+        if shape[axis] == 0 and Version(pd.__version__) >= Version("2.1")
         else nullcontext()
     )
     with ctx_concat_empty:

@@ -1,6 +1,7 @@
 """
 Tests that each element in an anndata is written correctly
 """
+
 from __future__ import annotations
 
 import re
@@ -10,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -146,6 +148,9 @@ def test_dask_write_sparse(store, sparse_format):
 
     assert_equal(X_from_disk, X_dask_from_disk)
     assert_equal(dict(store["X"].attrs), dict(store["X_dask"].attrs))
+
+    assert store["X_dask/indptr"].dtype == np.int64
+    assert store["X_dask/indices"].dtype == np.int64
 
 
 def test_io_spec_raw(store):
@@ -300,3 +305,44 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     with read_func(pth) as z:
         expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
+
+
+def test_dataframe_column_uniqueness(store):
+    repeated_cols = pd.DataFrame(np.ones((3, 2)), columns=["a", "a"])
+
+    with pytest_8_raises(
+        ValueError,
+        match=r"Found repeated column names: \['a'\]\. Column names must be unique\.",
+    ):
+        write_elem(store, "repeated_cols", repeated_cols)
+
+    index_shares_col_name = pd.DataFrame(
+        {"col_name": [1, 2, 3]}, index=pd.Index([1, 3, 2], name="col_name")
+    )
+
+    with pytest_8_raises(
+        ValueError,
+        match=r"DataFrame\.index\.name \('col_name'\) is also used by a column whose values are different\.",
+    ):
+        write_elem(store, "index_shares_col_name", index_shares_col_name)
+
+    index_shared_okay = pd.DataFrame(
+        {"col_name": [1, 2, 3]}, index=pd.Index([1, 2, 3], name="col_name")
+    )
+
+    write_elem(store, "index_shared_okay", index_shared_okay)
+    result = read_elem(store["index_shared_okay"])
+
+    assert_equal(result, index_shared_okay)
+
+
+@pytest.mark.parametrize("copy_on_write", [True, False])
+def test_io_pd_cow(store, copy_on_write):
+    if Version(pd.__version__) < Version("2"):
+        pytest.xfail("copy_on_write option is not available in pandas < 2")
+    # https://github.com/zarr-developers/numcodecs/issues/514
+    with pd.option_context("mode.copy_on_write", copy_on_write):
+        orig = gen_adata((3, 2))
+        write_elem(store, "adata", orig)
+        from_store = read_elem(store["adata"])
+        assert_equal(orig, from_store)

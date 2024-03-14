@@ -81,7 +81,12 @@ def test_readwrite_loom(tmp_path):
     adata = AnnData(X=X, layers=dict(L=L.copy()))
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", NumbaDeprecationWarning)
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
         adata.write_loom(loom_path)
     adata_read = read_loom(loom_path, X_name="")
 
