@@ -111,11 +111,11 @@ jobs:
         displayName: "Use Python 3.12"
 
       - script: |
-          python -m pip install --upgrade uv
-          uv pip install --system build twine
+          python -m pip install --upgrade pip
+          pip install build twine
         displayName: "Install build tools and requirements"
 
-      - script: uv pip list
+      - script: pip list
         displayName: "Display installed versions"
 
       - script: |
@@ -124,6 +124,6 @@ jobs:
         displayName: "Build & Twine check"
 
       - script: |
-          uv pip install --system "anndata @ `ls dist/*.whl`"
+          pip install dist/*.whl
           python -c 'import anndata; print(anndata.__version__)'
         displayName: "Check runtime version"
