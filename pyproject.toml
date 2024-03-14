@@ -134,7 +134,6 @@ filterwarnings_when_strict = [
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
-    "default::SyntaxWarning",  # https://github.com/linnarsson-lab/loompy/issues/183
 ]
 python_files = "test_*.py"
 testpaths = ["anndata", "docs/concatenation.rst"]

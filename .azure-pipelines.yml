@@ -49,19 +49,19 @@ jobs:
         displayName: Cache pip packages
 
       - script: |
-          uv pip install --system "anndata[dev,test] @ ."
+          uv pip install --system --compile "anndata[dev,test] @ ."
         displayName: "Install dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'latest')
 
       - script: |
-          uv pip install --system tomli packaging
+          uv pip install --system --compile tomli packaging
           deps=`python3 ci/scripts/min-deps.py pyproject.toml --extra dev test`
-          uv pip install --system $deps pytest-cov "anndata @ ."
+          uv pip install --system --compile $deps pytest-cov "anndata @ ."
         displayName: "Install minimum dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
 
       - script: |
-          uv pip install --system --pre "anndata[dev,test] @ ."
+          uv pip install --system --compile --pre "anndata[dev,test] @ ."
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
