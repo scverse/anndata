@@ -10,6 +10,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_string_dtype
 from scipy import sparse
 
 import anndata as ad
@@ -19,7 +20,7 @@ from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._io.utils import H5PY_V3, check_key
-from anndata._warnings import OldFormatWarning
+from anndata._warnings import ImplicitModificationWarning, OldFormatWarning
 from anndata.compat import (
     AwkArray,
     CupyArray,
@@ -683,14 +684,25 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
     group.attrs["column-order"] = col_names
 
     if df.index.name is not None:
-        if df.index.name in col_names and not pd.Series(
-            df.index, index=df.index
-        ).equals(df[df.index.name]):
-            raise ValueError(
-                f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
-                "whose values are different. This is not supported. Please make sure "
-                "the values are the same, or use a different name."
-            )
+
+        if df.index.name in col_names:
+
+            index_values = pd.Series(df.index, index=df.index)
+
+            df_values = df[df.index.name]
+
+            # This logic is required to mirror anndata/_core/aligned_df.py:_gen_dataframe_df
+            if not is_string_dtype(df_values):
+                warn("Transforming to str index.", ImplicitModificationWarning)
+                df_values = df_values.astype(str)
+
+            if not index_values.equals(df_values):
+                raise ValueError(
+                    f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
+                    "whose values are different. This is not supported. Please make sure "
+                    "the values are the same, or use a different name."
+                )
+
         index_name = df.index.name
     else:
         index_name = "_index"
