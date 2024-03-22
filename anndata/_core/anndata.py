@@ -249,6 +249,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
+        *,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
@@ -258,11 +259,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename: PathLike | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
-        *,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        oidx: Index1D = None,
-        vidx: Index1D = None,
+        oidx: Index1D | None = None,
+        vidx: Index1D | None = None,
     ):
         if asview:
             if not isinstance(X, AnnData):
@@ -502,7 +502,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # layers
         self._layers = Layers(self, layers)
 
-    def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
+    def __sizeof__(
+        self, *, show_stratified: bool = False, with_disk: bool = False
+    ) -> int:
         def get_size(X) -> int:
             def cs_to_bytes(X) -> int:
                 return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
@@ -763,7 +765,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Number of variables/features."""
         return len(self.var_names)
 
-    def _set_dim_df(self, value: pd.DataFrame, attr: str):
+    def _set_dim_df(self, value: pd.DataFrame, attr: str) -> None:
         if not isinstance(value, pd.DataFrame):
             raise ValueError(f"Can only assign pd.DataFrame to {attr}.")
         value_idx = self._prep_dim_index(value.index, attr)
@@ -1314,7 +1316,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
-    def _get_X(self, use_raw=False, layer=None):
+    def _get_X(self, *, use_raw: bool = False, layer: str | None = None):
         """\
         Convenience method for getting expression values
         with common arguments and error handling.
@@ -1366,7 +1368,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 layer = None
         return get_vector(self, k, "obs", "var", layer=layer)
 
-    def var_vector(self, k, *, layer: str | None = None) -> np.ndarray:
+    def var_vector(self, k: str, *, layer: str | None = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1399,7 +1401,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return get_vector(self, k, "var", "obs", layer=layer)
 
     @utils.deprecated("obs_vector")
-    def _get_obs_array(self, k, use_raw=False, layer=None):
+    def _get_obs_array(
+        self, k, *, use_raw: bool = False, layer: str | None = None
+    ) -> np.ndarray:
         """\
         Get an array from the layer (default layer='X') along the :attr:`obs`
         dimension by first looking up `obs.keys` and then :attr:`obs_names`.
@@ -1410,7 +1414,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return self.raw.obs_vector(k)
 
     @utils.deprecated("var_vector")
-    def _get_var_array(self, k, use_raw=False, layer=None):
+    def _get_var_array(
+        self, k: str, *, use_raw: bool = False, layer: str | None = None
+    ) -> np.ndarray:
         """\
         Get an array from the layer (default layer='X') along the :attr:`var`
         dimension by first looking up `var.keys` and then :attr:`var_names`.
@@ -1449,7 +1455,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self, copy=False) -> AnnData:
+    def to_memory(self, *, copy: bool = False) -> AnnData:
         """Return a new AnnData object with all backed arrays loaded into memory.
 
         Params
@@ -1941,7 +1947,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     write = write_h5ad  # a shortcut and backwards compat
 
-    def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ","):
+    def write_csvs(self, dirname: PathLike, *, skip_data: bool = True, sep: str = ","):
         """\
         Write annotation to `.csv` files.
 
@@ -1961,7 +1967,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
-    def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
+    def write_loom(self, filename: PathLike, *, write_obsm_varm: bool = False):
         """\
         Write `.loom`-formatted hdf5 file.
 
@@ -2017,6 +2023,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def chunk_X(
         self,
         select: int | Sequence[int] | np.ndarray = 1000,
+        *,
         replace: bool = True,
     ):
         """\
