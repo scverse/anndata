@@ -147,15 +147,10 @@ def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
 
 @_subset.register(DaskArray)
 def _subset_dask(a: DaskArray, subset_idx: Index):
-    if all(isinstance(x, cabc.Iterable) for x in subset_idx):
+    if len(subset_idx) > 1 and all(isinstance(x, cabc.Iterable) for x in subset_idx):
         if isinstance(a._meta, csc_matrix):
             return a[:, subset_idx[1]][subset_idx[0], :]
-        elif isinstance(a._meta, spmatrix):
-            return a[subset_idx[0], :][:, subset_idx[1]]
-        else:
-            # TODO: this may have been working for some cases?
-            subset_idx = np.ix_(*subset_idx)
-            return a.vindex[subset_idx]
+        return a[subset_idx[0], :][:, subset_idx[1]]
     return a[subset_idx]
 
 
