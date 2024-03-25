@@ -495,22 +495,20 @@ def concat_on_disk(
 
     >>> import httpx
     >>> import scanpy as sc
-    >>> api_url = "https://api.cellxgene.cziscience.com/curation/v1"
+    >>> base_url = "https://datasets.cellxgene.cziscience.com"
     >>> def get_cellxgene_data(id_: str):
     ...     out_path = sc.settings.datasetdir / f'{id_}.h5ad'
     ...     if out_path.exists():
     ...         return out_path
-    ...     ds_versions = httpx.get(f'{api_url}/datasets/{id_}/versions').raise_for_status().json()
-    ...     ds = ds_versions[0]  # newest
-    ...     file_url = next(a['url'] for a in ds['assets'] if a['filetype'] == 'H5AD')
+    ...     file_url = f"{base_url}/{id_}.h5ad"
     ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
     ...     with httpx.stream('GET', file_url) as r, out_path.open('wb') as f:
     ...         r.raise_for_status()
     ...         for data in r.iter_bytes():
     ...             f.write(data)
     ...     return out_path
-    >>> path_b_cells = get_cellxgene_data('0895c838-e550-48a3-a777-dbcd35d30272')
-    >>> path_fetal = get_cellxgene_data('08e94873-c2a6-4f7d-ab72-aeaff3e3f929')
+    >>> path_b_cells = get_cellxgene_data('a93eab58-3d82-4b61-8a2f-d7666dcdb7c4')
+    >>> path_fetal = get_cellxgene_data('d170ff04-6da0-4156-a719-f8e1bbefbf53')
 
     Now we can concatenate them on-disk:
 
