@@ -333,6 +333,19 @@ def _get_group_format(group) -> str:
         return _read_attr(group.attrs, "encoding-type").replace("_matrix", "")
 
 
+# Check for the overridden few methods above in our BackedSparseMatrix subclasses
+def is_sparse_indexing_overridden(format, row, col):
+    format_idx = int(format == "csc")
+    indexer = [row, col]
+    major_indexer = indexer[format_idx]
+    minor_indexer = indexer[format_idx - 1]
+    return isinstance(minor_indexer, slice) and (
+        (isinstance(major_indexer, (int, np.integer)))
+        or (isinstance(major_indexer, slice))
+        or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
+    )
+
+
 class BaseCompressedSparseDataset(ABC):
     """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
 
@@ -416,18 +429,6 @@ class BaseCompressedSparseDataset(ABC):
         row_sp_matrix_validated, col_sp_matrix_validated = mtx._validate_indices(
             (row, col)
         )
-
-        # Check for the overridden few methods above in our BackedSparseMatrix subclasses
-        def is_sparse_indexing_overridden(format, row, col):
-            format_idx = int(format == "csc")
-            indexer = [row, col]
-            major_indexer = indexer[format_idx]
-            minor_indexer = indexer[format_idx - 1]
-            return isinstance(minor_indexer, slice) and (
-                (isinstance(major_indexer, (int, np.integer)))
-                or (isinstance(major_indexer, slice))
-                or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
-            )
 
         # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
