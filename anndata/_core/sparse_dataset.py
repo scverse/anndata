@@ -413,6 +413,17 @@ class BaseCompressedSparseDataset(ABC):
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
+        row_sp_matrix_validated, col_sp_matrix_validated = mtx._validate_indices(
+            (row, col)
+        )
+
+        # Check for the overridden few methods above in our BackedSparseMatrix subclasses
+        def is_sparse_indexing_overridden(minor_indexer, major_indexer):
+            return isinstance(minor_indexer, slice) and (
+                (isinstance(major_indexer, (int, np.integer)))
+                or (isinstance(major_indexer, slice))
+                or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
+            )
 
         # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
@@ -423,6 +434,19 @@ class BaseCompressedSparseDataset(ABC):
             sub = ss.csc_matrix(
                 subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
             )[row, :]
+        # read into memory data if we do not override access methods
+        elif (
+            self.format == "csc"
+            and not is_sparse_indexing_overridden(
+                row_sp_matrix_validated, col_sp_matrix_validated
+            )
+        ) or (
+            self.format == "csr"
+            and not is_sparse_indexing_overridden(
+                col_sp_matrix_validated, row_sp_matrix_validated
+            )
+        ):
+            sub = self.to_memory()[row_sp_matrix_validated, col_sp_matrix_validated]
         else:
             sub = mtx[row, col]
 
