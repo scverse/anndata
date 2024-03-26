@@ -164,6 +164,7 @@ def equal_series(a, b) -> bool:
 
 
 @equal.register(sparse.spmatrix)
+@equal.register(sparse.sparray)
 @equal.register(CupySparseMatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
@@ -203,7 +204,7 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x):
-    if not isinstance(x, sparse.spmatrix):
+    if not isinstance(x, (sparse.spmatrix, sparse.sparray)):
         return sparse.csr_matrix(x)
     else:
         return x
@@ -531,7 +532,7 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, sparse.spmatrix):
+        elif isinstance(el, (sparse.spmatrix, sparse.sparray)):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -610,7 +611,10 @@ class Reindexer:
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
-    def _apply_to_sparse(self, el: spmatrix, *, axis, fill_value=None) -> spmatrix:
+    # TODO: Figure out how to make this work for array classes
+    def _apply_to_sparse(
+        self, el: sparse.spmatrix | sparse.sparray, *, axis, fill_value=None
+    ) -> spmatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
         else:
@@ -710,7 +714,7 @@ def default_fill_value(els):
 
     This is largely due to backwards compat, and might not be the ideal solution.
     """
-    if any(isinstance(el, sparse.spmatrix) for el in els):
+    if any(isinstance(el, (sparse.spmatrix, sparse.sparray)) for el in els):
         return 0
     else:
         return np.nan
@@ -808,7 +812,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             axis=axis,
         )
-    elif any(isinstance(a, sparse.spmatrix) for a in arrays):
+    elif any(isinstance(a, (sparse.spmatrix, sparse.sparray)) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         return sparse_stack(
             [

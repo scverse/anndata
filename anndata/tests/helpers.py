@@ -33,12 +33,25 @@ from anndata.utils import asarray
 GEN_ADATA_DASK_ARGS = dict(
     obsm_types=(
         sparse.csr_matrix,
+        sparse.csr_array,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
     ),
-    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
-    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    varm_types=(
+        sparse.csr_matrix,
+        sparse.csr_array,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    layers_types=(
+        sparse.csr_matrix,
+        sparse.csr_array,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
 )
 
 
@@ -162,17 +175,25 @@ def gen_adata(
     # var_dtypes,
     obsm_types: Collection[type] = (
         sparse.csr_matrix,
+        sparse.csr_array,
         np.ndarray,
         pd.DataFrame,
         AwkArray,
     ),
     varm_types: Collection[type] = (
         sparse.csr_matrix,
+        sparse.csr_array,
         np.ndarray,
         pd.DataFrame,
         AwkArray,
     ),
-    layers_types: Collection[type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    layers_types: Collection[type] = (
+        sparse.csr_matrix,
+        sparse.csr_array,
+        np.ndarray,
+        pd.DataFrame,
+    ),
+    random_state=None,
     sparse_fmt: str = "csr",
 ) -> AnnData:
     """\
@@ -203,6 +224,9 @@ def gen_adata(
     """
     import dask.array as da
 
+    if random_state is None:
+        random_state = np.random.default_rng()
+
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
@@ -215,10 +239,13 @@ def gen_adata(
     if X_type is None:
         X = None
     else:
-        X = X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype))
+        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
     obsm = dict(
         array=np.random.random((M, 50)),
-        sparse=sparse.random(M, 100, format=sparse_fmt),
+        sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
+        sparse_array=sparse.csr_array(
+            sparse.random(M, 100, format=sparse_fmt, random_state=random_state)
+        ),
         df=gen_typed_df(M, obs_names),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
@@ -226,7 +253,10 @@ def gen_adata(
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     varm = dict(
         array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format=sparse_fmt),
+        sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
+        sparse_array=sparse.csr_array(
+            sparse.random(N, 100, format=sparse_fmt, random_state=random_state)
+        ),
         df=gen_typed_df(N, var_names),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
@@ -234,15 +264,26 @@ def gen_adata(
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     layers = dict(
         array=np.random.random((M, N)),
-        sparse=sparse.random(M, N, format=sparse_fmt),
+        sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
+        sparse_array=sparse.csr_array(
+            sparse.random(M, N, format=sparse_fmt, random_state=random_state)
+        ),
         da=da.random.random((M, N)),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)), sparse=sparse.random(M, M, format=sparse_fmt)
+        array=np.random.random((M, M)),
+        sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
+        sparse_array=sparse.csr_array(
+            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
+        ),
     )
     varp = dict(
-        array=np.random.random((N, N)), sparse=sparse.random(N, N, format=sparse_fmt)
+        array=np.random.random((N, N)),
+        sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
+        sparse_array=sparse.csr_array(
+            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
+        ),
     )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
@@ -438,6 +479,7 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(BaseCompressedSparseDataset)
 @assert_equal.register(sparse.spmatrix)
+@assert_equal.register(sparse.sparray)  # TODO: Figure out compat for scipy < 1.11
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
