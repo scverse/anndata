@@ -60,7 +60,7 @@ These new data profit much from the application of the scalable machine learning
 
 `AnnData` is designed for data scientists and was inspired by a similar data structure in the R ecosystem, `ExpressionSet` [@Huber2015], filling this gap in the Python ecosystem.[^1]
 
-^1: Please note that `AnnData` denotes the class (data structure), whereas anndata denotes the software package (python module).
+[^1]: Please note that `AnnData` denotes the class (data structure), whereas anndata denotes the software package (python module).
 
 Within the pydata ecosystem, xarray [@Hoyer2017] enables to deal with labeled data tensors of arbitrary dimensions, while pandas [@McKinney2010] operates on single data matrices (tables) represented as `DataFrame` objects.
 anndata is positioned in between pandas and xarray by providing structure that organizes data matrix annotations. In contrast to pandas and xarray, `AnnData` offers a native on-disk format that allows sharing data with analysis results in form of learned annotations.
