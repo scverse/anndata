@@ -314,7 +314,7 @@ def test_indptr_cache(
     f = zarr.open_group(path, "a")
     ad._io.specs.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
-    store.set_key_trackers(["X/indptr"])
+    store.initialize_key_trackers(["X/indptr"])
     f = zarr.open_group(store, "a")
     a_disk = sparse_dataset(f["X"])
     a_disk[:1]
@@ -324,6 +324,41 @@ def test_indptr_cache(
     assert (
         store.get_access_count("X/indptr") == 2
     )  # one each for .zarray and actual access
+
+
+@pytest.mark.parametrize(
+    ["sparse_format"],
+    [
+        pytest.param(sparse.csr_matrix),
+        pytest.param(sparse.csc_matrix),
+    ],
+)
+def test_data_access(
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+):
+    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    a = sparse_format(np.eye(10, 10))
+    f = zarr.open_group(path, "a")
+    ad._io.specs.write_elem(f, "X", a)
+    data = f["X/data"][...]
+    del f["X/data"]
+    zarr.array(
+        data, store=path / "X" / "data", chunks=(1,)
+    )  # chunk one at a time to count properly
+    store = AccessTrackingStore(path)
+    store.initialize_key_trackers(["X/data"])
+    f = zarr.open_group(store)
+    a_disk = sparse_dataset(f["X"])
+    for idx in [slice(0, 1), 0, np.array([0]), np.array([True] + [False] * 9)]:
+        store.reset_key_trackers()
+        if a_disk.format == "csr":
+            a_disk[idx, :]
+        else:
+            a_disk[:, idx]
+        assert (store.get_access_count("X/data") == 3) and store.get_accessed_keys(
+            "X/data"
+        ) == ["X/data/.zarray", "X/data/.zarray", "X/data/0"]
 
 
 @pytest.mark.parametrize(
