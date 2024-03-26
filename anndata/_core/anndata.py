@@ -1,6 +1,7 @@
 """\
 Main class and helper functions.
 """
+
 from __future__ import annotations
 
 import collections.abc as cabc
@@ -9,7 +10,7 @@ from collections import OrderedDict
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
 from enum import Enum
-from functools import partial, singledispatch
+from functools import partial
 from pathlib import Path
 from textwrap import dedent
 from typing import (  # Meta  # Generic ABCs  # Generic
@@ -23,11 +24,9 @@ import numpy as np
 import pandas as pd
 from natsort import natsorted
 from numpy import ma
-from pandas.api.types import infer_dtype, is_string_dtype
+from pandas.api.types import infer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
-
-from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
 from .._settings import settings
@@ -42,6 +41,7 @@ from ..compat import (
 from ..logging import anndata_logger as logger
 from ..utils import convert_to_dict, deprecated, dim_len, ensure_df_homogeneous
 from .access import ElementRef
+from .aligned_df import _gen_dataframe
 from .aligned_mapping import (
     AxisArrays,
     AxisArraysView,
@@ -108,97 +108,6 @@ def _check_2d_shape(X):
         raise ValueError(
             f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
         )
-
-
-def _mk_df_error(
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    expected: int,
-    actual: int,
-):
-    if source == "X":
-        what = "row" if attr == "obs" else "column"
-        msg = (
-            f"Observations annot. `{attr}` must have as many rows as `X` has {what}s "
-            f"({expected}), but has {actual} rows."
-        )
-    else:
-        msg = (
-            f"`shape` is inconsistent with `{attr}` "
-            "({actual} {what}s instead of {expected})"
-        )
-    return ValueError(msg)
-
-
-@singledispatch
-def _gen_dataframe(
-    anno: Mapping[str, Any],
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-) -> pd.DataFrame:
-    if anno is None or len(anno) == 0:
-        anno = {}
-
-    def mk_index(l: int) -> pd.Index:
-        return pd.RangeIndex(0, l, name=None).astype(str)
-
-    for index_name in index_names:
-        if index_name not in anno:
-            continue
-        df = pd.DataFrame(
-            anno,
-            index=anno[index_name],
-            columns=[k for k in anno.keys() if k != index_name],
-        )
-        break
-    else:
-        df = pd.DataFrame(
-            anno,
-            index=None if length is None else mk_index(length),
-            columns=None if len(anno) else [],
-        )
-
-    if length is None:
-        df.index = mk_index(len(df))
-    elif length != len(df):
-        raise _mk_df_error(source, attr, length, len(df))
-    return df
-
-
-@_gen_dataframe.register(pd.DataFrame)
-def _gen_dataframe_df(
-    anno: pd.DataFrame,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    if length is not None and length != len(anno):
-        raise _mk_df_error(source, attr, length, len(anno))
-    anno = anno.copy(deep=False)
-    if not is_string_dtype(anno.index):
-        warnings.warn("Transforming to str index.", ImplicitModificationWarning)
-        anno.index = anno.index.astype(str)
-    if not len(anno.columns):
-        anno.columns = anno.columns.astype(str)
-    return anno
-
-
-@_gen_dataframe.register(pd.Series)
-@_gen_dataframe.register(pd.Index)
-def _gen_dataframe_1d(
-    anno: pd.Series | pd.Index,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -512,9 +421,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if isinstance(X, s_type.value):
                     break
             else:
-                class_names = ", ".join(c.__name__ for c in StorageType.classes())
                 raise ValueError(
-                    f"`X` needs to be of one of {class_names}, not {type(X)}."
+                    f"X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not {type(X)}."
                 )
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
@@ -1376,7 +1284,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     T = property(transpose)
 
-    def to_df(self, layer=None) -> pd.DataFrame:
+    def to_df(self, layer: str | None = None) -> pd.DataFrame:
         """\
         Generate shallow :class:`~pandas.DataFrame`.
 
@@ -1389,8 +1297,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Params
         ------
-        layer : str
+        layer
             Key for `.layers`.
+
+        Returns
+        -------
+        Pandas DataFrame of specified data matrix.
         """
         if layer is not None:
             X = self.layers[layer]

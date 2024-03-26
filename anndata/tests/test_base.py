@@ -89,6 +89,16 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
         AnnData(**{src: src_arg, dim: dim_arg(dim)})
 
 
+def test_invalid_X():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not <class 'str'>."
+        ),
+    ):
+        AnnData("string is not a valid X")
+
+
 def test_create_with_dfs():
     X = np.ones((6, 3))
     obs = pd.DataFrame(dict(cat_anno=pd.Categorical(["a", "a", "a", "a", "b", "a"])))

@@ -417,6 +417,10 @@ def _resolve_idx(old, new, l):
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(old, new, l):
+    if is_bool_dtype(old) and is_bool_dtype(new):
+        mask_new = np.zeros_like(old)
+        mask_new[np.flatnonzero(old)[new]] = True
+        return mask_new
     if is_bool_dtype(old):
         old = np.where(old)[0]
     return old[new]

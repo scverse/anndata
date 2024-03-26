@@ -19,6 +19,7 @@ Also interesting:
 * io for backed objects
 * Reading dense as sparse, writing sparse as dense
 """
+
 from __future__ import annotations
 
 import sys

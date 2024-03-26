@@ -12,7 +12,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.experimental import read_dispatched
+from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
@@ -138,12 +138,12 @@ def make_alternating_mask(size: int, step: int) -> np.ndarray:
 
 # non-random indices, with alternating one false and n true
 make_alternating_mask_5 = partial(make_alternating_mask, step=5)
-make_alternating_mask_10 = partial(make_alternating_mask, step=10)
+make_alternating_mask_15 = partial(make_alternating_mask, step=15)
 
 
 def make_one_group_mask(size: int) -> np.ndarray:
     one_group_mask = np.zeros(size, dtype=bool)
-    one_group_mask[size // 4 : size // 2] = True
+    one_group_mask[1 : size // 2] = True
     return one_group_mask
 
 
@@ -158,12 +158,12 @@ def make_one_elem_mask(size: int) -> np.ndarray:
     "make_bool_mask,should_trigger_optimization",
     [
         (make_randomized_mask, None),
-        (make_alternating_mask_10, True),
+        (make_alternating_mask_15, True),
         (make_alternating_mask_5, False),
         (make_one_group_mask, True),
         (make_one_elem_mask, False),
     ],
-    ids=["randomized", "alternating_10", "alternating_5", "one_group", "one_elem"],
+    ids=["randomized", "alternating_15", "alternating_5", "one_group", "one_elem"],
 )
 def test_consecutive_bool(
     mocker: MockerFixture,
@@ -188,6 +188,7 @@ def test_consecutive_bool(
     mask = make_bool_mask(csr_disk.shape[0])
 
     # indexing needs to be on `X` directly to trigger the optimization.
+
     # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
     from anndata._core import sparse_dataset
 
@@ -202,6 +203,30 @@ def test_consecutive_bool(
         assert (
             spy.call_count == 2 if should_trigger_optimization else not spy.call_count
         )
+    assert_equal(csr_disk[mask, :], csr_disk[np.where(mask)])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 3 if should_trigger_optimization else not spy.call_count
+        )
+    subset = csc_disk[:, mask]
+    assert_equal(subset, csc_disk[:, np.where(mask)[0]])
+    if should_trigger_optimization is not None:
+        assert (
+            spy.call_count == 4 if should_trigger_optimization else not spy.call_count
+        )
+    if should_trigger_optimization is not None and not csc_disk.isbacked:
+        size = subset.shape[1]
+        if should_trigger_optimization:
+            subset_subset_mask = np.ones(size).astype("bool")
+            subset_subset_mask[size // 2] = False
+        else:
+            subset_subset_mask = make_one_elem_mask(size)
+        assert_equal(
+            subset[:, subset_subset_mask], subset[:, np.where(subset_subset_mask)[0]]
+        )
+        assert (
+            spy.call_count == 5 if should_trigger_optimization else not spy.call_count
+        ), f"Actual count: {spy.call_count}"
 
 
 @pytest.mark.parametrize(
@@ -408,3 +433,40 @@ def test_backed_sizeof(
     assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
     assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
     assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
+
+
+@pytest.mark.parametrize(
+    "group_fn",
+    [
+        pytest.param(lambda _: zarr.group(), id="zarr"),
+        pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
+    ],
+)
+def test_append_overflow_check(group_fn, tmpdir):
+    group = group_fn(tmpdir)
+    typemax_int32 = np.iinfo(np.int32).max
+    orig_mtx = sparse.csr_matrix(np.ones((1, 1), dtype=bool))
+    # Minimally allocating new matrix
+    new_mtx = sparse.csr_matrix(
+        (
+            np.broadcast_to(True, typemax_int32 - 1),
+            np.broadcast_to(np.int32(1), typemax_int32 - 1),
+            [0, typemax_int32 - 1],
+        ),
+        shape=(1, 2),
+    )
+
+    write_elem(group, "mtx", orig_mtx)
+    backed = sparse_dataset(group["mtx"])
+
+    # Checking for correct caching behaviour
+    backed.indptr
+
+    with pytest.raises(
+        OverflowError,
+        match=r"This array was written with a 32 bit intptr, but is now large.*",
+    ):
+        backed.append(new_mtx)
+
+    # Check for any modification
+    assert_equal(backed, orig_mtx)
