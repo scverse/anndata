@@ -57,7 +57,7 @@ jobs:
           environment-file: ci/gpu_ci.yml
           init-shell: >-
             bash
-          post-cleanup: 'all'
+          post-cleanup: "all"
 
       - name: Install AnnData
         run: uv pip install -e .[dev,test,gpu]
