@@ -55,8 +55,6 @@ jobs:
         with:
           micromamba-version: "1.5.6-0"
           environment-file: ci/gpu_ci.yml
-          init-shell: >-
-            bash
           post-cleanup: "all"
 
       - name: Install AnnData
