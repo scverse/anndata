@@ -20,6 +20,7 @@ from anndata._core.aligned_mapping import AlignedMapping
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
+    CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
@@ -33,26 +34,33 @@ from anndata.utils import asarray
 GEN_ADATA_DASK_ARGS = dict(
     obsm_types=(
         sparse.csr_matrix,
-        sparse.csr_array,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
     ),
     varm_types=(
         sparse.csr_matrix,
-        sparse.csr_array,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
     ),
     layers_types=(
         sparse.csr_matrix,
-        sparse.csr_array,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
     ),
 )
+if CAN_USE_SPARSE_ARRAY:
+    GEN_ADATA_DASK_ARGS["obsm_types"] = GEN_ADATA_DASK_ARGS["obsm_types"] + (
+        sparse.csr_array,
+    )
+    GEN_ADATA_DASK_ARGS["varm_types"] = GEN_ADATA_DASK_ARGS["varm_types"] + (
+        sparse.csr_array,
+    )
+    GEN_ADATA_DASK_ARGS["layers_types"] = GEN_ADATA_DASK_ARGS["layers_types"] + (
+        sparse.csr_array,
+    )
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -166,6 +174,15 @@ def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     return df
 
 
+default_key_types = (
+    sparse.csr_matrix,
+    np.ndarray,
+    pd.DataFrame,
+)
+if CAN_USE_SPARSE_ARRAY:
+    default_key_types = default_key_types + (sparse.csr_array,)
+
+
 # TODO: Use hypothesis for this?
 def gen_adata(
     shape: tuple[int, int],
@@ -173,26 +190,9 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: Collection[type] = (
-        sparse.csr_matrix,
-        sparse.csr_array,
-        np.ndarray,
-        pd.DataFrame,
-        AwkArray,
-    ),
-    varm_types: Collection[type] = (
-        sparse.csr_matrix,
-        sparse.csr_array,
-        np.ndarray,
-        pd.DataFrame,
-        AwkArray,
-    ),
-    layers_types: Collection[type] = (
-        sparse.csr_matrix,
-        sparse.csr_array,
-        np.ndarray,
-        pd.DataFrame,
-    ),
+    obsm_types: Collection[type] = default_key_types + (AwkArray,),
+    varm_types: Collection[type] = default_key_types + (AwkArray,),
+    layers_types: Collection[type] = default_key_types,
     random_state=None,
     sparse_fmt: str = "csr",
 ) -> AnnData:
@@ -243,48 +243,56 @@ def gen_adata(
     obsm = dict(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
-        sparse_array=sparse.csr_array(
-            sparse.random(M, 100, format=sparse_fmt, random_state=random_state)
-        ),
         df=gen_typed_df(M, obs_names),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    if CAN_USE_SPARSE_ARRAY:
+        if sparse.csr_array in obsm_types or sparse.csr_matrix in obsm_types:
+            obsm["sparse_array"] = sparse.csr_array(
+                sparse.random(M, 100, format=sparse_fmt, random_state=random_state)
+            )
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
-        sparse_array=sparse.csr_array(
-            sparse.random(N, 100, format=sparse_fmt, random_state=random_state)
-        ),
         df=gen_typed_df(N, var_names),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    if CAN_USE_SPARSE_ARRAY:
+        if sparse.csr_array in varm_types or sparse.csr_matrix in varm_types:
+            varm["sparse_array"] = sparse.csr_array(
+                sparse.random(N, 100, format=sparse_fmt, random_state=random_state)
+            )
     layers = dict(
         array=np.random.random((M, N)),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
-        sparse_array=sparse.csr_array(
-            sparse.random(M, N, format=sparse_fmt, random_state=random_state)
-        ),
         da=da.random.random((M, N)),
     )
+    if CAN_USE_SPARSE_ARRAY:
+        if sparse.csr_array in layers_types or sparse.csr_matrix in layers_types:
+            layers["sparse_array"] = sparse.csr_array(
+                sparse.random(M, N, format=sparse_fmt, random_state=random_state)
+            )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
         array=np.random.random((M, M)),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
-        sparse_array=sparse.csr_array(
-            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
-        ),
     )
+    if CAN_USE_SPARSE_ARRAY:
+        obsp["sparse_array"] = sparse.csr_array(
+            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
+        )
     varp = dict(
         array=np.random.random((N, N)),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
-        sparse_array=sparse.csr_array(
-            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
-        ),
     )
+    if CAN_USE_SPARSE_ARRAY:
+        varp["sparse_array"] = sparse.csr_array(
+            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
+        )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
         nested=dict(
@@ -479,10 +487,16 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(BaseCompressedSparseDataset)
 @assert_equal.register(sparse.spmatrix)
-@assert_equal.register(sparse.sparray)  # TODO: Figure out compat for scipy < 1.11
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
+
+
+if CAN_USE_SPARSE_ARRAY:
+
+    @assert_equal.register(sparse.sparray)
+    def assert_equal_sparse_array(a, b, exact=False, elem_name=None):
+        return assert_equal_sparse(a, b, exact, elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)
