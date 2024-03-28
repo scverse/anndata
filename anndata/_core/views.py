@@ -15,6 +15,8 @@ from anndata._warnings import ImplicitModificationWarning
 
 from ..compat import (
     AwkArray,
+    CscArray,
+    CsrArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
@@ -304,12 +306,12 @@ def as_view_csc_matrix(mtx, view_args):
     return SparseCSCMatrixView(mtx, view_args=view_args)
 
 
-@as_view.register(sparse.csr_array)
+@as_view.register(CsrArray)
 def as_view_csr_array(mtx, view_args):
     return SparseCSRArrayView(mtx, view_args=view_args)
 
 
-@as_view.register(sparse.csc_array)
+@as_view.register(CscArray)
 def as_view_csc_array(mtx, view_args):
     return SparseCSCArrayView(mtx, view_args=view_args)
 

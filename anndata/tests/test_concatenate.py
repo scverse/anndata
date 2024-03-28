@@ -19,7 +19,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, DaskArray
+from anndata.compat import AwkArray, DaskArray, SpArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -57,15 +57,15 @@ def _filled_array(a, fill_value=None):
 
 @filled_like.register(sparse.spmatrix)
 def _filled_sparse(a, fill_value=None):
-    return sparse.csr_matrix(filled_like(sparse.csr_array(a)))
-
-
-@filled_like.register(sparse.sparray)
-def _filled_sparse_array(a, fill_value=None):
     if fill_value is None:
-        return sparse.csr_array(a.shape)
+        return sparse.csr_matrix(a.shape)
     else:
-        return sparse.csr_array(np.broadcast_to(fill_value, a.shape))
+        return sparse.csr_matrix(np.broadcast_to(fill_value, a.shape))
+
+
+@filled_like.register(SpArray)
+def _filled_sparse_array(a, fill_value=None):
+    return sparse.csr_array(filled_like(sparse.csr_matrix(a)))
 
 
 @filled_like.register(pd.DataFrame)

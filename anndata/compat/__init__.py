@@ -15,7 +15,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
-import scipy as sp
+import scipy
 from packaging.version import Version
 
 from .exceptiongroups import add_note  # noqa: F401
@@ -26,7 +26,7 @@ class Empty:
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, tuple[Index1D, Index1D], sp.sparse.spmatrix]
+Index = Union[Index1D, tuple[Index1D, Index1D], scipy.sparse.spmatrix]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 
@@ -134,7 +134,7 @@ except ImportError:
     class CupySparseMatrix:
         @staticmethod
         def __repr__():
-            return "mock cupyx.scipy.sparse.sp.spmatrix"
+            return "mock cupyx.scipy.sparse.scipy.spmatrix"
 
     class CupyCSRMatrix:
         @staticmethod
@@ -305,7 +305,7 @@ def _move_adj_mtx(d):
     for k in ("distances", "connectivities"):
         if (
             (k in n)
-            and isinstance(n[k], (sp.sparse.spmatrix, np.ndarray))
+            and isinstance(n[k], (scipy.sparse.spmatrix, np.ndarray))
             and len(n[k].shape) == 2
         ):
             warn(
@@ -321,7 +321,7 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
     for k, v in d.items():
         if isinstance(v, Mapping):
             _find_sparse_matrices(v, n, (*keys, k), paths)
-        elif isinstance(v, sp.spmatrix) and v.shape == (n, n):
+        elif isinstance(v, scipy.spmatrix) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
 
@@ -401,7 +401,7 @@ def _safe_transpose(x):
     This is a workaround for: https://github.com/scipy/scipy/issues/19161
     """
 
-    if isinstance(x, DaskArray) and sp.sparse.issparse(x._meta):
+    if isinstance(x, DaskArray) and scipy.sparse.issparse(x._meta):
         return _transpose_by_block(x)
     else:
         return x.T
@@ -415,4 +415,30 @@ def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
         return cat.map(str)
 
 
-CAN_USE_SPARSE_ARRAY = Version(sp.__version__) >= Version("1.11")
+#############################
+# scipy sparse array comapt #
+#############################
+
+
+CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
+
+if not CAN_USE_SPARSE_ARRAY:
+
+    class SpArray:
+        @staticmethod
+        def __repr__():
+            return "mock scipy.sparse.sparray"
+
+    class CsrArray:
+        @staticmethod
+        def __repr__():
+            return "mock scipy.sparse.csr_array"
+
+    class CscArray:
+        @staticmethod
+        def __repr__():
+            return "mock scipy.sparse.csc_array"
+else:
+    SpArray = scipy.sparse.sparray
+    CsrArray = scipy.sparse.csr_array
+    CscArray = scipy.sparse.csc_array

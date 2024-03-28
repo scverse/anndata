@@ -27,6 +27,7 @@ from anndata.compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    SpArray,
 )
 from anndata.utils import asarray
 
@@ -492,11 +493,9 @@ def assert_equal_sparse(a, b, exact=False, elem_name=None):
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
-if CAN_USE_SPARSE_ARRAY:
-
-    @assert_equal.register(sparse.sparray)
-    def assert_equal_sparse_array(a, b, exact=False, elem_name=None):
-        return assert_equal_sparse(a, b, exact, elem_name)
+@assert_equal.register(SpArray)
+def assert_equal_sparse_array(a, b, exact=False, elem_name=None):
+    return assert_equal_sparse(a, b, exact, elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)
