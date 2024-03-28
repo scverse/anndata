@@ -3,7 +3,6 @@ trigger:
   - "*.*.x"
 
 variables:
-  PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
   RUN_COVERAGE: no
   PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml
   DEPENDENCIES_VERSION: "latest" # |"pre-release" | "minimum-version"
@@ -35,36 +34,39 @@ jobs:
           versionSpec: "$(python.version)"
         displayName: "Use Python $(python.version)"
 
+      - script: |
+          python -m pip install --upgrade uv
+          echo "##vso[task.setvariable variable=uv_cache_dir]`uv cache dir`"
+        displayName: "Install tools"
+
       - task: Cache@2
         inputs:
           key: '"python $(python.version)" | "$(Agent.OS)" | pyproject.toml'
           restoreKeys: |
             python | "$(Agent.OS)"
             python
-          path: $(PIP_CACHE_DIR)
+          path: $(uv_cache_dir)
         displayName: Cache pip packages
 
       - script: |
-          python -m pip install --upgrade pip wheel
-          pip install .[dev,test]
+          uv pip install --system --compile "anndata[dev,test] @ ."
         displayName: "Install dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'latest')
 
       - script: |
-          python -m pip install pip wheel tomli packaging pytest-cov
-          pip install `python3 ci/scripts/min-deps.py pyproject.toml --extra dev test`
-          pip install --no-deps .
+          uv pip install --system --compile tomli packaging
+          deps=`python3 ci/scripts/min-deps.py pyproject.toml --extra dev test`
+          uv pip install --system --compile $deps pytest-cov "anndata @ ."
         displayName: "Install minimum dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
 
       - script: |
-          python -m pip install --pre --upgrade pip wheel
-          pip install --pre .[dev,test]
+          uv pip install -v --system --compile --pre "anndata[dev,test] @ ." "scanpy>=1.10.0rc1"
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
       - script: |
-          pip list
+          uv pip list
         displayName: "Display installed versions"
 
       - script: |
