@@ -4,7 +4,8 @@ trigger:
 
 variables:
   RUN_COVERAGE: no
-  PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml
+  # TODO: remove paths after moving tests to test dir
+  PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml anndata ./src/anndata/tests ./docs/concatenation.rst
   DEPENDENCIES_VERSION: "latest" # |"pre-release" | "minimum-version"
   TEST_TYPE: "standard" # | "coverage"
 
