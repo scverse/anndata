@@ -42,10 +42,10 @@ jobs:
 
       - task: Cache@2
         inputs:
-          key: '"python $(python.version)" | "$(Agent.OS)" | pyproject.toml'
+          key: '2 | "python $(python.version)" | "$(Agent.OS)" | pyproject.toml'
           restoreKeys: |
-            python | "$(Agent.OS)"
-            python
+            2 | python | "$(Agent.OS)"
+            2 | python
           path: $(uv_cache_dir)
         displayName: Cache pip packages
 
