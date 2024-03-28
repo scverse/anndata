@@ -31,9 +31,11 @@ from scipy.sparse import issparse
 from .. import utils
 from .._settings import settings
 from ..compat import (
+    CAN_USE_SPARSE_ARRAY,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
+    SpArray,
     ZappyArray,
     ZarrArray,
     _move_adj_mtx,
@@ -76,6 +78,7 @@ class StorageType(Enum):
     CupyArray = CupyArray
     CupySparseMatrix = CupySparseMatrix
     BackedSparseMatrix = BaseCompressedSparseDataset
+    SparseArray = SpArray
 
     @classmethod
     def classes(cls):
@@ -1773,8 +1776,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
+        sprase_class = sparse.csr_matrix
+        if CAN_USE_SPARSE_ARRAY:
+            sprase_class = sparse.csr_array
         out.obs = concat(
-            [AnnData(sparse.csr_matrix(a.shape), obs=a.obs) for a in all_adatas],
+            [AnnData(sprase_class(a.shape), obs=a.obs) for a in all_adatas],
             axis=0,
             join="outer",
             label=batch_key,

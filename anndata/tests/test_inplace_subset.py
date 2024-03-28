@@ -13,8 +13,22 @@ from anndata.utils import asarray
 
 
 @pytest.fixture(
-    params=[np.array, sparse.csr_matrix, sparse.csc_matrix, as_dense_dask_array],
-    ids=["np_array", "scipy_csr", "scipy_csc", "dask_array"],
+    params=[
+        np.array,
+        sparse.csr_matrix,
+        sparse.csc_matrix,
+        sparse.csr_array,
+        sparse.csc_array,
+        as_dense_dask_array,
+    ],
+    ids=[
+        "np_array",
+        "scipy_csr",
+        "scipy_csc",
+        "scipy_csr_array",
+        "scipy_csc_array",
+        "dask_array",
+    ],
 )
 def matrix_type(request):
     return request.param

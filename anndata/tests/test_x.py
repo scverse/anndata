@@ -15,6 +15,8 @@ from anndata.utils import asarray
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
     pytest.param(sparse.csc_matrix, id="csc"),
+    pytest.param(sparse.csr_array, id="csr_array"),
+    pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
 ]
 SINGULAR_SHAPES = [

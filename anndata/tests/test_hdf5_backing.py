@@ -182,6 +182,7 @@ def test_backed_raw(tmp_path):
     [
         pytest.param(asarray, id="dense_array"),
         pytest.param(sparse.csr_matrix, id="csr_matrix"),
+        pytest.param(sparse.csr_array, id="csr_array"),
     ],
 )
 def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):

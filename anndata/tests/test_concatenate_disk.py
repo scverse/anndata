@@ -33,7 +33,7 @@ def axis(request):
 
 
 @pytest.fixture(
-    params=["array", "sparse"],
+    params=["array", "sparse", "sparse_array"],
 )
 def array_type(request):
     return request.param
@@ -96,6 +96,10 @@ def get_array_type(array_type, axis):
         if axis == 0:
             return sparse.csr_matrix
         return sparse.csc_matrix
+    if array_type == "sparse_array":
+        if axis == 0:
+            return sparse.csr_array
+        return sparse.csc_array
     if array_type == "array":
         return asarray
     else:

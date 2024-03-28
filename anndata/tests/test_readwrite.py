@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 import zarr
 from numba.core.errors import NumbaDeprecationWarning
-from scipy.sparse import csc_matrix, csr_matrix
+from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
@@ -233,7 +233,9 @@ def test_readwrite_backed(typ, backing_h5ad):
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csc_matrix])
+@pytest.mark.parametrize(
+    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+)
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
