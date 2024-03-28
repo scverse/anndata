@@ -173,7 +173,7 @@ def equal_sparse(a, b) -> bool:
 
     xp = array_api_compat.array_namespace(a.data)
 
-    if isinstance(b, (CupySparseMatrix, sparse.spmatrix)):
+    if isinstance(b, (CupySparseMatrix, sparse.spmatrix, SpArray)):
         if isinstance(a, CupySparseMatrix):
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
