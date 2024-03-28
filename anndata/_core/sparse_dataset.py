@@ -335,10 +335,7 @@ def _get_group_format(group) -> str:
 
 # Check for the overridden few methods above in our BackedSparseMatrix subclasses
 def is_sparse_indexing_overridden(format, row, col):
-    format_idx = int(format == "csc")
-    indexer = [row, col]
-    major_indexer = indexer[format_idx]
-    minor_indexer = indexer[format_idx - 1]
+    major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
         (isinstance(major_indexer, (int, np.integer)))
         or (isinstance(major_indexer, slice))
