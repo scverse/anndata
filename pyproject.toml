@@ -146,8 +146,7 @@ filterwarnings_when_strict = [
 ]
 python_files = "test_*.py"
 testpaths = [
-    "anndata", # doctests in docstrings (module name due to --pyargs)
-    "./src/anndata/tests", # unit tests
+    "anndata", # docstrings and unit tests (module name due to --pyargs)
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
