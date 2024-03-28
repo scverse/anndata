@@ -125,10 +125,11 @@ exclude_also = [
 
 [tool.pytest.ini_options]
 addopts = [
-    # "--import-mode=importlib",  # TODO: enable
     "--strict-markers",
     "--doctest-modules",
-    "--pyargs",
+    # TODO: enable the following two options together
+    # "--import-mode=importlib",
+    # "--pyargs",
 ]
 filterwarnings = [
     'ignore:Support for Awkward Arrays is currently experimental',
@@ -146,8 +147,7 @@ filterwarnings_when_strict = [
 ]
 python_files = "test_*.py"
 testpaths = [
-    "anndata", # docstrings (module name due to --pyargs)
-    "./src/anndata/tests", # unit tests
+    "./src/anndata",
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
