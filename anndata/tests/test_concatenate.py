@@ -1444,15 +1444,31 @@ def test_concat_null_X():
 
 
 # https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
-def test_concat_X_dtype():
-    adatas_orig = {k: AnnData(np.ones((20, 10), dtype=np.int8)) for k in list("abc")}
+@pytest.mark.parametrize("sparse_indexer_type", [np.int64, np.int32])
+def test_concat_X_dtype(array_type, sparse_indexer_type):
+    adatas_orig = {
+        k: AnnData(array_type(np.ones((20, 10), dtype=np.int8))) for k in list("abc")
+    }
     for adata in adatas_orig.values():
-        adata.raw = AnnData(np.ones((20, 30), dtype=np.float64))
+        adata.raw = AnnData(array_type(np.ones((20, 30), dtype=np.float64)))
+        if sparse.issparse(adata.X):
+            adata.X.indptr = adata.X.indptr.astype(sparse_indexer_type)
+            adata.X.indices = adata.X.indices.astype(sparse_indexer_type)
 
     result = concat(adatas_orig, index_unique="-")
 
     assert result.X.dtype == np.int8
     assert result.raw.X.dtype == np.float64
+    if sparse.issparse(result.X):
+        # See https://github.com/scipy/scipy/issues/20389 for why this doesn't work with csc
+        if sparse_indexer_type == np.int64 and (
+            issubclass(array_type, sparse.spmatrix) or adata.X.format == "csc"
+        ):
+            pytest.xfail(
+                "Data type int64 is not maintained for sparse matrices or csc array"
+            )
+        assert result.X.indptr.dtype == sparse_indexer_type
+        assert result.X.indices.dtype == sparse_indexer_type
 
 
 # Leaving out for now. See definition of these values for explanation
