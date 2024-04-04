@@ -154,7 +154,7 @@ class BackedSparseMatrix(_cs_matrix):
         return new_data, new_indices, new_indptr
 
 
-class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
+class backed_csr(BackedSparseMatrix):
     def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:
         return ss.csr_matrix(
             get_compressed_vector(self, row), shape=(1, self.shape[1])
@@ -189,7 +189,7 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
         )[:, col]
 
 
-class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
+class backed_csc(BackedSparseMatrix):
     def _get_sliceXint(self, row: slice, col: int) -> ss.csc_matrix:
         return ss.csc_matrix(
             get_compressed_vector(self, col), shape=(self.shape[0], 1)
@@ -225,9 +225,27 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
         )[row, :]
 
 
+class backed_csr_matrix(backed_csr, ss.csr_matrix):
+    """backed_csr_matrix"""
+
+
+class backed_csc_matrix(backed_csc, ss.csc_matrix):
+    """backed_csc_matrix"""
+
+
+class backed_csr_array(backed_csr, ss.csr_array):
+    """backed_csr_array"""
+
+
+class backed_csc_array(backed_csc, ss.csc_array):
+    """backed_csc_array"""
+
+
 FORMATS = [
     BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
     BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
+    BackedFormat("csr", backed_csr_array, ss.csr_array),
+    BackedFormat("csc", backed_csc_array, ss.csc_array),
 ]
 
 
@@ -460,7 +478,7 @@ class BaseCompressedSparseDataset(ABC):
             sparse_matrix = sparse_matrix._to_backed()
 
         # Check input
-        if not ss.isspmatrix(sparse_matrix):
+        if not ss.issparse(sparse_matrix):
             raise NotImplementedError(
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."

@@ -13,7 +13,11 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata.experimental import read_dispatched, write_elem
-from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
+from anndata.tests.helpers import (
+    AccessTrackingStore,
+    assert_equal,
+    subset_func,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,13 +33,18 @@ def diskfmt(request):
     return request.param
 
 
+@pytest.fixture(params=[sparse.csr_matrix, sparse.csr_array])
+def sparse_csr_format(request):
+    return request.param
+
+
 M = 50
 N = 50
 
 
 @pytest.fixture(scope="function")
 def ondisk_equivalent_adata(
-    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
+    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], sparse_csr_format
 ) -> tuple[AnnData, AnnData, AnnData, AnnData]:
     csr_path = tmp_path / f"csr.{diskfmt}"
     csc_path = tmp_path / f"csc.{diskfmt}"
@@ -43,7 +52,9 @@ def ondisk_equivalent_adata(
 
     write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
-    csr_mem = ad.AnnData(X=sparse.random(M, N, format="csr", density=0.1))
+    csr_mem = ad.AnnData(
+        X=sparse_csr_format(sparse.random(M, N, format="csr", density=0.1))
+    )
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
     dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
@@ -234,6 +245,8 @@ def test_consecutive_bool(
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
+        pytest.param(sparse.csr_array, sparse.vstack),
+        pytest.param(sparse.csc_array, sparse.hstack),
     ],
 )
 def test_dataset_append_memory(
@@ -267,6 +280,8 @@ def test_dataset_append_memory(
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
+        pytest.param(sparse.csr_array, sparse.vstack),
+        pytest.param(sparse.csc_array, sparse.hstack),
     ],
 )
 def test_dataset_append_disk(
@@ -303,6 +318,8 @@ def test_dataset_append_disk(
     [
         pytest.param(sparse.csr_matrix),
         pytest.param(sparse.csc_matrix),
+        pytest.param(sparse.csr_array),
+        pytest.param(sparse.csc_array),
     ],
 )
 def test_indptr_cache(
@@ -406,11 +423,13 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     assert not np.any((pre_checks != post_checks).toarray())
 
 
-def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+def test_anndata_sparse_compat(
+    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], sparse_csr_format
+):
     path = (
         tmp_path / f"test.{diskfmt.replace('ad', '')}"
     )  # diskfmt is either h5ad or zarr
-    base = sparse.random(100, 100, format="csr")
+    base = sparse_csr_format(sparse.random(100, 100, format="csr"))
 
     if diskfmt == "zarr":
         f = zarr.open_group(path, "a")
