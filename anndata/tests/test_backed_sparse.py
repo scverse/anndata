@@ -234,6 +234,8 @@ def test_consecutive_bool(
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
+        pytest.param(sparse.csr_array, sparse.vstack),
+        pytest.param(sparse.csc_array, sparse.hstack),
     ],
 )
 def test_dataset_append_memory(

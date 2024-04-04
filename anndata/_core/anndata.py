@@ -514,7 +514,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 return int(np.array(X.shape).prod() * X.dtype.itemsize)
             elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
                 return cs_to_bytes(X._to_backed())
-            elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
+            elif issparse(X):
                 return cs_to_bytes(X)
             else:
                 return X.__sizeof__()

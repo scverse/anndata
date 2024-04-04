@@ -460,7 +460,7 @@ class BaseCompressedSparseDataset(ABC):
             sparse_matrix = sparse_matrix._to_backed()
 
         # Check input
-        if not ss.isspmatrix(sparse_matrix):
+        if not ss.issparse(sparse_matrix):
             raise NotImplementedError(
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
