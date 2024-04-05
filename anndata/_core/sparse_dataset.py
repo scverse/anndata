@@ -332,7 +332,7 @@ def get_memory_class(format: str, use_sparray_in_io=False) -> type[ss.spmatrix]:
         if format == fmt:
             if use_sparray_in_io and issubclass(memory_class, SpArray):
                 return memory_class
-            elif issubclass(memory_class, ss.spmatrix):
+            elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
                 return memory_class
     raise ValueError(f"Format string {format} is not supported.")
 
@@ -342,7 +342,7 @@ def get_backed_class(format: str, use_sparray_in_io=False) -> type[BackedSparseM
         if format == fmt:
             if use_sparray_in_io and issubclass(backed_class, SpArray):
                 return backed_class
-            elif issubclass(backed_class, ss.spmatrix):
+            elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
                 return backed_class
     raise ValueError(f"Format string {format} is not supported.")
 
