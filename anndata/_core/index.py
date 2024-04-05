@@ -156,7 +156,7 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 
 @_subset.register(spmatrix)
 @_subset.register(SpArray)
-def _subset_spmatrix(a: spmatrix, subset_idx: Index):
+def _subset_sparse(a: spmatrix | SpArray, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, cabc.Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
