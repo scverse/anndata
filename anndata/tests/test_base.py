@@ -30,6 +30,7 @@ def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]), {}, {})
     AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
     AnnData(sp.eye(2))
+    AnnData(sp.eye_array(2))
     X = np.array([[1, 2, 3], [4, 5, 6]])
     adata = AnnData(
         X=X,

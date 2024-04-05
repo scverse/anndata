@@ -609,7 +609,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X
 
     @X.setter
-    def X(self, value: np.ndarray | sparse.spmatrix | None):
+    def X(self, value: np.ndarray | sparse.spmatrix | SpArray | None):
         if value is None:
             if self.isbacked:
                 raise NotImplementedError(
@@ -660,7 +660,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         value, np.ndarray
                     ):
                         memory_class = sparse.coo_matrix
-                        if CAN_USE_SPARSE_ARRAY:
+                        if CAN_USE_SPARSE_ARRAY and isinstance(
+                            self._adata_ref.X, SpArray
+                        ):
                             memory_class = sparse.coo_array
                         value = memory_class(value)
                     self._adata_ref._X[oidx, vidx] = value
