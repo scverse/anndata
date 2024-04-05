@@ -156,12 +156,12 @@ class BackedSparseMatrix(_cs_matrix):
 
 
 class backed_csr(BackedSparseMatrix):
-    def _get_intXslice(self, row: int, col: slice) -> ss._base._spbase:
+    def _get_intXslice(self, row: int, col: slice) -> ss.spmatrix | SpArray:
         return get_memory_class(self.format)(
             get_compressed_vector(self, row), shape=(1, self.shape[1])
         )[:, col]
 
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss._base._spbase:
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss.spmatrix | SpArray:
         row = _fix_slice_bounds(row, self.shape[0])
         col = _fix_slice_bounds(col, self.shape[1])
 
@@ -179,7 +179,7 @@ class backed_csr(BackedSparseMatrix):
             return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
         return super()._get_sliceXslice(row, col)
 
-    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss._base._spbase:
+    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.spmatrix | SpArray:
         idxs = np.asarray(row)
         if len(idxs) == 0:
             return get_memory_class(self.format)((0, self.shape[1]))
@@ -191,12 +191,12 @@ class backed_csr(BackedSparseMatrix):
 
 
 class backed_csc(BackedSparseMatrix):
-    def _get_sliceXint(self, row: slice, col: int) -> ss._base._spbase:
+    def _get_sliceXint(self, row: slice, col: int) -> ss.spmatrix | SpArray:
         return get_memory_class(self.format)(
             get_compressed_vector(self, col), shape=(self.shape[0], 1)
         )[row, :]
 
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss._base._spbase:
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss.spmatrix | SpArray:
         row = _fix_slice_bounds(row, self.shape[0])
         col = _fix_slice_bounds(col, self.shape[1])
 
@@ -215,7 +215,7 @@ class backed_csc(BackedSparseMatrix):
             return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
         return super()._get_sliceXslice(row, col)
 
-    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss._base._spbase:
+    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.spmatrix | SpArray:
         idxs = np.asarray(col)
         if len(idxs) == 0:
             return get_memory_class(self.format)((self.shape[0], 0))
@@ -328,7 +328,7 @@ def get_format(data: ss.spmatrix) -> str:
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
-def get_memory_class(format: str) -> type[ss.spmatrix]:
+def get_memory_class(format: str) -> type[ss.spmatrix | SpArray]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
             if settings.use_sparray_in_io and issubclass(memory_class, SpArray):
@@ -438,7 +438,7 @@ class BaseCompressedSparseDataset(ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
+    def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix | SpArray:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()

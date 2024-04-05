@@ -31,16 +31,25 @@ CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
 if not CAN_USE_SPARSE_ARRAY:
 
     class SpArray:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         @staticmethod
         def __repr__():
             return "mock scipy.sparse.sparray"
 
     class CsrArray:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         @staticmethod
         def __repr__():
             return "mock scipy.sparse.csr_array"
 
     class CscArray:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         @staticmethod
         def __repr__():
             return "mock scipy.sparse.csc_array"
