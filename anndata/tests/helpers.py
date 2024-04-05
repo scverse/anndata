@@ -352,6 +352,12 @@ def spmatrix_bool_subset(index, min_size=2):
     )
 
 
+def sparray_bool_subset(index, min_size=2):
+    return sparse.csr_array(
+        array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
+    )
+
+
 def array_subset(index, min_size=2):
     if len(index) < min_size:
         raise ValueError(
@@ -402,6 +408,7 @@ def single_subset(index):
         list_bool_subset,
         matrix_bool_subset,
         spmatrix_bool_subset,
+        sparray_bool_subset,
     ]
 )
 def subset_func(request):
@@ -695,7 +702,7 @@ def as_sparse_array_dask_array(a) -> DaskArray:
 def _(a):
     import dask.array as da
 
-    return da.from_array(a, _half_chunk_size(a.shape))
+    return da.from_array(sparse.csr_array(a), _half_chunk_size(a.shape))
 
 
 @as_sparse_dask_array.register(sparse.spmatrix)
@@ -709,7 +716,7 @@ def _(a):
 def _(a):
     import dask.array as da
 
-    return da.from_array(a, _half_chunk_size(a.shape))
+    return da.from_array(sparse.csr_matrix(a), _half_chunk_size(a.shape))
 
 
 @as_sparse_dask_array.register(SpArray)
@@ -833,7 +840,10 @@ DASK_MATRIX_PARAMS = [
     pytest.param(
         as_sparse_array_dask_array,
         id="sparse_array_dask_array",
-        marks=pytest.mark.xfail(strict=False),
+        marks=pytest.mark.xfail(
+            condition=CAN_USE_SPARSE_ARRAY,
+            reason="{csr,csc}_array are not supported in dask",
+        ),
     ),  # TODO: ensure this works!
 ]
 

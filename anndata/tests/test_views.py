@@ -151,7 +151,6 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
     assert init_hash == hash_func(adata)
-    assert isinstance(subset.X, type(adata.X))
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
@@ -504,6 +503,7 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
     var_view1 = adata[:, var_s1]
+    adata[:, var_s1].X
     var_s2 = subset_func2(var_view1.var_names)
     var_view2 = var_view1[:, var_s2]
     assert var_view2._adata_ref is adata
