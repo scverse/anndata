@@ -327,17 +327,23 @@ def get_format(data: ss.spmatrix) -> str:
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
-def get_memory_class(format: str) -> type[ss.spmatrix]:
+def get_memory_class(format: str, use_sparray_in_io=False) -> type[ss.spmatrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
-            return memory_class
+            if use_sparray_in_io and issubclass(memory_class, SpArray):
+                return memory_class
+            elif issubclass(memory_class, ss.spmatrix):
+                return memory_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
-def get_backed_class(format: str) -> type[BackedSparseMatrix]:
+def get_backed_class(format: str, use_sparray_in_io=False) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
-            return backed_class
+            if use_sparray_in_io and issubclass(backed_class, SpArray):
+                return backed_class
+            elif issubclass(backed_class, ss.spmatrix):
+                return backed_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
