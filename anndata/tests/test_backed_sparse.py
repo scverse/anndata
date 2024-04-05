@@ -444,12 +444,13 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-def test_append_overflow_check(group_fn, tmpdir):
+@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
+def test_append_overflow_check(group_fn, sparse_class, tmpdir):
     group = group_fn(tmpdir)
     typemax_int32 = np.iinfo(np.int32).max
-    orig_mtx = sparse.csr_matrix(np.ones((1, 1), dtype=bool))
+    orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
     # Minimally allocating new matrix
-    new_mtx = sparse.csr_matrix(
+    new_mtx = sparse_class(
         (
             np.broadcast_to(True, typemax_int32 - 1),
             np.broadcast_to(np.int32(1), typemax_int32 - 1),
