@@ -134,7 +134,7 @@ except ImportError:
     class CupySparseMatrix:
         @staticmethod
         def __repr__():
-            return "mock cupyx.scipy.sparse.scipy.spmatrix"
+            return "mock cupyx.scipy.sparse.spmatrix"
 
     class CupyCSRMatrix:
         @staticmethod
