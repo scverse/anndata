@@ -374,7 +374,7 @@ settings.register(
 )
 
 
-sparray_option = "use_sparray_in_io"
+sparray_option = "use_sparse_array_in_io"
 sparray_default_value = False
 sparray_description = "Whether or not to use :class:`~scipy.sparse.sparray` as the sparse class when reading in sparse data."
 

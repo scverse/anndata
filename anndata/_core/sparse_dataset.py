@@ -331,9 +331,9 @@ def get_format(data: ss.spmatrix) -> str:
 def get_memory_class(format: str) -> type[ss.spmatrix | SpArray]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
-            if settings.use_sparray_in_io and issubclass(memory_class, SpArray):
+            if settings.use_sparse_array_in_io and issubclass(memory_class, SpArray):
                 return memory_class
-            elif not settings.use_sparray_in_io and issubclass(
+            elif not settings.use_sparse_array_in_io and issubclass(
                 memory_class, ss.spmatrix
             ):
                 return memory_class
@@ -343,9 +343,9 @@ def get_memory_class(format: str) -> type[ss.spmatrix | SpArray]:
 def get_backed_class(format: str) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
-            if settings.use_sparray_in_io and issubclass(backed_class, SpArray):
+            if settings.use_sparse_array_in_io and issubclass(backed_class, SpArray):
                 return backed_class
-            elif not settings.use_sparray_in_io and issubclass(
+            elif not settings.use_sparse_array_in_io and issubclass(
                 backed_class, ss.spmatrix
             ):
                 return backed_class

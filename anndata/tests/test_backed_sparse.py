@@ -104,7 +104,7 @@ def test_empty_backed_indexing(
     empty_mask,
 ):
     csr_mem, csr_disk, csc_mem, csc_disk, _ = ondisk_equivalent_adata
-    with settings.override(use_sparray_in_io=isinstance(csr_mem.X, SpArray)):
+    with settings.override(use_sparse_array_in_io=isinstance(csr_mem.X, SpArray)):
         assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
         assert isinstance(csr_mem.X[empty_mask], type(csr_disk.X[empty_mask]))
         assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
@@ -126,7 +126,7 @@ def test_backed_indexing(
 
     obs_idx = subset_func(csr_mem.obs_names)
     var_idx = subset_func2(csr_mem.var_names)
-    with settings.override(use_sparray_in_io=isinstance(csr_mem.X, SpArray)):
+    with settings.override(use_sparse_array_in_io=isinstance(csr_mem.X, SpArray)):
         assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
         assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
         assert_equal(csr_mem.X[...], csc_disk.X[...])
@@ -449,7 +449,7 @@ def test_anndata_sparse_compat(
 
     ad._io.specs.write_elem(f, "X", base)
     adata = ad.AnnData(sparse_dataset(f["X"]))
-    with settings.override(use_sparray_in_io=isinstance(base, SpArray)):
+    with settings.override(use_sparse_array_in_io=isinstance(base, SpArray)):
         assert_equal(adata.X, base)
         assert isinstance(base, type(adata.X[...]))
 
@@ -459,7 +459,7 @@ def test_backed_sizeof(
     diskfmt: Literal["h5ad", "zarr"],
 ):
     csr_mem, csr_disk, _, csc_disk, _ = ondisk_equivalent_adata
-    with settings.override(use_sparray_in_io=isinstance(csr_mem, SpArray)):
+    with settings.override(use_sparse_array_in_io=isinstance(csr_mem, SpArray)):
         assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
         assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
         assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(
