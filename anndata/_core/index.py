@@ -8,9 +8,9 @@ from itertools import repeat
 import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import csc_matrix, issparse, spmatrix
+from scipy.sparse import issparse, spmatrix
 
-from ..compat import AwkArray, DaskArray, Index, Index1D
+from ..compat import AwkArray, DaskArray, Index, Index1D, SpArray
 
 
 def _normalize_indices(
@@ -148,13 +148,14 @@ def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
 @_subset.register(DaskArray)
 def _subset_dask(a: DaskArray, subset_idx: Index):
     if len(subset_idx) > 1 and all(isinstance(x, cabc.Iterable) for x in subset_idx):
-        if isinstance(a._meta, csc_matrix):
+        if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
         return a[subset_idx[0], :][:, subset_idx[1]]
     return a[subset_idx]
 
 
 @_subset.register(spmatrix)
+@_subset.register(SpArray)
 def _subset_spmatrix(a: spmatrix, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, cabc.Iterable) for x in subset_idx):

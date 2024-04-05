@@ -218,16 +218,16 @@ class SparseCSCMatrixView(_ViewMixin, sparse.csc_matrix):
         return sparse.csc_matrix(self).copy()
 
 
-class SparseCSRArrayView(_ViewMixin, sparse.csr_matrix):
+class SparseCSRArrayView(_ViewMixin, CsrArray):
     # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csr_matrix:
-        return sparse.csr_array(self).copy()
+    def copy(self) -> CsrArray:
+        return CsrArray(self).copy()
 
 
-class SparseCSCArrayView(_ViewMixin, sparse.csc_matrix):
+class SparseCSCArrayView(_ViewMixin, CscArray):
     # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csc_matrix:
-        return sparse.csc_array(self).copy()
+    def copy(self) -> CscArray:
+        return CscArray(self).copy()
 
 
 class CupySparseCSRView(_ViewMixin, CupyCSRMatrix):
