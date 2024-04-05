@@ -373,5 +373,18 @@ settings.register(
     get_from_env=check_and_get_bool,
 )
 
+
+sparray_option = "use_sparray_in_io"
+sparray_default_value = False
+sparray_description = "Whether or not to use :class:`~scipy.sparse.sparray` as the sparse class when reading in sparse data."
+
+settings.register(
+    sparray_option,
+    sparray_default_value,
+    sparray_description,
+    validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
 ##################################################################################
 ##################################################################################

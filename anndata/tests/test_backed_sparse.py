@@ -12,6 +12,8 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
+from anndata._settings import settings
+from anndata.compat import SpArray
 from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import (
     AccessTrackingStore,
@@ -45,7 +47,7 @@ N = 50
 @pytest.fixture(scope="function")
 def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], sparse_csr_format
-) -> tuple[AnnData, AnnData, AnnData, AnnData]:
+) -> tuple[AnnData, AnnData, AnnData, AnnData, AnnData]:
     csr_path = tmp_path / f"csr.{diskfmt}"
     csc_path = tmp_path / f"csc.{diskfmt}"
     dense_path = tmp_path / f"dense.{diskfmt}"
@@ -91,20 +93,22 @@ def ondisk_equivalent_adata(
         csc_disk = read_zarr_backed(csc_path)
         dense_disk = read_zarr_backed(dense_path)
 
-    return csr_mem, csr_disk, csc_disk, dense_disk
+    return csr_mem, csr_disk, csc_mem, csc_disk, dense_disk
 
 
 @pytest.mark.parametrize(
     "empty_mask", [[], np.zeros(M, dtype=bool)], ids=["empty_list", "empty_bool_mask"]
 )
 def test_empty_backed_indexing(
-    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData, AnnData],
     empty_mask,
 ):
-    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
-
-    assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
-    assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
+    csr_mem, csr_disk, csc_mem, csc_disk, _ = ondisk_equivalent_adata
+    with settings.override(use_sparray_in_io=isinstance(csr_mem.X, SpArray)):
+        assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
+        assert isinstance(csr_mem.X[empty_mask], type(csr_disk.X[empty_mask]))
+        assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
+        assert isinstance(csc_mem.X[:, empty_mask], type(csc_disk.X[:, empty_mask]))
 
     # The following do not work because of https://github.com/scipy/scipy/issues/19919
     # Our implementation returns a (0,0) sized matrix but scipy does (1,0).
@@ -114,21 +118,28 @@ def test_empty_backed_indexing(
 
 
 def test_backed_indexing(
-    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData, AnnData],
     subset_func,
     subset_func2,
 ):
-    csr_mem, csr_disk, csc_disk, dense_disk = ondisk_equivalent_adata
+    csr_mem, csr_disk, csc_mem, csc_disk, dense_disk = ondisk_equivalent_adata
 
     obs_idx = subset_func(csr_mem.obs_names)
     var_idx = subset_func2(csr_mem.var_names)
-
-    assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
-    assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
-    assert_equal(csr_mem.X[...], csc_disk.X[...])
-    assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
-    assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
-    assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
+    with settings.override(use_sparray_in_io=isinstance(csr_mem.X, SpArray)):
+        assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
+        assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
+        assert_equal(csr_mem.X[...], csc_disk.X[...])
+        assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
+        assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
+        assert isinstance(csr_mem[obs_idx].X[...], type(csr_disk[obs_idx].X[...]))
+        assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
+        assert isinstance(csr_mem[:, var_idx].X[...], type(csr_disk[:, var_idx].X[...]))
+        assert isinstance(csc_mem[obs_idx].X[...], type(csc_disk[obs_idx].X[...]))
+        assert isinstance(
+            csc_mem[obs_idx, var_idx].X[...], type(csc_disk[obs_idx, var_idx].X[...])
+        )
+        assert isinstance(csc_mem[:, var_idx].X[...], type(csc_disk[:, var_idx].X[...]))
 
 
 def make_randomized_mask(size: int) -> np.ndarray:
@@ -178,7 +189,7 @@ def make_one_elem_mask(size: int) -> np.ndarray:
 )
 def test_consecutive_bool(
     mocker: MockerFixture,
-    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData, AnnData],
     make_bool_mask: Callable[[int], np.ndarray],
     should_trigger_optimization: bool | None,
 ):
@@ -195,7 +206,7 @@ def test_consecutive_bool(
     should_trigger_optimization
         Whether or not a given mask should trigger the optimized behavior.
     """
-    _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    _, csr_disk, _, csc_disk, _ = ondisk_equivalent_adata
     mask = make_bool_mask(csr_disk.shape[0])
 
     # indexing needs to be on `X` directly to trigger the optimization.
@@ -436,22 +447,26 @@ def test_anndata_sparse_compat(
     else:
         f = h5py.File(path, "a")
 
-    ad._io.specs.write_elem(f, "/", base)
-    adata = ad.AnnData(sparse_dataset(f["/"]))
-    assert_equal(adata.X, base)
+    ad._io.specs.write_elem(f, "X", base)
+    adata = ad.AnnData(sparse_dataset(f["X"]))
+    with settings.override(use_sparray_in_io=isinstance(base, SpArray)):
+        assert_equal(adata.X, base)
+        assert isinstance(base, type(adata.X[...]))
 
 
 def test_backed_sizeof(
-    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData, AnnData],
     diskfmt: Literal["h5ad", "zarr"],
 ):
-    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
-
-    assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
-    assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
-    assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(with_disk=True)
-    assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
-    assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
+    csr_mem, csr_disk, _, csc_disk, _ = ondisk_equivalent_adata
+    with settings.override(use_sparray_in_io=isinstance(csr_mem, SpArray)):
+        assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
+        assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
+        assert csr_disk.__sizeof__(with_disk=True) == csc_disk.__sizeof__(
+            with_disk=True
+        )
+        assert csr_mem.__sizeof__() > csr_disk.__sizeof__()
+        assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
 
 
 @pytest.mark.parametrize(

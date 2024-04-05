@@ -29,6 +29,7 @@ from scipy.sparse import _sparsetools
 from anndata._core.index import _fix_slice_bounds
 from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
+from .._settings import settings
 from ..compat import SpArray, _read_attr
 
 try:
@@ -155,12 +156,12 @@ class BackedSparseMatrix(_cs_matrix):
 
 
 class backed_csr(BackedSparseMatrix):
-    def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:
-        return ss.csr_matrix(
+    def _get_intXslice(self, row: int, col: slice) -> ss._base._spbase:
+        return get_memory_class(self.format)(
             get_compressed_vector(self, row), shape=(1, self.shape[1])
         )[:, col]
 
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss._base._spbase:
         row = _fix_slice_bounds(row, self.shape[0])
         col = _fix_slice_bounds(col, self.shape[1])
 
@@ -172,30 +173,30 @@ class backed_csr(BackedSparseMatrix):
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
         elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
             if row.step == 1:
-                return ss.csr_matrix(
+                return get_memory_class(self.format)(
                     self._get_contiguous_compressed_slice(row), shape=out_shape
                 )
             return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
         return super()._get_sliceXslice(row, col)
 
-    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
+    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss._base._spbase:
         idxs = np.asarray(row)
         if len(idxs) == 0:
-            return ss.csr_matrix((0, self.shape[1]))
+            return get_memory_class(self.format)((0, self.shape[1]))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
-        return ss.csr_matrix(
+        return get_memory_class(self.format)(
             get_compressed_vectors(self, idxs), shape=(len(idxs), self.shape[1])
         )[:, col]
 
 
 class backed_csc(BackedSparseMatrix):
-    def _get_sliceXint(self, row: slice, col: int) -> ss.csc_matrix:
-        return ss.csc_matrix(
+    def _get_sliceXint(self, row: slice, col: int) -> ss._base._spbase:
+        return get_memory_class(self.format)(
             get_compressed_vector(self, col), shape=(self.shape[0], 1)
         )[row, :]
 
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csc_matrix:
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss._base._spbase:
         row = _fix_slice_bounds(row, self.shape[0])
         col = _fix_slice_bounds(col, self.shape[1])
 
@@ -208,19 +209,19 @@ class backed_csc(BackedSparseMatrix):
             return self._get_sliceXint(row, slice_as_int(col, self.shape[1]))
         elif out_shape[0] == self.shape[0] and out_shape[1] < self.shape[1]:
             if col.step == 1:
-                return ss.csc_matrix(
+                return get_memory_class(self.format)(
                     self._get_contiguous_compressed_slice(col), shape=out_shape
                 )
             return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
         return super()._get_sliceXslice(row, col)
 
-    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
+    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss._base._spbase:
         idxs = np.asarray(col)
         if len(idxs) == 0:
-            return ss.csc_matrix((self.shape[0], 0))
+            return get_memory_class(self.format)((self.shape[0], 0))
         if idxs.dtype == bool:
             idxs = np.where(idxs)
-        return ss.csc_matrix(
+        return get_memory_class(self.format)(
             get_compressed_vectors(self, idxs), shape=(self.shape[0], len(idxs))
         )[row, :]
 
@@ -327,22 +328,26 @@ def get_format(data: ss.spmatrix) -> str:
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
-def get_memory_class(format: str, use_sparray_in_io=False) -> type[ss.spmatrix]:
+def get_memory_class(format: str) -> type[ss.spmatrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
-            if use_sparray_in_io and issubclass(memory_class, SpArray):
+            if settings.use_sparray_in_io and issubclass(memory_class, SpArray):
                 return memory_class
-            elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
+            elif not settings.use_sparray_in_io and issubclass(
+                memory_class, ss.spmatrix
+            ):
                 return memory_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
-def get_backed_class(format: str, use_sparray_in_io=False) -> type[BackedSparseMatrix]:
+def get_backed_class(format: str) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
-            if use_sparray_in_io and issubclass(backed_class, SpArray):
+            if settings.use_sparray_in_io and issubclass(backed_class, SpArray):
                 return backed_class
-            elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
+            elif not settings.use_sparray_in_io and issubclass(
+                backed_class, ss.spmatrix
+            ):
                 return backed_class
     raise ValueError(f"Format string {format} is not supported.")
 
@@ -437,14 +442,14 @@ class BaseCompressedSparseDataset(ABC):
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
-
+        memory_class = get_memory_class(self.format)
         # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
-            sub = ss.csr_matrix(
+            sub = memory_class(
                 subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
             )[:, col]
         elif self.format == "csc" and np.array(col).dtype == bool:
-            sub = ss.csc_matrix(
+            sub = memory_class(
                 subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
             )[row, :]
         else:
@@ -453,7 +458,7 @@ class BaseCompressedSparseDataset(ABC):
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         if isinstance(sub, BackedSparseMatrix):
-            return get_memory_class(self.format)(sub)
+            return memory_class(sub)
         else:
             return sub
 
