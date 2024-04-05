@@ -14,11 +14,12 @@ import pandas as pd
 import pytest
 import zarr
 from numba.core.errors import NumbaDeprecationWarning
+from scipy import sparse
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import DaskArray, _read_attr
+from anndata.compat import DaskArray, SpArray, _read_attr
 from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
@@ -106,7 +107,7 @@ diskfmt2 = diskfmt
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     tmpdir = Path(tmp_path)
     pth1 = tmpdir / f"first.{diskfmt}"
@@ -131,7 +132,7 @@ needs_zarr = pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not insta
 
 
 @pytest.mark.parametrize("storage", ["h5ad", pytest.param("zarr", marks=[needs_zarr])])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -161,7 +162,10 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
     # this would also work if they work
-    assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
+    if isinstance(adata_src.raw.X, SpArray):
+        assert isinstance(adata.raw.X, sparse.spmatrix)
+    else:
+        assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
     assert isinstance(
         adata_src.uns["uns4"]["c"], (type(adata.uns["uns4"]["c"]), DaskArray)
     )
@@ -174,7 +178,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
@@ -207,7 +211,7 @@ def test_maintain_layers(rw):
     assert not np.any((orig.layers["sparse"] != curr.layers["sparse"]).toarray())
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -218,7 +222,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, as_dense_dask_array])
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_backed(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
