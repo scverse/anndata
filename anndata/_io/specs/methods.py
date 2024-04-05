@@ -522,10 +522,10 @@ for store_type, (cls, spec, func) in product(
         (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_csc),
         (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_csc),
         # sparray
-        (CsrArray, IOSpec("csr_array", "0.1.0"), write_csr),
-        (views.SparseCSRArrayView, IOSpec("csr_array", "0.1.0"), write_csr),
-        (CscArray, IOSpec("csc_array", "0.1.0"), write_csc),
-        (views.SparseCSCArrayView, IOSpec("csc_array", "0.1.0"), write_csc),
+        (CsrArray, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (CscArray, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_csc),
         # cupy spmatrix
         (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csr)),
         (
