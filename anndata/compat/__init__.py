@@ -34,20 +34,8 @@ if not CAN_USE_SPARSE_ARRAY:
         @staticmethod
         def __repr__():
             return "mock scipy.sparse.sparray"
-
-    class CsrArray:
-        @staticmethod
-        def __repr__():
-            return "mock scipy.sparse.csr_array"
-
-    class CscArray:
-        @staticmethod
-        def __repr__():
-            return "mock scipy.sparse.csc_array"
 else:
     SpArray = scipy.sparse.sparray
-    CsrArray = scipy.sparse.csr_array
-    CscArray = scipy.sparse.csc_array
 
 
 class Empty:

@@ -32,7 +32,6 @@ from .. import utils
 from .._settings import settings
 from ..compat import (
     CAN_USE_SPARSE_ARRAY,
-    CsrArray,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
@@ -578,7 +577,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> np.ndarray | sparse.spmatrix | ArrayView | None:
+    def X(self) -> np.ndarray | sparse.spmatrix | SpArray | ArrayView | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -1784,7 +1783,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # obs used to always be an outer join
         sprase_class = sparse.csr_matrix
         if CAN_USE_SPARSE_ARRAY and any(isinstance(a.X, SpArray) for a in all_adatas):
-            sprase_class = CsrArray
+            sprase_class = sparse.csr_array
         out.obs = concat(
             [AnnData(sprase_class(a.shape), obs=a.obs) for a in all_adatas],
             axis=0,

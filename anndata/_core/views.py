@@ -15,8 +15,6 @@ from anndata._warnings import ImplicitModificationWarning
 
 from ..compat import (
     AwkArray,
-    CscArray,
-    CsrArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
@@ -218,16 +216,16 @@ class SparseCSCMatrixView(_ViewMixin, sparse.csc_matrix):
         return sparse.csc_matrix(self).copy()
 
 
-class SparseCSRArrayView(_ViewMixin, CsrArray):
+class SparseCSRArrayView(_ViewMixin, sparse.csr_array):
     # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> CsrArray:
-        return CsrArray(self).copy()
+    def copy(self) -> sparse.csr_array:
+        return sparse.csr_array(self).copy()
 
 
-class SparseCSCArrayView(_ViewMixin, CscArray):
+class SparseCSCArrayView(_ViewMixin, sparse.csc_array):
     # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> CscArray:
-        return CscArray(self).copy()
+    def copy(self) -> sparse.csc_array:
+        return sparse.csc_array(self).copy()
 
 
 class CupySparseCSRView(_ViewMixin, CupyCSRMatrix):
@@ -306,12 +304,12 @@ def as_view_csc_matrix(mtx, view_args):
     return SparseCSCMatrixView(mtx, view_args=view_args)
 
 
-@as_view.register(CsrArray)
+@as_view.register(sparse.csr_array)
 def as_view_csr_array(mtx, view_args):
     return SparseCSRArrayView(mtx, view_args=view_args)
 
 
-@as_view.register(CscArray)
+@as_view.register(sparse.csc_array)
 def as_view_csc_array(mtx, view_args):
     return SparseCSCArrayView(mtx, view_args=view_args)
 

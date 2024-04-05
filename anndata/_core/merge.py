@@ -31,7 +31,6 @@ from anndata._warnings import ExperimentalFeatureWarning
 from ..compat import (
     CAN_USE_SPARSE_ARRAY,
     AwkArray,
-    CsrArray,
     CupyArray,
     CupyCSRMatrix,
     CupySparseMatrix,
@@ -209,7 +208,7 @@ def equal_awkward(a, b) -> bool:
 def as_sparse(x, use_sparse_array=False):
     if not isinstance(x, (sparse.spmatrix, SpArray)):
         if CAN_USE_SPARSE_ARRAY and use_sparse_array:
-            return CsrArray(x)
+            return sparse.csr_array(x)
         return sparse.csr_matrix(x)
     else:
         return x
@@ -640,7 +639,7 @@ class Reindexer:
             if fill_value == 0:
                 memory_class = sparse.csr_matrix
                 if CAN_USE_SPARSE_ARRAY and isinstance(el, SpArray):
-                    memory_class = CsrArray
+                    memory_class = sparse.csr_array
                 return memory_class(shape)
             else:
                 return type(el)(xp.broadcast_to(xp.asarray(fill_value), shape))
@@ -973,7 +972,7 @@ def concat_pairwise_mapping(
     if CAN_USE_SPARSE_ARRAY and any(
         any(isinstance(v, SpArray) for v in m.values()) for m in mappings
     ):
-        sparse_class = CsrArray
+        sparse_class = sparse.csr_array
     for k in join_keys(mappings):
         els = [
             m.get(k, sparse_class((s, s), dtype=bool)) for m, s in zip(mappings, shapes)
