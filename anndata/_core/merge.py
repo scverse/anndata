@@ -821,7 +821,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
     elif any(isinstance(a, (sparse.spmatrix, SpArray)) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
-        use_sparse_array = any(issubclass(type(a), sparse.sparray) for a in arrays)
+        use_sparse_array = any(issubclass(type(a), SpArray) for a in arrays)
         return sparse_stack(
             [
                 f(
