@@ -684,7 +684,35 @@ def as_sparse_dask_array(a) -> DaskArray:
     return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
 
 
+@singledispatch
+def as_sparse_array_dask_array(a) -> DaskArray:
+    import dask.array as da
+
+    return da.from_array(sparse.csr_array(a), chunks=_half_chunk_size(a.shape))
+
+
+@as_sparse_array_dask_array.register(sparse.spmatrix)
+def _(a):
+    import dask.array as da
+
+    return da.from_array(a, _half_chunk_size(a.shape))
+
+
 @as_sparse_dask_array.register(sparse.spmatrix)
+def _(a):
+    import dask.array as da
+
+    return da.from_array(a, _half_chunk_size(a.shape))
+
+
+@as_sparse_array_dask_array.register(SpArray)
+def _(a):
+    import dask.array as da
+
+    return da.from_array(a, _half_chunk_size(a.shape))
+
+
+@as_sparse_dask_array.register(SpArray)
 def _(a):
     import dask.array as da
 
@@ -694,6 +722,11 @@ def _(a):
 @as_sparse_dask_array.register(DaskArray)
 def _(a):
     return a.map_blocks(sparse.csr_matrix)
+
+
+@as_sparse_array_dask_array.register(DaskArray)
+def _(a):
+    return a.map_blocks(sparse.csr_array)
 
 
 @contextmanager
@@ -797,6 +830,11 @@ BASE_MATRIX_PARAMS = [
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
     pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
+    pytest.param(
+        as_sparse_array_dask_array,
+        id="sparse_array_dask_array",
+        marks=pytest.mark.xfail(strict=False),
+    ),  # TODO: ensure this works!
 ]
 
 CUPY_MATRIX_PARAMS = [
