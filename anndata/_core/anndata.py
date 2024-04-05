@@ -32,6 +32,7 @@ from .. import utils
 from .._settings import settings
 from ..compat import (
     CAN_USE_SPARSE_ARRAY,
+    CsrArray,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
@@ -1780,8 +1781,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
         sprase_class = sparse.csr_matrix
-        if CAN_USE_SPARSE_ARRAY:
-            sprase_class = sparse.csr_array
+        if CAN_USE_SPARSE_ARRAY and any(isinstance(a.X, SpArray) for a in all_adatas):
+            sprase_class = CsrArray
         out.obs = concat(
             [AnnData(sprase_class(a.shape), obs=a.obs) for a in all_adatas],
             axis=0,

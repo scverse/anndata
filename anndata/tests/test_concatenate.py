@@ -184,6 +184,13 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
     )
 
     assert_equal(result[orig.obs_names].copy(), orig)
+    base_type = type(orig.X)
+    if sparse.issparse(orig.X) and orig.X.format == "csc":  # format changes to csr
+        if isinstance(orig.X, SpArray):
+            base_type = SpArray
+        else:
+            base_type = sparse.spmatrix
+    assert isinstance(result.X, base_type)
 
 
 @mark_legacy_concatenate
