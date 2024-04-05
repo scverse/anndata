@@ -22,8 +22,6 @@ from anndata._io.utils import H5PY_V3, check_key
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
-    CscArray,
-    CsrArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
@@ -574,13 +572,17 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_write(
     ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
 )
-@_REGISTRY.register_write(H5Group, (DaskArray, CsrArray), IOSpec("csr_array", "0.1.0"))
-@_REGISTRY.register_write(H5Group, (DaskArray, CscArray), IOSpec("csc_array", "0.1.0"))
 @_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, CsrArray), IOSpec("csr_array", "0.1.0")
+    H5Group, (DaskArray, sparse.csr_array), IOSpec("csr_array", "0.1.0")
 )
 @_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, CscArray), IOSpec("csc_array", "0.1.0")
+    H5Group, (DaskArray, sparse.csc_array), IOSpec("csc_array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csr_array), IOSpec("csr_array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, sparse.csc_array), IOSpec("csc_array", "0.1.0")
 )
 def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     sparse_format = elem._meta.format
