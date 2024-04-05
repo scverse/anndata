@@ -22,6 +22,8 @@ from anndata._io.utils import H5PY_V3, check_key
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
+    CscArray,
+    CsrArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
@@ -520,10 +522,10 @@ for store_type, (cls, spec, func) in product(
         (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_csc),
         (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_csc),
         # sparray
-        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0"), write_csc),
-        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (CsrArray, IOSpec("csr_array", "0.1.0"), write_csr),
+        (views.SparseCSRArrayView, IOSpec("csr_array", "0.1.0"), write_csr),
+        (CscArray, IOSpec("csc_array", "0.1.0"), write_csc),
+        (views.SparseCSCArrayView, IOSpec("csc_array", "0.1.0"), write_csc),
         # cupy spmatrix
         (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csr)),
         (
@@ -572,17 +574,13 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_write(
     ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
 )
+@_REGISTRY.register_write(H5Group, (DaskArray, CsrArray), IOSpec("csr_array", "0.1.0"))
+@_REGISTRY.register_write(H5Group, (DaskArray, CscArray), IOSpec("csc_array", "0.1.0"))
 @_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csr_array), IOSpec("csr_array", "0.1.0")
+    ZarrGroup, (DaskArray, CsrArray), IOSpec("csr_array", "0.1.0")
 )
 @_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csc_array), IOSpec("csc_array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csr_array), IOSpec("csr_array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csc_array), IOSpec("csc_array", "0.1.0")
+    ZarrGroup, (DaskArray, CscArray), IOSpec("csc_array", "0.1.0")
 )
 def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     sparse_format = elem._meta.format
