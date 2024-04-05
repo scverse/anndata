@@ -29,7 +29,7 @@ from scipy.sparse import _sparsetools
 from anndata._core.index import _fix_slice_bounds
 from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
-from ..compat import _read_attr
+from ..compat import SpArray, _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -471,7 +471,7 @@ class BaseCompressedSparseDataset(ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: ss.spmatrix):
+    def append(self, sparse_matrix: ss.spmatrix | SpArray):
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, BaseCompressedSparseDataset):
