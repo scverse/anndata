@@ -612,7 +612,6 @@ class Reindexer:
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
-    # TODO: Figure out how to make this work for array classes
     def _apply_to_sparse(
         self, el: sparse.spmatrix | SpArray, *, axis, fill_value=None
     ) -> spmatrix:
