@@ -35,7 +35,7 @@ import anndata
 
 from .utils import get_actualsize, get_peak_mem, sedate
 
-PBMC_3K_URL = "http://falexwolf.de/data/pbmc3k_raw.h5ad"
+PBMC_3K_URL = "https://falexwolf.de/data/pbmc3k_raw.h5ad"
 
 # PBMC_3K_PATH = Path(__file__).parent / "data/pbmc3k_raw.h5ad"
 # PBMC_REDUCED_PATH = Path(__file__).parent / "10x_pbmc68k_reduced.h5ad"

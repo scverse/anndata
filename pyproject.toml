@@ -42,7 +42,7 @@ dependencies = [
     "pandas >=1.4, !=2.1.0rc0, !=2.1.2",
     "numpy>=1.23",
     # https://github.com/scverse/anndata/issues/1434
-    "scipy >1.8, <1.13.0rc1",
+    "scipy >1.8",
     "h5py>=3.1",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
