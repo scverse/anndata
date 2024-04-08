@@ -125,7 +125,7 @@ exclude_also = [
 
 [tool.pytest.ini_options]
 addopts = [
-    # "--import-mode=importlib",  # TODO: enable
+    # "--import-mode=importlib",  # TODO: enable: https://github.com/scverse/anndata/issues/1451
     "--strict-markers",
     "--doctest-modules",
     "--pyargs",
