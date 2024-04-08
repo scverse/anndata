@@ -638,7 +638,7 @@ class Reindexer:
             shape = tuple(shape)
             if fill_value == 0:
                 memory_class = sparse.csr_matrix
-                if CAN_USE_SPARSE_ARRAY and isinstance(el, SpArray):
+                if isinstance(el, SpArray):
                     memory_class = sparse.csr_array
                 return memory_class(shape)
             else:
@@ -651,7 +651,7 @@ class Reindexer:
         else:
             idxmtx_dtype = bool
         memory_class = sparse.coo_matrix
-        if CAN_USE_SPARSE_ARRAY and isinstance(el, SpArray):
+        if isinstance(el, SpArray):
             memory_class = sparse.coo_array
         if axis == 1:
             idxmtx = memory_class(
@@ -969,9 +969,7 @@ def concat_pairwise_mapping(
 ):
     result = {}
     sparse_class = sparse.csr_matrix
-    if CAN_USE_SPARSE_ARRAY and any(
-        any(isinstance(v, SpArray) for v in m.values()) for m in mappings
-    ):
+    if any(any(isinstance(v, SpArray) for v in m.values()) for m in mappings):
         sparse_class = sparse.csr_array
     for k in join_keys(mappings):
         els = [

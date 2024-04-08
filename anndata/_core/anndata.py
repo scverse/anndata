@@ -31,7 +31,6 @@ from scipy.sparse import issparse
 from .. import utils
 from .._settings import settings
 from ..compat import (
-    CAN_USE_SPARSE_ARRAY,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
@@ -659,9 +658,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         value, np.ndarray
                     ):
                         memory_class = sparse.coo_matrix
-                        if CAN_USE_SPARSE_ARRAY and isinstance(
-                            self._adata_ref.X, SpArray
-                        ):
+                        if isinstance(self._adata_ref.X, SpArray):
                             memory_class = sparse.coo_array
                         value = memory_class(value)
                     self._adata_ref._X[oidx, vidx] = value
@@ -1782,7 +1779,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
         sprase_class = sparse.csr_matrix
-        if CAN_USE_SPARSE_ARRAY and any(isinstance(a.X, SpArray) for a in all_adatas):
+        if any(isinstance(a.X, SpArray) for a in all_adatas):
             sprase_class = sparse.csr_array
         out.obs = concat(
             [AnnData(sprase_class(a.shape), obs=a.obs) for a in all_adatas],
