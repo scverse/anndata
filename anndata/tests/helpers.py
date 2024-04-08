@@ -870,19 +870,29 @@ try:
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self._access_count = {}
+            self._accessed_keys = {}
 
         def __getitem__(self, key):
             for tracked in self._access_count:
                 if tracked in key:
                     self._access_count[tracked] += 1
+                    self._accessed_keys[tracked] += [key]
             return super().__getitem__(key)
 
         def get_access_count(self, key):
             return self._access_count[key]
 
-        def set_key_trackers(self, keys_to_track):
+        def get_accessed_keys(self, key):
+            return self._accessed_keys[key]
+
+        def initialize_key_trackers(self, keys_to_track):
             for k in keys_to_track:
                 self._access_count[k] = 0
+                self._accessed_keys[k] = []
+
+        def reset_key_trackers(self):
+            self.initialize_key_trackers(self._access_count.keys())
+
 except ImportError:
 
     class AccessTrackingStore:

@@ -26,6 +26,9 @@ class SparseCSRContiguousSlice:
             slice(0, 9000),
             slice(None, 9000, -1),
             slice(None, None, 2),
+            np.array([0, 5000, 9999]),
+            np.arange(0, 1000),
+            0,
             make_alternating_mask(10),
         ],
     )
