@@ -19,7 +19,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, DaskArray, SpArray
+from anndata.compat import CAN_USE_SPARSE_ARRAY, AwkArray, DaskArray, SpArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -1149,7 +1149,7 @@ def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val
     assert_equal(a, b)
 
 
-def test_batch_key(axis, array_type):
+def test_batch_key(axis):
     """Test that concat only adds a label if the key is provided"""
 
     def get_annot(adata):
@@ -1504,6 +1504,13 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     assert_equal(result1, target1)
     assert_equal(result2, target2)
+
+    if (
+        "a" not in target1.varm
+        and array_type.__name__ == "as_sparse_array_dask_array"
+        and CAN_USE_SPARSE_ARRAY
+    ):
+        assert False, f"this test xfails in general for as_sparse_array_dask_array but a for varm is dropped for merge_strategy: {merge_strategy}"
 
 
 def test_outer_concat_with_missing_value_for_df():
