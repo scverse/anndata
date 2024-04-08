@@ -842,7 +842,7 @@ DASK_MATRIX_PARAMS = [
         id="sparse_array_dask_array",
         marks=pytest.mark.xfail(
             condition=CAN_USE_SPARSE_ARRAY,
-            reason="{csr,csc}_array are not supported in dask",
+            reason="{csr,csc}_array are not supported in dask in general, although setting does appear to work.",
         ),
     ),  # TODO: ensure this works!
 ]

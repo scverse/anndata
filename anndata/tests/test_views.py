@@ -152,6 +152,9 @@ def test_modify_view_component(matrix_type, mapping_name):
 
     assert init_hash == hash_func(adata)
 
+    if matrix_type.__name__ == "as_sparse_array_dask_array" and CAN_USE_SPARSE_ARRAY:
+        assert False  # sparse arrays in dask are general expected to fail but in this case they do not
+
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
 def test_set_obsm_key(adata, attr):
