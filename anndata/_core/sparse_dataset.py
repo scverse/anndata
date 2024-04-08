@@ -333,6 +333,16 @@ def _get_group_format(group) -> str:
         return _read_attr(group.attrs, "encoding-type").replace("_matrix", "")
 
 
+# Check for the overridden few methods above in our BackedSparseMatrix subclasses
+def is_sparse_indexing_overridden(format, row, col):
+    major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
+    return isinstance(minor_indexer, slice) and (
+        (isinstance(major_indexer, (int, np.integer)))
+        or (isinstance(major_indexer, slice))
+        or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
+    )
+
+
 class BaseCompressedSparseDataset(ABC):
     """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
 
@@ -413,6 +423,9 @@ class BaseCompressedSparseDataset(ABC):
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
+        row_sp_matrix_validated, col_sp_matrix_validated = mtx._validate_indices(
+            (row, col)
+        )
 
         # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
@@ -423,6 +436,11 @@ class BaseCompressedSparseDataset(ABC):
             sub = ss.csc_matrix(
                 subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
             )[row, :]
+        # read into memory data if we do not override access methods
+        elif not is_sparse_indexing_overridden(
+            self.format, row_sp_matrix_validated, col_sp_matrix_validated
+        ):
+            sub = self.to_memory()[row_sp_matrix_validated, col_sp_matrix_validated]
         else:
             sub = mtx[row, col]
 
