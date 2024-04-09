@@ -88,7 +88,8 @@ jobs:
       # TODO: remove: https://github.com/scverse/anndata/issues/1451
       - task: PythonScript@0
         inputs:
-          scriptSource: |
+          scriptSource: inline
+          script: |
             import sys, xml.etree.ElementTree as ET
             results = ET.parse("./test-data/test-results.xml").findall("./*/*")
             sys.exit(0 if len(results) > 100 else f"Error: only {len(results)} tests run")
