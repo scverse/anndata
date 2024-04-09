@@ -23,7 +23,6 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
     gen_adata,
-    pytest_8_raises,
 )
 
 if TYPE_CHECKING:
@@ -275,7 +274,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
     write(adata, path)
     with store_context(path) as store:
         store["obs"].attrs["encoding-type"] = "invalid"
-    with pytest_8_raises(
+    with pytest.raises(
         IORegistryError,
         match=r"raised while reading key 'obs'.*from /$",
     ) as exc_info:
@@ -671,7 +670,7 @@ def test_write_string_types(tmp_path, diskfmt):
 
     adata.obs[b"c"] = np.zeros(3)
     # This should error, and tell you which key is at fault
-    with pytest_8_raises(TypeError, match=r"writing key 'obs'") as exc_info:
+    with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
         write(adata_pth)
 
     assert "b'c'" in str(exc_info.value)

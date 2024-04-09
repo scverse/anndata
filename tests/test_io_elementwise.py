@@ -22,7 +22,6 @@ from anndata.tests.helpers import (
     as_cupy_type,
     assert_equal,
     gen_adata,
-    pytest_8_raises,
 )
 
 
@@ -205,7 +204,7 @@ def test_write_io_error(store, obj):
         rf"No method registered for writing {type(obj)} into .*Group"
     )
 
-    with pytest_8_raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
+    with pytest.raises(IORegistryError, match=r"while writing key '/el'") as exc_info:
         write_elem(store, "/el", obj)
 
     msg = str(exc_info.value)
@@ -310,7 +309,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
 def test_dataframe_column_uniqueness(store):
     repeated_cols = pd.DataFrame(np.ones((3, 2)), columns=["a", "a"])
 
-    with pytest_8_raises(
+    with pytest.raises(
         ValueError,
         match=r"Found repeated column names: \['a'\]\. Column names must be unique\.",
     ):
@@ -320,7 +319,7 @@ def test_dataframe_column_uniqueness(store):
         {"col_name": [1, 2, 3]}, index=pd.Index([1, 3, 2], name="col_name")
     )
 
-    with pytest_8_raises(
+    with pytest.raises(
         ValueError,
         match=r"DataFrame\.index\.name \('col_name'\) is also used by a column whose values are different\.",
     ):
