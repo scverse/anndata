@@ -14,7 +14,6 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     gen_awkward,
-    pytest_8_raises,
     report_name,
 )
 from anndata.utils import dim_len
@@ -262,7 +261,7 @@ def test_assert_equal_dask_sparse_arrays():
     ],
 )
 def test_check_error_notes_success(error, match):
-    with pytest_8_raises(Exception, match=match):
+    with pytest.raises(Exception, match=match):
         raise error
 
 
@@ -275,5 +274,5 @@ def test_check_error_notes_success(error, match):
 )
 def test_check_error_notes_failure(error, match):
     with pytest.raises(AssertionError):
-        with pytest_8_raises(Exception, match=match):
+        with pytest.raises(Exception, match=match):
             raise error
