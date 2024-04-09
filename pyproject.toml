@@ -125,10 +125,8 @@ addopts = [
     "--pyargs",
 ]
 filterwarnings = [
-    'ignore:Support for Awkward Arrays is currently experimental',
-    'ignore:Outer joins on awkward\.Arrays',
-    # TODO: replace both lines above with this one once we figured out how prevent ImportPathMismatchError
-    # 'ignore::anndata._warnings.ExperimentalFeatureWarning',
+    'ignore::anndata._warnings.ExperimentalFeatureWarning',
+    'ignore::anndata.OldFormatWarning',
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
