@@ -92,7 +92,7 @@ jobs:
           script: |
             import sys, xml.etree.ElementTree as ET
             results = ET.parse("./test-data/test-results.xml").findall("./*/*")
-            sys.exit(0 if len(results) > 100 else f"Error: only {len(results)} tests run")
+            sys.exit(0 if len(results) > 3000 else f"Error: only {len(results)} tests run")
         displayName: "Check if enough tests ran"
 
       - task: PublishCodeCoverageResults@1
