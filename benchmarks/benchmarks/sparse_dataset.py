@@ -23,7 +23,7 @@ class SparseCSRContiguousSlice:
         "::-2": slice(None, None, 2),
         "array": np.array([0, 5000, 9999]),
         "arange": np.arange(0, 1000),
-        "int": 0,
+        "first": 0,
         "alternating": make_alternating_mask(10),
     }
     params = (
