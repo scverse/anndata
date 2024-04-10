@@ -95,7 +95,7 @@ jobs:
             sys.exit(0 if len(results) > 3000 else f"Error: only {len(results)} tests run")
         displayName: "Check if enough tests ran"
 
-      - task: PublishCodeCoverageResults@1
+      - task: PublishCodeCoverageResults@2
         inputs:
           codeCoverageTool: Cobertura
           summaryFileLocation: "test-data/coverage.xml"
