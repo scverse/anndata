@@ -4,7 +4,6 @@ import random
 import re
 import warnings
 from collections.abc import Collection, Mapping
-from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
 
@@ -749,7 +748,6 @@ def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
         yield exc_info
 
     check_error_or_notes_match(exc_info, match)
-
 
 def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
     """

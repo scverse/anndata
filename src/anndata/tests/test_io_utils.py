@@ -13,7 +13,6 @@ from anndata._io.specs.registry import IORegistryError
 from anndata._io.utils import report_read_key_on_error
 from anndata.compat import _clean_uns
 from anndata.experimental import read_elem, write_elem
-from anndata.tests.helpers import pytest_8_raises
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -50,12 +49,12 @@ def test_key_error(
         group["X"] = [1, 2, 3]
         group.create_group("group")
 
-        with pytest_8_raises(
+        with pytest.raises(
             NotImplementedError, match=rf"reading key 'X'.*from {path}$"
         ):
             read_attr(group["X"])
 
-        with pytest_8_raises(
+        with pytest.raises(
             NotImplementedError, match=rf"reading key 'group'.*from {path}$"
         ):
             read_attr(group["group"])
@@ -68,7 +67,7 @@ def test_write_error_info(diskfmt, tmp_path):
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
 
-    with pytest_8_raises(
+    with pytest.raises(
         IORegistryError, match=r"Error raised while writing key 'c'.*to /uns/a/b"
     ):
         write(a)
@@ -108,11 +107,11 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
     # https://stackoverflow.com/a/406408/130164 <- copilot suggested lol
     pattern = r"(?s)^((?!Error raised while writing key '/?a').)*$"
 
-    with pytest_8_raises(IORegistryError, match=pattern):
+    with pytest.raises(IORegistryError, match=pattern):
         write_elem(group, "/", {"a": {"b": Foo()}})
 
     write_elem(group, "/", {"a": {"b": [1, 2, 3]}})
     group["a/b"].attrs["encoding-type"] = "not a real encoding type"
 
-    with pytest_8_raises(IORegistryError, match=pattern):
+    with pytest.raises(IORegistryError, match=pattern):
         read_elem(group)
