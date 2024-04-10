@@ -37,7 +37,7 @@ def test_setter_singular_dim(shape, orig_array_type, new_array_type, request):
     adata = gen_adata(shape, X_type=orig_array_type)
     adata.X = new_array_type(np.ones(shape))
     np.testing.assert_equal(asarray(adata.X), 1)
-    if new_array_type.__name__ == "asarray":
+    if request.node.callspec.id.startswith("ndarray"):
         assert isinstance(adata.X, np.ndarray)
     else:
         assert isinstance(adata.X, new_array_type)

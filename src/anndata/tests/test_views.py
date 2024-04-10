@@ -128,7 +128,7 @@ def test_view_subset_shapes():
     assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
 
 
-def test_modify_view_component(matrix_type, mapping_name):
+def test_modify_view_component(matrix_type, mapping_name, request):
     adata = ad.AnnData(
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
@@ -152,7 +152,7 @@ def test_modify_view_component(matrix_type, mapping_name):
 
     assert init_hash == hash_func(adata)
 
-    if matrix_type.__name__ == "as_sparse_array_dask_array" and CAN_USE_SPARSE_ARRAY:
+    if "sparse_array_dask_array" in request.node.callspec.id and CAN_USE_SPARSE_ARRAY:
         assert False  # sparse arrays in dask are general expected to fail but in this case they do not
 
 

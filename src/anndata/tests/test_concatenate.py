@@ -19,7 +19,13 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import CAN_USE_SPARSE_ARRAY, AwkArray, DaskArray, SpArray
+from anndata.compat import (
+    CAN_USE_SPARSE_ARRAY,
+    AwkArray,
+    CupySparseMatrix,
+    DaskArray,
+    SpArray,
+)
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -91,6 +97,11 @@ def make_idx_tuple(idx, axis):
 # See array_type if only dense arrays are expected as input.
 @pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS)
 def array_type(request):
+    return request.param
+
+
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+def cpu_array_type(request):
     return request.param
 
 
@@ -190,6 +201,8 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
             base_type = SpArray
         else:
             base_type = sparse.spmatrix
+    if isinstance(orig.X, CupySparseMatrix):
+        base_type = CupySparseMatrix
     assert isinstance(result.X, base_type)
 
 
@@ -1452,12 +1465,13 @@ def test_concat_null_X():
 
 # https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
 @pytest.mark.parametrize("sparse_indexer_type", [np.int64, np.int32])
-def test_concat_X_dtype(array_type, sparse_indexer_type):
+def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
     adatas_orig = {
-        k: AnnData(array_type(np.ones((20, 10), dtype=np.int8))) for k in list("abc")
+        k: AnnData(cpu_array_type(np.ones((20, 10), dtype=np.int8)))
+        for k in list("abc")
     }
     for adata in adatas_orig.values():
-        adata.raw = AnnData(array_type(np.ones((20, 30), dtype=np.float64)))
+        adata.raw = AnnData(cpu_array_type(np.ones((20, 30), dtype=np.float64)))
         if sparse.issparse(adata.X):
             adata.X.indptr = adata.X.indptr.astype(sparse_indexer_type)
             adata.X.indices = adata.X.indices.astype(sparse_indexer_type)
@@ -1469,7 +1483,7 @@ def test_concat_X_dtype(array_type, sparse_indexer_type):
     if sparse.issparse(result.X):
         # See https://github.com/scipy/scipy/issues/20389 for why this doesn't work with csc
         if sparse_indexer_type == np.int64 and (
-            issubclass(array_type, sparse.spmatrix) or adata.X.format == "csc"
+            issubclass(cpu_array_type, sparse.spmatrix) or adata.X.format == "csc"
         ):
             pytest.xfail(
                 "Data type int64 is not maintained for sparse matrices or csc array"
@@ -1485,7 +1499,7 @@ def test_concat_X_dtype(array_type, sparse_indexer_type):
 
 
 # Tests how dask plays with other types on concatenation.
-def test_concat_different_types_dask(merge_strategy, array_type):
+def test_concat_different_types_dask(merge_strategy, array_type, request):
     import dask.array as da
     from scipy import sparse
 
@@ -1507,7 +1521,7 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     if (
         "a" not in target1.varm
-        and array_type.__name__ == "as_sparse_array_dask_array"
+        and "sparse_array_dask_array" in request.node.callspec.id
         and CAN_USE_SPARSE_ARRAY
     ):
         assert False, f"this test xfails in general for as_sparse_array_dask_array but a for varm is dropped for merge_strategy: {merge_strategy}"
