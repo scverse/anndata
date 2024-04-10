@@ -7,6 +7,7 @@ from collections.abc import Collection, Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
+from typing import Literal
 
 import h5py
 import numpy as np
@@ -184,6 +185,21 @@ if CAN_USE_SPARSE_ARRAY:
     default_key_types = default_key_types + (sparse.csr_array,)
 
 
+def maybe_add_sparse_array(
+    mapping: Mapping,
+    types: Collection[type],
+    format: Literal["csr", "csc"],
+    random_state: int,
+    shape: tuple[int, int],
+):
+    if CAN_USE_SPARSE_ARRAY:
+        if sparse.csr_array in types or sparse.csr_matrix in types:
+            mapping["sparse_array"] = sparse.csr_array(
+                sparse.random(*shape, format=format, random_state=random_state)
+            )
+    return mapping
+
+
 # TODO: Use hypothesis for this?
 def gen_adata(
     shape: tuple[int, int],
@@ -241,6 +257,7 @@ def gen_adata(
         X = None
     else:
         X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
+
     obsm = dict(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
@@ -249,11 +266,13 @@ def gen_adata(
         da=da.random.random((M, 50)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
-    if CAN_USE_SPARSE_ARRAY:
-        if sparse.csr_array in obsm_types or sparse.csr_matrix in obsm_types:
-            obsm["sparse_array"] = sparse.csr_array(
-                sparse.random(M, 100, format=sparse_fmt, random_state=random_state)
-            )
+    obsm = maybe_add_sparse_array(
+        mapping=obsm,
+        types=obsm_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(M, 100),
+    )
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
@@ -262,21 +281,25 @@ def gen_adata(
         da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
-    if CAN_USE_SPARSE_ARRAY:
-        if sparse.csr_array in varm_types or sparse.csr_matrix in varm_types:
-            varm["sparse_array"] = sparse.csr_array(
-                sparse.random(N, 100, format=sparse_fmt, random_state=random_state)
-            )
+    varm = maybe_add_sparse_array(
+        mapping=varm,
+        types=varm_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(N, 100),
+    )
     layers = dict(
         array=np.random.random((M, N)),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
-    if CAN_USE_SPARSE_ARRAY:
-        if sparse.csr_array in layers_types or sparse.csr_matrix in layers_types:
-            layers["sparse_array"] = sparse.csr_array(
-                sparse.random(M, N, format=sparse_fmt, random_state=random_state)
-            )
+    layers = maybe_add_sparse_array(
+        mapping=layers,
+        types=layers_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(M, N),
+    )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
         array=np.random.random((M, M)),
