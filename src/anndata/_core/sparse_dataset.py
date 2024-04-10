@@ -603,16 +603,45 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     Example
     -------
 
-    >>> import zarr
-    >>> from anndata.experimental import sparse_dataset
-    >>> group = zarr.open_group("./my_test_store.zarr")
-    >>> group["data"] = [10, 20, 30, 40, 50, 60, 70, 80]
-    >>> group["indices"] = [0, 1, 1, 3, 2, 3, 4, 5]
-    >>> group["indptr"] = [0, 2, 4, 7, 8]
-    >>> group.attrs["shape"] = (4, 6)
-    >>> group.attrs["encoding-type"] = "csr_matrix"
-    >>> sparse_dataset(group)
-    CSRDataset: backend zarr, shape (4, 6), data_dtype int64
+    >>> from scipy import sparse
+    >>> import zarr, numpy as np
+    >>> from anndata.experimental import sparse_dataset, write_elem
+    >>> rng = np.random.default_rng(0)
+    >>> g = zarr.group()
+    >>> X_mem = sparse.random(10_000, 1000, density=0.1, format="csr", random_state=rng)
+    >>> X_mem  # doctest: +NORMALIZE_WHITESPACE
+    <10000x1000 sparse matrix of type '<class 'numpy.float64'>'
+        with 1000000 stored elements in Compressed Sparse Row format>
+
+    Storing it (hdf5 would also work)
+
+    >>> write_elem(g, "X", X_mem)
+
+    Initialize a sparse dataset from storage
+
+    >>> X = sparse_dataset(g["X"])
+    >>> X
+    CSRDataset: backend zarr, shape (10000, 1000), data_dtype float64
+
+
+    Indexing returns sparse matrices
+
+    >>> X[100:200]  # doctest: +NORMALIZE_WHITESPACE
+    <100x1000 sparse matrix of type '<class 'numpy.float64'>'
+        with 9876 stored elements in Compressed Sparse Row format>
+
+    These can also be used inside of an AnnData object, no need for backed mode
+
+    >>> from anndata import AnnData
+    >>> adata = AnnData(X=X)
+    >>> adata.X
+    CSRDataset: backend zarr, shape (10000, 1000), data_dtype float64
+
+    Access pulls it into memory
+
+    >>> adata[:1000].X  # doctest: +NORMALIZE_WHITESPACE
+    <1000x1000 sparse matrix of type '<class 'numpy.float64'>'
+        with 100168 stored elements in Compressed Sparse Row format>
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
