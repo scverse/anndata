@@ -83,7 +83,7 @@ doc = [
 ]
 test = [
     "loompy>=3.0.5",
-    "pytest>=7.3",
+    "pytest>=8.0",
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
@@ -102,15 +102,21 @@ test = [
 gpu = ["cupy"]
 
 [tool.hatch.build]
-exclude = ["anndata/tests/test_*.py", "anndata/tests/data"]
+exclude = [
+    "src/anndata/tests/conftest.py",
+    "src/anndata/tests/test_*.py",
+    "src/anndata/tests/data",
+]
 [tool.hatch.version]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
-version-file = "anndata/_version.py"
+version-file = "src/anndata/_version.py"
 
 [tool.coverage.run]
-source = ["anndata"]
-omit = ["anndata/_version.py", "**/test_*.py"]
+source_pkgs = ["anndata"]
+omit = ["src/anndata/_version.py", "**/test_*.py"]
+[tool.coverage.paths]
+source = ["./src", "**/site-packages"]
 
 [tool.coverage.report]
 exclude_also = [
@@ -119,8 +125,10 @@ exclude_also = [
 
 [tool.pytest.ini_options]
 addopts = [
+    # "--import-mode=importlib",  # TODO: enable: https://github.com/scverse/anndata/issues/1451
     "--strict-markers",
     "--doctest-modules",
+    "--pyargs",
 ]
 filterwarnings = [
     'ignore:Support for Awkward Arrays is currently experimental',
@@ -137,10 +145,16 @@ filterwarnings_when_strict = [
     "default::dask.array.core.PerformanceWarning",
 ]
 python_files = "test_*.py"
-testpaths = ["anndata", "docs/concatenation.rst"]
+testpaths = [
+    "anndata", # docstrings and unit tests (module name due to --pyargs)
+    "./docs/concatenation.rst", # further doctests
+]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
 markers = ["gpu: mark test to run on GPU"]
+
+[tool.ruff]
+src = ["src"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -166,7 +180,7 @@ ignore = [
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
-"anndata/tests/test_readwrite.py" = ["E721"]
+"src/anndata/tests/test_readwrite.py" = ["E721"]
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
