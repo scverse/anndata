@@ -233,19 +233,9 @@ class backed_csc_matrix(backed_csc, ss.csc_matrix):
     """backed_csc_matrix"""
 
 
-class backed_csr_array(backed_csr, ss.csr_array):
-    """backed_csr_array"""
-
-
-class backed_csc_array(backed_csc, ss.csc_array):
-    """backed_csc_array"""
-
-
 FORMATS = [
     BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
     BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
-    BackedFormat("csr", backed_csr_array, ss.csr_array),
-    BackedFormat("csc", backed_csc_array, ss.csc_array),
 ]
 
 
@@ -318,13 +308,6 @@ def subset_by_major_axis_mask(
         else:
             return get_compressed_vectors_for_slices(mtx, slices)
     return [], [], [0]
-
-
-def get_format(data: ss.spmatrix) -> str:
-    for fmt, _, memory_class in FORMATS:
-        if isinstance(data, memory_class):
-            return fmt
-    raise ValueError(f"Data type {type(data)} is not supported.")
 
 
 def get_memory_class(format: str, use_sparray_in_io=False) -> type[ss.spmatrix]:
@@ -511,10 +494,10 @@ class BaseCompressedSparseDataset(ABC):
             raise NotImplementedError(
                 f"The append method for format {self.format} " f"is not implemented."
             )
-        if self.format != get_format(sparse_matrix):
+        if self.format != sparse_matrix.format:
             raise ValueError(
                 f"Matrices must have same format. Currently are "
-                f"{self.format!r} and {get_format(sparse_matrix)!r}"
+                f"{self.format!r} and {sparse_matrix.format!r}"
             )
         indptr_offset = len(self.group["indices"])
         if self.group["indptr"].dtype == np.int32:
