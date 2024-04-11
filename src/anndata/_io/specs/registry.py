@@ -44,7 +44,7 @@ class IORegistryError(Exception):
     ) -> IORegistryError:
         # TODO: Improve error message if type exists, but version does not
         msg = (
-            f"No {method} method registered for {spec} from {src_typ} in registry {registry}. "
+            f"No {method} method registered for {spec} from {src_typ}. "
             "You may need to update your installation of anndata."
         )
         return cls(msg)
