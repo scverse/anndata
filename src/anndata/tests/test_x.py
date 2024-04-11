@@ -43,6 +43,24 @@ def test_setter_singular_dim(shape, orig_array_type, new_array_type, request):
         assert isinstance(adata.X, new_array_type)
 
 
+@pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
+@pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
+def test_setter_view(orig_array_type, new_array_type, request):
+    if request.node.callspec.id.endswith(
+        "ndarray"
+    ) and request.node.callspec.id.startswith("cs"):
+        pytest.xfail("Cannot set a dense array with a sparse array")
+    # https://github.com/scverse/anndata/issues/500
+    adata = gen_adata((10, 10), X_type=orig_array_type)
+    view = adata[:9, :9]
+    view.X = new_array_type(np.ones((9, 9)))
+    np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))
+    if request.node.callspec.id.endswith("ndarray"):
+        assert isinstance(view.X, np.ndarray)
+    else:
+        assert isinstance(view.X, orig_array_type)
+
+
 ###############################
 # Tests for `adata.X is None` #
 ###############################
