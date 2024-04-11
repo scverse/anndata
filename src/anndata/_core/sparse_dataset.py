@@ -603,45 +603,42 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     Example
     -------
 
-    >>> from scipy import sparse
-    >>> import zarr, numpy as np
-    >>> from anndata.experimental import sparse_dataset, write_elem
-    >>> rng = np.random.default_rng(0)
-    >>> g = zarr.group()
-    >>> X_mem = sparse.random(10_000, 1000, density=0.1, format="csr", random_state=rng)
-    >>> X_mem  # doctest: +NORMALIZE_WHITESPACE
-    <10000x1000 sparse matrix of type '<class 'numpy.float64'>'
-        with 1000000 stored elements in Compressed Sparse Row format>
+    First we'll need a stored dataset:
 
-    Storing it (hdf5 would also work)
-
-    >>> write_elem(g, "X", X_mem)
+    >>> import scanpy as sc
+    >>> import h5py
+    >>> from anndata.experimental import sparse_dataset, read_elem
+    >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
     Initialize a sparse dataset from storage
 
-    >>> X = sparse_dataset(g["X"])
+    >>> f = h5py.File("pbmc.h5ad")
+    >>> X = sparse_dataset(f["X"])
     >>> X
-    CSRDataset: backend zarr, shape (10000, 1000), data_dtype float64
-
+    CSRDataset: backend hdf5, shape (700, 765), data_dtype float32
 
     Indexing returns sparse matrices
 
     >>> X[100:200]  # doctest: +NORMALIZE_WHITESPACE
-    <100x1000 sparse matrix of type '<class 'numpy.float64'>'
-        with 9876 stored elements in Compressed Sparse Row format>
+    <100x765 sparse matrix of type '<class 'numpy.float32'>'
+        with 25003 stored elements in Compressed Sparse Row format>
 
     These can also be used inside of an AnnData object, no need for backed mode
 
     >>> from anndata import AnnData
-    >>> adata = AnnData(X=X)
-    >>> adata.X
-    CSRDataset: backend zarr, shape (10000, 1000), data_dtype float64
+    >>> adata = AnnData(
+    ...     layers={"backed": X}, obs=read_elem(f["obs"]), var=read_elem(f["var"])
+    ... )
+    >>> adata.layers["backed"]
+    CSRDataset: backend hdf5, shape (700, 765), data_dtype float32
 
     Access pulls it into memory
 
-    >>> adata[:1000].X  # doctest: +NORMALIZE_WHITESPACE
-    <1000x1000 sparse matrix of type '<class 'numpy.float64'>'
-        with 100168 stored elements in Compressed Sparse Row format>
+    >>> adata[adata.obs["bulk_labels"] == "CD56+ NK"].layers[
+    ...     "backed"
+    ... ]  # doctest: +NORMALIZE_WHITESPACE
+    <31x765 sparse matrix of type '<class 'numpy.float32'>'
+        with 7340 stored elements in Compressed Sparse Row format>
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
