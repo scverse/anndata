@@ -53,9 +53,8 @@ def read_sparse_as_dask_h5(elem, _reader):
     with h5py.File(filename, "r") as f:
         e = f[elem_name]
         shape = e.attrs["shape"]
-        encoding_type = e.attrs["encoding-type"]
         dtype = e["data"].dtype
-    is_csc = encoding_type == "csc_matrix"
+        is_csc = e.attrs["encoding-type"] == "csc_matrix"
 
     def make_dask_chunk(block_id=None):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
