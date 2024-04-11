@@ -15,7 +15,14 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
+from anndata._io.specs import (
+    _REGISTRY,
+    IOSpec,
+    get_spec,
+    read_elem,
+    read_elem_lazy,
+    write_elem,
+)
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import H5Group, ZarrGroup, _read_attr
 from anndata.tests.helpers import (
@@ -45,6 +52,46 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
     finally:
         if request.param == "h5":
             file.close()
+
+
+sparse_formats = ["csr", "csc"]
+SIZE = 1000
+
+
+@pytest.fixture(scope="function", params=sparse_formats)
+def sparse_format(request):
+    return request.param
+
+
+def create_dense_store(store):
+    X = np.random.randn(SIZE, SIZE)
+
+    write_elem(store, "X", X)
+    return store
+
+
+def create_string_store(store):
+    X = np.arange(0, SIZE * SIZE).reshape((SIZE, SIZE)).astype(str)
+
+    write_elem(store, "X", X)
+    return store
+
+
+def create_sparse_store(sparse_format, store):
+    import dask.array as da
+
+    X = sparse.random(
+        SIZE,
+        SIZE,
+        format=sparse_format,
+        density=0.01,
+        random_state=np.random.default_rng(),
+    )
+    X_dask = da.from_array(X, chunks=(100, 100))
+
+    write_elem(store, "X", X)
+    write_elem(store, "X_dask", X_dask)
+    return store
 
 
 @pytest.mark.parametrize(
@@ -126,30 +173,40 @@ def test_io_spec_cupy(store, value, encoding_type):
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
-@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
-def test_dask_write_sparse(store, sparse_format):
-    import dask.array as da
-
-    X = sparse.random(
-        1000,
-        1000,
-        format=sparse_format,
-        density=0.01,
-        random_state=np.random.default_rng(),
-    )
-    X_dask = da.from_array(X, chunks=(100, 100))
-
-    write_elem(store, "X", X)
-    write_elem(store, "X_dask", X_dask)
-
-    X_from_disk = read_elem(store["X"])
-    X_dask_from_disk = read_elem(store["X_dask"])
+def test_dask_write_sparse(sparse_format, store):
+    x_sparse_store = create_sparse_store(sparse_format, store)
+    X_from_disk = read_elem(x_sparse_store["X"])
+    X_dask_from_disk = read_elem(x_sparse_store["X_dask"])
 
     assert_equal(X_from_disk, X_dask_from_disk)
-    assert_equal(dict(store["X"].attrs), dict(store["X_dask"].attrs))
+    assert_equal(dict(x_sparse_store["X"].attrs), dict(x_sparse_store["X_dask"].attrs))
 
-    assert store["X_dask/indptr"].dtype == np.int64
-    assert store["X_dask/indices"].dtype == np.int64
+    assert x_sparse_store["X_dask/indptr"].dtype == np.int64
+    assert x_sparse_store["X_dask/indices"].dtype == np.int64
+
+
+@pytest.mark.parametrize("arr_type", ["dense", "string", *sparse_formats])
+def test_read_lazy_2d_dask(arr_type, store):
+    if arr_type == "dense":
+        arr_store = create_dense_store(store)
+    elif arr_type == "string":
+        arr_store = create_string_store(store)
+    else:
+        arr_store = create_sparse_store(arr_type, store)
+    X_dask_from_disk = read_elem_lazy(arr_store["X"])
+    X_from_disk = read_elem(arr_store["X"])
+
+    assert_equal(X_from_disk, X_dask_from_disk)
+    random_int_indices = np.random.randint(0, SIZE, (SIZE // 10,))
+    random_bool_mask = np.random.randn(SIZE) > 0
+    index_slice = slice(0, SIZE // 10)
+    for index in [random_int_indices, index_slice, random_bool_mask]:
+        assert_equal(X_from_disk[index, :], X_dask_from_disk[index, :])
+        assert_equal(X_from_disk[:, index], X_dask_from_disk[:, index])
+
+    if arr_type in {"csr", "csc"}:
+        assert arr_store["X_dask/indptr"].dtype == np.int64
+        assert arr_store["X_dask/indices"].dtype == np.int64
 
 
 def test_io_spec_raw(store):
@@ -178,7 +235,7 @@ def test_write_anndata_to_root(store):
     ["attribute", "value"],
     [
         ("encoding-type", "floob"),
-        ("encoding-version", "10000.0"),
+        ("encoding-version", "SIZE0.0"),
     ],
 )
 def test_read_iospec_not_found(store, attribute, value):

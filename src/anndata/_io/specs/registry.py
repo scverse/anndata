@@ -44,7 +44,7 @@ class IORegistryError(Exception):
     ) -> IORegistryError:
         # TODO: Improve error message if type exists, but version does not
         msg = (
-            f"No {method} method registered for {spec} from {src_typ}. "
+            f"No {method} method registered for {spec} from {src_typ} in registry {registry}. "
             "You may need to update your installation of anndata."
         )
         return cls(msg)
@@ -145,9 +145,7 @@ class IORegistry:
         if (src_type, spec, modifiers) in self.read:
             return self.read[(src_type, spec, modifiers)]
         else:
-            raise IORegistryError._from_read_parts(
-                "read", _REGISTRY.read, src_type, spec
-            )
+            raise IORegistryError._from_read_parts("read", self.read, src_type, spec)
 
     def has_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
@@ -176,7 +174,7 @@ class IORegistry:
             return self.read_partial[(src_type, spec, modifiers)]
         else:
             raise IORegistryError._from_read_parts(
-                "read_partial", _REGISTRY.read_partial, src_type, spec
+                "read_partial", self.read_partial, src_type, spec
             )
 
     def get_spec(self, elem: Any) -> IOSpec:
@@ -188,6 +186,7 @@ class IORegistry:
 
 
 _REGISTRY = IORegistry()
+_LAZY_REGISTRY = IORegistry()
 
 
 @singledispatch
@@ -330,6 +329,21 @@ def read_elem(elem: StorageType) -> Any:
         The stored element.
     """
     return Reader(_REGISTRY).read_elem(elem)
+
+
+def read_elem_lazy(elem: StorageType) -> Any:
+    """
+    Read an element from a store lazily.
+
+    Assumes that the element is encoded using the anndata encoding. This function will
+    determine the encoded type using the encoding metadata stored in elem's attributes.
+
+    Params
+    ------
+    elem
+        The stored element.
+    """
+    return Reader(_LAZY_REGISTRY).read_elem(elem)
 
 
 def write_elem(
