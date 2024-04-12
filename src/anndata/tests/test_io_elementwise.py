@@ -20,7 +20,7 @@ from anndata._io.specs import (
     IOSpec,
     get_spec,
     read_elem,
-    read_elem_lazy,
+    read_elem_as_dask,
     write_elem,
 )
 from anndata._io.specs.registry import IORegistryError
@@ -193,7 +193,7 @@ def test_read_lazy_2d_dask(arr_type, store):
         arr_store = create_string_store(store)
     else:
         arr_store = create_sparse_store(arr_type, store)
-    X_dask_from_disk = read_elem_lazy(arr_store["X"])
+    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
     X_from_disk = read_elem(arr_store["X"])
 
     assert_equal(X_from_disk, X_dask_from_disk)

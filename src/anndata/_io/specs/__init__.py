@@ -9,7 +9,7 @@ from .registry import (
     Writer,
     get_spec,
     read_elem,
-    read_elem_lazy,
+    read_elem_as_dask,
     write_elem,
 )
 
@@ -19,7 +19,7 @@ __all__ = [
     "write_elem",
     "get_spec",
     "read_elem",
-    "read_elem_lazy",
+    "read_elem_as_dask",
     "Reader",
     "Writer",
     "IOSpec",

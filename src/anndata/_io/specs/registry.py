@@ -331,7 +331,7 @@ def read_elem(elem: StorageType) -> Any:
     return Reader(_REGISTRY).read_elem(elem)
 
 
-def read_elem_lazy(elem: StorageType) -> Any:
+def read_elem_as_dask(elem: StorageType) -> Any:
     """
     Read an element from a store lazily.
 
