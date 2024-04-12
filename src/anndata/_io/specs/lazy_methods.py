@@ -50,11 +50,9 @@ def make_index(is_csc, stride, shape, block_id):
 def read_sparse_as_dask_h5(elem, _reader):
     filename = elem.file.filename
     elem_name = elem.name
-    with h5py.File(filename, "r") as f:
-        e = f[elem_name]
-        shape = e.attrs["shape"]
-        dtype = e["data"].dtype
-        is_csc = e.attrs["encoding-type"] == "csc_matrix"
+    shape = elem.attrs["shape"]
+    dtype = elem["data"].dtype
+    is_csc = elem.attrs["encoding-type"] == "csc_matrix"
 
     def make_dask_chunk(block_id=None):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
