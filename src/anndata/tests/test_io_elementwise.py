@@ -70,13 +70,6 @@ def create_dense_store(store):
     return store
 
 
-def create_string_store(store):
-    X = np.arange(0, SIZE * SIZE).reshape((SIZE, SIZE)).astype(str)
-
-    write_elem(store, "X", X)
-    return store
-
-
 def create_sparse_store(sparse_format, store):
     import dask.array as da
 
@@ -185,12 +178,10 @@ def test_dask_write_sparse(sparse_format, store):
     assert x_sparse_store["X_dask/indices"].dtype == np.int64
 
 
-@pytest.mark.parametrize("arr_type", ["dense", "string", *sparse_formats])
+@pytest.mark.parametrize("arr_type", ["dense", *sparse_formats])
 def test_read_lazy_2d_dask(arr_type, store):
     if arr_type == "dense":
         arr_store = create_dense_store(store)
-    elif arr_type == "string":
-        arr_store = create_string_store(store)
     else:
         arr_store = create_sparse_store(arr_type, store)
     X_dask_from_disk = read_elem_as_dask(arr_store["X"])

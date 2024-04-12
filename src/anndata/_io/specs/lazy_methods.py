@@ -90,15 +90,6 @@ def read_h5_array(elem, _reader):
     return da.from_array(elem)
 
 
-@_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
-def read_h5_string_array(elem, _reader):
-    from anndata._io.h5ad import read_dataset
-
-    elem = read_dataset(elem)
-    return read_h5_array(elem, _reader)
-
-
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
-@_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_zarr_array(elem, _reader):
     return da.from_zarr(elem)
