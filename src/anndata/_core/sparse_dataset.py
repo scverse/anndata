@@ -632,7 +632,7 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     >>> adata.layers["backed"]
     CSRDataset: backend hdf5, shape (700, 765), data_dtype float32
 
-    Access pulls it into memory
+    Indexing access (i.e., from views) brings selection into memory
 
     >>> adata[adata.obs["bulk_labels"] == "CD56+ NK"].layers[
     ...     "backed"
