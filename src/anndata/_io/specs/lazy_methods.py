@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dask.array as da
 import h5py
 import numpy as np
 from scipy import sparse
@@ -16,6 +15,8 @@ h5_chunks = 1000
 
 
 def make_dask_array(is_csc, shape, make_dask_chunk, dtype):
+    import dask.array as da
+
     chunks = [None, None]
     major_index = int(is_csc)
     minor_index = (is_csc + 1) % 2
@@ -83,6 +84,8 @@ def read_sparse_as_dask_zarr(elem, _reader):
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(elem, _reader):
+    import dask.array as da
+
     if not hasattr(elem, "chunks") or elem.chunks is None:
         return da.from_array(elem, chunks=(h5_chunks,) * len(elem.shape))
     return da.from_array(elem)
@@ -90,4 +93,6 @@ def read_h5_array(elem, _reader):
 
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(elem, _reader):
+    import dask.array as da
+
     return da.from_zarr(elem)
