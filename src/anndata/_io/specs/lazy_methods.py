@@ -60,7 +60,7 @@ def read_sparse_as_dask_h5(elem, _reader):
         with h5py.File(filename, "r") as f:
             mtx = ad.experimental.sparse_dataset(f[elem_name])
             index = make_index(is_csc, stride, shape, block_id)
-            chunk = mtx[*index]
+            chunk = mtx[index]
         return chunk
 
     return make_dask_array(is_csc, shape, make_dask_chunk, dtype)
@@ -76,7 +76,7 @@ def read_sparse_as_dask_zarr(elem, _reader):
     def make_dask_chunk(block_id=None):
         mtx = ad.experimental.sparse_dataset(elem)
         index = make_index(is_csc, stride, shape, block_id)
-        return mtx[*index]
+        return mtx[index]
 
     return make_dask_array(is_csc, shape, make_dask_chunk, dtype)
 
