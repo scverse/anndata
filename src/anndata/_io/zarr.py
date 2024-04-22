@@ -27,13 +27,15 @@ def write_zarr(
     store: MutableMapping | str | Path,
     adata: AnnData,
     chunks=None,
+    strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
-    adata.strings_to_categoricals()
-    if adata.raw is not None:
-        adata.strings_to_categoricals(adata.raw.var)
+    if strings_to_categoricals:       
+        adata.strings_to_categoricals()
+        if adata.raw is not None:
+            adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
     f = zarr.open(store, mode="w")
     f.attrs.setdefault("encoding-type", "anndata")
