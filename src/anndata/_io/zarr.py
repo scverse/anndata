@@ -32,7 +32,7 @@ def write_zarr(
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
-    if strings_to_categoricals:       
+    if strings_to_categoricals:
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
