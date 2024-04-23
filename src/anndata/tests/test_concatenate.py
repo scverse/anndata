@@ -20,7 +20,6 @@ from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
 from anndata.compat import (
-    CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CupySparseMatrix,
     DaskArray,
@@ -1499,7 +1498,7 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
 
 
 # Tests how dask plays with other types on concatenation.
-def test_concat_different_types_dask(merge_strategy, array_type, request):
+def test_concat_different_types_dask(merge_strategy, array_type):
     import dask.array as da
     from scipy import sparse
 
@@ -1518,13 +1517,6 @@ def test_concat_different_types_dask(merge_strategy, array_type, request):
 
     assert_equal(result1, target1)
     assert_equal(result2, target2)
-
-    if (
-        "a" not in target1.varm
-        and "sparse_array_dask_array" in request.node.callspec.id
-        and CAN_USE_SPARSE_ARRAY
-    ):
-        assert False, f"this test xfails in general for as_sparse_array_dask_array but a for varm is dropped for merge_strategy: {merge_strategy}"
 
 
 def test_outer_concat_with_missing_value_for_df():
