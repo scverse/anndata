@@ -602,16 +602,42 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     Example
     -------
 
-    >>> import zarr
-    >>> from anndata.experimental import sparse_dataset
-    >>> group = zarr.open_group("./my_test_store.zarr")
-    >>> group["data"] = [10, 20, 30, 40, 50, 60, 70, 80]
-    >>> group["indices"] = [0, 1, 1, 3, 2, 3, 4, 5]
-    >>> group["indptr"] = [0, 2, 4, 7, 8]
-    >>> group.attrs["shape"] = (4, 6)
-    >>> group.attrs["encoding-type"] = "csr_matrix"
-    >>> sparse_dataset(group)
-    CSRDataset: backend zarr, shape (4, 6), data_dtype int64
+    First we'll need a stored dataset:
+
+    >>> import scanpy as sc
+    >>> import h5py
+    >>> from anndata.experimental import sparse_dataset, read_elem
+    >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
+
+    Initialize a sparse dataset from storage
+
+    >>> f = h5py.File("pbmc.h5ad")
+    >>> X = sparse_dataset(f["X"])
+    >>> X
+    CSRDataset: backend hdf5, shape (700, 765), data_dtype float32
+
+    Indexing returns sparse matrices
+
+    >>> X[100:200]  # doctest: +NORMALIZE_WHITESPACE
+    <100x765 sparse matrix of type '<class 'numpy.float32'>'
+        with 25003 stored elements in Compressed Sparse Row format>
+
+    These can also be used inside of an AnnData object, no need for backed mode
+
+    >>> from anndata import AnnData
+    >>> adata = AnnData(
+    ...     layers={"backed": X}, obs=read_elem(f["obs"]), var=read_elem(f["var"])
+    ... )
+    >>> adata.layers["backed"]
+    CSRDataset: backend hdf5, shape (700, 765), data_dtype float32
+
+    Indexing access (i.e., from views) brings selection into memory
+
+    >>> adata[adata.obs["bulk_labels"] == "CD56+ NK"].layers[
+    ...     "backed"
+    ... ]  # doctest: +NORMALIZE_WHITESPACE
+    <31x765 sparse matrix of type '<class 'numpy.float32'>'
+        with 7340 stored elements in Compressed Sparse Row format>
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
