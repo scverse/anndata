@@ -572,18 +572,6 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_write(
     ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
 )
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csr_array), IOSpec("csr_array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csc_array), IOSpec("csc_array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csr_array), IOSpec("csr_array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csc_array), IOSpec("csc_array", "0.1.0")
-)
 def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     sparse_format = elem._meta.format
 

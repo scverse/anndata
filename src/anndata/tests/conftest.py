@@ -26,6 +26,7 @@ def backing_h5ad(tmp_path):
 #####################
 # Dask tokenization #
 #####################
+# TODO: Should we be exporting this?
 
 
 # sparray classes don't have tokenize defined yet, see: https://github.com/dask/dask/issues/10375

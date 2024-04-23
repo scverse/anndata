@@ -483,7 +483,7 @@ def test_backed_sizeof(
 @pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
 def test_append_overflow_check(group_fn, sparse_class, tmpdir):
     if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
-        pytest.skip("scipy bug causes view to be read into memory")
+        pytest.skip("scipy bug causes view to be allocated")
     group = group_fn(tmpdir)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
