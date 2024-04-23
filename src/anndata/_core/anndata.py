@@ -657,9 +657,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     if sparse.issparse(self._adata_ref._X) and isinstance(
                         value, np.ndarray
                     ):
-                        memory_class = sparse.coo_matrix
                         if isinstance(self._adata_ref.X, SpArray):
                             memory_class = sparse.coo_array
+                        else:
+                            memory_class = sparse.coo_matrix
                         value = memory_class(value)
                     self._adata_ref._X[oidx, vidx] = value
                 else:
