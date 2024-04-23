@@ -29,11 +29,13 @@ from scipy.sparse import spmatrix
 from anndata._warnings import ExperimentalFeatureWarning
 
 from ..compat import (
+    CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CupyArray,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    SpArray,
     _map_cat_to_str,
 )
 from ..utils import asarray, dim_len, warn_once
@@ -164,6 +166,7 @@ def equal_series(a, b) -> bool:
 
 
 @equal.register(sparse.spmatrix)
+@equal.register(SpArray)
 @equal.register(CupySparseMatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
@@ -171,7 +174,7 @@ def equal_sparse(a, b) -> bool:
 
     xp = array_api_compat.array_namespace(a.data)
 
-    if isinstance(b, (CupySparseMatrix, sparse.spmatrix)):
+    if isinstance(b, (CupySparseMatrix, sparse.spmatrix, SpArray)):
         if isinstance(a, CupySparseMatrix):
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
@@ -202,8 +205,10 @@ def equal_awkward(a, b) -> bool:
     return ak.almost_equal(a, b)
 
 
-def as_sparse(x):
-    if not isinstance(x, sparse.spmatrix):
+def as_sparse(x, use_sparse_array=False):
+    if not isinstance(x, (sparse.spmatrix, SpArray)):
+        if CAN_USE_SPARSE_ARRAY and use_sparse_array:
+            return sparse.csr_array(x)
         return sparse.csr_matrix(x)
     else:
         return x
@@ -531,7 +536,7 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, sparse.spmatrix):
+        elif isinstance(el, (sparse.spmatrix, SpArray, CupySparseMatrix)):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -539,8 +544,6 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, CupySparseMatrix):
-            return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -610,7 +613,9 @@ class Reindexer:
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
-    def _apply_to_sparse(self, el: spmatrix, *, axis, fill_value=None) -> spmatrix:
+    def _apply_to_sparse(
+        self, el: sparse.spmatrix | SpArray, *, axis, fill_value=None
+    ) -> spmatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
         else:
@@ -632,7 +637,11 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             shape = tuple(shape)
             if fill_value == 0:
-                return sparse.csr_matrix(shape)
+                if isinstance(el, SpArray):
+                    memory_class = sparse.csr_array
+                else:
+                    memory_class = sparse.csr_matrix
+                return memory_class(shape)
             else:
                 return type(el)(xp.broadcast_to(xp.asarray(fill_value), shape))
 
@@ -642,9 +651,12 @@ class Reindexer:
             idxmtx_dtype = xp.promote_types(el.dtype, xp.array(fill_value).dtype)
         else:
             idxmtx_dtype = bool
-
+        if isinstance(el, SpArray):
+            memory_class = sparse.coo_array
+        else:
+            memory_class = sparse.coo_matrix
         if axis == 1:
-            idxmtx = sparse.coo_matrix(
+            idxmtx = memory_class(
                 (
                     xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
                     (xp.asarray(self.old_pos), xp.asarray(self.new_pos)),
@@ -658,7 +670,7 @@ class Reindexer:
                 out = out.tocsc()
                 fill_idxer = (slice(None), to_fill)
         elif axis == 0:
-            idxmtx = sparse.coo_matrix(
+            idxmtx = memory_class(
                 (
                     xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
                     (xp.asarray(self.new_pos), xp.asarray(self.old_pos)),
@@ -710,7 +722,7 @@ def default_fill_value(els):
 
     This is largely due to backwards compat, and might not be the ideal solution.
     """
-    if any(isinstance(el, sparse.spmatrix) for el in els):
+    if any(isinstance(el, (sparse.spmatrix, SpArray)) for el in els):
         return 0
     else:
         return np.nan
@@ -808,11 +820,16 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             axis=axis,
         )
-    elif any(isinstance(a, sparse.spmatrix) for a in arrays):
+    elif any(isinstance(a, (sparse.spmatrix, SpArray)) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
+        use_sparse_array = any(issubclass(type(a), SpArray) for a in arrays)
         return sparse_stack(
             [
-                f(as_sparse(a), axis=1 - axis, fill_value=fill_value)
+                f(
+                    as_sparse(a, use_sparse_array=use_sparse_array),
+                    axis=1 - axis,
+                    fill_value=fill_value,
+                )
                 for f, a in zip(reindexers, arrays)
             ],
             format="csr",
@@ -953,10 +970,14 @@ def concat_pairwise_mapping(
     mappings: Collection[Mapping], shapes: Collection[int], join_keys=intersect_keys
 ):
     result = {}
+    if any(any(isinstance(v, SpArray) for v in m.values()) for m in mappings):
+        sparse_class = sparse.csr_array
+    else:
+        sparse_class = sparse.csr_matrix
+
     for k in join_keys(mappings):
         els = [
-            m.get(k, sparse.csr_matrix((s, s), dtype=bool))
-            for m, s in zip(mappings, shapes)
+            m.get(k, sparse_class((s, s), dtype=bool)) for m, s in zip(mappings, shapes)
         ]
         if all(isinstance(el, (CupySparseMatrix, CupyArray)) for el in els):
             result[k] = _cp_block_diag(els, format="csr")

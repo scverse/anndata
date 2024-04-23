@@ -29,7 +29,7 @@ from scipy.sparse import _sparsetools
 from anndata._core.index import _fix_slice_bounds
 from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
-from ..compat import _read_attr
+from ..compat import SpArray, _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -302,24 +302,23 @@ def subset_by_major_axis_mask(
     return [], [], [0]
 
 
-def get_format(data: ss.spmatrix) -> str:
-    for fmt, _, memory_class in FORMATS:
-        if isinstance(data, memory_class):
-            return fmt
-    raise ValueError(f"Data type {type(data)} is not supported.")
-
-
-def get_memory_class(format: str) -> type[ss.spmatrix]:
+def get_memory_class(format: str, use_sparray_in_io=False) -> type[ss.spmatrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
-            return memory_class
+            if use_sparray_in_io and issubclass(memory_class, SpArray):
+                return memory_class
+            elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
+                return memory_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
-def get_backed_class(format: str) -> type[BackedSparseMatrix]:
+def get_backed_class(format: str, use_sparray_in_io=False) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
-            return backed_class
+            if use_sparray_in_io and issubclass(backed_class, SpArray):
+                return backed_class
+            elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
+                return backed_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
@@ -471,14 +470,14 @@ class BaseCompressedSparseDataset(ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: ss.spmatrix):
+    def append(self, sparse_matrix: ss.spmatrix | SpArray):
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, BaseCompressedSparseDataset):
             sparse_matrix = sparse_matrix._to_backed()
 
         # Check input
-        if not ss.isspmatrix(sparse_matrix):
+        if not ss.issparse(sparse_matrix):
             raise NotImplementedError(
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
@@ -487,10 +486,10 @@ class BaseCompressedSparseDataset(ABC):
             raise NotImplementedError(
                 f"The append method for format {self.format} " f"is not implemented."
             )
-        if self.format != get_format(sparse_matrix):
+        if self.format != sparse_matrix.format:
             raise ValueError(
                 f"Matrices must have same format. Currently are "
-                f"{self.format!r} and {get_format(sparse_matrix)!r}"
+                f"{self.format!r} and {sparse_matrix.format!r}"
             )
         indptr_offset = len(self.group["indices"])
         if self.group["indptr"].dtype == np.int32:

@@ -514,10 +514,17 @@ write_csc = partial(write_sparse_compressed, fmt="csc")
 for store_type, (cls, spec, func) in product(
     (H5Group, ZarrGroup),
     [
+        # spmatrix
         (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (views.SparseCSRView, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0"), write_csr),
         (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_csc),
-        (views.SparseCSCView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        # sparray
+        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_csr),
+        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        # cupy spmatrix
         (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csr)),
         (
             views.CupySparseCSRView,
