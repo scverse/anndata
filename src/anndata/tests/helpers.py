@@ -4,8 +4,10 @@ import random
 import re
 import warnings
 from collections.abc import Collection, Mapping
+from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
+from typing import Literal
 
 import h5py
 import numpy as np
@@ -19,12 +21,14 @@ from anndata._core.aligned_mapping import AlignedMapping
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
+    CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    SpArray,
 )
 from anndata.utils import asarray
 
@@ -36,9 +40,29 @@ GEN_ADATA_DASK_ARGS = dict(
         pd.DataFrame,
         DaskArray,
     ),
-    varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
-    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame, DaskArray),
+    varm_types=(
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
+    layers_types=(
+        sparse.csr_matrix,
+        np.ndarray,
+        pd.DataFrame,
+        DaskArray,
+    ),
 )
+if CAN_USE_SPARSE_ARRAY:
+    GEN_ADATA_DASK_ARGS["obsm_types"] = GEN_ADATA_DASK_ARGS["obsm_types"] + (
+        sparse.csr_array,
+    )
+    GEN_ADATA_DASK_ARGS["varm_types"] = GEN_ADATA_DASK_ARGS["varm_types"] + (
+        sparse.csr_array,
+    )
+    GEN_ADATA_DASK_ARGS["layers_types"] = GEN_ADATA_DASK_ARGS["layers_types"] + (
+        sparse.csr_array,
+    )
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -152,6 +176,30 @@ def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     return df
 
 
+default_key_types = (
+    sparse.csr_matrix,
+    np.ndarray,
+    pd.DataFrame,
+)
+if CAN_USE_SPARSE_ARRAY:
+    default_key_types = default_key_types + (sparse.csr_array,)
+
+
+def maybe_add_sparse_array(
+    mapping: Mapping,
+    types: Collection[type],
+    format: Literal["csr", "csc"],
+    random_state: int,
+    shape: tuple[int, int],
+):
+    if CAN_USE_SPARSE_ARRAY:
+        if sparse.csr_array in types or sparse.csr_matrix in types:
+            mapping["sparse_array"] = sparse.csr_array(
+                sparse.random(*shape, format=format, random_state=random_state)
+            )
+    return mapping
+
+
 # TODO: Use hypothesis for this?
 def gen_adata(
     shape: tuple[int, int],
@@ -159,19 +207,10 @@ def gen_adata(
     X_dtype=np.float32,
     # obs_dtypes,
     # var_dtypes,
-    obsm_types: Collection[type] = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        AwkArray,
-    ),
-    varm_types: Collection[type] = (
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        AwkArray,
-    ),
-    layers_types: Collection[type] = (sparse.csr_matrix, np.ndarray, pd.DataFrame),
+    obsm_types: Collection[type] = default_key_types + (AwkArray,),
+    varm_types: Collection[type] = default_key_types + (AwkArray,),
+    layers_types: Collection[type] = default_key_types,
+    random_state=None,
     sparse_fmt: str = "csr",
 ) -> AnnData:
     """\
@@ -202,6 +241,9 @@ def gen_adata(
     """
     import dask.array as da
 
+    if random_state is None:
+        random_state = np.random.default_rng()
+
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
@@ -214,35 +256,67 @@ def gen_adata(
     if X_type is None:
         X = None
     else:
-        X = X_type(np.random.binomial(100, 0.005, (M, N)).astype(X_dtype))
+        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
+
     obsm = dict(
         array=np.random.random((M, 50)),
-        sparse=sparse.random(M, 100, format=sparse_fmt),
+        sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    obsm = maybe_add_sparse_array(
+        mapping=obsm,
+        types=obsm_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(M, 100),
+    )
     varm = dict(
         array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format=sparse_fmt),
+        sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    varm = maybe_add_sparse_array(
+        mapping=varm,
+        types=varm_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(N, 100),
+    )
     layers = dict(
         array=np.random.random((M, N)),
-        sparse=sparse.random(M, N, format=sparse_fmt),
+        sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
+    )
+    layers = maybe_add_sparse_array(
+        mapping=layers,
+        types=layers_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(M, N),
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)), sparse=sparse.random(M, M, format=sparse_fmt)
+        array=np.random.random((M, M)),
+        sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
+    if CAN_USE_SPARSE_ARRAY:
+        obsp["sparse_array"] = sparse.csr_array(
+            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
+        )
     varp = dict(
-        array=np.random.random((N, N)), sparse=sparse.random(N, N, format=sparse_fmt)
+        array=np.random.random((N, N)),
+        sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
+    if CAN_USE_SPARSE_ARRAY:
+        varp["sparse_array"] = sparse.csr_array(
+            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
+        )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
         nested=dict(
@@ -301,6 +375,12 @@ def spmatrix_bool_subset(index, min_size=2):
     )
 
 
+def sparray_bool_subset(index, min_size=2):
+    return sparse.csr_array(
+        array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
+    )
+
+
 def array_subset(index, min_size=2):
     if len(index) < min_size:
         raise ValueError(
@@ -351,6 +431,7 @@ def single_subset(index):
         list_bool_subset,
         matrix_bool_subset,
         spmatrix_bool_subset,
+        sparray_bool_subset,
     ]
 )
 def subset_func(request):
@@ -440,6 +521,11 @@ def assert_equal_arrayview(a, b, exact=False, elem_name=None):
 def assert_equal_sparse(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
+
+
+@assert_equal.register(SpArray)
+def assert_equal_sparse_array(a, b, exact=False, elem_name=None):
+    return assert_equal_sparse(a, b, exact, elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)
@@ -635,9 +721,31 @@ def _(a):
     return da.from_array(a, _half_chunk_size(a.shape))
 
 
+@as_sparse_dask_array.register(SpArray)
+def _(a):
+    import dask.array as da
+
+    return da.from_array(sparse.csr_matrix(a), _half_chunk_size(a.shape))
+
+
 @as_sparse_dask_array.register(DaskArray)
 def _(a):
     return a.map_blocks(sparse.csr_matrix)
+
+
+@contextmanager
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
+    """Error handling using pytest 8's support for __notes__.
+
+    See: https://github.com/pytest-dev/pytest/pull/11227
+
+    Remove once pytest 8 is out!
+    """
+
+    with pytest.raises(exc_cls) as exc_info:
+        yield exc_info
+
+    check_error_or_notes_match(exc_info, match)
 
 
 def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
@@ -719,6 +827,8 @@ BASE_MATRIX_PARAMS = [
     pytest.param(asarray, id="np_array"),
     pytest.param(sparse.csr_matrix, id="scipy_csr"),
     pytest.param(sparse.csc_matrix, id="scipy_csc"),
+    pytest.param(sparse.csr_array, id="scipy_csr_array"),
+    pytest.param(sparse.csc_array, id="scipy_csc_array"),
 ]
 
 DASK_MATRIX_PARAMS = [
