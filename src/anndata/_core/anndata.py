@@ -1778,11 +1778,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
-        sprase_class = sparse.csr_matrix
+        sparse_class = sparse.csr_matrix
         if any(isinstance(a.X, SpArray) for a in all_adatas):
-            sprase_class = sparse.csr_array
+            sparse_class = sparse.csr_array
         out.obs = concat(
-            [AnnData(sprase_class(a.shape), obs=a.obs) for a in all_adatas],
+            [AnnData(sparse_class(a.shape), obs=a.obs) for a in all_adatas],
             axis=0,
             join="outer",
             label=batch_key,
