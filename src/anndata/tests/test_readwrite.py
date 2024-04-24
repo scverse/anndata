@@ -821,3 +821,17 @@ def test_io_dtype(tmp_path, diskfmt, dtype):
     curr = read(pth)
 
     assert curr.X.dtype == dtype
+
+
+def test_readwrite_units(read, write, name, tmp_path):
+    X_arr = np.array(X_list)
+    adata = ad.AnnData(
+        X=X_arr,
+        uns={"size": 100 * ad.units["um"]},
+        obsm={"X_spatial": X_arr * ad.units.mm},
+    )
+    write(tmp_path / name, adata)
+    ad_read = read(tmp_path / name)
+
+    assert adata.uns["spot_size"] == ad_read.uns["spot_size"]
+    assert (adata.obsm["X_spatial_units"] == ad_read.obsm["X_spatial_units"]).all()
