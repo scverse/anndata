@@ -373,10 +373,14 @@ def _dask_block_diag(mats):
             sparse.csr_matrix((mats[i].shape[0], mats[j].shape[1]))
         )
     for i, x in enumerate(mats):
-        if not isinstance(x._meta, sparse.csr_matrix):
+        if isinstance(x._meta, CupyArray):
+            x = x.map_blocks(CupyCSRMatrix)
+        elif not isinstance(x._meta, (sparse.csr_matrix, CupySparseMatrix)):
             x = x.map_blocks(sparse.csr_matrix)
         blocks[i, i] = x
 
+    # TODO: Incorrect _meta array type (np.ndarray) due to dask
+    # Incorrect actual result type (cupyx.scipy.sparse.coo_matrix) due to cupy
     return da.block(blocks.tolist())
 
 
@@ -835,6 +839,15 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             format="csr",
         )
     else:
+        if any(
+            isinstance(a, DaskArray) and isinstance(a._meta, (CupyArray))
+            for a in arrays
+        ):
+            import cupy as cp
+
+            for i in range(len(arrays)):
+                if 0 in arrays[i].shape:
+                    arrays[i] = cp.zeros(arrays[i].shape, dtype=arrays[i].dtype)
         return np.concatenate(
             [
                 f(x, fill_value=fill_value, axis=1 - axis)
