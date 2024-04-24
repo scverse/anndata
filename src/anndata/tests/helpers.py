@@ -691,12 +691,31 @@ def assert_adata_equal(
 def as_dense_dask_array(a):
     import dask.array as da
 
-    return da.asarray(a)
+    return da.asarray(asarray(a))
 
 
 @as_dense_dask_array.register(sparse.spmatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
+
+
+@as_dense_dask_array.register(DaskArray)
+def _(a):
+    return a.map_blocks(asarray, dtype=a.dtype, meta=np.ndarray)
+
+
+@singledispatch
+def as_dense_cupy_dask_array(a):
+    import cupy as cp
+
+    return as_dense_dask_array(a).map_blocks(cp.array)
+
+
+@as_dense_cupy_dask_array.register(CupyArray)
+def _(a):
+    import dask.array as da
+
+    return da.from_array(a)
 
 
 def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
