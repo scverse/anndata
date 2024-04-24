@@ -733,7 +733,7 @@ def _(a):
 
     if isinstance(a._meta, cp.ndarray):
         return a.copy()
-    return a.map_blocks(partial(as_cupy_type, typ=CupyArray), dtype=a.dtype)
+    return a.map_blocks(partial(as_cupy, typ=CupyArray), dtype=a.dtype)
 
 
 @singledispatch
@@ -791,24 +791,32 @@ def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Patter
     ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
 
 
-def as_cupy_type(val, typ=None):
+def resolve_cupy_type(val):
+    if not isinstance(val, type):
+        input_typ = type(val)
+    else:
+        input_typ = val
+
+    if issubclass(input_typ, np.ndarray):
+        typ = CupyArray
+    elif issubclass(input_typ, sparse.csr_matrix):
+        typ = CupyCSRMatrix
+    elif issubclass(input_typ, sparse.csc_matrix):
+        typ = CupyCSCMatrix
+    else:
+        raise NotImplementedError(f"No default target type for input type {input_typ}")
+    return typ
+
+
+@singledispatch
+def as_cupy(val, typ=None):
     """
     Rough conversion function
 
     Will try to infer target type from input type if not specified.
     """
     if typ is None:
-        input_typ = type(val)
-        if issubclass(input_typ, np.ndarray):
-            typ = CupyArray
-        elif issubclass(input_typ, sparse.csr_matrix):
-            typ = CupyCSRMatrix
-        elif issubclass(input_typ, sparse.csc_matrix):
-            typ = CupyCSCMatrix
-        else:
-            raise NotImplementedError(
-                f"No default target type for input type {input_typ}"
-            )
+        typ = resolve_cupy_type(val)
 
     if issubclass(typ, CupyArray):
         import cupy as cp
@@ -836,6 +844,14 @@ def as_cupy_type(val, typ=None):
         raise NotImplementedError(
             f"Conversion from {type(val)} to {typ} not implemented"
         )
+
+
+# TODO: test
+@as_cupy.register(DaskArray)
+def as_cupy_dask(a, typ=None):
+    if typ is None:
+        typ = resolve_cupy_type(a._meta)
+    return a.map_blocks(partial(as_cupy, typ=typ), dtype=a.dtype)
 
 
 @singledispatch
@@ -867,15 +883,15 @@ DASK_MATRIX_PARAMS = [
 
 CUPY_MATRIX_PARAMS = [
     pytest.param(
-        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+        partial(as_cupy, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
     ),
     pytest.param(
-        partial(as_cupy_type, typ=CupyCSRMatrix),
+        partial(as_cupy, typ=CupyCSRMatrix),
         id="cupy_csr",
         marks=pytest.mark.gpu,
     ),
     pytest.param(
-        partial(as_cupy_type, typ=CupyCSCMatrix),
+        partial(as_cupy, typ=CupyCSCMatrix),
         id="cupy_csc",
         marks=pytest.mark.gpu,
     ),
