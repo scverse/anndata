@@ -687,11 +687,20 @@ def assert_adata_equal(
         )
 
 
+def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
+    def half_rounded_up(x):
+        div, mod = divmod(x, 2)
+        return div + (mod > 0)
+
+    return tuple(half_rounded_up(x) for x in a)
+
+
 @singledispatch
 def as_dense_dask_array(a):
     import dask.array as da
 
-    return da.asarray(asarray(a))
+    a = asarray(a)
+    return da.asarray(a, chunks=_half_chunk_size(a.shape))
 
 
 @as_dense_dask_array.register(sparse.spmatrix)
@@ -715,15 +724,16 @@ def as_dense_cupy_dask_array(a):
 def _(a):
     import dask.array as da
 
-    return da.from_array(a)
+    return da.from_array(a, chunks=_half_chunk_size(a.shape))
 
 
-def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
-    def half_rounded_up(x):
-        div, mod = divmod(x, 2)
-        return div + (mod > 0)
+@as_dense_cupy_dask_array.register(DaskArray)
+def _(a):
+    import cupy as cp
 
-    return tuple(half_rounded_up(x) for x in a)
+    if isinstance(a._meta, cp.ndarray):
+        return a.copy()
+    return a.map_blocks(partial(as_cupy_type, typ=CupyArray), dtype=a.dtype)
 
 
 @singledispatch
@@ -867,6 +877,14 @@ CUPY_MATRIX_PARAMS = [
     pytest.param(
         partial(as_cupy_type, typ=CupyCSCMatrix),
         id="cupy_csc",
+        marks=pytest.mark.gpu,
+    ),
+]
+
+DASK_CUPY_MATRIX_PARAMS = [
+    pytest.param(
+        partial(as_dense_cupy_dask_array),
+        id="cupy_dense_dask_array",
         marks=pytest.mark.gpu,
     ),
 ]
