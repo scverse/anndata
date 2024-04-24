@@ -13,7 +13,7 @@ import pandas as pd
 from scipy import sparse
 
 import anndata as ad
-from anndata import AnnData, Raw
+from anndata import AnnData, Raw, units
 from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
@@ -291,6 +291,27 @@ def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
     _writer.write_elem(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
+
+
+########
+# Pint #
+########
+
+
+@_REGISTRY.register_read(H5Group, IOSpec("pint.Quantity", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("pint.Quantity", "0.1.0"))
+def read_quantity(elem, _reader):
+    v_magnitude = _reader.read_elem(elem["magnitude"])
+    v_units = units[_reader.read_elem(elem["units"])]
+    return v_magnitude * v_units
+
+
+@_REGISTRY.register_write(H5Group, units.Quantity, IOSpec("pint.Quantity", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, units.Quantity, IOSpec("pint.Quantity", "0.1.0"))
+def write_quantity(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
+    g = f.require_group(k)
+    _writer.write_elem(g, "magnitude", v.magnitude, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(g, "units", str(v.units), dataset_kwargs=dataset_kwargs)
 
 
 ############

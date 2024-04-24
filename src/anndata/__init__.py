@@ -21,7 +21,7 @@ if sys.version_info < (3, 11):
     # Backport package for exception groups
     import exceptiongroup  # noqa: F401
 
-from ._core.anndata import AnnData
+from ._core.anndata import AnnData, units
 from ._core.merge import concat
 from ._core.raw import Raw
 from ._io import (
@@ -81,4 +81,5 @@ __all__ = [
     "ExperimentalFeatureWarning",
     "experimental",
     "settings",
+    "units",
 ]
