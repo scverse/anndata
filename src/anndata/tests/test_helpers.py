@@ -10,6 +10,7 @@ from scipy import sparse
 import anndata as ad
 from anndata.compat import (
     CupyArray,
+    CupyCSRMatrix,
     DaskArray,
     add_note,
 )
@@ -17,6 +18,7 @@ from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
+    as_csr_cupy_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
     asarray,
@@ -297,6 +299,9 @@ def test_check_error_notes_failure(error, match):
             as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
         ),
         pytest.param(as_dense_dask_array, np.ndarray, id="numpy_dense"),
+        pytest.param(
+            as_csr_cupy_dask_array, CupyCSRMatrix, id="cupy_csr", marks=pytest.mark.gpu
+        ),
     ],
 )
 def test_as_dask_functions(input_type, as_dask_type, mem_type):
