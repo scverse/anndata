@@ -125,7 +125,7 @@ addopts = [
     "--pyargs",
 ]
 filterwarnings = [
-    # all `ignore::anndata.*` entries are in `tests/conftest.py`
+    # all `ignore::anndata.*` entries are in `conftest.py`
     # See: https://github.com/pytest-dev/pytest-cov/issues/437
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
