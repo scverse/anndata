@@ -34,3 +34,4 @@ __pycache__/
 .asv
 benchmark/benchmarks/data
 benchmarks/benchmarks/data
+benchmarks/pkgs

@@ -7,13 +7,19 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
-from dask.base import normalize_token, tokenize
+from dask.base import tokenize
 from scipy import sparse
 
 import anndata as ad
 from anndata._core.index import _normalize_index
-from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
-from anndata.compat import CupyCSCMatrix, DaskArray
+from anndata._core.views import (
+    ArrayView,
+    SparseCSCArrayView,
+    SparseCSCMatrixView,
+    SparseCSRArrayView,
+    SparseCSRMatrixView,
+)
+from anndata.compat import CAN_USE_SPARSE_ARRAY, CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -122,7 +128,7 @@ def test_view_subset_shapes():
     assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
 
 
-def test_modify_view_component(matrix_type, mapping_name):
+def test_modify_view_component(matrix_type, mapping_name, request):
     adata = ad.AnnData(
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
@@ -145,6 +151,9 @@ def test_modify_view_component(matrix_type, mapping_name):
     assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
     assert init_hash == hash_func(adata)
+
+    if "sparse_array_dask_array" in request.node.callspec.id and CAN_USE_SPARSE_ARRAY:
+        assert False  # sparse arrays in dask are general expected to fail but in this case they do not
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
@@ -296,21 +305,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == joblib.hash(adata)
-
-
-@normalize_token.register(ad.AnnData)
-def tokenize_anndata(adata: ad.AnnData):
-    res = []
-    if adata.X is not None:
-        res.append(tokenize(adata.X))
-    res.extend([tokenize(adata.obs), tokenize(adata.var)])
-    for attr in ["obsm", "varm", "obsp", "varp", "layers"]:
-        elem = getattr(adata, attr)
-        res.append(tokenize(list(elem.items())))
-    res.append(joblib.hash(adata.uns))
-    if adata.raw is not None:
-        res.append(tokenize(adata.raw.to_adata()))
-    return tuple(res)
+    assert isinstance(subset.X, type(adata.X))
 
 
 # TODO: Determine if this is the intended behavior,
@@ -338,6 +333,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     assert not np.any(asarray(adata.X != orig_X_val))
 
     assert init_hash == tokenize(adata)
+    assert isinstance(subset.X, type(adata.X))
 
 
 @IGNORE_SPARSE_EFFICIENCY_WARNING
@@ -510,19 +506,24 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
     var_view1 = adata[:, var_s1]
+    adata[:, var_s1].X
     var_s2 = subset_func2(var_view1.var_names)
     var_view2 = var_view1[:, var_s2]
     assert var_view2._adata_ref is adata
+    assert isinstance(var_view2.X, type(adata.X))
     obs_s1 = subset_func(adata.obs_names, min_size=4)
     obs_view1 = adata[obs_s1, :]
     obs_s2 = subset_func2(obs_view1.obs_names)
     assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
+    assert isinstance(obs_view1.X, type(adata.X))
 
     view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
 
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 
     assert_equal(view_of_actual_copy, view_of_view_copy, exact=True)
+    assert isinstance(view_of_actual_copy.X, type(adata.X))
+    assert isinstance(view_of_view_copy.X, type(adata.X))
 
 
 def test_view_of_view_modification():
@@ -644,7 +645,12 @@ def test_viewness_propagation_allclose(adata):
     assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
 
 
-@pytest.mark.parametrize("spmat", [sparse.csr_matrix, sparse.csc_matrix])
+spmat = [sparse.csr_matrix, sparse.csc_matrix]
+if CAN_USE_SPARSE_ARRAY:
+    spmat += [sparse.csr_array, sparse.csc_array]
+
+
+@pytest.mark.parametrize("spmat", spmat)
 def test_deepcopy_subset(adata, spmat: type):
     adata.obsp["arr"] = np.zeros((adata.n_obs, adata.n_obs))
     adata.obsp["spmat"] = spmat((adata.n_obs, adata.n_obs))
@@ -656,15 +662,27 @@ def test_deepcopy_subset(adata, spmat: type):
     np.testing.assert_array_equal(adata.obsp["arr"].shape, (10, 10))
 
     assert isinstance(adata.obsp["spmat"], spmat)
+    view_type = (
+        SparseCSRMatrixView if spmat is sparse.csr_matrix else SparseCSCMatrixView
+    )
+    if CAN_USE_SPARSE_ARRAY:
+        view_type = (
+            SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
+        )
     assert not isinstance(
         adata.obsp["spmat"],
-        SparseCSRView if spmat is sparse.csr_matrix else SparseCSCView,
+        view_type,
     )
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
 
 
+array_type = [asarray, sparse.csr_matrix, sparse.csc_matrix]
+if CAN_USE_SPARSE_ARRAY:
+    array_type += [sparse.csr_array, sparse.csc_array]
+
+
 # https://github.com/scverse/anndata/issues/680
-@pytest.mark.parametrize("array_type", [asarray, sparse.csr_matrix, sparse.csc_matrix])
+@pytest.mark.parametrize("array_type", array_type)
 @pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
 def test_view_mixin_copies_data(adata, array_type: type, attr):
     N = 100

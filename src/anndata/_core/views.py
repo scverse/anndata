@@ -202,18 +202,30 @@ class DaskArrayView(_SetItemMixin, DaskArray):
         return self.dtype.names
 
 
-# Unlike array views, SparseCSRView and SparseCSCView
+# Unlike array views, SparseCSRMatrixView and SparseCSCMatrixView
 # do not propagate through subsetting
-class SparseCSRView(_ViewMixin, sparse.csr_matrix):
+class SparseCSRMatrixView(_ViewMixin, sparse.csr_matrix):
     # https://github.com/scverse/anndata/issues/656
     def copy(self) -> sparse.csr_matrix:
         return sparse.csr_matrix(self).copy()
 
 
-class SparseCSCView(_ViewMixin, sparse.csc_matrix):
+class SparseCSCMatrixView(_ViewMixin, sparse.csc_matrix):
     # https://github.com/scverse/anndata/issues/656
     def copy(self) -> sparse.csc_matrix:
         return sparse.csc_matrix(self).copy()
+
+
+class SparseCSRArrayView(_ViewMixin, sparse.csr_array):
+    # https://github.com/scverse/anndata/issues/656
+    def copy(self) -> sparse.csr_array:
+        return sparse.csr_array(self).copy()
+
+
+class SparseCSCArrayView(_ViewMixin, sparse.csc_array):
+    # https://github.com/scverse/anndata/issues/656
+    def copy(self) -> sparse.csc_array:
+        return sparse.csc_array(self).copy()
 
 
 class CupySparseCSRView(_ViewMixin, CupyCSRMatrix):
@@ -283,13 +295,23 @@ def as_view_df(df, view_args):
 
 
 @as_view.register(sparse.csr_matrix)
-def as_view_csr(mtx, view_args):
-    return SparseCSRView(mtx, view_args=view_args)
+def as_view_csr_matrix(mtx, view_args):
+    return SparseCSRMatrixView(mtx, view_args=view_args)
 
 
 @as_view.register(sparse.csc_matrix)
-def as_view_csc(mtx, view_args):
-    return SparseCSCView(mtx, view_args=view_args)
+def as_view_csc_matrix(mtx, view_args):
+    return SparseCSCMatrixView(mtx, view_args=view_args)
+
+
+@as_view.register(sparse.csr_array)
+def as_view_csr_array(mtx, view_args):
+    return SparseCSRArrayView(mtx, view_args=view_args)
+
+
+@as_view.register(sparse.csc_array)
+def as_view_csc_array(mtx, view_args):
+    return SparseCSCArrayView(mtx, view_args=view_args)
 
 
 @as_view.register(dict)
