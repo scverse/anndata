@@ -29,6 +29,7 @@ from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
+    DASK_CUPY_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
     GEN_ADATA_DASK_ARGS,
     as_dense_dask_array,
@@ -94,7 +95,12 @@ def make_idx_tuple(idx, axis):
 
 # Will call func(sparse_matrix) so these types should be sparse compatible
 # See array_type if only dense arrays are expected as input.
-@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS)
+@pytest.fixture(
+    params=BASE_MATRIX_PARAMS
+    + DASK_MATRIX_PARAMS
+    + CUPY_MATRIX_PARAMS
+    + DASK_CUPY_MATRIX_PARAMS
+)
 def array_type(request):
     return request.param
 
