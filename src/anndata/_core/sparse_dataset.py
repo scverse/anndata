@@ -29,7 +29,7 @@ from scipy.sparse import _sparsetools
 from anndata._core.index import _fix_slice_bounds
 from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
-from ..compat import _read_attr
+from ..compat import SpArray, _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -302,24 +302,23 @@ def subset_by_major_axis_mask(
     return [], [], [0]
 
 
-def get_format(data: ss.spmatrix) -> str:
-    for fmt, _, memory_class in FORMATS:
-        if isinstance(data, memory_class):
-            return fmt
-    raise ValueError(f"Data type {type(data)} is not supported.")
-
-
-def get_memory_class(format: str) -> type[ss.spmatrix]:
+def get_memory_class(format: str, use_sparray_in_io=False) -> type[ss.spmatrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
-            return memory_class
+            if use_sparray_in_io and issubclass(memory_class, SpArray):
+                return memory_class
+            elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
+                return memory_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
-def get_backed_class(format: str) -> type[BackedSparseMatrix]:
+def get_backed_class(format: str, use_sparray_in_io=False) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
-            return backed_class
+            if use_sparray_in_io and issubclass(backed_class, SpArray):
+                return backed_class
+            elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
+                return backed_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
@@ -471,14 +470,14 @@ class BaseCompressedSparseDataset(ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: ss.spmatrix):
+    def append(self, sparse_matrix: ss.spmatrix | SpArray):
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, BaseCompressedSparseDataset):
             sparse_matrix = sparse_matrix._to_backed()
 
         # Check input
-        if not ss.isspmatrix(sparse_matrix):
+        if not ss.issparse(sparse_matrix):
             raise NotImplementedError(
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
@@ -487,10 +486,10 @@ class BaseCompressedSparseDataset(ABC):
             raise NotImplementedError(
                 f"The append method for format {self.format} " f"is not implemented."
             )
-        if self.format != get_format(sparse_matrix):
+        if self.format != sparse_matrix.format:
             raise ValueError(
                 f"Matrices must have same format. Currently are "
-                f"{self.format!r} and {get_format(sparse_matrix)!r}"
+                f"{self.format!r} and {sparse_matrix.format!r}"
             )
         indptr_offset = len(self.group["indices"])
         if self.group["indptr"].dtype == np.int32:
@@ -603,16 +602,42 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     Example
     -------
 
-    >>> import zarr
-    >>> from anndata.experimental import sparse_dataset
-    >>> group = zarr.open_group("./my_test_store.zarr")
-    >>> group["data"] = [10, 20, 30, 40, 50, 60, 70, 80]
-    >>> group["indices"] = [0, 1, 1, 3, 2, 3, 4, 5]
-    >>> group["indptr"] = [0, 2, 4, 7, 8]
-    >>> group.attrs["shape"] = (4, 6)
-    >>> group.attrs["encoding-type"] = "csr_matrix"
-    >>> sparse_dataset(group)
-    CSRDataset: backend zarr, shape (4, 6), data_dtype int64
+    First we'll need a stored dataset:
+
+    >>> import scanpy as sc
+    >>> import h5py
+    >>> from anndata.experimental import sparse_dataset, read_elem
+    >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
+
+    Initialize a sparse dataset from storage
+
+    >>> f = h5py.File("pbmc.h5ad")
+    >>> X = sparse_dataset(f["X"])
+    >>> X
+    CSRDataset: backend hdf5, shape (700, 765), data_dtype float32
+
+    Indexing returns sparse matrices
+
+    >>> X[100:200]  # doctest: +NORMALIZE_WHITESPACE
+    <100x765 sparse matrix of type '<class 'numpy.float32'>'
+        with 25003 stored elements in Compressed Sparse Row format>
+
+    These can also be used inside of an AnnData object, no need for backed mode
+
+    >>> from anndata import AnnData
+    >>> adata = AnnData(
+    ...     layers={"backed": X}, obs=read_elem(f["obs"]), var=read_elem(f["var"])
+    ... )
+    >>> adata.layers["backed"]
+    CSRDataset: backend hdf5, shape (700, 765), data_dtype float32
+
+    Indexing access (i.e., from views) brings selection into memory
+
+    >>> adata[adata.obs["bulk_labels"] == "CD56+ NK"].layers[
+    ...     "backed"
+    ... ]  # doctest: +NORMALIZE_WHITESPACE
+    <31x765 sparse matrix of type '<class 'numpy.float32'>'
+        with 7340 stored elements in Compressed Sparse Row format>
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":

@@ -34,6 +34,7 @@ from ..compat import (
     CupyArray,
     CupySparseMatrix,
     DaskArray,
+    SpArray,
     ZappyArray,
     ZarrArray,
     _move_adj_mtx,
@@ -76,6 +77,7 @@ class StorageType(Enum):
     CupyArray = CupyArray
     CupySparseMatrix = CupySparseMatrix
     BackedSparseMatrix = BaseCompressedSparseDataset
+    SparseArray = SpArray
 
     @classmethod
     def classes(cls):
@@ -511,7 +513,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 return int(np.array(X.shape).prod() * X.dtype.itemsize)
             elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
                 return cs_to_bytes(X._to_backed())
-            elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
+            elif issparse(X):
                 return cs_to_bytes(X)
             else:
                 return X.__sizeof__()
@@ -574,7 +576,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> np.ndarray | sparse.spmatrix | ArrayView | None:
+    def X(self) -> np.ndarray | sparse.spmatrix | SpArray | ArrayView | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -605,7 +607,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X
 
     @X.setter
-    def X(self, value: np.ndarray | sparse.spmatrix | None):
+    def X(self, value: np.ndarray | sparse.spmatrix | SpArray | None):
         if value is None:
             if self.isbacked:
                 raise NotImplementedError(
@@ -655,7 +657,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     if sparse.issparse(self._adata_ref._X) and isinstance(
                         value, np.ndarray
                     ):
-                        value = sparse.coo_matrix(value)
+                        if isinstance(self._adata_ref.X, SpArray):
+                            memory_class = sparse.coo_array
+                        else:
+                            memory_class = sparse.coo_matrix
+                        value = memory_class(value)
                     self._adata_ref._X[oidx, vidx] = value
                 else:
                     self._X = value
@@ -1773,8 +1779,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
+        sparse_class = sparse.csr_matrix
+        if any(isinstance(a.X, SpArray) for a in all_adatas):
+            sparse_class = sparse.csr_array
         out.obs = concat(
-            [AnnData(sparse.csr_matrix(a.shape), obs=a.obs) for a in all_adatas],
+            [AnnData(sparse_class(a.shape), obs=a.obs) for a in all_adatas],
             axis=0,
             join="outer",
             label=batch_key,
