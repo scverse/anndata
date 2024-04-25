@@ -4,17 +4,21 @@ For tests using dask
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
+from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
-from anndata.compat import DaskArray
+from anndata.compat import CupyArray, DaskArray
 from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
+    as_dense_cupy_dask_array,
     as_dense_dask_array,
+    as_sparse_dask_array,
     assert_equal,
     gen_adata,
 )
@@ -261,11 +265,24 @@ def test_assign_X(adata):
 
 
 # Test if dask arrays turn into numpy arrays after to_memory is called
-def test_dask_to_memory_unbacked():
+@pytest.mark.parametrize(
+    "array_func,mem_type",
+    [
+        pytest.param(as_dense_dask_array, np.ndarray, id="dense_dask_array"),
+        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse_dask_array"),
+        pytest.param(
+            as_dense_cupy_dask_array,
+            CupyArray,
+            id="cupy_dense_dask_array",
+            marks=pytest.mark.gpu,
+        ),
+    ],
+)
+def test_dask_to_memory_unbacked(array_func, mem_type):
     import numpy as np
 
-    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)
-    orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}
+    orig = gen_adata((15, 10), X_type=array_func, **GEN_ADATA_DASK_ARGS)
+    orig.uns = {"da": {"da": array_func(np.ones((4, 12)))}}
 
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["da"], DaskArray)
@@ -276,11 +293,11 @@ def test_dask_to_memory_unbacked():
     curr = orig.to_memory()
 
     assert_equal(orig, curr)
-    assert isinstance(curr.X, np.ndarray)
+    assert isinstance(curr.X, mem_type)
     assert isinstance(curr.obsm["da"], np.ndarray)
     assert isinstance(curr.varm["da"], np.ndarray)
     assert isinstance(curr.layers["da"], np.ndarray)
-    assert isinstance(curr.uns["da"]["da"], np.ndarray)
+    assert isinstance(curr.uns["da"]["da"], mem_type)
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["da"], DaskArray)
     assert isinstance(orig.layers["da"], DaskArray)
