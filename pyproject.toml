@@ -125,8 +125,8 @@ addopts = [
     "--pyargs",
 ]
 filterwarnings = [
-    'ignore::anndata._warnings.ExperimentalFeatureWarning',
-    'ignore::anndata.OldFormatWarning',
+    # all `ignore::anndata.*` entries are in `tests/conftest.py`
+    # See: https://github.com/pytest-dev/pytest-cov/issues/437
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [

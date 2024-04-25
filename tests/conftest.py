@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from functools import partial
 
 import joblib
@@ -9,6 +10,11 @@ from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
+
+# TODO: Should be done in pyproject.toml eventually
+# See https://github.com/pytest-dev/pytest-cov/issues/437
+warnings.filterwarnings("ignore", category=ad.OldFormatWarning)
+warnings.filterwarnings("ignore", category=ad.ImplicitModificationWarning)
 
 
 @pytest.fixture
