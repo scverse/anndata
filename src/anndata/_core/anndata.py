@@ -25,6 +25,7 @@ import pandas as pd
 from natsort import natsorted
 from numpy import ma
 from pandas.api.types import infer_dtype
+from pint import UnitRegistry
 from scipy import sparse
 from scipy.sparse import issparse
 
@@ -65,6 +66,8 @@ from .views import (
 
 if TYPE_CHECKING:
     from os import PathLike
+
+units = UnitRegistry()
 
 
 class StorageType(Enum):
