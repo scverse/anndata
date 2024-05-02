@@ -4,8 +4,7 @@ trigger:
 
 variables:
   RUN_COVERAGE: no
-  # TODO: remove paths after moving tests to test dir: https://github.com/scverse/anndata/issues/1451
-  PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml anndata ./src/anndata/tests ./docs/concatenation.rst
+  PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml
   DEPENDENCIES_VERSION: "latest" # |"pre-release" | "minimum-version"
   TEST_TYPE: "standard" # | "coverage"
 
@@ -84,16 +83,6 @@ jobs:
           pytest --strict-warnings
         displayName: "PyTest (treat warnings as errors)"
         condition: eq(variables['TEST_TYPE'], 'strict-warning')
-
-      # TODO: remove: https://github.com/scverse/anndata/issues/1451
-      - task: PythonScript@0
-        inputs:
-          scriptSource: inline
-          script: |
-            import sys, xml.etree.ElementTree as ET
-            results = ET.parse("./test-data/test-results.xml").findall("./*/*")
-            sys.exit(0 if len(results) > 3000 else f"Error: only {len(results)} tests run")
-        displayName: "Check if enough tests ran"
 
       - task: PublishCodeCoverageResults@2
         inputs:
