@@ -83,7 +83,7 @@ doc = [
 ]
 test = [
     "loompy>=3.0.5",
-    "pytest>=8.0",
+    "pytest>=8.2",
     "pytest-cov>=2.10",
     "zarr",
     "matplotlib",
@@ -101,12 +101,6 @@ test = [
 ]
 gpu = ["cupy"]
 
-[tool.hatch.build]
-exclude = [
-    "src/anndata/tests/conftest.py",
-    "src/anndata/tests/test_*.py",
-    "src/anndata/tests/data",
-]
 [tool.hatch.version]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
@@ -125,16 +119,14 @@ exclude_also = [
 
 [tool.pytest.ini_options]
 addopts = [
-    # "--import-mode=importlib",  # TODO: enable: https://github.com/scverse/anndata/issues/1451
+    "--import-mode=importlib",
     "--strict-markers",
     "--doctest-modules",
     "--pyargs",
 ]
 filterwarnings = [
-    'ignore:Support for Awkward Arrays is currently experimental',
-    'ignore:Outer joins on awkward\.Arrays',
-    # TODO: replace both lines above with this one once we figured out how prevent ImportPathMismatchError
-    # 'ignore::anndata._warnings.ExperimentalFeatureWarning',
+    # all `ignore::anndata.*` entries are in `conftest.py`
+    # See: https://github.com/pytest-dev/pytest-cov/issues/437
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -146,7 +138,8 @@ filterwarnings_when_strict = [
 ]
 python_files = "test_*.py"
 testpaths = [
-    "anndata", # docstrings and unit tests (module name due to --pyargs)
+    "anndata", # docstrings (module name due to --pyargs)
+    "./tests", # unit tests
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
@@ -180,7 +173,7 @@ ignore = [
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
-"src/anndata/tests/test_readwrite.py" = ["E721"]
+"tests/test_readwrite.py" = ["E721"]
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
