@@ -105,6 +105,8 @@ gpu = ["cupy"]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "src/anndata/_version.py"
+[tool.hatch.build.targets.wheel]
+packages = ["src/anndata", "src/testing"]
 
 [tool.coverage.run]
 source_pkgs = ["anndata"]
@@ -123,6 +125,7 @@ addopts = [
     "--strict-markers",
     "--doctest-modules",
     "--pyargs",
+    "-ptesting.anndata._pytest",
 ]
 filterwarnings = [
     # all `ignore::anndata.*` entries are in `conftest.py`
