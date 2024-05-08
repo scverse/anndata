@@ -228,7 +228,7 @@ def write_concat_sparse(
     del init_elem
     out_dataset: BaseCompressedSparseDataset = read_as_backed(output_group[output_path])
     if number_non_zero >= np.iinfo(np.int32).max:
-        out_dataset.group["indptr"] = out_dataset.group["indptr"].astype("int64")
+        out_dataset.group["indptr"] = out_dataset.group["indptr"][...].astype("int64")
     for temp_elem in elems:
         out_dataset.append(temp_elem)
         del temp_elem
