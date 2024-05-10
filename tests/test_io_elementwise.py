@@ -162,7 +162,7 @@ def test_write_indptr_dtype_override(store, sparse_format):
         random_state=np.random.default_rng(),
     )
 
-    write_elem(store, "X", X, dataset_kwargs={"indptr_dtype": "int64"})
+    write_elem(store, "X", X, dataset_kwargs=dict(indptr_dtype="int64"))
 
     assert store["X/indptr"].dtype == np.int64
     assert X.indptr.dtype == np.int32
