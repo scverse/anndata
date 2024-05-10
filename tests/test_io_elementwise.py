@@ -166,6 +166,7 @@ def test_write_indptr_dtype_override(store, sparse_format):
 
     assert store["X/indptr"].dtype == np.int64
     assert X.indptr.dtype == np.int32
+    np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
 def test_io_spec_raw(store):
