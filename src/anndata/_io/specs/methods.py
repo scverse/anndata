@@ -498,6 +498,7 @@ def write_sparse_compressed(
 ):
     g = f.require_group(key)
     g.attrs["shape"] = value.shape
+    indptr_dtype = dataset_kwargs.pop("indptr_dtype", "int32")
 
     # Allow resizing for hdf5
     if isinstance(f, H5Group) and "maxshape" not in dataset_kwargs:
@@ -505,7 +506,7 @@ def write_sparse_compressed(
 
     g.create_dataset("data", data=value.data, **dataset_kwargs)
     g.create_dataset("indices", data=value.indices, **dataset_kwargs)
-    g.create_dataset("indptr", data=value.indptr, **dataset_kwargs)
+    g.create_dataset("indptr", data=value.indptr, dtype=indptr_dtype, **dataset_kwargs)
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")

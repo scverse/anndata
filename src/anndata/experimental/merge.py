@@ -224,13 +224,15 @@ def write_concat_sparse(
     for d in datasets:
         number_non_zero += len(d.group["indices"])
     init_elem = next(elems)
-    write_elem(output_group, output_path, init_elem)
+    indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
+    write_elem(
+        output_group,
+        output_path,
+        init_elem,
+        dataset_kwargs={"indptr_dtype": indptr_dtype},
+    )
     del init_elem
     out_dataset: BaseCompressedSparseDataset = read_as_backed(output_group[output_path])
-    if number_non_zero >= np.iinfo(np.int32).max:
-        indptr = out_dataset.group["indptr"][...].astype("int64")
-        del out_dataset.group["indptr"]
-        out_dataset.group["indptr"] = indptr
     for temp_elem in elems:
         out_dataset.append(temp_elem)
         del temp_elem
