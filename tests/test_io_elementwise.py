@@ -152,6 +152,22 @@ def test_dask_write_sparse(store, sparse_format):
     assert store["X_dask/indices"].dtype == np.int64
 
 
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+def test_write_indptr_dtype_override(store, sparse_format):
+    X = sparse.random(
+        100,
+        100,
+        format=sparse_format,
+        density=0.1,
+        random_state=np.random.default_rng(),
+    )
+
+    write_elem(store, "X", X, dataset_kwargs={"indptr_dtype": "int64"})
+
+    assert store["X/indptr"].dtype == np.int64
+    assert X.indptr.dtype == np.int32
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
     adata.raw = adata
