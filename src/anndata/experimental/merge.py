@@ -5,11 +5,7 @@ import shutil
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from functools import singledispatch
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Literal,
-)
+from typing import Any, Callable, Literal
 
 import numpy as np
 import pandas as pd

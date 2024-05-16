@@ -443,7 +443,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 elif isinstance(X, (ZarrArray, DaskArray)):
                     X = X.astype(dtype)
                 else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                    X = np.array(X, dtype, copy=False)
+                    X = np.asarray(X, dtype)
             # data matrix and shape
             self._X = X
             n_obs, n_vars = X.shape
