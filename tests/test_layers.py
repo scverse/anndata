@@ -9,6 +9,7 @@ import pytest
 from numba.core.errors import NumbaDeprecationWarning
 
 from anndata import AnnData, read_h5ad, read_loom
+from anndata.tests._helpers import xfail_if_numpy2_loompy
 from anndata.tests.helpers import gen_typed_df_t2_size
 
 X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
@@ -75,6 +76,7 @@ def test_readwrite(backing_h5ad):
     assert (adata.layers["L"] == adata_read.layers["L"]).all()
 
 
+@xfail_if_numpy2_loompy
 @pytest.mark.skipif(find_spec("loompy") is None, reason="loompy not installed")
 def test_readwrite_loom(tmp_path):
     loom_path = tmp_path / "test.loom"
@@ -82,6 +84,8 @@ def test_readwrite_loom(tmp_path):
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        # loompy uses “is” for ints
+        warnings.filterwarnings("ignore", category=SyntaxWarning)
         warnings.filterwarnings(
             "ignore",
             message=r"datetime.datetime.utcnow\(\) is deprecated",

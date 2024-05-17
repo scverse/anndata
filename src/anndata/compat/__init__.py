@@ -209,7 +209,7 @@ def _from_fixed_length_strings(value):
             dt_type = dt_type[0]
         # Fixing issue introduced with h5py v2.10.0, see:
         # https://github.com/h5py/h5py/issues/1307
-        if issubclass(np.dtype(dt_type).type, np.string_):
+        if issubclass(np.dtype(dt_type).type, np.bytes_):
             dt_list[1] = f"U{int(dt_type[2:])}"
         elif is_annotated or np.issubdtype(np.dtype(dt_type), np.str_):
             dt_list[1] = "O"  # Assumption that it’s a vlen str

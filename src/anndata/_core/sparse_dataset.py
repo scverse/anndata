@@ -404,7 +404,7 @@ class BaseCompressedSparseDataset(ABC):
         if shape is None:
             # TODO warn
             shape = self.group.attrs.get("h5sparse_shape")
-        return tuple(shape)
+        return tuple(map(int, shape))
 
     @property
     def value(self) -> ss.spmatrix:
