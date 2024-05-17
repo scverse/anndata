@@ -11,7 +11,7 @@ __pycache__/
 
 # Distribution / packaging
 /dist/
-/anndata/_version.py
+/src/anndata/_version.py
 /requirements*.lock
 /.python-version
 /hatch.toml
@@ -35,3 +35,4 @@ __pycache__/
 .asv
 benchmark/benchmarks/data
 benchmarks/benchmarks/data
+benchmarks/pkgs

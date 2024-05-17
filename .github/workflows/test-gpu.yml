@@ -35,11 +35,16 @@ jobs:
     name: GPU Tests
     needs: check
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
+    # Setting a timeout of 30 minutes, as the AWS costs money
+    # At time of writing, a typical run takes about 5 minutes
+    timeout-minutes: 30
+
     defaults:
       run:
         shell: bash -el {0}
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -48,24 +53,17 @@ jobs:
 
       - uses: mamba-org/setup-micromamba@v1
         with:
-          micromamba-version: "1.3.1-0"
-          environment-name: anndata-gpu-ci
-          create-args: >-
-            python=3.11
-            cupy
-            numba
-            pytest
-            pytest-cov
-            pytest-xdist
-          init-shell: >-
-            bash
-          generate-run-shell: false
+          micromamba-version: "1.5.6-0"
+          environment-file: ci/gpu_ci.yml
+          post-cleanup: "all"
 
       - name: Install AnnData
-        run: pip install .[dev,test,gpu]
+        run: uv pip install -e .[dev,test,gpu]
 
-      - name: Mamba list
-        run: micromamba list
+      - name: Env list
+        run: |
+          micromamba list
+          pip list
 
       - name: Run test
         run: pytest -m gpu --cov --cov-report=xml --cov-context=test -n 4
