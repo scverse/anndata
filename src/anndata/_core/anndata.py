@@ -439,7 +439,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 elif isinstance(X, (ZarrArray, DaskArray)):
                     X = X.astype(dtype)
                 else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                    X = np.array(X, dtype, copy=False)
+                    X = np.asarray(X, dtype)
             # data matrix and shape
             self._X = X
             n_obs, n_vars = X.shape
@@ -1106,7 +1106,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Reset colors
                 del uns[color_key]
             else:
-                idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
+                idx = np.where(np.isin(all_categories, df_sub[k].cat.categories))[0]
                 uns[color_key] = np.array(color_vec)[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
