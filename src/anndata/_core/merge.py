@@ -115,7 +115,11 @@ def not_missing(v) -> bool:
 # TODO: Hopefully this will stop being an issue in the future and this code can be removed.
 @singledispatch
 def equal(a, b) -> bool:
-    return np.array_equal(a, asarray(b))
+    a = asarray(a)
+    b = asarray(b)
+    if a.ndim == b.ndim == 0:
+        return bool(a == b)
+    return np.array_equal(a, b)
 
 
 @equal.register(pd.DataFrame)
@@ -549,7 +553,7 @@ class Reindexer:
 
     def _apply_to_df(self, el: pd.DataFrame, *, axis, fill_value=None):
         if fill_value is None:
-            fill_value = np.NaN
+            fill_value = np.nan
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
 
     def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
