@@ -1114,7 +1114,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Reset colors
                 del uns[color_key]
             else:
-                idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
+                idx = np.where(np.isin(all_categories, df_sub[k].cat.categories))[0]
                 uns[color_key] = np.array(color_vec)[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):

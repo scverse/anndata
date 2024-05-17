@@ -84,6 +84,8 @@ def test_readwrite_loom(tmp_path):
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        # loompy uses “is” for ints
+        warnings.filterwarnings("ignore", category=SyntaxWarning)
         warnings.filterwarnings(
             "ignore",
             message=r"datetime.datetime.utcnow\(\) is deprecated",
