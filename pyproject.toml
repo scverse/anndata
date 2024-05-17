@@ -100,12 +100,14 @@ test = [
     "pytest-mock"
 ]
 gpu = ["cupy"]
-lazy = ["xarray"]
+xarray = ["xarray@git+https://github.com/ilan-gold/xarray#egg=ig/fix_equality_checl"]
 
 [tool.hatch.version]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "src/anndata/_version.py"
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.coverage.run]
 source_pkgs = ["anndata"]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, Generic, TypeVar, Union
+from typing import Generic, TypeVar, Union
 
 import pandas as pd
 import xarray as xr
@@ -9,9 +9,6 @@ import xarray as xr
 from anndata._core.index import Index, _subset
 from anndata._core.views import as_view
 from anndata.compat import H5Array, ZarrArray
-
-if TYPE_CHECKING:
-    import numpy as np
 
 K = TypeVar("K", bound=Union[H5Array, ZarrArray])
 
@@ -46,7 +43,7 @@ class CategoricalArray(xr.backends.BackendArray):
         codes: ZarrArray | H5Array,
         categories: ZarrArray | H5Array,
         ordered: bool,
-        drop_unused_cats: bool,
+        drop_unused_cats: bool = False,
         *args,
         **kwargs,
     ):
@@ -73,16 +70,18 @@ class CategoricalArray(xr.backends.BackendArray):
                 self._categories_cache = read_dataset(self._categories)
         return self._categories_cache
 
-    def __getitem__(self, key: xr.core.indexing.ExplicitIndexer) -> np.typing.ArrayLike:
+    def __getitem__(
+        self, key: xr.core.indexing.ExplicitIndexer
+    ) -> xr.core.extension_array.PandasExtensionArray:
         codes = self._codes[key]
         categorical_array = pd.Categorical.from_codes(
             codes=codes, categories=self.categories, ordered=self._ordered
         )
         if self._drop_unused_cats:
-            return xr.core.indexing.ExtensionDuckArray(
+            return xr.core.extension_array.PandasExtensionArray(
                 categorical_array.remove_unused_categories()
             )
-        return xr.core.indexing.ExtensionDuckArray(categorical_array)
+        return xr.core.extension_array.PandasExtensionArray(categorical_array)
 
 
 class MaskedArray(xr.backends.BackendArray):
@@ -98,21 +97,21 @@ class MaskedArray(xr.backends.BackendArray):
         self.shape = self._values.shape
         self.dtype = pd.api.types.pandas_dtype(self._values.dtype)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> xr.core.extension_array.PandasExtensionArray:
         # HACK! TODO(ilan-gold): open issue about hdf5 compat that doesn't allow initialization!
         values = self._values[key]
         if self._mask is not None:
             mask = self._mask[key]
             if self._dtype_str == "nullable-integer":
                 # numpy does not support nan ints
-                return xr.core.indexing.ExtensionDuckArray(
+                return xr.core.extension_array.PandasExtensionArray(
                     pd.arrays.IntegerArray(values, mask=mask)
                 )
             elif self._dtype_str == "nullable-boolean":
-                return xr.core.indexing.ExtensionDuckArray(
+                return xr.core.extension_array.PandasExtensionArray(
                     pd.arrays.BooleanArray(values, mask=mask)
                 )
-        return xr.core.indexing.ExtensionDuckArray(pd.array(values))
+        return xr.core.extension_array.PandasExtensionArray(pd.array(values))
 
 
 @_subset.register(xr.DataArray)

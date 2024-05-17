@@ -859,9 +859,9 @@ try:
     class AccessTrackingStore(zarr.DirectoryStore):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self._access_count = {}
+            self._access_count = defaultdict(int)
             self._accessed = defaultdict(set)
-            self._accessed_keys = {}
+            self._accessed_keys = defaultdict(list)
 
         def __getitem__(self, key):
             for tracked in self._access_count:
@@ -873,12 +873,6 @@ try:
 
         def get_access_count(self, key):
             return self._access_count[key]
-
-        def set_key_trackers(self, keys_to_track):
-            if isinstance(keys_to_track, str):
-                keys_to_track = [keys_to_track]
-            for k in keys_to_track:
-                self._access_count[k] = 0
 
         def get_subkeys_accessed(self, key):
             return self._accessed[key]
