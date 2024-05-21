@@ -642,7 +642,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ):
             if not np.isscalar(value):
                 if self.is_view and any(
-                    isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx)
+                    isinstance(idx, np.ndarray)
+                    and len(np.unique(idx)) != len(idx.ravel())
                     for idx in [oidx, vidx]
                 ):
                     warnings.warn(
