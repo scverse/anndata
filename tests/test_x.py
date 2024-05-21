@@ -47,7 +47,7 @@ def test_repeat_indices_view():
     mat = np.array([np.ones(adata.shape[1]) * i for i in range(4)])
     with pytest.warns(
         FutureWarning,
-        match="You are attempting to set `X` on a view which has non-unique indices.",
+        match="You are attempting to set `X` to a matrix on a view which has non-unique indices",
     ):
         subset.X = mat
 
