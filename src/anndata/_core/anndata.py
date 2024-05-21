@@ -634,28 +634,29 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             oidx, vidx = np.ix_(self._oidx, self._vidx)
         else:
             oidx, vidx = self._oidx, self._vidx
-        if self.is_view and any(
-            isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx)
-            for idx in [oidx, vidx]
-        ):
-            warnings.warn(
-                "You are attempting to set `X` on a view which has non-unique indices. "
-                "The resulting `adata.X` will likely not equal the value to which you set it. "
-                "To avoid this potential issue, please make a copy of the data first. "
-                "In the future, this operation will throw an error.",
-                FutureWarning,
-                stacklevel=1,
-            )
         if (
             np.isscalar(value)
             or (hasattr(value, "shape") and (self.shape == value.shape))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         ):
-            if not np.isscalar(value) and self.shape != value.shape:
-                # For assigning vector of values to 2d array or matrix
-                # Not necessary for row of 2d array
-                value = value.reshape(self.shape)
+            if not np.isscalar(value):
+                if self.is_view and any(
+                    isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx)
+                    for idx in [oidx, vidx]
+                ):
+                    warnings.warn(
+                        "You are attempting to set `X` on a view which has non-unique indices. "
+                        "The resulting `adata.X` will likely not equal the value to which you set it. "
+                        "To avoid this potential issue, please make a copy of the data first. "
+                        "In the future, this operation will throw an error.",
+                        FutureWarning,
+                        stacklevel=1,
+                    )
+                if self.shape != value.shape:
+                    # For assigning vector of values to 2d array or matrix
+                    # Not necessary for row of 2d array
+                    value = value.reshape(self.shape)
             if self.isbacked:
                 if self.is_view:
                     X = self.file["X"]
