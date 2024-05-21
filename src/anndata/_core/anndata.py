@@ -635,7 +635,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             oidx, vidx = self._oidx, self._vidx
         if self.is_view and any(
-            len(np.unique(idx)) != len(idx) for idx in [oidx, vidx]
+            isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx)
+            for idx in [oidx, vidx]
         ):
             warnings.warn(
                 "You are attempting to set `X` on a view which has non-unique indices. "
