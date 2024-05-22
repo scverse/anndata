@@ -39,7 +39,7 @@ def array_type(request):
     return request.param
 
 
-@pytest.fixture(params=["inner"])
+@pytest.fixture(params=["inner", "outer"])
 def join_type(request):
     return request.param
 
@@ -208,7 +208,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
 
 
 @pytest.fixture
-def obsm_adatas():
+def xxxm_adatas():
     def gen_index(n):
         return [f"cell{i}" for i in range(n)]
 
@@ -256,8 +256,12 @@ def obsm_adatas():
     ]
 
 
-def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
-    assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
+def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
+    if join_type == "outer":
+        for i in range(len(xxxm_adatas)):
+            xxxm_adatas[i] = xxxm_adatas[i].T
+            xxxm_adatas[i].X = sparse.csr_matrix(xxxm_adatas[i].X)
+    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
 def test_output_dir_exists(tmp_path):
