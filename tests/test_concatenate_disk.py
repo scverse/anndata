@@ -126,10 +126,19 @@ def test_anndatas_without_reindex(
             sparse_fmt=sparse_fmt,
             **GEN_ADATA_OOC_CONCAT_ARGS,
         )
+        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
         if axis == 0:
             a.obs_names = f"{i}-" + a.obs_names
+            a.var_names = [
+                f"{i}-{name}" if var_ind % 2 else name
+                for var_ind, name in enumerate(a.var_names)
+            ]
         else:
             a.var_names = f"{i}-" + a.var_names
+            a.obs_names = [
+                f"{i}-{name}" if obs_ind % 2 else name
+                for obs_ind, name in enumerate(a.obs_names)
+            ]
         adatas.append(a)
 
     assert_eq_concat_on_disk(
@@ -153,7 +162,7 @@ def test_anndatas_with_reindex(
     if axis == 0:
         sparse_fmt = "csr"
 
-    for _ in range(5):
+    for i in range(5):
         M = np.random.randint(1, 100)
         N = np.random.randint(1, 100)
 
@@ -169,6 +178,17 @@ def test_anndatas_with_reindex(
             varm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
+        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
+        if axis == 1:
+            a.obs_names = [
+                f"{i}-{name}" if obs_ind % 2 else name
+                for obs_ind, name in enumerate(a.obs_names)
+            ]
+        else:
+            a.var_names = [
+                f"{i}-{name}" if var_ind % 2 else name
+                for var_ind, name in enumerate(a.var_names)
+            ]
         adatas.append(a)
 
     assert_eq_concat_on_disk(
