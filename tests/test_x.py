@@ -15,6 +15,8 @@ from anndata.utils import asarray
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
     pytest.param(sparse.csc_matrix, id="csc"),
+    pytest.param(sparse.csr_array, id="csr_array"),
+    pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
 ]
 SINGULAR_SHAPES = [
@@ -33,8 +35,25 @@ def diskfmt(request):
 def test_setter_singular_dim(shape, orig_array_type, new_array_type):
     # https://github.com/scverse/anndata/issues/500
     adata = gen_adata(shape, X_type=orig_array_type)
-    adata.X = new_array_type(np.ones(shape))
+    to_assign = new_array_type(np.ones(shape))
+    adata.X = to_assign
     np.testing.assert_equal(asarray(adata.X), 1)
+    assert isinstance(adata.X, type(to_assign))
+
+
+@pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
+@pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
+def test_setter_view(orig_array_type, new_array_type):
+    adata = gen_adata((10, 10), X_type=orig_array_type)
+    orig_X = adata.X
+    to_assign = new_array_type(np.ones((9, 9)))
+    if isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign):
+        # https://github.com/scverse/anndata/issues/500
+        pytest.xfail("Cannot set a dense array with a sparse array")
+    view = adata[:9, :9]
+    view.X = to_assign
+    np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))
+    assert isinstance(view.X, type(orig_X))
 
 
 ###############################

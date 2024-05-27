@@ -200,6 +200,23 @@ def test_read_lazy_2d_dask(arr_type, store):
         assert arr_store["X_dask/indices"].dtype == np.int64
 
 
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+def test_write_indptr_dtype_override(store, sparse_format):
+    X = sparse.random(
+        100,
+        100,
+        format=sparse_format,
+        density=0.1,
+        random_state=np.random.default_rng(),
+    )
+
+    write_elem(store, "X", X, dataset_kwargs=dict(indptr_dtype="int64"))
+
+    assert store["X/indptr"].dtype == np.int64
+    assert X.indptr.dtype == np.int32
+    np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
     adata.raw = adata

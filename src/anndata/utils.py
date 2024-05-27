@@ -11,7 +11,7 @@ import pandas as pd
 from scipy import sparse
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
-from .compat import CupyArray, CupySparseMatrix, DaskArray
+from .compat import CupyArray, CupySparseMatrix, DaskArray, SpArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -44,6 +44,7 @@ def asarray(x):
     return np.asarray(x)
 
 
+@asarray.register(SpArray)
 @asarray.register(sparse.spmatrix)
 def asarray_sparse(x):
     return x.toarray()

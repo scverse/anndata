@@ -12,6 +12,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
+from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray
 from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -234,6 +235,8 @@ def test_consecutive_bool(
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
+        pytest.param(sparse.csr_array, sparse.vstack),
+        pytest.param(sparse.csc_array, sparse.hstack),
     ],
 )
 def test_dataset_append_memory(
@@ -477,12 +480,15 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-def test_append_overflow_check(group_fn, tmpdir):
+@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
+def test_append_overflow_check(group_fn, sparse_class, tmpdir):
+    if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
+        pytest.skip("scipy bug causes view to be allocated")
     group = group_fn(tmpdir)
     typemax_int32 = np.iinfo(np.int32).max
-    orig_mtx = sparse.csr_matrix(np.ones((1, 1), dtype=bool))
+    orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
     # Minimally allocating new matrix
-    new_mtx = sparse.csr_matrix(
+    new_mtx = sparse_class(
         (
             np.broadcast_to(True, typemax_int32 - 1),
             np.broadcast_to(np.int32(1), typemax_int32 - 1),
