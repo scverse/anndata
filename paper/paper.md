@@ -31,7 +31,7 @@ affiliations:
  - name: "TU Munich."
    index: 3
 date: December 16, 2021
-bibliography: [./paper.bib]
+bibliography: paper.bib
 ---
 
 # Summary
