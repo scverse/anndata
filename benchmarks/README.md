@@ -4,7 +4,7 @@ This repo contains some work in progress benchmarks for [AnnData](https://github
 
 ## Setup
 
-I definitley recommend reading through the asv docs. Currently, this assumes the benchmark suite can reach the `anndata` repo via the path `../anndata`. Otherwise, all you'll need to do is create a [machine file](https://asv.readthedocs.io/en/stable/commands.html#asv-machine) for your system and make sure `anndata`s dependencies are installable via `conda`.
+I definitely recommend reading through the asv docs. Currently, this assumes the benchmark suite can reach the `anndata` repo via the path `../anndata`. Otherwise, all you'll need to do is create a [machine file](https://asv.readthedocs.io/en/stable/commands.html#asv-machine) for your system and make sure `anndata`s dependencies are installable via `conda`.
 
 ### Data
 
@@ -20,7 +20,7 @@ To run benchmarks for a particular commit: `asv run {commit} --steps 1 -b`
 
 To run benchmarks for a range of commits: `asv run {commit1}..{commit2}`
 
-You can filter out the benchmarks which are run with the `-b {patttern}` flag.
+You can filter out the benchmarks which are run with the `-b {pattern}` flag.
 
 ### Accessing the benchmarks
 
