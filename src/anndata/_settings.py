@@ -360,7 +360,7 @@ categories_description = (
 
 uniqueness_option = "should_check_uniqueness"
 uniqueness_default_value = True
-uniqueness_description = "Whether or not to check uniqueness of the `obs` indices on :meth:`~anndata.AnnData.__init__`."
+uniqueness_description = "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
 
 
 def validate_bool(val) -> bool:
