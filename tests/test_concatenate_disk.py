@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import get_args
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData, concat
+from anndata._core.merge import StrategiesLiteral
 from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.tests.helpers import (
@@ -41,6 +43,11 @@ def array_type(request):
 
 @pytest.fixture(params=["inner", "outer"])
 def join_type(request):
+    return request.param
+
+
+@pytest.fixture(params=get_args(StrategiesLiteral))
+def merge_type(request):
     return request.param
 
 
@@ -148,11 +155,12 @@ def test_anndatas_without_reindex(
         max_loaded_elems,
         axis=axis,
         join=join_type,
+        pairwise=False,
     )
 
 
 def test_anndatas_with_reindex(
-    axis, array_type, join_type, tmp_path, file_format, max_loaded_elems
+    axis, array_type, join_type, tmp_path, file_format, max_loaded_elems, merge_type
 ):
     N = 50
     M = 50
@@ -198,6 +206,8 @@ def test_anndatas_with_reindex(
         max_loaded_elems,
         axis=axis,
         join=join_type,
+        merge=merge_type,
+        pairwise=False,
     )
 
 
