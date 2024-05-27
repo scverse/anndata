@@ -481,9 +481,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # Backwards compat for connectivities matrices in uns["neighbors"]
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
-
         self._check_dimensions()
-        self._check_uniqueness()
+        if settings.check_uniqueness:
+            self._check_uniqueness()
 
         if self.filename:
             assert not isinstance(

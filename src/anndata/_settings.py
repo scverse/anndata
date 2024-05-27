@@ -358,6 +358,10 @@ categories_description = (
     "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
 )
 
+uniqueness_option = "check_uniqueness"
+uniqueness_default_value = True
+uniqueness_description = "Whether or not to check uniqueness of the `obs` indices on :method:`~anndata.AnnData.__init__`."
+
 
 def validate_bool(val) -> bool:
     if not isinstance(val, bool):
@@ -369,6 +373,14 @@ settings.register(
     categories_option,
     categories_default_value,
     categories_description,
+    validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    uniqueness_option,
+    uniqueness_default_value,
+    uniqueness_description,
     validate_bool,
     get_from_env=check_and_get_bool,
 )
