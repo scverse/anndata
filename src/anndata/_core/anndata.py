@@ -325,7 +325,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        if settings.remove_unused_categories:
+        if settings.should_remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
@@ -481,9 +481,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # Backwards compat for connectivities matrices in uns["neighbors"]
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
-
         self._check_dimensions()
-        self._check_uniqueness()
+        if settings.should_check_uniqueness:
+            self._check_uniqueness()
 
         if self.filename:
             assert not isinstance(
