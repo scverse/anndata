@@ -48,7 +48,7 @@ def maybe_open_h5(filename_or_elem: str | ZarrGroup, elem_name: str):
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse_as_dask_h5(elem, _reader):
+def read_sparse_as_dask(elem, _reader):
     import dask.array as da
 
     filename_or_elem = elem.file.filename if isinstance(elem, H5Group) else elem
