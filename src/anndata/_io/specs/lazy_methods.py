@@ -12,10 +12,6 @@ from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup
 
 from .registry import _LAZY_REGISTRY, IOSpec
 
-# TODO: settings
-stride = 100
-h5_chunks = 1000
-
 
 def make_index(is_csc, stride, shape, block_id):
     index = (
@@ -48,7 +44,7 @@ def maybe_open_h5(filename_or_elem: str | ZarrGroup, elem_name: str):
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse_as_dask(elem, _reader):
+def read_sparse_as_dask(elem, _reader, stride: int = 100):
     import dask.array as da
 
     filename_or_elem = elem.file.filename if isinstance(elem, H5Group) else elem
@@ -84,11 +80,11 @@ def read_sparse_as_dask(elem, _reader):
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
-def read_h5_array(elem, _reader):
+def read_h5_array(elem, _reader, chunk_size: int = 1000):
     import dask.array as da
 
     if not hasattr(elem, "chunks") or elem.chunks is None:
-        return da.from_array(elem, chunks=(h5_chunks,) * len(elem.shape))
+        return da.from_array(elem, chunks=(chunk_size,) * len(elem.shape))
     return da.from_array(elem)
 
 
