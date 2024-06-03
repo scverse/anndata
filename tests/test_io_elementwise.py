@@ -218,6 +218,20 @@ def test_read_lazy_2d_dask(arr_type, store):
         assert arr_store["X_dask/indices"].dtype == np.int64
 
 
+def test_read_lazy_h5_cluster(sparse_format, tmp_path):
+    import dask.distributed as dd
+
+    file = h5py.File(tmp_path / "test.h5", "w")
+    store = file["/"]
+    arr_store = create_sparse_store(sparse_format, store)
+    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+    X_from_disk = read_elem(arr_store["X"])
+    file.close()
+    with dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster:
+        with dd.Client(cluster) as client:  # noqa: F841
+            assert_equal(X_from_disk, X_dask_from_disk)
+
+
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
 def test_write_indptr_dtype_override(store, sparse_format):
     X = sparse.random(
