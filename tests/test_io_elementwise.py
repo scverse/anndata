@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from typing import Literal, TypeVar
 
 import h5py
 import numpy as np
@@ -70,7 +71,21 @@ def create_dense_store(store):
     return store
 
 
-def create_sparse_store(sparse_format, store):
+G = TypeVar("G", bound=H5Group | ZarrGroup)
+
+
+def create_sparse_store(sparse_format: Literal["csc", "csr"], store: G) -> G:
+    """Returns a store
+
+    Parameters
+    ----------
+    sparse_format
+    store
+
+    Returns
+    -------
+        A store with a key, `X` that is simply a sparse matrix, and `X_dask` where that same array is wrapped by dask
+    """
     import dask.array as da
 
     X = sparse.random(
@@ -80,7 +95,9 @@ def create_sparse_store(sparse_format, store):
         density=0.01,
         random_state=np.random.default_rng(),
     )
-    X_dask = da.from_array(X, chunks=(100, 100))
+    X_dask = da.from_array(
+        X, chunks=(100 if format == "csr" else SIZE, SIZE if format == "csr" else 100)
+    )
 
     write_elem(store, "X", X)
     write_elem(store, "X_dask", X_dask)
