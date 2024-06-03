@@ -71,7 +71,7 @@ def create_dense_store(store):
     return store
 
 
-G = TypeVar("G", bound=H5Group | ZarrGroup)
+G = TypeVar("G", H5Group, ZarrGroup)
 
 
 def create_sparse_store(sparse_format: Literal["csc", "csr"], store: G) -> G:
