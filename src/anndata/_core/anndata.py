@@ -40,7 +40,7 @@ from ..compat import (
     _move_adj_mtx,
 )
 from ..logging import anndata_logger as logger
-from ..utils import convert_to_dict, deprecated, dim_len, ensure_df_homogeneous
+from ..utils import axis_len, convert_to_dict, deprecated, ensure_df_homogeneous
 from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import (
@@ -1843,7 +1843,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([dim_len(o, 0) == self.n_obs for o in obsm.values()])
+                not all([axis_len(o, 0) == self.n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self.n_obs
             ):
                 raise ValueError(
@@ -1853,7 +1853,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "varm" in key:
             varm = self._varm
             if (
-                not all([dim_len(v, 0) == self.n_vars for v in varm.values()])
+                not all([axis_len(v, 0) == self.n_vars for v in varm.values()])
                 and len(varm.dim_names) != self.n_vars
             ):
                 raise ValueError(

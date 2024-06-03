@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
 from itertools import chain, permutations, product
+from operator import attrgetter
 from typing import Any, Callable, Literal
 
 import numpy as np
@@ -114,8 +115,8 @@ def fill_val(request):
     return request.param
 
 
-@pytest.fixture(params=[0, 1])
-def axis(request) -> Literal[0, 1]:
+@pytest.fixture(params=["obs", "var"])
+def axis_name(request) -> Literal["obs", "var"]:
     return request.param
 
 
@@ -429,6 +430,15 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
     # fmt: on
     cur_df = outer.obsm["df"].reset_index(drop=True)
     pd.testing.assert_frame_equal(true_df, cur_df)
+
+
+@pytest.mark.parametrize(
+    ("axis", "axis_name"),
+    [("obs", 0), ("var", 1)],
+)
+def test_concat_axis_param(axis, axis_name):
+    a, b = gen_adata((10, 10)), gen_adata((10, 10))
+    assert_equal(concat([a, b], axis=axis), concat([a, b], axis=axis_name))
 
 
 def test_concat_annot_join(obsm_adatas, join_type):
@@ -824,26 +834,24 @@ def test_awkward_does_not_mix(join_type, other):
         concat([adata_a, adata_b], join=join_type)
 
 
-def test_pairwise_concat(axis, array_type):
-    dim_sizes = [[100, 200, 50], [50, 50, 50]]
-    if axis:
-        dim_sizes.reverse()
-    Ms, Ns = dim_sizes
-    dim = ("obs", "var")[axis]
-    alt = ("var", "obs")[axis]
-    dim_attr = f"{dim}p"
-    alt_attr = f"{alt}p"
+def test_pairwise_concat(axis_name, array_type):
+    axis, axis_name = merge._resolve_axis(axis_name)
+    _, alt_axis_name = merge._resolve_axis(1 - axis)
+    axis_sizes = [[100, 200, 50], [50, 50, 50]]
+    if axis_name == "var":
+        axis_sizes.reverse()
+    Ms, Ns = axis_sizes
+    axis_attr = f"{axis_name}p"
+    alt_attr = f"{alt_axis_name}p"
 
-    def gen_dim_array(m):
+    def gen_axis_array(m):
         return array_type(sparse.random(m, m, format="csr", density=0.1))
 
     adatas = {
         k: AnnData(
-            **{
-                "X": sparse.csr_matrix((m, n)),
-                "obsp": {"arr": gen_dim_array(m)},
-                "varp": {"arr": gen_dim_array(n)},
-            }
+            X=sparse.csr_matrix((m, n)),
+            obsp={"arr": gen_axis_array(m)},
+            varp={"arr": gen_axis_array(n)},
         )
         for k, m, n in zip("abc", Ms, Ns)
     }
@@ -852,16 +860,16 @@ def test_pairwise_concat(axis, array_type):
     wo_pairwise = concat(adatas, axis=axis, label="orig", pairwise=False)
 
     # Check that argument controls whether elements are included
-    assert getattr(wo_pairwise, dim_attr) == {}
-    assert getattr(w_pairwise, dim_attr) != {}
+    assert getattr(wo_pairwise, axis_attr) == {}
+    assert getattr(w_pairwise, axis_attr) != {}
 
     # Check values of included elements
     full_inds = np.arange(w_pairwise.shape[axis])
-    obs_var: pd.DataFrame = getattr(w_pairwise, dim)
+    obs_var: pd.DataFrame = getattr(w_pairwise, axis_name)
     groups = obs_var.groupby("orig", observed=True).indices
     for k, inds in groups.items():
-        orig_arr = getattr(adatas[k], dim_attr)["arr"]
-        full_arr = getattr(w_pairwise, dim_attr)["arr"]
+        orig_arr = getattr(adatas[k], axis_attr)["arr"]
+        full_arr = getattr(w_pairwise, axis_attr)["arr"]
 
         if isinstance(full_arr, DaskArray):
             full_arr = full_arr.compute()
@@ -884,14 +892,14 @@ def test_pairwise_concat(axis, array_type):
     )
 
 
-def test_nan_merge(axis, join_type, array_type):
-    # concat_dim = ("obs", "var")[axis]
-    alt_dim = ("var", "obs")[axis]
-    mapping_attr = f"{alt_dim}m"
+def test_nan_merge(axis_name, join_type, array_type):
+    axis, _ = merge._resolve_axis(axis_name)
+    alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
+    mapping_attr = f"{alt_axis_name}m"
     adata_shape = (20, 10)
 
     arr = array_type(
-        sparse.random(adata_shape[1 - axis], 10, density=0.1, format="csr")
+        sparse.random(adata_shape[alt_axis], 10, density=0.1, format="csr")
     )
     arr_nan = arr.copy()
     with warnings.catch_warnings():
@@ -904,7 +912,7 @@ def test_nan_merge(axis, join_type, array_type):
     _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)
     orig2 = AnnData(**_data)
-    result = concat([orig1, orig2], axis=axis, merge="same")
+    result = concat([orig1, orig2], axis=axis, join=join_type, merge="same")
 
     assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
 
@@ -1149,29 +1157,28 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     assert_equal(merged, result, elem_name="uns")
 
 
-def test_transposed_concat(array_type, axis, join_type, merge_strategy, fill_val):
+def test_transposed_concat(array_type, axis_name, join_type, merge_strategy):
+    axis, axis_name = merge._resolve_axis(axis_name)
+    alt_axis = 1 - axis
     lhs = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     rhs = gen_adata((10, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
 
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
-    b = concat(
-        [lhs.T, rhs.T], axis=abs(axis - 1), join=join_type, merge=merge_strategy
-    ).T
+    b = concat([lhs.T, rhs.T], axis=alt_axis, join=join_type, merge=merge_strategy).T
 
     assert_equal(a, b)
 
 
-def test_batch_key(axis):
+def test_batch_key(axis_name):
     """Test that concat only adds a label if the key is provided"""
 
-    def get_annot(adata):
-        return getattr(adata, ("obs", "var")[axis])
+    get_annot = attrgetter(axis_name)
 
     lhs = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     rhs = gen_adata((10, 12), **GEN_ADATA_DASK_ARGS)
 
     # There is probably a prettier way to do this
-    annot = get_annot(concat([lhs, rhs], axis=axis))
+    annot = get_annot(concat([lhs, rhs], axis=axis_name))
     assert (
         list(
             annot.columns.difference(
@@ -1181,7 +1188,7 @@ def test_batch_key(axis):
         == []
     )
 
-    batch_annot = get_annot(concat([lhs, rhs], axis=axis, label="batch"))
+    batch_annot = get_annot(concat([lhs, rhs], axis=axis_name, label="batch"))
     assert list(
         batch_annot.columns.difference(
             get_annot(lhs).columns.union(get_annot(rhs).columns)
@@ -1328,30 +1335,34 @@ def test_bool_promotion():
     assert result.obs["bool"].dtype == np.dtype(bool)
 
 
-def test_concat_names(axis):
-    def get_annot(adata):
-        return getattr(adata, ("obs", "var")[axis])
+def test_concat_names(axis_name):
+    get_annot = attrgetter(axis_name)
 
     lhs = gen_adata((10, 10))
     rhs = gen_adata((10, 10))
 
-    assert not get_annot(concat([lhs, rhs], axis=axis)).index.is_unique
-    assert get_annot(concat([lhs, rhs], axis=axis, index_unique="-")).index.is_unique
+    assert not get_annot(concat([lhs, rhs], axis=axis_name)).index.is_unique
+    assert get_annot(
+        concat([lhs, rhs], axis=axis_name, index_unique="-")
+    ).index.is_unique
 
 
-def axis_labels(adata, axis):
+def axis_labels(adata: AnnData, axis: Literal[0, 1]) -> pd.Index:
     return (adata.obs_names, adata.var_names)[axis]
 
 
-def expected_shape(a, b, axis, join):
-    labels = partial(axis_labels, axis=abs(axis - 1))
+def expected_shape(
+    a: AnnData, b: AnnData, axis: Literal[0, 1], join: Literal["inner", "outer"]
+) -> tuple[int, int]:
+    alt_axis = 1 - axis
+    labels = partial(axis_labels, axis=alt_axis)
     shape = [None, None]
 
     shape[axis] = a.shape[axis] + b.shape[axis]
     if join == "inner":
-        shape[abs(axis - 1)] = len(labels(a).intersection(labels(b)))
+        shape[alt_axis] = len(labels(a).intersection(labels(b)))
     elif join == "outer":
-        shape[abs(axis - 1)] = len(labels(a).union(labels(b)))
+        shape[alt_axis] = len(labels(a).union(labels(b)))
     else:
         raise ValueError()
 
@@ -1361,12 +1372,12 @@ def expected_shape(a, b, axis, join):
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
-    # https://github.com/scverse/anndata/issues/526
+def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
+    """Regression test for https://github.com/scverse/anndata/issues/526"""
+    axis, axis_name = merge._resolve_axis(axis_name)
+    alt_axis = 1 - axis
     a = gen_adata((5, 7))
     b = gen_adata(shape)
-    alt_axis = 1 - axis
-    dim = ("obs", "var")[axis]
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
@@ -1404,8 +1415,8 @@ def test_concat_size_0_dim(axis, join_type, merge_strategy, shape):
 
         if shape[axis] > 0:
             b_result = result[axis_idx].copy()
-            mapping_elem = f"{dim}m"
-            setattr(b_result, f"{dim}_names", getattr(b, f"{dim}_names"))
+            mapping_elem = f"{axis_name}m"
+            setattr(b_result, f"{axis_name}_names", getattr(b, f"{axis_name}_names"))
             for k, result_elem in getattr(b_result, mapping_elem).items():
                 elem_name = f"{mapping_elem}/{k}"
                 # pd.concat can have unintuitive return types. is similar to numpy promotion
@@ -1436,7 +1447,7 @@ def test_concat_outer_aligned_mapping(elem):
 
 
 @mark_legacy_concatenate
-def test_concatenate_size_0_dim():
+def test_concatenate_size_0_axis():
     # https://github.com/scverse/anndata/issues/526
 
     a = gen_adata((5, 10))
