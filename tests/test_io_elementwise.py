@@ -243,7 +243,7 @@ def test_write_anndata_to_root(store):
     ["attribute", "value"],
     [
         ("encoding-type", "floob"),
-        ("encoding-version", "SIZE0.0"),
+        ("encoding-version", "10000.0"),
     ],
 )
 def test_read_iospec_not_found(store, attribute, value):
