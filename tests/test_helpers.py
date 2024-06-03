@@ -16,7 +16,7 @@ from anndata.tests.helpers import (
     gen_awkward,
     report_name,
 )
-from anndata.utils import dim_len
+from anndata.utils import axis_len
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -72,7 +72,7 @@ def test_gen_awkward(shape, datashape):
 
     arr = gen_awkward(shape)
     for i, s in enumerate(shape):
-        assert dim_len(arr, i) == s
+        assert axis_len(arr, i) == s
     arr_type = ak.types.from_datashape(datashape)
     assert arr.type == arr_type
 

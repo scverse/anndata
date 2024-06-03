@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from functools import singledispatch, wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import h5py
 import numpy as np
@@ -101,7 +101,7 @@ def convert_to_dict_nonetype(obj: None):
 
 
 @singledispatch
-def dim_len(x, axis):
+def axis_len(x, axis: Literal[0, 1]) -> int | None:
     """\
     Return the size of an array in dimension `axis`.
 
@@ -175,11 +175,11 @@ try:
             lateral_context["out"] = result
             return ak.contents.EmptyArray()
 
-    @dim_len.register(ak.Array)
-    def dim_len_awkward(array, axis):
-        """Get the length of an awkward array in a given dimension
+    @axis_len.register(ak.Array)
+    def axis_len_awkward(array, axis: Literal[0, 1]) -> int | None:
+        """Get the length of an awkward array in a given axis
 
-        Returns None if the dimension is of variable length.
+        Returns None if the axis is of variable length.
 
         Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
         """

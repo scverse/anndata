@@ -17,7 +17,7 @@ from anndata import (
 )
 from anndata.compat import awkward as ak
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
-from anndata.utils import dim_len
+from anndata.utils import axis_len
 
 
 @pytest.mark.parametrize(
@@ -66,14 +66,14 @@ from anndata.utils import dim_len
         [ak.to_regular(ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), 1), (3, 2)],
     ],
 )
-def test_dim_len(array, shape):
-    """Test that dim_len returns the right value for awkward arrays."""
+def test_axis_len(array, shape):
+    """Test that axis_len returns the right value for awkward arrays."""
     for axis, size in enumerate(shape):
-        assert size == dim_len(array, axis)
+        assert size == axis_len(array, axis)
 
     # Requesting the size for an axis higher than the array has dimensions should raise a TypeError
     with pytest.raises(TypeError):
-        dim_len(array, len(shape))
+        axis_len(array, len(shape))
 
 
 @pytest.mark.parametrize(
@@ -361,7 +361,7 @@ def test_concat_mixed_types(key, arrays, expected, join):
     for a in arrays:
         shape = np.array([3, 3])  # default shape (in case of missing array)
         if a is not None:
-            length = dim_len(a, 0)
+            length = axis_len(a, 0)
             shape[axis] = length
 
         tmp_adata = gen_adata(
