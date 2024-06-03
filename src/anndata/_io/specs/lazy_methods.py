@@ -17,26 +17,6 @@ stride = 100
 h5_chunks = 1000
 
 
-def make_dask_array(is_csc, shape, make_dask_chunk, dtype):
-    import dask.array as da
-
-    chunks = [None, None]
-    major_index = int(is_csc)
-    minor_index = (is_csc + 1) % 2
-    chunks[minor_index] = (shape[minor_index],)
-    chunks[major_index] = (stride,) * (shape[major_index] // stride) + (
-        shape[major_index] % stride,
-    )
-    memory_format = [sparse.csr_matrix, sparse.csc_matrix][major_index]
-    da_mtx = da.map_blocks(
-        make_dask_chunk,
-        dtype=dtype,
-        chunks=chunks,
-        meta=memory_format((0, 0), dtype=np.float32),
-    )
-    return da_mtx
-
-
 def make_index(is_csc, stride, shape, block_id):
     index = (
         slice(
@@ -69,6 +49,8 @@ def maybe_open_h5(filename_or_elem: str | ZarrGroup, elem_name: str):
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_as_dask_h5(elem, _reader):
+    import dask.array as da
+
     filename_or_elem = elem.file.filename if isinstance(elem, H5Group) else elem
     elem_name = elem.name if isinstance(elem, H5Group) else Path(elem.path).name
     shape = elem.attrs["shape"]
@@ -84,7 +66,21 @@ def read_sparse_as_dask_h5(elem, _reader):
             chunk = mtx[index]
         return chunk
 
-    return make_dask_array(is_csc, shape, make_dask_chunk, dtype)
+    chunks = [None, None]
+    major_index = int(is_csc)
+    minor_index = (is_csc + 1) % 2
+    chunks[minor_index] = (shape[minor_index],)
+    chunks[major_index] = (stride,) * (shape[major_index] // stride) + (
+        shape[major_index] % stride,
+    )
+    memory_format = [sparse.csr_matrix, sparse.csc_matrix][major_index]
+    da_mtx = da.map_blocks(
+        make_dask_chunk,
+        dtype=dtype,
+        chunks=chunks,
+        meta=memory_format((0, 0), dtype=np.float32),
+    )
+    return da_mtx
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
