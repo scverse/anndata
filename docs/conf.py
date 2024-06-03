@@ -1,18 +1,19 @@
+from __future__ import annotations
+
 import sys
-from pathlib import Path
 from datetime import datetime
 from importlib import metadata
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from sphinx.application import Sphinx
+if TYPE_CHECKING:
+    from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
 sys.path[:0] = [str(HERE / "extensions")]
 
 
 # -- General configuration ------------------------------------------------
-
-
-needs_sphinx = "1.7"  # autosummary bugfix
 
 # General information
 project = "anndata"
@@ -47,6 +48,8 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
+    "sphinx_design",
+    "sphinx_search.extension",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
@@ -82,6 +85,9 @@ nitpick_ignore = [
         for cls in "Layers AxisArrays PairwiseArrays".split()
         for kind in ["", "View"]
     ],
+    # TODO: sphinx’ builtin autodoc.typehints extension isn’t handled by `qualname_overrides` yet
+    # https://github.com/theislab/scanpydoc/issues/140
+    ("py:class", "h5py._hl.group.Group"),
 ]
 suppress_warnings = [
     "ref.citation",
@@ -121,11 +127,13 @@ ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "sphinx_book_theme"
+# The theme is sphinx-book-theme, with patches for readthedocs-sphinx-search
+html_theme = "scanpydoc"
 html_theme_options = dict(
     use_repository_button=True,
     repository_url="https://github.com/scverse/anndata",
     repository_branch="main",
+    navigation_with_keys=False,  # https://github.com/pydata/pydata-sphinx-theme/issues/1492
 )
 html_logo = "_static/img/anndata_schema.svg"
 issues_github_path = "scverse/anndata"

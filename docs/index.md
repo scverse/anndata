@@ -9,15 +9,12 @@
 ```{include} ../README.md
 ```
 
-# News
-
-```{include} news.md
-```
-
 # Latest additions
 
 ```{include} release-notes/release-latest.md
 ```
+
+See {doc}`/release-notes/index` for more.
 
 ```{toctree}
 :hidden: true
@@ -32,4 +29,9 @@ benchmarks
 contributing
 release-notes/index
 references
+```
+
+# News
+
+```{include} news.md
 ```
