@@ -414,7 +414,7 @@ def test_slicing_remove_unused_categories():
 
 
 def test_slicing_dont_remove_unused_categories():
-    with settings.override(remove_unused_categories=False):
+    with settings.override(should_remove_unused_categories=False):
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
         )
@@ -423,7 +423,7 @@ def test_slicing_dont_remove_unused_categories():
 
 
 def test_no_uniqueness_check_gives_repeat_indices():
-    with settings.override(check_uniqueness=False):
+    with settings.override(should_check_uniqueness=False):
         obs_names = ["0", "0", "1", "1"]
         with warnings.catch_warnings():
             warnings.simplefilter("error")

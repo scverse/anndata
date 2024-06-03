@@ -352,13 +352,13 @@ settings = SettingsManager()
 ##################################################################################
 
 
-categories_option = "remove_unused_categories"
+categories_option = "should_remove_unused_categories"
 categories_default_value = True
 categories_description = (
     "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
 )
 
-uniqueness_option = "check_uniqueness"
+uniqueness_option = "should_check_uniqueness"
 uniqueness_default_value = True
 uniqueness_description = "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
 
