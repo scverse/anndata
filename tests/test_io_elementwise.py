@@ -206,6 +206,7 @@ def test_read_lazy_2d_dask(arr_type, store):
 
     assert_equal(X_from_disk, X_dask_from_disk)
     random_int_indices = np.random.randint(0, SIZE, (SIZE // 10,))
+    random_int_indices.sort()
     random_bool_mask = np.random.randn(SIZE) > 0
     index_slice = slice(0, SIZE // 10)
     for index in [random_int_indices, index_slice, random_bool_mask]:
