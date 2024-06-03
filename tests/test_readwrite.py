@@ -20,11 +20,8 @@ from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import DaskArray, SpArray, _read_attr
-from anndata.tests.helpers import (
-    as_dense_dask_array,
-    assert_equal,
-    gen_adata,
-)
+from anndata.tests._helpers import xfail_if_numpy2_loompy
+from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -382,6 +379,7 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
+@xfail_if_numpy2_loompy
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
 @pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
@@ -398,6 +396,8 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        # loompy uses “is” for ints
+        warnings.filterwarnings("ignore", category=SyntaxWarning)
         warnings.filterwarnings(
             "ignore",
             message=r"datetime.datetime.utcnow\(\) is deprecated",
@@ -433,6 +433,7 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     assert adata.var_names.name == var_dim
 
 
+@xfail_if_numpy2_loompy
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 def test_readloom_deprecations(tmp_path):
     loom_pth = tmp_path / "test.loom"
@@ -473,21 +474,21 @@ def test_readloom_deprecations(tmp_path):
 
 
 def test_read_csv():
-    adata = ad.read_csv(HERE / "adata.csv")
+    adata = ad.read_csv(HERE / "data" / "adata.csv")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
     assert adata.X.tolist() == X_list
 
 
 def test_read_tsv_strpath():
-    adata = ad.read_text(str(HERE / "adata-comments.tsv"), "\t")
+    adata = ad.read_text(str(HERE / "data" / "adata-comments.tsv"), "\t")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
     assert adata.X.tolist() == X_list
 
 
 def test_read_tsv_iter():
-    with (HERE / "adata-comments.tsv").open() as f:
+    with (HERE / "data" / "adata-comments.tsv").open() as f:
         adata = ad.read_text(f, "\t")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]

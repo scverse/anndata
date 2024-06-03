@@ -91,7 +91,7 @@ def test_setting_sparse(adata: AnnData):
     "df,homogenous,dtype",
     [
         (lambda dim: gen_typed_df_t2_size(dim, dim), True, np.object_),
-        (lambda dim: pd.DataFrame(np.random.randn(dim, dim)), False, np.float_),
+        (lambda dim: pd.DataFrame(np.random.randn(dim, dim)), False, np.floating),
     ],
     ids=["heterogeneous", "homogeneous"],
 )

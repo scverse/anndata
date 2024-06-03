@@ -18,6 +18,17 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+# TODO: Should be done in pyproject.toml eventually
+# See https://github.com/pytest-dev/pytest-cov/issues/437
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "filterwarnings", "ignore::anndata._warnings.OldFormatWarning"
+    )
+    config.addinivalue_line(
+        "filterwarnings", "ignore::anndata._warnings.ExperimentalFeatureWarning"
+    )
+
+
 @pytest.fixture(autouse=True)
 def _suppress_env_for_doctests(request: pytest.FixtureRequest) -> None:
     if isinstance(request.node, pytest.DoctestItem):

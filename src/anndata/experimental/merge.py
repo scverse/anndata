@@ -5,11 +5,7 @@ import shutil
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from functools import singledispatch
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Literal,
-)
+from typing import Any, Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -220,8 +216,15 @@ def write_concat_sparse(
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
+    number_non_zero = sum(len(d.group["indices"]) for d in datasets)
     init_elem = next(elems)
-    write_elem(output_group, output_path, init_elem)
+    indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
+    write_elem(
+        output_group,
+        output_path,
+        init_elem,
+        dataset_kwargs=dict(indptr_dtype=indptr_dtype),
+    )
     del init_elem
     out_dataset: BaseCompressedSparseDataset = read_as_backed(output_group[output_path])
     for temp_elem in elems:
