@@ -607,11 +607,6 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     >>> import scanpy as sc
     >>> import h5py
     >>> from anndata.experimental import sparse_dataset, read_elem
-    >>> import scipy
-    >>> import pytest
-    >>> from packaging.version import Version
-    >>> if Version(scipy.__version__) >= Version("1.14.0rc1"):
-    ...     pytest.xfail("scipy.sparse string formatting changed in 1.14.0rc1 and up")
     >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
     Initialize a sparse dataset from storage
@@ -623,9 +618,8 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
 
     Indexing returns sparse matrices
 
-    >>> X[100:200]  # doctest: +NORMALIZE_WHITESPACE
-    <100x765 sparse matrix of type '<class 'numpy.float32'>'
-        with 25003 stored elements in Compressed Sparse Row format>
+    >>> X[100:200]  # doctest: +ELLIPSIS
+    <...100...765...sparse matrix of type...float32...Compressed Sparse Row...>
 
     These can also be used inside of an AnnData object, no need for backed mode
 
@@ -640,9 +634,8 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
 
     >>> adata[adata.obs["bulk_labels"] == "CD56+ NK"].layers[
     ...     "backed"
-    ... ]  # doctest: +NORMALIZE_WHITESPACE
-    <31x765 sparse matrix of type '<class 'numpy.float32'>'
-        with 7340 stored elements in Compressed Sparse Row format>
+    ... ]  # doctest: +ELLIPSIS
+    <...31...765...sparse matrix of type...float32...Compressed Sparse Row...>
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
