@@ -421,6 +421,8 @@ class AlignedMappingProperty:
         self.cls = cls
 
     def __get__(self, obj, objtype=None):
+        if obj is None:  # None check needed for AnnData.layers accessors
+            return self.cls
         if obj.is_view:
             parent_anndata = obj._adata_ref
             idxs = (obj._oidx, obj._vidx)
@@ -428,7 +430,6 @@ class AlignedMappingProperty:
             return parent_aligned_mapping._view(
                 obj, tuple(idxs[ax] for ax in parent_aligned_mapping.axes)
             )
-            # return self.cls._view_class()
         else:
             return self.cls(obj, self.axis, getattr(obj, "_" + self.name))
 
