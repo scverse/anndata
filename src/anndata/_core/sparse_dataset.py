@@ -607,6 +607,11 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     >>> import scanpy as sc
     >>> import h5py
     >>> from anndata.experimental import sparse_dataset, read_elem
+    >>> import scipy
+    >>> import pytest
+    >>> from packaging.version import Version
+    >>> if Version(scipy.__version__) >= Version("1.14.0rc1"):
+    ...     pytest.xfail("scipy.sparse string formatting changed in 1.14.0rc1 and up")
     >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
     Initialize a sparse dataset from storage
