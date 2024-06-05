@@ -23,9 +23,9 @@ class GarbargeCollectionSuite:
             total = sum(stat.size for stat in top_stats)
             return total
 
-        total = np.zeros(self.n)
+        total = np.zeros(self.runs)
         tracemalloc.start()
-        for i in range(self.n):
+        for i in range(self.runs):
             data = gen_adata(10000, 10000, "X-csc")  # noqa: F841
             snapshot = tracemalloc.take_snapshot()
             total[i] = display_top(snapshot)
