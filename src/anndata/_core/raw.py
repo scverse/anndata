@@ -52,7 +52,6 @@ class Raw:
                 self._X = adata.X.copy()
             self._var = adata.var.copy()
             self.varm = adata.varm.copy()
-            # self._varm = AxisArrays(self, 1, adata.varm.copy())
         elif adata.isbacked:
             raise ValueError("Cannot specify X if adata is backed")
 
