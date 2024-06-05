@@ -46,8 +46,11 @@ from .aligned_df import _gen_dataframe
 from .aligned_mapping import (
     AlignedMappingProperty,
     AxisArrays,
+    AxisArraysView,
     Layers,
+    LayersView,
     PairwiseArrays,
+    PairwiseArraysView,
 )
 from .file_backing import AnnDataFileManager, to_memory
 from .index import Index, Index1D, _normalize_indices, _subset, get_vector
@@ -667,11 +670,132 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self):
         self.X = None
 
-    obsm = AlignedMappingProperty("obsm", AxisArrays, 0)
-    varm = AlignedMappingProperty("varm", AxisArrays, 1)
-    layers = AlignedMappingProperty("layers", Layers, (0, 1))
-    obsp = AlignedMappingProperty("obsp", PairwiseArrays, 0)
-    varp = AlignedMappingProperty("varp", PairwiseArrays, 1)
+    __obsm__alignedmapping_property = AlignedMappingProperty("obsm", AxisArrays, 0)
+
+    @property
+    def obsm(self) -> AxisArrays | AxisArraysView:
+        """\
+        Multi-dimensional annotation of observations
+        (mutable structured :class:`~numpy.ndarray`).
+
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        of length `n_obs`.
+        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
+        """
+        return self.__obsm__alignedmapping_property
+
+    @obsm.setter
+    def obsm(self, val):
+        self.__obsm__alignedmapping_property = val
+
+    @obsm.deleter
+    def obsm(self):
+        del self.__obsm__alignedmapping_property
+
+    __varm__alignedmapping_property = AlignedMappingProperty("varm", AxisArrays, 1)
+
+    @property
+    def varm(self) -> AxisArrays | AxisArraysView:
+        """\
+        Multi-dimensional annotation of variables/features
+        (mutable structured :class:`~numpy.ndarray`).
+
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        of length `n_vars`.
+        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
+        """
+        return self.__varm__alignedmapping_property
+
+    @varm.setter
+    def varm(self, val):
+        self.__varm__alignedmapping_property = val
+
+    @varm.deleter
+    def varm(self):
+        del self.__varm__alignedmapping_property
+
+    __layers__alignedmapping_property = AlignedMappingProperty("layers", Layers, (0, 1))
+
+    @property
+    def layers(self) -> Layers | LayersView:
+        """\
+        Dictionary-like object with values of the same dimensions as :attr:`X`.
+
+        Layers in AnnData are inspired by loompy’s :ref:`loomlayers`.
+
+        Return the layer named `"unspliced"`::
+
+            adata.layers["unspliced"]
+
+        Create or replace the `"spliced"` layer::
+
+            adata.layers["spliced"] = ...
+
+        Assign the 10th column of layer `"spliced"` to the variable a::
+
+            a = adata.layers["spliced"][:, 10]
+
+        Delete the `"spliced"` layer::
+
+            del adata.layers["spliced"]
+
+        Return layers’ names::
+
+            adata.layers.keys()
+        """
+        return self.__layers__alignedmapping_property
+
+    @layers.setter
+    def layers(self, val):
+        self.__layers__alignedmapping_property = val
+
+    @layers.deleter
+    def layers(self):
+        del self.__layers__alignedmapping_property
+
+    __obsp__alignedmapping_property = AlignedMappingProperty("obsp", PairwiseArrays, 0)
+
+    @property
+    def obsp(self) -> PairwiseArrays | PairwiseArraysView:
+        """\
+        Pairwise annotation of observations,
+        a mutable mapping with array-like values.
+
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        whose first two dimensions are of length `n_obs`.
+        Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
+        """
+        return self.__obsp__alignedmapping_property
+
+    @obsp.setter
+    def obsp(self, val):
+        self.__obsp__alignedmapping_property = val
+
+    @obsp.deleter
+    def obsp(self):
+        del self.__obsp__alignedmapping_property
+
+    __varp__alignedmapping_property = AlignedMappingProperty("varp", PairwiseArrays, 1)
+
+    @property
+    def varp(self) -> PairwiseArrays | PairwiseArraysView:
+        """\
+        Pairwise annotation of variables/features,
+        a mutable mapping with array-like values.
+
+        Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+        whose first two dimensions are of length `n_var`.
+        Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
+        """
+        return self.__varp__alignedmapping_property
+
+    @varp.setter
+    def varp(self, val):
+        self.__varp__alignedmapping_property = val
+
+    @varp.deleter
+    def varp(self):
+        del self.__varp__alignedmapping_property
 
     @property
     def raw(self) -> Raw:
