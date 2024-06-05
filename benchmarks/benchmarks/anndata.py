@@ -11,7 +11,7 @@ class GarbargeCollectionSuite:
     runs = 10
 
     # custom because `memory_profiler` is a line-by-line profiler (also: https://github.com/pythonprofilers/memory_profiler/issues/402)
-    def track_peakmem_write_compressed(self, *_):
+    def track_peakmem_garbage_collection(self, *_):
         def display_top(snapshot, key_type="lineno"):
             snapshot = snapshot.filter_traces(
                 (
