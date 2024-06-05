@@ -284,12 +284,14 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self,
         parent: AnnData | Raw,
         axis: int,
-        vals: dict[str, V] | AxisArraysBase = {},
+        vals: dict[str, V] | AxisArraysBase | None = None,
     ):
         self._parent = parent
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
+        if vals is None:
+            vals = {}
         for k, v in vals.items():
             vals[k] = self._validate_value(v, k)
         self._data = vals
@@ -332,10 +334,15 @@ class LayersBase(AlignedMapping):
 
 class Layers(AlignedActualMixin, LayersBase):
     def __init__(
-        self, parent: AnnData, axis: tuple[int] = (0, 1), vals: dict[str, V] = {}
+        self,
+        parent: AnnData,
+        axis: tuple[int] = (0, 1),
+        vals: dict[str, V] | None = None,
     ):
         assert axis == (0, 1), axis
         self._parent = parent
+        if vals is None:
+            vals = {}
         for k, v in vals.items():
             vals[k] = self._validate_value(v, k)
         self._data = vals
@@ -386,12 +393,14 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         self,
         parent: AnnData,
         axis: int,
-        vals: dict[str, V] = {},
+        vals: dict[str, V] | None = None,
     ):
         self._parent = parent
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
+        if vals is None:
+            vals = {}
         for k, v in vals.items():
             vals[k] = self._validate_value(v, k)
         self._data = vals
