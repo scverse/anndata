@@ -284,7 +284,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self,
         parent: AnnData | Raw,
         axis: int,
-        vals: Mapping | AxisArraysBase | None = None,
+        vals: dict[str, V] | AxisArraysBase = {},
     ):
         self._parent = parent
         if axis not in (0, 1):
@@ -332,7 +332,7 @@ class LayersBase(AlignedMapping):
 
 class Layers(AlignedActualMixin, LayersBase):
     def __init__(
-        self, parent: AnnData, axis: tuple[int] = (0, 1), vals: Mapping | None = None
+        self, parent: AnnData, axis: tuple[int] = (0, 1), vals: dict[str, V] = {}
     ):
         assert axis == (0, 1), axis
         self._parent = parent
@@ -386,7 +386,7 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         self,
         parent: AnnData,
         axis: int,
-        vals: Mapping | None = None,
+        vals: dict[str, V] = {},
     ):
         self._parent = parent
         if axis not in (0, 1):
