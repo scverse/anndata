@@ -168,6 +168,39 @@ def test_df_warnings():
         adata.X = df
 
 
+@pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
+@pytest.mark.parametrize("when", ["init", "assign"])
+def test_convert_matrix(attr, when):
+    """Test that initializing or assigning aligned arrays to a np.matrix converts it."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", r"the matrix.*not.*recommended", PendingDeprecationWarning
+        )
+        mat = np.matrix([[1, 2], [3, 0]])
+
+    direct = attr in {"X"}
+
+    if when == "init":
+        adata = (
+            AnnData(**{attr: mat})
+            if direct
+            else AnnData(shape=(2, 2), **{attr: {"a": mat}})
+        )
+    elif when == "assign":
+        adata = AnnData(shape=(2, 2))
+        if direct:
+            setattr(adata, attr, mat)
+        else:
+            getattr(adata, attr)["a"] = mat
+    else:
+        raise ValueError(when)
+
+    # with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
+    arr = getattr(adata, attr) if direct else getattr(adata, attr)["a"]
+    assert isinstance(arr, np.ndarray), "it’s not even an array"
+    assert not isinstance(arr, np.matrix), "it’s still a matrix"
+
+
 def test_attr_deletion():
     full = gen_adata((30, 30))
     # Empty has just X, obs_names, var_names
