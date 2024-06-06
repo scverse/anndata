@@ -9,6 +9,7 @@ from numpy import ma
 from scipy import sparse
 
 from ..compat import (
+    AwkArray,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
@@ -31,6 +32,7 @@ class StorageType(Enum):
     CupySparseMatrix = CupySparseMatrix
     BackedSparseMatrix = BaseCompressedSparseDataset
     SparseArray = SpArray
+    AwkArray = AwkArray
 
     @classmethod
     def classes(cls):
