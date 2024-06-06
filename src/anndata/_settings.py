@@ -5,6 +5,7 @@ import textwrap
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from inspect import Parameter, signature
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
@@ -95,10 +96,11 @@ For boolean environment variable setting, use 1 for `True` and 0 for `False`.
 """
 
 
+@dataclass
 class SettingsManager:
-    _registered_options: dict[str, RegisteredOption] = {}
-    _deprecated_options: dict[str, DeprecatedOption] = {}
-    _config: dict[str, object] = {}
+    _registered_options: dict[str, RegisteredOption] = field(default_factory=dict)
+    _deprecated_options: dict[str, DeprecatedOption] = field(default_factory=dict)
+    _config: dict[str, object] = field(default_factory=dict)
     __doc_tmpl__: str = _docstring
 
     def describe(
@@ -262,8 +264,8 @@ class SettingsManager:
         AttributeError
             If the option has not been registered, this function will raise an error.
         """
-        if hasattr(super(), option):
-            super().__setattr__(option, val)
+        if option in {f.name for f in fields(self)}:
+            return super().__setattr__(option, val)
         elif option not in self._registered_options:
             raise AttributeError(
                 f"{option} is not an available option for anndata.\
