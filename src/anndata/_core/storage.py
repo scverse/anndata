@@ -39,13 +39,13 @@ class StorageType(Enum):
         return tuple(c.value for c in cls.__members__.values())
 
 
-def coerce_array(value: Any, *, name: str, allow_df: bool = True):
+def coerce_array(value: Any, *, name: str, allow_df: bool = False):
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
     if (
         isinstance(value, StorageType.classes()) or np.isscalar(value)
     ) and not isinstance(value, np.matrix):
         return value
-    if not allow_df and isinstance(value, pd.DataFrame):
-        return ensure_df_homogeneous(value, name)
+    if isinstance(value, pd.DataFrame):
+        return value if allow_df else ensure_df_homogeneous(value, name)
     # TODO: asarray? asanyarray?
     return np.array(value)
