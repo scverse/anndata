@@ -95,9 +95,7 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
 def test_invalid_X():
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            "X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not <class 'str'>."
-        ),
+        match=r"X needs to be of one of np\.ndarray.*not <class 'str'>\.",
     ):
         AnnData("string is not a valid X")
 

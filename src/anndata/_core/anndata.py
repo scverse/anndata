@@ -582,7 +582,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 self._init_as_actual(self.copy())
             self._X = None
             return
-        value = coerce_array(value, name="X")
+        value = coerce_array(value, name="X", allow_array_like=True)
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates

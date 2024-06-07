@@ -57,17 +57,29 @@ class StorageType(Enum):
         yield from (v.qualname for v in cls)
 
 
-def coerce_array(value: Any, *, name: str, allow_df: bool = False):
+def coerce_array(
+    value: Any,
+    *,
+    name: str,
+    allow_df: bool = False,
+    allow_array_like: bool = False,
+):
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
-    if (
-        isinstance(value, StorageType.classes()) or np.isscalar(value)
-    ) and not isinstance(value, np.matrix):
+    # If value is a scalar and we allow that, return it
+    if allow_array_like and np.isscalar(value):
         return value
+    # If value is one of the allowed types, return it
+    if isinstance(value, StorageType.classes()):
+        return value.A if isinstance(value, np.matrix) else value
     if isinstance(value, pd.DataFrame):
         return value if allow_df else ensure_df_homogeneous(value, name)
-    if not isinstance(value, StorageType.classes()):
-        raise ValueError(
-            f"X needs to be of one of {join_english(StorageType.qualnames())}, not {type(value)}."
-        )
-    # TODO: asarray? asanyarray?
-    return np.array(value)
+    # if value is an array-like object, try to convert it
+    if allow_array_like:
+        try:
+            # TODO: asarray? asanyarray?
+            return np.array(value)
+        except (ValueError, TypeError):
+            pass
+    # if value isn’t the right type or convertible, raise an error
+    msg = f"X needs to be of one of {join_english(StorageType.qualnames())}, not {type(value)}."
+    raise ValueError(msg)
