@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from abc import ABC, abstractmethod
 from collections import abc as cabc
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from copy import copy
 from typing import (
     TYPE_CHECKING,
@@ -121,7 +121,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         return self._parent
 
     def copy(self):
-        d = self._actual_class(self.parent, self._axis, {})
+        d = self._actual_class(self.parent, axis=self._axis, store={})
         for k, v in self.items():
             if isinstance(v, AwkArray):
                 # Shallow copy since awkward array buffers are immutable
@@ -193,7 +193,7 @@ class AlignedViewMixin:
 
 
 class AlignedActualMixin:
-    _data: dict[str, V]
+    _data: MutableMapping[str, V]
     """Underlying mapping to the data"""
 
     is_view = False
@@ -278,23 +278,21 @@ class AxisArraysBase(AlignedMapping):
         return (self.parent.obs_names, self.parent.var_names)[self._axis]
 
 
-# TODO: vals can't be None
 class AxisArrays(AlignedActualMixin, AxisArraysBase):
     def __init__(
         self,
         parent: AnnData | Raw,
+        *,
+        store: MutableMapping[str, V] | AxisArraysBase,
         axis: int,
-        vals: dict[str, V] | AxisArraysBase | None = None,
     ):
         self._parent = parent
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
-        if vals is None:
-            vals = {}
-        for k, v in vals.items():
-            vals[k] = self._validate_value(v, k)
-        self._data = vals
+        self._data = store
+        for k, v in self._data.items():
+            self._data[k] = self._validate_value(v, k)
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
@@ -326,7 +324,7 @@ class LayersBase(AlignedMapping):
 
     # TODO: I thought I had a more elegant solution to overriding this...
     def copy(self) -> Layers:
-        d = self._actual_class(self.parent, vals={})
+        d = self._actual_class(self.parent, store={})
         for k, v in self.items():
             d[k] = v.copy()
         return d
@@ -336,16 +334,15 @@ class Layers(AlignedActualMixin, LayersBase):
     def __init__(
         self,
         parent: AnnData,
-        axis: tuple[int] = (0, 1),
-        vals: dict[str, V] | None = None,
+        *,
+        axis: tuple[int, int] = (0, 1),
+        store: MutableMapping[str, V],
     ):
         assert axis == (0, 1), axis
         self._parent = parent
-        if vals is None:
-            vals = {}
-        for k, v in vals.items():
-            vals[k] = self._validate_value(v, k)
-        self._data = vals
+        self._data = store
+        for k, v in self._data.items():
+            self._data[k] = self._validate_value(v, k)
 
 
 class LayersView(AlignedViewMixin, LayersBase):
@@ -392,18 +389,17 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
+        *,
         axis: int,
-        vals: dict[str, V] | None = None,
+        store: MutableMapping[str, V],
     ):
         self._parent = parent
         if axis not in (0, 1):
             raise ValueError()
         self._axis = axis
-        if vals is None:
-            vals = {}
-        for k, v in vals.items():
-            vals[k] = self._validate_value(v, k)
-        self._data = vals
+        self._data = store
+        for k, v in self._data.items():
+            self._data[k] = self._validate_value(v, k)
 
 
 class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
@@ -440,11 +436,11 @@ class AlignedMappingProperty:
                 obj, tuple(idxs[ax] for ax in parent_aligned_mapping.axes)
             )
         else:
-            return self.cls(obj, self.axis, getattr(obj, "_" + self.name))
+            return self.cls(obj, axis=self.axis, store=getattr(obj, "_" + self.name))
 
     def __set__(self, obj, value):
         value = convert_to_dict(value)
-        _ = self.cls(obj, self.axis, value)  # Validate
+        _ = self.cls(obj, axis=self.axis, store=value)  # Validate
         if obj.is_view:
             obj._init_as_actual(obj.copy())
         setattr(obj, "_" + self.name, value)

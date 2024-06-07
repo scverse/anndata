@@ -758,7 +758,9 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             self._obsm = inner_concat_aligned_mapping(
                 [a.obsm for a in adatas], index=self.obs_names
             )
-            self._obsm = AxisArrays(self, axis=0) if self._obsm == {} else self._obsm
+            self._obsm = (
+                AxisArrays(self, axis=0, store={}) if self._obsm == {} else self._obsm
+            )
 
         # process inner join of views
         self._view_attrs_keys = {}
