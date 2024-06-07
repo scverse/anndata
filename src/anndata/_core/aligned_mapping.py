@@ -419,15 +419,15 @@ PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
 
 
-class AlignedMappingProperty:
+class AlignedMappingProperty(property):
     def __init__(self, name, cls, axis):
         self.name = name
         self.axis = axis
         self.cls = cls
 
     def __get__(self, obj, objtype=None):
-        if obj is None:  # None check needed for AnnData.layers accessors
-            return self.cls
+        if obj is None:  # needs to return a `property`, e.g. for Sphinx
+            return self
         if obj.is_view:
             parent_anndata = obj._adata_ref
             idxs = (obj._oidx, obj._vidx)
