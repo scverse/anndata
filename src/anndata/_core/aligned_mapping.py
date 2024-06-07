@@ -283,8 +283,8 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self,
         parent: AnnData | Raw,
         *,
-        store: MutableMapping[str, V] | AxisArraysBase,
         axis: int,
+        store: MutableMapping[str, V] | AxisArraysBase,
     ):
         self._parent = parent
         if axis not in (0, 1):
