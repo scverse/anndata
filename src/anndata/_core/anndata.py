@@ -42,7 +42,7 @@ from .file_backing import AnnDataFileManager, to_memory
 from .index import Index, Index1D, _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
-from .storage import StorageType, coerce_array
+from .storage import coerce_array
 from .views import (
     ArrayView,
     DataFrameView,
@@ -390,13 +390,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # check data type of X
         if X is not None:
-            if not isinstance(X, StorageType.classes()):
-                raise ValueError(
-                    "X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, "
-                    "scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, "
-                    "anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, "
-                    f"cupy.ndarray, cupyx.scipy.sparse.spmatrix, not {type(X)}."
-                )
+            X = coerce_array(X, name="X")
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
@@ -416,7 +410,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 else:  # is np.ndarray or a subclass, convert to true np.ndarray
                     X = np.asarray(X, dtype)
             # data matrix and shape
-            self._X = coerce_array(X, name="X")
+            self._X = X
             n_obs, n_vars = X.shape
             source = "X"
         else:
