@@ -662,26 +662,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self):
         self.X = None
 
-    obsm = AlignedMappingProperty("obsm", AxisArrays, 0)
-    """\
-    Multi-dimensional annotation of observations
-    (mutable structured :class:`~numpy.ndarray`).
-
-    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-    of length `n_obs`.
-    Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
-    """
-
-    varm = AlignedMappingProperty("varm", AxisArrays, 1)
-    """\
-    Multi-dimensional annotation of variables/features
-    (mutable structured :class:`~numpy.ndarray`).
-
-    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-    of length `n_vars`.
-    Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
-    """
-
     layers = AlignedMappingProperty("layers", Layers, (0, 1))
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
@@ -707,26 +687,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Return layers’ names::
 
         adata.layers.keys()
-    """
-
-    obsp = AlignedMappingProperty("obsp", PairwiseArrays, 0)
-    """\
-    Pairwise annotation of observations,
-    a mutable mapping with array-like values.
-
-    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-    whose first two dimensions are of length `n_obs`.
-    Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
-    """
-
-    varp = AlignedMappingProperty("varp", PairwiseArrays, 1)
-    """\
-    Pairwise annotation of variables/features,
-    a mutable mapping with array-like values.
-
-    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
-    whose first two dimensions are of length `n_var`.
-    Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
     @property
@@ -910,6 +870,46 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def uns(self):
         self.uns = OrderedDict()
 
+    obsm = AlignedMappingProperty("obsm", AxisArrays, 0)
+    """\
+    Multi-dimensional annotation of observations
+    (mutable structured :class:`~numpy.ndarray`).
+
+    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+    of length `n_obs`.
+    Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
+    """
+
+    varm = AlignedMappingProperty("varm", AxisArrays, 1)
+    """\
+    Multi-dimensional annotation of variables/features
+    (mutable structured :class:`~numpy.ndarray`).
+
+    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+    of length `n_vars`.
+    Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
+    """
+
+    obsp = AlignedMappingProperty("obsp", PairwiseArrays, 0)
+    """\
+    Pairwise annotation of observations,
+    a mutable mapping with array-like values.
+
+    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+    whose first two dimensions are of length `n_obs`.
+    Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
+    """
+
+    varp = AlignedMappingProperty("varp", PairwiseArrays, 1)
+    """\
+    Pairwise annotation of variables/features,
+    a mutable mapping with array-like values.
+
+    Stores for each key a two or higher-dimensional :class:`~numpy.ndarray`
+    whose first two dimensions are of length `n_var`.
+    Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
+    """
+
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
@@ -920,11 +920,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def obsm_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obsm`."""
-        return list(self._obsm.keys())
+        return list(self.obsm.keys())
 
     def varm_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`varm`."""
-        return list(self._varm.keys())
+        return list(self.varm.keys())
 
     def uns_keys(self) -> list[str]:
         """List keys of unstructured annotation."""
@@ -1203,10 +1203,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             obs=self.var,
             var=self.obs,
             uns=self._uns,
-            obsm=self._varm,
-            varm=self._obsm,
-            obsp=self._varp,
-            varp=self._obsp,
+            obsm=self.varm,
+            varm=self.obsm,
+            obsp=self.varp,
+            varp=self.obsp,
             filename=self.filename,
         )
 
@@ -1763,24 +1763,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             key = {key}
         if "obsm" in key:
-            obsm = self._obsm
             if (
-                not all([axis_len(o, 0) == self.n_obs for o in obsm.values()])
-                and len(obsm.dim_names) != self.n_obs
+                not all([axis_len(o, 0) == self.n_obs for o in self.obsm.values()])
+                and len(self.obsm.dim_names) != self.n_obs
             ):
                 raise ValueError(
                     "Observations annot. `obsm` must have number of rows of `X`"
-                    f" ({self.n_obs}), but has {len(obsm)} rows."
+                    f" ({self.n_obs}), but has {len(self.obsm)} rows."
                 )
         if "varm" in key:
-            varm = self._varm
             if (
-                not all([axis_len(v, 0) == self.n_vars for v in varm.values()])
-                and len(varm.dim_names) != self.n_vars
+                not all([axis_len(v, 0) == self.n_vars for v in self.varm.values()])
+                and len(self.varm.dim_names) != self.n_vars
             ):
                 raise ValueError(
                     "Variables annot. `varm` must have number of columns of `X`"
-                    f" ({self.n_vars}), but has {len(varm)} rows."
+                    f" ({self.n_vars}), but has {len(self.varm)} rows."
                 )
 
     def write_h5ad(

@@ -3,19 +3,17 @@ from __future__ import annotations
 import warnings
 from abc import ABC, abstractmethod
 from collections import abc as cabc
-from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from copy import copy
 from typing import (
     TYPE_CHECKING,
     ClassVar,
+    Generic,
     Literal,
     TypeVar,
     Union,
 )
 
-import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix
 
 from anndata._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from anndata.compat import AwkArray
@@ -32,16 +30,23 @@ from .index import _subset
 from .views import as_view, view_update
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
+
+    import numpy as np
+    from scipy.sparse import spmatrix
+
     from .anndata import AnnData
     from .raw import Raw
 
+    OneDIdx = Union[Sequence[int], Sequence[bool], slice]
+    TwoDIdx = tuple[OneDIdx, OneDIdx]
 
-OneDIdx = Union[Sequence[int], Sequence[bool], slice]
-TwoDIdx = tuple[OneDIdx, OneDIdx]
+    I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
+    # TODO: pd.DataFrame only allowed in AxisArrays?
+    V = Union[pd.DataFrame, spmatrix, np.ndarray]
 
-I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
-# TODO: pd.DataFrame only allowed in AxisArrays?
-V = Union[pd.DataFrame, spmatrix, np.ndarray]
+# Used in `Generic[T]`
+T = TypeVar("T")
 
 
 class AlignedMapping(cabc.MutableMapping, ABC):
@@ -335,7 +340,7 @@ class Layers(AlignedActualMixin, LayersBase):
         self,
         parent: AnnData,
         *,
-        axis: tuple[int, int] = (0, 1),
+        axis: tuple[Literal[0], Literal[1]] = (0, 1),
         store: MutableMapping[str, V],
     ):
         assert axis == (0, 1), axis
@@ -419,15 +424,17 @@ PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
 
 
-class AlignedMappingProperty(property):
-    def __init__(self, name, cls, axis):
+class AlignedMappingProperty(property, Generic[T]):
+    def __init__(
+        self, name: str, cls: T, axis: Literal[0, 1] | tuple[Literal[0], Literal[1]]
+    ):
         self.name = name
         self.axis = axis
         self.cls = cls
 
-    def __get__(self, obj, objtype=None):
+    def __get__(self, obj: None | AnnData, objtype: type | None = None) -> T:
         if obj is None:  # needs to return a `property`, e.g. for Sphinx
-            return self
+            return self  # type: ignore
         if obj.is_view:
             parent_anndata = obj._adata_ref
             idxs = (obj._oidx, obj._vidx)
@@ -438,12 +445,14 @@ class AlignedMappingProperty(property):
         else:
             return self.cls(obj, axis=self.axis, store=getattr(obj, "_" + self.name))
 
-    def __set__(self, obj, value):
+    def __set__(
+        self, obj: AnnData, value: Mapping[str, V] | Iterable[tuple[str, V]]
+    ) -> None:
         value = convert_to_dict(value)
         _ = self.cls(obj, axis=self.axis, store=value)  # Validate
         if obj.is_view:
             obj._init_as_actual(obj.copy())
         setattr(obj, "_" + self.name, value)
 
-    def __delete__(self, obj):
+    def __delete__(self, obj) -> None:
         setattr(obj, self.name, dict())
