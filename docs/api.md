@@ -142,3 +142,13 @@ Utilities for customizing the IO process:
 
    ImplicitModificationWarning
 ```
+
+## Settings
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   settings
+   settings.override
+```
