@@ -45,9 +45,6 @@ if TYPE_CHECKING:
     # TODO: pd.DataFrame only allowed in AxisArrays?
     V = Union[pd.DataFrame, spmatrix, np.ndarray]
 
-# Used in `Generic[T]`
-T = TypeVar("T")
-
 
 class AlignedMapping(cabc.MutableMapping, ABC):
     """\
@@ -424,13 +421,30 @@ PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
 
 
+T = TypeVar("T", bound=AlignedMapping)
+
+
 class AlignedMappingProperty(property, Generic[T]):
     def __init__(
-        self, name: str, cls: T, axis: Literal[0, 1] | tuple[Literal[0], Literal[1]]
+        self,
+        name: str,
+        cls: type[T],
+        axis: Literal[0, 1] | tuple[Literal[0], Literal[1]],
     ):
         self.name = name
         self.axis = axis
         self.cls = cls
+
+    @property
+    def fget(self) -> cabc.Callable:
+        """Fake fget for sphinx-autodoc-typehints."""
+
+        def fake(): ...
+
+        fake.__annotations__ = {
+            "return": Union[self.cls._actual_class, self.cls._view_class]
+        }
+        return fake
 
     def __get__(self, obj: None | AnnData, objtype: type | None = None) -> T:
         if obj is None:  # needs to return a `property`, e.g. for Sphinx
