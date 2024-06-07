@@ -619,7 +619,7 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     Indexing returns sparse matrices
 
     >>> X[100:200]  # doctest: +ELLIPSIS
-    <...100...765...sparse matrix of type...float32...Compressed Sparse Row...>
+    <...sparse matrix of...float32...with 25003 stored elements...>
 
     These can also be used inside of an AnnData object, no need for backed mode
 
@@ -635,7 +635,7 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     >>> adata[adata.obs["bulk_labels"] == "CD56+ NK"].layers[
     ...     "backed"
     ... ]  # doctest: +ELLIPSIS
-    <...31...765...sparse matrix of type...float32...Compressed Sparse Row...>
+    <...sparse matrix of...float32...with 7340 stored elements...>
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
