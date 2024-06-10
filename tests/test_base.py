@@ -11,7 +11,7 @@ from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
-from anndata import AnnData
+from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
 from anndata.compat import CAN_USE_SPARSE_ARRAY
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -178,22 +178,22 @@ def test_convert_matrix(attr, when):
 
     direct = attr in {"X"}
 
-    if when == "init":
-        adata = (
-            AnnData(**{attr: mat})
-            if direct
-            else AnnData(shape=(2, 2), **{attr: {"a": mat}})
-        )
-    elif when == "assign":
-        adata = AnnData(shape=(2, 2))
-        if direct:
-            setattr(adata, attr, mat)
+    with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
+        if when == "init":
+            adata = (
+                AnnData(**{attr: mat})
+                if direct
+                else AnnData(shape=(2, 2), **{attr: {"a": mat}})
+            )
+        elif when == "assign":
+            adata = AnnData(shape=(2, 2))
+            if direct:
+                setattr(adata, attr, mat)
+            else:
+                getattr(adata, attr)["a"] = mat
         else:
-            getattr(adata, attr)["a"] = mat
-    else:
-        raise ValueError(when)
+            raise ValueError(when)
 
-    # with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
     arr = getattr(adata, attr) if direct else getattr(adata, attr)["a"]
     assert isinstance(arr, np.ndarray), f"{arr} is not an array"
     assert not isinstance(arr, np.matrix), f"{arr} is still a matrix"
