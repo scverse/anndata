@@ -195,8 +195,8 @@ def test_convert_matrix(attr, when):
 
     # with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
     arr = getattr(adata, attr) if direct else getattr(adata, attr)["a"]
-    assert isinstance(arr, np.ndarray), "it’s not even an array"
-    assert not isinstance(arr, np.matrix), "it’s still a matrix"
+    assert isinstance(arr, np.ndarray), f"{arr} is not an array"
+    assert not isinstance(arr, np.matrix), f"{arr} is still a matrix"
 
 
 def test_attr_deletion():
