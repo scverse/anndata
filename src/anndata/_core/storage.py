@@ -89,4 +89,6 @@ def coerce_array(
             e = _e
     # if value isn’t the right type or convertible, raise an error
     msg = f"{name} needs to be of one of {join_english(StorageType.qualnames())}, not {type(value)}."
+    if e is not None:
+        msg += " (Failed to convert it to an array, see above for details.)"
     raise ValueError(msg) from e

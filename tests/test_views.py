@@ -120,6 +120,14 @@ def test_views():
     assert adata_subset.obs["foo"].tolist() == list(range(2))
 
 
+def test_convert_error():
+    adata = ad.AnnData(np.array([[1, 2], [3, 0]]))
+    no_array = [[1], []]
+
+    with pytest.raises(ValueError, match=r"Failed to convert"):
+        adata[:, 0].X = no_array
+
+
 def test_view_subset_shapes():
     adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
 
