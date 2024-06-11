@@ -81,7 +81,7 @@ def diskfmt(request):
     return request.param
 
 
-@pytest.fixture
+@pytest.fixture()
 def rw(backing_h5ad):
     M, N = 100, 101
     orig = gen_adata((M, N))
@@ -265,7 +265,7 @@ def store_context(path: Path):
 
 
 @pytest.mark.parametrize(
-    ["name", "read", "write"],
+    ("name", "read", "write"),
     [
         ("adata.h5ad", ad.read_h5ad, ad.AnnData.write_h5ad),
         ("adata.zarr", ad.read_zarr, ad.AnnData.write_zarr),
@@ -289,7 +289,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
 
 
 @pytest.mark.parametrize(
-    "compression,compression_opts",
+    ("compression", "compression_opts"),
     [
         (None, None),
         ("lzf", None),
@@ -420,15 +420,19 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     else:
         # TODO: this should not be necessary
         assert np.allclose(adata.X.toarray(), X.toarray())
-    assert "X_a" in adata.obsm_keys() and adata.obsm["X_a"].shape[1] == 2
-    assert "X_b" in adata.varm_keys() and adata.varm["X_b"].shape[1] == 3
+    assert "X_a" in adata.obsm_keys()
+    assert adata.obsm["X_a"].shape[1] == 2
+    assert "X_b" in adata.varm_keys()
+    assert adata.varm["X_b"].shape[1] == 3
     # as we called with `cleanup=True`
     assert "oanno1b" in adata.uns["loom-obs"]
     assert "vanno2" in adata.uns["loom-var"]
     for k, v in obsm_mapping.items():
-        assert k in adata.obsm_keys() and adata.obsm[k].shape[1] == len(v)
+        assert k in adata.obsm_keys()
+        assert adata.obsm[k].shape[1] == len(v)
     for k, v in varm_mapping.items():
-        assert k in adata.varm_keys() and adata.varm[k].shape[1] == len(v)
+        assert k in adata.varm_keys()
+        assert adata.varm[k].shape[1] == len(v)
     assert adata.obs_names.name == obs_dim
     assert adata.var_names.name == var_dim
 
@@ -454,7 +458,7 @@ def test_readloom_deprecations(tmp_path):
         depr_result = ad.read_loom(loom_pth, obsm_names=obsm_mapping)
     actual_result = ad.read_loom(loom_pth, obsm_mapping=obsm_mapping)
     assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match="ambiguous"), pytest.warns(FutureWarning):
+    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
         ad.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
 
     # varm_names -> varm_mapping
@@ -463,11 +467,11 @@ def test_readloom_deprecations(tmp_path):
         depr_result = ad.read_loom(loom_pth, varm_names=varm_mapping)
     actual_result = ad.read_loom(loom_pth, varm_mapping=varm_mapping)
     assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match="ambiguous"), pytest.warns(FutureWarning):
+    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
         ad.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
 
     # positional -> keyword
-    with pytest.warns(FutureWarning, match="sparse"):
+    with pytest.warns(FutureWarning, match=r"sparse"):
         depr_result = ad.read_loom(loom_pth, True)
     actual_result = ad.read_loom(loom_pth, sparse=True)
     assert type(depr_result.X) == type(actual_result.X)
@@ -535,7 +539,7 @@ def test_write_csv_view(typ, tmp_path):
 
 
 @pytest.mark.parametrize(
-    ["read", "write", "name"],
+    ("read", "write", "name"),
     [
         pytest.param(ad.read_h5ad, ad._io.write_h5ad, "test_empty.h5ad"),
         pytest.param(
@@ -604,26 +608,25 @@ def test_write_categorical_index(tmp_path, diskfmt):
     assert_equal(orig, curr, exact=True)
 
 
-def test_dataframe_reserved_columns(tmp_path, diskfmt):
-    reserved = ("_index",)
+@pytest.mark.parametrize("colname", ["_index"])
+@pytest.mark.parametrize("attr", ["obs", "varm_df"])
+def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     orig = ad.AnnData(
         obs=pd.DataFrame(index=np.arange(5)), var=pd.DataFrame(index=np.arange(5))
     )
-    for colname in reserved:
-        to_write = orig.copy()
+
+    to_write = orig.copy()
+    if attr == "obs":
         to_write.obs[colname] = np.ones(5)
-        with pytest.raises(ValueError) as exc_info:
-            getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value)
-    for colname in reserved:
-        to_write = orig.copy()
+    elif attr == "varm_df":
         to_write.varm["df"] = pd.DataFrame(
             {colname: list("aabcd")}, index=to_write.var_names
         )
-        with pytest.raises(ValueError) as exc_info:
-            getattr(to_write, f"write_{diskfmt}")(adata_pth)
-        assert colname in str(exc_info.value)
+    else:
+        pytest.fail(f"Unexpected attr: {attr}")
+    with pytest.raises(ValueError, match=rf"{colname}.*reserved name"):
+        getattr(to_write, f"write_{diskfmt}")(adata_pth)
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
