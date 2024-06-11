@@ -543,6 +543,11 @@ class BaseCompressedSparseDataset(ABC):
 
     @cached_property
     def indptr(self) -> np.ndarray:
+        """\
+        Other than `data` and `indices`, this is only as long as the major axis
+
+        It should therefore fit into memory, so we cache it for faster access.
+        """
         arr = self.group["indptr"][...]
         return arr
 
