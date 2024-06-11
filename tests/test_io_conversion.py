@@ -86,11 +86,12 @@ def test_sparse_to_dense_inplace(tmp_path, spmtx_format):
 def test_sparse_to_dense_errors(tmp_path):
     adata = ad.AnnData(X=sparse.random(50, 50, format="csr"))
     adata.layers["like_X"] = adata.X.copy()
-    with pytest.raises(ValueError):
-        adata.write_h5ad(tmp_path / "failure.h5ad", as_dense=("raw/X"))
+    with pytest.raises(ValueError, match=r"Cannot specify writing"):
+        adata.write_h5ad(tmp_path / "failure.h5ad", as_dense=("raw/X",))
+    with pytest.raises(NotImplementedError):
         adata.write_h5ad(tmp_path / "failure.h5ad", as_dense=("raw", "X"))
     with pytest.raises(NotImplementedError):
-        adata.write_h5ad(tmp_path / "failure.h5ad", as_dense=("layers/like_X"))
+        adata.write_h5ad(tmp_path / "failure.h5ad", as_dense=("layers/like_X",))
 
 
 def test_dense_to_sparse_memory(tmp_path, spmtx_format, to_convert):

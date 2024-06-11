@@ -12,7 +12,7 @@ import anndata as ad
 ADATA_ATTRS = ("obs", "var", "varm", "obsm", "layers", "obsp", "varp", "uns")
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata():
     return ad.AnnData(
         np.zeros((20, 10)),

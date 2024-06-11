@@ -48,9 +48,9 @@ def _normalize_index(
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
     if not isinstance(index, pd.RangeIndex):
-        assert (
-            index.dtype != float and index.dtype != int
-        ), "Don’t call _normalize_index with non-categorical/string names"
+        msg = "Don’t call _normalize_index with non-categorical/string names"
+        assert index.dtype != float, msg
+        assert index.dtype != int, msg
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
