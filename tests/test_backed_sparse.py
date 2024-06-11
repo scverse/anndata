@@ -12,7 +12,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray
+from anndata.compat import CAN_USE_SPARSE_ARRAY, H5Array, SpArray, ZarrArray
 from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -104,7 +104,9 @@ def test_empty_backed_indexing(
 
 
 def test_backed_indexing(
+    monkeypatch: pytest.MonkeyPatch,
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
 ):
@@ -113,9 +115,28 @@ def test_backed_indexing(
     obs_idx = subset_func(csr_mem.obs_names)
     var_idx = subset_func2(csr_mem.var_names)
 
+    # This is the only time the whole matrix data is accessed
+    assert_equal(csr_mem.X[...], csc_disk.X[...])
+
+    # Make sure it isn’t accidentally accessed when slicing
+    if diskfmt == "zarr":
+        cls = ZarrArray
+    elif diskfmt == "h5ad":
+        cls = H5Array
+    else:
+        pytest.fail(f"Unknown {diskfmt=}")
+
+    __array__orig = cls.__array__
+
+    def __array__(self, *args) -> np.ndarray:
+        arr = __array__orig(self, *args)
+        assert len(arr) < len(csr_mem.X.data)
+        return arr
+
+    monkeypatch.setattr(cls, "__array__", __array__)
+
     assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
     assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
-    assert_equal(csr_mem.X[...], csc_disk.X[...])
     assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
     assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
