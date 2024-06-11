@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from functools import reduce
-from typing import Callable, Literal, Union
+from typing import Any, Callable, Literal, Union
 
 import numpy as np
 import pandas as pd
@@ -117,9 +117,12 @@ class _ConcatViewMixin:
 
 
 class _IterateViewMixin:
+    shape: tuple[int, int]
+
     def iterate_axis(
         self,
         batch_size: int,
+        *,
         axis: Literal[0, 1] = 0,
         shuffle: bool = False,
         drop_last: bool = False,
@@ -183,7 +186,7 @@ class MapObsView:
         self.dtypes = dtypes
         self.obs_names = obs_names
 
-    def __getitem__(self, key, use_convert=True):
+    def __getitem__(self, key: str, *, use_convert: bool = True):
         if self._keys is not None and key not in self._keys:
             raise KeyError(f"No {key} in {self.attr} view")
 
@@ -225,17 +228,19 @@ class MapObsView:
 
         return _arr
 
-    def keys(self):
+    def keys(self) -> list[str]:
         if self._keys is not None:
             return self._keys
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
-    def to_dict(self, keys=None, use_convert=True):
+    def to_dict(
+        self, *, keys: Iterable[str] | None = None, use_convert: bool = True
+    ) -> dict[str, Any]:
         dct = {}
         keys = self.keys() if keys is None else keys
         for key in keys:
-            dct[key] = self.__getitem__(key, use_convert)
+            dct[key] = self.__getitem__(key, use_convert=use_convert)
         return dct
 
     @property
@@ -293,7 +298,9 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         self._convert_X = None
         self.convert = convert
 
-    def _lazy_init_attr(self, attr, set_vidx=False):
+    def _lazy_init_attr(
+        self, attr: Literal["obs", "obsm", "layers"], *, set_vidx: bool = False
+    ) -> None:
         if getattr(self, f"_{attr}_view") is not None:
             return
         keys = None
@@ -504,30 +511,30 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self._convert
 
     @convert.setter
-    def convert(self, value):
+    def convert(self, value) -> None:
         self._convert = value
         self._convert_X = _select_convert("X", self._convert)
         for attr in ATTRS:
             setattr(self, f"_{attr}_view", None)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.obs_names)
 
-    def __getitem__(self, index: Index):
+    def __getitem__(self, index: Index) -> AnnCollectionView:
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 
         return AnnCollectionView(self.reference, self.convert, resolved_idx)
 
     @property
-    def has_backed(self):
+    def has_backed(self) -> bool:
         """`True` if the current subset of `adatas` has backed objects, `False` otherwise."""
         for i, adata in enumerate(self.adatas):
             if adata.isbacked and self.adatas_oidx[i] is not None:
                 return True
         return False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         n_obs, n_vars = self.shape
         descr = f"AnnCollectionView object with n_obs × n_vars = {n_obs} × {n_vars}"
         all_attrs_keys = self._view_attrs_keys.copy()
@@ -538,7 +545,9 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
 
-    def to_adata(self, ignore_X: bool = False, ignore_layers: bool = False):
+    def to_adata(
+        self, *, ignore_X: bool = False, ignore_layers: bool = False
+    ) -> AnnData:
         """Convert this AnnCollectionView object to an AnnData object.
 
         Parameters
@@ -672,6 +681,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     def __init__(
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
+        *,
         join_obs: Literal["inner", "outer"] | None = "inner",
         join_obsm: Literal["inner"] | None = None,
         join_vars: Literal["inner"] | None = None,
@@ -681,7 +691,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         convert: ConvertType | None = None,
         harmonize_dtypes: bool = True,
         indices_strict: bool = True,
-    ):
+    ) -> None:
         if isinstance(adatas, Mapping):
             if keys is not None:
                 raise TypeError(
