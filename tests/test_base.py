@@ -189,7 +189,7 @@ def test_names():
 
 
 @pytest.mark.parametrize(
-    "names,after",
+    ("names", "after"),
     [
         pytest.param(["a", "b"], None, id="list"),
         pytest.param(
@@ -427,7 +427,9 @@ def test_append_col():
     # this worked in the initial AnnData, but not with a dataframe
     # adata.obs[['new2', 'new3']] = [['A', 'B'], ['c', 'd']]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="Length of values.*does not match length of index"
+    ):
         adata.obs["new4"] = "far too long".split()
 
 
@@ -446,8 +448,9 @@ def test_set_obs():
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
     assert adata.obs_names.tolist() == [0, 1]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="but this AnnData has shape"):
         adata.obs = pd.DataFrame(dict(a=[3, 4, 5]))
+    with pytest.raises(ValueError, match="Can only assign pd.DataFrame"):
         adata.obs = dict(a=[1, 2])
 
 
@@ -605,9 +608,9 @@ def test_to_df_no_X():
     )
     v = adata[:10]
 
-    with pytest.raises(ValueError, match="X is None"):
+    with pytest.raises(ValueError, match=r"X is None"):
         _ = adata.to_df()
-    with pytest.raises(ValueError, match="X is None"):
+    with pytest.raises(ValueError, match=r"X is None"):
         _ = v.to_df()
 
     expected = pd.DataFrame(

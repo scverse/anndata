@@ -33,7 +33,7 @@ M = 50
 N = 50
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
 ) -> tuple[AnnData, AnnData, AnnData, AnnData]:
@@ -155,7 +155,7 @@ def make_one_elem_mask(size: int) -> np.ndarray:
 
 # test behavior from https://github.com/scverse/anndata/pull/1233
 @pytest.mark.parametrize(
-    "make_bool_mask,should_trigger_optimization",
+    ("make_bool_mask", "should_trigger_optimization"),
     [
         (make_randomized_mask, None),
         (make_alternating_mask_15, True),
@@ -230,7 +230,7 @@ def test_consecutive_bool(
 
 
 @pytest.mark.parametrize(
-    ["sparse_format", "append_method"],
+    ("sparse_format", "append_method"),
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
@@ -263,7 +263,7 @@ def test_dataset_append_memory(
 
 
 @pytest.mark.parametrize(
-    ["sparse_format", "append_method"],
+    ("sparse_format", "append_method"),
     [
         pytest.param(sparse.csr_matrix, sparse.vstack),
         pytest.param(sparse.csc_matrix, sparse.hstack),
@@ -299,7 +299,7 @@ def test_dataset_append_disk(
 
 
 @pytest.mark.parametrize(
-    ["sparse_format"],
+    "sparse_format",
     [
         pytest.param(sparse.csr_matrix),
         pytest.param(sparse.csc_matrix),
@@ -327,7 +327,7 @@ def test_indptr_cache(
 
 
 @pytest.mark.parametrize(
-    ["sparse_format"],
+    "sparse_format",
     [
         pytest.param(sparse.csr_matrix),
         pytest.param(sparse.csc_matrix),
@@ -356,13 +356,16 @@ def test_data_access(
             a_disk[idx, :]
         else:
             a_disk[:, idx]
-        assert (store.get_access_count("X/data") == 3) and store.get_accessed_keys(
-            "X/data"
-        ) == ["X/data/.zarray", "X/data/.zarray", "X/data/0"]
+        assert store.get_access_count("X/data") == 3
+        assert store.get_accessed_keys("X/data") == [
+            "X/data/.zarray",
+            "X/data/.zarray",
+            "X/data/0",
+        ]
 
 
 @pytest.mark.parametrize(
-    ["sparse_format", "a_shape", "b_shape"],
+    ("sparse_format", "a_shape", "b_shape"),
     [
         pytest.param("csr", (100, 100), (100, 200)),
         pytest.param("csc", (100, 100), (200, 100)),
@@ -425,9 +428,9 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     disk_mtx = sparse_dataset(f["base"])
     pre_checks = disk_mtx.to_memory()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="must have same format"):
         disk_mtx.append(sparse.random(100, 100, format="csc"))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="must have same format"):
         disk_mtx.append(sparse.random(100, 100, format="coo"))
     with pytest.raises(NotImplementedError):
         disk_mtx.append(np.random.random((100, 100)))

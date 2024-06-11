@@ -514,7 +514,7 @@ class BaseCompressedSparseDataset(ABC):
             ), "CSC matrices must have same size of dimension 0 to be appended."
             new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
         else:
-            assert False, "We forgot to update this branching to a new format"
+            raise AssertionError("We forgot to update this branching to a new format")
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
         self.group.attrs["shape"] = new_shape

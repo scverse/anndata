@@ -144,17 +144,17 @@ def fix_known_differences(orig, result, backwards_compat=True):
 def test_concat_interface_errors():
     adatas = [gen_adata((5, 10)), gen_adata((5, 10))]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="`axis` must be.*0, 1, 'obs', or 'var'"):
         concat(adatas, axis=3)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="'inner' or 'outer'"):
         concat(adatas, join="not implemented")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="No objects to concatenate"):
         concat([])
 
 
 @mark_legacy_concatenate
 @pytest.mark.parametrize(
-    ["concat_func", "backwards_compat"],
+    ("concat_func", "backwards_compat"),
     [
         (partial(concat, merge="unique"), False),
         (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
@@ -268,7 +268,7 @@ def test_concatenate_layers(array_type, join_type):
     assert_equal(merged.X, merged.layers["a"])
 
 
-@pytest.fixture
+@pytest.fixture()
 def obsm_adatas():
     def gen_index(n):
         return [f"cell{i}" for i in range(n)]
@@ -795,7 +795,7 @@ def test_awkward_does_not_mix(join_type, other):
 
     with pytest.raises(
         NotImplementedError,
-        match="Cannot concatenate an AwkwardArray with other array types",
+        match=r"Cannot concatenate an AwkwardArray with other array types",
     ):
         concat([adata_a, adata_b], join=join_type)
 
@@ -1045,7 +1045,7 @@ def gen_concat_params(unss, compat2result):
 
 
 @pytest.mark.parametrize(
-    ["unss", "merge_strategy", "result", "value_gen"],
+    ("unss", "merge_strategy", "result", "value_gen"),
     chain(
         gen_concat_params(
             [{"a": 1}, {"a": 2}],
@@ -1524,7 +1524,7 @@ def test_concat_duplicated_columns(join_type):
         concat([a, b], join=join_type)
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_error_on_mixed_device():
     """https://github.com/scverse/anndata/issues/1083"""
     import cupy
@@ -1557,7 +1557,7 @@ def test_error_on_mixed_device():
     for p in map(dict, permutations(adatas.items())):
         print(list(p.keys()))
         with pytest.raises(
-            NotImplementedError, match="Cannot concatenate a cupy array with other"
+            NotImplementedError, match=r"Cannot concatenate a cupy array with other"
         ):
             concat(p)
 

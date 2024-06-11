@@ -203,7 +203,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     assert_eq_concat_on_disk(adatas, tmp_path, file_format)
 
 
-@pytest.fixture
+@pytest.fixture()
 def obsm_adatas():
     def gen_index(n):
         return [f"cell{i}" for i in range(n)]
@@ -267,5 +267,5 @@ def test_output_dir_exists(tmp_path):
 
 
 def test_failure_w_no_args(tmp_path):
-    with pytest.raises(ValueError, match="No objects to concatenate"):
+    with pytest.raises(ValueError, match=r"No objects to concatenate"):
         concat_on_disk([], tmp_path / "out.h5ad")
