@@ -65,9 +65,7 @@ jobs:
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
-      - script: |
-          set -e
-          uv pip list
+      - script: uv pip list
         displayName: "Display installed versions"
 
       - script: pytest
