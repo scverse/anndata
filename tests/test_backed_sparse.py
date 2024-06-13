@@ -242,9 +242,7 @@ def test_dataset_append_memory(
     append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = (
-        tmp_path / f"test.{diskfmt.replace('ad', '')}"
-    )  # diskfmt is either h5ad or zarr
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
     if diskfmt == "zarr":
@@ -275,9 +273,7 @@ def test_dataset_append_disk(
     append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = (
-        tmp_path / f"test.{diskfmt.replace('ad', '')}"
-    )  # diskfmt is either h5ad or zarr
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
@@ -298,13 +294,7 @@ def test_dataset_append_disk(
     assert_equal(fromdisk, frommem)
 
 
-@pytest.mark.parametrize(
-    ["sparse_format"],
-    [
-        pytest.param(sparse.csr_matrix),
-        pytest.param(sparse.csc_matrix),
-    ],
-)
+@pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 def test_indptr_cache(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
@@ -321,18 +311,11 @@ def test_indptr_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    assert (
-        store.get_access_count("X/indptr") == 2
-    )  # one each for .zarray and actual access
+    # one each for .zarray and actual access
+    assert store.get_access_count("X/indptr") == 2
 
 
-@pytest.mark.parametrize(
-    ["sparse_format"],
-    [
-        pytest.param(sparse.csr_matrix),
-        pytest.param(sparse.csc_matrix),
-    ],
-)
+@pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 def test_data_access(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
@@ -343,9 +326,8 @@ def test_data_access(
     ad._io.specs.write_elem(f, "X", a)
     data = f["X/data"][...]
     del f["X/data"]
-    zarr.array(
-        data, store=path / "X" / "data", chunks=(1,)
-    )  # chunk one at a time to count properly
+    # chunk one at a time to count properly
+    zarr.array(data, store=path / "X" / "data", chunks=(1,))
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store)
@@ -375,9 +357,7 @@ def test_wrong_shape(
     b_shape: tuple[int, int],
     diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = (
-        tmp_path / f"test.{diskfmt.replace('ad', '')}"
-    )  # diskfmt is either h5ad or zarr
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a_mem = sparse.random(*a_shape, format=sparse_format)
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
@@ -411,9 +391,7 @@ def test_reset_group(tmp_path: Path):
 
 
 def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
-    path = (
-        tmp_path / f"test.{diskfmt.replace('ad', '')}"
-    )  # diskfmt is either h5ad or zarr
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
@@ -442,9 +420,7 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
 
 
 def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
-    path = (
-        tmp_path / f"test.{diskfmt.replace('ad', '')}"
-    )  # diskfmt is either h5ad or zarr
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
@@ -459,7 +435,6 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
 
 def test_backed_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
