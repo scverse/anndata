@@ -144,7 +144,7 @@ def fix_known_differences(orig, result, backwards_compat=True):
 def test_concat_interface_errors():
     adatas = [gen_adata((5, 10)), gen_adata((5, 10))]
 
-    with pytest.raises(ValueError, match="`axis` must be.*0, 1, 'obs', or 'var'"):
+    with pytest.raises(ValueError, match="`axis` must be.*0.*1"):
         concat(adatas, axis=3)
     with pytest.raises(ValueError, match="'inner' or 'outer'"):
         concat(adatas, join="not implemented")

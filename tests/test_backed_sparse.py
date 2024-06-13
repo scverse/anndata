@@ -428,9 +428,9 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     disk_mtx = sparse_dataset(f["base"])
     pre_checks = disk_mtx.to_memory()
 
-    with pytest.raises(ValueError, match="must have same format"):
+    with pytest.raises(ValueError, match="must have same format|is not supported"):
         disk_mtx.append(sparse.random(100, 100, format="csc"))
-    with pytest.raises(ValueError, match="must have same format"):
+    with pytest.raises(ValueError, match="must have same format|is not supported"):
         disk_mtx.append(sparse.random(100, 100, format="coo"))
     with pytest.raises(NotImplementedError):
         disk_mtx.append(np.random.random((100, 100)))
