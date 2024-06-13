@@ -349,10 +349,12 @@ def mk_idx_kind(
 ) -> slice | int | NDArray[np.integer] | NDArray[np.bool_] | None:
     match kind:
         case "slice":
+            start = idx[0] if idx[0] > 0 else None
             if len(idx) == 1:
-                return slice(idx[0], idx[0] + 1)
+                return slice(start, idx[0] + 1)
             if all(np.diff(idx) == 1):
-                return slice(idx[0], idx[-1] + 1)
+                stop = idx[-1] + 1 if idx[-1] < l - 1 else None
+                return slice(start, stop)
         case "int":
             if len(idx) == 1:
                 return idx[0]
@@ -365,29 +367,28 @@ def mk_idx_kind(
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize(
-    ("idx", "exp"),
+    ("idx_maj", "idx_min", "exp"),
     [
-        pytest.param(idx, exp, id=f"{idx_raw}-{kind}")
-        for (idx_raw, exp), kind in product(
+        pytest.param(idx_maj, idx_min, exp, id=f"{idx_maj_raw}-{kind}")
+        for (idx_maj_raw, idx_min_raw, exp), kind in product(
             [
                 (
                     [0],
-                    [
-                        "X/data/.zarray",
-                        "X/data/.zarray",
-                        "X/data/0",
-                    ],
+                    range(10),
+                    ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
                 ),
             ],
             get_args(Kind),
         )
-        if (idx := mk_idx_kind(idx_raw, kind=kind, l=10)) is not None
+        if (idx_maj := mk_idx_kind(idx_maj_raw, kind=kind, l=10)) is not None
+        if (idx_min := mk_idx_kind(idx_min_raw, kind=kind, l=10)) is not None
     ],
 )
 def test_data_access(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    idx: slice | int | NDArray[np.integer] | NDArray[np.bool_],
+    idx_maj: slice | int | NDArray[np.integer] | NDArray[np.bool_],
+    idx_min: slice | int | NDArray[np.integer] | NDArray[np.bool_],
     exp: list[str],
 ):
     path = tmp_path / "test.zarr"
@@ -406,11 +407,13 @@ def test_data_access(
     # Do the slicing with idx
     store.reset_key_trackers()
     if a_disk.format == "csr":
-        a_disk[idx, :]
+        a_disk[idx_maj, idx_min]
     else:
-        a_disk[:, idx]
+        a_disk[idx_min, idx_maj]
 
-    assert store.get_access_count("X/data") == len(exp)
+    assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
+        "X/data"
+    )
     assert store.get_accessed_keys("X/data") == exp
 
 
