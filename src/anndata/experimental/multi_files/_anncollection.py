@@ -137,7 +137,7 @@ class _IterateViewMixin:
         drop_last
             Set to `True` to drop a batch with the length lower than `batch_size`.
         """
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError("Axis should be either 0 or 1.")
 
         n = self.shape[axis]
@@ -951,7 +951,7 @@ class LazyAttrData(_IterateViewMixin):
         oidx = None
         vidx = None
 
-        if isinstance(index, tuple) and self.attr in ("obs", "obsm"):
+        if isinstance(index, tuple) and self.attr in {"obs", "obsm"}:
             oidx = index[0]
             if len(index) > 1:
                 vidx = index[1]
@@ -968,7 +968,7 @@ class LazyAttrData(_IterateViewMixin):
     @property
     def shape(self):
         shape = self.adset.shape
-        if self.attr in ["X", "layers"]:
+        if self.attr in {"X", "layers"}:
             return shape
         elif self.attr == "obs":
             return (shape[0],)
