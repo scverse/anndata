@@ -323,7 +323,7 @@ def test_indptr_cache(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
 ):
-    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
     f = zarr.open_group(path, "a")
     ad._io.specs.write_elem(f, "X", a)
@@ -340,11 +340,13 @@ def test_indptr_cache(
 
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
+@pytest.mark.parametrize("idx_kind", ["slice", "int", "array", "mask"])
 def test_data_access(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    idx_kind: Literal["slice", "int", "array", "mask"],
 ):
-    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
     f = zarr.open_group(path, "a")
     ad._io.specs.write_elem(f, "X", a)
@@ -356,18 +358,31 @@ def test_data_access(
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store)
     a_disk = sparse_dataset(f["X"])
-    for idx in [slice(0, 1), 0, np.array([0]), np.array([True] + [False] * 9)]:
-        store.reset_key_trackers()
-        if a_disk.format == "csr":
-            a_disk[idx, :]
-        else:
-            a_disk[:, idx]
-        assert store.get_access_count("X/data") == 3
-        assert store.get_accessed_keys("X/data") == [
-            "X/data/.zarray",
-            "X/data/.zarray",
-            "X/data/0",
-        ]
+
+    idx = 0
+    match idx_kind:
+        case "slice":
+            idx = slice(idx, idx + 1)
+        case "int":
+            pass
+        case "array":
+            idx = np.array([idx])
+        case "mask":
+            idx = np.array([i == idx for i in range(10)])
+
+    # Do the slicing with idx
+    store.reset_key_trackers()
+    if a_disk.format == "csr":
+        a_disk[idx, :]
+    else:
+        a_disk[:, idx]
+
+    assert store.get_access_count("X/data") == 3
+    assert store.get_accessed_keys("X/data") == [
+        "X/data/.zarray",
+        "X/data/.zarray",
+        "X/data/0",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -403,7 +418,7 @@ def test_wrong_shape(
 
 
 def test_reset_group(tmp_path: Path):
-    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    path = tmp_path / "test.zarr"
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
