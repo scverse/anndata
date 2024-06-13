@@ -64,7 +64,7 @@ class BackedSparseMatrix(_cs_matrix):
     indices: GroupStorageType
     indptr: np.ndarray
 
-    def copy(self) -> _cs_matrix:
+    def copy(self) -> ss.csr_matrix | ss.csc_matrix:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
         if isinstance(self.data, ZarrArray):
@@ -424,7 +424,7 @@ class BaseCompressedSparseDataset(ABC):
         return tuple(map(int, shape))
 
     @property
-    def value(self) -> _cs_matrix:
+    def value(self) -> ss.csr_matrix | ss.csc_matrix:
         """DEPRECATED Use .to_memory() instead."""
         warnings.warn(
             "The .value attribute is deprecated and will be removed in the anndata 0.11.0. "
@@ -436,7 +436,9 @@ class BaseCompressedSparseDataset(ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(self, index: Index | tuple[()]) -> float | _cs_matrix:
+    def __getitem__(
+        self, index: Index | tuple[()]
+    ) -> float | ss.csr_matrix | ss.csc_matrix:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
@@ -577,7 +579,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx.indptr = self.indptr
         return mtx
 
-    def to_memory(self) -> _cs_matrix:
+    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix:
         format_class = get_memory_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
