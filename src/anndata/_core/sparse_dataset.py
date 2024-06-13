@@ -33,9 +33,10 @@ from ..compat import _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
-    from scipy.sparse.compressed import _cs_matrix
+    from scipy.sparse._compressed import _cs_matrix
 except ImportError:
-    _cs_matrix = ss.spmatrix
+    from scipy.sparse import spmatrix as _cs_matrix
+
 
 from .index import Index, _subset, unpack_index
 
@@ -46,9 +47,9 @@ if TYPE_CHECKING:
 
 
 class BackedFormat(NamedTuple):
-    format: str
+    format: Literal["csr", "csc"]
     backed_type: type[BackedSparseMatrix]
-    memory_type: type[ss.spmatrix]
+    memory_type: type[_cs_matrix]
 
 
 class BackedSparseMatrix(_cs_matrix):
@@ -59,7 +60,11 @@ class BackedSparseMatrix(_cs_matrix):
     since that calls copy on `.data`, `.indices`, and `.indptr`.
     """
 
-    def copy(self) -> ss.spmatrix:
+    data: GroupStorageType
+    indices: GroupStorageType
+    indptr: np.ndarray
+
+    def copy(self) -> ss.csr_matrix | ss.csc_matrix:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
         if isinstance(self.data, ZarrArray):
@@ -286,7 +291,7 @@ def get_compressed_vector(
 
 
 def subset_by_major_axis_mask(
-    mtx: ss.spmatrix, mask: np.ndarray
+    mtx: _cs_matrix, mask: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     slices = np.ma.extras._ezclump(mask)
 
@@ -309,21 +314,21 @@ def get_format(data: ss.spmatrix) -> str:
     raise ValueError(f"Data type {type(data)} is not supported.")
 
 
-def get_memory_class(format: str) -> type[ss.spmatrix]:
+def get_memory_class(format: Literal["csr", "csc"]) -> type[_cs_matrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
             return memory_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
-def get_backed_class(format: str) -> type[BackedSparseMatrix]:
+def get_backed_class(format: Literal["csr", "csc"]) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
             return backed_class
     raise ValueError(f"Format string {format} is not supported.")
 
 
-def _get_group_format(group) -> str:
+def _get_group_format(group: GroupStorageType) -> str:
     if "h5sparse_format" in group.attrs:
         # TODO: Warn about an old format
         # If this is only just going to be public, I could insist it's not like this
@@ -334,7 +339,7 @@ def _get_group_format(group) -> str:
 
 
 # Check for the overridden few methods above in our BackedSparseMatrix subclasses
-def is_sparse_indexing_overridden(format, row, col):
+def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
         (isinstance(major_indexer, (int, np.integer)))
@@ -346,6 +351,7 @@ def is_sparse_indexing_overridden(format, row, col):
 class BaseCompressedSparseDataset(ABC):
     """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
 
+    format: Literal["csr", "csc"]
     _group: GroupStorageType
 
     def __init__(self, group: GroupStorageType):
@@ -385,7 +391,7 @@ class BaseCompressedSparseDataset(ABC):
         assert group_format == cls.format
 
     @property
-    def format_str(self) -> Literal["csc", "csr"]:
+    def format_str(self) -> Literal["csr", "csc"]:
         """DEPRECATED Use .format instead."""
         warnings.warn(
             "The attribute .format_str is deprecated and will be removed in the anndata 0.11.0. "
@@ -407,7 +413,7 @@ class BaseCompressedSparseDataset(ABC):
         return tuple(map(int, shape))
 
     @property
-    def value(self) -> ss.spmatrix:
+    def value(self) -> ss.csr_matrix | ss.csc_matrix:
         """DEPRECATED Use .to_memory() instead."""
         warnings.warn(
             "The .value attribute is deprecated and will be removed in the anndata 0.11.0. "
@@ -419,7 +425,9 @@ class BaseCompressedSparseDataset(ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(self, index: Index | tuple[()]) -> float | ss.spmatrix:
+    def __getitem__(
+        self, index: Index | tuple[()]
+    ) -> float | ss.csr_matrix | ss.csc_matrix:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
@@ -461,7 +469,7 @@ class BaseCompressedSparseDataset(ABC):
             row, col = np.ix_(row, col)
         return row, col
 
-    def __setitem__(self, index: Index | tuple[()], value):
+    def __setitem__(self, index: Index | tuple[()], value) -> None:
         warnings.warn(
             "__setitem__ will likely be removed in the near future. We do not recommend relying on its stability.",
             PendingDeprecationWarning,
@@ -471,7 +479,7 @@ class BaseCompressedSparseDataset(ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: ss.spmatrix):
+    def append(self, sparse_matrix: _cs_matrix) -> None:
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, BaseCompressedSparseDataset):
@@ -544,6 +552,11 @@ class BaseCompressedSparseDataset(ABC):
 
     @cached_property
     def indptr(self) -> np.ndarray:
+        """\
+        Other than `data` and `indices`, this is only as long as the major axis
+
+        It should therefore fit into memory, so we cache it for faster access.
+        """
         arr = self.group["indptr"][...]
         return arr
 
@@ -555,7 +568,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx.indptr = self.indptr
         return mtx
 
-    def to_memory(self) -> ss.spmatrix:
+    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix:
         format_class = get_memory_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
@@ -575,16 +588,12 @@ _sparse_dataset_doc = """\
 
 
 class CSRDataset(BaseCompressedSparseDataset):
-    __doc__ = _sparse_dataset_doc.format(
-        format="CSR",
-    )
+    __doc__ = _sparse_dataset_doc.format(format="CSR")
     format = "csr"
 
 
 class CSCDataset(BaseCompressedSparseDataset):
-    __doc__ = _sparse_dataset_doc.format(
-        format="CSC",
-    )
+    __doc__ = _sparse_dataset_doc.format(format="CSC")
     format = "csc"
 
 

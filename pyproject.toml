@@ -85,7 +85,7 @@ test = [
     "loompy>=3.0.5",
     "pytest>=8.2",
     "pytest-cov>=2.10",
-    "zarr",
+    "zarr<3.0.0a0",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
