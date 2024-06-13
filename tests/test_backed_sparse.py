@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Literal
+from itertools import product
+from typing import TYPE_CHECKING, Callable, Literal, get_args
 
 import h5py
 import numpy as np
@@ -17,9 +18,10 @@ from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
-    from numpy.typing import ArrayLike
+    from numpy.typing import ArrayLike, NDArray
     from pytest_mock import MockerFixture
 
 subset_func2 = subset_func
@@ -339,12 +341,54 @@ def test_indptr_cache(
     assert store.get_access_count("X/indptr") == 2
 
 
+Kind = Literal["slice", "int", "array", "mask"]
+
+
+def mk_idx_kind(
+    idx: Sequence[int], *, kind: Kind, l: int
+) -> slice | int | NDArray[np.integer] | NDArray[np.bool_] | None:
+    match kind:
+        case "slice":
+            if len(idx) == 1:
+                return slice(idx[0], idx[0] + 1)
+            if all(np.diff(idx) == 1):
+                return slice(idx[0], idx[-1] + 1)
+        case "int":
+            if len(idx) == 1:
+                return idx[0]
+        case "array":
+            return np.asarray(idx)
+        case "mask":
+            return np.in1d(np.arange(l), idx)
+    return None
+
+
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
-@pytest.mark.parametrize("idx_kind", ["slice", "int", "array", "mask"])
+@pytest.mark.parametrize(
+    ("idx", "exp"),
+    [
+        pytest.param(idx, exp, id=f"{idx_raw}-{kind}")
+        for (idx_raw, exp), kind in product(
+            [
+                (
+                    [0],
+                    [
+                        "X/data/.zarray",
+                        "X/data/.zarray",
+                        "X/data/0",
+                    ],
+                ),
+            ],
+            get_args(Kind),
+        )
+        if (idx := mk_idx_kind(idx_raw, kind=kind, l=10)) is not None
+    ],
+)
 def test_data_access(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    idx_kind: Literal["slice", "int", "array", "mask"],
+    idx: slice | int | NDArray[np.integer] | NDArray[np.bool_],
+    exp: list[str],
 ):
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
@@ -359,17 +403,6 @@ def test_data_access(
     f = zarr.open_group(store)
     a_disk = sparse_dataset(f["X"])
 
-    idx = 0
-    match idx_kind:
-        case "slice":
-            idx = slice(idx, idx + 1)
-        case "int":
-            pass
-        case "array":
-            idx = np.array([idx])
-        case "mask":
-            idx = np.array([i == idx for i in range(10)])
-
     # Do the slicing with idx
     store.reset_key_trackers()
     if a_disk.format == "csr":
@@ -377,12 +410,8 @@ def test_data_access(
     else:
         a_disk[:, idx]
 
-    assert store.get_access_count("X/data") == 3
-    assert store.get_accessed_keys("X/data") == [
-        "X/data/.zarray",
-        "X/data/.zarray",
-        "X/data/0",
-    ]
+    assert store.get_access_count("X/data") == len(exp)
+    assert store.get_accessed_keys("X/data") == exp
 
 
 @pytest.mark.parametrize(
