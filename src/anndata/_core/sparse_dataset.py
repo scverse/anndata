@@ -181,7 +181,11 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
                     self._get_contiguous_compressed_slice(row), shape=out_shape
                 )
             return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
-        return super()._get_sliceXslice(row, col)
+
+        # This is better than super()._get_sliceXslice,
+        # as that loads the complete .data and .indices arrays into memory
+        # TODO: Can probably still be more efficient
+        return self[row, :][:, col]
 
     def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
         idxs = np.asarray(row)
@@ -217,7 +221,11 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
                     self._get_contiguous_compressed_slice(col), shape=out_shape
                 )
             return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
-        return super()._get_sliceXslice(row, col)
+
+        # This is better than super()._get_sliceXslice,
+        # as that loads the complete .data and .indices arrays into memory
+        # TODO: Can probably still be more efficient
+        return self[:, col][row, :]
 
     def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
         idxs = np.asarray(col)
