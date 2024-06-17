@@ -18,11 +18,15 @@ from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
     from pathlib import Path
 
+    from _pytest.mark import ParameterSet
     from numpy.typing import ArrayLike, NDArray
     from pytest_mock import MockerFixture
+
+    Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
+
 
 subset_func2 = subset_func
 
@@ -344,9 +348,7 @@ def test_indptr_cache(
 Kind = Literal["slice", "int", "array", "mask"]
 
 
-def mk_idx_kind(
-    idx: Sequence[int], *, kind: Kind, l: int
-) -> slice | int | NDArray[np.integer] | NDArray[np.bool_] | None:
+def mk_idx_kind(idx: Sequence[int], *, kind: Kind, l: int) -> Idx | None:
     match kind:
         case "slice":
             start = idx[0] if idx[0] > 0 else None
@@ -365,30 +367,46 @@ def mk_idx_kind(
     return None
 
 
+def idify(x: object) -> str:
+    if isinstance(x, slice):
+        start, stop = ("" if s is None else str(s) for s in (x.start, x.stop))
+        return f"{start}:{stop}" + (f":{x.step}" if x.step not in (1, None) else "")
+    return str(x)
+
+
+def width_idx_kinds(
+    *idxs: tuple[Sequence[int], Idx, Sequence[str]], l: int
+) -> Generator[ParameterSet, None, None]:
+    for (idx_maj_raw, idx_min, exp), maj_kind in product(idxs, get_args(Kind)):
+        if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
+            continue
+        id_ = "-".join(map(idify, [idx_maj_raw, idx_min, maj_kind]))
+        yield pytest.param(idx_maj, idx_min, exp, id=id_)
+
+
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize(
     ("idx_maj", "idx_min", "exp"),
-    [
-        pytest.param(idx_maj, idx_min, exp, id=f"{idx_maj_raw}-{maj_kind}")
-        for (idx_maj_raw, idx_min, exp), maj_kind in product(
-            [
-                (
-                    [0],
-                    slice(None, None),
-                    ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
-                ),
-            ],
-            get_args(Kind),
-        )
-        if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=10)) is not None
-    ],
+    width_idx_kinds(
+        (
+            [0],
+            slice(None, None),
+            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+        ),
+        (
+            [0],
+            slice(None, 3),
+            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+        ),
+        l=10,
+    ),
 )
 def test_data_access(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    idx_maj: slice | int | NDArray[np.integer] | NDArray[np.bool_],
-    idx_min: slice | int | NDArray[np.integer] | NDArray[np.bool_],
-    exp: list[str],
+    idx_maj: Idx,
+    idx_min: Idx,
+    exp: Sequence[str],
 ):
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
