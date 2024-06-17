@@ -20,8 +20,8 @@ from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import DaskArray, SpArray, _read_attr
-from anndata.tests._helpers import xfail_if_numpy2_loompy
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
+from testing.anndata._helpers import xfail_if_numpy2_loompy
 
 if TYPE_CHECKING:
     from os import PathLike

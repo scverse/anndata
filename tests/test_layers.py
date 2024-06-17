@@ -9,8 +9,8 @@ import pytest
 from numba.core.errors import NumbaDeprecationWarning
 
 from anndata import AnnData, read_h5ad, read_loom
-from anndata.tests._helpers import xfail_if_numpy2_loompy
 from anndata.tests.helpers import gen_typed_df_t2_size
+from testing.anndata._helpers import xfail_if_numpy2_loompy
 
 X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
