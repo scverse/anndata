@@ -1,7 +1,12 @@
-# This file exists
-# 1. to allow ignoring warnings without test collection failing on CI
-# 2. as a pytest plugin/config that applies to doctests as well
-# TODO: Fix that, e.g. with the `pytest -p anndata.testing._pytest` pattern.
+"""Private anndata pytest plugin.
+
+This file exists
+1. to allow ignoring warnings without test collection failing on CI
+2. as a pytest plugin/config that applies to doctests as well
+
+It lives outside of the anndata package in order to avoid importing anndata too early.
+"""
+
 from __future__ import annotations
 
 import re
@@ -9,9 +14,6 @@ import warnings
 from typing import TYPE_CHECKING, cast
 
 import pytest
-
-from anndata.compat import chdir
-from anndata.utils import import_name
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -40,6 +42,9 @@ def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
 ) -> Generator[None, None, None]:
     from scanpy import settings
+
+    from anndata.compat import chdir
+    from anndata.utils import import_name
 
     assert isinstance(request.node.parent, pytest.Module)
     # request.node.parent is either a DoctestModule or a DoctestTextFile.
