@@ -349,21 +349,20 @@ Kind = Literal["slice", "int", "array", "mask"]
 
 
 def mk_idx_kind(idx: Sequence[int], *, kind: Kind, l: int) -> Idx | None:
-    match kind:
-        case "slice":
-            start = idx[0] if idx[0] > 0 else None
-            if len(idx) == 1:
-                return slice(start, idx[0] + 1)
-            if all(np.diff(idx) == 1):
-                stop = idx[-1] + 1 if idx[-1] < l - 1 else None
-                return slice(start, stop)
-        case "int":
-            if len(idx) == 1:
-                return idx[0]
-        case "array":
-            return np.asarray(idx)
-        case "mask":
-            return np.in1d(np.arange(l), idx)
+    if kind == "slice":
+        start = idx[0] if idx[0] > 0 else None
+        if len(idx) == 1:
+            return slice(start, idx[0] + 1)
+        if all(np.diff(idx) == 1):
+            stop = idx[-1] + 1 if idx[-1] < l - 1 else None
+            return slice(start, stop)
+    if kind == "int":
+        if len(idx) == 1:
+            return idx[0]
+    if kind == "array":
+        return np.asarray(idx)
+    if kind == "mask":
+        return np.in1d(np.arange(l), idx)
     return None
 
 
