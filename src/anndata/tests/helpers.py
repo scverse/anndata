@@ -853,9 +853,9 @@ CUPY_MATRIX_PARAMS = [
 ]
 
 try:
-    import zarr
+    import zarr.storage
 
-    class AccessTrackingStore(zarr.DirectoryStore):
+    class AccessTrackingStore(zarr.storage.DirectoryStore):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self._access_count = {}
