@@ -369,19 +369,18 @@ def mk_idx_kind(
 @pytest.mark.parametrize(
     ("idx_maj", "idx_min", "exp"),
     [
-        pytest.param(idx_maj, idx_min, exp, id=f"{idx_maj_raw}-{kind}")
-        for (idx_maj_raw, idx_min_raw, exp), kind in product(
+        pytest.param(idx_maj, idx_min, exp, id=f"{idx_maj_raw}-{maj_kind}")
+        for (idx_maj_raw, idx_min, exp), maj_kind in product(
             [
                 (
                     [0],
-                    range(10),
+                    slice(None, None),
                     ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
                 ),
             ],
             get_args(Kind),
         )
-        if (idx_maj := mk_idx_kind(idx_maj_raw, kind=kind, l=10)) is not None
-        if (idx_min := mk_idx_kind(idx_min_raw, kind=kind, l=10)) is not None
+        if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=10)) is not None
     ],
 )
 def test_data_access(
