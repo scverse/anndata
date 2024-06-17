@@ -38,8 +38,8 @@ def give_chunks(request):
 
 # Does some stuff so that dask can cache the
 # subclasscheck before the run.
-@pytest.fixture
-def alloc_cache():
+@pytest.fixture()
+def _alloc_cache():
     import dask.array as da
 
     N = 2**6
@@ -71,7 +71,7 @@ def alloc_cache():
 # if we put a 2 factor on 2**19
 # the results seems more accurate with the experimental results
 # For example from dask.random we allocate 1mb
-@pytest.mark.usefixtures("alloc_cache")
+@pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
 def test_size_of_view(mapping_name, give_chunks):
     import dask.array as da
@@ -92,7 +92,7 @@ def test_size_of_view(mapping_name, give_chunks):
 # Thus, if we allocated it all it should at least have 6mb
 # experimentally we should at least have 10mb
 # for index this should be ok
-@pytest.mark.usefixtures("alloc_cache")
+@pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
     import dask.array as da
@@ -118,7 +118,7 @@ def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
 # Thus, if we allocated it all it should at least have 6mb
 # experimentally we should at least have 10mb
 # for index this should be ok
-@pytest.mark.usefixtures("alloc_cache")
+@pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_X_memory(mapping_name, give_chunks):
     import dask.array as da
@@ -137,7 +137,7 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
     m = subset.X
     with pytest.warns(
         ad.ImplicitModificationWarning,
-        match="Trying to modify attribute `.X` of view, initializing view as actual.",
+        match=r"Trying to modify attribute `.X` of view, initializing view as actual.",
     ):
         m[0, 0] = 100
 
@@ -148,7 +148,7 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
 # Thus, if we allocated it all it should at least have 6mb
 # experimentally we should at least have 10mb
 # for index this should be ok
-@pytest.mark.usefixtures("alloc_cache")
+@pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
 def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
     import dask.array as da

@@ -48,7 +48,7 @@ def test_views():
 
 
 @pytest.mark.parametrize(
-    "df,homogenous,dtype",
+    ("df", "homogenous", "dtype"),
     [
         (lambda: gen_typed_df_t2_size(*X.shape), True, np.object_),
         (lambda: pd.DataFrame(X**2), False, np.int_),

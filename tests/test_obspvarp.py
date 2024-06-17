@@ -16,7 +16,7 @@ from anndata.utils import asarray
 M, N = (200, 100)
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(
@@ -53,13 +53,13 @@ def test_setting_ndarray(adata: AnnData):
     assert np.all(adata.varp["a"] == np.ones((N, N)))
 
     h = joblib.hash(adata)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsp["b"] = np.ones((int(M / 2), M))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsp["b"] = np.ones((M, int(M * 2)))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varp["b"] = np.ones((int(N / 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varp["b"] = np.ones((N, int(N * 2)))
     assert h == joblib.hash(adata)
 
@@ -76,19 +76,19 @@ def test_setting_sparse(adata: AnnData):
     h = joblib.hash(adata)
 
     bad_obsp_sparse = sparse.random(M * 2, M)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsp["b"] = bad_obsp_sparse
 
     bad_varp_sparse = sparse.random(N * 2, N)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varp["b"] = bad_varp_sparse
 
     assert h == joblib.hash(adata)
 
 
-@pytest.mark.parametrize("field,dim", [("obsp", M), ("varp", N)])
+@pytest.mark.parametrize(("field", "dim"), [("obsp", M), ("varp", N)])
 @pytest.mark.parametrize(
-    "df,homogenous,dtype",
+    ("df", "homogenous", "dtype"),
     [
         (lambda dim: gen_typed_df_t2_size(dim, dim), True, np.object_),
         (lambda dim: pd.DataFrame(np.random.randn(dim, dim)), False, np.floating),
@@ -118,13 +118,13 @@ def test_setting_daskarray(adata: AnnData):
     assert type(adata.varp["a"]) == da.Array
 
     h = joblib.hash(adata)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsp["b"] = da.ones((int(M / 2), M))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsp["b"] = da.ones((M, int(M * 2)))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varp["b"] = da.ones((int(N / 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varp["b"] = da.ones((N, int(N * 2)))
     assert h == joblib.hash(adata)
 

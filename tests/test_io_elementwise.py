@@ -30,7 +30,7 @@ def diskfmt(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["h5", "zarr"])
+@pytest.fixture(params=["h5", "zarr"])
 def store(request, tmp_path) -> H5Group | ZarrGroup:
     if request.param == "h5":
         file = h5py.File(tmp_path / "test.h5", "w")
@@ -38,7 +38,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
     elif request.param == "zarr":
         store = zarr.open(tmp_path / "test.zarr", "w")
     else:
-        assert False
+        pytest.fail(f"Unknown store type: {request.param}")
 
     try:
         yield store
@@ -48,7 +48,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
 
 
 @pytest.mark.parametrize(
-    "value,encoding_type",
+    ("value", "encoding_type"),
     [
         ("hello world", "string"),
         (np.str_("hello world"), "string"),
@@ -100,9 +100,9 @@ def test_io_spec(store, value, encoding_type):
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test
-@pytest.mark.gpu
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "value,encoding_type",
+    ("value", "encoding_type"),
     [
         (np.array([1, 2, 3]), "array"),
         (np.arange(12).reshape(4, 3), "array"),
@@ -192,7 +192,7 @@ def test_write_anndata_to_root(store):
 
 
 @pytest.mark.parametrize(
-    ["attribute", "value"],
+    ("attribute", "value"),
     [
         ("encoding-type", "floob"),
         ("encoding-version", "10000.0"),
@@ -213,7 +213,7 @@ def test_read_iospec_not_found(store, attribute, value):
 
 
 @pytest.mark.parametrize(
-    ["obj"],
+    "obj",
     [(b"x",)],
 )
 def test_write_io_error(store, obj):

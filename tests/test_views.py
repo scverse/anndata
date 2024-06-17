@@ -57,7 +57,7 @@ class NDArraySubclass(np.ndarray):
         return self
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm["o"] = np.zeros((100, 50))
@@ -235,9 +235,9 @@ def test_set_obsm(adata):
 
     subset = adata[subset_idx, :]
     subset_hash = joblib.hash(subset)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.obsm = dict(o=np.ones((dim0_size + 1, dim1_size)))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.varm = dict(o=np.ones((dim0_size - 1, dim1_size)))
     assert subset_hash == joblib.hash(subset)
 
@@ -262,9 +262,9 @@ def test_set_varm(adata):
 
     subset = adata[:, subset_idx]
     subset_hash = joblib.hash(subset)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.varm = dict(o=np.ones((dim0_size + 1, dim1_size)))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.varm = dict(o=np.ones((dim0_size - 1, dim1_size)))
     # subset should not be changed by failed setting
     assert subset_hash == joblib.hash(subset)
@@ -487,7 +487,7 @@ def test_layers_view():
 
     assert view_adata.is_view
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         view_adata.layers["L2"] = L + 2
 
     assert view_adata.is_view  # Failing to set layer item makes adata not view
