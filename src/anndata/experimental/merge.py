@@ -110,7 +110,7 @@ def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
         return h5py.File(store, *args, **kwargs)
     import zarr
 
-    return zarr.open_group(store, *args, **kwargs)
+    return zarr.open_group(store=store, *args, **kwargs)
 
 
 @as_group.register(ZarrGroup)

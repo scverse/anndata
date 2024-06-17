@@ -61,7 +61,7 @@ def ondisk_equivalent_adata(
         def read_zarr_backed(path):
             path = str(path)
 
-            f = zarr.open(path, mode="r")
+            f = zarr.open(store=path, mode="r")
 
             # Read with handling for backwards compat
             def callback(func, elem_name, elem, iospec):
@@ -249,7 +249,7 @@ def test_dataset_append_memory(
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(store=path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad._io.specs.write_elem(f, "mtx", a)
@@ -281,7 +281,7 @@ def test_dataset_append_disk(
     b = sparse_format(sparse.random(10, 10))
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(store=path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad._io.specs.write_elem(f, "a", a)
@@ -304,11 +304,11 @@ def test_indptr_cache(
 ):
     path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
     a = sparse_format(sparse.random(10, 10))
-    f = zarr.open_group(path, "a")
+    f = zarr.open_group(store=path, mode="a")
     ad._io.specs.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/indptr"])
-    f = zarr.open_group(store, "a")
+    f = zarr.open_group(store=store, mode="a")
     a_disk = sparse_dataset(f["X"])
     a_disk[:1]
     a_disk[3:5]
@@ -325,7 +325,7 @@ def test_data_access(
 ):
     path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
     a = sparse_format(np.eye(10, 10))
-    f = zarr.open_group(path, "a")
+    f = zarr.open_group(store=path, mode="a")
     ad._io.specs.write_elem(f, "X", a)
     data = f["X/data"][...]
     del f["X/data"]
@@ -333,7 +333,7 @@ def test_data_access(
     zarr.array(data, store=path / "X" / "data", chunks=(1,))
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
-    f = zarr.open_group(store)
+    f = zarr.open_group(store=store)
     a_disk = sparse_dataset(f["X"])
     for idx in [slice(0, 1), 0, np.array([0]), np.array([True] + [False] * 9)]:
         store.reset_key_trackers()
@@ -368,7 +368,7 @@ def test_wrong_shape(
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(store=path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -386,7 +386,7 @@ def test_reset_group(tmp_path: Path):
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(store=path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -401,7 +401,7 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(store=path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -430,7 +430,7 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(store=path, mode="a")
     else:
         f = h5py.File(path, "a")
 

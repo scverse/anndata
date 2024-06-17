@@ -87,19 +87,29 @@ else:
 #############################
 
 try:
-    from zarr.core import Array as ZarrArray
-    from zarr.hierarchy import Group as ZarrGroup
+    from zarr.array import Array as ZarrArray
 except ImportError:
+    try:
+        from zarr.core import Array as ZarrArray
+    except ImportError:
 
-    class ZarrArray:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.core.Array"
+        class ZarrArray:
+            @staticmethod
+            def __repr__():
+                return "mock zarr.core.Array"
 
-    class ZarrGroup:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.core.Group"
+
+try:
+    from zarr.group import Group as ZarrGroup
+except ImportError:
+    try:
+        from zarr.hierarchy import Group as ZarrGroup
+    except ImportError:
+
+        class ZarrGroup:
+            @staticmethod
+            def __repr__():
+                return "mock zarr.core.Group"
 
 
 try:

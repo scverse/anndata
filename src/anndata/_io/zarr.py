@@ -35,7 +35,7 @@ def write_zarr(
     if adata.raw is not None:
         adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
-    f = zarr.open(store, mode="w")
+    f = zarr.open_group(store=store, mode="w")
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
@@ -63,7 +63,7 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
     if isinstance(store, zarr.Group):
         f = store
     else:
-        f = zarr.open(store, mode="r")
+        f = zarr.open(store=store, mode="r")
 
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):

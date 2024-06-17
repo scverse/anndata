@@ -36,7 +36,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         file = h5py.File(tmp_path / "test.h5", "w")
         store = file["/"]
     elif request.param == "zarr":
-        store = zarr.open(tmp_path / "test.zarr", "w")
+        store = zarr.open(store=tmp_path / "test.zarr", mode="w")
     else:
         pytest.fail(f"Unknown store type: {request.param}")
 
@@ -307,7 +307,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     pth = tmp_path / "test.zarr"
     adata = gen_adata((3, 2))
 
-    with zarr.open(pth, mode="w") as z:
+    with zarr.open(store=pth, mode="w") as z:
         write_elem(z, "table/table", adata)
 
         if consolidated:
@@ -318,7 +318,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     else:
         read_func = zarr.open
 
-    with read_func(pth) as z:
+    with read_func(store=pth) as z:
         expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
 

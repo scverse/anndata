@@ -33,7 +33,7 @@ from anndata.compat import (
     _read_attr,
 )
 
-from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
+from .registry import _REGISTRY, IOSpec, Writer, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -245,8 +245,14 @@ def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
 
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
-def write_anndata(f, k, adata, _writer, dataset_kwargs=MappingProxyType({})):
-    g = f.require_group(k)
+def write_anndata(
+    f: H5Group | ZarrGroup,
+    k: str,
+    adata: AnnData,
+    _writer: Writer,
+    dataset_kwargs=MappingProxyType({}),
+):
+    g = f.create_group(k)
     _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "var", adata.var, dataset_kwargs=dataset_kwargs)
@@ -781,7 +787,7 @@ def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
             import zarr
 
             parent_name = dataset.name.rstrip(dataset.basename)
-            parent = zarr.open(dataset.store)[parent_name]
+            parent = zarr.open(store=dataset.store)[parent_name]
         else:
             parent = dataset.parent
         categories_dset = parent[_read_attr(dataset.attrs, "categories")]
