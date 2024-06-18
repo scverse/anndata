@@ -85,9 +85,9 @@ def _normalize_index(
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
-        if issubclass(indexer.dtype.type, (np.integer, np.floating)):
+        if issubclass(indexer.dtype, (int, float)):
             return indexer  # Might not work for range indexes
-        elif issubclass(indexer.dtype.type, np.bool_):
+        elif issubclass(indexer.dtype, bool):
             if indexer.shape != index.shape:
                 raise IndexError(
                     f"Boolean index does not match AnnData’s shape along this "
@@ -162,7 +162,7 @@ def _subset_sparse(a: spmatrix | SpArray, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, cabc.Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
-        if issubclass(first_idx.dtype.type, np.bool_):
+        if issubclass(first_idx.dtype, bool):
             first_idx = np.where(first_idx)[0]
         subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
