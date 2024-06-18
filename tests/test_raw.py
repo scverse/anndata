@@ -33,7 +33,7 @@ uns_dict = dict(  # unstructured annotation
 )
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata_raw() -> ad.AnnData:
     adata = ad.AnnData(
         np.array(data, dtype="int32"), obs=obs_dict, var=var_dict, uns=uns_dict
@@ -94,7 +94,9 @@ def test_raw_view_rw(adata_raw: ad.AnnData, backing_h5ad):
     # Make sure it still writes correctly if the object is a view
     adata_raw_view = adata_raw[:, adata_raw.var_names]
     assert_equal(adata_raw_view, adata_raw)
-    with pytest.warns(ImplicitModificationWarning, match="initializing view as actual"):
+    with pytest.warns(
+        ImplicitModificationWarning, match=r"initializing view as actual"
+    ):
         adata_raw_view.write(backing_h5ad)
     adata_read = ad.read_h5ad(backing_h5ad)
 

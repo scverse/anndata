@@ -718,7 +718,8 @@ def merge_indices(
     elif join == "outer":
         return reduce(lambda x, y: x.union(y), inds)
     else:
-        raise ValueError()
+        msg = f"`join` must be one of 'inner' or 'outer', got {join!r}"
+        raise ValueError(msg)
 
 
 def default_fill_value(els):
@@ -1327,7 +1328,7 @@ def concat(
         )
         join_keys = union_keys
     else:
-        assert False, f"{join=} should have been validated above by pd.concat"
+        raise AssertionError(f"{join=} should have been validated above by pd.concat")
 
     layers = concat_aligned_mapping(
         [a.layers for a in adatas], axis=axis, reindexers=reindexers

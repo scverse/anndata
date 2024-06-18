@@ -289,7 +289,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         store: MutableMapping[str, V] | AxisArraysBase,
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = store
@@ -396,7 +396,7 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         store: MutableMapping[str, V],
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = store

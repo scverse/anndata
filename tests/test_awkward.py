@@ -21,37 +21,37 @@ from anndata.utils import axis_len
 
 
 @pytest.mark.parametrize(
-    "array,shape",
+    ("array", "shape"),
     [
         # numpy array
-        [ak.Array(np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))), (2, 3, 4, 5)],
+        (ak.Array(np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))), (2, 3, 4, 5)),
         # record
-        [ak.Array([{"a": 1, "b": 2}, {"a": 1, "b": 3}]), (2, 2)],
+        (ak.Array([{"a": 1, "b": 2}, {"a": 1, "b": 3}]), (2, 2)),
         # ListType, variable length
-        [ak.Array([[1], [2, 3], [4, 5, 6]]), (3, None)],
+        (ak.Array([[1], [2, 3], [4, 5, 6]]), (3, None)),
         # ListType, happens to have the same length, but is not regular
-        [ak.Array([[2], [3], [4]]), (3, None)],
+        (ak.Array([[2], [3], [4]]), (3, None)),
         # RegularType + nested ListType
-        [ak.to_regular(ak.Array([[[1, 2], [3]], [[2], [3, 4, 5]]]), 1), (2, 2, None)],
+        (ak.to_regular(ak.Array([[[1, 2], [3]], [[2], [3, 4, 5]]]), 1), (2, 2, None)),
         # nested record
-        [
+        (
             ak.to_regular(ak.Array([[{"a": 0}, {"b": 1}], [{"c": 2}, {"d": 3}]]), 1),
             (2, 2, 4),
-        ],
+        ),
         # mixed types (variable length)
-        [ak.Array([[1, 2], ["a"]]), (2, None)],
+        (ak.Array([[1, 2], ["a"]]), (2, None)),
         # mixed types (but regular)
-        [ak.to_regular(ak.Array([[1, 2], ["a", "b"]]), 1), (2, 2)],
+        (ak.to_regular(ak.Array([[1, 2], ["a", "b"]]), 1), (2, 2)),
         # zero-size edge cases
-        [ak.Array(np.ones((0, 7))), (0, 7)],
-        [ak.Array(np.ones((7, 0))), (7, 0)],
+        (ak.Array(np.ones((0, 7))), (0, 7)),
+        (ak.Array(np.ones((7, 0))), (7, 0)),
         # UnionType of two regular types with different dimensions
-        [
+        (
             ak.concatenate([ak.Array(np.ones((2, 2))), ak.Array(np.ones((2, 3)))]),
             (4, None),
-        ],
+        ),
         # UnionType of two regular types with same dimension
-        [
+        (
             ak.concatenate(
                 [
                     ak.Array(np.ones((2, 2))),
@@ -59,11 +59,11 @@ from anndata.utils import axis_len
                 ]
             ),
             (4, 2),
-        ],
+        ),
         # Array of string types
-        [ak.Array(["a", "b", "c"]), (3,)],
-        [ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), (3, None)],
-        [ak.to_regular(ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), 1), (3, 2)],
+        (ak.Array(["a", "b", "c"]), (3,)),
+        (ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), (3, None)),
+        (ak.to_regular(ak.Array([["a", "b"], ["c", "d"], ["e", "f"]]), 1), (3, 2)),
     ],
 )
 def test_axis_len(array, shape):
@@ -77,23 +77,23 @@ def test_axis_len(array, shape):
 
 
 @pytest.mark.parametrize(
-    "field,value,valid",
+    ("field", "value", "valid"),
     [
-        ["obsm", gen_awkward((10, 5)), True],
-        ["obsm", gen_awkward((10, None)), True],
-        ["obsm", gen_awkward((10, None, None)), True],
-        ["obsm", gen_awkward((10, 5, None)), True],
-        ["obsm", gen_awkward((8, 10)), False],
-        ["obsm", gen_awkward((8, None)), False],
-        ["varm", gen_awkward((20, 5)), True],
-        ["varm", gen_awkward((20, None)), True],
-        ["varm", gen_awkward((20, None, None)), True],
-        ["varm", gen_awkward((20, 5, None)), True],
-        ["varm", gen_awkward((8, 20)), False],
-        ["varm", gen_awkward((8, None)), False],
-        ["uns", gen_awkward((7,)), True],
-        ["uns", gen_awkward((7, None)), True],
-        ["uns", gen_awkward((7, None, None)), True],
+        ("obsm", gen_awkward((10, 5)), True),
+        ("obsm", gen_awkward((10, None)), True),
+        ("obsm", gen_awkward((10, None, None)), True),
+        ("obsm", gen_awkward((10, 5, None)), True),
+        ("obsm", gen_awkward((8, 10)), False),
+        ("obsm", gen_awkward((8, None)), False),
+        ("varm", gen_awkward((20, 5)), True),
+        ("varm", gen_awkward((20, None)), True),
+        ("varm", gen_awkward((20, None, None)), True),
+        ("varm", gen_awkward((20, 5, None)), True),
+        ("varm", gen_awkward((8, 20)), False),
+        ("varm", gen_awkward((8, None)), False),
+        ("uns", gen_awkward((7,)), True),
+        ("uns", gen_awkward((7, None)), True),
+        ("uns", gen_awkward((7, None, None)), True),
     ],
 )
 def test_set_awkward(field, value, valid):
@@ -106,7 +106,7 @@ def test_set_awkward(field, value, valid):
         getattr(adata, field)["test"] = value
 
     if not valid:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="incorrect shape"):
             _assign()
     else:
         _assign()
@@ -138,7 +138,9 @@ def test_view(key):
     getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
     adata_view = adata[:2, :2]
 
-    with pytest.warns(ImplicitModificationWarning, match="initializing view as actual"):
+    with pytest.warns(
+        ImplicitModificationWarning, match=r"initializing view as actual"
+    ):
         getattr(adata_view, key)["awk"]["c"] = np.full((2, 1), 4)
         getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
 
@@ -249,7 +251,7 @@ def test_awkward_io(tmp_path, array):
 
 # @pytest.mark.parametrize("join", ["outer", "inner"])
 @pytest.mark.parametrize(
-    "arrays,join,expected",
+    ("arrays", "join", "expected"),
     [
         pytest.param(
             [ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]), None],
@@ -382,13 +384,14 @@ def test_concat_mixed_types(key, arrays, expected, join):
         to_concat.append(tmp_adata)
 
     if isinstance(expected, type) and issubclass(expected, Exception):
-        with pytest.raises(expected), warnings.catch_warnings():
+        with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
                 FutureWarning,
             )
-            anndata.concat(to_concat, axis=axis, join=join)
+            with pytest.raises(expected):
+                anndata.concat(to_concat, axis=axis, join=join)
     else:
         result_adata = anndata.concat(to_concat, axis=axis, join=join)
         result = getattr(result_adata, key).get("test", None)
