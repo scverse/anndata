@@ -105,7 +105,7 @@ def read_dataset(dataset: zarr.Array):
         return value
     elif isinstance(value.dtype, str):
         pass
-    elif issubclass(value.dtype, bytes):
+    elif isinstance(value.dtype, bytes):
         value = value.astype(str).astype(object)  # bytestring -> unicode -> str
     elif len(value.dtype.descr) > 1:  # Compound dtype
         # For backwards compat, now strings are written as variable length
