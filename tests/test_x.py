@@ -156,3 +156,14 @@ def test_io_missing_X(tmp_path, diskfmt):
     from_disk = read(file_pth)
 
     assert_equal(from_disk, adata)
+
+
+def test_set_dense_x_view_from_sparse():
+    x = np.zeros((100, 30))
+    x1 = np.ones((100, 30))
+    orig = ad.AnnData(x)
+    view = orig[:30]
+    view.X = sparse.csr_matrix(x1[:30])
+    assert_equal(view.X, x1[:30])
+    assert_equal(orig.X[:30], x1[:30])  # change propagates through
+    assert_equal(orig.X[30:], x[30:])  # change propagates through
