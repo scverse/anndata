@@ -85,7 +85,7 @@ test = [
     "loompy>=3.0.5",
     "pytest>=8.2",
     "pytest-cov>=2.10",
-    "zarr",
+    "zarr<3.0.0a0",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
@@ -105,6 +105,8 @@ gpu = ["cupy"]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "src/anndata/_version.py"
+[tool.hatch.build.targets.wheel]
+packages = ["src/anndata", "src/testing"]
 
 [tool.coverage.run]
 source_pkgs = ["anndata"]
@@ -123,6 +125,7 @@ addopts = [
     "--strict-markers",
     "--doctest-modules",
     "--pyargs",
+    "-ptesting.anndata._pytest",
 ]
 filterwarnings = [
     # all `ignore::anndata.*` entries are in `conftest.py`
@@ -162,6 +165,7 @@ select = [
     "TCH", # manage type checking blocks
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
+    "PT",  # Pytest conventions
 ]
 ignore = [
     # line too long -> we accept long comment lines; formatter gets rid of long code lines

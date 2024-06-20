@@ -20,7 +20,7 @@ from scipy.sparse import spmatrix
 from anndata._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from anndata.compat import AwkArray
 
-from ..utils import deprecated, dim_len, ensure_df_homogeneous, warn_once
+from ..utils import axis_len, deprecated, ensure_df_homogeneous, warn_once
 from .access import ElementRef
 from .index import _subset
 from .views import as_view, view_update
@@ -69,10 +69,10 @@ class AlignedMapping(cabc.MutableMapping, ABC):
                 # stacklevel=3,
             )
         for i, axis in enumerate(self.axes):
-            if self.parent.shape[axis] == dim_len(val, i):
+            if self.parent.shape[axis] == axis_len(val, i):
                 continue
             right_shape = tuple(self.parent.shape[a] for a in self.axes)
-            actual_shape = tuple(dim_len(val, a) for a, _ in enumerate(self.axes))
+            actual_shape = tuple(axis_len(val, a) for a, _ in enumerate(self.axes))
             if actual_shape[i] is None and isinstance(val, AwkArray):
                 dim = ("obs", "var")[i]
                 msg = (
@@ -280,7 +280,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         vals: Mapping | AxisArraysBase | None = None,
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = dict()
@@ -379,7 +379,7 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         vals: Mapping | None = None,
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = dict()

@@ -11,7 +11,7 @@ from anndata import AnnData
 M, N = (100, 100)
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(
@@ -52,13 +52,13 @@ def test_setting_ndarray(adata: AnnData):
     assert np.all(adata.varm["a"] == np.ones((N, 10)))
 
     h = joblib.hash(adata)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsm["b"] = np.ones((int(M / 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsm["b"] = np.ones((int(M * 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = np.ones((int(N / 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = np.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)
 
@@ -74,12 +74,12 @@ def test_setting_dataframe(adata: AnnData):
 
     bad_obsm_df = obsm_df.copy()
     bad_obsm_df.reset_index(inplace=True)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"index does not match.*obs names"):
         adata.obsm["c"] = bad_obsm_df
 
     bad_varm_df = varm_df.copy()
     bad_varm_df.reset_index(inplace=True)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"index does not match.*var names"):
         adata.varm["c"] = bad_varm_df
 
 
@@ -95,11 +95,11 @@ def test_setting_sparse(adata: AnnData):
     h = joblib.hash(adata)
 
     bad_obsm_sparse = sparse.random(M * 2, M)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsm["b"] = bad_obsm_sparse
 
     bad_varm_sparse = sparse.random(N * 2, N)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = bad_varm_sparse
 
     assert h == joblib.hash(adata)
@@ -116,13 +116,13 @@ def test_setting_daskarray(adata: AnnData):
     assert type(adata.varm["a"]) == da.Array
 
     h = joblib.hash(adata)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsm["b"] = da.ones((int(M / 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsm["b"] = da.ones((int(M * 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = da.ones((int(N / 2), 10))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = da.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)
 

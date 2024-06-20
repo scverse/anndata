@@ -193,7 +193,7 @@ def test_names():
 
 
 @pytest.mark.parametrize(
-    "names,after",
+    ("names", "after"),
     [
         pytest.param(["a", "b"], None, id="list"),
         pytest.param(
@@ -414,12 +414,24 @@ def test_slicing_remove_unused_categories():
 
 
 def test_slicing_dont_remove_unused_categories():
-    with settings.override(remove_unused_categories=False):
+    with settings.override(should_remove_unused_categories=False):
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
         )
         adata._sanitize()
         assert adata[2:4].obs["k"].cat.categories.tolist() == ["a", "b"]
+
+
+def test_no_uniqueness_check_gives_repeat_indices():
+    with settings.override(should_check_uniqueness=False):
+        obs_names = ["0", "0", "1", "1"]
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            adata = AnnData(
+                np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
+                obs=pd.DataFrame(index=obs_names),
+            )
+    assert adata.obs_names.values.tolist() == obs_names
 
 
 def test_get_subset_annotation():
@@ -440,7 +452,9 @@ def test_append_col():
     # this worked in the initial AnnData, but not with a dataframe
     # adata.obs[['new2', 'new3']] = [['A', 'B'], ['c', 'd']]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="Length of values.*does not match length of index"
+    ):
         adata.obs["new4"] = "far too long".split()
 
 
@@ -459,8 +473,9 @@ def test_set_obs():
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
     assert adata.obs_names.tolist() == [0, 1]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="but this AnnData has shape"):
         adata.obs = pd.DataFrame(dict(a=[3, 4, 5]))
+    with pytest.raises(ValueError, match="Can only assign pd.DataFrame"):
         adata.obs = dict(a=[1, 2])
 
 
@@ -618,9 +633,9 @@ def test_to_df_no_X():
     )
     v = adata[:10]
 
-    with pytest.raises(ValueError, match="X is None"):
+    with pytest.raises(ValueError, match=r"X is None"):
         _ = adata.to_df()
-    with pytest.raises(ValueError, match="X is None"):
+    with pytest.raises(ValueError, match=r"X is None"):
         _ = v.to_df()
 
     expected = pd.DataFrame(

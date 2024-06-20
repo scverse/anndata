@@ -5,6 +5,7 @@ import textwrap
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from inspect import Parameter, signature
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
@@ -95,10 +96,11 @@ For boolean environment variable setting, use 1 for `True` and 0 for `False`.
 """
 
 
+@dataclass
 class SettingsManager:
-    _registered_options: dict[str, RegisteredOption] = {}
-    _deprecated_options: dict[str, DeprecatedOption] = {}
-    _config: dict[str, object] = {}
+    _registered_options: dict[str, RegisteredOption] = field(default_factory=dict)
+    _deprecated_options: dict[str, DeprecatedOption] = field(default_factory=dict)
+    _config: dict[str, object] = field(default_factory=dict)
     __doc_tmpl__: str = _docstring
 
     def describe(
@@ -262,8 +264,8 @@ class SettingsManager:
         AttributeError
             If the option has not been registered, this function will raise an error.
         """
-        if hasattr(super(), option):
-            super().__setattr__(option, val)
+        if option in {f.name for f in fields(self)}:
+            return super().__setattr__(option, val)
         elif option not in self._registered_options:
             raise AttributeError(
                 f"{option} is not an available option for anndata.\
@@ -352,11 +354,15 @@ settings = SettingsManager()
 ##################################################################################
 
 
-categories_option = "remove_unused_categories"
+categories_option = "should_remove_unused_categories"
 categories_default_value = True
 categories_description = (
     "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
 )
+
+uniqueness_option = "should_check_uniqueness"
+uniqueness_default_value = True
+uniqueness_description = "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
 
 
 def validate_bool(val) -> bool:
@@ -369,6 +375,14 @@ settings.register(
     categories_option,
     categories_default_value,
     categories_description,
+    validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    uniqueness_option,
+    uniqueness_default_value,
+    uniqueness_description,
     validate_bool,
     get_from_env=check_and_get_bool,
 )

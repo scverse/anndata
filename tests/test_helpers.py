@@ -16,7 +16,7 @@ from anndata.tests.helpers import (
     gen_awkward,
     report_name,
 )
-from anndata.utils import dim_len
+from anndata.utils import axis_len
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -44,27 +44,27 @@ from anndata.utils import dim_len
 #     assert tag in str(err.value)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def reusable_adata():
     """Reusable anndata for when tests shouldn’t mutate it"""
     return gen_adata((10, 10))
 
 
 @pytest.mark.parametrize(
-    "shape, datashape",
+    ("shape", "datashape"),
     [
-        [(4, 2), "4 * 2 * int32"],
-        [(100, 200, None), "100 * 200 * var * int32"],
-        [(4, None), "4 * var * int32"],
-        [(0, 4), "0 * 4 * int32"],
-        [(4, 0), "4 * 0 * int32"],
-        [(8, None, None), "8 * var * var * int32"],
-        [(8, None, None, None), "8 * var * var * var * int32"],
-        [(4, None, 8), "4 * var * 8 * int32"],
-        [(100, 200, 4), "100 * 200 * 4 * int32"],
-        [(4, 0, 0), "4 * 0 * 0 * int32"],
-        [(0, 0, 0), "0 * 0 * 0 * int32"],
-        [(0, None), "0 * var * int32"],
+        ((4, 2), "4 * 2 * int32"),
+        ((100, 200, None), "100 * 200 * var * int32"),
+        ((4, None), "4 * var * int32"),
+        ((0, 4), "0 * 4 * int32"),
+        ((4, 0), "4 * 0 * int32"),
+        ((8, None, None), "8 * var * var * int32"),
+        ((8, None, None, None), "8 * var * var * var * int32"),
+        ((4, None, 8), "4 * var * 8 * int32"),
+        ((100, 200, 4), "100 * 200 * 4 * int32"),
+        ((4, 0, 0), "4 * 0 * 0 * int32"),
+        ((0, 0, 0), "0 * 0 * 0 * int32"),
+        ((0, None), "0 * var * int32"),
     ],
 )
 def test_gen_awkward(shape, datashape):
@@ -72,7 +72,7 @@ def test_gen_awkward(shape, datashape):
 
     arr = gen_awkward(shape)
     for i, s in enumerate(shape):
-        assert dim_len(arr, i) == s
+        assert axis_len(arr, i) == s
     arr_type = ak.types.from_datashape(datashape)
     assert arr.type == arr_type
 
@@ -84,9 +84,9 @@ def test_report_name():
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))
-    with pytest.raises(Exception) as e1:
+    with pytest.raises(Exception, match=r"an error occurred!") as e1:
         raise_error()
-    with pytest.raises(Exception) as e2:
+    with pytest.raises(Exception, match=r"an error occurred!") as e2:
         report_name(raise_error)(_elem_name=tag)
     assert str(e2.value).startswith(str(e1.value))
     assert tag in str(e2.value)
@@ -252,7 +252,7 @@ def test_assert_equal_dask_sparse_arrays():
 
 
 @pytest.mark.parametrize(
-    "error, match",
+    ("error", "match"),
     [
         (Exception("test"), "test"),
         (add_note(AssertionError("foo"), "bar"), "bar"),
@@ -266,7 +266,7 @@ def test_check_error_notes_success(error, match):
 
 
 @pytest.mark.parametrize(
-    "error, match",
+    ("error", "match"),
     [
         (Exception("test"), "foo"),
         (add_note(AssertionError("foo"), "bar"), "baz"),
