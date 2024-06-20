@@ -82,7 +82,7 @@ def test_inplace_subset_obs(matrix_type, subset_func):
         assert_equal(from_view.layers[k], modified.layers[k], exact=True)
 
 
-@pytest.mark.parametrize("dim", ("obs", "var"))
+@pytest.mark.parametrize("dim", ["obs", "var"])
 def test_inplace_subset_no_X(subset_func, dim):
     orig = gen_adata((30, 30))
     del orig.X

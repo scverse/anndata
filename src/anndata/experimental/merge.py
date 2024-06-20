@@ -16,7 +16,7 @@ from .._core.merge import (
     MissingVal,
     Reindexer,
     StrategiesLiteral,
-    _resolve_dim,
+    _resolve_axis,
     concat_arrays,
     gen_inner_reindexers,
     gen_reindexer,
@@ -367,34 +367,36 @@ def _write_concat_sequence(
         )
 
 
-def _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge):
-    alt_mapping = merge([read_as_backed(g[alt_dim]) for g in groups])
+def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
+    alt_mapping = merge([read_as_backed(g[alt_axis_name]) for g in groups])
     # If its empty, we need to write an empty dataframe with the correct index
     if not alt_mapping:
         alt_df = pd.DataFrame(index=alt_indices)
-        write_elem(output_group, alt_dim, alt_df)
+        write_elem(output_group, alt_axis_name, alt_df)
     else:
-        write_elem(output_group, alt_dim, alt_mapping)
+        write_elem(output_group, alt_axis_name, alt_mapping)
 
 
-def _write_alt_annot(groups, output_group, alt_dim, alt_indices, merge):
+def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
     # Annotation for other axis
     alt_annot = merge_dataframes(
-        [read_elem(g[alt_dim]) for g in groups], alt_indices, merge
+        [read_elem(g[alt_axis_name]) for g in groups], alt_indices, merge
     )
-    write_elem(output_group, alt_dim, alt_annot)
+    write_elem(output_group, alt_axis_name, alt_annot)
 
 
-def _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col, join):
+def _write_axis_annot(
+    groups, output_group, axis_name, concat_indices, label, label_col, join
+):
     concat_annot = pd.concat(
-        unify_dtypes(read_elem(g[dim]) for g in groups),
+        unify_dtypes(read_elem(g[axis_name]) for g in groups),
         join=join,
         ignore_index=True,
     )
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
-    write_elem(output_group, dim, concat_annot)
+    write_elem(output_group, axis_name, concat_annot)
 
 
 def concat_on_disk(
@@ -402,7 +404,7 @@ def concat_on_disk(
     out_file: str | os.PathLike,
     *,
     max_loaded_elems: int = 100_000_000,
-    axis: Literal[0, 1] = 0,
+    axis: Literal["obs", 0, "var", 1] = 0,
     join: Literal["inner", "outer"] = "inner",
     merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
     uns_merge: (
@@ -561,17 +563,17 @@ def concat_on_disk(
     if keys is None:
         keys = np.arange(len(in_files)).astype(str)
 
-    _, dim = _resolve_dim(axis=axis)
-    _, alt_dim = _resolve_dim(axis=1 - axis)
+    axis, axis_name = _resolve_axis(axis)
+    _, alt_axis_name = _resolve_axis(1 - axis)
 
     output_group = as_group(out_file, mode="w")
     groups = [as_group(f) for f in in_files]
 
     use_reindexing = False
 
-    alt_dims = [_df_index(g[alt_dim]) for g in groups]
-    # All dim_names must be equal if reindexing not applied
-    if not _indices_equal(alt_dims):
+    alt_idxs = [_df_index(g[alt_axis_name]) for g in groups]
+    # All {axis_name}_names must be equal if reindexing not applied
+    if not _indices_equal(alt_idxs):
         use_reindexing = True
 
     # All groups must be anndata
@@ -592,34 +594,36 @@ def concat_on_disk(
 
     # Combining indexes
     concat_indices = pd.concat(
-        [pd.Series(_df_index(g[dim])) for g in groups], ignore_index=True
+        [pd.Series(_df_index(g[axis_name])) for g in groups], ignore_index=True
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
             _map_cat_to_str(label_col), sep=index_unique
         )
 
-    # Resulting indices for {dim} and {alt_dim}
+    # Resulting indices for {axis_name} and {alt_axis_name}
     concat_indices = pd.Index(concat_indices)
 
-    alt_indices = merge_indices(alt_dims, join=join)
+    alt_index = merge_indices(alt_idxs, join=join)
 
     reindexers = None
     if use_reindexing:
         reindexers = [
-            gen_reindexer(alt_indices, alt_old_index) for alt_old_index in alt_dims
+            gen_reindexer(alt_index, alt_old_index) for alt_old_index in alt_idxs
         ]
     else:
         reindexers = [IdentityReindexer()] * len(groups)
 
-    # Write {dim}
-    _write_dim_annot(groups, output_group, dim, concat_indices, label, label_col, join)
+    # Write {axis_name}
+    _write_axis_annot(
+        groups, output_group, axis_name, concat_indices, label, label_col, join
+    )
 
-    # Write {alt_dim}
-    _write_alt_annot(groups, output_group, alt_dim, alt_indices, merge)
+    # Write {alt_axis_name}
+    _write_alt_annot(groups, output_group, alt_axis_name, alt_index, merge)
 
-    # Write {alt_dim}m
-    _write_alt_mapping(groups, output_group, alt_dim, alt_indices, merge)
+    # Write {alt_axis_name}m
+    _write_alt_mapping(groups, output_group, alt_axis_name, alt_index, merge)
 
     # Write X
 
@@ -633,10 +637,10 @@ def concat_on_disk(
         max_loaded_elems=max_loaded_elems,
     )
 
-    # Write Layers and {dim}m
+    # Write Layers and {axis_name}m
     mapping_names = [
         (
-            f"{dim}m",
+            f"{axis_name}m",
             concat_indices,
             0,
             None if use_reindexing else [IdentityReindexer()] * len(groups),
