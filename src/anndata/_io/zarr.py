@@ -103,9 +103,9 @@ def read_dataset(dataset: zarr.Array):
     value = dataset[...]
     if not hasattr(value, "dtype"):
         return value
-    elif isinstance(value.dtype, str):
+    elif value.dtype == str:
         pass
-    elif isinstance(value.dtype, bytes):
+    elif value.dtype == bytes:
         value = value.astype(str).astype(object)  # bytestring -> unicode -> str
     elif len(value.dtype.descr) > 1:  # Compound dtype
         # For backwards compat, now strings are written as variable length
