@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
+import numpy as np
 import pandas as pd
 import zarr
 from scipy import sparse
@@ -103,9 +104,9 @@ def read_dataset(dataset: zarr.Array):
     value = dataset[...]
     if not hasattr(value, "dtype"):
         return value
-    elif value.dtype == str:
+    elif isinstance(value.dtype, str):
         pass
-    elif value.dtype == bytes:
+    elif issubclass(value.dtype.type, np.bytes_):
         value = value.astype(str).astype(object)  # bytestring -> unicode -> str
     elif len(value.dtype.descr) > 1:  # Compound dtype
         # For backwards compat, now strings are written as variable length
