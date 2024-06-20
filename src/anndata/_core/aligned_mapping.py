@@ -278,7 +278,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         vals: Mapping | AxisArraysBase | None = None,
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = dict()
@@ -377,7 +377,7 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         vals: Mapping | None = None,
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = dict()

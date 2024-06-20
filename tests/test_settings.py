@@ -32,7 +32,7 @@ def validate_int_list(val) -> bool:
     return True
 
 
-@pytest.fixture
+@pytest.fixture()
 def settings() -> SettingsManager:
     settings = SettingsManager()
     settings.register(option, default_val, description, validate_bool)
@@ -94,7 +94,7 @@ def test_register_with_env_enum(
 
 
 def test_register_bad_option(settings: SettingsManager):
-    with pytest.raises(TypeError, match="'foo' is not a valid int list"):
+    with pytest.raises(TypeError, match=r"'foo' is not a valid int list"):
         settings.register(
             "test_var_4",
             "foo",  # should be a list of ints
@@ -157,7 +157,7 @@ def test_deprecation(settings: SettingsManager):
     assert described_option.endswith(warning)
     with pytest.warns(
         DeprecationWarning,
-        match="'test_var' will be removed in 0.1.0. This is a deprecation warning!",
+        match=r"'test_var' will be removed in 0\.1\.0\. This is a deprecation warning!",
     ):
         assert getattr(settings, option) == default_val
 

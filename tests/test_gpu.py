@@ -6,7 +6,7 @@ from scipy import sparse
 from anndata import AnnData, Raw
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_gpu():
     """
     For testing that the gpu mark works
@@ -16,7 +16,7 @@ def test_gpu():
     cupy.ones(1)
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_adata_raw_gpu():
     import cupy as cp
     from cupyx.scipy import sparse as cupy_sparse
@@ -28,7 +28,7 @@ def test_adata_raw_gpu():
     assert isinstance(adata.raw.X, sparse.csr_matrix)
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_raw_gpu():
     import cupy as cp
     from cupyx.scipy import sparse as cupy_sparse

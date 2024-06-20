@@ -129,7 +129,7 @@ try:
             return ak.contents.EmptyArray()
 
         elif layout.is_list and depth == lateral_context["axis"]:
-            if layout.parameter("__array__") in ("string", "bytestring"):
+            if layout.parameter("__array__") in {"string", "bytestring"}:
                 # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
                 # which results in an extra hierarchy-level that shouldn't show up in dim_len
                 # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747

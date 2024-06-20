@@ -65,7 +65,7 @@ class NDArraySubclass(np.ndarray):
         return self
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm["o"] = np.zeros((100, 50))
@@ -176,7 +176,8 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     assert init_hash == hash_func(adata)
 
     if "sparse_array_dask_array" in request.node.callspec.id and CAN_USE_SPARSE_ARRAY:
-        assert False  # sparse arrays in dask are general expected to fail but in this case they do not
+        msg = "sparse arrays in dask are generally expected to fail but in this case they do not"
+        pytest.fail(msg)
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
@@ -267,9 +268,9 @@ def test_set_obsm(adata):
 
     subset = adata[subset_idx, :]
     subset_hash = joblib.hash(subset)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.obsm = dict(o=np.ones((dim0_size + 1, dim1_size)))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.varm = dict(o=np.ones((dim0_size - 1, dim1_size)))
     assert subset_hash == joblib.hash(subset)
 
@@ -294,9 +295,9 @@ def test_set_varm(adata):
 
     subset = adata[:, subset_idx]
     subset_hash = joblib.hash(subset)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.varm = dict(o=np.ones((dim0_size + 1, dim1_size)))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         subset.varm = dict(o=np.ones((dim0_size - 1, dim1_size)))
     # subset should not be changed by failed setting
     assert subset_hash == joblib.hash(subset)
@@ -506,7 +507,7 @@ def test_layers_view():
 
     assert view_adata.is_view
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"incorrect shape"):
         view_adata.layers["L2"] = L + 2
 
     assert view_adata.is_view  # Failing to set layer item makes adata not view
