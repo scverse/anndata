@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import joblib
 import numpy as np
@@ -160,6 +161,44 @@ def test_backing_copy(adata, tmp_path, backing_h5ad):
     assert copy.filename == copypath
     assert adata.isbacked
     assert copy.isbacked
+
+
+@pytest.mark.parametrize("assign", ["init", "assign"])
+@pytest.mark.parametrize("attr", ["X", "obsm", "varm", "layers"])
+def test_backed_init(
+    tmp_path: Path,
+    adata: ad.AnnData,
+    assign: Literal["init", "assign"],
+    attr: Literal["X", "obsm", "varm", "layers"],
+):
+    import h5py
+
+    path = tmp_path / "test.h5ad"
+    f = h5py.File(path, mode="a")
+    ad._io.specs.write_elem(f, "a", adata.X)
+
+    if assign == "init":
+        kw = (
+            dict(X=f["a"])
+            if attr == "X"
+            else {attr: {"a": f["a"]}, "shape": adata.X.shape}
+        )
+        adata_backed = ad.AnnData(**kw)
+    elif assign == "assign":
+        adata_backed = ad.AnnData(shape=adata.X.shape)
+        if attr == "X":
+            adata_backed.X = f["a"]
+        else:
+            getattr(adata_backed, attr)["a"] = f["a"]
+    else:
+        pytest.fail(f"Unexpected assign: {assign}")
+
+    if attr == "X":
+        # TODO: should that be inverted, e.g. when the Dataset’s path matches the backed mode path?
+        assert not adata_backed.isbacked
+        assert_equal(adata_backed.X, adata.X)
+    else:
+        assert_equal(getattr(adata_backed, attr)["a"], adata.X)
 
 
 # TODO: Also test updating the backing file inplace
