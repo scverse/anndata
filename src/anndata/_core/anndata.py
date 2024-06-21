@@ -9,15 +9,10 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
-from enum import Enum
 from functools import partial
 from pathlib import Path
 from textwrap import dedent
-from typing import (  # Meta  # Generic ABCs  # Generic
-    TYPE_CHECKING,
-    Any,
-    Literal,
-)
+from typing import TYPE_CHECKING, Any, Literal
 
 import h5py
 import numpy as np
@@ -30,10 +25,7 @@ from scipy.sparse import issparse
 
 from .. import utils
 from ..compat import (
-    CupyArray,
-    CupySparseMatrix,
     DaskArray,
-    ZappyArray,
     ZarrArray,
     _move_adj_mtx,
 )
@@ -53,6 +45,7 @@ from .file_backing import AnnDataFileManager, to_memory
 from .index import Index, Index1D, _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+from .storage import coerce_array
 from .views import (
     ArrayView,
     DataFrameView,
@@ -63,22 +56,6 @@ from .views import (
 
 if TYPE_CHECKING:
     from os import PathLike
-
-
-class StorageType(Enum):
-    Array = np.ndarray
-    Masked = ma.MaskedArray
-    Sparse = sparse.spmatrix
-    ZarrArray = ZarrArray
-    ZappyArray = ZappyArray
-    DaskArray = DaskArray
-    CupyArray = CupyArray
-    CupySparseMatrix = CupySparseMatrix
-    BackedSparseMatrix = BaseCompressedSparseDataset
-
-    @classmethod
-    def classes(cls):
-        return tuple(c.value for c in cls.__members__.values())
 
 
 # for backwards compat
@@ -415,13 +392,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # check data type of X
         if X is not None:
-            for s_type in StorageType:
-                if isinstance(X, s_type.value):
-                    break
-            else:
-                raise ValueError(
-                    f"X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not {type(X)}."
-                )
+            X = coerce_array(X, name="X")
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
@@ -613,11 +584,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 self._init_as_actual(self.copy())
             self._X = None
             return
-        if not isinstance(value, StorageType.classes()) and not np.isscalar(value):
-            if hasattr(value, "to_numpy") and hasattr(value, "dtypes"):
-                value = ensure_df_homogeneous(value, "X")
-            else:  # TODO: asarray? asanyarray?
-                value = np.array(value)
+        value = coerce_array(value, name="X", allow_array_like=True)
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates

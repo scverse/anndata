@@ -15,7 +15,7 @@ from .compat import CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
 logger = get_logger(__name__)
 
@@ -268,6 +268,17 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     values[indices_dup] = values_dup
     index = pd.Index(values, name=index.name)
     return index
+
+
+def join_english(words: Iterable[str], conjunction: str = "or") -> str:
+    words = list(words)  # no need to be efficient
+    if len(words) == 0:
+        return ""
+    if len(words) == 1:
+        return words[0]
+    if len(words) == 2:
+        return f"{words[0]} {conjunction} {words[1]}"
+    return ", ".join(words[:-1]) + f", {conjunction} {words[-1]}"
 
 
 def warn_names_duplicates(attr: str):
