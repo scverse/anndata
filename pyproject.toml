@@ -99,7 +99,10 @@ test = [
     "pytest_memray",
     "pytest-mock"
 ]
-gpu = ["cupy"]
+gpu = [
+    "cupy",
+    "numpy<2.0.0",
+]
 
 [tool.hatch.version]
 source = "vcs"
