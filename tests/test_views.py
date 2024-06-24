@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from copy import deepcopy
 from operator import mul
 
@@ -8,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from dask.base import tokenize
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -118,6 +120,27 @@ def test_views():
     assert not adata_subset.is_view
 
     assert adata_subset.obs["foo"].tolist() == list(range(2))
+
+
+def test_convert_error():
+    adata = ad.AnnData(np.array([[1, 2], [3, 0]]))
+    no_array = [[1], []]
+
+    if Version(np.__version__) >= Version("1.24"):
+        stack = pytest.raises(ValueError, match=r"Failed to convert")
+    else:
+        stack = ExitStack()
+        stack.enter_context(
+            pytest.warns(
+                np.VisibleDeprecationWarning,
+                match=r"ndarray from ragged.*is deprecated",
+            )
+        )
+        stack.enter_context(
+            pytest.raises(ValueError, match=r"setting an array element with a sequence")
+        )
+    with stack:
+        adata[:, 0].X = no_array
 
 
 def test_view_subset_shapes():
