@@ -129,8 +129,6 @@ addopts = [
     "--doctest-modules",
     "--pyargs",
     "-ptesting.anndata._pytest",
-    "--ignore=src/anndata/core.py",      # deprecated
-    "--ignore=src/anndata/readwrite.py", # deprecated
 ]
 filterwarnings = [
     # all `ignore::anndata.*` entries are in `conftest.py`
