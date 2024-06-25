@@ -342,7 +342,7 @@ def mk_idx_kind(idx: Sequence[int], *, kind: Kind, l: int) -> Idx | None:
     if kind == "array":
         return np.asarray(idx)
     if kind == "mask":
-        return np.in1d(np.arange(l), idx)
+        return np.isin(np.arange(l), idx)
     return None
 
 
@@ -356,6 +356,7 @@ def idify(x: object) -> str:
 def width_idx_kinds(
     *idxs: tuple[Sequence[int], Idx, Sequence[str]], l: int
 ) -> Generator[ParameterSet, None, None]:
+    """Convert major (first) index into various identical kinds of indexing."""
     for (idx_maj_raw, idx_min, exp), maj_kind in product(idxs, get_args(Kind)):
         if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
             continue
@@ -376,6 +377,11 @@ def width_idx_kinds(
             [0],
             slice(None, 3),
             ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+        ),
+        (
+            [3, 4, 5],
+            slice(None, None),
+            ["X/data/.zarray", "X/data/.zarray", "X/data/3", "X/data/4", "X/data/5"],
         ),
         l=10,
     ),
