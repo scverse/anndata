@@ -623,6 +623,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         else:
                             memory_class = sparse.coo_matrix
                         value = memory_class(value)
+                    elif sparse.issparse(value) and isinstance(
+                        self._adata_ref._X, np.ndarray
+                    ):
+                        warnings.warn(
+                            "Trying to set a dense array with a sparse array on a view."
+                            "Densifying the sparse array."
+                            "This may incur excessive memory usage",
+                            stacklevel=2,
+                        )
+                        value = value.toarray()
                     self._adata_ref._X[oidx, vidx] = value
                 else:
                     self._X = value
