@@ -101,6 +101,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
 
 
 # this is very similar to the views test
+@pytest.mark.filterwarnings("ignore::anndata.ImplicitModificationWarning")
 def test_backing(adata, tmp_path, backing_h5ad):
     assert not adata.isbacked
 
@@ -181,7 +182,7 @@ def test_backed_init(
         kw = (
             dict(X=f["a"])
             if attr == "X"
-            else {attr: {"a": f["a"]}, "shape": adata.X.shape}
+            else {attr: dict(a=f["a"]), "shape": adata.X.shape}
         )
         adata_backed = ad.AnnData(**kw)
     elif assign == "assign":
