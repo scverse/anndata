@@ -11,7 +11,7 @@ from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
-from anndata import AnnData
+from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
 from anndata.compat import CAN_USE_SPARSE_ARRAY
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -95,9 +95,7 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
 def test_invalid_X():
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            "X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not <class 'str'>."
-        ),
+        match=r"X needs to be of one of np\.ndarray.*not <class 'str'>\.",
     ):
         AnnData("string is not a valid X")
 
@@ -166,6 +164,39 @@ def test_df_warnings():
         adata = AnnData(df)
     with pytest.warns(UserWarning, match=r"X.*dtype float64"):
         adata.X = df
+
+
+@pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
+@pytest.mark.parametrize("when", ["init", "assign"])
+def test_convert_matrix(attr, when):
+    """Test that initializing or assigning aligned arrays to a np.matrix converts it."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", r"the matrix.*not.*recommended", PendingDeprecationWarning
+        )
+        mat = np.matrix([[1, 2], [3, 0]])
+
+    direct = attr in {"X"}
+
+    with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
+        if when == "init":
+            adata = (
+                AnnData(**{attr: mat})
+                if direct
+                else AnnData(shape=(2, 2), **{attr: {"a": mat}})
+            )
+        elif when == "assign":
+            adata = AnnData(shape=(2, 2))
+            if direct:
+                setattr(adata, attr, mat)
+            else:
+                getattr(adata, attr)["a"] = mat
+        else:
+            raise ValueError(when)
+
+    arr = getattr(adata, attr) if direct else getattr(adata, attr)["a"]
+    assert isinstance(arr, np.ndarray), f"{arr} is not an array"
+    assert not isinstance(arr, np.matrix), f"{arr} is still a matrix"
 
 
 def test_attr_deletion():
