@@ -753,6 +753,8 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
     with pytest.warns(UserWarning, match=r"Observation names are not unique"):
         orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
+    # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
+    orig.obs["cell_type"] = orig.obs["cell_type"].astype(str)
     getattr(orig, f"write_{diskfmt}")(filepth)
     with pytest.warns(UserWarning, match=r"Observation names are not unique"):
         read = getattr(ad, f"read_{diskfmt}")(filepth)
