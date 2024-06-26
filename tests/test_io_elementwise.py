@@ -59,7 +59,7 @@ sparse_formats = ["csr", "csc"]
 SIZE = 1000
 
 
-@pytest.fixture(scope="function", params=sparse_formats)
+@pytest.fixture(params=sparse_formats)
 def sparse_format(request):
     return request.param
 
