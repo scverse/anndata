@@ -32,74 +32,69 @@ def validate_int_list(val) -> bool:
     return True
 
 
-settings = SettingsManager()
-settings.register(option, default_val, description, validate_bool)
-
-settings.register(option_2, default_val_2, description_2, validate_bool)
-
-settings.register(
-    option_3,
-    default_val_3,
-    description_3,
-    validate_int_list,
-    type_3,
-)
+@pytest.fixture()
+def settings() -> SettingsManager:
+    settings = SettingsManager()
+    settings.register(option, default_val, description, validate_bool)
+    settings.register(option_2, default_val_2, description_2, validate_bool)
+    settings.register(option_3, default_val_3, description_3, validate_int_list, type_3)
+    return settings
 
 
-def test_register_option_default():
+def test_register_option_default(settings: SettingsManager):
     assert getattr(settings, option) == default_val
     assert description in settings.describe(option)
 
 
-def test_register_with_env(monkeypatch):
-    with monkeypatch.context() as mp:
-        option_env = "test_var_env"
-        default_val_env = False
-        description_env = "My doc string env!"
-        option_env_var = "ANNDATA_" + option_env.upper()
-        mp.setenv(option_env_var, "1")
+def test_register_with_env(settings: SettingsManager, monkeypatch: pytest.MonkeyPatch):
+    option_env = "test_var_env"
+    default_val_env = False
+    description_env = "My doc string env!"
+    option_env_var = "ANNDATA_" + option_env.upper()
+    monkeypatch.setenv(option_env_var, "1")
 
-        settings.register(
-            option_env,
-            default_val_env,
-            description_env,
-            validate_bool,
-            get_from_env=check_and_get_bool,
-        )
+    settings.register(
+        option_env,
+        default_val_env,
+        description_env,
+        validate_bool,
+        get_from_env=check_and_get_bool,
+    )
 
-        assert settings.test_var_env
-
-
-def test_register_with_env_enum(monkeypatch):
-    with monkeypatch.context() as mp:
-        option_env = "test_var_env"
-        default_val_env = False
-        description_env = "My doc string env!"
-        option_env_var = "ANNDATA_" + option_env.upper()
-        mp.setenv(option_env_var, "b")
-
-        class TestEnum(Enum):
-            a = False
-            b = True
-
-        def check_and_get_bool_enum(option, default_value):
-            return check_and_get_environ_var(
-                "ANNDATA_" + option.upper(), "a", cast=TestEnum
-            ).value
-
-        settings.register(
-            option_env,
-            default_val_env,
-            description_env,
-            validate_bool,
-            get_from_env=check_and_get_bool_enum,
-        )
-
-        assert settings.test_var_env
+    assert settings.test_var_env
 
 
-def test_register_bad_option():
-    with pytest.raises(TypeError, match="'foo' is not a valid int list"):
+def test_register_with_env_enum(
+    settings: SettingsManager, monkeypatch: pytest.MonkeyPatch
+):
+    option_env = "test_var_env"
+    default_val_env = False
+    description_env = "My doc string env!"
+    option_env_var = "ANNDATA_" + option_env.upper()
+    monkeypatch.setenv(option_env_var, "b")
+
+    class TestEnum(Enum):
+        a = False
+        b = True
+
+    def check_and_get_bool_enum(option, default_value):
+        return check_and_get_environ_var(
+            "ANNDATA_" + option.upper(), "a", cast=TestEnum
+        ).value
+
+    settings.register(
+        option_env,
+        default_val_env,
+        description_env,
+        validate_bool,
+        get_from_env=check_and_get_bool_enum,
+    )
+
+    assert settings.test_var_env
+
+
+def test_register_bad_option(settings: SettingsManager):
+    with pytest.raises(TypeError, match=r"'foo' is not a valid int list"):
         settings.register(
             "test_var_4",
             "foo",  # should be a list of ints
@@ -109,19 +104,19 @@ def test_register_bad_option():
         )
 
 
-def test_set_option():
+def test_set_option(settings: SettingsManager):
     setattr(settings, option, not default_val)
     assert getattr(settings, option) == (not default_val)
     settings.reset(option)
     assert getattr(settings, option) == default_val
 
 
-def test_dir():
+def test_dir(settings: SettingsManager):
     assert {option, option_2, option_3} <= set(dir(settings))
     assert dir(settings) == sorted(dir(settings))
 
 
-def test_reset_multiple():
+def test_reset_multiple(settings: SettingsManager):
     setattr(settings, option, not default_val)
     setattr(settings, option_2, not default_val_2)
     settings.reset([option, option_2])
@@ -129,18 +124,18 @@ def test_reset_multiple():
     assert getattr(settings, option_2) == default_val_2
 
 
-def test_get_unregistered_option():
+def test_get_unregistered_option(settings: SettingsManager):
     with pytest.raises(AttributeError):
         setattr(settings, option + "_different", default_val)
 
 
-def test_override():
+def test_override(settings: SettingsManager):
     with settings.override(**{option: not default_val}):
         assert getattr(settings, option) == (not default_val)
     assert getattr(settings, option) == default_val
 
 
-def test_override_multiple():
+def test_override_multiple(settings: SettingsManager):
     with settings.override(**{option: not default_val, option_2: not default_val_2}):
         assert getattr(settings, option) == (not default_val)
         assert getattr(settings, option_2) == (not default_val_2)
@@ -148,7 +143,7 @@ def test_override_multiple():
     assert getattr(settings, option_2) == default_val_2
 
 
-def test_deprecation():
+def test_deprecation(settings: SettingsManager):
     warning = "This is a deprecation warning!"
     version = "0.1.0"
     settings.deprecate(option, version, warning)
@@ -162,12 +157,12 @@ def test_deprecation():
     assert described_option.endswith(warning)
     with pytest.warns(
         DeprecationWarning,
-        match="'test_var' will be removed in 0.1.0. This is a deprecation warning!",
+        match=r"'test_var' will be removed in 0\.1\.0\. This is a deprecation warning!",
     ):
         assert getattr(settings, option) == default_val
 
 
-def test_deprecation_no_message():
+def test_deprecation_no_message(settings: SettingsManager):
     version = "0.1.0"
     settings.deprecate(option, version)
     described_option = settings.describe(option, print_description=False)
@@ -175,53 +170,46 @@ def test_deprecation_no_message():
     assert described_option.endswith(f"{option} will be removed in {version}.*")
 
 
-def test_option_typing():
+def test_option_typing(settings: SettingsManager):
     assert settings._registered_options[option_3].type == type_3
     assert str(type_3) in settings.describe(option_3, print_description=False)
 
 
-def test_check_and_get_environ_var(monkeypatch):
-    with monkeypatch.context() as mp:
-        option_env_var = "ANNDATA_OPTION"
-        assert hash("foo") == check_and_get_environ_var(
+def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
+    option_env_var = "ANNDATA_OPTION"
+    assert hash("foo") == check_and_get_environ_var(
+        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+    )
+    monkeypatch.setenv(option_env_var, "bar")
+    assert hash("bar") == check_and_get_environ_var(
+        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+    )
+    monkeypatch.setenv(option_env_var, "Not foo or bar")
+    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+        check_and_get_environ_var(
             option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
         )
-        mp.setenv(option_env_var, "bar")
-        assert hash("bar") == check_and_get_environ_var(
-            option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
-        )
-        mp.setenv(option_env_var, "Not foo or bar")
-        with pytest.warns(
-            match=f'Value "{os.environ[option_env_var]}" is not in allowed'
-        ):
-            check_and_get_environ_var(
-                option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
-            )
-        assert hash("Not foo or bar") == check_and_get_environ_var(
-            option_env_var, "foo", cast=lambda x: hash(x)
-        )
+    assert hash("Not foo or bar") == check_and_get_environ_var(
+        option_env_var, "foo", cast=lambda x: hash(x)
+    )
 
 
-def test_check_and_get_bool(monkeypatch):
-    with monkeypatch.context() as mp:
-        option_env_var = "ANNDATA_" + option.upper()
-        assert not check_and_get_bool(option, default_val)
-        mp.setenv(option_env_var, "1")
-        assert check_and_get_bool(option, default_val)
-        mp.setenv(option_env_var, "Not 0 or 1")
-        with pytest.warns(
-            match=f'Value "{os.environ[option_env_var]}" is not in allowed'
-        ):
-            check_and_get_bool(option, default_val)
+def test_check_and_get_bool(monkeypatch: pytest.MonkeyPatch):
+    option_env_var = "ANNDATA_" + option.upper()
+    assert not check_and_get_bool(option, default_val)
+    monkeypatch.setenv(option_env_var, "1")
+    assert check_and_get_bool(option, default_val)
+    monkeypatch.setenv(option_env_var, "Not 0 or 1")
+    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+        check_and_get_bool(option, default_val)
 
 
-def test_check_and_get_bool_enum(monkeypatch):
-    with monkeypatch.context() as mp:
-        option_env_var = "ANNDATA_" + option.upper()
-        mp.setenv(option_env_var, "b")
+def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
+    option_env_var = "ANNDATA_" + option.upper()
+    monkeypatch.setenv(option_env_var, "b")
 
-        class TestEnum(Enum):
-            a = False
-            b = True
+    class TestEnum(Enum):
+        a = False
+        b = True
 
-        assert check_and_get_environ_var(option_env_var, "a", cast=TestEnum).value
+    assert check_and_get_environ_var(option_env_var, "a", cast=TestEnum).value

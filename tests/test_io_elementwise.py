@@ -38,7 +38,7 @@ def diskfmt(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["h5", "zarr"])
+@pytest.fixture(params=["h5", "zarr"])
 def store(request, tmp_path) -> H5Group | ZarrGroup:
     if request.param == "h5":
         file = h5py.File(tmp_path / "test.h5", "w")
@@ -46,7 +46,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
     elif request.param == "zarr":
         store = zarr.open(tmp_path / "test.zarr", "w")
     else:
-        assert False
+        pytest.fail(f"Unknown store type: {request.param}")
 
     try:
         yield store
@@ -105,44 +105,64 @@ def create_sparse_store(sparse_format: Literal["csc", "csr"], store: G) -> G:
 
 
 @pytest.mark.parametrize(
-    "value,encoding_type",
+    ("value", "encoding_type"),
     [
-        ("hello world", "string"),
-        (np.str_("hello world"), "string"),
-        (np.array([1, 2, 3]), "array"),
-        (np.array(["hello", "world"], dtype=object), "string-array"),
-        (1, "numeric-scalar"),
-        (True, "numeric-scalar"),
-        (1.0, "numeric-scalar"),
-        ({"a": 1}, "dict"),
-        (gen_adata((3, 2)), "anndata"),
-        (sparse.random(5, 3, format="csr", density=0.5), "csr_matrix"),
-        (sparse.random(5, 3, format="csc", density=0.5), "csc_matrix"),
-        (pd.DataFrame({"a": [1, 2, 3]}), "dataframe"),
-        (pd.Categorical(list("aabccedd")), "categorical"),
-        (pd.Categorical(list("aabccedd"), ordered=True), "categorical"),
-        (pd.Categorical([1, 2, 1, 3], ordered=True), "categorical"),
-        (
+        pytest.param("hello world", "string", id="py_str"),
+        pytest.param(np.str_("hello world"), "string", id="np_str"),
+        pytest.param(np.array([1, 2, 3]), "array", id="np_arr_int"),
+        pytest.param(
+            np.array(["hello", "world"], dtype=object), "string-array", id="np_arr_str"
+        ),
+        pytest.param(1, "numeric-scalar", id="py_int"),
+        pytest.param(True, "numeric-scalar", id="py_bool"),
+        pytest.param(1.0, "numeric-scalar", id="py_float"),
+        pytest.param({"a": 1}, "dict", id="py_dict"),
+        pytest.param(gen_adata((3, 2)), "anndata", id="anndata"),
+        pytest.param(
+            sparse.random(5, 3, format="csr", density=0.5),
+            "csr_matrix",
+            id="sp_mat_csr",
+        ),
+        pytest.param(
+            sparse.random(5, 3, format="csc", density=0.5),
+            "csc_matrix",
+            id="sp_mat_csc",
+        ),
+        pytest.param(pd.DataFrame({"a": [1, 2, 3]}), "dataframe", id="pd_df"),
+        pytest.param(pd.Categorical(list("aabccedd")), "categorical", id="pd_cat"),
+        pytest.param(
+            pd.Categorical(list("aabccedd"), ordered=True),
+            "categorical",
+            id="pd_cat_ord",
+        ),
+        pytest.param(
+            pd.Categorical([1, 2, 1, 3], ordered=True), "categorical", id="pd_cat_num"
+        ),
+        pytest.param(
             pd.arrays.IntegerArray(
                 np.ones(5, dtype=int), mask=np.array([True, False, True, False, True])
             ),
             "nullable-integer",
+            id="pd_arr_int_mask",
         ),
-        (pd.array([1, 2, 3]), "nullable-integer"),
-        (
+        pytest.param(pd.array([1, 2, 3]), "nullable-integer", id="pd_arr_int"),
+        pytest.param(
             pd.arrays.BooleanArray(
                 np.random.randint(0, 2, size=5, dtype=bool),
                 mask=np.random.randint(0, 2, size=5, dtype=bool),
             ),
             "nullable-boolean",
+            id="pd_arr_bool_mask",
         ),
-        (pd.array([True, False, True, True]), "nullable-boolean"),
-        # (bytes, b"some bytes", "bytes"), # Does not work for zarr
+        pytest.param(
+            pd.array([True, False, True, True]), "nullable-boolean", id="pd_arr_bool"
+        ),
+        # pytest.param(bytes, b"some bytes", "bytes", id="py_bytes"), # Does not work for zarr
         # TODO consider how specific encodings should be. Should we be fully describing the written type?
         # Currently the info we add is: "what you wouldn't be able to figure out yourself"
         # but that's not really a solid rule.
-        # (bool, True, "bool"),
-        # (bool, np.bool_(False), "bool"),
+        # pytest.param(bool, True, "bool", id="py_bool"),
+        # pytest.param(bool, np.bool_(False), "bool", id="np_bool"),
     ],
 )
 def test_io_spec(store, value, encoding_type):
@@ -157,9 +177,9 @@ def test_io_spec(store, value, encoding_type):
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test
-@pytest.mark.gpu
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "value,encoding_type",
+    ("value", "encoding_type"),
     [
         (np.array([1, 2, 3]), "array"),
         (np.arange(12).reshape(4, 3), "array"),
@@ -272,7 +292,7 @@ def test_write_anndata_to_root(store):
 
 
 @pytest.mark.parametrize(
-    ["attribute", "value"],
+    ("attribute", "value"),
     [
         ("encoding-type", "floob"),
         ("encoding-version", "10000.0"),
@@ -293,7 +313,7 @@ def test_read_iospec_not_found(store, attribute, value):
 
 
 @pytest.mark.parametrize(
-    ["obj"],
+    "obj",
     [(b"x",)],
 )
 def test_write_io_error(store, obj):

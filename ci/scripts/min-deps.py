@@ -33,12 +33,13 @@ def min_dep(req: Requirement) -> Requirement:
     if req.extras:
         req_name = f"{req_name}[{','.join(req.extras)}]"
 
-    if not req.specifier:
+    specs = [spec for spec in req.specifier if spec.operator in {">", ">=", "~=", "=="}]
+    if not specs:
         return Requirement(req_name)
 
     min_version = Version("0.0.0.a1")
-    for spec in req.specifier:
-        if spec.operator in [">", ">=", "~="]:
+    for spec in specs:
+        if spec.operator in {">", ">=", "~="}:
             min_version = max(min_version, Version(spec.version))
         elif spec.operator == "==":
             min_version = Version(spec.version)

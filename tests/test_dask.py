@@ -40,7 +40,7 @@ def diskfmt(request):
     return request.param
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata(sizes):
     import dask.array as da
     import numpy as np
@@ -86,7 +86,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
     write(orig, pth)
     curr = read(pth)
 
-    with pytest.raises(Exception):
+    with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
@@ -118,13 +118,13 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
         adata.varm["a"] = da.random.random((N, 10))
         orig = adata
         if diskfmt == "h5ad":
-            with pytest.raises(ValueError, match="Cannot write dask arrays to hdf5"):
+            with pytest.raises(ValueError, match=r"Cannot write dask arrays to hdf5"):
                 write_elem(g, "", orig)
             return
         write_elem(g, "", orig)
         curr = read_elem(g)
 
-    with pytest.raises(Exception):
+    with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
@@ -161,7 +161,7 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
 
     mem = orig.to_memory()
 
-    with pytest.raises(Exception):
+    with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
@@ -199,7 +199,7 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
 
     mem = orig.to_memory(copy=True)
 
-    with pytest.raises(Exception):
+    with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
@@ -229,7 +229,7 @@ def test_dask_copy_check_array_types(adata):
     orig = adata
     curr = adata.copy()
 
-    with pytest.raises(Exception):
+    with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
@@ -255,7 +255,8 @@ def test_assign_X(adata):
     adata_copy = adata.copy()
 
     adata.X = -1 * da.ones(adata.X.shape)
-    assert prev_type is DaskArray and type(adata_copy.X) is DaskArray
+    assert prev_type is DaskArray
+    assert type(adata_copy.X) is DaskArray
     assert_equal(adata.X, -1 * np.ones(adata.X.shape))
     assert_equal(adata_copy.X, np.ones(adata.X.shape))
 

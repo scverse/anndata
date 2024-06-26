@@ -17,12 +17,12 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix
 
-from anndata._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from anndata.compat import AwkArray
-
-from ..utils import axis_len, deprecated, ensure_df_homogeneous, warn_once
+from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
+from ..compat import AwkArray
+from ..utils import axis_len, deprecated, warn_once
 from .access import ElementRef
 from .index import _subset
+from .storage import coerce_array
 from .views import as_view, view_update
 
 if TYPE_CHECKING:
@@ -88,10 +88,8 @@ class AlignedMapping(cabc.MutableMapping, ABC):
                 )
             raise ValueError(msg)
 
-        if not self._allow_df and isinstance(val, pd.DataFrame):
-            name = self.attrname.title().rstrip("s")
-            val = ensure_df_homogeneous(val, f"{name} {key!r}")
-        return val
+        name = f"{self.attrname.title().rstrip('s')} {key!r}"
+        return coerce_array(val, name=name, allow_df=self._allow_df)
 
     @property
     @abstractmethod
@@ -280,7 +278,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         vals: Mapping | AxisArraysBase | None = None,
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = dict()
@@ -379,7 +377,7 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         vals: Mapping | None = None,
     ):
         self._parent = parent
-        if axis not in (0, 1):
+        if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
         self._data = dict()
