@@ -29,6 +29,7 @@ from anndata.compat import (
     CupySparseMatrix,
     DaskArray,
     SpArray,
+    ZarrArray,
 )
 from anndata.utils import asarray
 
@@ -535,6 +536,7 @@ def assert_equal_cupy_sparse(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(h5py.Dataset)
+@assert_equal.register(ZarrArray)
 def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)
