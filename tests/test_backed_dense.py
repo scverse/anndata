@@ -22,50 +22,70 @@ def diskfmt(request):
     return request.param
 
 
+@pytest.fixture()
+def file(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | zarr.Group:
+    path = tmp_path / f"test.{diskfmt}"
+    if diskfmt == "zarr":
+        return zarr.open_group(path, "a")
+    if diskfmt == "h5ad":
+        return h5py.File(path, "a")
+    pytest.fail(f"Unknown diskfmt: {diskfmt}")
+
+
 @pytest.mark.parametrize("assign", ["init", "assign"])
 @pytest.mark.parametrize("attr", ["X", "obsm", "varm", "layers"])
-def test_backed_init(
-    tmp_path: Path,
+def test_create_delete(
     diskfmt: Literal["h5ad", "zarr"],
+    file: h5py.File | zarr.Group,
     assign: Literal["init", "assign"],
     attr: Literal["X", "obsm", "varm", "layers"],
 ):
-    path = tmp_path / f"test.{diskfmt}"
-    if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
-    elif diskfmt == "h5ad":
-        f = h5py.File(path, mode="a")
-    else:
-        pytest.fail(f"Unexpected diskfmt: {diskfmt}")
-
     x = np.random.randn(10, 10)
-    write_elem(f, "a", x)
+    write_elem(file, "a", x)
 
     # initialize (and if applicable, assign)
     if assign == "init":
-        kw = dict(X=f["a"]) if attr == "X" else {attr: dict(a=f["a"]), "shape": x.shape}
-        adata_backed = AnnData(**kw)
+        kw = (
+            dict(X=file["a"])
+            if attr == "X"
+            else {attr: dict(a=file["a"]), "shape": x.shape}
+        )
+        adata = AnnData(**kw)
     elif assign == "assign":
-        adata_backed = AnnData(shape=x.shape)
+        adata = AnnData(shape=x.shape)
         if attr == "X":
-            adata_backed.X = f["a"]
+            adata.X = file["a"]
         else:
-            getattr(adata_backed, attr)["a"] = f["a"]
+            getattr(adata, attr)["a"] = file["a"]
     else:
         pytest.fail(f"Unexpected assign: {assign}")
 
     # check equality
     if attr == "X":
         # TODO: should that be inverted, e.g. when the Dataset’s path matches the backed mode path?
-        assert not adata_backed.isbacked
-        backed_array = adata_backed.X
+        assert not adata.isbacked
+        backed_array = adata.X
     else:
-        backed_array = getattr(adata_backed, attr)["a"]
+        backed_array = getattr(adata, attr)["a"]
     assert isinstance(backed_array, zarr.Array if diskfmt == "zarr" else h5py.Dataset)
     assert_equal(backed_array, x)
 
     # check that there’s no error deleting it either
     if attr == "X":
-        del adata_backed.X
+        del adata.X
     else:
-        del getattr(adata_backed, attr)["a"]
+        del getattr(adata, attr)["a"]
+
+
+def test_assign_x_subset(file: h5py.File | zarr.Group):
+    x = np.ones((10, 10))
+    write_elem(file, "a", x)
+
+    adata = AnnData(file["a"])
+
+    view = adata[3:7, 6:8]
+    view.X = np.zeros((4, 2))
+
+    expected = x.copy()
+    expected[3:7, 6:8] = np.zeros((4, 2))
+    assert_equal(adata.X, expected)

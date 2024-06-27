@@ -495,7 +495,7 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     b = asarray(b)
     if not exact and is_numeric_dtype(a) and is_numeric_dtype(b):
         assert a.shape == b.shape, format_msg(elem_name)
-        assert np.allclose(a, b, equal_nan=True), format_msg(elem_name)
+        np.testing.assert_allclose(a, b, equal_nan=True, err_msg=format_msg(elem_name))
     elif (  # Structured dtype
         not exact
         and hasattr(a, "dtype")
