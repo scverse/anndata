@@ -1,3 +1,5 @@
+"""Tests for backing using the `.file` and `.isbacked` attributes."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,6 +20,8 @@ from anndata.tests.helpers import (
 from anndata.utils import asarray
 
 subset_func2 = subset_func
+
+
 # -------------------------------------------------------------------------------
 # Some test data
 # -------------------------------------------------------------------------------
@@ -99,6 +103,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
 
 
 # this is very similar to the views test
+@pytest.mark.filterwarnings("ignore::anndata.ImplicitModificationWarning")
 def test_backing(adata, tmp_path, backing_h5ad):
     assert not adata.isbacked
 
