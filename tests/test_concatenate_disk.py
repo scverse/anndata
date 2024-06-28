@@ -9,6 +9,7 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData, concat
+from anndata._core.merge import _resolve_axis
 from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.tests.helpers import (
@@ -131,18 +132,10 @@ def test_anndatas_without_reindex(
             **GEN_ADATA_OOC_CONCAT_ARGS,
         )
         # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        if axis == 0:
-            a.obs_names = f"{i}-" + a.obs_names
-            a.var_names = [
-                f"{i}-{name}" if var_ind % 2 else name
-                for var_ind, name in enumerate(a.var_names)
-            ]
-        else:
-            a.var_names = f"{i}-" + a.var_names
-            a.obs_names = [
-                f"{i}-{name}" if obs_ind % 2 else name
-                for obs_ind, name in enumerate(a.obs_names)
-            ]
+        _, off_axis_name = _resolve_axis(1 - axis)
+        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names[1::2] = f"{i}-" + off_names[1::2]
+        setattr(a, f"{off_axis_name}_names", off_names)
         adatas.append(a)
 
     assert_eq_concat_on_disk(
@@ -174,16 +167,10 @@ def test_anndatas_with_reindex(
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
         # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        if axis == 1:
-            a.obs_names = [
-                f"{i}-{name}" if obs_ind % 2 else name
-                for obs_ind, name in enumerate(a.obs_names)
-            ]
-        else:
-            a.var_names = [
-                f"{i}-{name}" if var_ind % 2 else name
-                for var_ind, name in enumerate(a.var_names)
-            ]
+        _, off_axis_name = _resolve_axis(1 - axis)
+        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names[1::2] = f"{i}-" + off_names[1::2]
+        setattr(a, f"{off_axis_name}_names", off_names)
         adatas.append(a)
 
     assert_eq_concat_on_disk(
