@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,10 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
     obsm_types=(
@@ -77,13 +82,18 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
 
 
 def assert_eq_concat_on_disk(
-    adatas, tmp_path, file_format, max_loaded_elems=None, *args, **kwargs
+    adatas,
+    tmp_path: Path,
+    file_format: Literal["zarr", "h5ad"],
+    max_loaded_elems: int | None = None,
+    *args,
+    **kwargs,
 ):
     # create one from the concat function
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / ("out." + file_format)
+    out_name = tmp_path / f"out.{file_format}"
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
     concat_on_disk(paths, out_name, *args, **kwargs)
@@ -93,32 +103,26 @@ def assert_eq_concat_on_disk(
 
 def get_array_type(array_type, axis):
     if array_type == "sparse":
-        if axis == 0:
-            return sparse.csr_matrix
-        return sparse.csc_matrix
+        return sparse.csr_matrix if axis == 0 else sparse.csc_matrix
     if array_type == "sparse_array":
-        if axis == 0:
-            return sparse.csr_array
-        return sparse.csc_array
+        return sparse.csr_array if axis == 0 else sparse.csc_array
     if array_type == "array":
         return asarray
-    else:
-        raise NotImplementedError(f"array_type {array_type} not implemented")
+    raise NotImplementedError(f"array_type {array_type} not implemented")
 
 
 def test_anndatas_without_reindex(
     axis, array_type, join_type, tmp_path, max_loaded_elems, file_format
 ):
-    N = 50
-    M = 50
-    sparse_fmt = "csr"
+    M = N = 50
+    sparse_fmt = "csr" if axis == 0 else "csc"
+
     adatas = []
     for i in range(5):
         if axis == 0:
             M = np.random.randint(1, 100)
         else:
             N = np.random.randint(1, 100)
-            sparse_fmt = "csc"
 
         a = gen_adata(
             (M, N),
@@ -154,14 +158,9 @@ def test_anndatas_without_reindex(
 def test_anndatas_with_reindex(
     axis, array_type, join_type, tmp_path, file_format, max_loaded_elems
 ):
-    N = 50
-    M = 50
+    sparse_fmt = "csr" if axis == 0 else "csc"
+
     adatas = []
-
-    sparse_fmt = "csc"
-    if axis == 0:
-        sparse_fmt = "csr"
-
     for i in range(5):
         M = np.random.randint(1, 100)
         N = np.random.randint(1, 100)
@@ -170,11 +169,7 @@ def test_anndatas_with_reindex(
             (M, N),
             X_type=get_array_type(array_type, axis),
             sparse_fmt=sparse_fmt,
-            obsm_types=(
-                get_array_type("sparse", 1 - axis),
-                np.ndarray,
-                pd.DataFrame,
-            ),
+            obsm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
             varm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
