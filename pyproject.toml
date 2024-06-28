@@ -42,7 +42,7 @@ dependencies = [
     "pandas >=1.4, !=2.1.0rc0, !=2.1.2",
     "numpy>=1.23",
     # https://github.com/scverse/anndata/issues/1434
-    "scipy >1.8, <1.13.0rc1",
+    "scipy >1.8",
     "h5py>=3.1",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
@@ -83,9 +83,9 @@ doc = [
 ]
 test = [
     "loompy>=3.0.5",
-    "pytest>=7.3",
+    "pytest>=8.2",
     "pytest-cov>=2.10",
-    "zarr",
+    "zarr<3.0.0a0",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
@@ -99,18 +99,23 @@ test = [
     "pytest_memray",
     "pytest-mock"
 ]
-gpu = ["cupy"]
+gpu = [
+    "cupy",
+    "numpy<2.0.0",
+]
 
-[tool.hatch.build]
-exclude = ["anndata/tests/test_*.py", "anndata/tests/data"]
 [tool.hatch.version]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
-version-file = "anndata/_version.py"
+version-file = "src/anndata/_version.py"
+[tool.hatch.build.targets.wheel]
+packages = ["src/anndata", "src/testing"]
 
 [tool.coverage.run]
-source = ["anndata"]
-omit = ["anndata/_version.py", "**/test_*.py"]
+source_pkgs = ["anndata"]
+omit = ["src/anndata/_version.py", "**/test_*.py"]
+[tool.coverage.paths]
+source = ["./src", "**/site-packages"]
 
 [tool.coverage.report]
 exclude_also = [
@@ -119,14 +124,15 @@ exclude_also = [
 
 [tool.pytest.ini_options]
 addopts = [
+    "--import-mode=importlib",
     "--strict-markers",
     "--doctest-modules",
+    "--pyargs",
+    "-ptesting.anndata._pytest",
 ]
 filterwarnings = [
-    'ignore:Support for Awkward Arrays is currently experimental',
-    'ignore:Outer joins on awkward\.Arrays',
-    # TODO: replace both lines above with this one once we figured out how prevent ImportPathMismatchError
-    # 'ignore::anndata._warnings.ExperimentalFeatureWarning',
+    # all `ignore::anndata.*` entries are in `conftest.py`
+    # See: https://github.com/pytest-dev/pytest-cov/issues/437
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -137,10 +143,17 @@ filterwarnings_when_strict = [
     "default::dask.array.core.PerformanceWarning",
 ]
 python_files = "test_*.py"
-testpaths = ["anndata", "docs/concatenation.rst"]
+testpaths = [
+    "anndata", # docstrings (module name due to --pyargs)
+    "./tests", # unit tests
+    "./docs/concatenation.rst", # further doctests
+]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
 markers = ["gpu: mark test to run on GPU"]
+
+[tool.ruff]
+src = ["src"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -155,6 +168,7 @@ select = [
     "TCH", # manage type checking blocks
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
+    "PT",  # Pytest conventions
 ]
 ignore = [
     # line too long -> we accept long comment lines; formatter gets rid of long code lines
@@ -166,7 +180,7 @@ ignore = [
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
-"anndata/tests/test_readwrite.py" = ["E721"]
+"tests/test_readwrite.py" = ["E721"]
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
