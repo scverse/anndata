@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal, overload
 
 import h5py
@@ -16,16 +16,24 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 @overload
 def make_index(
-    *, is_csc: Literal[True], stride: int, shape: tuple[int, int], block_id: int
+    *,
+    is_csc: Literal[True],
+    stride: int,
+    shape: tuple[int, int],
+    block_id: tuple[int, int],
 ) -> tuple[slice, slice]: ...
 @overload
 def make_index(
-    *, is_csc: Literal[False], stride: int, shape: tuple[int, int], block_id: int
+    *,
+    is_csc: Literal[False],
+    stride: int,
+    shape: tuple[int, int],
+    block_id: tuple[int, int],
 ) -> tuple[slice]: ...
 
 
 def make_index(
-    *, is_csc: bool, stride: int, shape: tuple[int, int], block_id: int
+    *, is_csc: bool, stride: int, shape: tuple[int, int], block_id: tuple[int, int]
 ) -> tuple[slice, slice] | tuple[slice]:
     index1d = slice(
         block_id[is_csc] * stride,
@@ -52,29 +60,32 @@ def maybe_open_h5(path_or_group: Path | ZarrGroup, elem_name: str):
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse_as_dask(elem, _reader, stride: int = 100):
+def read_sparse_as_dask(elem: H5Group | ZarrGroup, _reader, stride: int = 100):
     import dask.array as da
 
-    filename_or_elem = elem.file.filename if isinstance(elem, H5Group) else elem
-    elem_name = elem.name if isinstance(elem, H5Group) else Path(elem.path).name
-    shape = elem.attrs["shape"]
+    path_or_group = Path(elem.file.filename) if isinstance(elem, H5Group) else elem
+    elem_name = (
+        elem.name if isinstance(elem, H5Group) else PurePosixPath(elem.path).name
+    )
+    shape: tuple[int, int] = elem.attrs["shape"]
     dtype = elem["data"].dtype
-    is_csc = elem.attrs["encoding-type"] == "csc_matrix"
-    major_index = int(is_csc)
-    minor_index = int(not is_csc)
+    is_csc: bool = elem.attrs["encoding-type"] == "csc_matrix"
 
-    def make_dask_chunk(block_id=None):
+    def make_dask_chunk(block_id: tuple[int, int]):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
         # https://github.com/scverse/anndata/issues/1105
-        with maybe_open_h5(filename_or_elem, elem_name) as f:
+        with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
-            index = make_index(is_csc, stride, shape, block_id)
+            index = make_index(
+                is_csc=is_csc, stride=stride, shape=shape, block_id=block_id
+            )
             chunk = mtx[index]
         return chunk
 
-    n_strides, rest = np.divmod(shape[major_index], stride)
+    shape_minor, shape_major = shape if is_csc else shape[::-1]
+    n_strides, rest = np.divmod(shape_major, stride)
     chunks_major = (stride,) * n_strides + (rest,)
-    chunks_minor = (shape[minor_index],)
+    chunks_minor = (shape_minor,)
     chunks = (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
     memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     da_mtx = da.map_blocks(
