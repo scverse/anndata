@@ -273,7 +273,7 @@ def test_assign_X(adata):
         pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse_dask_array"),
         pytest.param(
             as_dense_cupy_dask_array,
-            DaskArray,
+            CupyArray,
             id="cupy_dense_dask_array",
             marks=pytest.mark.gpu,
         ),
@@ -299,8 +299,6 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
 
     assert_equal(orig, curr)
     assert isinstance(curr.X, mem_type)
-    if mem_type == DaskArray:
-        assert isinstance(curr.X._meta, CupyArray)
     assert isinstance(curr.obsm["da"], np.ndarray)
     assert isinstance(curr.varm["da"], np.ndarray)
     assert isinstance(curr.layers["da"], np.ndarray)

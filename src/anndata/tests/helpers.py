@@ -745,14 +745,22 @@ def _(a):
 def as_dense_cupy_dask_array(a):
     import cupy as cp
 
-    return as_dense_dask_array(a).map_blocks(cp.array)
+    return as_dense_dask_array(a).map_blocks(
+        cp.array, meta=cp.array((1.0), dtype=a.dtype), dtype=a.dtype
+    )
 
 
 @as_dense_cupy_dask_array.register(CupyArray)
 def _(a):
+    import cupy as cp
     import dask.array as da
 
-    return da.from_array(a, chunks=_half_chunk_size(a.shape))
+    return da.from_array(
+        a,
+        chunks=_half_chunk_size(a.shape),
+        meta=cp.array((1.0), dtype=a.dtype),
+        dtype=a.dtype,
+    )
 
 
 @as_dense_cupy_dask_array.register(DaskArray)
@@ -761,7 +769,11 @@ def _(a):
 
     if isinstance(a._meta, cp.ndarray):
         return a.copy()
-    return a.map_blocks(partial(as_cupy, typ=CupyArray), dtype=a.dtype)
+    return a.map_blocks(
+        partial(as_cupy, typ=CupyArray),
+        dtype=a.dtype,
+        meta=cp.array((1.0), dtype=a.dtype),
+    )
 
 
 # TODO: If there are chunks which divide along columns, then a coo_matrix is returned by compute
