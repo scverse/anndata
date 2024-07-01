@@ -180,12 +180,13 @@ class IORegistry:
             )
 
     def get_spec(self, elem: Any) -> IOSpec:
-        typ = type(elem)
         if isinstance(elem, DaskArray):
-            typ = (DaskArray, type(elem._meta))
+            if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
+                return self.write_specs[typ_meta]
         elif hasattr(elem, "dtype"):
-            typ = (type(elem), elem.dtype.kind)
-        return self.write_specs[typ]
+            if (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs:
+                return self.write_specs[typ_kind]
+        return self.write_specs[type(elem)]
 
 
 _REGISTRY = IORegistry()
