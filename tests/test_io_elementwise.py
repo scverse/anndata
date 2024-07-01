@@ -251,7 +251,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
         dd.Client(cluster) as _client,
     ):
-            assert_equal(X_from_disk, X_dask_from_disk)
+        assert_equal(X_from_disk, X_dask_from_disk)
 
 
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
