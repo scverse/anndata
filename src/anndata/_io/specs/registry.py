@@ -183,7 +183,7 @@ class IORegistry:
         typ = type(elem)
         if isinstance(elem, DaskArray):
             typ = (DaskArray, type(elem._meta))
-        if hasattr(elem, "dtype"):
+        elif hasattr(elem, "dtype"):
             typ = (type(elem), elem.dtype.kind)
         return self.write_specs[typ]
 
