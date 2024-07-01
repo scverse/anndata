@@ -280,14 +280,8 @@ def test_assign_X(adata):
     ],
 )
 def test_dask_to_memory_unbacked(array_func, mem_type):
-    import numpy as np
-
     orig = gen_adata((15, 10), X_type=array_func, **GEN_ADATA_DASK_ARGS)
     orig.uns = {"da": {"da": array_func(np.ones((4, 12)))}}
-    import numpy as np
-
-    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)
-    orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}
 
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["da"], DaskArray)
