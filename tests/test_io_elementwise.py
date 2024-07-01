@@ -19,7 +19,9 @@ from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import H5Group, ZarrGroup, _read_attr
 from anndata.tests.helpers import (
-    as_cupy_type,
+    as_cupy,
+    as_dense_dask_array,
+    as_sparse_dask_array,
     assert_equal,
     gen_adata,
 )
@@ -130,18 +132,23 @@ def test_io_spec(store, value, encoding_type):
         (sparse.random(5, 3, format="csc", density=0.5), "csc_matrix"),
     ],
 )
-def test_io_spec_cupy(store, value, encoding_type):
-    """Tests that"""
+@pytest.mark.parametrize("as_dask", [False, True])
+def test_io_spec_cupy(store, value, encoding_type, as_dask):
+    if as_dask:
+        if isinstance(value, sparse.spmatrix):
+            value = as_sparse_dask_array(value)
+        else:
+            value = as_dense_dask_array(value)
     key = f"key_for_{encoding_type}"
     print(type(value))
-    value = as_cupy_type(value)
+    value = as_cupy(value)
 
     print(type(value))
     write_elem(store, key, value, dataset_kwargs={})
 
     assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
-    from_disk = as_cupy_type(read_elem(store[key]))
+    from_disk = as_cupy(read_elem(store[key]))
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
