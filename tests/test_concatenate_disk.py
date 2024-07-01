@@ -34,30 +34,28 @@ GEN_ADATA_OOC_CONCAT_ARGS = dict(
 
 
 @pytest.fixture(params=[0, 1])
-def axis(request):
+def axis(request) -> Literal[0, 1]:
     return request.param
 
 
-@pytest.fixture(
-    params=["array", "sparse", "sparse_array"],
-)
-def array_type(request):
+@pytest.fixture(params=["array", "sparse", "sparse_array"])
+def array_type(request) -> Literal["array", "sparse", "sparse_array"]:
     return request.param
 
 
 @pytest.fixture(params=["inner", "outer"])
-def join_type(request):
+def join_type(request) -> Literal["inner", "outer"]:
     return request.param
 
 
 @pytest.fixture(params=["zarr", "h5ad"])
-def file_format(request):
+def file_format(request) -> Literal["zarr", "h5ad"]:
     return request.param
 
 
 # trying with 10 should be slow but will guarantee that the feature is being used
 @pytest.fixture(params=[10, 100_000_000])
-def max_loaded_elems(request):
+def max_loaded_elems(request) -> int:
     return request.param
 
 
@@ -112,62 +110,36 @@ def get_array_type(array_type, axis):
     raise NotImplementedError(f"array_type {array_type} not implemented")
 
 
-def test_anndatas_without_reindex(
-    axis, array_type, join_type, tmp_path, max_loaded_elems, file_format
+@pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
+def test_anndatas(
+    axis: Literal[0, 1],
+    array_type: Literal["array", "sparse", "sparse_array"],
+    join_type: Literal["inner", "outer"],
+    tmp_path: Path,
+    max_loaded_elems: int,
+    file_format: Literal["zarr", "h5ad"],
+    reindex: bool,
 ):
-    M = N = 50
+    _, off_axis_name = _resolve_axis(1 - axis)
+    random_axes = {0, 1} if reindex else {axis}
     sparse_fmt = "csr" if axis == 0 else "csc"
-
-    adatas = []
-    for i in range(5):
-        if axis == 0:
-            M = np.random.randint(1, 100)
-        else:
-            N = np.random.randint(1, 100)
-
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
-            **GEN_ADATA_OOC_CONCAT_ARGS,
-        )
-        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        _, off_axis_name = _resolve_axis(1 - axis)
-        off_names = getattr(a, f"{off_axis_name}_names").array
-        off_names[1::2] = f"{i}-" + off_names[1::2]
-        setattr(a, f"{off_axis_name}_names", off_names)
-        adatas.append(a)
-
-    assert_eq_concat_on_disk(
-        adatas,
-        tmp_path,
-        file_format,
-        max_loaded_elems,
-        axis=axis,
-        join=join_type,
-    )
-
-
-def test_anndatas_with_reindex(
-    axis, array_type, join_type, tmp_path, file_format, max_loaded_elems
-):
-    sparse_fmt = "csr" if axis == 0 else "csc"
-
-    adatas = []
-    for i in range(5):
-        M = np.random.randint(1, 100)
-        N = np.random.randint(1, 100)
-
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
+    kw = (
+        GEN_ADATA_OOC_CONCAT_ARGS
+        if not reindex
+        else dict(
             obsm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
             varm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
+    )
+
+    adatas = []
+    for i in range(5):
+        M, N = (np.random.randint(1, 100) if a in random_axes else 50 for a in (0, 1))
+        a = gen_adata(
+            (M, N), X_type=get_array_type(array_type, axis), sparse_fmt=sparse_fmt, **kw
+        )
         # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        _, off_axis_name = _resolve_axis(1 - axis)
         off_names = getattr(a, f"{off_axis_name}_names").array
         off_names[1::2] = f"{i}-" + off_names[1::2]
         setattr(a, f"{off_axis_name}_names", off_names)
