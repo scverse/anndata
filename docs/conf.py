@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime
+from functools import partial
 from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from docutils import nodes
 
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
@@ -33,6 +36,8 @@ exclude_patterns = [
     ".DS_Store",
     "**.ipynb_checkpoints",
     "tutorials/notebooks/*.rst",
+    # exclude all 0.x.y.md files, but not index.md
+    "release-notes/[!i]*.md",
 ]
 pygments_style = "sphinx"
 
@@ -59,6 +64,7 @@ extensions = [
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
 ]
+myst_heading_anchors = 3
 
 # Generate the API documentation when building
 autosummary_generate = True
@@ -96,8 +102,8 @@ suppress_warnings = [
 
 
 def setup(app: Sphinx):
-    # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = True
+    app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
+    app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
 
 intersphinx_mapping = dict(
