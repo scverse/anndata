@@ -182,13 +182,10 @@ class IORegistry:
     def get_spec(self, elem: Any) -> IOSpec:
         if isinstance(elem, DaskArray):
             typ = (DaskArray, type(elem._meta))
-            if typ not in self.write_specs:
-                raise KeyError(f"{typ} not found in spec")
-            return self.write_specs[typ]
         if hasattr(elem, "dtype"):
             typ = (type(elem), elem.dtype.kind)
-            if typ in self.write_specs:
-                return self.write_specs[typ]
+        if typ in self.write_specs:
+            return self.write_specs[typ]
         return self.write_specs[type(elem)]
 
 
