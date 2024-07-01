@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal, overload
 
 import h5py
 import numpy as np
@@ -13,7 +14,19 @@ from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 
-def make_index(is_csc, stride, shape, block_id):
+@overload
+def make_index(
+    *, is_csc: Literal[True], stride: int, shape: tuple[int, int], block_id: int
+) -> tuple[slice, slice]: ...
+@overload
+def make_index(
+    *, is_csc: Literal[False], stride: int, shape: tuple[int, int], block_id: int
+) -> tuple[slice]: ...
+
+
+def make_index(
+    *, is_csc: bool, stride: int, shape: tuple[int, int], block_id: int
+) -> tuple[slice, slice] | tuple[slice]:
     index1d = slice(
         block_id[is_csc] * stride,
         min((block_id[is_csc] * stride) + stride, shape[0]),
@@ -47,6 +60,8 @@ def read_sparse_as_dask(elem, _reader, stride: int = 100):
     shape = elem.attrs["shape"]
     dtype = elem["data"].dtype
     is_csc = elem.attrs["encoding-type"] == "csc_matrix"
+    major_index = int(is_csc)
+    minor_index = int(not is_csc)
 
     def make_dask_chunk(block_id=None):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
