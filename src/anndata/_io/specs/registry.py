@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata.compat import _read_attr
+from anndata.compat import DaskArray, _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -71,7 +71,7 @@ class IORegistry:
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
         ] = {}
-        self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
+        self.write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec] = {}
 
     def register_write(
         self,
@@ -180,6 +180,11 @@ class IORegistry:
             )
 
     def get_spec(self, elem: Any) -> IOSpec:
+        if isinstance(elem, DaskArray):
+            typ = (DaskArray, type(elem._meta))
+            if typ not in self.write_specs:
+                raise KeyError(f"{typ} not found in spec")
+            return self.write_specs[typ]
         if hasattr(elem, "dtype"):
             typ = (type(elem), elem.dtype.kind)
             if typ in self.write_specs:
