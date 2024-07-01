@@ -770,7 +770,7 @@ def as_csr_cupy_dask_array(a):
 
     cpu_da = as_sparse_dask_array(a)
     return cpu_da.rechunk((cpu_da.chunks[0], -1)).map_blocks(
-        cpsparse.csr_matrix, dtype=a.dtype
+        cpsparse.csr_matrix, dtype=a.dtype, meta=cpsparse.csr_matrix(cpu_da._meta)
     )
 
 

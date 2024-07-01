@@ -137,11 +137,19 @@ def test_io_spec_cupy(store, value, encoding_type, as_dask):
     if as_dask:
         if isinstance(value, sparse.spmatrix):
             value = as_sparse_dask_array(value)
+            value = value.map_blocks(
+                as_cupy, dtype=value.dtype, meta=as_cupy(value._meta)
+            )
         else:
             value = as_dense_dask_array(value)
+            value = value.map_blocks(
+                as_cupy, dtype=value.dtype, meta=as_cupy(value._meta)
+            )
+    else:
+        value = as_cupy(value)
+
     key = f"key_for_{encoding_type}"
     print(type(value))
-    value = as_cupy(value)
 
     print(type(value))
     write_elem(store, key, value, dataset_kwargs={})
