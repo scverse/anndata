@@ -1,11 +1,3 @@
-```{eval-rst}
-.. role:: small
-```
-
-```{eval-rst}
-.. role:: smaller
-```
-
 ```{include} ../README.md
 ```
 
