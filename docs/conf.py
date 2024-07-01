@@ -36,7 +36,7 @@ exclude_patterns = [
     ".DS_Store",
     "**.ipynb_checkpoints",
     "tutorials/notebooks/*.rst",
-    # exclude 0.x.y.md and release-latest.md, but not index.md
+    # exclude all 0.x.y.md files, but not index.md
     "release-notes/[!i]*.md",
 ]
 pygments_style = "sphinx"

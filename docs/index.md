@@ -3,10 +3,9 @@
 
 # Latest additions
 
-```{include} release-notes/release-latest.md
-```
-
-See {doc}`/release-notes/index` for more.
+See {doc}`/release-notes/index`,
+particularly {ref}`v0.10` for the current release,
+and {ref}`v0.11` for the upcoming release,
 
 ```{toctree}
 :hidden: true
