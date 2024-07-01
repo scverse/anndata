@@ -247,8 +247,10 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
     X_dask_from_disk = read_elem_as_dask(arr_store["X"])
     X_from_disk = read_elem(arr_store["X"])
     file.close()
-    with dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster:
-        with dd.Client(cluster) as client:  # noqa: F841
+    with (
+        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
+        dd.Client(cluster) as _client,
+    ):
             assert_equal(X_from_disk, X_dask_from_disk)
 
 

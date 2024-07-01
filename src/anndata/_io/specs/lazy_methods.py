@@ -14,30 +14,25 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 
 def make_index(is_csc, stride, shape, block_id):
-    index = (
-        slice(
-            block_id[is_csc] * stride,
-            min((block_id[is_csc] * stride) + stride, shape[0]),
-        ),
+    index1d = slice(
+        block_id[is_csc] * stride,
+        min((block_id[is_csc] * stride) + stride, shape[0]),
     )
     if is_csc:
-        return (slice(None, None, None),) + index
-    return index
+        return (slice(None, None, None), index1d)
+    return (index1d,)
 
 
 @contextmanager
-def maybe_open_h5(filename_or_elem: str | ZarrGroup, elem_name: str):
-    if isinstance(filename_or_elem, str):
-        file = h5py.File(filename_or_elem, "r")
-        try:
-            yield file[elem_name]
-        finally:
-            file.close()
-    else:
-        try:
-            yield filename_or_elem
-        finally:
-            pass
+def maybe_open_h5(path_or_group: Path | ZarrGroup, elem_name: str):
+    if not isinstance(path_or_group, Path):
+        yield path_or_group
+        return
+    file = h5py.File(path_or_group, "r")
+    try:
+        yield file[elem_name]
+    finally:
+        file.close()
 
 
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -62,14 +57,11 @@ def read_sparse_as_dask(elem, _reader, stride: int = 100):
             chunk = mtx[index]
         return chunk
 
-    chunks = [None, None]
-    major_index = int(is_csc)
-    minor_index = (is_csc + 1) % 2
-    chunks[minor_index] = (shape[minor_index],)
-    chunks[major_index] = (stride,) * (shape[major_index] // stride) + (
-        shape[major_index] % stride,
-    )
-    memory_format = [sparse.csr_matrix, sparse.csc_matrix][major_index]
+    n_strides, rest = np.divmod(shape[major_index], stride)
+    chunks_major = (stride,) * n_strides + (rest,)
+    chunks_minor = (shape[minor_index],)
+    chunks = (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
+    memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     da_mtx = da.map_blocks(
         make_dask_chunk,
         dtype=dtype,
