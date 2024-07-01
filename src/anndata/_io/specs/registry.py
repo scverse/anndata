@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata.compat import _read_attr
+from anndata.compat import DaskArray, _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -331,7 +331,7 @@ def read_elem(elem: StorageType) -> Any:
     return Reader(_REGISTRY).read_elem(elem)
 
 
-def read_elem_as_dask(elem: StorageType) -> Any:
+def read_elem_as_dask(elem: StorageType) -> DaskArray:
     """
     Read an element from a store lazily.
 
