@@ -28,8 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check if merging isn’t blocked
-        if: contains(env.LABELS, 'DON’T MERGE')
-        run: exit 1
+        uses: flying-sheep/check@v1
+        with:
+          success: ! contains(env.LABELS, 'DON’T MERGE')
       - name: Check if a milestone is necessary and exists
-        if: github.event.pull_request.milestone == null && contains(env.LABELS, 'no milestone') == false
-        run: exit 1
+        uses: flying-sheep/check@v1
+        with:
+          success: github.event.pull_request.milestone != null || contains(env.LABELS, 'no milestone')
