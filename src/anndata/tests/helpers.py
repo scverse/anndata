@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import re
 import warnings
+from collections import defaultdict
 from collections.abc import Collection, Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
@@ -860,18 +861,23 @@ try:
     class AccessTrackingStore(zarr.DirectoryStore):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self._access_count = {}
-            self._accessed_keys = {}
+            self._access_count = defaultdict(int)
+            self._accessed = defaultdict(set)
+            self._accessed_keys = defaultdict(list)
 
         def __getitem__(self, key):
             for tracked in self._access_count:
                 if tracked in key:
                     self._access_count[tracked] += 1
+                    self._accessed[tracked].add(key)
                     self._accessed_keys[tracked] += [key]
             return super().__getitem__(key)
 
         def get_access_count(self, key):
             return self._access_count[key]
+
+        def get_subkeys_accessed(self, key):
+            return self._accessed[key]
 
         def get_accessed_keys(self, key):
             return self._accessed_keys[key]

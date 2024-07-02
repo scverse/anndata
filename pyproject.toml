@@ -103,6 +103,8 @@ gpu = [
     "cupy",
     "numpy<2.0.0",
 ]
+xarray = ["xarray"]
+
 
 [tool.hatch.version]
 source = "vcs"
