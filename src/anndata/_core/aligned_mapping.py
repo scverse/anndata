@@ -97,18 +97,15 @@ class AlignedMapping(MutableMapping, ABC):
     @abstractmethod
     def attrname(self) -> str:
         """What attr for the AnnData is this?"""
-        pass
 
     @property
     @abstractmethod
     def axes(self) -> tuple[Literal[0, 1], ...]:
         """Which axes of the parent is this aligned to?"""
-        pass
 
     @property
     @abstractmethod
-    def is_view(self) -> bool:
-        pass
+    def is_view(self) -> bool: ...
 
     @property
     def parent(self) -> AnnData | Raw:
@@ -221,6 +218,8 @@ class AxisArraysBase(AlignedMapping):
     _allow_df = True
     _dimnames = ("obs", "var")
 
+    _axis: Literal[0, 1]
+
     @property
     def attrname(self) -> str:
         return f"{self.dim}m"
@@ -234,12 +233,6 @@ class AxisArraysBase(AlignedMapping):
     def dim(self) -> str:
         """Name of the dimension this aligned to."""
         return self._dimnames[self._axis]
-
-    def flipped(self) -> AxisArraysBase:
-        """Transpose."""
-        new = self.copy()
-        new.dimension = abs(self._axis - 1)
-        return new
 
     def to_df(self) -> pd.DataFrame:
         """Convert to pandas dataframe."""
@@ -277,7 +270,7 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         self,
         parent: AnnData | Raw,
         *,
-        axis: int,
+        axis: Literal[0, 1],
         store: MutableMapping[str, V] | AxisArraysBase,
     ):
         self._parent = parent
@@ -325,14 +318,7 @@ class LayersBase(AlignedMapping):
 
 
 class Layers(AlignedActualMixin, LayersBase):
-    def __init__(
-        self,
-        parent: AnnData,
-        *,
-        axis: tuple[Literal[0], Literal[1]] = (0, 1),
-        store: MutableMapping[str, V],
-    ):
-        assert axis == (0, 1), axis
+    def __init__(self, parent: AnnData, *, store: MutableMapping[str, V]):
         self._parent = parent
         self._data = store
         for k, v in self._data.items():
@@ -364,6 +350,8 @@ class PairwiseArraysBase(AlignedMapping):
     _allow_df = False
     _dimnames = ("obs", "var")
 
+    _axis: Literal[0, 1]
+
     @property
     def attrname(self) -> str:
         return f"{self.dim}p"
@@ -384,7 +372,7 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         self,
         parent: AnnData,
         *,
-        axis: int,
+        axis: Literal[0, 1],
         store: MutableMapping[str, V],
     ):
         self._parent = parent
@@ -421,11 +409,16 @@ class AlignedMappingProperty(property, Generic[T]):
         self,
         name: str,
         cls: type[T],
-        axis: Literal[0, 1] | tuple[Literal[0], Literal[1]],
+        axis: Literal[0, 1] | None = None,
     ):
         self.name = name
         self.axis = axis
         self.cls = cls
+
+    def construct(self, obj: AnnData, store: MutableMapping[str, V]) -> T:
+        if self.axis is None:
+            return self.cls(obj, store=store)
+        return self.cls(obj, axis=self.axis, store=store)
 
     @property
     def fget(self) -> Callable:
@@ -441,21 +434,20 @@ class AlignedMappingProperty(property, Generic[T]):
     def __get__(self, obj: None | AnnData, objtype: type | None = None) -> T:
         if obj is None:  # needs to return a `property`, e.g. for Sphinx
             return self  # type: ignore
-        if obj.is_view:
-            parent_anndata = obj._adata_ref
-            idxs = (obj._oidx, obj._vidx)
-            parent_aligned_mapping = getattr(parent_anndata, self.name)
-            return parent_aligned_mapping._view(
-                obj, tuple(idxs[ax] for ax in parent_aligned_mapping.axes)
-            )
-        else:
-            return self.cls(obj, axis=self.axis, store=getattr(obj, "_" + self.name))
+        if not obj.is_view:
+            return self.construct(obj, getattr(obj, f"_{self.name}"))
+        parent_anndata = obj._adata_ref
+        idxs = (obj._oidx, obj._vidx)
+        parent_aligned_mapping: AlignedMapping = getattr(parent_anndata, self.name)
+        return parent_aligned_mapping._view(
+            obj, tuple(idxs[ax] for ax in parent_aligned_mapping.axes)
+        )
 
     def __set__(
         self, obj: AnnData, value: Mapping[str, V] | Iterable[tuple[str, V]]
     ) -> None:
         value = convert_to_dict(value)
-        _ = self.cls(obj, axis=self.axis, store=value)  # Validate
+        _ = self.construct(obj, value)  # Validate
         if obj.is_view:
             obj._init_as_actual(obj.copy())
         setattr(obj, "_" + self.name, value)

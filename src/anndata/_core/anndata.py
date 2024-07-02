@@ -623,7 +623,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self):
         self.X = None
 
-    layers = AlignedMappingProperty("layers", Layers, (0, 1))
+    layers = AlignedMappingProperty("layers", Layers)
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
 
