@@ -607,14 +607,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     and len(np.unique(idx)) != len(idx.ravel())
                     for idx in [oidx, vidx]
                 ):
-                    warnings.warn(
+                    msg = (
                         "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
                         "The resulting `adata.X` will likely not equal the value to which you set it. "
                         "To avoid this potential issue, please make a copy of the data first. "
-                        "In the future, this operation will throw an error.",
-                        FutureWarning,
-                        stacklevel=1,
+                        "In the future, this operation will throw an error."
                     )
+                    warnings.warn(msg, FutureWarning, stacklevel=1)
                 if self.shape != value.shape:
                     # For assigning vector of values to 2d array or matrix
                     # Not necessary for row of 2d array
