@@ -3,39 +3,41 @@ from __future__ import annotations
 import warnings
 from abc import ABC, abstractmethod
 from collections import abc as cabc
-from collections.abc import Iterator, Mapping, Sequence
 from copy import copy
 from typing import (
     TYPE_CHECKING,
     ClassVar,
+    Generic,
     Literal,
     TypeVar,
     Union,
 )
 
-import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray
-from ..utils import axis_len, deprecated, warn_once
+from ..utils import axis_len, convert_to_dict, deprecated, warn_once
 from .access import ElementRef
 from .index import _subset
 from .storage import coerce_array
 from .views import as_view, view_update
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
+
+    import numpy as np
+    from scipy.sparse import spmatrix
+
     from .anndata import AnnData
     from .raw import Raw
 
+    OneDIdx = Union[Sequence[int], Sequence[bool], slice]
+    TwoDIdx = tuple[OneDIdx, OneDIdx]
 
-OneDIdx = Union[Sequence[int], Sequence[bool], slice]
-TwoDIdx = tuple[OneDIdx, OneDIdx]
-
-I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
-# TODO: pd.DataFrame only allowed in AxisArrays?
-V = Union[pd.DataFrame, spmatrix, np.ndarray]
+    I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
+    # TODO: pd.DataFrame only allowed in AxisArrays?
+    V = Union[pd.DataFrame, spmatrix, np.ndarray]
 
 
 class AlignedMapping(cabc.MutableMapping, ABC):
@@ -113,7 +115,7 @@ class AlignedMapping(cabc.MutableMapping, ABC):
         return self._parent
 
     def copy(self):
-        d = self._actual_class(self.parent, self._axis)
+        d = self._actual_class(self.parent, axis=self._axis, store={})
         for k, v in self.items():
             if isinstance(v, AwkArray):
                 # Shallow copy since awkward array buffers are immutable
@@ -185,7 +187,7 @@ class AlignedViewMixin:
 
 
 class AlignedActualMixin:
-    _data: dict[str, V]
+    _data: MutableMapping[str, V]
     """Underlying mapping to the data"""
 
     is_view = False
@@ -274,16 +276,17 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
     def __init__(
         self,
         parent: AnnData | Raw,
+        *,
         axis: int,
-        vals: Mapping | AxisArraysBase | None = None,
+        store: MutableMapping[str, V] | AxisArraysBase,
     ):
         self._parent = parent
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        self._data = dict()
-        if vals is not None:
-            self.update(vals)
+        self._data = store
+        for k, v in self._data.items():
+            self._data[k] = self._validate_value(v, k)
 
 
 class AxisArraysView(AlignedViewMixin, AxisArraysBase):
@@ -315,18 +318,25 @@ class LayersBase(AlignedMapping):
 
     # TODO: I thought I had a more elegant solution to overriding this...
     def copy(self) -> Layers:
-        d = self._actual_class(self.parent)
+        d = self._actual_class(self.parent, store={})
         for k, v in self.items():
             d[k] = v.copy()
         return d
 
 
 class Layers(AlignedActualMixin, LayersBase):
-    def __init__(self, parent: AnnData, vals: Mapping | None = None):
+    def __init__(
+        self,
+        parent: AnnData,
+        *,
+        axis: tuple[Literal[0], Literal[1]] = (0, 1),
+        store: MutableMapping[str, V],
+    ):
+        assert axis == (0, 1), axis
         self._parent = parent
-        self._data = dict()
-        if vals is not None:
-            self.update(vals)
+        self._data = store
+        for k, v in self._data.items():
+            self._data[k] = self._validate_value(v, k)
 
 
 class LayersView(AlignedViewMixin, LayersBase):
@@ -373,16 +383,17 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
+        *,
         axis: int,
-        vals: Mapping | None = None,
+        store: MutableMapping[str, V],
     ):
         self._parent = parent
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        self._data = dict()
-        if vals is not None:
-            self.update(vals)
+        self._data = store
+        for k, v in self._data.items():
+            self._data[k] = self._validate_value(v, k)
 
 
 class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
@@ -394,9 +405,60 @@ class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
     ):
         self.parent_mapping = parent_mapping
         self._parent = parent_view
-        self.subset_idx = (subset_idx, subset_idx)
+        self.subset_idx = subset_idx
         self._axis = parent_mapping._axis
 
 
 PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
+
+
+T = TypeVar("T", bound=AlignedMapping)
+
+
+class AlignedMappingProperty(property, Generic[T]):
+    def __init__(
+        self,
+        name: str,
+        cls: type[T],
+        axis: Literal[0, 1] | tuple[Literal[0], Literal[1]],
+    ):
+        self.name = name
+        self.axis = axis
+        self.cls = cls
+
+    @property
+    def fget(self) -> cabc.Callable:
+        """Fake fget for sphinx-autodoc-typehints."""
+
+        def fake(): ...
+
+        fake.__annotations__ = {
+            "return": Union[self.cls._actual_class, self.cls._view_class]
+        }
+        return fake
+
+    def __get__(self, obj: None | AnnData, objtype: type | None = None) -> T:
+        if obj is None:  # needs to return a `property`, e.g. for Sphinx
+            return self  # type: ignore
+        if obj.is_view:
+            parent_anndata = obj._adata_ref
+            idxs = (obj._oidx, obj._vidx)
+            parent_aligned_mapping = getattr(parent_anndata, self.name)
+            return parent_aligned_mapping._view(
+                obj, tuple(idxs[ax] for ax in parent_aligned_mapping.axes)
+            )
+        else:
+            return self.cls(obj, axis=self.axis, store=getattr(obj, "_" + self.name))
+
+    def __set__(
+        self, obj: AnnData, value: Mapping[str, V] | Iterable[tuple[str, V]]
+    ) -> None:
+        value = convert_to_dict(value)
+        _ = self.cls(obj, axis=self.axis, store=value)  # Validate
+        if obj.is_view:
+            obj._init_as_actual(obj.copy())
+        setattr(obj, "_" + self.name, value)
+
+    def __delete__(self, obj) -> None:
+        setattr(obj, self.name, dict())
