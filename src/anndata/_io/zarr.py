@@ -107,8 +107,6 @@ def read_dataset(dataset: zarr.Array):
         return value
     elif isinstance(value.dtype, str):
         pass
-    elif issubclass(value.dtype.type, np.str_):
-        value = value.astype(object)
     elif issubclass(value.dtype.type, np.bytes_):
         value = value.astype(str).astype(object)  # bytestring -> unicode -> str
     elif len(value.dtype.descr) > 1:  # Compound dtype

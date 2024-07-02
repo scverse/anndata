@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from functools import singledispatch, wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import h5py
 import numpy as np
@@ -15,7 +15,7 @@ from .compat import CupyArray, CupySparseMatrix, DaskArray, SpArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
 logger = get_logger(__name__)
 
@@ -101,7 +101,7 @@ def convert_to_dict_nonetype(obj: None):
 
 
 @singledispatch
-def dim_len(x, axis):
+def axis_len(x, axis: Literal[0, 1]) -> int | None:
     """\
     Return the size of an array in dimension `axis`.
 
@@ -129,7 +129,7 @@ try:
             return ak.contents.EmptyArray()
 
         elif layout.is_list and depth == lateral_context["axis"]:
-            if layout.parameter("__array__") in ("string", "bytestring"):
+            if layout.parameter("__array__") in {"string", "bytestring"}:
                 # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
                 # which results in an extra hierarchy-level that shouldn't show up in dim_len
                 # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
@@ -175,11 +175,11 @@ try:
             lateral_context["out"] = result
             return ak.contents.EmptyArray()
 
-    @dim_len.register(ak.Array)
-    def dim_len_awkward(array, axis):
-        """Get the length of an awkward array in a given dimension
+    @axis_len.register(ak.Array)
+    def axis_len_awkward(array, axis: Literal[0, 1]) -> int | None:
+        """Get the length of an awkward array in a given axis
 
-        Returns None if the dimension is of variable length.
+        Returns None if the axis is of variable length.
 
         Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
         """
@@ -269,6 +269,17 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     values[indices_dup] = values_dup
     index = pd.Index(values, name=index.name)
     return index
+
+
+def join_english(words: Iterable[str], conjunction: str = "or") -> str:
+    words = list(words)  # no need to be efficient
+    if len(words) == 0:
+        return ""
+    if len(words) == 1:
+        return words[0]
+    if len(words) == 2:
+        return f"{words[0]} {conjunction} {words[1]}"
+    return ", ".join(words[:-1]) + f", {conjunction} {words[-1]}"
 
 
 def warn_names_duplicates(attr: str):

@@ -1,3 +1,5 @@
+"""Tests for backing using the `.file` and `.isbacked` attributes."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,12 +21,14 @@ from anndata.tests.helpers import (
 from anndata.utils import asarray
 
 subset_func2 = subset_func
+
+
 # -------------------------------------------------------------------------------
 # Some test data
 # -------------------------------------------------------------------------------
 
 
-@pytest.fixture
+@pytest.fixture()
 def adata():
     X_list = [
         [1, 2, 3],
@@ -100,6 +104,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
 
 
 # this is very similar to the views test
+@pytest.mark.filterwarnings("ignore::anndata.ImplicitModificationWarning")
 def test_backing(adata, tmp_path, backing_h5ad):
     assert not adata.isbacked
 
@@ -121,15 +126,15 @@ def test_backing(adata, tmp_path, backing_h5ad):
     subset_hash = joblib.hash(adata_subset)
 
     # cannot set view in backing mode...
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"pass a filename.*to_memory"):
         adata_subset.obs["foo"] = range(2)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"pass a filename.*to_memory"):
         adata_subset.var["bar"] = -12
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"pass a filename.*to_memory"):
         adata_subset.obsm["o2"] = np.ones((2, 2))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"pass a filename.*to_memory"):
         adata_subset.varm["v2"] = np.zeros((2, 2))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"pass a filename.*to_memory"):
         adata_subset.layers["float2"] = adata_subset.layers["float"].copy()
 
     # Things should stay the same after failed operations
@@ -249,7 +254,7 @@ def test_to_memory_full(tmp_path, array_type):
 
 def test_double_index(adata, backing_h5ad):
     adata.filename = backing_h5ad
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"cannot make a view of a view"):
         # no view of view of backed object currently
         adata[:2][:, 0]
 
@@ -311,7 +316,7 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     ):
         adata.X[0, [0, 2]] = 10
         adata.X[1, [0, 2]] = [11, 12]
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"cannot change the sparsity structure"):
             adata.X[2, 1] = 13
 
     assert adata.isbacked

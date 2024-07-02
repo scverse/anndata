@@ -11,7 +11,7 @@ from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
-from anndata import AnnData
+from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
 from anndata.compat import CAN_USE_SPARSE_ARRAY
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -95,9 +95,7 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
 def test_invalid_X():
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            "X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not <class 'str'>."
-        ),
+        match=r"X needs to be of one of np\.ndarray.*not <class 'str'>\.",
     ):
         AnnData("string is not a valid X")
 
@@ -168,6 +166,39 @@ def test_df_warnings():
         adata.X = df
 
 
+@pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
+@pytest.mark.parametrize("when", ["init", "assign"])
+def test_convert_matrix(attr, when):
+    """Test that initializing or assigning aligned arrays to a np.matrix converts it."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", r"the matrix.*not.*recommended", PendingDeprecationWarning
+        )
+        mat = np.matrix([[1, 2], [3, 0]])
+
+    direct = attr in {"X"}
+
+    with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
+        if when == "init":
+            adata = (
+                AnnData(**{attr: mat})
+                if direct
+                else AnnData(shape=(2, 2), **{attr: {"a": mat}})
+            )
+        elif when == "assign":
+            adata = AnnData(shape=(2, 2))
+            if direct:
+                setattr(adata, attr, mat)
+            else:
+                getattr(adata, attr)["a"] = mat
+        else:
+            raise ValueError(when)
+
+    arr = getattr(adata, attr) if direct else getattr(adata, attr)["a"]
+    assert isinstance(arr, np.ndarray), f"{arr} is not an array"
+    assert not isinstance(arr, np.matrix), f"{arr} is still a matrix"
+
+
 def test_attr_deletion():
     full = gen_adata((30, 30))
     # Empty has just X, obs_names, var_names
@@ -193,7 +224,7 @@ def test_names():
 
 
 @pytest.mark.parametrize(
-    "names,after",
+    ("names", "after"),
     [
         pytest.param(["a", "b"], None, id="list"),
         pytest.param(
@@ -414,12 +445,24 @@ def test_slicing_remove_unused_categories():
 
 
 def test_slicing_dont_remove_unused_categories():
-    with settings.override(remove_unused_categories=False):
+    with settings.override(should_remove_unused_categories=False):
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
         )
         adata._sanitize()
         assert adata[2:4].obs["k"].cat.categories.tolist() == ["a", "b"]
+
+
+def test_no_uniqueness_check_gives_repeat_indices():
+    with settings.override(should_check_uniqueness=False):
+        obs_names = ["0", "0", "1", "1"]
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            adata = AnnData(
+                np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
+                obs=pd.DataFrame(index=obs_names),
+            )
+    assert adata.obs_names.values.tolist() == obs_names
 
 
 def test_get_subset_annotation():
@@ -440,7 +483,9 @@ def test_append_col():
     # this worked in the initial AnnData, but not with a dataframe
     # adata.obs[['new2', 'new3']] = [['A', 'B'], ['c', 'd']]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="Length of values.*does not match length of index"
+    ):
         adata.obs["new4"] = "far too long".split()
 
 
@@ -459,8 +504,9 @@ def test_set_obs():
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
     assert adata.obs_names.tolist() == [0, 1]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="but this AnnData has shape"):
         adata.obs = pd.DataFrame(dict(a=[3, 4, 5]))
+    with pytest.raises(ValueError, match="Can only assign pd.DataFrame"):
         adata.obs = dict(a=[1, 2])
 
 
@@ -618,9 +664,9 @@ def test_to_df_no_X():
     )
     v = adata[:10]
 
-    with pytest.raises(ValueError, match="X is None"):
+    with pytest.raises(ValueError, match=r"X is None"):
         _ = adata.to_df()
-    with pytest.raises(ValueError, match="X is None"):
+    with pytest.raises(ValueError, match=r"X is None"):
         _ = v.to_df()
 
     expected = pd.DataFrame(
