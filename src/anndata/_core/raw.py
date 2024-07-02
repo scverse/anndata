@@ -43,7 +43,7 @@ class Raw:
             self._var = _gen_dataframe(
                 var, ["var_names"], source="X", attr="var", length=n_var
             )
-            self._varm = varm
+            self.varm = varm
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
             if isinstance(adata.X, (CupyArray, CupySparseMatrix)):
