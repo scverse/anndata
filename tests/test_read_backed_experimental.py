@@ -5,15 +5,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-import zarr
 from scipy import sparse
 
 from anndata._core.anndata import AnnData
 from anndata.experimental import read_backed
-from anndata.experimental.backed._lazy_arrays import (
-    CategoricalArray,
-    MaskedArray,
-)
 from anndata.tests.helpers import (
     AccessTrackingStore,
     as_dense_dask_array,
@@ -39,136 +34,6 @@ def sparse_format(request):
 @pytest.fixture(params=["zarr", "h5ad"])
 def dskfmt(request):
     return request.param
-
-
-@pytest.fixture()
-def categorical_lazy_arr(tmp_path_factory):
-    base_path = tmp_path_factory.getbasetemp()
-    z = zarr.open_group(base_path, mode="w")
-    z["codes"] = np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
-    z["categories"] = np.array(["foo", "bar", "jazz"])
-    z.attrs["ordered"] = False
-    z = zarr.open(base_path)
-    return CategoricalArray(
-        codes=z["codes"],
-        categories=z["categories"],
-        ordered=z.attrs["ordered"],
-        drop_unused_categories=True,
-    )
-
-
-@pytest.fixture()
-def nullable_boolean_lazy_arr(tmp_path_factory):
-    base_path = tmp_path_factory.getbasetemp()
-    z = zarr.open_group(base_path, mode="w")
-    z["values"] = np.array(
-        [
-            True,
-            False,
-            True,
-            False,
-            False,
-            True,
-            False,
-            False,
-            True,
-            True,
-            False,
-            False,
-            False,
-            True,
-            False,
-            True,
-        ]
-    )
-    z["mask"] = np.array(
-        [
-            True,
-            True,
-            True,
-            True,
-            True,
-            False,
-            False,
-            True,
-            False,
-            True,
-            True,
-            True,
-            True,
-            False,
-            True,
-            False,
-        ]
-    )
-    z = zarr.open(base_path)
-    return MaskedArray(values=z["values"], mask=z["mask"], dtype_str="nullable-boolean")
-
-
-@pytest.fixture()
-def nullable_boolean_lazy_arr_no_mask(tmp_path_factory):
-    base_path = tmp_path_factory.getbasetemp()
-    z = zarr.open_group(base_path, mode="w")
-    z["values"] = np.array(
-        [
-            True,
-            False,
-            True,
-            False,
-            False,
-            True,
-            False,
-            False,
-            True,
-            True,
-            False,
-            False,
-            False,
-            True,
-            False,
-            True,
-        ]
-    )
-    z = zarr.open(base_path)
-    return MaskedArray(values=z["values"], mask=None, dtype_str="nullable-boolean")
-
-
-@pytest.fixture()
-def nullable_integer_lazy_arr(tmp_path_factory):
-    base_path = tmp_path_factory.getbasetemp()
-    z = zarr.open_group(base_path, mode="w")
-    z["values"] = np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
-    z["mask"] = np.array(
-        [
-            True,
-            True,
-            True,
-            True,
-            True,
-            False,
-            False,
-            True,
-            False,
-            True,
-            True,
-            True,
-            True,
-            False,
-            True,
-            False,
-        ]
-    )
-    z = zarr.open(base_path)
-    return MaskedArray(values=z["values"], mask=z["mask"], dtype_str="nullable-integer")
-
-
-@pytest.fixture()
-def nullable_integer_lazy_arr_no_mask(tmp_path_factory):
-    base_path = tmp_path_factory.getbasetemp()
-    z = zarr.open_group(base_path, mode="w")
-    z["values"] = np.array([0, 1, 0, 1, 1, 2, 2, 1, 2, 0, 1, 1, 1, 2, 1, 2])
-    z = zarr.open(base_path)
-    return MaskedArray(values=z["values"], mask=None, dtype_str="nullable-integer")
 
 
 def test_access_count_obs_var(tmp_path, mtx_format):

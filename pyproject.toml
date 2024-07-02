@@ -100,7 +100,7 @@ test = [
     "pytest-mock"
 ]
 gpu = ["cupy"]
-xarray = ["xarray@git+https://github.com/ilan-gold/xarray#egg=ig/fix_equality_checl"]
+xarray = ["xarray"]
 
 [tool.hatch.version]
 source = "vcs"
