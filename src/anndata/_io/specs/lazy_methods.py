@@ -98,11 +98,13 @@ def read_sparse_as_dask(elem: H5Group | ZarrGroup, _reader, stride: int = 100):
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
-def read_h5_array(elem, _reader, chunk_size: int = 1000):
+def read_h5_array(elem, _reader, chunks: tuple[int] | None = None):
     import dask.array as da
 
     if not hasattr(elem, "chunks") or elem.chunks is None:
-        return da.from_array(elem, chunks=(chunk_size,) * len(elem.shape))
+        if chunks is None:
+            chunks = (1000,) * len(elem.shape)
+        return da.from_array(elem, chunks=chunks)
     return da.from_array(elem)
 
 
