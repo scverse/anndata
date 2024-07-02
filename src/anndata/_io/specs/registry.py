@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import inspect
+import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata.compat import _read_attr
+from anndata.compat import DaskArray, _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -145,9 +147,7 @@ class IORegistry:
         if (src_type, spec, modifiers) in self.read:
             return self.read[(src_type, spec, modifiers)]
         else:
-            raise IORegistryError._from_read_parts(
-                "read", _REGISTRY.read, src_type, spec
-            )
+            raise IORegistryError._from_read_parts("read", self.read, src_type, spec)
 
     def has_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
@@ -176,7 +176,7 @@ class IORegistry:
             return self.read_partial[(src_type, spec, modifiers)]
         else:
             raise IORegistryError._from_read_parts(
-                "read_partial", _REGISTRY.read_partial, src_type, spec
+                "read_partial", self.read_partial, src_type, spec
             )
 
     def get_spec(self, elem: Any) -> IOSpec:
@@ -188,6 +188,7 @@ class IORegistry:
 
 
 _REGISTRY = IORegistry()
+_LAZY_REGISTRY = IORegistry()
 
 
 @singledispatch
@@ -242,6 +243,7 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
+        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ) -> Any:
         """Read an element from a store. See exported function for more details."""
         from functools import partial
@@ -252,8 +254,16 @@ class Reader:
             _reader=self,
         )
         if self.callback is None:
-            return read_func(elem)
-        return self.callback(read_func, elem.name, elem, iospec=iospec)
+            return read_func(elem, dataset_kwargs=dataset_kwargs)
+        if "dataset_kwargs" not in inspect.getfullargspec(self.callback)[0]:
+            warnings.warn(
+                "Callback does not accept dataset_kwargs. Ignoring dataset_kwargs.",
+                stacklevel=2,
+            )
+            return self.callback(read_func, elem.name, elem, iospec=iospec)
+        return self.callback(
+            read_func, elem.name, elem, dataset_kwargs=dataset_kwargs, iospec=iospec
+        )
 
 
 class Writer:
@@ -330,6 +340,36 @@ def read_elem(elem: StorageType) -> Any:
         The stored element.
     """
     return Reader(_REGISTRY).read_elem(elem)
+
+
+class DaskKwargs(TypedDict):
+    chunks: tuple[int, ...]
+
+
+def read_elem_as_dask(
+    elem: StorageType, dataset_kwargs: DaskKwargs | None = None
+) -> DaskArray:
+    """
+    Read an element from a store lazily.
+
+    Assumes that the element is encoded using the anndata encoding. This function will
+    determine the encoded type using the encoding metadata stored in elem's attributes.
+
+
+    Parameters
+    ----------
+    elem
+        The stored element.
+    dataset_kwargs, optional
+        Keyword arguments for dask array creation.  Only `chunks` is supported with `n` elements, the same `n` as the size of the array.
+
+    Returns
+    -------
+        DaskArray
+    """
+    return Reader(_LAZY_REGISTRY).read_elem(
+        elem, dataset_kwargs=dataset_kwargs if dataset_kwargs is not None else {}
+    )
 
 
 def write_elem(

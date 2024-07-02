@@ -236,7 +236,7 @@ def read_h5ad(
 
     with h5py.File(filename, "r") as f:
 
-        def callback(func, elem_name: str, elem, iospec):
+        def callback(func, elem_name: str, elem, dataset_kwargs, iospec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                 return AnnData(
                     **{
