@@ -63,6 +63,16 @@ def maybe_open_h5(path_or_group: Path | ZarrGroup, elem_name: str):
 _DEFAULT_STRIDE = 1000
 
 
+def compute_chunk_layout_for_axis_shape(
+    chunk_axis_shape: int, full_axis_shape: int
+) -> tuple[int, ...]:
+    n_strides, rest = np.divmod(full_axis_shape, chunk_axis_shape)
+    chunk = (chunk_axis_shape,) * n_strides
+    if rest > 0:
+        chunk += (rest,)
+    return chunk
+
+
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
@@ -103,10 +113,7 @@ def read_sparse_as_dask(
         return chunk
 
     shape_minor, shape_major = shape if is_csc else shape[::-1]
-    n_strides, rest = np.divmod(shape_major, stride)
-    chunks_major = (stride,) * n_strides
-    if rest > 0:
-        chunks_major += (rest,)
+    chunks_major = compute_chunk_layout_for_axis_shape(stride, shape_major)
     chunks_minor = (shape_minor,)
     chunk_layout = (
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
@@ -147,13 +154,10 @@ def read_h5_array(
                 idx += (slice(start, stop),)
             return f[idx]
 
-    chunk_layout = ()
-    for i in range(len(shape)):
-        n_strides, rest = np.divmod(shape[i], chunks[i])
-        chunk = (chunks[i],) * n_strides
-        if rest > 0:
-            chunk += (rest,)
-        chunk_layout += (chunk,)
+    chunk_layout = tuple(
+        compute_chunk_layout_for_axis_shape(chunks[i], shape[i])
+        for i in range(len(shape))
+    )
 
     return da.map_blocks(
         make_dask_chunk,
