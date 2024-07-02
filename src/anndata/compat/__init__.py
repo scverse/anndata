@@ -15,10 +15,27 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+import scipy
+import scipy.sparse
 from packaging.version import Version
-from scipy.sparse import issparse, spmatrix
 
 from .exceptiongroups import add_note  # noqa: F401
+
+#############################
+# scipy sparse array comapt #
+#############################
+
+
+CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
+
+if not CAN_USE_SPARSE_ARRAY:
+
+    class SpArray:
+        @staticmethod
+        def __repr__():
+            return "mock scipy.sparse.sparray"
+else:
+    SpArray = scipy.sparse.sparray
 
 
 class Empty:
@@ -26,7 +43,7 @@ class Empty:
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, tuple[Index1D, Index1D], spmatrix]
+Index = Union[Index1D, tuple[Index1D, Index1D], scipy.sparse.spmatrix, SpArray]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 
@@ -209,7 +226,7 @@ def _from_fixed_length_strings(value):
             dt_type = dt_type[0]
         # Fixing issue introduced with h5py v2.10.0, see:
         # https://github.com/h5py/h5py/issues/1307
-        if issubclass(np.dtype(dt_type).type, np.string_):
+        if issubclass(np.dtype(dt_type).type, np.bytes_):
             dt_list[1] = f"U{int(dt_type[2:])}"
         elif is_annotated or np.issubdtype(np.dtype(dt_type), np.str_):
             dt_list[1] = "O"  # Assumption that it’s a vlen str
@@ -305,7 +322,7 @@ def _move_adj_mtx(d):
     for k in ("distances", "connectivities"):
         if (
             (k in n)
-            and isinstance(n[k], (spmatrix, np.ndarray))
+            and isinstance(n[k], (scipy.sparse.spmatrix, np.ndarray))
             and len(n[k].shape) == 2
         ):
             warn(
@@ -321,7 +338,7 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
     for k, v in d.items():
         if isinstance(v, Mapping):
             _find_sparse_matrices(v, n, (*keys, k), paths)
-        elif isinstance(v, spmatrix) and v.shape == (n, n):
+        elif scipy.sparse.issparse(v) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
 
@@ -401,7 +418,7 @@ def _safe_transpose(x):
     This is a workaround for: https://github.com/scipy/scipy/issues/19161
     """
 
-    if isinstance(x, DaskArray) and issparse(x._meta):
+    if isinstance(x, DaskArray) and scipy.sparse.issparse(x._meta):
         return _transpose_by_block(x)
     else:
         return x.T

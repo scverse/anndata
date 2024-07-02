@@ -9,15 +9,10 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
-from enum import Enum
 from functools import partial
 from pathlib import Path
 from textwrap import dedent
-from typing import (  # Meta  # Generic ABCs  # Generic
-    TYPE_CHECKING,
-    Any,
-    Literal,
-)
+from typing import TYPE_CHECKING, Any, Literal
 
 import h5py
 import numpy as np
@@ -30,16 +25,9 @@ from scipy.sparse import issparse
 
 from .. import utils
 from .._settings import settings
-from ..compat import (
-    CupyArray,
-    CupySparseMatrix,
-    DaskArray,
-    ZappyArray,
-    ZarrArray,
-    _move_adj_mtx,
-)
+from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx
 from ..logging import anndata_logger as logger
-from ..utils import convert_to_dict, deprecated, dim_len, ensure_df_homogeneous
+from ..utils import axis_len, convert_to_dict, deprecated, ensure_df_homogeneous
 from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import (
@@ -54,6 +42,7 @@ from .file_backing import AnnDataFileManager, to_memory
 from .index import Index, Index1D, _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+from .storage import coerce_array
 from .views import (
     ArrayView,
     DataFrameView,
@@ -64,22 +53,6 @@ from .views import (
 
 if TYPE_CHECKING:
     from os import PathLike
-
-
-class StorageType(Enum):
-    Array = np.ndarray
-    Masked = ma.MaskedArray
-    Sparse = sparse.spmatrix
-    ZarrArray = ZarrArray
-    ZappyArray = ZappyArray
-    DaskArray = DaskArray
-    CupyArray = CupyArray
-    CupySparseMatrix = CupySparseMatrix
-    BackedSparseMatrix = BaseCompressedSparseDataset
-
-    @classmethod
-    def classes(cls):
-        return tuple(c.value for c in cls.__members__.values())
 
 
 # for backwards compat
@@ -323,7 +296,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._varp = adata_ref.varp._view(self, vidx)
         # fix categories
         uns = copy(adata_ref._uns)
-        if settings.remove_unused_categories:
+        if settings.should_remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
@@ -417,13 +390,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # check data type of X
         if X is not None:
-            for s_type in StorageType:
-                if isinstance(X, s_type.value):
-                    break
-            else:
-                raise ValueError(
-                    f"X needs to be of one of numpy.ndarray, numpy.ma.core.MaskedArray, scipy.sparse.spmatrix, h5py.Dataset, zarr.Array, anndata.experimental.[CSC,CSR]Dataset, dask.array.Array, cupy.ndarray, cupyx.scipy.sparse.spmatrix, not {type(X)}."
-                )
+            X = coerce_array(X, name="X")
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             _check_2d_shape(X)
@@ -441,7 +408,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 elif isinstance(X, (ZarrArray, DaskArray)):
                     X = X.astype(dtype)
                 else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                    X = np.array(X, dtype, copy=False)
+                    X = np.asarray(X, dtype)
             # data matrix and shape
             self._X = X
             n_obs, n_vars = X.shape
@@ -479,9 +446,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # Backwards compat for connectivities matrices in uns["neighbors"]
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
-
         self._check_dimensions()
-        self._check_uniqueness()
+        if settings.should_check_uniqueness:
+            self._check_uniqueness()
 
         if self.filename:
             assert not isinstance(
@@ -511,7 +478,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 return int(np.array(X.shape).prod() * X.dtype.itemsize)
             elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
                 return cs_to_bytes(X._to_backed())
-            elif isinstance(X, (sparse.csr_matrix, sparse.csc_matrix)):
+            elif issparse(X):
                 return cs_to_bytes(X)
             else:
                 return X.__sizeof__()
@@ -574,7 +541,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> np.ndarray | sparse.spmatrix | ArrayView | None:
+    def X(self) -> np.ndarray | sparse.spmatrix | SpArray | ArrayView | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -605,7 +572,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X
 
     @X.setter
-    def X(self, value: np.ndarray | sparse.spmatrix | None):
+    def X(self, value: np.ndarray | sparse.spmatrix | SpArray | None):
         if value is None:
             if self.isbacked:
                 raise NotImplementedError(
@@ -615,11 +582,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 self._init_as_actual(self.copy())
             self._X = None
             return
-        if not isinstance(value, StorageType.classes()) and not np.isscalar(value):
-            if hasattr(value, "to_numpy") and hasattr(value, "dtypes"):
-                value = ensure_df_homogeneous(value, "X")
-            else:  # TODO: asarray? asanyarray?
-                value = np.array(value)
+        value = coerce_array(value, name="X", allow_array_like=True)
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
@@ -655,7 +618,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     if sparse.issparse(self._adata_ref._X) and isinstance(
                         value, np.ndarray
                     ):
-                        value = sparse.coo_matrix(value)
+                        if isinstance(self._adata_ref.X, SpArray):
+                            memory_class = sparse.coo_array
+                        else:
+                            memory_class = sparse.coo_matrix
+                        value = memory_class(value)
+                    elif sparse.issparse(value) and isinstance(
+                        self._adata_ref._X, np.ndarray
+                    ):
+                        warnings.warn(
+                            "Trying to set a dense array with a sparse array on a view."
+                            "Densifying the sparse array."
+                            "This may incur excessive memory usage",
+                            stacklevel=2,
+                        )
+                        value = value.toarray()
                     self._adata_ref._X[oidx, vidx] = value
                 else:
                     self._X = value
@@ -797,7 +774,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if (
             len(value) > 0
             and not isinstance(value, pd.RangeIndex)
-            and infer_dtype(value) not in ("string", "bytes")
+            and infer_dtype(value) not in {"string", "bytes"}
         ):
             sample = list(value[: min(len(value), 5)])
             msg = dedent(
@@ -1108,7 +1085,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 # Reset colors
                 del uns[color_key]
             else:
-                idx = np.where(np.in1d(all_categories, df_sub[k].cat.categories))[0]
+                idx = np.where(np.isin(all_categories, df_sub[k].cat.categories))[0]
                 uns[color_key] = np.array(color_vec)[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
@@ -1773,8 +1750,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
+        sparse_class = sparse.csr_matrix
+        if any(isinstance(a.X, SpArray) for a in all_adatas):
+            sparse_class = sparse.csr_array
         out.obs = concat(
-            [AnnData(sparse.csr_matrix(a.shape), obs=a.obs) for a in all_adatas],
+            [AnnData(sparse_class(a.shape), obs=a.obs) for a in all_adatas],
             axis=0,
             join="outer",
             label=batch_key,
@@ -1834,7 +1814,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "obsm" in key:
             obsm = self._obsm
             if (
-                not all([dim_len(o, 0) == self.n_obs for o in obsm.values()])
+                not all([axis_len(o, 0) == self.n_obs for o in obsm.values()])
                 and len(obsm.dim_names) != self.n_obs
             ):
                 raise ValueError(
@@ -1844,7 +1824,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if "varm" in key:
             varm = self._varm
             if (
-                not all([dim_len(v, 0) == self.n_vars for v in varm.values()])
+                not all([axis_len(v, 0) == self.n_vars for v in varm.values()])
                 and len(varm.dim_names) != self.n_vars
             ):
                 raise ValueError(

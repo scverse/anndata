@@ -333,7 +333,7 @@ def read_dataset(dataset: h5py.Dataset):
         return value
     elif isinstance(value.dtype, str):
         pass
-    elif issubclass(value.dtype.type, np.string_):
+    elif issubclass(value.dtype.type, np.bytes_):
         value = value.astype(str)
         # Backwards compat, old datasets have strings as one element 1d arrays
         if len(value) == 1:

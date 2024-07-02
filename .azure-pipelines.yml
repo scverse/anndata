@@ -4,8 +4,7 @@ trigger:
 
 variables:
   RUN_COVERAGE: no
-  # TODO: remove paths after moving tests to test dir: https://github.com/scverse/anndata/issues/1451
-  PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml anndata ./src/anndata/tests ./docs/concatenation.rst
+  PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml
   DEPENDENCIES_VERSION: "latest" # |"pre-release" | "minimum-version"
   TEST_TYPE: "standard" # | "coverage"
 
@@ -36,6 +35,7 @@ jobs:
         displayName: "Use Python $(python.version)"
 
       - script: |
+          set -e
           python -m pip install --upgrade uv
           echo "##vso[task.setvariable variable=uv_cache_dir]`uv cache dir`"
         displayName: "Install tools"
@@ -49,51 +49,36 @@ jobs:
           path: $(uv_cache_dir)
         displayName: Cache pip packages
 
-      - script: |
-          uv pip install --system --compile "anndata[dev,test] @ ."
+      - script: uv pip install --system --compile "anndata[dev,test] @ ."
         displayName: "Install dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'latest')
 
       - script: |
+          set -e
           uv pip install --system --compile tomli packaging
           deps=`python3 ci/scripts/min-deps.py pyproject.toml --extra dev test`
           uv pip install --system --compile $deps pytest-cov "anndata @ ."
         displayName: "Install minimum dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
 
-      - script: |
-          uv pip install -v --system --compile --pre "anndata[dev,test] @ ." "scanpy>=1.10.0rc1"
+      - script: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." "scanpy>=1.10.0rc1"
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
-      - script: |
-          uv pip list
+      - script: uv pip list
         displayName: "Display installed versions"
 
-      - script: |
-          pytest
+      - script: pytest
         displayName: "PyTest"
         condition: eq(variables['TEST_TYPE'], 'standard')
 
-      - script: |
-          pytest --cov --cov-report=xml --cov-context=test
+      - script: pytest --cov --cov-report=xml --cov-context=test
         displayName: "PyTest (coverage)"
         condition: eq(variables['TEST_TYPE'], 'coverage')
 
-      - script: |
-          pytest --strict-warnings
+      - script: pytest --strict-warnings
         displayName: "PyTest (treat warnings as errors)"
         condition: eq(variables['TEST_TYPE'], 'strict-warning')
-
-      # TODO: remove: https://github.com/scverse/anndata/issues/1451
-      - task: PythonScript@0
-        inputs:
-          scriptSource: inline
-          script: |
-            import sys, xml.etree.ElementTree as ET
-            results = ET.parse("./test-data/test-results.xml").findall("./*/*")
-            sys.exit(0 if len(results) > 3000 else f"Error: only {len(results)} tests run")
-        displayName: "Check if enough tests ran"
 
       - task: PublishCodeCoverageResults@2
         inputs:
@@ -122,6 +107,7 @@ jobs:
         displayName: "Use Python 3.12"
 
       - script: |
+          set -e
           python -m pip install --upgrade pip
           pip install build twine
         displayName: "Install build tools and requirements"
@@ -130,11 +116,13 @@ jobs:
         displayName: "Display installed versions"
 
       - script: |
+          set -e
           python -m build --sdist --wheel .
           twine check dist/*
         displayName: "Build & Twine check"
 
       - script: |
+          set -e
           pip install dist/*.whl
           python -c 'import anndata; print(anndata.__version__)'
         displayName: "Check runtime version"
