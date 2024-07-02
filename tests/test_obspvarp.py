@@ -114,8 +114,8 @@ def test_setting_daskarray(adata: AnnData):
     adata.varp["a"] = da.ones((N, N))
     assert da.all(adata.obsp["a"] == da.ones((M, M)))
     assert da.all(adata.varp["a"] == da.ones((N, N)))
-    assert type(adata.obsp["a"]) == da.Array
-    assert type(adata.varp["a"]) == da.Array
+    assert isinstance(adata.obsp["a"], da.Array)
+    assert isinstance(adata.varp["a"], da.Array)
 
     h = joblib.hash(adata)
     with pytest.raises(ValueError, match=r"incorrect shape"):
