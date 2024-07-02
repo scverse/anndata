@@ -18,7 +18,7 @@ from anndata.tests.helpers import assert_equal, gen_adata
 
 
 def test_read_dispatched_w_regex():
-    def read_only_axis_dfs(func, elem_name: str, elem, iospec):
+    def read_only_axis_dfs(func, elem_name: str, elem, iospec, dataset_kwargs):
         if iospec.encoding_type == "anndata":
             return func(elem)
         elif re.match(r"^/((obs)|(var))?(/.*)?$", elem_name):
@@ -40,7 +40,7 @@ def test_read_dispatched_w_regex():
 def test_read_dispatched_dask():
     import dask.array as da
 
-    def read_as_dask_array(func, elem_name: str, elem, iospec):
+    def read_as_dask_array(func, elem_name: str, elem, iospec, dataset_kwargs):
         if iospec.encoding_type in {
             "dataframe",
             "csr_matrix",
@@ -162,11 +162,11 @@ def test_io_dispatched_keys(tmp_path):
         zarr_write_keys.append(k)
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def h5ad_reader(func, elem_name: str, elem, iospec):
+    def h5ad_reader(func, elem_name: str, elem, iospec, dataset_kwargs):
         h5ad_read_keys.append(elem_name)
         return func(elem)
 
-    def zarr_reader(func, elem_name: str, elem, iospec):
+    def zarr_reader(func, elem_name: str, elem, iospec, dataset_kwargs):
         zarr_read_keys.append(elem_name)
         return func(elem)
 

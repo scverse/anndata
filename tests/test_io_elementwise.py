@@ -64,8 +64,8 @@ def sparse_format(request):
     return request.param
 
 
-def create_dense_store(store):
-    X = np.random.randn(SIZE, SIZE)
+def create_dense_store(store, n_dims: int = 2):
+    X = np.random.randn(*((SIZE,) * n_dims))
 
     write_elem(store, "X", X)
     return store
@@ -215,12 +215,8 @@ def test_dask_write_sparse(sparse_format, store):
     assert x_sparse_store["X_dask/indices"].dtype == np.int64
 
 
-@pytest.mark.parametrize("arr_type", ["dense", *sparse_formats])
-def test_read_lazy_2d_dask(arr_type, store):
-    if arr_type == "dense":
-        arr_store = create_dense_store(store)
-    else:
-        arr_store = create_sparse_store(arr_type, store)
+def test_read_lazy_2d_dask(sparse_format, store):
+    arr_store = create_sparse_store(sparse_format, store)
     X_dask_from_disk = read_elem_as_dask(arr_store["X"])
     X_from_disk = read_elem(arr_store["X"])
 
@@ -233,9 +229,28 @@ def test_read_lazy_2d_dask(arr_type, store):
         assert_equal(X_from_disk[index, :], X_dask_from_disk[index, :])
         assert_equal(X_from_disk[:, index], X_dask_from_disk[:, index])
 
-    if arr_type in {"csr", "csc"}:
-        assert arr_store["X_dask/indptr"].dtype == np.int64
-        assert arr_store["X_dask/indices"].dtype == np.int64
+    assert arr_store["X_dask/indptr"].dtype == np.int64
+    assert arr_store["X_dask/indices"].dtype == np.int64
+
+
+@pytest.mark.parametrize(
+    ("n_dims", "chunks"),
+    [(1, (100,)), (1, (400,)), (2, (100, 100)), (2, (400, 400)), (2, (200, 400))],
+)
+def test_read_lazy_nd_dask(store, n_dims, chunks):
+    arr_store = create_dense_store(store, n_dims)
+    X_dask_from_disk = read_elem_as_dask(
+        arr_store["X"], dataset_kwargs=dict(chunks=chunks)
+    )
+    X_from_disk = read_elem(arr_store["X"])
+    assert_equal(X_from_disk, X_dask_from_disk)
+
+    random_int_indices = np.random.randint(0, SIZE, (SIZE // 10,))
+    random_int_indices.sort()
+    random_bool_mask = np.random.randn(SIZE) > 0
+    index_slice = slice(0, SIZE // 10)
+    for index in [random_int_indices, index_slice, random_bool_mask]:
+        assert_equal(X_from_disk[index], X_dask_from_disk[index])
 
 
 def test_read_lazy_h5_cluster(sparse_format, tmp_path):
@@ -252,6 +267,45 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         dd.Client(cluster) as _client,
     ):
         assert_equal(X_from_disk, X_dask_from_disk)
+
+
+@pytest.mark.parametrize(
+    ("arr_type", "chunks"),
+    [("dense", (100, 100)), ("csc", (SIZE, 10)), ("csr", (10, SIZE))],
+)
+def test_read_lazy_h5_chunk_kwargs(arr_type, chunks, tmp_path):
+    import dask.distributed as dd
+
+    file = h5py.File(tmp_path / "test.h5", "w")
+    store = file["/"]
+    if arr_type == "dense":
+        arr_store = create_dense_store(store)
+        X_dask_from_disk = read_elem_as_dask(
+            arr_store["X"], dataset_kwargs=dict(chunks=chunks)
+        )
+    else:
+        arr_store = create_sparse_store(arr_type, store)
+        X_dask_from_disk = read_elem_as_dask(
+            arr_store["X"], dataset_kwargs=dict(chunks=chunks)
+        )
+    X_from_disk = read_elem(arr_store["X"])
+    file.close()
+    with (
+        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
+        dd.Client(cluster) as _client,
+    ):
+        assert_equal(X_from_disk, X_dask_from_disk)
+
+
+def test_read_lazy_h5_bad_chunk_kwargs(tmp_path):
+    arr_type = "csr"
+    file = h5py.File(tmp_path / "test.h5", "w")
+    store = file["/"]
+    arr_store = create_sparse_store(arr_type, store)
+    with pytest.raises(ValueError, match=r"`chunks` must be a tuple of two integers"):
+        read_elem_as_dask(arr_store["X"], dataset_kwargs=dict(chunks=(SIZE,)))
+    with pytest.raises(ValueError, match=r"Only the major axis can be chunked"):
+        read_elem_as_dask(arr_store["X"], dataset_kwargs=dict(chunks=(SIZE, 10)))
 
 
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
