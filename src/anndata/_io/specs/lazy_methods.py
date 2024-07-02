@@ -145,7 +145,7 @@ def read_h5_array(
                 start = block_id[i] * chunks[i]
                 stop = min(((block_id[i] * chunks[i]) + chunks[i]), shape[i])
                 idx += (slice(start, stop),)
-            return f[*idx]
+            return f[idx]
 
     chunk_layout = ()
     for i in range(len(shape)):
