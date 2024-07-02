@@ -76,7 +76,7 @@ def test_read_dispatched_null_case():
     write_elem(z, "/", adata)
 
     expected = read_elem(z)
-    actual = read_dispatched(z, lambda _, __, x, **___: read_elem(x))
+    actual = read_dispatched(z, lambda _, __, x, ___, ____: read_elem(x))
 
     assert_equal(expected, actual)
 
