@@ -146,6 +146,15 @@ try:
     from cupyx.scipy.sparse import (
         spmatrix as CupySparseMatrix,
     )
+
+    try:
+        import dask.array as da
+
+        da.register_chunk_type(CupyCSRMatrix)
+        da.register_chunk_type(CupyCSCMatrix)
+    except ImportError:
+        pass
+
 except ImportError:
 
     class CupySparseMatrix:
