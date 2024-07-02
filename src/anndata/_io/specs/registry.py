@@ -296,7 +296,11 @@ class Writer:
             k = str(PurePosixPath(store.name) / k)
 
         if k == "/":
-            store.clear()
+            if hasattr(store, "clear"):
+                store.clear()
+            else:
+                for name, _ in store.members:
+                    del store[name]
         elif k in store:
             del store[k]
 

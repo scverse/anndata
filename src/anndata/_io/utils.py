@@ -187,7 +187,7 @@ def report_read_key_on_error(func):
     >>> @report_read_key_on_error
     ... def read_arr(group):
     ...     raise NotImplementedError()
-    >>> z = zarr.open("tmp.zarr")
+    >>> z = zarr.open_group(store="tmp.zarr", mode="w")
     >>> z["X"] = [1, 2, 3]
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
@@ -223,7 +223,7 @@ def report_write_key_on_error(func):
     >>> @report_write_key_on_error
     ... def write_arr(group, key, val):
     ...     raise NotImplementedError()
-    >>> z = zarr.open("tmp.zarr")
+    >>> z = zarr.open(store="tmp.zarr")
     >>> X = [1, 2, 3]
     >>> write_arr(z, "X", X)  # doctest: +SKIP
     """

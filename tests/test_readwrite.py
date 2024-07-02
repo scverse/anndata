@@ -255,7 +255,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
 @contextmanager
 def store_context(path: Path):
     if path.suffix == ".zarr":
-        store = zarr.open(path, "r+")
+        store = zarr.open(store=path, mode="r+")
     else:
         file = h5py.File(path, "r+")
         store = file["/"]
@@ -334,7 +334,7 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 def test_zarr_compression(tmp_path):
     from numcodecs import Blosc
 
-    pth = str(Path(tmp_path) / "adata.zarr")
+    pth = Path(tmp_path) / "adata.zarr"
     adata = gen_adata((10, 8))
     compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
     not_compressed = []
@@ -346,7 +346,7 @@ def test_zarr_compression(tmp_path):
             if value.compressor != compressor:
                 not_compressed.append(key)
 
-    with zarr.open(str(pth), "r") as f:
+    with zarr.open(store=pth, mode="r") as f:
         f.visititems(check_compressed)
 
     if not_compressed:
@@ -712,7 +712,7 @@ def test_zarr_chunk_X(tmp_path):
     adata = gen_adata((100, 100), X_type=np.array)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
 
-    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
+    z = zarr.open(store=zarr_pth)
     assert z["X"].chunks == (10, 10)
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)

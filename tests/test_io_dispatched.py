@@ -176,7 +176,7 @@ def test_io_dispatched_keys(tmp_path):
         write_dispatched(f, "/", adata, callback=h5ad_writer)
         _ = read_dispatched(f, h5ad_reader)
 
-    with zarr.open_group(zarr_path, "w") as f:
+    with zarr.open_group(store=zarr_path, mode="w") as f:
         write_dispatched(f, "/", adata, callback=zarr_writer)
         _ = read_dispatched(f, zarr_reader)
 
