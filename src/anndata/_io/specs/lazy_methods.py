@@ -44,7 +44,7 @@ def make_index(
         min((block_id[is_csc] * stride) + stride, shape[0]),
     )
     if is_csc:
-        return (slice(None, None, None), index1d)
+        return (slice(None), index1d)
     return (index1d,)
 
 
