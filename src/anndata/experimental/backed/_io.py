@@ -11,7 +11,11 @@ if TYPE_CHECKING:
 
 import dask.array as da
 import h5py
-import xarray as xr
+
+try:
+    import xarray as xr
+except ImportError:
+    xr = None
 import zarr
 
 from ..._core.anndata import AnnData

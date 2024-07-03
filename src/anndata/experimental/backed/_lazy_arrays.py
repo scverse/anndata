@@ -4,7 +4,34 @@ from functools import singledispatchmethod
 from typing import Generic, TypeVar, Union
 
 import pandas as pd
-import xarray as xr
+
+try:
+    import xarray as xr
+except ImportError:
+
+    class xr:
+        @property
+        def DataArray(self):
+            return None
+
+
+try:
+    from xarray.backends.zarr import ZarrArrayWrapper
+except ImportError:
+
+    class ZarrArrayWrapper:
+        def __repr__(self) -> str:
+            return "mock ZarrArrayWrapper"
+
+
+try:
+    from xarray.backends import BackendArray
+except ImportError:
+
+    class BackendArray:
+        def __repr__(self) -> str:
+            return "mock BackendArray"
+
 
 from anndata._core.index import Index, _subset
 from anndata._core.views import as_view
@@ -13,7 +40,7 @@ from anndata.compat import H5Array, ZarrArray
 K = TypeVar("K", bound=Union[H5Array, ZarrArray])
 
 
-class ZarrOrHDF5Wrapper(xr.backends.zarr.ZarrArrayWrapper, Generic[K]):
+class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
     @singledispatchmethod  # type: ignore
     def __init__(self, array: ZarrArray):
         return super().__init__(array)
@@ -84,7 +111,7 @@ class CategoricalArray(xr.backends.BackendArray):
         return xr.core.extension_array.PandasExtensionArray(categorical_array)
 
 
-class MaskedArray(xr.backends.BackendArray):
+class MaskedArray(BackendArray):
     def __init__(
         self,
         values: ZarrArray | H5Array,
