@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from functools import singledispatch
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, overload
@@ -73,6 +74,21 @@ def compute_chunk_layout_for_axis_shape(
     return chunk
 
 
+@singledispatch
+def get_elem_name(x):
+    raise NotImplementedError(f"Not implemented for {type(x)}")
+
+
+@get_elem_name.register(h5py.Group)
+def _(x):
+    return x.name
+
+
+@get_elem_name.register(ZarrArray)
+def _(x):
+    return PurePosixPath(x.path).name
+
+
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
@@ -85,9 +101,7 @@ def read_sparse_as_dask(
     import dask.array as da
 
     path_or_group = Path(elem.file.filename) if isinstance(elem, H5Group) else elem
-    elem_name = (
-        elem.name if isinstance(elem, H5Group) else PurePosixPath(elem.path).name
-    )
+    elem_name = get_elem_name(elem)
     shape: tuple[int, int] = elem.attrs["shape"]
     dtype = elem["data"].dtype
     is_csc: bool = elem.attrs["encoding-type"] == "csc_matrix"
