@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 @overload
-def make_index(
+def make_block_indexer(
     *,
     is_csc: Literal[True],
     stride: int,
@@ -27,7 +27,7 @@ def make_index(
     block_id: tuple[int, int],
 ) -> tuple[slice, slice]: ...
 @overload
-def make_index(
+def make_block_indexer(
     *,
     is_csc: Literal[False],
     stride: int,
@@ -36,7 +36,7 @@ def make_index(
 ) -> tuple[slice]: ...
 
 
-def make_index(
+def make_block_indexer(
     *, is_csc: bool, stride: int, shape: tuple[int, int], block_id: tuple[int, int]
 ) -> tuple[slice, slice] | tuple[slice]:
     index1d = slice(
@@ -106,7 +106,7 @@ def read_sparse_as_dask(
         # https://github.com/scverse/anndata/issues/1105
         with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
-            index = make_index(
+            index = make_block_indexer(
                 is_csc=is_csc, stride=stride, shape=shape, block_id=block_id
             )
             chunk = mtx[index]
