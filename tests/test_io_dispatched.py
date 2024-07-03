@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 import h5py
+import pytest
 import zarr
 from scipy import sparse
 
@@ -83,6 +84,21 @@ def test_read_dispatched_null_case():
     actual = read_dispatched(z, callback)
 
     assert_equal(expected, actual)
+
+
+def test_read_dispatched_warns_with_no_dataset_kwargs():
+    adata = gen_adata((100, 100))
+    z = zarr.group()
+    write_elem(z, "/", adata)
+
+    def callback(read_func, elem_name, x, iospec):
+        return read_elem(x)
+
+    with pytest.warns(
+        UserWarning,
+        match="Callback does not accept dataset_kwargs. Ignoring dataset_kwargs.",
+    ):
+        read_dispatched(z, callback)
 
 
 def test_write_dispatched_chunks():
