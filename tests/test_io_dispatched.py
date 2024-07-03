@@ -182,11 +182,11 @@ def test_io_dispatched_keys(tmp_path):
         zarr_write_keys.append(k)
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def h5ad_reader(func, elem_name: str, elem, iospec, dataset_kwargs):
+    def h5ad_reader(func, elem_name: str, elem, dataset_kwargs, iospec):
         h5ad_read_keys.append(elem_name)
         return func(elem)
 
-    def zarr_reader(func, elem_name: str, elem, iospec, dataset_kwargs):
+    def zarr_reader(func, elem_name: str, elem, dataset_kwargs, iospec):
         zarr_read_keys.append(elem_name)
         return func(elem)
 
