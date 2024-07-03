@@ -64,7 +64,7 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
         )
 
 
-class CategoricalArray(xr.backends.BackendArray):
+class CategoricalArray(BackendArray):
     def __init__(
         self,
         codes: ZarrArray | H5Array,
