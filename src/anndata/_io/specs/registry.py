@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata.compat import DaskArray, _read_attr
@@ -342,12 +342,8 @@ def read_elem(elem: StorageType) -> Any:
     return Reader(_REGISTRY).read_elem(elem)
 
 
-class DaskKwargs(TypedDict):
-    chunks: tuple[int, ...]
-
-
 def read_elem_as_dask(
-    elem: StorageType, dataset_kwargs: DaskKwargs | None = None
+    elem: StorageType, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     """
     Read an element from a store lazily.
@@ -360,16 +356,15 @@ def read_elem_as_dask(
     ----------
     elem
         The stored element.
-    dataset_kwargs, optional
-        Keyword arguments for dask array creation.  Only `chunks` is supported with `n` elements, the same `n` as the size of the array.
+    chunks, optional
+       length `n`, the same `n` as the size of the underlying array.
+       Note that the minor axis dimension must match the shape for sparse.
 
     Returns
     -------
         DaskArray
     """
-    return Reader(_LAZY_REGISTRY).read_elem(
-        elem, dataset_kwargs=dataset_kwargs if dataset_kwargs is not None else {}
-    )
+    return Reader(_LAZY_REGISTRY).read_elem(elem, dataset_kwargs={"chunks": chunks})
 
 
 def write_elem(
