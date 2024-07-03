@@ -84,7 +84,7 @@ def _(x):
     return x.name
 
 
-@get_elem_name.register(ZarrArray)
+@get_elem_name.register(ZarrGroup)
 def _(x):
     return PurePosixPath(x.path).name
 
