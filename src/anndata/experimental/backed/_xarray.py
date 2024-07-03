@@ -17,9 +17,9 @@ from ..._core.views import as_view
 
 def get_index_dim(ds):
     assert (
-        len(ds.dims) == 1
+        len(ds.sizes) == 1
     ), f"xarray Dataset should not have more than 1 dims, found {len(ds)}"
-    return list(ds.dims.keys())[0]
+    return list(ds.sizes.keys())[0]
 
 
 class Dataset2D(xr.Dataset):
