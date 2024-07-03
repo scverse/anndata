@@ -79,7 +79,7 @@ def get_elem_name(x):
     raise NotImplementedError(f"Not implemented for {type(x)}")
 
 
-@get_elem_name.register(h5py.Group)
+@get_elem_name.register(H5Group)
 def _(x):
     return x.name
 
