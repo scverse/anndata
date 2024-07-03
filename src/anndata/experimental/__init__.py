@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
-from anndata._io.specs import IOSpec, read_elem, write_elem
+from anndata._io.specs import IOSpec, read_elem, read_elem_as_dask, write_elem
 
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
@@ -13,6 +13,7 @@ __all__ = [
     "AnnLoader",
     "read_elem",
     "write_elem",
+    "read_elem_as_dask",
     "read_dispatched",
     "write_dispatched",
     "IOSpec",
