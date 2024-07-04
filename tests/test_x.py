@@ -37,6 +37,17 @@ def test_setter_singular_dim(shape, orig_array_type, new_array_type):
     np.testing.assert_equal(asarray(adata.X), 1)
 
 
+def test_repeat_indices_view():
+    adata = gen_adata((10, 10), X_type=np.asarray)
+    subset = adata[[0, 0, 1, 1], :]
+    mat = np.array([np.ones(adata.shape[1]) * i for i in range(4)])
+    with pytest.warns(
+        FutureWarning,
+        match=r"You are attempting to set `X` to a matrix on a view which has non-unique indices",
+    ):
+        subset.X = mat
+
+
 ###############################
 # Tests for `adata.X is None` #
 ###############################
