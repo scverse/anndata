@@ -603,10 +603,23 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         ):
-            if not np.isscalar(value) and self.shape != value.shape:
-                # For assigning vector of values to 2d array or matrix
-                # Not necessary for row of 2d array
-                value = value.reshape(self.shape)
+            if not np.isscalar(value):
+                if self.is_view and any(
+                    isinstance(idx, np.ndarray)
+                    and len(np.unique(idx)) != len(idx.ravel())
+                    for idx in [oidx, vidx]
+                ):
+                    msg = (
+                        "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
+                        "The resulting `adata.X` will likely not equal the value to which you set it. "
+                        "To avoid this potential issue, please make a copy of the data first. "
+                        "In the future, this operation will throw an error."
+                    )
+                    warnings.warn(msg, FutureWarning, stacklevel=1)
+                if self.shape != value.shape:
+                    # For assigning vector of values to 2d array or matrix
+                    # Not necessary for row of 2d array
+                    value = value.reshape(self.shape)
             if self.isbacked:
                 if self.is_view:
                     X = self.file["X"]
