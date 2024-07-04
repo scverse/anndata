@@ -9,7 +9,7 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData, concat
-from anndata._core.merge import _resolve_axis
+from anndata._core.merge import _resolve_dim
 from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.tests.helpers import (
@@ -122,7 +122,7 @@ def test_anndatas(
     file_format: Literal["zarr", "h5ad"],
     reindex: bool,
 ):
-    _, off_axis_name = _resolve_axis(1 - axis)
+    _, off_axis_name = _resolve_dim(axis=1 - axis)
     random_axes = {0, 1} if reindex else {axis}
     sparse_fmt = "csr" if axis == 0 else "csc"
     kw = (
