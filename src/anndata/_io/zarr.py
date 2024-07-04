@@ -23,10 +23,12 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+# TODO: move * to the left and add @legacy_api("chunks")
 def write_zarr(
     store: MutableMapping | str | Path,
     adata: AnnData,
-    chunks=None,
+    chunks: tuple[int, ...] | None = None,
+    *,
     strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
@@ -43,9 +45,8 @@ def write_zarr(
 
     def callback(func, s, k, elem, dataset_kwargs, iospec):
         if chunks is not None and not isinstance(elem, sparse.spmatrix) and k == "/X":
-            func(s, k, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs))
-        else:
-            func(s, k, elem, dataset_kwargs=dataset_kwargs)
+            dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
+        func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
 
