@@ -18,7 +18,7 @@ from .views import as_view, view_update
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
-    from typing import ClassVar, Literal, Self
+    from typing import ClassVar, Literal
 
     import numpy as np
     from scipy.sparse import spmatrix
@@ -108,15 +108,11 @@ class AlignedMapping(MutableMapping, ABC):
     def parent(self) -> AnnData | Raw:
         return self._parent
 
-    def copy(self) -> Self:
-        d = self._actual_class(self.parent, axis=self._axis, store={})
-        for k, v in self.items():
-            if isinstance(v, AwkArray):
-                # Shallow copy since awkward array buffers are immutable
-                d[k] = copy(v)
-            else:
-                d[k] = v.copy()
-        return d
+    def copy(self) -> dict[str, V]:
+        # Shallow copy for awkward array since their buffers are immutable
+        return {
+            k: copy(v) if isinstance(v, AwkArray) else v.copy() for k, v in self.items()
+        }
 
     def _view(self, parent: AnnData, subset_idx: I):
         """Returns a subset copy-on-write view of the object."""
@@ -309,13 +305,6 @@ class LayersBase(AlignedMapping):
     _allow_df = False
     attrname = "layers"
     axes = (0, 1)
-
-    # TODO: I thought I had a more elegant solution to overriding this...
-    def copy(self) -> Layers:
-        d = self._actual_class(self.parent, store={})
-        for k, v in self.items():
-            d[k] = v.copy()
-        return d
 
 
 class Layers(AlignedActual, LayersBase):
