@@ -43,11 +43,14 @@ class AlignedMapping(MutableMapping, ABC):
     _allow_df: ClassVar[bool]
     """If this mapping supports heterogeneous DataFrames"""
 
-    _view_class: ClassVar[type[AlignedViewMixin]]
+    _view_class: ClassVar[type[AlignedView]]
     """The view class for this aligned mapping."""
 
-    _actual_class: ClassVar[type[AlignedActualMixin]]
+    _actual_class: ClassVar[type[AlignedActual]]
     """The actual class (which has it’s own data) for this aligned mapping."""
+
+    _parent: AnnData | Raw
+    """The parent object that this mapping is aligned to."""
 
     def __repr__(self):
         return f"{type(self).__name__} with keys: {', '.join(self.keys())}"
@@ -124,7 +127,8 @@ class AlignedMapping(MutableMapping, ABC):
         return dict(self)
 
 
-class AlignedViewMixin:
+class AlignedView(AlignedMapping):
+    # override docstring
     parent: AnnData
     """Reference to parent AnnData view"""
 
@@ -142,7 +146,7 @@ class AlignedViewMixin:
             ElementRef(self.parent, self.attrname, (key,)),
         )
 
-    def __setitem__(self, key: str, value: V):
+    def __setitem__(self, key: str, value: V) -> None:
         value = self._validate_value(value, key)  # Validate before mutating
         warnings.warn(
             f"Setting element `.{self.attrname}['{key}']` of view, "
@@ -153,7 +157,7 @@ class AlignedViewMixin:
         with view_update(self.parent, self.attrname, ()) as new_mapping:
             new_mapping[key] = value
 
-    def __delitem__(self, key: str):
+    def __delitem__(self, key: str) -> None:
         if key not in self:
             raise KeyError(
                 "'{key!r}' not found in view of {self.attrname}"
@@ -177,11 +181,17 @@ class AlignedViewMixin:
         return len(self.parent_mapping)
 
 
-class AlignedActualMixin:
+class AlignedActual(AlignedMapping):
     _data: MutableMapping[str, V]
     """Underlying mapping to the data"""
 
     is_view = False
+
+    def __init__(self, parent: AnnData | Raw, *, store: MutableMapping[str, V]):
+        self._parent = parent
+        self._data = store
+        for k, v in self._data.items():
+            self._data[k] = self._validate_value(v, k)
 
     def __getitem__(self, key: str) -> V:
         return self._data[key]
@@ -259,7 +269,7 @@ class AxisArraysBase(AlignedMapping):
         return (self.parent.obs_names, self.parent.var_names)[self._axis]
 
 
-class AxisArrays(AlignedActualMixin, AxisArraysBase):
+class AxisArrays(AlignedActual, AxisArraysBase):
     def __init__(
         self,
         parent: AnnData | Raw,
@@ -267,16 +277,13 @@ class AxisArrays(AlignedActualMixin, AxisArraysBase):
         axis: Literal[0, 1],
         store: MutableMapping[str, V] | AxisArraysBase,
     ):
-        self._parent = parent
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        self._data = store
-        for k, v in self._data.items():
-            self._data[k] = self._validate_value(v, k)
+        super().__init__(parent, store=store)
 
 
-class AxisArraysView(AlignedViewMixin, AxisArraysBase):
+class AxisArraysView(AlignedView, AxisArraysBase):
     def __init__(
         self,
         parent_mapping: AxisArraysBase,
@@ -311,15 +318,11 @@ class LayersBase(AlignedMapping):
         return d
 
 
-class Layers(AlignedActualMixin, LayersBase):
-    def __init__(self, parent: AnnData, *, store: MutableMapping[str, V]):
-        self._parent = parent
-        self._data = store
-        for k, v in self._data.items():
-            self._data[k] = self._validate_value(v, k)
+class Layers(AlignedActual, LayersBase):
+    pass
 
 
-class LayersView(AlignedViewMixin, LayersBase):
+class LayersView(AlignedView, LayersBase):
     def __init__(
         self,
         parent_mapping: LayersBase,
@@ -361,7 +364,7 @@ class PairwiseArraysBase(AlignedMapping):
         return self._dimnames[self._axis]
 
 
-class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
+class PairwiseArrays(AlignedActual, PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
@@ -369,16 +372,13 @@ class PairwiseArrays(AlignedActualMixin, PairwiseArraysBase):
         axis: Literal[0, 1],
         store: MutableMapping[str, V],
     ):
-        self._parent = parent
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        self._data = store
-        for k, v in self._data.items():
-            self._data[k] = self._validate_value(v, k)
+        super().__init__(parent, store=store)
 
 
-class PairwiseArraysView(AlignedViewMixin, PairwiseArraysBase):
+class PairwiseArraysView(AlignedView, PairwiseArraysBase):
     def __init__(
         self,
         parent_mapping: PairwiseArraysBase,
@@ -415,7 +415,7 @@ class AlignedMappingProperty(property, Generic[T]):
         return self.cls(obj, axis=self.axis, store=store)
 
     @property
-    def fget(self) -> Callable:
+    def fget(self) -> Callable[[], None]:
         """Fake fget for sphinx-autodoc-typehints."""
 
         def fake(): ...

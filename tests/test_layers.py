@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 from numba.core.errors import NumbaDeprecationWarning
 
-from anndata import AnnData, read_h5ad, read_loom
+from anndata import AnnData, ImplicitModificationWarning, read_h5ad, read_loom
 from anndata.tests.helpers import gen_typed_df_t2_size
 from testing.anndata._helpers import xfail_if_numpy2_loompy
 
@@ -41,7 +41,8 @@ def test_views():
     assert adata_view.layers.keys() == adata.layers.keys()
     assert (adata_view.layers["S"] == adata.layers["S"][1:, 1:]).all()
 
-    adata_view.layers["T"] = X[1:, 1:]
+    with pytest.warns(ImplicitModificationWarning):
+        adata_view.layers["T"] = X[1:, 1:]
 
     assert not adata_view.layers.is_view
     assert not adata_view.is_view
@@ -106,6 +107,9 @@ def test_backed():
 def test_copy():
     adata = AnnData(X=X, layers=dict(L=L.copy()))
     bdata = adata.copy()
+    # check that we don’t create too many references
+    assert bdata._layers is bdata.layers._data
+    # check that we have a copy
     adata.layers["L"] += 10
     assert np.all(adata.layers["L"] != bdata.layers["L"])  # 201
 
