@@ -50,8 +50,8 @@ def write_h5ad(
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
-    dataset_kwargs: Mapping = MappingProxyType({}),
     strings_to_categoricals: bool = True,
+    dataset_kwargs: Mapping = MappingProxyType({}),
     **kwargs,
 ) -> None:
     if isinstance(as_dense, str):

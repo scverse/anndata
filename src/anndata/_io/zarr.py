@@ -23,12 +23,11 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-# TODO: move * to the left and add @legacy_api("chunks")
 def write_zarr(
     store: MutableMapping | str | Path,
     adata: AnnData,
-    chunks: tuple[int, ...] | None = None,
     *,
+    chunks: tuple[int, ...] | None = None,
     strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
