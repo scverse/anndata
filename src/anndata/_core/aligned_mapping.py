@@ -4,14 +4,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Collection, MutableMapping
 from copy import copy
-from typing import (
-    TYPE_CHECKING,
-    ClassVar,
-    Generic,
-    Literal,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
 import pandas as pd
 
@@ -25,6 +18,7 @@ from .views import as_view, view_update
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from typing import ClassVar, Literal, Self
 
     import numpy as np
     from scipy.sparse import spmatrix
@@ -111,7 +105,7 @@ class AlignedMapping(MutableMapping, ABC):
     def parent(self) -> AnnData | Raw:
         return self._parent
 
-    def copy(self):
+    def copy(self) -> Self:
         d = self._actual_class(self.parent, axis=self._axis, store={})
         for k, v in self.items():
             if isinstance(v, AwkArray):
@@ -415,7 +409,7 @@ class AlignedMappingProperty(property, Generic[T]):
         self.axis = axis
         self.cls = cls
 
-    def construct(self, obj: AnnData, store: MutableMapping[str, V]) -> T:
+    def construct(self, obj: AnnData, *, store: MutableMapping[str, V]) -> T:
         if self.axis is None:
             return self.cls(obj, store=store)
         return self.cls(obj, axis=self.axis, store=store)
@@ -435,7 +429,7 @@ class AlignedMappingProperty(property, Generic[T]):
         if obj is None:  # needs to return a `property`, e.g. for Sphinx
             return self  # type: ignore
         if not obj.is_view:
-            return self.construct(obj, getattr(obj, f"_{self.name}"))
+            return self.construct(obj, store=getattr(obj, f"_{self.name}"))
         parent_anndata = obj._adata_ref
         idxs = (obj._oidx, obj._vidx)
         parent_aligned_mapping: AlignedMapping = getattr(parent_anndata, self.name)
@@ -447,10 +441,10 @@ class AlignedMappingProperty(property, Generic[T]):
         self, obj: AnnData, value: Mapping[str, V] | Iterable[tuple[str, V]]
     ) -> None:
         value = convert_to_dict(value)
-        _ = self.construct(obj, value)  # Validate
+        _ = self.construct(obj, store=value)  # Validate
         if obj.is_view:
             obj._init_as_actual(obj.copy())
-        setattr(obj, "_" + self.name, value)
+        setattr(obj, f"_{self.name}", value)
 
     def __delete__(self, obj) -> None:
         setattr(obj, self.name, dict())

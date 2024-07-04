@@ -1343,8 +1343,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         Params
         ------
-            copy:
-                Whether the arrays that are already in-memory should be copied.
+        copy
+            Whether the arrays that are already in-memory should be copied.
 
         Example
         -------
