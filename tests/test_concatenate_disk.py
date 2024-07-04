@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData, concat
+from anndata._core.merge import _resolve_dim
 from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.tests.helpers import (
@@ -15,6 +17,10 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
     obsm_types=(
@@ -28,7 +34,7 @@ GEN_ADATA_OOC_CONCAT_ARGS = dict(
 
 
 @pytest.fixture(params=[0, 1])
-def axis(request):
+def axis(request) -> Literal[0, 1]:
     return request.param
 
 
@@ -39,19 +45,19 @@ def array_type(request):
     return request.param
 
 
-@pytest.fixture(params=["inner"])
-def join_type(request):
+@pytest.fixture(params=["inner", "outer"])
+def join_type(request) -> Literal["inner", "outer"]:
     return request.param
 
 
 @pytest.fixture(params=["zarr", "h5ad"])
-def file_format(request):
+def file_format(request) -> Literal["zarr", "h5ad"]:
     return request.param
 
 
 # trying with 10 should be slow but will guarantee that the feature is being used
 @pytest.fixture(params=[10, 100_000_000])
-def max_loaded_elems(request):
+def max_loaded_elems(request) -> int:
     return request.param
 
 
@@ -77,13 +83,18 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
 
 
 def assert_eq_concat_on_disk(
-    adatas, tmp_path, file_format, max_loaded_elems=None, *args, **kwargs
+    adatas,
+    tmp_path: Path,
+    file_format: Literal["zarr", "h5ad"],
+    max_loaded_elems: int | None = None,
+    *args,
+    **kwargs,
 ):
     # create one from the concat function
     res1 = concat(adatas, *args, **kwargs)
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / ("out." + file_format)
+    out_name = tmp_path / f"out.{file_format}"
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
     concat_on_disk(paths, out_name, *args, **kwargs)
@@ -98,75 +109,42 @@ def get_array_type(array_type, axis):
         return sparse.csc_matrix
     if array_type == "array":
         return asarray
-    else:
-        raise NotImplementedError(f"array_type {array_type} not implemented")
+    raise NotImplementedError(f"array_type {array_type} not implemented")
 
 
-def test_anndatas_without_reindex(
-    axis, array_type, join_type, tmp_path, max_loaded_elems, file_format
+@pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
+def test_anndatas(
+    axis: Literal[0, 1],
+    array_type: Literal["array", "sparse", "sparse_array"],
+    join_type: Literal["inner", "outer"],
+    tmp_path: Path,
+    max_loaded_elems: int,
+    file_format: Literal["zarr", "h5ad"],
+    reindex: bool,
 ):
-    N = 50
-    M = 50
-    sparse_fmt = "csr"
-    adatas = []
-    for i in range(5):
-        if axis == 0:
-            M = np.random.randint(1, 100)
-        else:
-            N = np.random.randint(1, 100)
-            sparse_fmt = "csc"
-
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
-            **GEN_ADATA_OOC_CONCAT_ARGS,
-        )
-        if axis == 0:
-            a.obs_names = f"{i}-" + a.obs_names
-        else:
-            a.var_names = f"{i}-" + a.var_names
-        adatas.append(a)
-
-    assert_eq_concat_on_disk(
-        adatas,
-        tmp_path,
-        file_format,
-        max_loaded_elems,
-        axis=axis,
-        join=join_type,
-    )
-
-
-def test_anndatas_with_reindex(
-    axis, array_type, join_type, tmp_path, file_format, max_loaded_elems
-):
-    N = 50
-    M = 50
-    adatas = []
-
-    sparse_fmt = "csc"
-    if axis == 0:
-        sparse_fmt = "csr"
-
-    for _ in range(5):
-        M = np.random.randint(1, 100)
-        N = np.random.randint(1, 100)
-
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
-            obsm_types=(
-                get_array_type("sparse", 1 - axis),
-                np.ndarray,
-                pd.DataFrame,
-            ),
-            varm_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
+    _, off_axis_name = _resolve_dim(axis=1 - axis)
+    random_axes = {0, 1} if reindex else {axis}
+    sparse_fmt = "csr" if axis == 0 else "csc"
+    kw = (
+        GEN_ADATA_OOC_CONCAT_ARGS
+        if not reindex
+        else dict(
+            obsm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
+            varm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
-        a.layers["sparse"] = get_array_type("sparse", axis)(a.layers["sparse"])
-        a.varm["sparse"] = get_array_type("sparse", 1 - axis)(a.varm["sparse"])
+    )
+
+    adatas = []
+    for i in range(5):
+        M, N = (np.random.randint(1, 100) if a in random_axes else 50 for a in (0, 1))
+        a = gen_adata(
+            (M, N), X_type=get_array_type(array_type, axis), sparse_fmt=sparse_fmt, **kw
+        )
+        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
+        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names[1::2] = f"{i}-" + off_names[1::2]
+        setattr(a, f"{off_axis_name}_names", off_names)
         adatas.append(a)
 
     assert_eq_concat_on_disk(
@@ -204,7 +182,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
 
 
 @pytest.fixture()
-def obsm_adatas():
+def xxxm_adatas():
     def gen_index(n):
         return [f"cell{i}" for i in range(n)]
 
@@ -252,8 +230,12 @@ def obsm_adatas():
     ]
 
 
-def test_concatenate_obsm_inner(obsm_adatas, tmp_path, file_format):
-    assert_eq_concat_on_disk(obsm_adatas, tmp_path, file_format, join="inner")
+def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
+    if join_type == "outer":
+        for i in range(len(xxxm_adatas)):
+            xxxm_adatas[i] = xxxm_adatas[i].T
+            xxxm_adatas[i].X = sparse.csr_matrix(xxxm_adatas[i].X)
+    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
 def test_output_dir_exists(tmp_path):
