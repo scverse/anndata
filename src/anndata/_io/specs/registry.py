@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union
 
 import pandas as pd
 
@@ -19,13 +19,13 @@ if TYPE_CHECKING:
     from anndata._core.storage import StorageType
     from anndata._types import GroupStorageType
 
-InMemoryElem = (
-    dict[str, InMemoryArrayOrScalarType]
-    | InMemoryArrayOrScalarType
-    | AnnData
-    | pd.Categorical
-    | pd.api.extensions.ExtensionArray
-)
+InMemoryElem = Union[
+    dict[str, InMemoryArrayOrScalarType],
+    InMemoryArrayOrScalarType,
+    AnnData,
+    pd.Categorical,
+    pd.api.extensions.ExtensionArray,
+]
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
