@@ -30,23 +30,23 @@ __all__ = [
     "StorageType",
 ]
 
-InMemoryArrayOrScalarType = (
-    np.ndarray
-    | np.ma.MaskedArray
-    | sparse.spmatrix
-    | SpArray
-    | H5Array
-    | ZarrArray
-    | ZappyArray
-    | BaseCompressedSparseDataset
-    | DaskArray
-    | CupyArray
-    | CupySparseMatrix
-    | AwkArray
-    | pd.DataFrame
-    | np.number
-    | str
-)
+InMemoryArrayOrScalarType = Union[
+    np.typing.NDArray,
+    np.ma.MaskedArray,
+    sparse.spmatrix,
+    SpArray,
+    H5Array,
+    ZarrArray,
+    ZappyArray,
+    BaseCompressedSparseDataset,
+    DaskArray,
+    CupyArray,
+    CupySparseMatrix,
+    AwkArray,
+    pd.DataFrame,
+    np.number,
+    str,
+]
 
 ArrayStorageType = Union[ZarrArray, H5Array]
 GroupStorageType = Union[ZarrGroup, H5Group]
