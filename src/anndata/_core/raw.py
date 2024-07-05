@@ -11,7 +11,7 @@ from ..compat import CupyArray, CupySparseMatrix
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AxisArrays
 from .index import _normalize_index, _subset, get_vector, unpack_index
-from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+from .sparse_dataset import sparse_dataset
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from scipy import sparse
 
     from .anndata import AnnData
+    from .sparse_dataset import BaseCompressedSparseDataset
 
 
 # TODO: Implement views for Raw
