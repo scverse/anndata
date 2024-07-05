@@ -39,6 +39,8 @@ from .registry import _REGISTRY, IOSpec, Reader, read_elem, read_elem_partial
 if TYPE_CHECKING:
     from os import PathLike
 
+    from numpy import typing as npt
+
     from anndata._core.storage import StorageType
 
 H5Array = h5py.Dataset
@@ -114,7 +116,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
     elem: StorageType, _reader: Reader
-) -> dict | np.ndarray[Any, Any] | np.ndarray | sparse.spmatrix | SpArray:
+) -> dict | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import h5ad
 
     warn(
@@ -136,15 +138,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
     elem: StorageType, _reader: Reader
-) -> (
-    dict
-    | Any
-    | np.ndarray[np.void]
-    | np.ndarray[Any, np.dtype[np.float64]]
-    | np.ndarray[Any, np.dtype[Any]]
-    | sparse.spmatrix
-    | SpArray
-):
+) -> dict | Any | npt.NDArray | npt.NDArray[np.float64] | sparse.spmatrix | SpArray:
     from anndata._io import zarr
 
     warn(
@@ -389,7 +383,7 @@ def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
-def read_array(elem: StorageType, _reader: Reader) -> np.ndarray:
+def read_array(elem: StorageType, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
@@ -475,7 +469,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
-def read_recarray(d, _reader) -> np.recarray | np.ndarray:
+def read_recarray(d, _reader) -> np.recarray | npt.NDArray:
     value = d[()]
     dtype = value.dtype
     value = _from_fixed_length_strings(value)
