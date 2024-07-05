@@ -32,7 +32,7 @@ class Dataset2D(xr.Dataset):
     def shape(
         self,
     ):  # aligned mapping classes look for this for DataFrames so this ensures usability with e.g., obsm
-        return [self.dims[get_index_dim(self)], len(self)]
+        return [self.sizes[get_index_dim(self)], len(self)]
 
     @property
     def iloc(self):
