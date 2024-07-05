@@ -5,38 +5,11 @@ from typing import Generic, TypeVar, Union
 
 import pandas as pd
 
-try:
-    import xarray as xr
-    from xarray import DataArray
-except ImportError:
-    xr = None
-
-    class DataArray:
-        def __repr__(self) -> str:
-            return "mock DataArray"
-
-
-try:
-    from xarray.backends.zarr import ZarrArrayWrapper
-except ImportError:
-
-    class ZarrArrayWrapper:
-        def __repr__(self) -> str:
-            return "mock ZarrArrayWrapper"
-
-
-try:
-    from xarray.backends import BackendArray
-except ImportError:
-
-    class BackendArray:
-        def __repr__(self) -> str:
-            return "mock BackendArray"
-
-
 from anndata._core.index import Index, _subset
 from anndata._core.views import as_view
 from anndata.compat import H5Array, ZarrArray
+
+from ._compat import BackendArray, DataArray, ZarrArrayWrapper, xr
 
 K = TypeVar("K", bound=Union[H5Array, ZarrArray])
 

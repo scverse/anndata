@@ -7,12 +7,12 @@ if TYPE_CHECKING:
 
 
 import pandas as pd
-import xarray as xr
 
 from ..._core.anndata import _gen_dataframe, _remove_unused_categories
 from ..._core.file_backing import to_memory
 from ..._core.index import Index, _subset
 from ..._core.views import as_view
+from ._compat import DataArray, Dataset
 
 
 def get_index_dim(ds):
@@ -22,7 +22,7 @@ def get_index_dim(ds):
     return list(ds.sizes.keys())[0]
 
 
-class Dataset2D(xr.Dataset):
+class Dataset2D(Dataset):
     @property
     def index(self) -> pd.Index:
         coord = list(self.coords.keys())[0]
@@ -48,7 +48,7 @@ class Dataset2D(xr.Dataset):
 
 
 @_subset.register(Dataset2D)
-def _(a: xr.DataArray, subset_idx: Index):
+def _(a: DataArray, subset_idx: Index):
     key = get_index_dim(a)
     if (
         isinstance(subset_idx, tuple) and len(subset_idx) == 1

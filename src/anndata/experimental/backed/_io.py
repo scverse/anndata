@@ -11,17 +11,13 @@ if TYPE_CHECKING:
 
 import dask.array as da
 import h5py
-
-try:
-    import xarray as xr
-except ImportError:
-    xr = None
 import zarr
 
 from ..._core.anndata import AnnData
 from ..._core.sparse_dataset import sparse_dataset
 from ...compat import DaskArray
 from .. import read_dispatched
+from ._compat import xr
 from ._lazy_arrays import CategoricalArray, MaskedArray
 from ._xarray import Dataset2D
 
