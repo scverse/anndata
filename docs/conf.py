@@ -51,7 +51,6 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
-    "sphinx_toolbox.more_autodoc.autoprotocol",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
     "sphinx_design",
@@ -95,6 +94,7 @@ nitpick_ignore = [
     # TODO: sphinx’ builtin autodoc.typehints extension isn’t handled by `qualname_overrides` yet
     # https://github.com/theislab/scanpydoc/issues/140
     ("py:class", "h5py._hl.group.Group"),
+    ("py:class", "h5py._hl.dataset.Dataset"),
 ]
 suppress_warnings = [
     "ref.citation",

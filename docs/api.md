@@ -131,7 +131,8 @@ Utilities for customizing the IO process:
    experimental.read_dispatched
    experimental.write_dispatched
    experimental.IOSpec
-
+   experimental.read_callback
+   experimental.StorageType
 ```
 
 ## Errors and warnings
