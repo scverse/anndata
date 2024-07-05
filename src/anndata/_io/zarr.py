@@ -101,6 +101,7 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
 
 @report_read_key_on_error
 def read_dataset(dataset: zarr.Array):
+    """Legacy method for reading datasets without encoding_type."""
     value = dataset[...]
     if not hasattr(value, "dtype"):
         return value

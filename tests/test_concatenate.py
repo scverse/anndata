@@ -1421,6 +1421,7 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
                 elem_name = f"{mapping_elem}/{k}"
                 # pd.concat can have unintuitive return types. is similar to numpy promotion
                 if isinstance(result_elem, pd.DataFrame):
+                    # TODO test with "string" dtype
                     assert_equal(
                         getattr(b, mapping_elem)[k].astype(object),
                         result_elem.astype(object),

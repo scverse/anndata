@@ -72,14 +72,28 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
             id="sp_mat_csc",
         ),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), "dataframe", id="pd_df"),
-        pytest.param(pd.Categorical(list("aabccedd")), "categorical", id="pd_cat"),
+        pytest.param(
+            pd.Categorical(list("aabccedd") + [pd.NA]),
+            "categorical",
+            id="pd_cat_np_str",
+        ),
         pytest.param(
             pd.Categorical(list("aabccedd"), ordered=True),
             "categorical",
-            id="pd_cat_ord",
+            id="pd_cat_np_str_ord",
+        ),
+        pytest.param(
+            pd.array(list("aabccedd") + [pd.NA], dtype="string").astype("category"),
+            "categorical",
+            id="pd_cat_pd_str",
         ),
         pytest.param(
             pd.Categorical([1, 2, 1, 3], ordered=True), "categorical", id="pd_cat_num"
+        ),
+        pytest.param(
+            pd.array(["hello", "world", pd.NA], dtype="string"),
+            "string-array-nullable",
+            id="pd_arr_str",
         ),
         pytest.param(
             pd.arrays.IntegerArray(
