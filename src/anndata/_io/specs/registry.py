@@ -6,13 +6,34 @@ from functools import singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
+import numpy as np
+import pandas as pd
+from numpy import typing as npt
+from scipy import sparse
+
+from anndata._core.anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata.compat import _read_attr
+from anndata._types import DictElemType
+from anndata.compat import SpArray, _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
 
-    from anndata._types import GroupStorageType, StorageType
+    from anndata._core.storage import StorageType
+    from anndata._types import GroupStorageType
+
+InMemoryElem = (
+    dict[str, DictElemType]
+    | npt.NDArray
+    | sparse.spmatrix
+    | SpArray
+    | AnnData
+    | pd.DataFrame
+    | pd.Categorical
+    | str
+    | np.number
+    | pd.api.extensions.ExtensionArray
+)
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -69,7 +90,7 @@ class reader(Protocol):
         self,
         elem: StorageType,
         _reader: Reader,
-    ) -> Any: ...
+    ) -> InMemoryElem: ...
 
 
 class IORegistry:
@@ -240,7 +261,7 @@ def _iter_patterns(
     yield t
 
 
-InMemoryType = TypeVar("InMemoryType")
+InMemoryType = TypeVar("InMemoryType", bound=InMemoryElem)
 
 
 class read_callback(Protocol):
@@ -266,7 +287,7 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-    ) -> Any:
+    ) -> InMemoryElem:
         """Read an element from a store. See exported function for more details."""
         from functools import partial
 
