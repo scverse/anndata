@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from anndata._core.storage import StorageType
     from anndata._types import GroupStorageType
 
-InMemoryElem = Union[
+InMemoryReadElem = Union[
     dict[str, InMemoryArrayOrScalarType],
     InMemoryArrayOrScalarType,
     AnnData,
@@ -82,7 +82,7 @@ class reader(Protocol):
         self,
         elem: StorageType,
         _reader: Reader,
-    ) -> InMemoryElem: ...
+    ) -> InMemoryReadElem: ...
 
 
 class IORegistry:
@@ -253,7 +253,7 @@ def _iter_patterns(
     yield t
 
 
-InMemoryType = TypeVar("InMemoryType", bound=InMemoryElem)
+InMemoryType = TypeVar("InMemoryType", bound=InMemoryReadElem)
 
 
 class read_callback(Protocol):
@@ -279,7 +279,7 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-    ) -> InMemoryElem:
+    ) -> InMemoryReadElem:
         """Read an element from a store. See exported function for more details."""
         from functools import partial
 
