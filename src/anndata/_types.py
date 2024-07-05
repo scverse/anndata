@@ -30,7 +30,7 @@ __all__ = [
     "StorageType",
 ]
 
-DictElemType = (
+InMemoryArrayOrScalarType = (
     np.ndarray
     | np.ma.MaskedArray
     | sparse.spmatrix

@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from numpy import typing as npt
 
     from anndata._core.storage import StorageType
-    from anndata._types import DictElemType
+    from anndata._types import InMemoryArrayOrScalarType
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group
@@ -117,7 +117,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
     elem: StorageType, _reader: Reader
-) -> dict[str, DictElemType] | npt.NDArray | sparse.spmatrix | SpArray:
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import h5ad
 
     warn(
@@ -139,7 +139,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
     elem: StorageType, _reader: Reader
-) -> dict[str, DictElemType] | npt.NDArray | sparse.spmatrix | SpArray:
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import zarr
 
     warn(
@@ -310,7 +310,9 @@ def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
-def read_mapping(elem: StorageType, _reader: Reader) -> dict[str, DictElemType]:
+def read_mapping(
+    elem: StorageType, _reader: Reader
+) -> dict[str, InMemoryArrayOrScalarType]:
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
 
