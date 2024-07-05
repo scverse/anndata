@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from anndata._io.specs import IOSpec
+    from anndata._io.specs.registry import read_callback
     from anndata._types import GroupStorageType, StorageType
 
 
 def read_dispatched(
     elem: StorageType,
-    callback: Callable[[Callable[[StorageType], Any], str, StorageType, IOSpec], Any],
+    callback: read_callback,
 ) -> Any:
     """
     Read elem, calling the callback at each sub-element.

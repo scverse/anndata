@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata.compat import _read_attr
@@ -64,9 +64,17 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
+class reader(Protocol):
+    def __call__(
+        self,
+        elem: StorageType,
+        _reader: Reader,
+    ) -> Any: ...
+
+
 class IORegistry:
     def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], reader] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], Callable
@@ -232,8 +240,24 @@ def _iter_patterns(
     yield t
 
 
+InMemoryType = TypeVar("InMemoryType")
+
+
+class read_callback(Protocol):
+    def __call__(
+        self,
+        /,
+        read_func: Callable[[StorageType, Reader], InMemoryType],
+        elem_name: str,
+        elem: StorageType,
+        iospec: IOSpec,
+    ) -> InMemoryType: ...
+
+
 class Reader:
-    def __init__(self, registry: IORegistry, callback: Callable | None = None) -> None:
+    def __init__(
+        self, registry: IORegistry, callback: read_callback | None = None
+    ) -> None:
         self.registry = registry
         self.callback = callback
 
