@@ -138,7 +138,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
     elem: StorageType, _reader: Reader
-) -> dict | Any | npt.NDArray | npt.NDArray[np.float64] | sparse.spmatrix | SpArray:
+) -> dict | Any | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import zarr
 
     warn(
