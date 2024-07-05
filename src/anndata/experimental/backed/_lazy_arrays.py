@@ -7,12 +7,13 @@ import pandas as pd
 
 try:
     import xarray as xr
+    from xarray import DataArray
 except ImportError:
+    xr = None
 
-    class xr:
-        @property
-        def DataArray(self):
-            return None
+    class DataArray:
+        def __repr__(self) -> str:
+            return "mock DataArray"
 
 
 try:
@@ -141,11 +142,11 @@ class MaskedArray(BackendArray):
         return xr.core.extension_array.PandasExtensionArray(pd.array(values))
 
 
-@_subset.register(xr.DataArray)
-def _subset_masked(a: xr.DataArray, subset_idx: Index):
+@_subset.register(DataArray)
+def _subset_masked(a: DataArray, subset_idx: Index):
     return a[subset_idx]
 
 
-@as_view.register(xr.DataArray)
-def _view_pd_boolean_array(a: xr.DataArray, view_args):
+@as_view.register(DataArray)
+def _view_pd_boolean_array(a: DataArray, view_args):
     return a
