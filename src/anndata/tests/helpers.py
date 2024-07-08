@@ -3,11 +3,11 @@ from __future__ import annotations
 import random
 import re
 import warnings
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
-from typing import Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -32,6 +32,10 @@ from anndata.compat import (
     ZarrArray,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from collections.abc import Collection
+    from typing import Literal
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(

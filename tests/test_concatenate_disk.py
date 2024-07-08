@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Literal
 
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
