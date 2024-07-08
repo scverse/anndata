@@ -267,6 +267,13 @@ class read_callback(Protocol):
         iospec: IOSpec,
     ) -> InMemoryType: ...
 
+    """Callback used in {func}`anndata.experimental.read_dispatched` to customize reading an element from a store.
+
+    Returns
+    -------
+        The element read from the store.
+    """
+
 
 class Reader:
     def __init__(
@@ -307,7 +314,9 @@ class write_callback(Protocol):
         *,
         iospec: IOSpec,
         dataset_kwargs: MappingProxyType,
-    ) -> InMemoryType: ...
+    ) -> None: ...
+
+    """Callback used in {func}`anndata.experimental.write_dispatched` to customize writing an element to a store."""
 
 
 class Writer:
