@@ -96,6 +96,13 @@ nitpick_ignore = [
     # https://github.com/theislab/scanpydoc/issues/140
     ("py:class", "h5py._hl.group.Group"),
     ("py:class", "h5py._hl.dataset.Dataset"),
+    # for experimental callback exports
+    ("py:class", "anndata.compat.ZappyArray"),
+    ("py:class", "anndata.compat.DaskArray"),
+    ("py:class", "anndata.compat.CupyArray"),
+    ("py:class", "anndata.compat.CupySparseMatrix"),
+    ("py:class", "awkward.highlevel.Array"),
+    ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
 ]
 suppress_warnings = [
     "ref.citation",
