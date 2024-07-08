@@ -293,8 +293,24 @@ class Reader:
         return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
+class write_callback(Protocol):
+    def __call__(
+        self,
+        /,
+        write_func: Callable[
+            [GroupStorageType, str, InMemoryReadElem, Writer, MappingProxyType], None
+        ],
+        store: GroupStorageType,
+        elem_name: str,
+        elem: InMemoryReadElem,
+        *,
+        iospec: IOSpec,
+        dataset_kwargs: MappingProxyType,
+    ) -> InMemoryType: ...
+
+
 class Writer:
-    def __init__(self, registry: IORegistry, callback: Callable | None = None):
+    def __init__(self, registry: IORegistry, callback: write_callback | None = None):
         self.registry = registry
         self.callback = callback
 
