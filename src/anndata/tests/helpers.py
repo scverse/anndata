@@ -3,11 +3,11 @@ from __future__ import annotations
 import random
 import re
 import warnings
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
-from typing import Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -29,8 +29,13 @@ from anndata.compat import (
     CupySparseMatrix,
     DaskArray,
     SpArray,
+    ZarrArray,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from collections.abc import Collection
+    from typing import Literal
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -494,7 +499,7 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
     b = asarray(b)
     if not exact and is_numeric_dtype(a) and is_numeric_dtype(b):
         assert a.shape == b.shape, format_msg(elem_name)
-        assert np.allclose(a, b, equal_nan=True), format_msg(elem_name)
+        np.testing.assert_allclose(a, b, equal_nan=True, err_msg=format_msg(elem_name))
     elif (  # Structured dtype
         not exact
         and hasattr(a, "dtype")
@@ -535,6 +540,7 @@ def assert_equal_cupy_sparse(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(h5py.Dataset)
+@assert_equal.register(ZarrArray)
 def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
     a = asarray(a)
     assert_equal(b, a, exact, elem_name=elem_name)

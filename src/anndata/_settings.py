@@ -8,12 +8,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
 from enum import Enum
 from inspect import Parameter, signature
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, NamedTuple, TypeVar
 
 from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from typing import Any
 
 T = TypeVar("T")
 

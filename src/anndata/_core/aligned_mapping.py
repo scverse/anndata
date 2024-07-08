@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Collection, MutableMapping
+from collections.abc import Collection, MutableMapping, Sequence
 from copy import copy
 from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
@@ -17,7 +17,7 @@ from .storage import coerce_array
 from .views import as_view, view_update
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
     from typing import ClassVar, Literal
 
     import numpy as np

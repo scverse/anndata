@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping
 from functools import reduce
-from typing import Callable, Literal, Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import pandas as pd
@@ -11,11 +11,17 @@ from h5py import Dataset
 
 from ..._core.aligned_mapping import AxisArrays
 from ..._core.anndata import AnnData
-from ..._core.index import Index, _normalize_index, _normalize_indices
+from ..._core.index import _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
 from ...compat import _map_cat_to_str
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Literal
+
+    from ..._core.index import Index
 
 ATTRS = ["obs", "obsm", "layers"]
 

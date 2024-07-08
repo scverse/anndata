@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,7 @@ from ..compat import (
     CupyArray,
     CupySparseMatrix,
     DaskArray,
+    H5Array,
     SpArray,
     ZappyArray,
     ZarrArray,
@@ -24,23 +25,28 @@ from .sparse_dataset import BaseCompressedSparseDataset
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from typing import Any
 
 
 class StorageType(Enum):
+    # Memory
     Array = (np.ndarray, "np.ndarray")
     Masked = (ma.MaskedArray, "numpy.ma.core.MaskedArray")
     Sparse = (sparse.spmatrix, "scipy.sparse.spmatrix")
+    SparseArray = (SpArray, "scipy.sparse.sparray")
+    AwkArray = (AwkArray, "awkward.Array")
+    # Backed
+    HDF5Dataset = (H5Array, "h5py.Dataset")
     ZarrArray = (ZarrArray, "zarr.Array")
     ZappyArray = (ZappyArray, "zappy.base.ZappyArray")
-    DaskArray = (DaskArray, "dask.array.Array")
-    CupyArray = (CupyArray, "cupy.ndarray")
-    CupySparseMatrix = (CupySparseMatrix, "cupyx.scipy.sparse.spmatrix")
     BackedSparseMatrix = (
         BaseCompressedSparseDataset,
         "anndata.experimental.[CSC,CSR]Dataset",
     )
-    SparseArray = (SpArray, "scipy.sparse.sparray")
-    AwkArray = (AwkArray, "awkward.Array")
+    # Distributed
+    DaskArray = (DaskArray, "dask.array.Array")
+    CupyArray = (CupyArray, "cupy.ndarray")
+    CupySparseMatrix = (CupySparseMatrix, "cupyx.scipy.sparse.spmatrix")
 
     @property
     def cls(self):

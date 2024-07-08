@@ -4,15 +4,14 @@ Main class and helper functions.
 
 from __future__ import annotations
 
-import collections.abc as cabc
 import warnings
 from collections import OrderedDict
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
 from functools import partial
 from pathlib import Path
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -32,12 +31,11 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import Index, Index1D, _normalize_indices, _subset, get_vector
+from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
 from .views import (
-    ArrayView,
     DataFrameView,
     DictView,
     _resolve_idxs,
@@ -45,7 +43,12 @@ from .views import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from os import PathLike
+    from typing import Any, Literal
+
+    from .index import Index, Index1D
+    from .views import ArrayView
 
 
 # for backwards compat
@@ -445,7 +448,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raw = dict(X=None, **raw)
         if not raw:
             self._raw = None
-        elif isinstance(raw, cabc.Mapping):
+        elif isinstance(raw, Mapping):
             self._raw = Raw(self, **raw)
         else:  # is a Raw from another AnnData
             self._raw = Raw(self, raw._X, raw.var, raw.varm)
@@ -588,10 +591,23 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         ):
-            if not np.isscalar(value) and self.shape != value.shape:
-                # For assigning vector of values to 2d array or matrix
-                # Not necessary for row of 2d array
-                value = value.reshape(self.shape)
+            if not np.isscalar(value):
+                if self.is_view and any(
+                    isinstance(idx, np.ndarray)
+                    and len(np.unique(idx)) != len(idx.ravel())
+                    for idx in [oidx, vidx]
+                ):
+                    msg = (
+                        "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
+                        "The resulting `adata.X` will likely not equal the value to which you set it. "
+                        "To avoid this potential issue, please make a copy of the data first. "
+                        "In the future, this operation will throw an error."
+                    )
+                    warnings.warn(msg, FutureWarning, stacklevel=1)
+                if self.shape != value.shape:
+                    # For assigning vector of values to 2d array or matrix
+                    # Not necessary for row of 2d array
+                    value = value.reshape(self.shape)
             if self.isbacked:
                 if self.is_view:
                     X = self.file["X"]
@@ -610,6 +626,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                         else:
                             memory_class = sparse.coo_matrix
                         value = memory_class(value)
+                    elif sparse.issparse(value) and isinstance(
+                        self._adata_ref._X, np.ndarray
+                    ):
+                        warnings.warn(
+                            "Trying to set a dense array with a sparse array on a view."
+                            "Densifying the sparse array."
+                            "This may incur excessive memory usage",
+                            stacklevel=2,
+                        )
+                        value = value.toarray()
                     self._adata_ref._X[oidx, vidx] = value
                 else:
                     self._X = value
@@ -738,7 +764,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if (
             len(value) > 0
             and not isinstance(value, pd.RangeIndex)
-            and infer_dtype(value) not in ("string", "bytes")
+            and infer_dtype(value) not in {"string", "bytes"}
         ):
             sample = list(value[: min(len(value), 5)])
             msg = dedent(
@@ -1929,7 +1955,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs
             choice = np.random.choice(self.n_obs, select, replace)
-        elif isinstance(select, (np.ndarray, cabc.Sequence)):
+        elif isinstance(select, (np.ndarray, Sequence)):
             choice = np.asarray(select)
         else:
             raise ValueError("select should be int or array")

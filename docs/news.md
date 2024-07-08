@@ -1,7 +1,3 @@
-```{eval-rst}
-.. role:: small
-```
-
 # Muon paper published {small}`2022-02-02`
 
 Muon has been published in Genome Biology [^cite_bredikhin22].

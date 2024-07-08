@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from os import PathLike, fspath
+from os import fspath
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +14,8 @@ from .._warnings import WriteWarning
 from ..logging import get_logger
 
 if TYPE_CHECKING:
+    from os import PathLike
+
     from .. import AnnData
 
 logger = get_logger(__name__)
