@@ -12,14 +12,14 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
-import collections.abc as cabc
 import warnings
 from abc import ABC
+from collections.abc import Iterable
 from functools import cached_property
 from itertools import accumulate, chain
 from math import floor
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import h5py
 import numpy as np
@@ -37,12 +37,14 @@ except ImportError:
     from scipy.sparse import spmatrix as _cs_matrix
 
 
-from .index import Index, _subset, unpack_index
+from .index import _subset, unpack_index
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
+    from typing import Literal
 
     from .._types import GroupStorageType
+    from .index import Index
 
 
 class BackedFormat(NamedTuple):
@@ -466,7 +468,7 @@ class BaseCompressedSparseDataset(ABC):
         if isinstance(index, tuple) and not len(index):
             index = slice(None)
         row, col = unpack_index(index)
-        if all(isinstance(x, cabc.Iterable) for x in (row, col)):
+        if all(isinstance(x, Iterable) for x in (row, col)):
             row, col = np.ix_(row, col)
         return row, col
 

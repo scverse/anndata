@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from functools import singledispatch, wraps
 from inspect import Parameter, signature
 from pathlib import Path
-from typing import Any, Union
+from typing import TYPE_CHECKING, Union
 from warnings import warn
 
 import h5py
@@ -20,6 +20,9 @@ import scipy.sparse
 from packaging.version import Version
 
 from .exceptiongroups import add_note  # noqa: F401
+
+if TYPE_CHECKING:
+    from typing import Any
 
 #############################
 # scipy sparse array comapt #

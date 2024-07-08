@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 from ..._core.anndata import _gen_dataframe, _remove_unused_categories
 from ..._core.file_backing import to_memory
-from ..._core.index import Index, _subset
+from ..._core.index import _subset
 from ..._core.views import as_view
-from ._compat import DataArray, Dataset
+from ._compat import Dataset
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import Any, Literal
+
+    from ..._core.index import Index
+    from ._compat import DataArray
 
 
 def get_index_dim(ds):

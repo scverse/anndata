@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import os
 import shutil
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Mapping
 from functools import singledispatch
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -14,8 +14,6 @@ from scipy.sparse import csc_matrix, csr_matrix
 from .._core.file_backing import to_memory
 from .._core.merge import (
     MissingVal,
-    Reindexer,
-    StrategiesLiteral,
     _resolve_axis,
     concat_arrays,
     gen_inner_reindexers,
@@ -30,6 +28,12 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _map_cat_to_str
 from . import read_dispatched
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Collection, Iterable, Sequence
+    from typing import Any, Literal
+
+    from .._core.merge import Reindexer, StrategiesLiteral
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from functools import singledispatchmethod
-from typing import Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Generic, TypeVar, Union
 
 import pandas as pd
 
-from anndata._core.index import Index, _subset
+from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata.compat import H5Array, ZarrArray
 
 from ._compat import BackendArray, DataArray, ZarrArrayWrapper, xr
+
+if TYPE_CHECKING:
+    from anndata._core.index import Index
+
 
 K = TypeVar("K", bound=Union[H5Array, ZarrArray])
 
