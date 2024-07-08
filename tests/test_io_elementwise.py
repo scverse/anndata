@@ -18,7 +18,6 @@ from scipy import sparse
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
-
 from anndata.compat import ZarrGroup, _read_attr
 from anndata.tests.helpers import (
     as_cupy,
@@ -30,6 +29,7 @@ from anndata.tests.helpers import (
 
 if TYPE_CHECKING:
     from anndata.compat import H5Group
+
 
 @pytest.fixture(params=["h5ad", "zarr"])
 def diskfmt(request):
