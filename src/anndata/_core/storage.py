@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -24,6 +24,7 @@ from .sparse_dataset import BaseCompressedSparseDataset
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from typing import Any
 
 
 class StorageType(Enum):

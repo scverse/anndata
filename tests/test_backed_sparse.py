@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -16,7 +16,9 @@ from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
+    from typing import Literal
 
     from numpy.typing import ArrayLike
     from pytest_mock import MockerFixture

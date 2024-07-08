@@ -186,6 +186,9 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
+[tool.ruff.lint.flake8-type-checking]
+exempt-modules = []
+strict = true
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"

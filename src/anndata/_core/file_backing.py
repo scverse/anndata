@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from functools import singledispatch
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import h5py
 
@@ -11,7 +11,9 @@ from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
 from .sparse_dataset import BaseCompressedSparseDataset
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from os import PathLike
+    from typing import Literal
 
     from . import anndata
 

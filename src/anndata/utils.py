@@ -16,6 +16,7 @@ from .logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+    from typing import Any
 
 logger = get_logger(__name__)
 
