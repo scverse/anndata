@@ -4,10 +4,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
     from typing import Any
 
-    from anndata._io.specs.registry import read_callback
+    from anndata._io.specs.registry import read_callback, write_callback
     from anndata._types import GroupStorageType, StorageType
 
 
@@ -53,10 +53,7 @@ def write_dispatched(
     store: GroupStorageType,
     key: str,
     elem: Any,
-    callback: Callable[
-        [Callable[[StorageType, str, Any], None], GroupStorageType, str, Any, dict],
-        None,
-    ],
+    callback: write_callback,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:

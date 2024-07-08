@@ -132,6 +132,7 @@ Utilities for customizing the IO process:
    experimental.write_dispatched
    experimental.IOSpec
    experimental.read_callback
+   experimental.write_callback
    experimental.StorageType
 ```
 
