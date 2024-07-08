@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -12,14 +12,12 @@ from anndata import AnnData, concat
 from anndata._core.merge import _resolve_dim
 from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group, concat_on_disk
-from anndata.tests.helpers import (
-    assert_equal,
-    gen_adata,
-)
+from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Literal
 
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(

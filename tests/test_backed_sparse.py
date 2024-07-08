@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 from itertools import product
-from typing import TYPE_CHECKING, Callable, Literal, get_args
+from typing import TYPE_CHECKING, Literal, get_args
 
 import h5py
 import numpy as np
@@ -17,7 +17,7 @@ from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Callable, Generator, Sequence
     from pathlib import Path
 
     from _pytest.mark import ParameterSet

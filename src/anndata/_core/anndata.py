@@ -4,15 +4,14 @@ Main class and helper functions.
 
 from __future__ import annotations
 
-import collections.abc as cabc
 import warnings
 from collections import OrderedDict
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
 from functools import partial
 from pathlib import Path
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -33,21 +32,13 @@ from ..logging import anndata_logger as logger
 from ..utils import convert_to_dict, deprecated, dim_len, ensure_df_homogeneous
 from .access import ElementRef
 from .aligned_df import _gen_dataframe
-from .aligned_mapping import (
-    AxisArrays,
-    AxisArraysView,
-    Layers,
-    LayersView,
-    PairwiseArrays,
-    PairwiseArraysView,
-)
+from .aligned_mapping import AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import Index, Index1D, _normalize_indices, _subset, get_vector
+from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
 from .views import (
-    ArrayView,
     DataFrameView,
     DictView,
     _resolve_idxs,
@@ -55,7 +46,13 @@ from .views import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from os import PathLike
+    from typing import Any, Literal
+
+    from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
+    from .index import Index, Index1D
+    from .views import ArrayView
 
 
 # for backwards compat
@@ -460,7 +457,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raw = dict(X=None, **raw)
         if not raw:
             self._raw = None
-        elif isinstance(raw, cabc.Mapping):
+        elif isinstance(raw, Mapping):
             self._raw = Raw(self, **raw)
         else:  # is a Raw from another AnnData
             self._raw = Raw(self, raw._X, raw.var, raw.varm)
@@ -2027,7 +2024,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs
             choice = np.random.choice(self.n_obs, select, replace)
-        elif isinstance(select, (np.ndarray, cabc.Sequence)):
+        elif isinstance(select, (np.ndarray, Sequence)):
             choice = np.asarray(select)
         else:
             raise ValueError("select should be int or array")
