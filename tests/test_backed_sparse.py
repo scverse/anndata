@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING
+from itertools import product
+from typing import TYPE_CHECKING, Literal, get_args
 
 import h5py
 import numpy as np
@@ -16,12 +17,15 @@ from anndata.experimental import read_dispatched, write_elem
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator, Sequence
     from pathlib import Path
-    from typing import Literal
 
-    from numpy.typing import ArrayLike
+    from _pytest.mark import ParameterSet
+    from numpy.typing import ArrayLike, NDArray
     from pytest_mock import MockerFixture
+
+    Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
+
 
 subset_func2 = subset_func
 
@@ -301,7 +305,7 @@ def test_indptr_cache(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
 ):
-    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
     f = zarr.open_group(path, "a")
     ad._io.specs.write_elem(f, "X", a)
@@ -317,12 +321,76 @@ def test_indptr_cache(
     assert store.get_access_count("X/indptr") == 2
 
 
+Kind = Literal["slice", "int", "array", "mask"]
+
+
+def mk_idx_kind(idx: Sequence[int], *, kind: Kind, l: int) -> Idx | None:
+    """Convert sequence of consecutive integers (e.g. range with step=1) into different kinds of indexing."""
+    if kind == "slice":
+        start = idx[0] if idx[0] > 0 else None
+        if len(idx) == 1:
+            return slice(start, idx[0] + 1)
+        if all(np.diff(idx) == 1):
+            stop = idx[-1] + 1 if idx[-1] < l - 1 else None
+            return slice(start, stop)
+    if kind == "int":
+        if len(idx) == 1:
+            return idx[0]
+    if kind == "array":
+        return np.asarray(idx)
+    if kind == "mask":
+        return np.isin(np.arange(l), idx)
+    return None
+
+
+def idify(x: object) -> str:
+    if isinstance(x, slice):
+        start, stop = ("" if s is None else str(s) for s in (x.start, x.stop))
+        return f"{start}:{stop}" + (f":{x.step}" if x.step not in (1, None) else "")
+    return str(x)
+
+
+def width_idx_kinds(
+    *idxs: tuple[Sequence[int], Idx, Sequence[str]], l: int
+) -> Generator[ParameterSet, None, None]:
+    """Convert major (first) index into various identical kinds of indexing."""
+    for (idx_maj_raw, idx_min, exp), maj_kind in product(idxs, get_args(Kind)):
+        if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
+            continue
+        id_ = "-".join(map(idify, [idx_maj_raw, idx_min, maj_kind]))
+        yield pytest.param(idx_maj, idx_min, exp, id=id_)
+
+
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
+@pytest.mark.parametrize(
+    ("idx_maj", "idx_min", "exp"),
+    width_idx_kinds(
+        (
+            [0],
+            slice(None, None),
+            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+        ),
+        (
+            [0],
+            slice(None, 3),
+            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+        ),
+        (
+            [3, 4, 5],
+            slice(None, None),
+            ["X/data/.zarray", "X/data/.zarray", "X/data/3", "X/data/4", "X/data/5"],
+        ),
+        l=10,
+    ),
+)
 def test_data_access(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    idx_maj: Idx,
+    idx_min: Idx,
+    exp: Sequence[str],
 ):
-    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
     f = zarr.open_group(path, "a")
     ad._io.specs.write_elem(f, "X", a)
@@ -334,18 +402,18 @@ def test_data_access(
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store)
     a_disk = sparse_dataset(f["X"])
-    for idx in [slice(0, 1), 0, np.array([0]), np.array([True] + [False] * 9)]:
-        store.reset_key_trackers()
-        if a_disk.format == "csr":
-            a_disk[idx, :]
-        else:
-            a_disk[:, idx]
-        assert store.get_access_count("X/data") == 3
-        assert store.get_accessed_keys("X/data") == [
-            "X/data/.zarray",
-            "X/data/.zarray",
-            "X/data/0",
-        ]
+
+    # Do the slicing with idx
+    store.reset_key_trackers()
+    if a_disk.format == "csr":
+        a_disk[idx_maj, idx_min]
+    else:
+        a_disk[idx_min, idx_maj]
+
+    assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
+        "X/data"
+    )
+    assert store.get_accessed_keys("X/data") == exp
 
 
 @pytest.mark.parametrize(
@@ -381,7 +449,7 @@ def test_wrong_shape(
 
 
 def test_reset_group(tmp_path: Path):
-    path = tmp_path / "test.zarr"  # diskfmt is either h5ad or zarr
+    path = tmp_path / "test.zarr"
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":

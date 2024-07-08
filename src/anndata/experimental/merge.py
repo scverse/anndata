@@ -540,8 +540,6 @@ def concat_on_disk(
     # Argument normalization
     if pairwise:
         raise NotImplementedError("pairwise concatenation not yet implemented")
-    if join != "inner":
-        raise NotImplementedError("only inner join is currently supported")
 
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
