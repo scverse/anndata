@@ -4,13 +4,7 @@ import re
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Literal,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
 import h5py
@@ -21,7 +15,7 @@ from scipy import sparse
 from anndata._warnings import OldFormatWarning
 
 from .._core.anndata import AnnData
-from .._core.file_backing import AnnDataFileManager, filename
+from .._core.file_backing import filename
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..compat import (
     _clean_uns,
@@ -40,7 +34,10 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
+    from typing import Any, Literal
+
+    from .._core.file_backing import AnnDataFileManager
 
 T = TypeVar("T")
 

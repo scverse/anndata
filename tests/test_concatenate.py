@@ -7,7 +7,7 @@ from copy import deepcopy
 from functools import partial, singledispatch
 from itertools import chain, permutations, product
 from operator import attrgetter
-from typing import Any, Callable, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -20,12 +20,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import (
-    AwkArray,
-    CupySparseMatrix,
-    DaskArray,
-    SpArray,
-)
+from anndata.compat import AwkArray, CupySparseMatrix, DaskArray, SpArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -38,6 +33,10 @@ from anndata.tests.helpers import (
     gen_vstr_recarray,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any, Literal
 
 mark_legacy_concatenate = pytest.mark.filterwarnings(
     r"ignore:.*AnnData\.concatenate is deprecated:FutureWarning"

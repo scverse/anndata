@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from functools import singledispatch
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -17,6 +17,7 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from typing import Any, Literal
 
 
 @overload

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
+    from typing import Any
 
     from anndata._io.specs import IOSpec
     from anndata._types import GroupStorageType, StorageType

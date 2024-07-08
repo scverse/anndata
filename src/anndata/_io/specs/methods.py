@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import h5py
@@ -37,6 +37,7 @@ from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
     from os import PathLike
+    from typing import Literal
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group

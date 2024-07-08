@@ -2,16 +2,9 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from collections import abc as cabc
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, MutableMapping, Sequence
 from copy import copy
-from typing import (
-    TYPE_CHECKING,
-    ClassVar,
-    Literal,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -26,6 +19,9 @@ from .storage import coerce_array
 from .views import as_view, view_update
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator, Mapping
+    from typing import ClassVar, Literal
+
     from .anndata import AnnData
     from .raw import Raw
 
@@ -38,7 +34,7 @@ I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
 V = Union[pd.DataFrame, spmatrix, np.ndarray]
 
 
-class AlignedMapping(cabc.MutableMapping, ABC):
+class AlignedMapping(MutableMapping, ABC):
     """\
     An abstract base class for Mappings containing array-like values aligned
     to either one or both AnnData axes.
@@ -251,7 +247,7 @@ class AxisArraysBase(AlignedMapping):
     def _validate_value(self, val: V, key: str) -> V:
         if (
             hasattr(val, "index")
-            and isinstance(val.index, cabc.Collection)
+            and isinstance(val.index, Collection)
             and not val.index.equals(self.dim_names)
         ):
             # Could probably also re-order index if it’s contained

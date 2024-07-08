@@ -12,14 +12,14 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
-import collections.abc as cabc
 import warnings
 from abc import ABC
+from collections.abc import Iterable
 from functools import cached_property
 from itertools import accumulate, chain
 from math import floor
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import h5py
 import numpy as np
@@ -38,12 +38,14 @@ except ImportError:
     from scipy.sparse import spmatrix as _cs_matrix
 
 
-from .index import Index, _subset, unpack_index
+from .index import _subset, unpack_index
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
+    from typing import Literal
 
     from .._types import GroupStorageType
+    from .index import Index
 
 
 class BackedFormat(NamedTuple):
@@ -175,13 +177,13 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
         )
         if out_shape[0] == 1:
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
-        elif out_shape[1] == self.shape[1] and out_shape[0] < self.shape[0]:
-            if row.step == 1:
-                return ss.csr_matrix(
-                    self._get_contiguous_compressed_slice(row), shape=out_shape
-                )
+        if row.step != 1:
             return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
-        return super()._get_sliceXslice(row, col)
+        res = ss.csr_matrix(
+            self._get_contiguous_compressed_slice(row),
+            shape=(out_shape[0], self.shape[1]),
+        )
+        return res if out_shape[1] == self.shape[1] else res[:, col]
 
     def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
         idxs = np.asarray(row)
@@ -208,16 +210,15 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
             slice_len(row, self.shape[0]),
             slice_len(col, self.shape[1]),
         )
-
         if out_shape[1] == 1:
             return self._get_sliceXint(row, slice_as_int(col, self.shape[1]))
-        elif out_shape[0] == self.shape[0] and out_shape[1] < self.shape[1]:
-            if col.step == 1:
-                return ss.csc_matrix(
-                    self._get_contiguous_compressed_slice(col), shape=out_shape
-                )
+        if col.step != 1:
             return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
-        return super()._get_sliceXslice(row, col)
+        res = ss.csc_matrix(
+            self._get_contiguous_compressed_slice(col),
+            shape=(self.shape[0], out_shape[1]),
+        )
+        return res if out_shape[0] == self.shape[0] else res[row, :]
 
     def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
         idxs = np.asarray(col)
@@ -468,7 +469,7 @@ class BaseCompressedSparseDataset(ABC):
         if isinstance(index, tuple) and not len(index):
             index = slice(None)
         row, col = unpack_index(index)
-        if all(isinstance(x, cabc.Iterable) for x in (row, col)):
+        if all(isinstance(x, Iterable) for x in (row, col)):
             row, col = np.ix_(row, col)
         return row, col
 

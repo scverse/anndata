@@ -5,7 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
-from typing import Literal, TypeVar
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -25,12 +25,15 @@ from anndata._io.specs import (
     write_elem,
 )
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import H5Group, ZarrGroup, _read_attr
-from anndata.tests.helpers import (
-    as_cupy_type,
-    assert_equal,
-    gen_adata,
-)
+from anndata.compat import ZarrGroup, _read_attr
+from anndata.tests.helpers import as_cupy_type, assert_equal, gen_adata
+
+if TYPE_CHECKING:
+    from typing import Literal, TypeVar
+
+    from anndata.compat import H5Group
+
+    G = TypeVar("G", H5Group, ZarrGroup)
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
@@ -69,9 +72,6 @@ def create_dense_store(store, n_dims: int = 2):
 
     write_elem(store, "X", X)
     return store
-
-
-G = TypeVar("G", H5Group, ZarrGroup)
 
 
 def create_sparse_store(sparse_format: Literal["csc", "csr"], store: G) -> G:
