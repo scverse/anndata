@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import h5py
@@ -26,7 +26,6 @@ from anndata.compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
-    SpArray,
     ZarrArray,
     ZarrGroup,
     _decode_structured_array,
@@ -34,15 +33,19 @@ from anndata.compat import (
     _read_attr,
 )
 
-from .registry import _REGISTRY, IOSpec, Reader, Writer, read_elem, read_elem_partial
+from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
     from os import PathLike
+    from typing import Literal
 
     from numpy import typing as npt
 
     from anndata._core.storage import StorageType
     from anndata._types import GroupStorageType, InMemoryArrayOrScalarType
+    from anndata.compat import SpArray
+
+    from .registry import Reader, Writer
 
 H5Array = h5py.Dataset
 H5Group = h5py.Group

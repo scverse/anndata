@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union
+from typing import TYPE_CHECKING, Protocol, TypeVar, Union
 
 import pandas as pd
 
@@ -15,6 +15,7 @@ from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
+    from typing import Any
 
     from anndata._core.storage import StorageType
     from anndata._types import GroupStorageType
