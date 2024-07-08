@@ -267,7 +267,19 @@ class read_callback(Protocol):
         iospec: IOSpec,
     ) -> InMemoryType: ...
 
-    """Callback used in {func}`anndata.experimental.read_dispatched` to customize reading an element from a store.
+    """
+    Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
+
+    Params
+    ------
+    read_func
+        :func:`anndata.experimental.read_elem` function to call to read the current element given the :param:`iospec`.
+    elem_name
+        The key to read in from the group.
+    elem
+        The element to read from.
+    iospec
+       Internal AnnData encoding specification for the element.
 
     Returns
     -------
@@ -316,7 +328,24 @@ class write_callback(Protocol):
         dataset_kwargs: MappingProxyType,
     ) -> None: ...
 
-    """Callback used in {func}`anndata.experimental.write_dispatched` to customize writing an element to a store."""
+    """
+    Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.
+
+    Params
+    ------
+    write_func
+        :func:`anndata.experimental.write_elem` function to call to read the current element given the :param:`iospec`.
+    store
+        The store to which `elem` should be written.
+    elem_name
+        The key to read in from the group.
+    elem
+        The element to write out.
+    iospec
+       Internal AnnData encoding specification for the element.
+    dataset_kwargs
+       Keyword arguments to be passed to a library-level io function, like `chunks` for :mod:`zarr`.
+    """
 
 
 class Writer:
