@@ -67,7 +67,7 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
         f = zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
-    def callback(func, elem_name: str, elem, iospec):
+    def callback(func, elem_name: str, elem, dataset_kwargs, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             return AnnData(
                 **{

@@ -49,6 +49,7 @@ Index1D = Union[slice, int, str, np.int64, np.ndarray]
 Index = Union[Index1D, tuple[Index1D, Index1D], scipy.sparse.spmatrix, SpArray]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
+H5File = h5py.File
 
 
 #############################

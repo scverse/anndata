@@ -1,19 +1,41 @@
 from __future__ import annotations
 
+import inspect
+import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
+import pandas as pd
+
+from anndata._core.anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._types import InMemoryArrayOrScalarType
 from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any
+    from typing import Any, TypeAlias
 
-    from anndata._types import GroupStorageType, StorageType
+    from anndata._core.storage import StorageType
+    from anndata._types import (
+        DaskArray,
+        GroupStorageType,
+        Read,
+        ReadCallback,
+        Write,
+        WriteCallback,
+    )
+
+InMemoryReadElem: TypeAlias = Union[
+    dict[str, InMemoryArrayOrScalarType],
+    InMemoryArrayOrScalarType,
+    AnnData,
+    pd.Categorical,
+    pd.api.extensions.ExtensionArray,
+]
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -67,10 +89,10 @@ def write_spec(spec: IOSpec):
 
 class IORegistry:
     def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], Read] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
-            tuple[type, type | tuple[type, str], frozenset[str]], Callable
+            tuple[type, type | tuple[type, str], frozenset[str]], Write
         ] = {}
         self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
 
@@ -146,9 +168,7 @@ class IORegistry:
         if (src_type, spec, modifiers) in self.read:
             return self.read[(src_type, spec, modifiers)]
         else:
-            raise IORegistryError._from_read_parts(
-                "read", _REGISTRY.read, src_type, spec
-            )
+            raise IORegistryError._from_read_parts("read", self.read, src_type, spec)
 
     def has_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
@@ -177,7 +197,7 @@ class IORegistry:
             return self.read_partial[(src_type, spec, modifiers)]
         else:
             raise IORegistryError._from_read_parts(
-                "read_partial", _REGISTRY.read_partial, src_type, spec
+                "read_partial", self.read_partial, src_type, spec
             )
 
     def get_spec(self, elem: Any) -> IOSpec:
@@ -189,6 +209,7 @@ class IORegistry:
 
 
 _REGISTRY = IORegistry()
+_LAZY_REGISTRY = IORegistry()
 
 
 @singledispatch
@@ -234,7 +255,9 @@ def _iter_patterns(
 
 
 class Reader:
-    def __init__(self, registry: IORegistry, callback: Callable | None = None) -> None:
+    def __init__(
+        self, registry: IORegistry, callback: ReadCallback | None = None
+    ) -> None:
         self.registry = registry
         self.callback = callback
 
@@ -243,7 +266,8 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-    ) -> Any:
+        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    ) -> InMemoryReadElem:
         """Read an element from a store. See exported function for more details."""
         from functools import partial
 
@@ -253,12 +277,20 @@ class Reader:
             _reader=self,
         )
         if self.callback is None:
-            return read_func(elem)
-        return self.callback(read_func, elem.name, elem, iospec=iospec)
+            return read_func(elem, dataset_kwargs=dataset_kwargs)
+        if "dataset_kwargs" not in inspect.getfullargspec(self.callback)[0]:
+            warnings.warn(
+                "Callback does not accept dataset_kwargs. Ignoring dataset_kwargs.",
+                stacklevel=2,
+            )
+            return self.callback(read_func, elem.name, elem, iospec=iospec)
+        return self.callback(
+            read_func, elem.name, elem, dataset_kwargs=dataset_kwargs, iospec=iospec
+        )
 
 
 class Writer:
-    def __init__(self, registry: IORegistry, callback: Callable | None = None):
+    def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
         self.registry = registry
         self.callback = callback
 
@@ -331,6 +363,31 @@ def read_elem(elem: StorageType) -> Any:
         The stored element.
     """
     return Reader(_REGISTRY).read_elem(elem)
+
+
+def read_elem_as_dask(
+    elem: StorageType, chunks: tuple[int, ...] | None = None
+) -> DaskArray:
+    """
+    Read an element from a store lazily.
+
+    Assumes that the element is encoded using the anndata encoding. This function will
+    determine the encoded type using the encoding metadata stored in elem's attributes.
+
+
+    Parameters
+    ----------
+    elem
+        The stored element.
+    chunks, optional
+       length `n`, the same `n` as the size of the underlying array.
+       Note that the minor axis dimension must match the shape for sparse.
+
+    Returns
+    -------
+        DaskArray
+    """
+    return Reader(_LAZY_REGISTRY).read_elem(elem, dataset_kwargs={"chunks": chunks})
 
 
 def write_elem(
