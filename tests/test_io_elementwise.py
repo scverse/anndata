@@ -59,7 +59,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
 
 
 sparse_formats = ["csr", "csc"]
-SIZE = 1000
+SIZE = 2500
 
 
 @pytest.fixture(params=sparse_formats)
@@ -235,7 +235,15 @@ def test_read_lazy_2d_dask(sparse_format, store):
 
 @pytest.mark.parametrize(
     ("n_dims", "chunks"),
-    [(1, (100,)), (1, (400,)), (2, (100, 100)), (2, (400, 400)), (2, (200, 400))],
+    [
+        (1, (100,)),
+        (1, (400,)),
+        (2, (100, 100)),
+        (2, (400, 400)),
+        (2, (200, 400)),
+        (1, None),
+        (2, None),
+    ],
 )
 def test_read_lazy_nd_dask(store, n_dims, chunks):
     arr_store = create_dense_store(store, n_dims)
@@ -269,7 +277,13 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
 
 @pytest.mark.parametrize(
     ("arr_type", "chunks"),
-    [("dense", (100, 100)), ("csc", (SIZE, 10)), ("csr", (10, SIZE))],
+    [
+        ("dense", (100, 100)),
+        ("csc", (SIZE, 10)),
+        ("csr", (10, SIZE)),
+        ("csc", None),
+        ("csr", None),
+    ],
 )
 def test_read_lazy_h5_chunk_kwargs(arr_type, chunks, tmp_path):
     import dask.distributed as dd
@@ -282,7 +296,11 @@ def test_read_lazy_h5_chunk_kwargs(arr_type, chunks, tmp_path):
     else:
         arr_store = create_sparse_store(arr_type, store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
-    assert X_dask_from_disk.chunksize == chunks
+    if chunks is not None:
+        assert X_dask_from_disk.chunksize == chunks
+    else:
+        # assert that sparse chunks are set correctly by default
+        assert X_dask_from_disk.chunksize[bool(arr_type == "csr")] == SIZE
     X_from_disk = read_elem(arr_store["X"])
     file.close()
     with (
