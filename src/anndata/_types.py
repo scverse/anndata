@@ -150,7 +150,7 @@ class ReadCallback(Protocol[InvariantInMemoryType]):
         iospec
             Internal AnnData encoding specification for the element.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask.from_zarr`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
 
         Returns
         -------
