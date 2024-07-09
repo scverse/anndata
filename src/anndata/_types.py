@@ -11,8 +11,8 @@ import pandas as pd
 from numpy.typing import NDArray
 from scipy import sparse
 
-from anndata._core.sparse_dataset import BaseCompressedSparseDataset
-from anndata.compat import (
+from ._core.sparse_dataset import BaseCompressedSparseDataset
+from .compat import (
     AwkArray,
     CupyArray,
     CupySparseMatrix,
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from types import MappingProxyType
     from typing import TypeAlias
 
-    from anndata._io.specs.registry import IOSpec, Reader, Writer
+    from ._io.specs.registry import IOSpec, Reader, Writer
 
 __all__ = [
     "ArrayStorageType",
@@ -91,8 +91,7 @@ class Read(Protocol[CovariantInMemoryType]):
         -------
             The element read from the store.
         """
-
-    ...
+        ...
 
 
 class Write(Protocol[ContravariantInMemoryType]):
@@ -119,8 +118,7 @@ class Write(Protocol[ContravariantInMemoryType]):
         dataset_kwargs
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
         """
-
-    ...
+        ...
 
 
 class ReadCallback(Protocol[InvariantInMemoryType]):

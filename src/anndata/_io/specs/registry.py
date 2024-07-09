@@ -278,15 +278,6 @@ class Reader:
         return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
-InMemoryReadElem: TypeAlias = Union[
-    dict[str, InMemoryArrayOrScalarType],
-    InMemoryArrayOrScalarType,
-    AnnData,
-    pd.Categorical,
-    pd.api.extensions.ExtensionArray,
-]
-
-
 class Writer:
     def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
         self.registry = registry
