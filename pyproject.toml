@@ -68,7 +68,7 @@ dev = [
 doc = [
     "sphinx>=4.4",
     "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=1.11.0",
+    "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",
     "sphinx-copybutton",
     "sphinx-toolbox",

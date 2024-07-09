@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol, TypeVar, Union
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar, Union
 
 import pandas as pd
 
@@ -15,12 +15,12 @@ from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any
+    from typing import Any, TypeAlias
 
     from anndata._core.storage import StorageType
     from anndata._types import GroupStorageType
 
-InMemoryReadElem = Union[
+InMemoryReadElem: TypeAlias = Union[
     dict[str, InMemoryArrayOrScalarType],
     InMemoryArrayOrScalarType,
     AnnData,
@@ -257,26 +257,7 @@ def _iter_patterns(
 InMemoryType = TypeVar("InMemoryType", bound=InMemoryReadElem)
 
 
-class read_callback(Protocol):
-    """
-    Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
-
-    Params
-    ------
-    read_func
-        :func:`anndata.experimental.read_elem` function to call to read the current element given the ``iospec``.
-    elem_name
-        The key to read in from the group.
-    elem
-        The element to read from.
-    iospec
-       Internal AnnData encoding specification for the element.
-
-    Returns
-    -------
-        The element read from the store.
-    """
-
+class read_callback(Protocol, Generic[InMemoryType]):
     def __call__(
         self,
         /,
@@ -284,7 +265,26 @@ class read_callback(Protocol):
         elem_name: str,
         elem: StorageType,
         iospec: IOSpec,
-    ) -> InMemoryType: ...
+    ) -> InMemoryType:
+        """
+        Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
+
+        Params
+        ------
+        read_func
+            :func:`anndata.experimental.read_elem` function to call to read the current element given the ``iospec``.
+        elem_name
+            The key to read in from the group.
+        elem
+            The element to read from.
+        iospec
+            Internal AnnData encoding specification for the element.
+
+        Returns
+        -------
+            The element read from the store.
+        """
+        ...
 
 
 class Reader:
@@ -314,25 +314,6 @@ class Reader:
 
 
 class write_callback(Protocol):
-    """
-    Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.
-
-    Params
-    ------
-    write_func
-        :func:`anndata.experimental.write_elem` function to call to read the current element given the ``iospec``.
-    store
-        The store to which `elem` should be written.
-    elem_name
-        The key to read in from the group.
-    elem
-        The element to write out.
-    iospec
-       Internal AnnData encoding specification for the element.
-    dataset_kwargs
-       Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
-    """
-
     def __call__(
         self,
         /,
@@ -345,7 +326,26 @@ class write_callback(Protocol):
         *,
         iospec: IOSpec,
         dataset_kwargs: MappingProxyType,
-    ) -> None: ...
+    ) -> None:
+        """
+        Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.
+
+        Params
+        ------
+        write_func
+            :func:`anndata.experimental.write_elem` function to call to read the current element given the ``iospec``.
+        store
+            The store to which `elem` should be written.
+        elem_name
+            The key to read in from the group.
+        elem
+            The element to write out.
+        iospec
+            Internal AnnData encoding specification for the element.
+            dataset_kwargs
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+        """
+        ...
 
 
 class Writer:

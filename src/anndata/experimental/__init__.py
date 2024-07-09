@@ -4,7 +4,14 @@ from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._io.specs import IOSpec, read_elem, write_elem
 
 from .._core.storage import StorageType
-from .._io.specs.registry import read_callback, write_callback
+from .._io.specs.registry import (
+    InMemoryArrayOrScalarType,
+    InMemoryReadElem,
+    Reader,
+    Writer,
+    read_callback,
+    write_callback,
+)
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
@@ -22,6 +29,10 @@ __all__ = [
     "sparse_dataset",
     "CSRDataset",
     "CSCDataset",
+    "InMemoryReadElem",
+    "InMemoryArrayOrScalarType",
+    "Reader",
+    "Writer",
     "read_callback",
     "write_callback",
     "StorageType",

@@ -131,6 +131,10 @@ Utilities for customizing the IO process:
    experimental.read_dispatched
    experimental.write_dispatched
    experimental.IOSpec
+   experimental.InMemoryReadElem
+   experimental.InMemoryArrayOrScalarType
+   experimental.Reader
+   experimental.Writer
    experimental.read_callback
    experimental.write_callback
    experimental.StorageType

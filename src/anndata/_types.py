@@ -4,10 +4,11 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import pandas as pd
+from numpy.typing import NDArray
 from scipy import sparse
 
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
@@ -24,14 +25,17 @@ from anndata.compat import (
     ZarrGroup,
 )
 
+if TYPE_CHECKING:
+    from typing import TypeAlias
+
 __all__ = [
     "ArrayStorageType",
     "GroupStorageType",
     "StorageType",
 ]
 
-InMemoryArrayOrScalarType = Union[
-    np.typing.NDArray,
+InMemoryArrayOrScalarType: TypeAlias = Union[
+    NDArray,
     np.ma.MaskedArray,
     sparse.spmatrix,
     SpArray,
