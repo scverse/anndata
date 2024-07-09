@@ -89,7 +89,7 @@ class Read(Protocol[CovariantInMemoryType]):
         _reader
             The :class:`anndata.experimental.Reader` instance.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask.from_zarr`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
 
         Returns
         -------
@@ -120,7 +120,7 @@ class Write(Protocol[ContravariantInMemoryType]):
         _writer
             The :class:`anndata.experimental.Writer` instance.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
         """
         ...
 
