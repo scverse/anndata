@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, Literal
 
+    from .registry import Reader
+
 
 @overload
 def make_block_indexer(
@@ -96,7 +98,7 @@ def _(x):
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_as_dask(
     elem: H5Group | ZarrGroup,
-    _reader,
+    _reader: Reader,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     import dask.array as da
@@ -145,9 +147,8 @@ def read_sparse_as_dask(
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
-    elem,
-    _reader,
-    chunks: tuple[int] | None = None,
+    elem: H5Array,
+    _reader: Reader,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     import dask.array as da
