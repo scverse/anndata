@@ -77,6 +77,8 @@ class Read(Protocol[CovariantInMemoryType]):
         self,
         elem: StorageType,
         _reader: Reader,
+        *,
+        dataset_kwargs: MappingProxyType,
     ) -> CovariantInMemoryType:
         """Low-level reading function for an element.
 
@@ -86,6 +88,8 @@ class Read(Protocol[CovariantInMemoryType]):
             The element to read from.
         _reader
             The :class:`anndata.experimental.Reader` instance.
+        dataset_kwargs
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask.from_zarr`.
 
         Returns
         -------
@@ -129,6 +133,8 @@ class ReadCallback(Protocol[InvariantInMemoryType]):
         elem_name: str,
         elem: StorageType,
         iospec: IOSpec,
+        *,
+        dataset_kwargs: MappingProxyType,
     ) -> InvariantInMemoryType:
         """
         Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
@@ -143,6 +149,8 @@ class ReadCallback(Protocol[InvariantInMemoryType]):
             The element to read from.
         iospec
             Internal AnnData encoding specification for the element.
+        dataset_kwargs
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask.from_zarr`.
 
         Returns
         -------
