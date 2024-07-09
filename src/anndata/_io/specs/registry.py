@@ -258,22 +258,13 @@ InMemoryType = TypeVar("InMemoryType", bound=InMemoryReadElem)
 
 
 class read_callback(Protocol):
-    def __call__(
-        self,
-        /,
-        read_func: Callable[[StorageType, Reader], InMemoryType],
-        elem_name: str,
-        elem: StorageType,
-        iospec: IOSpec,
-    ) -> InMemoryType: ...
-
     """
     Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
 
     Params
     ------
     read_func
-        :func:`anndata.experimental.read_elem` function to call to read the current element given the :param:`iospec`.
+        :func:`anndata.experimental.read_elem` function to call to read the current element given the ``iospec``.
     elem_name
         The key to read in from the group.
     elem
@@ -285,6 +276,15 @@ class read_callback(Protocol):
     -------
         The element read from the store.
     """
+
+    def __call__(
+        self,
+        /,
+        read_func: Callable[[StorageType, Reader], InMemoryType],
+        elem_name: str,
+        elem: StorageType,
+        iospec: IOSpec,
+    ) -> InMemoryType: ...
 
 
 class Reader:
@@ -314,6 +314,25 @@ class Reader:
 
 
 class write_callback(Protocol):
+    """
+    Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.
+
+    Params
+    ------
+    write_func
+        :func:`anndata.experimental.write_elem` function to call to read the current element given the ``iospec``.
+    store
+        The store to which `elem` should be written.
+    elem_name
+        The key to read in from the group.
+    elem
+        The element to write out.
+    iospec
+       Internal AnnData encoding specification for the element.
+    dataset_kwargs
+       Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+    """
+
     def __call__(
         self,
         /,
@@ -327,25 +346,6 @@ class write_callback(Protocol):
         iospec: IOSpec,
         dataset_kwargs: MappingProxyType,
     ) -> None: ...
-
-    """
-    Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.
-
-    Params
-    ------
-    write_func
-        :func:`anndata.experimental.write_elem` function to call to read the current element given the :param:`iospec`.
-    store
-        The store to which `elem` should be written.
-    elem_name
-        The key to read in from the group.
-    elem
-        The element to write out.
-    iospec
-       Internal AnnData encoding specification for the element.
-    dataset_kwargs
-       Keyword arguments to be passed to a library-level io function, like `chunks` for :mod:`zarr`.
-    """
 
 
 class Writer:
