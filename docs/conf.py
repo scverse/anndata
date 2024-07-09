@@ -70,11 +70,6 @@ myst_heading_anchors = 3
 # Generate the API documentation when building
 autosummary_generate = True
 autodoc_member_order = "bysource"
-autodoc_type_aliases = dict(
-    InMemoryReadElem="anndata.experimental.InMemoryReadElem",
-    InMemoryType="anndata.experimental.InMemoryArrayOrScalarType",
-    InMemoryArrayOrScalarType="anndata.experimental.InMemoryArrayOrScalarType",
-)
 issues_github_path = "scverse/anndata"
 # autodoc_default_flags = ['members']
 napoleon_google_docstring = False
@@ -108,6 +103,7 @@ nitpick_ignore = [
     ("py:class", "anndata.compat.CupySparseMatrix"),
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
+    ("py:obj", "numpy._typing._array_like._ScalarType_co"),
 ]
 suppress_warnings = [
     "ref.citation",
@@ -140,6 +136,12 @@ qualname_overrides = {
     "anndata._io.specs.registry.read_callback": "anndata.experimental.read_callback",
     "anndata._io.specs.registry.write_callback": "anndata.experimental.write_callback",
 }
+autodoc_type_aliases = dict(
+    NDArray=":data:`~numpy.typing.NDArray`",
+    InMemoryReadElem=":data:`~anndata.experimental.InMemoryReadElem`",
+    InMemoryType=":data:`~anndata.experimental.InMemoryArrayOrScalarType`",
+    InMemoryArrayOrScalarType=":data:`~anndata.experimental.InMemoryArrayOrScalarType`",
+)
 
 # -- Social cards ---------------------------------------------------------
 
