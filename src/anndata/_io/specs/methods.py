@@ -26,6 +26,9 @@ from anndata.compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
+    H5Array,
+    H5File,
+    H5Group,
     ZarrArray,
     ZarrGroup,
     _decode_structured_array,
@@ -49,11 +52,6 @@ if TYPE_CHECKING:
     from anndata.compat import SpArray
 
     from .registry import Reader, Writer
-
-H5Array = h5py.Dataset
-H5Group = h5py.Group
-H5File = h5py.File
-
 
 ####################
 # Dask utils       #
