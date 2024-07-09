@@ -198,7 +198,6 @@ def read_h5_array(
     )
 
 
-@_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
     elem: ZarrArray,
