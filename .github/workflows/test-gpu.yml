@@ -71,3 +71,6 @@ jobs:
       - uses: codecov/codecov-action@v3
         with:
           flags: gpu-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true
