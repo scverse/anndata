@@ -78,7 +78,7 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-class reader(Protocol):
+class Read(Protocol):
     def __call__(
         self,
         elem: StorageType,
@@ -86,12 +86,23 @@ class reader(Protocol):
     ) -> InMemoryReadElem: ...
 
 
+class Write(Protocol):
+    def __call__(
+        self,
+        f: GroupStorageType,
+        k: str,
+        v: InMemoryReadElem,
+        _writer: Writer,
+        dataset_kwargs: MappingProxyType,
+    ) -> None: ...
+
+
 class IORegistry:
     def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], reader] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], Read] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
-            tuple[type, type | tuple[type, str], frozenset[str]], Callable
+            tuple[type, type | tuple[type, str], frozenset[str]], Write
         ] = {}
         self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
 
@@ -261,7 +272,7 @@ class ReadCallback(Protocol, Generic[InMemoryType]):
     def __call__(
         self,
         /,
-        read_func: Callable[[StorageType, Reader], InMemoryType],
+        read_func: Read,
         elem_name: str,
         elem: StorageType,
         iospec: IOSpec,
@@ -317,9 +328,7 @@ class WriteCallback(Protocol):
     def __call__(
         self,
         /,
-        write_func: Callable[
-            [GroupStorageType, str, InMemoryReadElem, Writer, MappingProxyType], None
-        ],
+        write_func: Write,
         store: GroupStorageType,
         elem_name: str,
         elem: InMemoryReadElem,

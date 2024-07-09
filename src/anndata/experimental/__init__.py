@@ -7,8 +7,10 @@ from .._core.storage import StorageType
 from .._io.specs.registry import (
     InMemoryArrayOrScalarType,
     InMemoryReadElem,
+    Read,
     ReadCallback,
     Reader,
+    Write,
     WriteCallback,
     Writer,
 )
@@ -32,7 +34,9 @@ __all__ = [
     "InMemoryReadElem",
     "InMemoryArrayOrScalarType",
     "Reader",
+    "Read",
     "Writer",
+    "Write",
     "ReadCallback",
     "WriteCallback",
     "StorageType",

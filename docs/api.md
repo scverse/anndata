@@ -134,9 +134,11 @@ Utilities for customizing the IO process:
    experimental.InMemoryReadElem
    experimental.InMemoryArrayOrScalarType
    experimental.Reader
+   experimental.Read
    experimental.Writer
-   experimental.read_callback
-   experimental.write_callback
+   experimental.Write
+   experimental.ReadCallback
+   experimental.WriteCallback
    experimental.StorageType
 ```
 
