@@ -78,7 +78,10 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-class Read(Protocol):
+InMemoryType = TypeVar("InMemoryType", bound=InMemoryReadElem, covariant=True)
+
+
+class Read(Protocol, Generic[InMemoryType]):
     def __call__(
         self,
         elem: StorageType,
@@ -265,14 +268,11 @@ def _iter_patterns(
     yield t
 
 
-InMemoryType = TypeVar("InMemoryType", bound=InMemoryReadElem)
-
-
 class ReadCallback(Protocol, Generic[InMemoryType]):
     def __call__(
         self,
         /,
-        read_func: Read,
+        read_func: Read[InMemoryType],
         elem_name: str,
         elem: StorageType,
         iospec: IOSpec,
