@@ -282,6 +282,7 @@ def test_read_lazy_h5_chunk_kwargs(arr_type, chunks, tmp_path):
     else:
         arr_store = create_sparse_store(arr_type, store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
+    assert X_dask_from_disk.chunksize == chunks
     X_from_disk = read_elem(arr_store["X"])
     file.close()
     with (
