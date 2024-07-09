@@ -146,6 +146,21 @@ def read_sparse_as_dask(
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
+def read_h5_string_array(
+    elem: H5Array,
+    _reader: Reader,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    import dask.array as da
+
+    from anndata._io.h5ad import read_dataset
+
+    return da.from_array(
+        read_dataset(elem),
+        chunks=dataset_kwargs.get("chunks", (_DEFAULT_STRIDE,) * len(elem.shape)),
+    )
+
+
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
     elem: H5Array,
