@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
     from ._io.specs.registry import IOSpec, Reader, Writer
+    from .compat import (
+        H5File,
+    )
 
 __all__ = [
     "ArrayStorageType",
@@ -75,7 +78,7 @@ InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryReadElem
 class Read(Protocol[CovariantInMemoryType]):
     def __call__(
         self,
-        elem: StorageType,
+        elem: StorageType | H5File,
         _reader: Reader,
         *,
         dataset_kwargs: MappingProxyType,
@@ -101,7 +104,7 @@ class Read(Protocol[CovariantInMemoryType]):
 class Write(Protocol[ContravariantInMemoryType]):
     def __call__(
         self,
-        f: GroupStorageType,
+        f: StorageType,
         k: str,
         v: ContravariantInMemoryType,
         _writer: Writer,
@@ -164,7 +167,7 @@ class WriteCallback(Protocol[InvariantInMemoryType]):
         self,
         /,
         write_func: Write[InvariantInMemoryType],
-        store: GroupStorageType,
+        store: StorageType,
         elem_name: str,
         elem: InvariantInMemoryType,
         *,

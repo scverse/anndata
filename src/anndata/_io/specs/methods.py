@@ -26,6 +26,9 @@ from anndata.compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
+    H5Array,
+    H5File,
+    H5Group,
     ZarrArray,
     ZarrGroup,
     _decode_structured_array,
@@ -41,16 +44,14 @@ if TYPE_CHECKING:
 
     from numpy import typing as npt
 
-    from anndata._core.storage import StorageType
-    from anndata._types import GroupStorageType, InMemoryArrayOrScalarType
+    from anndata._types import (
+        ArrayStorageType,
+        GroupStorageType,
+        InMemoryArrayOrScalarType,
+    )
     from anndata.compat import SpArray
 
     from .registry import Reader, Writer
-
-H5Array = h5py.Dataset
-H5Group = h5py.Group
-H5File = h5py.File
-
 
 ####################
 # Dask utils       #
@@ -119,7 +120,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Group, IOSpec("", ""))
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
-    elem: StorageType,
+    elem: H5File | H5Group | H5Array,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
@@ -143,7 +144,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("", ""))
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
-    elem: StorageType,
+    elem: ZarrGroup | ZarrArray,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
@@ -289,7 +290,7 @@ def write_anndata(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("raw", "0.1.0"))
 def read_anndata(
-    elem: StorageType,
+    elem: GroupStorageType | H5File,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> AnnData:
@@ -334,7 +335,7 @@ def write_raw(
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
 def read_mapping(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> dict[str, InMemoryArrayOrScalarType]:
@@ -442,7 +443,7 @@ def write_basic_dask_h5(
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array(
-    elem: StorageType,
+    elem: ArrayStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> npt.NDArray:
@@ -463,7 +464,9 @@ def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
 # arrays of strings
 @_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_string_array(
-    d, _reader, dataset_kwargs: MappingProxyType = MappingProxyType({})
+    d: H5Array,
+    _reader: Reader,
+    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ):
     return read_array(d.asstr(), _reader=_reader)
 
@@ -544,7 +547,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
 def read_recarray(
-    d: StorageType,
+    d: ArrayStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> np.recarray | npt.NDArray:
@@ -732,7 +735,7 @@ def write_dask_sparse(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> sparse.spmatrix | SpArray:
@@ -780,7 +783,7 @@ def write_awkward(
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
 def read_awkward(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> AwkArray:
@@ -852,7 +855,7 @@ def write_dataframe(
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
 def read_dataframe(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.DataFrame:
@@ -897,7 +900,7 @@ def read_dataframe_partial(
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.1.0"))
 def read_dataframe_0_1_0(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.DataFrame:
@@ -971,7 +974,7 @@ def write_categorical(
 @_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
 def read_categorical(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.Categorical:
@@ -1025,7 +1028,7 @@ def write_nullable_integer(
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
 def read_nullable_integer(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.api.extensions.ExtensionArray:
@@ -1040,7 +1043,7 @@ def read_nullable_integer(
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))
 def read_nullable_boolean(
-    elem: StorageType,
+    elem: GroupStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.api.extensions.ExtensionArray:
@@ -1060,7 +1063,7 @@ def read_nullable_boolean(
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
 def read_scalar(
-    elem: StorageType,
+    elem: ArrayStorageType,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> np.number:
@@ -1109,7 +1112,7 @@ _REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_sc
 
 @_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))
 def read_hdf5_string(
-    elem: StorageType,
+    elem: H5Array,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> str:
@@ -1118,7 +1121,7 @@ def read_hdf5_string(
 
 @_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
 def read_zarr_string(
-    elem: StorageType,
+    elem: ZarrArray,
     _reader: Reader,
     dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> str:
@@ -1132,7 +1135,7 @@ _REGISTRY.register_read(ZarrArray, IOSpec("bytes", "0.2.0"))(read_scalar)
 @_REGISTRY.register_write(H5Group, np.str_, IOSpec("string", "0.2.0"))
 @_REGISTRY.register_write(H5Group, str, IOSpec("string", "0.2.0"))
 def write_string(
-    f: GroupStorageType,
+    f: H5Group,
     k: str,
     v: np.str_ | str,
     _writer: Writer,
