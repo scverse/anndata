@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Generic, Protocol, TypeVar, Union
+from typing import TYPE_CHECKING, Union
 
 import pandas as pd
 
@@ -18,7 +18,13 @@ if TYPE_CHECKING:
     from typing import Any, TypeAlias
 
     from anndata._core.storage import StorageType
-    from anndata._types import GroupStorageType
+    from anndata._types import (
+        GroupStorageType,
+        Read,
+        ReadCallback,
+        Write,
+        WriteCallback,
+    )
 
 InMemoryReadElem: TypeAlias = Union[
     dict[str, InMemoryArrayOrScalarType],
@@ -76,28 +82,6 @@ def write_spec(spec: IOSpec):
         return wrapper
 
     return decorator
-
-
-InMemoryType = TypeVar("InMemoryType", bound=InMemoryReadElem, covariant=True)
-
-
-class Read(Protocol, Generic[InMemoryType]):
-    def __call__(
-        self,
-        elem: StorageType,
-        _reader: Reader,
-    ) -> InMemoryReadElem: ...
-
-
-class Write(Protocol):
-    def __call__(
-        self,
-        f: GroupStorageType,
-        k: str,
-        v: InMemoryReadElem,
-        _writer: Writer,
-        dataset_kwargs: MappingProxyType,
-    ) -> None: ...
 
 
 class IORegistry:
@@ -268,36 +252,6 @@ def _iter_patterns(
     yield t
 
 
-class ReadCallback(Protocol, Generic[InMemoryType]):
-    def __call__(
-        self,
-        /,
-        read_func: Read[InMemoryType],
-        elem_name: str,
-        elem: StorageType,
-        iospec: IOSpec,
-    ) -> InMemoryType:
-        """
-        Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
-
-        Params
-        ------
-        read_func
-            :func:`anndata.experimental.read_elem` function to call to read the current element given the ``iospec``.
-        elem_name
-            The key to read in from the group.
-        elem
-            The element to read from.
-        iospec
-            Internal AnnData encoding specification for the element.
-
-        Returns
-        -------
-            The element read from the store.
-        """
-        ...
-
-
 class Reader:
     def __init__(
         self, registry: IORegistry, callback: ReadCallback | None = None
@@ -324,37 +278,13 @@ class Reader:
         return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
-class WriteCallback(Protocol):
-    def __call__(
-        self,
-        /,
-        write_func: Write,
-        store: GroupStorageType,
-        elem_name: str,
-        elem: InMemoryReadElem,
-        *,
-        iospec: IOSpec,
-        dataset_kwargs: MappingProxyType,
-    ) -> None:
-        """
-        Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.
-
-        Params
-        ------
-        write_func
-            :func:`anndata.experimental.write_elem` function to call to read the current element given the ``iospec``.
-        store
-            The store to which `elem` should be written.
-        elem_name
-            The key to read in from the group.
-        elem
-            The element to write out.
-        iospec
-            Internal AnnData encoding specification for the element.
-            dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
-        """
-        ...
+InMemoryReadElem: TypeAlias = Union[
+    dict[str, InMemoryArrayOrScalarType],
+    InMemoryArrayOrScalarType,
+    AnnData,
+    pd.Categorical,
+    pd.api.extensions.ExtensionArray,
+]
 
 
 class Writer:

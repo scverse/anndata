@@ -7,8 +7,12 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from anndata._io.specs.registry import ReadCallback, WriteCallback
-    from anndata._types import GroupStorageType, StorageType
+    from anndata._types import (
+        GroupStorageType,
+        ReadCallback,
+        StorageType,
+        WriteCallback,
+    )
 
 
 def read_dispatched(

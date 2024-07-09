@@ -7,12 +7,14 @@ from .._core.storage import StorageType
 from .._io.specs.registry import (
     InMemoryArrayOrScalarType,
     InMemoryReadElem,
+    Reader,
+    Writer,
+)
+from .._types import (
     Read,
     ReadCallback,
-    Reader,
     Write,
     WriteCallback,
-    Writer,
 )
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
