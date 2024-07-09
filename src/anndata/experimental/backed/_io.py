@@ -6,15 +6,15 @@ from typing import (
     TYPE_CHECKING,
 )
 
+from anndata._io.specs.registry import read_elem_as_dask
+
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-import dask.array as da
 import h5py
 import zarr
 
 from ..._core.anndata import AnnData
-from ..._core.sparse_dataset import sparse_dataset
 from ...compat import DaskArray
 from .. import read_dispatched
 from ._compat import xr
@@ -122,20 +122,13 @@ def read_backed(
                 mask=elem["mask"] if "mask" in elem else None,
                 dtype_str=iospec.encoding_type,
             )
-        elif iospec.encoding_type in {"array", "string-array"}:
-            if is_h5:
-                if iospec.encoding_type == "string-array":
-                    if (
-                        "read_dataset" not in dir()
-                    ):  # avoid circular dependency, not sure what caused this all of a sudden after merging https://github.com/scverse/anndata/pull/949/commits/dc9f12fcbca977841e967c8414b9f1032e069250
-                        from ..._io.h5ad import read_dataset
-                    elem = read_dataset(elem)
-                if not hasattr(elem, "chunks") or elem.chunks is None:
-                    return da.from_array(elem, chunks=(1000,) * len(elem.shape))
-                return da.from_array(elem)
-            return da.from_zarr(elem)
-        elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
-            return sparse_dataset(elem)
+        elif iospec.encoding_type in {
+            "csr_matrix",
+            "csc_matrix",
+            "array",
+            "string-array",
+        }:
+            return read_elem_as_dask(elem)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         return func(elem)
