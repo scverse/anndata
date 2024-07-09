@@ -6,18 +6,11 @@ from __future__ import annotations
 
 import typing
 from collections import OrderedDict
-from collections.abc import (
-    Callable,
-    Collection,
-    Iterable,
-    Mapping,
-    MutableSet,
-    Sequence,
-)
+from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Any, Literal, TypeVar
+from typing import Literal, TypeVar
 from warnings import warn
 
 import numpy as np
@@ -43,6 +36,9 @@ from .anndata import AnnData
 from .index import _subset, make_slice
 
 if typing.TYPE_CHECKING:
+    from collections.abc import Collection, Iterable, Sequence
+    from typing import Any
+
     from pandas.api.extensions import ExtensionDtype
 
 T = TypeVar("T")

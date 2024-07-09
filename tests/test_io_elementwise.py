@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -17,7 +18,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import H5Group, ZarrGroup, _read_attr
+from anndata.compat import ZarrGroup, _read_attr
 from anndata.tests.helpers import (
     as_cupy,
     as_dense_dask_array,
@@ -25,6 +26,9 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
 )
+
+if TYPE_CHECKING:
+    from anndata.compat import H5Group
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
