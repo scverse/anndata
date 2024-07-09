@@ -527,7 +527,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
-def read_recarray(d, _reader) -> np.recarray | npt.NDArray:
+def read_recarray(d: StorageType, _reader: Reader) -> np.recarray | npt.NDArray:
     value = d[()]
     dtype = value.dtype
     value = _from_fixed_length_strings(value)
