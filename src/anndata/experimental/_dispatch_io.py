@@ -21,13 +21,13 @@ def read_dispatched(
     Params
     ------
     elem
-        Storage container (e.g. `h5py.Group`, `zarr.Group`). This must have anndata
-        element specifications.
+        Storage container (e.g. `h5py.Group`, `zarr.Group`).
+        This must have anndata element specifications.
     callback
         Function to call at each anndata encoded element.
+
     See Also
     --------
-
     :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
     from anndata._io.specs import _REGISTRY, Reader
@@ -61,10 +61,8 @@ def write_dispatched(
     dataset_kwargs
         Keyword arguments to pass to the dataset creation function.
 
-
     See Also
     --------
-
     :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
     from anndata._io.specs import _REGISTRY, Writer
