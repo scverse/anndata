@@ -184,8 +184,11 @@ def read_h5_array(
 
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
-    elem, _reader, dataset_kwargs: Mapping[str, Any] = MappingProxyType({})
+    elem: ZarrArray,
+    _reader: Reader,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    chunks: tuple[int, ...] = dataset_kwargs.get("chunks", elem.chunks)
     import dask.array as da
 
-    return da.from_zarr(elem)
+    return da.from_zarr(elem, chunks=chunks)

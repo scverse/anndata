@@ -387,7 +387,9 @@ def read_elem_as_dask(
     -------
         DaskArray
     """
-    return Reader(_LAZY_REGISTRY).read_elem(elem, dataset_kwargs={"chunks": chunks})
+    return Reader(_LAZY_REGISTRY).read_elem(
+        elem, dataset_kwargs={"chunks": chunks} if chunks is not None else {}
+    )
 
 
 def write_elem(
