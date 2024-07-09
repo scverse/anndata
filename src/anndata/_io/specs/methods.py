@@ -41,7 +41,11 @@ if TYPE_CHECKING:
 
     from numpy import typing as npt
 
-    from anndata._types import GroupStorageType, InMemoryArrayOrScalarType
+    from anndata._types import (
+        ArrayStorageType,
+        GroupStorageType,
+        InMemoryArrayOrScalarType,
+    )
     from anndata.compat import SpArray
 
     from .registry import Reader, Writer
@@ -118,7 +122,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Group, IOSpec("", ""))
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
-    elem: GroupStorageType, _reader: Reader
+    elem: H5File | H5Group | H5Array, _reader: Reader
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import h5ad
 
@@ -140,7 +144,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("", ""))
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
-    elem: GroupStorageType, _reader: Reader
+    elem: ZarrGroup | ZarrArray, _reader: Reader
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import zarr
 
@@ -283,7 +287,7 @@ def write_anndata(
 @_REGISTRY.register_read(H5File, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("raw", "0.1.0"))
-def read_anndata(elem: GroupStorageType, _reader: Reader) -> AnnData:
+def read_anndata(elem: GroupStorageType | H5File, _reader: Reader) -> AnnData:
     d = {}
     for k in [
         "X",
@@ -430,7 +434,7 @@ def write_basic_dask_h5(
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
-def read_array(elem: GroupStorageType, _reader: Reader) -> npt.NDArray:
+def read_array(elem: ArrayStorageType, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
@@ -447,7 +451,7 @@ def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
 
 # arrays of strings
 @_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
-def read_string_array(d, _reader):
+def read_string_array(d: H5Array, _reader: Reader):
     return read_array(d.asstr(), _reader=_reader)
 
 
@@ -526,7 +530,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
-def read_recarray(d: GroupStorageType, _reader: Reader) -> np.recarray | npt.NDArray:
+def read_recarray(d: ArrayStorageType, _reader: Reader) -> np.recarray | npt.NDArray:
     value = d[()]
     dtype = value.dtype
     value = _from_fixed_length_strings(value)
@@ -1014,7 +1018,7 @@ def read_nullable_boolean(
 
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
-def read_scalar(elem: GroupStorageType, _reader: Reader) -> np.number:
+def read_scalar(elem: ArrayStorageType, _reader: Reader) -> np.number:
     return elem[()]
 
 
@@ -1059,12 +1063,12 @@ _REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_sc
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))
-def read_hdf5_string(elem: GroupStorageType, _reader: Reader) -> str:
+def read_hdf5_string(elem: H5Array, _reader: Reader) -> str:
     return elem.asstr()[()]
 
 
 @_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
-def read_zarr_string(elem: GroupStorageType, _reader: Reader) -> str:
+def read_zarr_string(elem: ZarrArray, _reader: Reader) -> str:
     return str(elem[()])
 
 
@@ -1075,7 +1079,7 @@ _REGISTRY.register_read(ZarrArray, IOSpec("bytes", "0.2.0"))(read_scalar)
 @_REGISTRY.register_write(H5Group, np.str_, IOSpec("string", "0.2.0"))
 @_REGISTRY.register_write(H5Group, str, IOSpec("string", "0.2.0"))
 def write_string(
-    f: GroupStorageType,
+    f: H5Group,
     k: str,
     v: np.str_ | str,
     _writer: Writer,
