@@ -257,7 +257,7 @@ def _iter_patterns(
 InMemoryType = TypeVar("InMemoryType", bound=InMemoryReadElem)
 
 
-class read_callback(Protocol, Generic[InMemoryType]):
+class ReadCallback(Protocol, Generic[InMemoryType]):
     def __call__(
         self,
         /,
@@ -289,7 +289,7 @@ class read_callback(Protocol, Generic[InMemoryType]):
 
 class Reader:
     def __init__(
-        self, registry: IORegistry, callback: read_callback | None = None
+        self, registry: IORegistry, callback: ReadCallback | None = None
     ) -> None:
         self.registry = registry
         self.callback = callback
@@ -313,7 +313,7 @@ class Reader:
         return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
-class write_callback(Protocol):
+class WriteCallback(Protocol):
     def __call__(
         self,
         /,
@@ -349,7 +349,7 @@ class write_callback(Protocol):
 
 
 class Writer:
-    def __init__(self, registry: IORegistry, callback: write_callback | None = None):
+    def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
         self.registry = registry
         self.callback = callback
 

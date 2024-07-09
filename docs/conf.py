@@ -133,8 +133,8 @@ qualname_overrides = {
     "h5py._hl.files.File": "h5py.File",
     "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
-    "anndata._io.specs.registry.read_callback": "anndata.experimental.read_callback",
-    "anndata._io.specs.registry.write_callback": "anndata.experimental.write_callback",
+    "anndata._io.specs.registry.ReadCallback": "anndata.experimental.ReadCallback",
+    "anndata._io.specs.registry.WriteCallback": "anndata.experimental.WriteCallback",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",

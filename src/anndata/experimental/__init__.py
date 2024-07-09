@@ -7,10 +7,10 @@ from .._core.storage import StorageType
 from .._io.specs.registry import (
     InMemoryArrayOrScalarType,
     InMemoryReadElem,
+    ReadCallback,
     Reader,
+    WriteCallback,
     Writer,
-    read_callback,
-    write_callback,
 )
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
@@ -33,7 +33,7 @@ __all__ = [
     "InMemoryArrayOrScalarType",
     "Reader",
     "Writer",
-    "read_callback",
-    "write_callback",
+    "ReadCallback",
+    "WriteCallback",
     "StorageType",
 ]

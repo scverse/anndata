@@ -7,13 +7,13 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from anndata._io.specs.registry import read_callback, write_callback
+    from anndata._io.specs.registry import ReadCallback, WriteCallback
     from anndata._types import GroupStorageType, StorageType
 
 
 def read_dispatched(
     elem: StorageType,
-    callback: read_callback,
+    callback: ReadCallback,
 ) -> Any:
     """
     Read elem, calling the callback at each sub-element.
@@ -24,19 +24,7 @@ def read_dispatched(
         Storage container (e.g. `h5py.Group`, `zarr.Group`). This must have anndata
         element specifications.
     callback
-        Function to call at each anndata encoded element. See details below for
-        signature.
-
-
-    The callback has the following signature:
-
-    * `read_func` (`Callable`): A callable which takes the encoded element and returns it's decoded value.
-      This is the default decoding function, and what to call if you don't want to modify the decoding.
-      It will call this callback again at the next element encoding it sees.
-    * `key` (`str`): They absolute key of the element in the store. This will be an absolute key.
-    * `elem` (`StorageType`): The encoded element.
-    * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
-
+        Function to call at each anndata encoded element.
     See Also
     --------
 
@@ -53,7 +41,7 @@ def write_dispatched(
     store: GroupStorageType,
     key: str,
     elem: Any,
-    callback: write_callback,
+    callback: WriteCallback,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
@@ -69,20 +57,9 @@ def write_dispatched(
     elem
         The element to write. Probably an AnnData.
     callback
-        Function called when writing each element. See below for signature.
+        Function called when writing each element.
     dataset_kwargs
         Keyword arguments to pass to the dataset creation function.
-
-
-    The callback has the following signature:
-
-    * `write_func` (`Callable`): A callable which takes the in memory element and writes it to the store.
-      This is the default encoding function, and what to call if you don't want to change behaviour at this level.
-    * `store` (`GroupStorageType`): The store to write to.
-    * `key` (`str`): The key to write elem into store at. This will be an absolute key.
-    * `elem` (`Any`): The element to write.
-    * `dataset_kwargs` (`dict`): Keyword arguments to pass to the dataset creation function. This is passed as a keyword argument.
-    * `iospec` (`IOSpec`): The specification of the element. This is passed as a keyword argument.
 
 
     See Also
