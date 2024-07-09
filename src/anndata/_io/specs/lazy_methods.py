@@ -145,7 +145,6 @@ def read_sparse_as_dask(
     return da_mtx
 
 
-@_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
     elem: H5Array,
@@ -183,7 +182,6 @@ def read_h5_array(
     )
 
 
-@_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
     elem: ZarrArray,
