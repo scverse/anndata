@@ -6,17 +6,36 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
+import pandas as pd
+
+from anndata._core.anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._types import InMemoryArrayOrScalarType
 from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any
+    from typing import Any, TypeAlias
 
-    from anndata._types import GroupStorageType, StorageType
-    from anndata.compat import DaskArray
+    from anndata._core.storage import StorageType
+    from anndata._types import (
+        DaskArray,
+        GroupStorageType,
+        Read,
+        ReadCallback,
+        Write,
+        WriteCallback,
+    )
+
+InMemoryReadElem: TypeAlias = Union[
+    dict[str, InMemoryArrayOrScalarType],
+    InMemoryArrayOrScalarType,
+    AnnData,
+    pd.Categorical,
+    pd.api.extensions.ExtensionArray,
+]
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -70,10 +89,10 @@ def write_spec(spec: IOSpec):
 
 class IORegistry:
     def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], Read] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
-            tuple[type, type | tuple[type, str], frozenset[str]], Callable
+            tuple[type, type | tuple[type, str], frozenset[str]], Write
         ] = {}
         self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
 
@@ -236,7 +255,9 @@ def _iter_patterns(
 
 
 class Reader:
-    def __init__(self, registry: IORegistry, callback: Callable | None = None) -> None:
+    def __init__(
+        self, registry: IORegistry, callback: ReadCallback | None = None
+    ) -> None:
         self.registry = registry
         self.callback = callback
 
@@ -246,7 +267,7 @@ class Reader:
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    ) -> Any:
+    ) -> InMemoryReadElem:
         """Read an element from a store. See exported function for more details."""
         from functools import partial
 
@@ -269,7 +290,7 @@ class Reader:
 
 
 class Writer:
-    def __init__(self, registry: IORegistry, callback: Callable | None = None):
+    def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
         self.registry = registry
         self.callback = callback
 
