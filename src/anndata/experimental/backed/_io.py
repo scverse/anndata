@@ -54,7 +54,7 @@ def read_backed(
     else:
         f = h5py.File(store, mode="r")
 
-    def callback(func, elem_name: str, elem, iospec):
+    def callback(func, elem_name: str, elem, iospec, dataset_kwargs):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             cols = [
                 "obs",
