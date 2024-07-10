@@ -86,11 +86,14 @@ def read_backed(
             d = {k: read_dispatched(v, callback) for k, v in iter_object}
             d_with_xr = {}
             index_label = f'{elem_name.replace("/", "")}_names'
+            index = d[
+                elem.attrs["_index"]
+            ]  # no sense in reading this in multiple times
             for k in d:
                 v = d[k]
                 if type(v) == DaskArray and k != elem.attrs["_index"]:
                     d_with_xr[k] = xr.DataArray(
-                        v, coords=[d[elem.attrs["_index"]]], dims=[index_label], name=k
+                        v, coords=[index], dims=[index_label], name=k
                     )
                 elif (
                     type(v) == CategoricalArray or type(v) == MaskedArray
@@ -100,7 +103,7 @@ def read_backed(
                     )
                     d_with_xr[k] = xr.DataArray(
                         variable,
-                        coords=[d[elem.attrs["_index"]]],
+                        coords=[index],
                         dims=[index_label],
                         name=k,
                     )
