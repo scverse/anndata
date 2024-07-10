@@ -8,8 +8,19 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import add_note
+from anndata.compat import (
+    CupyArray,
+    CupyCSRMatrix,
+    DaskArray,
+    add_note,
+)
 from anndata.tests.helpers import (
+    BASE_MATRIX_PARAMS,
+    CUPY_MATRIX_PARAMS,
+    DASK_MATRIX_PARAMS,
+    as_csr_cupy_dask_array,
+    as_dense_cupy_dask_array,
+    as_dense_dask_array,
     asarray,
     assert_equal,
     gen_adata,
@@ -276,3 +287,39 @@ def test_check_error_notes_failure(error, match):
     with pytest.raises(AssertionError):
         with pytest.raises(Exception, match=match):
             raise error
+
+
+@pytest.mark.parametrize(
+    "input_type", BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS
+)
+@pytest.mark.parametrize(
+    (
+        "as_dask_type",
+        "mem_type",
+    ),
+    [
+        pytest.param(
+            as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
+        ),
+        pytest.param(as_dense_dask_array, np.ndarray, id="numpy_dense"),
+        pytest.param(
+            as_csr_cupy_dask_array, CupyCSRMatrix, id="cupy_csr", marks=pytest.mark.gpu
+        ),
+    ],
+)
+def test_as_dask_functions(input_type, as_dask_type, mem_type):
+    SHAPE = (1000, 100)
+
+    rng = np.random.default_rng(42)
+    X_source = rng.poisson(size=SHAPE).astype(np.float32)
+    X_input = input_type(X_source)
+    X_output = as_dask_type(X_input)
+    X_computed = X_output.compute()
+
+    assert isinstance(X_output, DaskArray)
+    assert X_output.shape == SHAPE
+    assert X_output.dtype == X_input.dtype
+
+    assert isinstance(X_computed, mem_type)
+
+    assert_equal(asarray(X_computed), X_source)
