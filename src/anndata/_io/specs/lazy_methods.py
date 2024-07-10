@@ -45,7 +45,7 @@ def make_block_indexer(
 ) -> tuple[slice, slice] | tuple[slice]:
     index1d = slice(
         block_id[is_csc] * stride,
-        min((block_id[is_csc] * stride) + stride, shape[0]),
+        min((block_id[is_csc] * stride) + stride, shape[is_csc]),
     )
     if is_csc:
         return (slice(None), index1d)
@@ -105,7 +105,7 @@ def read_sparse_as_dask(
 
     path_or_group = Path(elem.file.filename) if isinstance(elem, H5Group) else elem
     elem_name = get_elem_name(elem)
-    shape: tuple[int, int] = elem.attrs["shape"]
+    shape: tuple[int, int] = tuple(elem.attrs["shape"])
     dtype = elem["data"].dtype
     is_csc: bool = elem.attrs["encoding-type"] == "csc_matrix"
 
@@ -171,7 +171,7 @@ def read_h5_array(
 
     path = Path(elem.file.filename)
     elem_name = elem.name
-    shape = elem.shape
+    shape = tuple(elem.shape)
     dtype = elem.dtype
     chunks: tuple[int, ...] = dataset_kwargs.get(
         "chunks", (_DEFAULT_STRIDE,) * len(shape)

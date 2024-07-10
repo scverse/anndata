@@ -245,7 +245,7 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (2, None),
     ],
 )
-def test_read_lazy_nd_dask(store, n_dims, chunks):
+def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
     arr_store = create_dense_store(store, n_dims)
     X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
     X_from_disk = read_elem(arr_store["X"])
@@ -285,11 +285,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         ("csr", None),
     ],
 )
-def test_read_lazy_h5_chunk_kwargs(arr_type, chunks, tmp_path):
-    import dask.distributed as dd
-
-    file = h5py.File(tmp_path / "test.h5", "w")
-    store = file["/"]
+def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks):
     if arr_type == "dense":
         arr_store = create_dense_store(store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
@@ -302,15 +298,10 @@ def test_read_lazy_h5_chunk_kwargs(arr_type, chunks, tmp_path):
         # assert that sparse chunks are set correctly by default
         assert X_dask_from_disk.chunksize[bool(arr_type == "csr")] == SIZE
     X_from_disk = read_elem(arr_store["X"])
-    file.close()
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
-        dd.Client(cluster) as _client,
-    ):
-        assert_equal(X_from_disk, X_dask_from_disk)
+    assert_equal(X_from_disk, X_dask_from_disk)
 
 
-def test_read_lazy_h5_bad_chunk_kwargs(tmp_path):
+def test_read_lazy_bad_chunk_kwargs(tmp_path):
     arr_type = "csr"
     file = h5py.File(tmp_path / "test.h5", "w")
     store = file["/"]
