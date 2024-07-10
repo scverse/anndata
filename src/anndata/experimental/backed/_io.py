@@ -8,7 +8,6 @@ from typing import (
 
 import h5py
 
-from anndata._io import zarr
 from anndata._io.specs.registry import read_elem_as_dask
 
 from ..._core.anndata import AnnData
@@ -21,19 +20,23 @@ from ._xarray import Dataset2D
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from ...compat import ZarrGroup
+
 
 def read_backed(
-    store: str | Path | MutableMapping | zarr.Group | h5py.Dataset,
+    store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
 ) -> AnnData:
     """Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
-    No array data should need to be read into memory, with exception of non-obs/var dataframes and Awkward Arrays.
+    No array data should need to be read into memory with the exceptio of Awkward Arrays and some older-encoding string arrays.
 
-    Args:
-        store (Union[str, Path, MutableMapping, zarr.Group, h5py.Dataset]): A store-like object to be read in.  If `zarr`, it is best
+    Params
+    ------
+        store: A store-like object to be read in.  If :doc:`zarr:index`, it is best
         for it to be consolidated.
 
-    Returns:
-        AnnData: A lazily read-in AnnData object.
+    Returns
+    -------
+        A lazily read-in AnnData object.
     """
     is_h5 = False
     if isinstance(store, Path) or isinstance(store, str):
@@ -43,6 +46,8 @@ def read_backed(
 
     has_keys = True  # true if consolidated or h5ad
     if not is_h5:
+        import zarr
+
         try:
             f = zarr.open_consolidated(store, mode="r")
         except KeyError:
