@@ -6,13 +6,10 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from anndata._io.specs.registry import read_elem_as_dask
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-
 import h5py
-import zarr
+
+from anndata._io import zarr
+from anndata._io.specs.registry import read_elem_as_dask
 
 from ..._core.anndata import AnnData
 from ...compat import DaskArray
@@ -20,6 +17,9 @@ from .. import read_dispatched
 from ._compat import xr
 from ._lazy_arrays import CategoricalArray, MaskedArray
 from ._xarray import Dataset2D
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 
 def read_backed(
