@@ -102,7 +102,7 @@ def _to_cpu_mem_wrapper(write_func):
         cupy_val: CupyArray | CupyCSCMatrix | CupyCSRMatrix,
         *,
         _writer: Writer,
-        dataset_kwargs=MappingProxyType,
+        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ):
         return write_func(
             f, k, cupy_val.get(), _writer=_writer, dataset_kwargs=dataset_kwargs
