@@ -4,7 +4,6 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
 from typing import TYPE_CHECKING, Protocol, TypeVar, Union
 
 import numpy as np
@@ -59,10 +58,9 @@ InMemoryArrayOrScalarType: TypeAlias = Union[
     np.number,
     str,
 ]
-RWAble: TypeAlias = Union[InMemoryArrayOrScalarType, "RWAbleDict", "RWAbleList"]  # noqa: TCH010
-# dict has a broken docstring: https://readthedocs.com/projects/icb-anndata/builds/2342910/
-RWAbleDict: TypeAlias = MutableMapping[str, RWAble]
-RWAbleList: TypeAlias = list[RWAble]
+RWAble: TypeAlias = Union[
+    InMemoryArrayOrScalarType, dict[str, "RWAble"], list["RWAble"]
+]  # noqa: TCH010
 InMemoryElem: TypeAlias = Union[
     RWAble,
     AnnData,
