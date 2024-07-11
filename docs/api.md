@@ -142,9 +142,7 @@ Types used by the former:
    experimental.IOSpec
    experimental.InMemoryReadElem
    experimental.InMemoryArrayOrScalarType
-   experimental.Reader
    experimental.Read
-   experimental.Writer
    experimental.Write
    experimental.ReadCallback
    experimental.WriteCallback

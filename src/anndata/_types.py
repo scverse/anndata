@@ -69,11 +69,19 @@ CovariantInMemoryType = TypeVar(
 InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryReadElem")
 
 
+class _ReadInternal(Protocol[CovariantInMemoryType]):
+    def __call__(
+        self,
+        elem: StorageType | H5File,
+        *,
+        _reader: Reader,
+    ) -> CovariantInMemoryType: ...
+
+
 class Read(Protocol[CovariantInMemoryType]):
     def __call__(
         self,
         elem: StorageType | H5File,
-        _reader: Reader,
     ) -> CovariantInMemoryType:
         """Low-level reading function for an element.
 
@@ -81,14 +89,24 @@ class Read(Protocol[CovariantInMemoryType]):
         ----------
         elem
             The element to read from.
-        _reader
-            The :class:`anndata.experimental.Reader` instance.
 
         Returns
         -------
             The element read from the store.
         """
         ...
+
+
+class _WriteInternal(Protocol[ContravariantInMemoryType]):
+    def __call__(
+        self,
+        f: StorageType,
+        k: str,
+        v: ContravariantInMemoryType,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any],
+    ) -> None: ...
 
 
 class Write(Protocol[ContravariantInMemoryType]):
@@ -98,7 +116,6 @@ class Write(Protocol[ContravariantInMemoryType]):
         k: str,
         v: ContravariantInMemoryType,
         *,
-        _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
     ) -> None:
         """Low-level writing function for an element.
@@ -111,8 +128,6 @@ class Write(Protocol[ContravariantInMemoryType]):
             The key to read in from the group.
         v
             The element to write out.
-        _writer
-            The :class:`anndata.experimental.Writer` instance.
         dataset_kwargs
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
         """
