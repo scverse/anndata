@@ -26,8 +26,8 @@ from .compat import (
 )
 
 if TYPE_CHECKING:
-    from types import MappingProxyType
-    from typing import TypeAlias
+    from collections.abc import Mapping
+    from typing import Any, TypeAlias
 
     from ._io.specs.registry import IOSpec, Reader, Writer
     from .compat import H5File
@@ -97,8 +97,9 @@ class Write(Protocol[ContravariantInMemoryType]):
         f: StorageType,
         k: str,
         v: ContravariantInMemoryType,
+        *,
         _writer: Writer,
-        dataset_kwargs: MappingProxyType,
+        dataset_kwargs: Mapping[str, Any],
     ) -> None:
         """Low-level writing function for an element.
 
@@ -158,7 +159,7 @@ class WriteCallback(Protocol[InvariantInMemoryType]):
         elem: InvariantInMemoryType,
         *,
         iospec: IOSpec,
-        dataset_kwargs: MappingProxyType,
+        dataset_kwargs: Mapping[str, Any],
     ) -> None:
         """
         Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.
