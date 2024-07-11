@@ -16,13 +16,13 @@ from .pytorch import AnnLoader
 
 # Sphinx can’t find data docstrings when objects are re-exported
 InMemoryElem = _InMemoryElem
-"""An in-memory element that can be read and written."""
+"""An in-memory element that can be read and written, including an :class:`anndata.AnnData` objects."""
 RWAble = _RWAble
-"""A serializable object."""
+"""A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 RWAbleDict = _RWAbleDict
-"""A dict containing serializable objects."""
+"""A dict containing serializable objects, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 RWAbleList = _RWAbleList
-"""A list containing serializable objects."""
+"""A list containing serializable objects, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns`."""
 
 __all__ = [
     "AnnCollection",
