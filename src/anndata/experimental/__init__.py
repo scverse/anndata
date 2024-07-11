@@ -33,8 +33,6 @@ __all__ = [
     "CSCDataset",
     "InMemoryElem",
     "Read",
-    "RWAbleDict",
-    "RWAbleList",
     "RWAble",
     "Write",
     "ReadCallback",
