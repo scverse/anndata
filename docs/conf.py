@@ -60,6 +60,7 @@ extensions = [
     "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
+    "sphinx_toolbox.more_autodoc.autoprotocol",
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
@@ -94,6 +95,17 @@ nitpick_ignore = [
     # TODO: sphinx’ builtin autodoc.typehints extension isn’t handled by `qualname_overrides` yet
     # https://github.com/theislab/scanpydoc/issues/140
     ("py:class", "h5py._hl.group.Group"),
+    ("py:class", "h5py._hl.dataset.Dataset"),
+    # for experimental callback exports
+    ("py:class", "anndata.compat.ZappyArray"),
+    ("py:class", "anndata.compat.DaskArray"),
+    ("py:class", "anndata.compat.CupyArray"),
+    ("py:class", "anndata.compat.CupySparseMatrix"),
+    ("py:class", "numpy.ma.core.MaskedArray"),
+    ("py:class", "dask.array.core.Array"),
+    ("py:class", "awkward.highlevel.Array"),
+    ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
+    ("py:obj", "numpy._typing._array_like._ScalarType_co"),
 ]
 suppress_warnings = [
     "ref.citation",
@@ -123,7 +135,20 @@ qualname_overrides = {
     "h5py._hl.files.File": "h5py.File",
     "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
+    "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",
+    "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
+    "anndata._types.Read": "anndata.experimental.Read",
+    "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.RWAble": "anndata.experimental.RWAble",
 }
+autodoc_type_aliases = dict(
+    NDArray=":data:`~numpy.typing.NDArray`",
+    RWAble=":data:`~anndata.experimental.RWAble`",
+    **{
+        f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryElem`"
+        for v in ["In", "Co", "Contra"]
+    },
+)
 
 # -- Social cards ---------------------------------------------------------
 
