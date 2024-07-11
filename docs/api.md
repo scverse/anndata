@@ -141,8 +141,6 @@ Types used by the former:
 
    experimental.IOSpec
    experimental.InMemoryElem
-   experimental.RWAbleDict
-   experimental.RWAbleList
    experimental.RWAble
    experimental.Read
    experimental.Write
