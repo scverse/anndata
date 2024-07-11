@@ -74,7 +74,7 @@ doc = [
     "sphinx-toolbox",
     "sphinxext.opengraph",
     "nbsphinx",
-    "scanpydoc[theme,typehints] >=0.13.5",
+    "scanpydoc[theme,typehints] >=0.13.6",
     "zarr",
     "awkward>=2.0.7",
     "IPython",                          # For syntax highlighting in notebooks

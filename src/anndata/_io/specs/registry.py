@@ -4,38 +4,32 @@ import inspect
 import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
-from functools import singledispatch, wraps
+from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
-import pandas as pd
-
-from anndata._core.anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata._types import InMemoryArrayOrScalarType
 from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any, TypeAlias
+    from typing import Any, TypeVar
 
     from anndata._core.storage import StorageType
     from anndata._types import (
         DaskArray,
         GroupStorageType,
+        InMemoryElem,
         Read,
         ReadCallback,
         Write,
         WriteCallback,
+        _ReadInternal,
+        _WriteInternal,
     )
 
-InMemoryReadElem: TypeAlias = Union[
-    dict[str, InMemoryArrayOrScalarType],
-    InMemoryArrayOrScalarType,
-    AnnData,
-    pd.Categorical,
-    pd.api.extensions.ExtensionArray,
-]
+    T = TypeVar("T")
+    W = TypeVar("W", bound=_WriteInternal)
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -50,7 +44,7 @@ class IOSpec:
 class IORegistryError(Exception):
     @classmethod
     def _from_write_parts(
-        cls, dest_type: type, typ: type, modifiers: frozenset[str]
+        cls, dest_type: type, typ: type | tuple[type, str], modifiers: frozenset[str]
     ) -> IORegistryError:
         msg = f"No method registered for writing {typ} into {dest_type}"
         if modifiers:
@@ -74,7 +68,7 @@ class IORegistryError(Exception):
 
 
 def write_spec(spec: IOSpec):
-    def decorator(func: Callable):
+    def decorator(func: W) -> W:
         @wraps(func)
         def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
             result = func(g, k, *args, **kwargs)
@@ -89,10 +83,10 @@ def write_spec(spec: IOSpec):
 
 class IORegistry:
     def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], Read] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], _ReadInternal] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
-            tuple[type, type | tuple[type, str], frozenset[str]], Write
+            tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
         ] = {}
         self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
 
@@ -102,7 +96,7 @@ class IORegistry:
         src_type: type | tuple[type, str],
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ):
+    ) -> Callable[[_WriteInternal[T]], _WriteInternal[T]]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -123,28 +117,30 @@ class IORegistry:
 
         return _register
 
-    def get_writer(
+    def get_write(
         self,
         dest_type: type,
         src_type: type | tuple[type, str],
         modifiers: frozenset[str] = frozenset(),
-    ):
+        *,
+        writer: Writer,
+    ) -> Write:
         import h5py
 
         if dest_type is h5py.File:
             dest_type = h5py.Group
 
-        if (dest_type, src_type, modifiers) in self.write:
-            return self.write[(dest_type, src_type, modifiers)]
-        else:
+        if (dest_type, src_type, modifiers) not in self.write:
             raise IORegistryError._from_write_parts(dest_type, src_type, modifiers)
+        internal = self.write[(dest_type, src_type, modifiers)]
+        return partial(internal, _writer=writer)
 
-    def has_writer(
+    def has_write(
         self,
         dest_type: type,
         src_type: type | tuple[type, str],
         modifiers: frozenset[str],
-    ):
+    ) -> bool:
         return (dest_type, src_type, modifiers) in self.write
 
     def register_read(
@@ -152,7 +148,7 @@ class IORegistry:
         src_type: type,
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ):
+    ) -> Callable[[_ReadInternal[T]], _ReadInternal[T]]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -162,17 +158,22 @@ class IORegistry:
 
         return _register
 
-    def get_reader(
-        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ):
-        if (src_type, spec, modifiers) in self.read:
-            return self.read[(src_type, spec, modifiers)]
-        else:
+    def get_read(
+        self,
+        src_type: type,
+        spec: IOSpec,
+        modifiers: frozenset[str] = frozenset(),
+        *,
+        reader: Reader,
+    ) -> Read:
+        if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)
+        internal = self.read[(src_type, spec, modifiers)]
+        return partial(internal, _reader=reader)
 
-    def has_reader(
+    def has_read(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ):
+    ) -> bool:
         return (src_type, spec, modifiers) in self.read
 
     def register_read_partial(
@@ -190,7 +191,7 @@ class IORegistry:
 
         return _register
 
-    def get_partial_reader(
+    def get_partial_read(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
         if (src_type, spec, modifiers) in self.read_partial:
@@ -267,15 +268,11 @@ class Reader:
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    ) -> InMemoryReadElem:
+    ) -> InMemoryElem:
         """Read an element from a store. See exported function for more details."""
-        from functools import partial
 
         iospec = get_spec(elem)
-        read_func = partial(
-            self.registry.get_reader(type(elem), iospec, modifiers),
-            _reader=self,
-        )
+        read_func = self.registry.get_read(type(elem), iospec, modifiers, reader=self)
         if self.callback is None:
             return read_func(elem, dataset_kwargs=dataset_kwargs)
         if "dataset_kwargs" not in inspect.getfullargspec(self.callback)[0]:
@@ -294,24 +291,27 @@ class Writer:
         self.registry = registry
         self.callback = callback
 
-    def find_writer(self, dest_type: type, elem, modifiers: frozenset[str]):
+    def find_write_func(
+        self, dest_type: type, elem: Any, modifiers: frozenset[str]
+    ) -> Write:
         for pattern in _iter_patterns(elem):
-            if self.registry.has_writer(dest_type, pattern, modifiers):
-                return self.registry.get_writer(dest_type, pattern, modifiers)
+            if self.registry.has_write(dest_type, pattern, modifiers):
+                return self.registry.get_write(
+                    dest_type, pattern, modifiers, writer=self
+                )
         # Raises IORegistryError
-        return self.registry.get_writer(dest_type, type(elem), modifiers)
+        return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
 
     @report_write_key_on_error
     def write_elem(
         self,
         store: GroupStorageType,
         k: str,
-        elem: Any,
+        elem: InMemoryElem,
         *,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
         modifiers: frozenset[str] = frozenset(),
     ):
-        from functools import partial
         from pathlib import PurePosixPath
 
         import h5py
@@ -333,10 +333,7 @@ class Writer:
         elif k in store:
             del store[k]
 
-        write_func = partial(
-            self.find_writer(dest_type, elem, modifiers),
-            _writer=self,
-        )
+        write_func = self.find_write_func(dest_type, elem, modifiers)
 
         if self.callback is None:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
@@ -350,7 +347,7 @@ class Writer:
         )
 
 
-def read_elem(elem: StorageType) -> Any:
+def read_elem(elem: StorageType) -> InMemoryElem:
     """
     Read an element from a store.
 
@@ -395,7 +392,7 @@ def read_elem_as_dask(
 def write_elem(
     store: GroupStorageType,
     k: str,
-    elem: Any,
+    elem: InMemoryElem,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
@@ -428,9 +425,10 @@ def read_elem_partial(
     modifiers: frozenset[str] = frozenset(),
 ):
     """Read part of an element from an on disk store."""
-    return _REGISTRY.get_partial_reader(
+    read_partial = _REGISTRY.get_partial_read(
         type(elem), get_spec(elem), frozenset(modifiers)
-    )(elem, items=items, indices=indices)
+    )
+    return read_partial(elem, items=items, indices=indices)
 
 
 @singledispatch

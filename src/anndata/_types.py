@@ -4,12 +4,15 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
+from collections.abc import MutableMapping
 from typing import TYPE_CHECKING, Protocol, TypeVar, Union
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 from scipy import sparse
+
+from anndata._core.anndata import AnnData
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import (
@@ -26,13 +29,12 @@ from .compat import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from types import MappingProxyType
-    from typing import TypeAlias
+    from typing import Any, TypeAlias
 
     from ._io.specs.registry import IOSpec, Reader, Writer
-    from .compat import (
-        H5File,
-    )
+    from .compat import H5File
 
 __all__ = [
     "ArrayStorageType",
@@ -57,29 +59,44 @@ InMemoryArrayOrScalarType: TypeAlias = Union[
     np.number,
     str,
 ]
+RWAble: TypeAlias = Union[InMemoryArrayOrScalarType, "RWAbleDict", "RWAbleList"]  # noqa: TCH010
+# dict has a broken docstring: https://readthedocs.com/projects/icb-anndata/builds/2342910/
+RWAbleDict: TypeAlias = MutableMapping[str, RWAble]
+RWAbleList: TypeAlias = list[RWAble]
+InMemoryElem: TypeAlias = Union[
+    RWAble,
+    AnnData,
+    pd.Categorical,
+    pd.api.extensions.ExtensionArray,
+]
 
-ArrayStorageType = Union[ZarrArray, H5Array]
-GroupStorageType = Union[ZarrGroup, H5Group]
-StorageType = Union[ArrayStorageType, GroupStorageType]
+ArrayStorageType: TypeAlias = Union[ZarrArray, H5Array]
+GroupStorageType: TypeAlias = Union[ZarrGroup, H5Group]
+StorageType: TypeAlias = Union[ArrayStorageType, GroupStorageType]
 
+# NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
 ContravariantInMemoryType = TypeVar(
-    "ContravariantInMemoryType",
-    bound="InMemoryReadElem",  # noqa: F821
-    contravariant=True,
+    "ContravariantInMemoryType", bound="InMemoryElem", contravariant=True
 )
 CovariantInMemoryType = TypeVar(
-    "CovariantInMemoryType",
-    bound="InMemoryReadElem",  # noqa: F821
-    covariant=True,
+    "CovariantInMemoryType", bound="InMemoryElem", covariant=True
 )
-InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryReadElem")  # noqa: F821
+InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryElem")
+
+
+class _ReadInternal(Protocol[CovariantInMemoryType]):
+    def __call__(
+        self,
+        elem: StorageType | H5File,
+        *,
+        _reader: Reader,
+    ) -> CovariantInMemoryType: ...
 
 
 class Read(Protocol[CovariantInMemoryType]):
     def __call__(
         self,
         elem: StorageType | H5File,
-        _reader: Reader,
         *,
         dataset_kwargs: MappingProxyType,
     ) -> CovariantInMemoryType:
@@ -89,8 +106,6 @@ class Read(Protocol[CovariantInMemoryType]):
         ----------
         elem
             The element to read from.
-        _reader
-            The :class:`anndata.experimental.Reader` instance.
         dataset_kwargs
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
 
@@ -101,14 +116,26 @@ class Read(Protocol[CovariantInMemoryType]):
         ...
 
 
+class _WriteInternal(Protocol[ContravariantInMemoryType]):
+    def __call__(
+        self,
+        f: StorageType,
+        k: str,
+        v: ContravariantInMemoryType,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any],
+    ) -> None: ...
+
+
 class Write(Protocol[ContravariantInMemoryType]):
     def __call__(
         self,
         f: StorageType,
         k: str,
         v: ContravariantInMemoryType,
-        _writer: Writer,
-        dataset_kwargs: MappingProxyType,
+        *,
+        dataset_kwargs: Mapping[str, Any],
     ) -> None:
         """Low-level writing function for an element.
 
@@ -120,8 +147,6 @@ class Write(Protocol[ContravariantInMemoryType]):
             The key to read in from the group.
         v
             The element to write out.
-        _writer
-            The :class:`anndata.experimental.Writer` instance.
         dataset_kwargs
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
         """
@@ -135,8 +160,8 @@ class ReadCallback(Protocol[InvariantInMemoryType]):
         read_func: Read[InvariantInMemoryType],
         elem_name: str,
         elem: StorageType,
-        iospec: IOSpec,
         *,
+        iospec: IOSpec,
         dataset_kwargs: MappingProxyType,
     ) -> InvariantInMemoryType:
         """
@@ -172,7 +197,7 @@ class WriteCallback(Protocol[InvariantInMemoryType]):
         elem: InvariantInMemoryType,
         *,
         iospec: IOSpec,
-        dataset_kwargs: MappingProxyType,
+        dataset_kwargs: Mapping[str, Any],
     ) -> None:
         """
         Callback used in :func:`anndata.experimental.write_dispatched` to customize writing an element to a store.

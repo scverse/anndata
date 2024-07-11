@@ -140,11 +140,11 @@ Types used by the former:
    :toctree: generated/
 
    experimental.IOSpec
-   experimental.InMemoryReadElem
-   experimental.InMemoryArrayOrScalarType
-   experimental.Reader
+   experimental.InMemoryElem
+   experimental.RWAbleDict
+   experimental.RWAbleList
+   experimental.RWAble
    experimental.Read
-   experimental.Writer
    experimental.Write
    experimental.ReadCallback
    experimental.WriteCallback
