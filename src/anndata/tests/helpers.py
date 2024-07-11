@@ -763,7 +763,6 @@ def _(a):
         a,
         chunks=_half_chunk_size(a.shape),
         meta=cp.array((1.0), dtype=a.dtype),
-        dtype=a.dtype,
     )
 
 
