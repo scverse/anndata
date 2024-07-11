@@ -141,6 +141,7 @@ class ReadCallback(Protocol[InvariantInMemoryType]):
         read_func: Read[InvariantInMemoryType],
         elem_name: str,
         elem: StorageType,
+        *,
         iospec: IOSpec,
     ) -> InvariantInMemoryType:
         """
