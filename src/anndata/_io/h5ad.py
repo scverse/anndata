@@ -47,7 +47,7 @@ def write_h5ad(
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
-    dataset_kwargs: Mapping = MappingProxyType({}),
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs,
 ) -> None:
     if isinstance(as_dense, str):
