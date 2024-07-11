@@ -140,9 +140,12 @@ qualname_overrides = {
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
-    InMemoryReadElem=":data:`~anndata.experimental.InMemoryReadElem`",
-    InMemoryType=":data:`~anndata.experimental.InMemoryArrayOrScalarType`",
     InMemoryArrayOrScalarType=":data:`~anndata.experimental.InMemoryArrayOrScalarType`",
+    InMemoryReadElem=":data:`~anndata.experimental.InMemoryReadElem`",
+    **{
+        f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryReadElem`"
+        for v in ["In", "Co", "Contra"]
+    },
 )
 
 # -- Social cards ---------------------------------------------------------

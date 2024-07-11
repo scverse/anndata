@@ -60,6 +60,7 @@ ArrayStorageType = Union[ZarrArray, H5Array]
 GroupStorageType = Union[ZarrGroup, H5Group]
 StorageType = Union[ArrayStorageType, GroupStorageType]
 
+# NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
 ContravariantInMemoryType = TypeVar(
     "ContravariantInMemoryType", bound="InMemoryReadElem", contravariant=True
 )
