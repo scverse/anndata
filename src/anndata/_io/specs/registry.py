@@ -15,7 +15,7 @@ from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any, TypeAlias
+    from typing import Any, TypeAlias, TypeVar
 
     from anndata._core.storage import StorageType
     from anndata._types import (
@@ -25,6 +25,9 @@ if TYPE_CHECKING:
         Write,
         WriteCallback,
     )
+
+    T = TypeVar("T")
+    W = TypeVar("W", bound=Write)
 
 InMemoryReadElem: TypeAlias = Union[
     dict[str, InMemoryArrayOrScalarType],
@@ -47,7 +50,7 @@ class IOSpec:
 class IORegistryError(Exception):
     @classmethod
     def _from_write_parts(
-        cls, dest_type: type, typ: type, modifiers: frozenset[str]
+        cls, dest_type: type | tuple[type, str], typ: type, modifiers: frozenset[str]
     ) -> IORegistryError:
         msg = f"No method registered for writing {typ} into {dest_type}"
         if modifiers:
@@ -71,7 +74,7 @@ class IORegistryError(Exception):
 
 
 def write_spec(spec: IOSpec):
-    def decorator(func: Callable):
+    def decorator(func: W) -> W:
         @wraps(func)
         def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
             result = func(g, k, *args, **kwargs)
@@ -99,7 +102,7 @@ class IORegistry:
         src_type: type | tuple[type, str],
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ):
+    ) -> Callable[[Write[T]], Write[T]]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -125,7 +128,7 @@ class IORegistry:
         dest_type: type,
         src_type: type | tuple[type, str],
         modifiers: frozenset[str] = frozenset(),
-    ):
+    ) -> Write:
         import h5py
 
         if dest_type is h5py.File:
@@ -141,7 +144,7 @@ class IORegistry:
         dest_type: type,
         src_type: type | tuple[type, str],
         modifiers: frozenset[str],
-    ):
+    ) -> bool:
         return (dest_type, src_type, modifiers) in self.write
 
     def register_read(
@@ -149,7 +152,7 @@ class IORegistry:
         src_type: type,
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ):
+    ) -> Callable[[Read[T]], Read[T]]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -161,7 +164,7 @@ class IORegistry:
 
     def get_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ):
+    ) -> Read:
         if (src_type, spec, modifiers) in self.read:
             return self.read[(src_type, spec, modifiers)]
         else:
@@ -171,7 +174,7 @@ class IORegistry:
 
     def has_reader(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ):
+    ) -> bool:
         return (src_type, spec, modifiers) in self.read
 
     def register_read_partial(
