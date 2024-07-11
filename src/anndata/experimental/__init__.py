@@ -4,10 +4,13 @@ from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._io.specs import IOSpec, read_elem, write_elem
 
 from .._core.storage import StorageType
-from .._io.specs.registry import InMemoryArrayOrScalarType, InMemoryReadElem
 from .._types import (
+    InMemoryElem,
     Read,
     ReadCallback,
+    RWAble,
+    RWAbleDict,
+    RWAbleList,
     Write,
     WriteCallback,
 )
@@ -28,9 +31,11 @@ __all__ = [
     "sparse_dataset",
     "CSRDataset",
     "CSCDataset",
-    "InMemoryReadElem",
-    "InMemoryArrayOrScalarType",
+    "InMemoryElem",
     "Read",
+    "RWAbleDict",
+    "RWAbleList",
+    "RWAble",
     "Write",
     "ReadCallback",
     "WriteCallback",

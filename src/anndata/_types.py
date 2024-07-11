@@ -11,6 +11,8 @@ import pandas as pd
 from numpy.typing import NDArray
 from scipy import sparse
 
+from anndata._core.anndata import AnnData
+
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import (
     AwkArray,
@@ -55,19 +57,28 @@ InMemoryArrayOrScalarType: TypeAlias = Union[
     np.number,
     str,
 ]
+RWAble: TypeAlias = InMemoryArrayOrScalarType | "RWAbleDict" | "RWAbleList"  # noqa: TCH010
+RWAbleDict: TypeAlias = dict[str, RWAble]
+RWAbleList: TypeAlias = list[RWAble]
+InMemoryElem: TypeAlias = Union[
+    RWAble,
+    AnnData,
+    pd.Categorical,
+    pd.api.extensions.ExtensionArray,
+]
 
-ArrayStorageType = Union[ZarrArray, H5Array]
-GroupStorageType = Union[ZarrGroup, H5Group]
-StorageType = Union[ArrayStorageType, GroupStorageType]
+ArrayStorageType: TypeAlias = Union[ZarrArray, H5Array]
+GroupStorageType: TypeAlias = Union[ZarrGroup, H5Group]
+StorageType: TypeAlias = Union[ArrayStorageType, GroupStorageType]
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
 ContravariantInMemoryType = TypeVar(
-    "ContravariantInMemoryType", bound="InMemoryReadElem", contravariant=True
+    "ContravariantInMemoryType", bound="InMemoryElem", contravariant=True
 )
 CovariantInMemoryType = TypeVar(
-    "CovariantInMemoryType", bound="InMemoryReadElem", covariant=True
+    "CovariantInMemoryType", bound="InMemoryElem", covariant=True
 )
-InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryReadElem")
+InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryElem")
 
 
 class _ReadInternal(Protocol[CovariantInMemoryType]):
@@ -197,8 +208,3 @@ class WriteCallback(Protocol[InvariantInMemoryType]):
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
         """
         ...
-
-
-if TYPE_CHECKING:
-    # Needs to be at the end because Sphinx’s type import suffers from circular imports
-    from ._io.specs.registry import InMemoryReadElem

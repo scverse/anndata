@@ -4,22 +4,19 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
-import pandas as pd
-
-from anndata._core.anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata._types import InMemoryArrayOrScalarType
 from anndata.compat import _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any, TypeAlias, TypeVar
+    from typing import Any, TypeVar
 
     from anndata._core.storage import StorageType
     from anndata._types import (
         GroupStorageType,
+        InMemoryElem,
         Read,
         ReadCallback,
         Write,
@@ -30,14 +27,6 @@ if TYPE_CHECKING:
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
-
-InMemoryReadElem: TypeAlias = Union[
-    dict[str, InMemoryArrayOrScalarType],
-    InMemoryArrayOrScalarType,
-    AnnData,
-    pd.Categorical,
-    pd.api.extensions.ExtensionArray,
-]
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -276,7 +265,7 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-    ) -> InMemoryReadElem:
+    ) -> InMemoryElem:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
@@ -307,7 +296,7 @@ class Writer:
         self,
         store: GroupStorageType,
         k: str,
-        elem: Any,
+        elem: InMemoryElem,
         *,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
         modifiers: frozenset[str] = frozenset(),
@@ -347,7 +336,7 @@ class Writer:
         )
 
 
-def read_elem(elem: StorageType) -> Any:
+def read_elem(elem: StorageType) -> InMemoryElem:
     """
     Read an element from a store.
 
@@ -365,7 +354,7 @@ def read_elem(elem: StorageType) -> Any:
 def write_elem(
     store: GroupStorageType,
     k: str,
-    elem: Any,
+    elem: InMemoryElem,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
