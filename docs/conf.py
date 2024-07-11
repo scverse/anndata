@@ -101,9 +101,14 @@ nitpick_ignore = [
     ("py:class", "anndata.compat.DaskArray"),
     ("py:class", "anndata.compat.CupyArray"),
     ("py:class", "anndata.compat.CupySparseMatrix"),
+    ("py:class", "numpy.ma.core.MaskedArray"),
+    ("py:class", "dask.array.core.Array"),
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
+    # Something is picking these up as classes despite being aliases so this just suppresses the warning, but doesn't affect the build
+    ("py:class", "RWAbleDict"),
+    ("py:class", "RWAbleList"),
 ]
 suppress_warnings = [
     "ref.citation",
@@ -138,12 +143,19 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.RWAble": "anndata.experimental.RWAble",
+    "anndata._types.RWAbleDict": "anndata.experimental.RWAbleDict",
+    "anndata._types.RWAbleList": "anndata.experimental.RWAbleList",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
-    InMemoryReadElem=":data:`~anndata.experimental.InMemoryReadElem`",
-    InMemoryType=":data:`~anndata.experimental.InMemoryArrayOrScalarType`",
-    InMemoryArrayOrScalarType=":data:`~anndata.experimental.InMemoryArrayOrScalarType`",
+    RWAble=":data:`~anndata.experimental.RWAble`",
+    RWAbleDict=":data:`~anndata.experimental.RWAbleDict`",
+    RWAbleList=":data:`~anndata.experimental.RWAbleList`",
+    **{
+        f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryElem`"
+        for v in ["In", "Co", "Contra"]
+    },
 )
 
 # -- Social cards ---------------------------------------------------------
