@@ -48,8 +48,7 @@ if TYPE_CHECKING:
         ArrayStorageType,
         GroupStorageType,
         InMemoryArrayOrScalarType,
-        RWAbleDict,
-        RWAbleList,
+        RWAble,
     )
     from anndata.compat import SpArray
 
@@ -332,7 +331,7 @@ def write_raw(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
-def read_mapping(elem: GroupStorageType, *, _reader: Reader) -> RWAbleDict:
+def read_mapping(elem: GroupStorageType, *, _reader: Reader) -> dict[str, RWAble]:
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
 
@@ -341,7 +340,7 @@ def read_mapping(elem: GroupStorageType, *, _reader: Reader) -> RWAbleDict:
 def write_mapping(
     f: GroupStorageType,
     k: str,
-    v: RWAbleDict,
+    v: dict[str, RWAble],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -361,7 +360,7 @@ def write_mapping(
 def write_list(
     f: GroupStorageType,
     k: str,
-    elem: RWAbleList,
+    elem: list[RWAble],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
