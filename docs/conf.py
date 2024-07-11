@@ -106,6 +106,9 @@ nitpick_ignore = [
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
+    # Something is picking these up as classes despite being aliases so this just suppresses the warning, but doesn't affect the build
+    ("py:class", "RWAbleDict"),
+    ("py:class", "RWAbleList"),
 ]
 suppress_warnings = [
     "ref.citation",
