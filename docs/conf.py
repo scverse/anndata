@@ -101,6 +101,8 @@ nitpick_ignore = [
     ("py:class", "anndata.compat.DaskArray"),
     ("py:class", "anndata.compat.CupyArray"),
     ("py:class", "anndata.compat.CupySparseMatrix"),
+    ("py:class", "numpy.ma.core.MaskedArray"),
+    ("py:class", "dask.array.core.Array"),
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
