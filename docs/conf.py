@@ -137,6 +137,9 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.RWAble": "anndata.experimental.RWAble",
+    "anndata._types.RWAbleDict": "anndata.experimental.RWAbleDict",
+    "anndata._types.RWAbleList": "anndata.experimental.RWAbleList",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
