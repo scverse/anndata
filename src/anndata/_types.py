@@ -30,9 +30,7 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
     from ._io.specs.registry import IOSpec, Reader, Writer
-    from .compat import (
-        H5File,
-    )
+    from .compat import H5File
 
 __all__ = [
     "ArrayStorageType",
@@ -63,16 +61,12 @@ GroupStorageType = Union[ZarrGroup, H5Group]
 StorageType = Union[ArrayStorageType, GroupStorageType]
 
 ContravariantInMemoryType = TypeVar(
-    "ContravariantInMemoryType",
-    bound="InMemoryReadElem",  # noqa: F821
-    contravariant=True,
+    "ContravariantInMemoryType", bound="InMemoryReadElem", contravariant=True
 )
 CovariantInMemoryType = TypeVar(
-    "CovariantInMemoryType",
-    bound="InMemoryReadElem",  # noqa: F821
-    covariant=True,
+    "CovariantInMemoryType", bound="InMemoryReadElem", covariant=True
 )
-InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryReadElem")  # noqa: F821
+InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryReadElem")
 
 
 class Read(Protocol[CovariantInMemoryType]):
@@ -185,3 +179,8 @@ class WriteCallback(Protocol[InvariantInMemoryType]):
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
         """
         ...
+
+
+if TYPE_CHECKING:
+    # Needs to be at the end because Sphinx’s type import suffers from circular imports
+    from ._io.specs.registry import InMemoryReadElem
