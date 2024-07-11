@@ -125,7 +125,7 @@ class IORegistry:
 
         return _register
 
-    def get_write_func(
+    def get_write(
         self,
         dest_type: type,
         src_type: type | tuple[type, str],
@@ -143,7 +143,7 @@ class IORegistry:
         internal = self.write[(dest_type, src_type, modifiers)]
         return partial(internal, _writer=writer)
 
-    def has_writer(
+    def has_write(
         self,
         dest_type: type,
         src_type: type | tuple[type, str],
@@ -166,7 +166,7 @@ class IORegistry:
 
         return _register
 
-    def get_read_func(
+    def get_read(
         self,
         src_type: type,
         spec: IOSpec,
@@ -181,7 +181,7 @@ class IORegistry:
         internal = self.read[(src_type, spec, modifiers)]
         return partial(internal, _reader=reader)
 
-    def has_reader(
+    def has_read(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ) -> bool:
         return (src_type, spec, modifiers) in self.read
@@ -201,7 +201,7 @@ class IORegistry:
 
         return _register
 
-    def get_partial_reader(
+    def get_partial_read(
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ):
         if (src_type, spec, modifiers) in self.read_partial:
@@ -280,9 +280,7 @@ class Reader:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func = self.registry.get_read_func(
-            type(elem), iospec, modifiers, reader=self
-        )
+        read_func = self.registry.get_read(type(elem), iospec, modifiers, reader=self)
         if self.callback is None:
             return read_func(elem)
         return self.callback(read_func, elem.name, elem, iospec=iospec)
@@ -297,14 +295,12 @@ class Writer:
         self, dest_type: type, elem: Any, modifiers: frozenset[str]
     ) -> Write:
         for pattern in _iter_patterns(elem):
-            if self.registry.has_writer(dest_type, pattern, modifiers):
-                return self.registry.get_write_func(
+            if self.registry.has_write(dest_type, pattern, modifiers):
+                return self.registry.get_write(
                     dest_type, pattern, modifiers, writer=self
                 )
         # Raises IORegistryError
-        return self.registry.get_write_func(
-            dest_type, type(elem), modifiers, writer=self
-        )
+        return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
 
     @report_write_key_on_error
     def write_elem(
@@ -402,9 +398,10 @@ def read_elem_partial(
     modifiers: frozenset[str] = frozenset(),
 ):
     """Read part of an element from an on disk store."""
-    return _REGISTRY.get_partial_reader(
+    read_partial = _REGISTRY.get_partial_read(
         type(elem), get_spec(elem), frozenset(modifiers)
-    )(elem, items=items, indices=indices)
+    )
+    return read_partial(elem, items=items, indices=indices)
 
 
 @singledispatch
