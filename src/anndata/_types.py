@@ -57,7 +57,7 @@ InMemoryArrayOrScalarType: TypeAlias = Union[
     np.number,
     str,
 ]
-RWAble: TypeAlias = InMemoryArrayOrScalarType | "RWAbleDict" | "RWAbleList"  # noqa: TCH010
+RWAble: TypeAlias = Union[InMemoryArrayOrScalarType, "RWAbleDict", "RWAbleList"]  # noqa: TCH010
 RWAbleDict: TypeAlias = dict[str, RWAble]
 RWAbleList: TypeAlias = list[RWAble]
 InMemoryElem: TypeAlias = Union[
