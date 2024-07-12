@@ -333,6 +333,7 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     "dask_matrix_type",
     DASK_MATRIX_PARAMS,
 )
+@pytest.mark.gpu()
 def test_as_cupy_dask(dask_matrix_type):
     SHAPE = (100, 10)
     rng = np.random.default_rng(42)
