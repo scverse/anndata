@@ -337,7 +337,7 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
 def test_as_cupy_dask(dask_matrix_type):
     SHAPE = (100, 10)
     rng = np.random.default_rng(42)
-    X_cpu = dask_matrix_type(rng.poisson(size=SHAPE))
+    X_cpu = dask_matrix_type(rng.normal(size=SHAPE))
     X_gpu_roundtripped = as_cupy(X_cpu).map_blocks(lambda x: x.get(), meta=X_cpu._meta)
     assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
     assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
