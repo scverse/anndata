@@ -130,6 +130,7 @@ intersphinx_mapping = dict(
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     dask=("https://docs.dask.org/en/stable/", None),
     xarray=("https://xarray.pydata.org/en/stable/", None),
+    dask=("https://docs.dask.org/en/stable/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
