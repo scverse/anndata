@@ -18,6 +18,7 @@ from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
+    as_cupy,
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
@@ -326,3 +327,17 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     assert isinstance(X_computed, mem_type)
 
     assert_equal(asarray(X_computed), X_source)
+
+
+@pytest.mark.parametrize(
+    "dask_matrix_type",
+    DASK_MATRIX_PARAMS,
+)
+def test_as_cupy_dask(dask_matrix_type):
+    SHAPE = (100, 10)
+    rng = np.random.default_rng(42)
+    X_cpu = dask_matrix_type(rng.poisson(size=SHAPE))
+    X_gpu_roundtripped = as_cupy(X_cpu).map_blocks(lambda x: x.get(), meta=X_cpu._meta)
+    assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
+    assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
+    assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
