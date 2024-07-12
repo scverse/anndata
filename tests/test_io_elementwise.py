@@ -20,9 +20,9 @@ from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import ZarrGroup, _read_attr
 from anndata.tests.helpers import (
+    as_csr_cupy_dask_array,
     as_cupy,
-    as_dense_dask_array,
-    as_sparse_dask_array,
+    as_dense_cupy_dask_array,
     assert_equal,
     gen_adata,
 )
@@ -140,22 +140,13 @@ def test_io_spec(store, value, encoding_type):
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
     if as_dask:
         if isinstance(value, sparse.spmatrix):
-            value = as_sparse_dask_array(value)
-            value = value.map_blocks(
-                as_cupy, dtype=value.dtype, meta=as_cupy(value._meta)
-            )
+            value = as_csr_cupy_dask_array(value)
         else:
-            value = as_dense_dask_array(value)
-            value = value.map_blocks(
-                as_cupy, dtype=value.dtype, meta=as_cupy(value._meta)
-            )
+            value = as_dense_cupy_dask_array(value)
     else:
         value = as_cupy(value)
 
     key = f"key_for_{encoding_type}"
-    print(type(value))
-
-    print(type(value))
     write_elem(store, key, value, dataset_kwargs={})
 
     assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
