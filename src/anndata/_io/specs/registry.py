@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
     from anndata._core.storage import StorageType
     from anndata._types import (
-        DaskArray,
         GroupStorageType,
         InMemoryElem,
         Read,
