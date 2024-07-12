@@ -66,8 +66,10 @@ jobs:
           pip list
 
       - name: Run test
-        run: pytest -m gpu --cov --cov-report=xml --cov-context=test -n 4
+        run: pytest -m gpu --cov --cov-report=xml --cov-context=test
 
       - uses: codecov/codecov-action@v3
         with:
-          flags: gpu-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true

@@ -662,6 +662,29 @@ def write_sparse_dataset(
     f[k].attrs["encoding-version"] = "0.1.0"
 
 
+@_REGISTRY.register_write(H5Group, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
+)
+def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+    _writer.write_elem(
+        f,
+        k,
+        elem.map_blocks(lambda x: x.get(), dtype=elem.dtype, meta=elem._meta.get()),
+        dataset_kwargs=dataset_kwargs,
+    )
+
+
 @_REGISTRY.register_write(
     H5Group, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
 )
