@@ -20,8 +20,8 @@ from anndata._io.specs import _REGISTRY, IOSpec, get_spec, read_elem, write_elem
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import ZarrGroup, _read_attr
 from anndata.tests.helpers import (
-    as_csr_cupy_dask_array,
     as_cupy,
+    as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     assert_equal,
     gen_adata,
@@ -140,7 +140,7 @@ def test_io_spec(store, value, encoding_type):
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
     if as_dask:
         if isinstance(value, sparse.spmatrix):
-            value = as_csr_cupy_dask_array(value)
+            value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
         else:
             value = as_dense_cupy_dask_array(value)
     else:

@@ -18,7 +18,7 @@ from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
-    as_csr_cupy_dask_array,
+    as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
     asarray,
@@ -303,7 +303,10 @@ def test_check_error_notes_failure(error, match):
         ),
         pytest.param(as_dense_dask_array, np.ndarray, id="numpy_dense"),
         pytest.param(
-            as_csr_cupy_dask_array, CupyCSRMatrix, id="cupy_csr", marks=pytest.mark.gpu
+            as_cupy_sparse_dask_array,
+            CupyCSRMatrix,
+            id="cupy_csr",
+            marks=pytest.mark.gpu,
         ),
     ],
 )

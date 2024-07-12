@@ -779,37 +779,41 @@ def _(a):
     )
 
 
+try:
+    import cupyx.scipy.sparse as cpsparse
+
+    format_to_memory_class = {"csr": cpsparse.csr_matrix, "csc": cpsparse.csc_matrix}
+except ImportError:
+    format_to_memory_class = {}
+
+
 # TODO: If there are chunks which divide along columns, then a coo_matrix is returned by compute
 # We should try and fix this upstream in dask/ cupy
 @singledispatch
-def as_csr_cupy_dask_array(a):
-    import cupyx.scipy.sparse as cpsparse
-
+def as_cupy_sparse_dask_array(a, format="csr"):
+    memory_class = format_to_memory_class[format]
     cpu_da = as_sparse_dask_array(a)
     return cpu_da.rechunk((cpu_da.chunks[0], -1)).map_blocks(
-        cpsparse.csr_matrix, dtype=a.dtype, meta=cpsparse.csr_matrix(cpu_da._meta)
+        memory_class, dtype=a.dtype, meta=memory_class(cpu_da._meta)
     )
 
 
-@as_csr_cupy_dask_array.register(CupyArray)
-@as_csr_cupy_dask_array.register(CupySparseMatrix)
-def _(a):
-    import cupyx.scipy.sparse as cpsparse
+@as_cupy_sparse_dask_array.register(CupyArray)
+@as_cupy_sparse_dask_array.register(CupySparseMatrix)
+def _(a, format="csr"):
     import dask.array as da
 
-    return da.from_array(
-        cpsparse.csr_matrix(a), chunks=(_half_chunk_size(a.shape)[0], -1)
-    )
+    memory_class = format_to_memory_class[format]
+    return da.from_array(memory_class(a), chunks=(_half_chunk_size(a.shape)[0], -1))
 
 
-@as_csr_cupy_dask_array.register(DaskArray)
-def _(a):
-    import cupyx.scipy.sparse as cpsparse
-
-    if isinstance(a._meta, cpsparse.csr_matrix):
+@as_cupy_sparse_dask_array.register(DaskArray)
+def _(a, format="csr"):
+    memory_class = format_to_memory_class[format]
+    if isinstance(a._meta, memory_class):
         return a.copy()
     return a.rechunk((a.chunks[0], -1)).map_blocks(
-        partial(as_cupy, typ=cpsparse.csr_matrix), dtype=a.dtype
+        partial(as_cupy, typ=memory_class), dtype=a.dtype
     )
 
 
@@ -955,7 +959,7 @@ DASK_CUPY_MATRIX_PARAMS = [
         marks=pytest.mark.gpu,
     ),
     pytest.param(
-        as_csr_cupy_dask_array, id="cupy_csr_dask_array", marks=pytest.mark.gpu
+        as_cupy_sparse_dask_array, id="cupy_csr_dask_array", marks=pytest.mark.gpu
     ),
 ]
 
