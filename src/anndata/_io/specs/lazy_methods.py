@@ -122,7 +122,7 @@ def read_sparse_as_dask(
         make_dask_chunk,
         dtype=dtype,
         chunks=chunk_layout,
-        meta=memory_format((0, 0), dtype=np.float32),
+        meta=memory_format((0, 0), dtype=dtype),
     )
     return da_mtx
 
