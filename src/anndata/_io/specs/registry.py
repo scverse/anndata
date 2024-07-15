@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata.compat import _read_attr
+from anndata.compat import DaskArray, _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
     from anndata._core.storage import StorageType
     from anndata._types import (
-        DaskArray,
         GroupStorageType,
         InMemoryElem,
         Read,
@@ -88,7 +87,7 @@ class IORegistry:
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
         ] = {}
-        self.write_specs: dict[type | tuple[type, str], IOSpec] = {}
+        self.write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec] = {}
 
     def register_write(
         self,
@@ -202,10 +201,12 @@ class IORegistry:
             )
 
     def get_spec(self, elem: Any) -> IOSpec:
-        if hasattr(elem, "dtype"):
-            typ = (type(elem), elem.dtype.kind)
-            if typ in self.write_specs:
-                return self.write_specs[typ]
+        if isinstance(elem, DaskArray):
+            if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
+                return self.write_specs[typ_meta]
+        elif hasattr(elem, "dtype"):
+            if (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs:
+                return self.write_specs[typ_kind]
         return self.write_specs[type(elem)]
 
 
