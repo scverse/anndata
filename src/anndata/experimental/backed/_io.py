@@ -136,12 +136,7 @@ def read_backed(
             "array",
             "string-array",
         }:
-            chunks = None
-            if "csr_matrix" == iospec.encoding_type:
-                chunks = (1, elem.attrs["shape"][1])
-            elif iospec.encoding_type == "csc_matrix":
-                chunks = (elem.attrs["shape"][0], 1)
-            return read_elem_as_dask(elem, chunks=chunks)
+            return read_elem_as_dask(elem)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         return func(elem)
