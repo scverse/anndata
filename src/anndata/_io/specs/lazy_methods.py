@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from functools import singledispatch
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -17,39 +17,9 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any, Literal
+    from typing import Any, Literal, Union
 
     from .registry import Reader
-
-
-@overload
-def make_block_indexer(
-    *,
-    is_csc: Literal[True],
-    stride: int,
-    shape: tuple[int, int],
-    block_id: tuple[int, int],
-) -> tuple[slice, slice]: ...
-@overload
-def make_block_indexer(
-    *,
-    is_csc: Literal[False],
-    stride: int,
-    shape: tuple[int, int],
-    block_id: tuple[int, int],
-) -> tuple[slice]: ...
-
-
-def make_block_indexer(
-    *, is_csc: bool, stride: int, shape: tuple[int, int], block_id: tuple[int, int]
-) -> tuple[slice, slice] | tuple[slice]:
-    index1d = slice(
-        block_id[is_csc] * stride,
-        min((block_id[is_csc] * stride) + stride, shape[is_csc]),
-    )
-    if is_csc:
-        return (slice(None), index1d)
-    return (index1d,)
 
 
 @contextmanager
@@ -118,13 +88,25 @@ def read_sparse_as_dask(
             raise ValueError("Only the major axis can be chunked")
         stride = chunks[int(is_csc)]
 
-    def make_dask_chunk(block_id: tuple[int, int]):
+    def make_dask_chunk(
+        block_info: Union[  # noqa: UP007
+            dict[
+                Literal[None],
+                dict[str, Union[tuple[int, ...], list[tuple[int, ...]]]],  # noqa: UP007
+            ],
+            None,
+        ] = None,
+    ):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
         # https://github.com/scverse/anndata/issues/1105
+        if block_info is None:
+            raise ValueError("Block info is required")
         with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
-            index = make_block_indexer(
-                is_csc=is_csc, stride=stride, shape=shape, block_id=block_id
+            array_location = block_info[None]["array-location"]
+            index = (
+                slice(array_location[0][0], array_location[0][1]),
+                slice(array_location[1][0], array_location[1][1]),
             )
             chunk = mtx[index]
         return chunk
