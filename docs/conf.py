@@ -110,7 +110,7 @@ nitpick_ignore = [
 suppress_warnings = [
     "ref.citation",
     "myst.header",  # https://github.com/executablebooks/MyST-Parser/issues/262
-    "autosummary.import_cycle",  # https://readthedocs.com/projects/icb-anndata/builds/2349021/
+    "autosummary.import_cycle",  # https://github.com/sphinx-doc/sphinx/issues/12589
 ]
 
 
