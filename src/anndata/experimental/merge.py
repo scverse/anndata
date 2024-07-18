@@ -134,7 +134,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
     BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
     """
 
-    def callback(func, elem_name: str, elem, dataset_kwargs, iospec):
+    def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in SPARSE_MATRIX:
             return sparse_dataset(elem)
         elif iospec.encoding_type in EAGER_TYPES:

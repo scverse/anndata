@@ -3,7 +3,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import singledispatch
 from pathlib import Path, PurePosixPath
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import h5py
@@ -16,8 +15,7 @@ from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-    from typing import Any, Literal, Union
+    from typing import Literal, Union
 
     from .registry import Reader
 
@@ -67,9 +65,7 @@ def _(x):
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_as_dask(
-    elem: H5Group | ZarrGroup,
-    _reader: Reader,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    elem: H5Group | ZarrGroup, _reader: Reader, chunks: tuple[int, ...] | None = None
 ):
     import dask.array as da
 
@@ -79,13 +75,15 @@ def read_sparse_as_dask(
     dtype = elem["data"].dtype
     is_csc: bool = elem.attrs["encoding-type"] == "csc_matrix"
 
-    chunks = dataset_kwargs.get("chunks", None)
     stride: int = _DEFAULT_STRIDE
     if chunks is not None:
         if len(chunks) != 2:
             raise ValueError("`chunks` must be a tuple of two integers")
         if chunks[int(not is_csc)] != shape[int(not is_csc)]:
-            raise ValueError("Only the major axis can be chunked")
+            raise ValueError(
+                "Only the major axis can be chunked. "
+                f"Try setting chunks to {((-1, _DEFAULT_STRIDE) if is_csc else (_DEFAULT_STRIDE, -1))}"
+            )
         stride = chunks[int(is_csc)]
 
     def make_dask_chunk(
@@ -122,7 +120,7 @@ def read_sparse_as_dask(
         make_dask_chunk,
         dtype=dtype,
         chunks=chunk_layout,
-        meta=memory_format((0, 0), dtype=np.float32),
+        meta=memory_format((0, 0), dtype=dtype),
     )
     return da_mtx
 
@@ -145,9 +143,7 @@ def read_h5_string_array(
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
-    elem: H5Array,
-    _reader: Reader,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    elem: H5Array, _reader: Reader, chunks: tuple[int, ...] | None = None
 ):
     import dask.array as da
 
@@ -155,8 +151,8 @@ def read_h5_array(
     elem_name = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
-    chunks: tuple[int, ...] = dataset_kwargs.get(
-        "chunks", (_DEFAULT_STRIDE,) * len(shape)
+    chunks: tuple[int, ...] = (
+        chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(shape)
     )
 
     def make_dask_chunk(block_id: tuple[int, int]):
@@ -183,11 +179,9 @@ def read_h5_array(
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
-    elem: ZarrArray,
-    _reader: Reader,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    elem: ZarrArray, _reader: Reader, chunks: tuple[int, ...] | None = None
 ):
-    chunks: tuple[int, ...] = dataset_kwargs.get("chunks", elem.chunks)
+    chunks: tuple[int, ...] = chunks if chunks is not None else elem.chunks
     import dask.array as da
 
     return da.from_zarr(elem, chunks=chunks)
