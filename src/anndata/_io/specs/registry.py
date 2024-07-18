@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -275,16 +274,28 @@ class Reader:
         iospec = get_spec(elem)
         read_func = self.registry.get_read(type(elem), iospec, modifiers, reader=self)
         if self.callback is None:
-            return read_func(elem, dataset_kwargs=dataset_kwargs)
-        if "dataset_kwargs" not in inspect.getfullargspec(self.callback)[0]:
+            return read_func(elem)
+        return self.callback(read_func, elem.name, elem, iospec=iospec)
+
+
+class DaskReader(Reader):
+    @report_read_key_on_error
+    def read_elem(
+        self,
+        elem: StorageType,
+        modifiers: frozenset[str] = frozenset(),
+        chunks: tuple[int, ...] | None = None,
+    ) -> InMemoryElem:
+        """Read an element from a store. See exported function for more details."""
+
+        iospec = get_spec(elem)
+        read_func = self.registry.get_read(type(elem), iospec, modifiers, reader=self)
+        if self.callback is None:
             warnings.warn(
-                "Callback does not accept dataset_kwargs. Ignoring dataset_kwargs.",
+                "Dask reading does not use a callback. Ignoring callback.",
                 stacklevel=2,
             )
-            return self.callback(read_func, elem.name, elem, iospec=iospec)
-        return self.callback(
-            read_func, elem.name, elem, dataset_kwargs=dataset_kwargs, iospec=iospec
-        )
+        return read_func(elem, chunks=chunks)
 
 
 class Writer:
@@ -385,9 +396,7 @@ def read_elem_as_dask(
     -------
         DaskArray
     """
-    return Reader(_LAZY_REGISTRY).read_elem(
-        elem, dataset_kwargs={"chunks": chunks} if chunks is not None else {}
-    )
+    return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
 
 
 def write_elem(

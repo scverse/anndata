@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 import h5py
-import pytest
 import zarr
 from scipy import sparse
 
@@ -19,7 +18,7 @@ from anndata.tests.helpers import assert_equal, gen_adata
 
 
 def test_read_dispatched_w_regex():
-    def read_only_axis_dfs(func, elem_name: str, elem, iospec, dataset_kwargs):
+    def read_only_axis_dfs(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata":
             return func(elem)
         elif re.match(r"^/((obs)|(var))?(/.*)?$", elem_name):
@@ -41,7 +40,7 @@ def test_read_dispatched_w_regex():
 def test_read_dispatched_dask():
     import dask.array as da
 
-    def read_as_dask_array(func, elem_name: str, elem, iospec, dataset_kwargs):
+    def read_as_dask_array(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in {
             "dataframe",
             "csr_matrix",
@@ -78,27 +77,12 @@ def test_read_dispatched_null_case():
 
     expected = read_elem(z)
 
-    def callback(read_func, elem_name, x, dataset_kwargs, iospec):
+    def callback(read_func, elem_name, x, iospec):
         return read_elem(x)
 
     actual = read_dispatched(z, callback)
 
     assert_equal(expected, actual)
-
-
-def test_read_dispatched_warns_with_no_dataset_kwargs():
-    adata = gen_adata((100, 100))
-    z = zarr.group()
-    write_elem(z, "/", adata)
-
-    def callback(read_func, elem_name, x, iospec):
-        return read_elem(x)
-
-    with pytest.warns(
-        UserWarning,
-        match="Callback does not accept dataset_kwargs. Ignoring dataset_kwargs.",
-    ):
-        read_dispatched(z, callback)
 
 
 def test_write_dispatched_chunks():
@@ -182,11 +166,11 @@ def test_io_dispatched_keys(tmp_path):
         zarr_write_keys.append(k)
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def h5ad_reader(func, elem_name: str, elem, dataset_kwargs, iospec):
+    def h5ad_reader(func, elem_name: str, elem, iospec):
         h5ad_read_keys.append(elem_name)
         return func(elem)
 
-    def zarr_reader(func, elem_name: str, elem, dataset_kwargs, iospec):
+    def zarr_reader(func, elem_name: str, elem, iospec):
         zarr_read_keys.append(elem_name)
         return func(elem)
 

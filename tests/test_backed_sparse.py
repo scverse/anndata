@@ -70,7 +70,7 @@ def ondisk_equivalent_adata(
             f = zarr.open(path, mode="r")
 
             # Read with handling for backwards compat
-            def callback(func, elem_name, elem, iospec, dataset_kwargs):
+            def callback(func, elem_name, elem, iospec):
                 if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                     return AnnData(
                         **{k: read_dispatched(v, callback) for k, v in elem.items()}

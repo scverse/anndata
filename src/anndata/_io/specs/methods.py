@@ -126,7 +126,6 @@ def read_basic(
     elem: H5File | H5Group | H5Array,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import h5ad
 
@@ -151,7 +150,6 @@ def read_basic_zarr(
     elem: ZarrGroup | ZarrArray,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import zarr
 
@@ -299,7 +297,6 @@ def read_anndata(
     elem: GroupStorageType | H5File,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> AnnData:
     d = {}
     for k in [
@@ -346,7 +343,6 @@ def read_mapping(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> dict[str, RWAble]:
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
@@ -460,7 +456,6 @@ def read_array(
     elem: ArrayStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> npt.NDArray:
     return elem[()]
 
@@ -482,7 +477,6 @@ def read_string_array(
     d: H5Array,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ):
     return read_array(d.asstr(), _reader=_reader)
 
@@ -568,7 +562,6 @@ def read_recarray(
     d: ArrayStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> np.recarray | npt.NDArray:
     value = d[()]
     dtype = value.dtype
@@ -785,7 +778,6 @@ def read_sparse(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> sparse.spmatrix | SpArray:
     return sparse_dataset(elem).to_memory()
 
@@ -835,7 +827,6 @@ def read_awkward(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> AwkArray:
     from anndata.compat import awkward as ak
 
@@ -909,7 +900,6 @@ def read_dataframe(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.DataFrame:
     columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
@@ -955,7 +945,6 @@ def read_dataframe_0_1_0(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.DataFrame:
     columns = _read_attr(elem.attrs, "column-order")
     idx_key = _read_attr(elem.attrs, "_index")
@@ -1031,7 +1020,6 @@ def read_categorical(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.Categorical:
     return pd.Categorical.from_codes(
         codes=_reader.read_elem(elem["codes"]),
@@ -1087,7 +1075,6 @@ def read_nullable_integer(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.api.extensions.ExtensionArray:
     if "mask" in elem:
         return pd.arrays.IntegerArray(
@@ -1103,7 +1090,6 @@ def read_nullable_boolean(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> pd.api.extensions.ExtensionArray:
     if "mask" in elem:
         return pd.arrays.BooleanArray(
@@ -1124,7 +1110,6 @@ def read_scalar(
     elem: ArrayStorageType,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> np.number:
     return elem[()]
 
@@ -1176,7 +1161,6 @@ def read_hdf5_string(
     elem: H5Array,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> str:
     return elem.asstr()[()]
 
@@ -1186,7 +1170,6 @@ def read_zarr_string(
     elem: ZarrArray,
     *,
     _reader: Reader,
-    dataset_kwargs: MappingProxyType = MappingProxyType({}),
 ) -> str:
     return str(elem[()])
 
