@@ -290,7 +290,7 @@ class DaskReader(Reader):
 
         iospec = get_spec(elem)
         read_func = self.registry.get_read(type(elem), iospec, modifiers, reader=self)
-        if self.callback is None:
+        if self.callback is not None:
             warnings.warn(
                 "Dask reading does not use a callback. Ignoring callback.",
                 stacklevel=2,
