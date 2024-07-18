@@ -76,11 +76,7 @@ def test_read_dispatched_null_case():
     write_elem(z, "/", adata)
 
     expected = read_elem(z)
-
-    def callback(read_func, elem_name, x, iospec):
-        return read_elem(x)
-
-    actual = read_dispatched(z, callback)
+    actual = read_dispatched(z, lambda _, __, x, **___: read_elem(x))
 
     assert_equal(expected, actual)
 
