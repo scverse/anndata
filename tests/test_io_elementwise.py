@@ -272,12 +272,11 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
 def test_read_lazy_h5_cluster(sparse_format, tmp_path):
     import dask.distributed as dd
 
-    file = h5py.File(tmp_path / "test.h5", "w")
-    store = file["/"]
-    arr_store = create_sparse_store(sparse_format, store)
-    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
-    X_from_disk = read_elem(arr_store["X"])
-    file.close()
+    with h5py.File(tmp_path / "test.h5", "w") as file:
+        store = file["/"]
+        arr_store = create_sparse_store(sparse_format, store)
+        X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+        X_from_disk = read_elem(arr_store["X"])
     with (
         dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
         dd.Client(cluster) as _client,
