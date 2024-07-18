@@ -80,7 +80,10 @@ def read_sparse_as_dask(
         if len(chunks) != 2:
             raise ValueError("`chunks` must be a tuple of two integers")
         if chunks[int(not is_csc)] != shape[int(not is_csc)]:
-            raise ValueError("Only the major axis can be chunked")
+            raise ValueError(
+                "Only the major axis can be chunked. "
+                f"Try setting chunks to {((-1, _DEFAULT_STRIDE) if is_csc else (_DEFAULT_STRIDE, -1))}"
+            )
         stride = chunks[int(is_csc)]
 
     def make_dask_chunk(
