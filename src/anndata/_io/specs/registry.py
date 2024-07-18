@@ -267,7 +267,6 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ) -> InMemoryElem:
         """Read an element from a store. See exported function for more details."""
 
