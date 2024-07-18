@@ -29,7 +29,6 @@ from .compat import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from types import MappingProxyType
     from typing import Any, TypeAlias
 
     from ._io.specs.registry import IOSpec, Reader, Writer
@@ -95,8 +94,6 @@ class Read(Protocol[CovariantInMemoryType]):
     def __call__(
         self,
         elem: StorageType | H5File,
-        *,
-        dataset_kwargs: MappingProxyType,
     ) -> CovariantInMemoryType:
         """Low-level reading function for an element.
 
@@ -104,9 +101,6 @@ class Read(Protocol[CovariantInMemoryType]):
         ----------
         elem
             The element to read from.
-        dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
-
         Returns
         -------
             The element read from the store.
@@ -146,7 +140,7 @@ class Write(Protocol[ContravariantInMemoryType]):
         v
             The element to write out.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
         """
         ...
 
@@ -160,7 +154,6 @@ class ReadCallback(Protocol[InvariantInMemoryType]):
         elem: StorageType,
         *,
         iospec: IOSpec,
-        dataset_kwargs: MappingProxyType,
     ) -> InvariantInMemoryType:
         """
         Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
@@ -175,8 +168,6 @@ class ReadCallback(Protocol[InvariantInMemoryType]):
             The element to read from.
         iospec
             Internal AnnData encoding specification for the element.
-        dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`dask:index`.
 
         Returns
         -------
