@@ -123,9 +123,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Group, IOSpec("", ""))
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
-    elem: H5File | H5Group | H5Array,
-    *,
-    _reader: Reader,
+    elem: H5File | H5Group | H5Array, *, _reader: Reader
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import h5ad
 
@@ -147,9 +145,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("", ""))
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
-    elem: ZarrGroup | ZarrArray,
-    *,
-    _reader: Reader,
+    elem: ZarrGroup | ZarrArray, *, _reader: Reader
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import zarr
 
@@ -293,11 +289,7 @@ def write_anndata(
 @_REGISTRY.register_read(H5File, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("raw", "0.1.0"))
-def read_anndata(
-    elem: GroupStorageType | H5File,
-    *,
-    _reader: Reader,
-) -> AnnData:
+def read_anndata(elem: GroupStorageType | H5File, *, _reader: Reader) -> AnnData:
     d = {}
     for k in [
         "X",
@@ -339,11 +331,7 @@ def write_raw(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
-def read_mapping(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
-) -> dict[str, RWAble]:
+def read_mapping(elem: GroupStorageType, *, _reader: Reader) -> dict[str, RWAble]:
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
 
@@ -452,11 +440,7 @@ def write_basic_dask_h5(
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
-def read_array(
-    elem: ArrayStorageType,
-    *,
-    _reader: Reader,
-) -> npt.NDArray:
+def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
@@ -473,11 +457,7 @@ def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
 
 # arrays of strings
 @_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
-def read_string_array(
-    d: H5Array,
-    *,
-    _reader: Reader,
-):
+def read_string_array(d: H5Array, *, _reader: Reader):
     return read_array(d.asstr(), _reader=_reader)
 
 
@@ -558,11 +538,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
-def read_recarray(
-    d: ArrayStorageType,
-    *,
-    _reader: Reader,
-) -> np.recarray | npt.NDArray:
+def read_recarray(d: ArrayStorageType, *, _reader: Reader) -> np.recarray | npt.NDArray:
     value = d[()]
     dtype = value.dtype
     value = _from_fixed_length_strings(value)
@@ -775,9 +751,7 @@ def write_dask_sparse(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
+    elem: GroupStorageType, *, _reader: Reader
 ) -> sparse.spmatrix | SpArray:
     return sparse_dataset(elem).to_memory()
 
@@ -823,11 +797,7 @@ def write_awkward(
 
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
-def read_awkward(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
-) -> AwkArray:
+def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
     from anndata.compat import awkward as ak
 
     form = _read_attr(elem.attrs, "form")
@@ -896,11 +866,7 @@ def write_dataframe(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
-def read_dataframe(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
-) -> pd.DataFrame:
+def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
@@ -941,11 +907,7 @@ def read_dataframe_partial(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.1.0"))
-def read_dataframe_0_1_0(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
-) -> pd.DataFrame:
+def read_dataframe_0_1_0(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     columns = _read_attr(elem.attrs, "column-order")
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
@@ -1016,11 +978,7 @@ def write_categorical(
 
 @_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
-def read_categorical(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
-) -> pd.Categorical:
+def read_categorical(elem: GroupStorageType, *, _reader: Reader) -> pd.Categorical:
     return pd.Categorical.from_codes(
         codes=_reader.read_elem(elem["codes"]),
         categories=_reader.read_elem(elem["categories"]),
@@ -1072,9 +1030,7 @@ def write_nullable_integer(
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
 def read_nullable_integer(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
+    elem: GroupStorageType, *, _reader: Reader
 ) -> pd.api.extensions.ExtensionArray:
     if "mask" in elem:
         return pd.arrays.IntegerArray(
@@ -1087,9 +1043,7 @@ def read_nullable_integer(
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))
 def read_nullable_boolean(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
+    elem: GroupStorageType, *, _reader: Reader
 ) -> pd.api.extensions.ExtensionArray:
     if "mask" in elem:
         return pd.arrays.BooleanArray(
@@ -1106,11 +1060,7 @@ def read_nullable_boolean(
 
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
-def read_scalar(
-    elem: ArrayStorageType,
-    *,
-    _reader: Reader,
-) -> np.number:
+def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
     return elem[()]
 
 
@@ -1157,20 +1107,12 @@ _REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_sc
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))
-def read_hdf5_string(
-    elem: H5Array,
-    *,
-    _reader: Reader,
-) -> str:
+def read_hdf5_string(elem: H5Array, *, _reader: Reader) -> str:
     return elem.asstr()[()]
 
 
 @_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
-def read_zarr_string(
-    elem: ZarrArray,
-    *,
-    _reader: Reader,
-) -> str:
+def read_zarr_string(elem: ZarrArray, *, _reader: Reader) -> str:
     return str(elem[()])
 
 
