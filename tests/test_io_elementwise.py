@@ -312,13 +312,15 @@ def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks):
 
 def test_read_lazy_bad_chunk_kwargs(tmp_path):
     arr_type = "csr"
-    file = h5py.File(tmp_path / "test.h5", "w")
-    store = file["/"]
-    arr_store = create_sparse_store(arr_type, store)
-    with pytest.raises(ValueError, match=r"`chunks` must be a tuple of two integers"):
-        read_elem_as_dask(arr_store["X"], chunks=(SIZE,))
-    with pytest.raises(ValueError, match=r"Only the major axis can be chunked"):
-        read_elem_as_dask(arr_store["X"], chunks=(SIZE, 10))
+    with h5py.File(tmp_path / "test.h5", "w") as file:
+        store = file["/"]
+        arr_store = create_sparse_store(arr_type, store)
+        with pytest.raises(
+            ValueError, match=r"`chunks` must be a tuple of two integers"
+        ):
+            read_elem_as_dask(arr_store["X"], chunks=(SIZE,))
+        with pytest.raises(ValueError, match=r"Only the major axis can be chunked"):
+            read_elem_as_dask(arr_store["X"], chunks=(SIZE, 10))
 
 
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
