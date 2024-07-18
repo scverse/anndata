@@ -139,13 +139,22 @@ def read_h5_array(
         chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(shape)
     )
 
-    def make_dask_chunk(block_id: tuple[int, int]):
+    def make_dask_chunk(
+        block_info: Union[  # noqa: UP007
+            dict[
+                Literal[None],
+                dict[str, Union[tuple[int, ...], list[tuple[int, ...]]]],  # noqa: UP007
+            ],
+            None,
+        ] = None,
+    ):
+        if block_info is None:
+            raise ValueError("Block info is required")
         with maybe_open_h5(path, elem_name) as f:
             idx = ()
             for i in range(len(shape)):
-                start = block_id[i] * chunks[i]
-                stop = min(((block_id[i] * chunks[i]) + chunks[i]), shape[i])
-                idx += (slice(start, stop),)
+                array_location = block_info[None]["array-location"][i]
+                idx += (slice(array_location[0], array_location[1]),)
             return f[idx]
 
     chunk_layout = tuple(
