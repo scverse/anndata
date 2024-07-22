@@ -74,13 +74,15 @@ def sparse_format(request):
 
 
 def create_dense_store(store, n_dims: int = 2):
-    X = np.random.randn(*((SIZE,) * n_dims))
+    X = np.random.randn(*[SIZE * (i + 1) for i in range(n_dims)])
 
     write_elem(store, "X", X)
     return store
 
 
-def create_sparse_store(sparse_format: Literal["csc", "csr"], store: G) -> G:
+def create_sparse_store(
+    sparse_format: Literal["csc", "csr"], store: G, shape=(SIZE, SIZE * 2)
+) -> G:
     """Returns a store
 
     Parameters
@@ -95,14 +97,15 @@ def create_sparse_store(sparse_format: Literal["csc", "csr"], store: G) -> G:
     import dask.array as da
 
     X = sparse.random(
-        SIZE,
-        SIZE,
+        shape[0],
+        shape[1],
         format=sparse_format,
         density=0.01,
         random_state=np.random.default_rng(),
     )
     X_dask = da.from_array(
-        X, chunks=(100 if format == "csr" else SIZE, SIZE if format == "csr" else 100)
+        X,
+        chunks=(100 if format == "csr" else SIZE, SIZE * 2 if format == "csr" else 100),
     )
 
     write_elem(store, "X", X)
@@ -233,11 +236,18 @@ def test_read_lazy_2d_dask(sparse_format, store):
     assert_equal(X_from_disk, X_dask_from_disk)
     random_int_indices = np.random.randint(0, SIZE, (SIZE // 10,))
     random_int_indices.sort()
-    random_bool_mask = np.random.randn(SIZE) > 0
     index_slice = slice(0, SIZE // 10)
-    for index in [random_int_indices, index_slice, random_bool_mask]:
+    for index in [random_int_indices, index_slice]:
         assert_equal(X_from_disk[index, :], X_dask_from_disk[index, :])
         assert_equal(X_from_disk[:, index], X_dask_from_disk[:, index])
+    random_bool_mask = np.random.randn(SIZE) > 0
+    assert_equal(
+        X_from_disk[random_bool_mask, :], X_dask_from_disk[random_bool_mask, :]
+    )
+    random_bool_mask = np.random.randn(SIZE * 2) > 0
+    assert_equal(
+        X_from_disk[:, random_bool_mask], X_dask_from_disk[:, random_bool_mask]
+    )
 
     assert arr_store["X_dask/indptr"].dtype == np.int64
     assert arr_store["X_dask/indices"].dtype == np.int64
@@ -289,7 +299,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
     [
         ("dense", (100, 100)),
         ("csc", (SIZE, 10)),
-        ("csr", (10, SIZE)),
+        ("csr", (10, SIZE * 2)),
         ("csc", None),
         ("csr", None),
     ],
@@ -304,8 +314,9 @@ def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks):
     if chunks is not None:
         assert X_dask_from_disk.chunksize == chunks
     else:
+        minor_index = int(arr_type == "csr")
         # assert that sparse chunks are set correctly by default
-        assert X_dask_from_disk.chunksize[bool(arr_type == "csr")] == SIZE
+        assert X_dask_from_disk.chunksize[minor_index] == SIZE * (1 + minor_index)
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
 
