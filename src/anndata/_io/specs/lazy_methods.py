@@ -53,6 +53,7 @@ def compute_chunk_layout_for_axis_shape(
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_as_dask(
     elem: H5Group | ZarrGroup,
+    *,
     _reader: DaskReader,
     chunks: tuple[int, ...] | None = None,
 ) -> DaskArray:
@@ -116,7 +117,7 @@ def read_sparse_as_dask(
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
-    elem: H5Array, _reader: DaskReader, chunks: tuple[int, ...] | None = None
+    elem: H5Array, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     import dask.array as da
 
@@ -160,7 +161,7 @@ def read_h5_array(
 
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
-    elem: ZarrArray, _reader: DaskReader, chunks: tuple[int, ...] | None = None
+    elem: ZarrArray, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     chunks: tuple[int, ...] = chunks if chunks is not None else elem.chunks
     import dask.array as da

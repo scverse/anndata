@@ -5,25 +5,23 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._types import Read, ReadDask, _ReadDaskInternal, _ReadInternal
 from anndata.compat import DaskArray, _read_attr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any, TypeVar
+    from typing import Any
 
     from anndata._core.storage import StorageType
     from anndata._types import (
         GroupStorageType,
         InMemoryElem,
-        Read,
         ReadCallback,
-        ReadDask,
         Write,
         WriteCallback,
-        _ReadInternal,
         _WriteInternal,
     )
 
@@ -80,11 +78,13 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-class IORegistry:
+_R = TypeVar("_R", _ReadInternal, _ReadDaskInternal)
+R = TypeVar("R", Read, ReadDask)
+
+
+class IORegistry(Generic[_R, R]):
     def __init__(self):
-        self.read: dict[
-            tuple[type, IOSpec, frozenset[str]], _ReadInternal | ReadDask
-        ] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], _R] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
@@ -149,7 +149,7 @@ class IORegistry:
         src_type: type,
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ) -> Callable[[_ReadInternal[T]], _ReadInternal[T]]:
+    ) -> Callable[[_R], _R]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -166,7 +166,7 @@ class IORegistry:
         modifiers: frozenset[str] = frozenset(),
         *,
         reader: Reader,
-    ) -> Read | ReadDask:
+    ) -> R:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)
         internal = self.read[(src_type, spec, modifiers)]
@@ -212,8 +212,8 @@ class IORegistry:
         return self.write_specs[type(elem)]
 
 
-_REGISTRY = IORegistry()
-_LAZY_REGISTRY = IORegistry()
+_REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
+_LAZY_REGISTRY: IORegistry[_ReadDaskInternal, ReadDask] = IORegistry()
 
 
 @singledispatch
@@ -290,17 +290,15 @@ class DaskReader(Reader):
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
     ) -> DaskArray:
-        """Read an element from a store. See exported function for more details."""
+        """Read a dask element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
         read_func: ReadDask = self.registry.get_read(
             type(elem), iospec, modifiers, reader=self
         )
         if self.callback is not None:
-            warnings.warn(
-                "Dask reading does not use a callback. Ignoring callback.",
-                stacklevel=2,
-            )
+            msg = "Dask reading does not use a callback. Ignoring callback."
+            warnings.warn(msg, stacklevel=2)
         return read_func(elem, chunks=chunks)
 
 

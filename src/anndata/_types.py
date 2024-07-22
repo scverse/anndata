@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from anndata._io.specs.registry import DaskReader
 
     from ._io.specs.registry import IOSpec, Reader, Writer
-    from .compat import H5File
 
 __all__ = [
     "ArrayStorageType",
@@ -82,21 +81,22 @@ CovariantInMemoryType = TypeVar(
 )
 InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryElem")
 
+SCo = TypeVar("SCo", covariant=True, bound=StorageType)
+SCon = TypeVar("SCon", contravariant=True, bound=StorageType)
 
-class _ReadInternal(Protocol[CovariantInMemoryType]):
+
+class _ReadInternal(Protocol[SCon, CovariantInMemoryType]):
+    def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantInMemoryType: ...
+
+
+class _ReadDaskInternal(Protocol[SCon]):
     def __call__(
-        self,
-        elem: StorageType | H5File,
-        *,
-        _reader: Reader,
-    ) -> CovariantInMemoryType: ...
+        self, elem: SCon, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
+    ) -> DaskArray: ...
 
 
-class Read(Protocol[CovariantInMemoryType]):
-    def __call__(
-        self,
-        elem: StorageType | H5File,
-    ) -> CovariantInMemoryType:
+class Read(Protocol[SCon, CovariantInMemoryType]):
+    def __call__(self, elem: SCon) -> CovariantInMemoryType:
         """Low-level reading function for an element.
 
         Parameters
@@ -110,13 +110,9 @@ class Read(Protocol[CovariantInMemoryType]):
         ...
 
 
-class ReadDask(Protocol):
+class ReadDask(Protocol[SCon]):
     def __call__(
-        self,
-        elem: StorageType | H5File,
-        *,
-        _reader: DaskReader,
-        chunks: tuple[int, ...] | None = None,
+        self, elem: SCon, *, chunks: tuple[int, ...] | None = None
     ) -> DaskArray:
         """Low-level reading function for a dask element.
 
@@ -124,10 +120,8 @@ class ReadDask(Protocol):
         ----------
         elem
             The element to read from.
-        _reader
-           The parent object that will be used to read the element.
         chunks
-            The chunks size to be used.
+            The chunk size to be used.
         Returns
         -------
             The dask element read from the store.
@@ -172,11 +166,11 @@ class Write(Protocol[ContravariantInMemoryType]):
         ...
 
 
-class ReadCallback(Protocol[InvariantInMemoryType]):
+class ReadCallback(Protocol[SCo, InvariantInMemoryType]):
     def __call__(
         self,
         /,
-        read_func: Read[InvariantInMemoryType],
+        read_func: Read[SCo, InvariantInMemoryType],
         elem_name: str,
         elem: StorageType,
         *,
