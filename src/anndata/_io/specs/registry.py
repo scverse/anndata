@@ -438,21 +438,3 @@ def read_elem_partial(
         type(elem), get_spec(elem), frozenset(modifiers)
     )
     return read_partial(elem, items=items, indices=indices)
-
-
-@singledispatch
-def elem_key(elem) -> str:
-    return elem.name
-
-
-#     raise NotImplementedError()
-
-# @elem_key.register(ZarrGroup)
-# @elem_key.register(ZarrArray)
-# def _(elem):
-#     return elem.name
-
-# @elem_key.register(H5Array)
-# @elem_key.register(H5Group)
-# def _(elem):
-#     re

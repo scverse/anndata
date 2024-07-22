@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from functools import singledispatch
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
@@ -10,6 +9,7 @@ import numpy as np
 from scipy import sparse
 
 import anndata as ad
+from anndata._core.file_backing import filename, get_elem_name
 from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup
 
 from .registry import _LAZY_REGISTRY, IOSpec
@@ -45,21 +45,6 @@ def compute_chunk_layout_for_axis_shape(
     return chunk
 
 
-@singledispatch
-def get_elem_name(x):
-    raise NotImplementedError(f"Not implemented for {type(x)}")
-
-
-@get_elem_name.register(H5Group)
-def _(x):
-    return x.name
-
-
-@get_elem_name.register(ZarrGroup)
-def _(x):
-    return PurePosixPath(x.path).name
-
-
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
@@ -69,7 +54,7 @@ def read_sparse_as_dask(
 ):
     import dask.array as da
 
-    path_or_group = Path(elem.file.filename) if isinstance(elem, H5Group) else elem
+    path_or_group = Path(filename(elem)) if isinstance(elem, H5Group) else elem
     elem_name = get_elem_name(elem)
     shape: tuple[int, int] = tuple(elem.attrs["shape"])
     dtype = elem["data"].dtype
