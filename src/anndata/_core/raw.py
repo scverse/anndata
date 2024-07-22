@@ -9,7 +9,7 @@ from scipy.sparse import issparse
 
 from ..compat import CupyArray, CupySparseMatrix
 from .aligned_df import _gen_dataframe
-from .aligned_mapping import AlignedMappingProperty, AxisArrays, AxisArraysView
+from .aligned_mapping import AlignedMappingProperty, AxisArrays
 from .index import _normalize_index, _subset, get_vector, unpack_index
 from .sparse_dataset import sparse_dataset
 
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from scipy import sparse
 
+    from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
 
@@ -107,7 +108,9 @@ class Raw:
     def n_obs(self) -> int:
         return self._n_obs
 
-    varm = AlignedMappingProperty[AxisArrays | AxisArraysView]("varm", AxisArrays, 1)
+    varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
+        "varm", AxisArrays, 1
+    )
 
     @property
     def var_names(self) -> pd.Index[str]:

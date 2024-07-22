@@ -29,15 +29,7 @@ from ..logging import anndata_logger as logger
 from ..utils import axis_len, deprecated, ensure_df_homogeneous
 from .access import ElementRef
 from .aligned_df import _gen_dataframe
-from .aligned_mapping import (
-    AlignedMappingProperty,
-    AxisArrays,
-    AxisArraysView,
-    Layers,
-    LayersView,
-    PairwiseArrays,
-    PairwiseArraysView,
-)
+from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
 from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
@@ -55,6 +47,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
+    from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index, Index1D
     from .views import ArrayView
 
@@ -657,7 +650,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self):
         self.X = None
 
-    layers = AlignedMappingProperty[Layers | LayersView]("layers", Layers)
+    layers: AlignedMappingProperty[Layers | LayersView] = AlignedMappingProperty(
+        "layers", Layers
+    )
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
 
@@ -865,7 +860,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def uns(self):
         self.uns = OrderedDict()
 
-    obsm = AlignedMappingProperty[AxisArrays | AxisArraysView]("obsm", AxisArrays, 0)
+    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
+        "obsm", AxisArrays, 0
+    )
     """\
     Multi-dimensional annotation of observations
     (mutable structured :class:`~numpy.ndarray`).
@@ -875,7 +872,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varm = AlignedMappingProperty[AxisArrays | AxisArraysView]("varm", AxisArrays, 1)
+    varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
+        "varm", AxisArrays, 1
+    )
     """\
     Multi-dimensional annotation of variables/features
     (mutable structured :class:`~numpy.ndarray`).
@@ -885,8 +884,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
-    obsp = AlignedMappingProperty[PairwiseArrays | PairwiseArraysView](
-        "obsp", PairwiseArrays, 0
+    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+        AlignedMappingProperty("obsp", PairwiseArrays, 0)
     )
     """\
     Pairwise annotation of observations,
@@ -897,8 +896,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varp = AlignedMappingProperty[PairwiseArrays | PairwiseArraysView](
-        "varp", PairwiseArrays, 1
+    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+        AlignedMappingProperty("varp", PairwiseArrays, 1)
     )
     """\
     Pairwise annotation of variables/features,
