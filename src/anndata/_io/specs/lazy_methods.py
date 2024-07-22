@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, ParamSpec, TypeVar, Union
 
 import h5py
 import numpy as np
@@ -15,7 +16,8 @@ from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from typing import Literal, Union
+    from collections.abc import Callable
+    from typing import Concatenate
 
     from anndata.compat import DaskArray
 
@@ -47,6 +49,29 @@ def compute_chunk_layout_for_axis_shape(
     return chunk
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+BlockInfo = dict[
+    Literal[None],
+    dict[str, Union[tuple[int, ...], list[tuple[int, ...]]]],
+]
+
+
+def require_block_info(
+    f: Callable[Concatenate[BlockInfo, P], R],
+) -> Callable[Concatenate[BlockInfo | None, P], R]:
+    @wraps(f)
+    def wrapper(
+        block_info: BlockInfo | None = None, *args: P.args, **kwargs: P.kwargs
+    ) -> R:
+        if block_info is None:
+            msg = "Block info is required"
+            raise ValueError(msg)
+        return f(block_info, *args, **kwargs)
+
+    return wrapper
+
+
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
@@ -76,19 +101,10 @@ def read_sparse_as_dask(
             )
         stride = chunks[int(is_csc)]
 
-    def make_dask_chunk(
-        block_info: Union[  # noqa: UP007
-            dict[
-                Literal[None],
-                dict[str, Union[tuple[int, ...], list[tuple[int, ...]]]],  # noqa: UP007
-            ],
-            None,
-        ] = None,
-    ):
+    @require_block_info
+    def make_dask_chunk(block_info: BlockInfo):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
         # https://github.com/scverse/anndata/issues/1105
-        if block_info is None:
-            raise ValueError("Block info is required")
         with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
             array_location = block_info[None]["array-location"]
@@ -129,17 +145,8 @@ def read_h5_array(
         chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(shape)
     )
 
-    def make_dask_chunk(
-        block_info: Union[  # noqa: UP007
-            dict[
-                Literal[None],
-                dict[str, Union[tuple[int, ...], list[tuple[int, ...]]]],  # noqa: UP007
-            ],
-            None,
-        ] = None,
-    ):
-        if block_info is None:
-            raise ValueError("Block info is required")
+    @require_block_info
+    def make_dask_chunk(block_info: BlockInfo):
         with maybe_open_h5(path, elem_name) as f:
             idx = ()
             for i in range(len(shape)):
@@ -152,11 +159,7 @@ def read_h5_array(
         for i in range(len(shape))
     )
 
-    return da.map_blocks(
-        make_dask_chunk,
-        dtype=dtype,
-        chunks=chunk_layout,
-    )
+    return da.map_blocks(make_dask_chunk, dtype=dtype, chunks=chunk_layout)
 
 
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
