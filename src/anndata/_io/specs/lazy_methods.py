@@ -16,18 +16,24 @@ from anndata.compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping, Sequence
     from typing import Concatenate, Literal, ParamSpec, TypeVar
 
     from anndata.compat import DaskArray
 
     from .registry import DaskReader
 
-    BlockInfo = dict[
+    BlockInfo2D = Mapping[
         Literal[None],
-        dict[str, tuple[int, ...] | list[tuple[int, ...]]],
+        dict[str, tuple[tuple[int, int], tuple[int, int]]],
     ]
 
+    BlockInfoND = Mapping[
+        Literal[None],
+        dict[str, Sequence[tuple[int, int]]],
+    ]
+
+    B = TypeVar("B", BlockInfo2D, BlockInfoND)
     P = ParamSpec("P")
     R = TypeVar("R")
 
@@ -58,12 +64,10 @@ def compute_chunk_layout_for_axis_shape(
 
 
 def require_block_info(
-    f: Callable[Concatenate[BlockInfo, P], R],
-) -> Callable[Concatenate[BlockInfo | None, P], R]:
+    f: Callable[Concatenate[B, P], R],
+) -> Callable[Concatenate[B | None, P], R]:
     @wraps(f)
-    def wrapper(
-        block_info: BlockInfo | None = None, *args: P.args, **kwargs: P.kwargs
-    ) -> R:
+    def wrapper(block_info: B | None = None, *args: P.args, **kwargs: P.kwargs) -> R:
         if block_info is None:
             msg = "Block info is required"
             raise ValueError(msg)
@@ -80,7 +84,7 @@ def read_sparse_as_dask(
     elem: H5Group | ZarrGroup,
     *,
     _reader: DaskReader,
-    chunks: tuple[int, int] | None = None,
+    chunks: tuple[int, ...] | None = None,  # only tuple[int, int] is supported here
 ) -> DaskArray:
     import dask.array as da
 
@@ -103,19 +107,13 @@ def read_sparse_as_dask(
         stride = chunks[major_dim]
 
     @require_block_info
-    def make_dask_chunk(block_info: BlockInfo):
+    def make_dask_chunk(block_info: BlockInfo2D):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
         # https://github.com/scverse/anndata/issues/1105
         with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
-            (xxx_start, xxx_end), (yyy_start, yyy_end) = block_info[None][
-                "array-location"
-            ]
-            index = (
-                slice(xxx_start, xxx_end),
-                slice(yyy_start, yyy_end),
-            )
-            chunk = mtx[index]
+            range_i, range_j = block_info[None]["array-location"]
+            chunk = mtx[slice(*range_i), slice(*range_j)]
         return chunk
 
     shape_minor, shape_major = shape if is_csc else shape[::-1]
@@ -141,7 +139,7 @@ def read_h5_array(
     import dask.array as da
 
     path = Path(elem.file.filename)
-    elem_name = elem.name
+    elem_name: str = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
     chunks: tuple[int, ...] = (
@@ -149,7 +147,7 @@ def read_h5_array(
     )
 
     @require_block_info
-    def make_dask_chunk(block_info: BlockInfo):
+    def make_dask_chunk(block_info: BlockInfoND):
         with maybe_open_h5(path, elem_name) as f:
             idx = ()
             for i in range(len(shape)):
