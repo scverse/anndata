@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
+    from anndata._io.specs.registry import DaskReader
+
     from ._io.specs.registry import IOSpec, Reader, Writer
     from .compat import H5File
 
@@ -104,6 +106,31 @@ class Read(Protocol[CovariantInMemoryType]):
         Returns
         -------
             The element read from the store.
+        """
+        ...
+
+
+class ReadDask(Protocol):
+    def __call__(
+        self,
+        elem: StorageType | H5File,
+        *,
+        _reader: DaskReader,
+        chunks: tuple[int, ...] | None = None,
+    ) -> DaskArray:
+        """Low-level reading function for a dask element.
+
+        Parameters
+        ----------
+        elem
+            The element to read from.
+        _reader
+           The parent object that will be used to read the element.
+        chunks
+            The chunks size to be used.
+        Returns
+        -------
+            The dask element read from the store.
         """
         ...
 

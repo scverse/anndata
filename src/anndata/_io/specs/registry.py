@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         InMemoryElem,
         Read,
         ReadCallback,
+        ReadDask,
         Write,
         WriteCallback,
         _ReadInternal,
@@ -81,7 +82,9 @@ def write_spec(spec: IOSpec):
 
 class IORegistry:
     def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], _ReadInternal] = {}
+        self.read: dict[
+            tuple[type, IOSpec, frozenset[str]], _ReadInternal | ReadDask
+        ] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
@@ -163,7 +166,7 @@ class IORegistry:
         modifiers: frozenset[str] = frozenset(),
         *,
         reader: Reader,
-    ) -> Read:
+    ) -> Read | ReadDask:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)
         internal = self.read[(src_type, spec, modifiers)]
@@ -271,7 +274,9 @@ class Reader:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func = self.registry.get_read(type(elem), iospec, modifiers, reader=self)
+        read_func: Read = self.registry.get_read(
+            type(elem), iospec, modifiers, reader=self
+        )
         if self.callback is None:
             return read_func(elem)
         return self.callback(read_func, elem.name, elem, iospec=iospec)
@@ -288,7 +293,9 @@ class DaskReader(Reader):
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func = self.registry.get_read(type(elem), iospec, modifiers, reader=self)
+        read_func: ReadDask = self.registry.get_read(
+            type(elem), iospec, modifiers, reader=self
+        )
         if self.callback is not None:
             warnings.warn(
                 "Dask reading does not use a callback. Ignoring callback.",
