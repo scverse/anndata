@@ -34,10 +34,10 @@ Value = Union[pd.DataFrame, spmatrix, np.ndarray]
 
 P = TypeVar("P", bound="AlignedMappingBase")
 """Parent mapping an AlignedView is based on."""
-I = TypeVar("I", OneDIdx, TwoDIdx, covariant=True)
+I = TypeVar("I", OneDIdx, TwoDIdx)
 
 
-class AlignedMappingBase(MutableMapping[str, Value], ABC, Generic[I]):
+class AlignedMappingBase(MutableMapping[str, Value], ABC):
     """\
     An abstract base class for Mappings containing array-like values aligned
     to either one or both AnnData axes.
@@ -126,7 +126,7 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC, Generic[I]):
         return dict(self)
 
 
-class AlignedView(AlignedMappingBase[I], Generic[P, I]):
+class AlignedView(AlignedMappingBase, Generic[P, I]):
     is_view: ClassVar[Literal[True]] = True
 
     # override docstring
