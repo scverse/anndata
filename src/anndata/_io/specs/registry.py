@@ -284,7 +284,7 @@ class DaskReader(Reader):
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
-    ) -> InMemoryElem:
+    ) -> DaskArray:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)

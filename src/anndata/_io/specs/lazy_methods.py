@@ -17,6 +17,8 @@ from .registry import _LAZY_REGISTRY, IOSpec
 if TYPE_CHECKING:
     from typing import Literal, Union
 
+    from anndata.compat import DaskArray
+
     from .registry import Reader
 
 
@@ -51,7 +53,7 @@ def compute_chunk_layout_for_axis_shape(
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_as_dask(
     elem: H5Group | ZarrGroup, _reader: Reader, chunks: tuple[int, ...] | None = None
-):
+) -> DaskArray:
     import dask.array as da
 
     path_or_group = Path(filename(elem)) if isinstance(elem, H5Group) else elem
@@ -113,7 +115,7 @@ def read_sparse_as_dask(
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
     elem: H5Array, _reader: Reader, chunks: tuple[int, ...] | None = None
-):
+) -> DaskArray:
     import dask.array as da
 
     path = Path(elem.file.filename)
@@ -157,7 +159,7 @@ def read_h5_array(
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
     elem: ZarrArray, _reader: Reader, chunks: tuple[int, ...] | None = None
-):
+) -> DaskArray:
     chunks: tuple[int, ...] = chunks if chunks is not None else elem.chunks
     import dask.array as da
 
