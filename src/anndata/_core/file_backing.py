@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from functools import singledispatch
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import h5py
@@ -161,3 +161,18 @@ def _(x):
 @filename.register(ZarrGroup)
 def _(x):
     return x.store.path
+
+
+@singledispatch
+def get_elem_name(x):
+    raise NotImplementedError(f"Not implemented for {type(x)}")
+
+
+@get_elem_name.register(h5py.Group)
+def _(x):
+    return x.name
+
+
+@get_elem_name.register(ZarrGroup)
+def _(x):
+    return PurePosixPath(x.path).name
