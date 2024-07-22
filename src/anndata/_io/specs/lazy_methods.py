@@ -80,7 +80,7 @@ def read_sparse_as_dask(
     elem: H5Group | ZarrGroup,
     *,
     _reader: DaskReader,
-    chunks: tuple[int, ...] | None = None,
+    chunks: tuple[int, int] | None = None,
 ) -> DaskArray:
     import dask.array as da
 
@@ -91,15 +91,16 @@ def read_sparse_as_dask(
     is_csc: bool = elem.attrs["encoding-type"] == "csc_matrix"
 
     stride: int = _DEFAULT_STRIDE
+    major_dim, minor_dim = (1, 0) if is_csc else (0, 1)
     if chunks is not None:
         if len(chunks) != 2:
             raise ValueError("`chunks` must be a tuple of two integers")
-        if chunks[int(not is_csc)] != shape[int(not is_csc)]:
+        if chunks[minor_dim] != shape[minor_dim]:
             raise ValueError(
                 "Only the major axis can be chunked. "
                 f"Try setting chunks to {((-1, _DEFAULT_STRIDE) if is_csc else (_DEFAULT_STRIDE, -1))}"
             )
-        stride = chunks[int(is_csc)]
+        stride = chunks[major_dim]
 
     @require_block_info
     def make_dask_chunk(block_info: BlockInfo):
@@ -107,10 +108,12 @@ def read_sparse_as_dask(
         # https://github.com/scverse/anndata/issues/1105
         with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
-            array_location = block_info[None]["array-location"]
+            (xxx_start, xxx_end), (yyy_start, yyy_end) = block_info[None][
+                "array-location"
+            ]
             index = (
-                slice(array_location[0][0], array_location[0][1]),
-                slice(array_location[1][0], array_location[1][1]),
+                slice(xxx_start, xxx_end),
+                slice(yyy_start, yyy_end),
             )
             chunk = mtx[index]
         return chunk
@@ -150,8 +153,8 @@ def read_h5_array(
         with maybe_open_h5(path, elem_name) as f:
             idx = ()
             for i in range(len(shape)):
-                array_location = block_info[None]["array-location"][i]
-                idx += (slice(array_location[0], array_location[1]),)
+                (start, stop) = block_info[None]["array-location"][i]
+                idx += (slice(start, stop),)
             return f[idx]
 
     chunk_layout = tuple(
