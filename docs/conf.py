@@ -27,7 +27,7 @@ release = version = metadata.version("anndata")
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = [".rst", ".md"]
+source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 master_doc = "index"
 default_role = "literal"
 exclude_patterns = [
