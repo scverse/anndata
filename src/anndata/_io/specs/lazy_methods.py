@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, ParamSpec, TypeVar, Union
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -17,11 +17,19 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from typing import Concatenate
+    from typing import Concatenate, Literal, ParamSpec, TypeVar
 
     from anndata.compat import DaskArray
 
     from .registry import DaskReader
+
+    BlockInfo = dict[
+        Literal[None],
+        dict[str, tuple[int, ...] | list[tuple[int, ...]]],
+    ]
+
+    P = ParamSpec("P")
+    R = TypeVar("R")
 
 
 @contextmanager
@@ -47,14 +55,6 @@ def compute_chunk_layout_for_axis_shape(
     if rest > 0:
         chunk += (rest,)
     return chunk
-
-
-P = ParamSpec("P")
-R = TypeVar("R")
-BlockInfo = dict[
-    Literal[None],
-    dict[str, Union[tuple[int, ...], list[tuple[int, ...]]]],
-]
 
 
 def require_block_info(
