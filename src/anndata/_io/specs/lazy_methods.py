@@ -72,7 +72,7 @@ def require_block_info(
     return wrapper
 
 
-def get_chunks_indexer(block_info: BlockInfo) -> tuple[slice, ...]:
+def get_array_ranges(block_info: BlockInfo) -> tuple[slice, ...]:
     return tuple(
         slice(start, stop) for start, stop in block_info[None]["array-location"]
     )
@@ -114,7 +114,7 @@ def read_sparse_as_dask(
         # https://github.com/scverse/anndata/issues/1105
         with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
-            xs, ys = get_chunks_indexer(block_info)
+            xs, ys = get_array_ranges(block_info)
             chunk = mtx[xs, ys]
         return chunk
 
@@ -151,7 +151,7 @@ def read_h5_array(
     @require_block_info
     def make_dask_chunk(block_info: BlockInfo):
         with maybe_open_h5(path, elem_name) as f:
-            return f[get_chunks_indexer(block_info)]
+            return f[get_array_ranges(block_info)]
 
     chunk_layout = tuple(
         compute_chunk_layout_for_axis_shape(chunks[i], shape[i])
