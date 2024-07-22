@@ -16,7 +16,7 @@ from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
-from anndata._core.aligned_mapping import AlignedMapping
+from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
@@ -499,7 +499,7 @@ def assert_equal_mapping(a, b, exact=False, elem_name=None):
         assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
 
 
-@assert_equal.register(AlignedMapping)
+@assert_equal.register(AlignedMappingBase)
 def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
     a_indices = (a.parent.obs_names, a.parent.var_names)
     b_indices = (b.parent.obs_names, b.parent.var_names)
