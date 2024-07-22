@@ -23,17 +23,11 @@ if TYPE_CHECKING:
 
     from .registry import DaskReader
 
-    BlockInfo2D = Mapping[
-        Literal[None],
-        dict[str, tuple[tuple[int, int], tuple[int, int]]],
-    ]
-
-    BlockInfoND = Mapping[
+    BlockInfo = Mapping[
         Literal[None],
         dict[str, Sequence[tuple[int, int]]],
     ]
 
-    B = TypeVar("B", BlockInfo2D, BlockInfoND)
     P = ParamSpec("P")
     R = TypeVar("R")
 
@@ -64,16 +58,24 @@ def compute_chunk_layout_for_axis_shape(
 
 
 def require_block_info(
-    f: Callable[Concatenate[B, P], R],
-) -> Callable[Concatenate[B | None, P], R]:
+    f: Callable[Concatenate[BlockInfo, P], R],
+) -> Callable[Concatenate[BlockInfo | None, P], R]:
     @wraps(f)
-    def wrapper(block_info: B | None = None, *args: P.args, **kwargs: P.kwargs) -> R:
+    def wrapper(
+        block_info: BlockInfo | None = None, *args: P.args, **kwargs: P.kwargs
+    ) -> R:
         if block_info is None:
             msg = "Block info is required"
             raise ValueError(msg)
         return f(block_info, *args, **kwargs)
 
     return wrapper
+
+
+def get_chunks_indexer(block_info: BlockInfo) -> tuple[slice, ...]:
+    return tuple(
+        slice(start, stop) for start, stop in block_info[None]["array-location"]
+    )
 
 
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -107,13 +109,13 @@ def read_sparse_as_dask(
         stride = chunks[major_dim]
 
     @require_block_info
-    def make_dask_chunk(block_info: BlockInfo2D):
+    def make_dask_chunk(block_info: BlockInfo):
         # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
         # https://github.com/scverse/anndata/issues/1105
         with maybe_open_h5(path_or_group, elem_name) as f:
             mtx = ad.experimental.sparse_dataset(f)
-            range_i, range_j = block_info[None]["array-location"]
-            chunk = mtx[slice(*range_i), slice(*range_j)]
+            xs, ys = get_chunks_indexer(block_info)
+            chunk = mtx[xs, ys]
         return chunk
 
     shape_minor, shape_major = shape if is_csc else shape[::-1]
@@ -147,13 +149,9 @@ def read_h5_array(
     )
 
     @require_block_info
-    def make_dask_chunk(block_info: BlockInfoND):
+    def make_dask_chunk(block_info: BlockInfo):
         with maybe_open_h5(path, elem_name) as f:
-            idx = ()
-            for i in range(len(shape)):
-                (start, stop) = block_info[None]["array-location"][i]
-                idx += (slice(start, stop),)
-            return f[idx]
+            return f[get_chunks_indexer(block_info)]
 
     chunk_layout = tuple(
         compute_chunk_layout_for_axis_shape(chunks[i], shape[i])
