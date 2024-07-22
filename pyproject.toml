@@ -66,7 +66,7 @@ dev = [
     "pytest-xdist",
 ]
 doc = [
-    "sphinx>=4.4",
+    "sphinx>=7.4.6",
     "sphinx-book-theme>=1.1.0",
     "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",
