@@ -678,6 +678,9 @@ def test_copy():
         map_sprs = getattr(adata_sparse, attr)
         map_copy = getattr(adata_copy, attr)
         assert map_sprs is not map_copy
+        if attr not in {"obs", "var"}:
+            # check that we don’t create too many references
+            assert getattr(adata_copy, f"_{attr}") is map_copy._data
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
         for key in map_sprs.keys():
             assert_eq_not_id(map_sprs[key], map_copy[key])
