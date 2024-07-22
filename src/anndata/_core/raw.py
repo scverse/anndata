@@ -9,12 +9,13 @@ from scipy.sparse import issparse
 
 from ..compat import CupyArray, CupySparseMatrix
 from .aligned_df import _gen_dataframe
-from .aligned_mapping import AlignedMappingProperty, AxisArrays
+from .aligned_mapping import AlignedMappingProperty, AxisArrays, AxisArraysView
 from .index import _normalize_index, _subset, get_vector, unpack_index
 from .sparse_dataset import sparse_dataset
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from typing import ClassVar
 
     from scipy import sparse
 
@@ -24,6 +25,8 @@ if TYPE_CHECKING:
 
 # TODO: Implement views for Raw
 class Raw:
+    is_view: ClassVar = False
+
     def __init__(
         self,
         adata: AnnData,
@@ -89,29 +92,29 @@ class Raw:
             return X
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, int]:
         return self.n_obs, self.n_vars
 
     @property
-    def var(self):
+    def var(self) -> pd.DataFrame:
         return self._var
 
     @property
-    def n_vars(self):
+    def n_vars(self) -> int:
         return self._var.shape[0]
 
     @property
-    def n_obs(self):
+    def n_obs(self) -> int:
         return self._n_obs
 
-    varm = AlignedMappingProperty("varm", AxisArrays, 1)
+    varm = AlignedMappingProperty[AxisArrays | AxisArraysView]("varm", AxisArrays, 1)
 
     @property
-    def var_names(self):
+    def var_names(self) -> pd.Index[str]:
         return self.var.index
 
     @property
-    def obs_names(self):
+    def obs_names(self) -> pd.Index[str]:
         return self._adata.obs_names
 
     def __getitem__(self, index):
@@ -135,11 +138,7 @@ class Raw:
             new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
         return new
 
-    @property
-    def is_view(self):
-        return False
-
-    def __str__(self):
+    def __str__(self) -> str:
         descr = f"Raw AnnData with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
         for attr in ["var", "varm"]:
             keys = getattr(self, attr).keys()
@@ -147,7 +146,7 @@ class Raw:
                 descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
         return descr
 
-    def copy(self):
+    def copy(self) -> Raw:
         return Raw(
             self._adata,
             X=self.X.copy(),
@@ -155,7 +154,7 @@ class Raw:
             varm=None if self._varm is None else self._varm.copy(),
         )
 
-    def to_adata(self):
+    def to_adata(self) -> AnnData:
         """Create full AnnData object."""
         from anndata import AnnData
 
