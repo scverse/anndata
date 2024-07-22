@@ -136,7 +136,7 @@ class AlignedView(AlignedMappingBase[I], Generic[P, I]):
     attrname: str
     """What attribute in the parent is this?"""
 
-    parent_mapping: Mapping[str, Value]
+    parent_mapping: P
     """The object this is a view of."""
 
     subset_idx: I
