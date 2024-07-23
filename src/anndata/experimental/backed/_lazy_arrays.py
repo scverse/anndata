@@ -42,6 +42,34 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
         )
 
 
+# Prevents first access from having to load the categories array
+class CategoriesAccessor:
+    def __init__(self, categories: ZarrArray | H5Array, ordered: bool):
+        self._categories = categories
+        self._ordered = ordered
+        self._dtype = None
+
+    def __get__(self, obj, objtype=None):
+        return self.dtype
+
+    @property
+    def dtype(self):
+        if self._dtype is None:
+            self._dtype = pd.CategoricalDtype(
+                categories=self._categories, ordered=self._ordered
+            )
+        return self._dtype
+
+    def __getattr__(self, name):
+        return getattr(self.dtype, name)
+
+    def __repr__(self):
+        return repr(self.dtype)
+
+    def __str__(self) -> str:
+        return str(self.dtype)
+
+
 class CategoricalArray(BackendArray):
     def __init__(
         self,
@@ -58,7 +86,7 @@ class CategoricalArray(BackendArray):
         self._categories_cache = None
         self._codes = ZarrOrHDF5Wrapper[type(codes)](codes)
         self.shape = self._codes.shape
-        self.dtype = pd.CategoricalDtype(
+        self.dtype = CategoriesAccessor(
             categories=self._categories, ordered=self._ordered
         )
 
