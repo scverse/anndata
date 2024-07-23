@@ -23,12 +23,11 @@ def read_backed(
     store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
 ) -> AnnData:
     """Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
-    No array data should need to be read into memory with the exceptio of Awkward Arrays and some older-encoding string arrays.
+    No array data should need to be read into memory with the exception of :class:`awkward.Array` and some older-encoding string arrays.
 
     Params
     ------
-        store: A store-like object to be read in.  If :doc:`zarr:index`, it is best
-        for it to be consolidated.
+        store: A store-like object to be read in.  If :doc:`zarr:index`, it is best for it to be consolidated.
 
     Returns
     -------

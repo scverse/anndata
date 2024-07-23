@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         WriteCallback,
         _WriteInternal,
     )
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.experimental.backed._xarray import Dataset2D
 
     T = TypeVar("T")
@@ -290,7 +291,7 @@ class LazyReader(Reader):
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
-    ) -> DaskArray | Dataset2D:
+    ) -> DaskArray | Dataset2D | CategoricalArray | MaskedArray:
         """Read a dask element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
@@ -381,7 +382,7 @@ def read_elem(elem: StorageType) -> InMemoryElem:
 
 def read_elem_lazy(
     elem: StorageType, chunks: tuple[int, ...] | None = None
-) -> DaskArray | Dataset2D:
+) -> DaskArray | Dataset2D | CategoricalArray | MaskedArray:
     """
     Read an element from a store lazily.
 

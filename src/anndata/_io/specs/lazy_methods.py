@@ -13,13 +13,13 @@ import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup
 
-from ..._settings import settings
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.experimental.backed._xarray import Dataset2D
 
     from ..._core.sparse_dataset import CSCDataset, CSRDataset
@@ -139,7 +139,7 @@ def read_h5_string_array(
     *,
     _reader: LazyReader,
     chunks: tuple[int, int] | None = None,
-):
+) -> DaskArray:
     import dask.array as da
 
     from anndata._io.h5ad import read_dataset
@@ -236,14 +236,13 @@ def read_categorical(
     *,
     _reader: LazyReader,
     chunks: tuple[int, ...] | None = None,
-):
+) -> CategoricalArray:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray
 
     return CategoricalArray(
         codes=elem["codes"],
         categories=elem["categories"],
         ordered=elem.attrs["ordered"],
-        drop_unused_cats=settings.should_remove_unused_categories,
     )
 
 
@@ -253,7 +252,7 @@ def read_nullable(
     encoding_type: str,
     _reader: LazyReader,
     chunks: tuple[int, ...] | None = None,
-):
+) -> MaskedArray:
     from anndata.experimental.backed._lazy_arrays import MaskedArray
 
     return MaskedArray(

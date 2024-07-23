@@ -88,7 +88,7 @@ def coerce_array(
         return value
     # If value is one of the allowed types, return it
 
-    if isinstance(value, StorageType.classes()) or isinstance(value, Dataset2D):  # ????
+    if isinstance(value, StorageType.classes()) or isinstance(value, Dataset2D):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warnings.warn(msg, ImplicitModificationWarning)

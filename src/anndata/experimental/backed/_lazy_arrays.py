@@ -9,6 +9,7 @@ from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata.compat import H5Array, ZarrArray
 
+from ..._settings import settings
 from ._compat import BackendArray, DataArray, ZarrArrayWrapper, xr
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
 
 
 # Prevents first access from having to load the categories array
-class CategoriesAccessor:
+class CategoricalDtypeAccessor:
     def __init__(self, categories: ZarrArray | H5Array, ordered: bool):
         self._categories = categories
         self._ordered = ordered
@@ -60,7 +61,7 @@ class CategoriesAccessor:
             )
         return self._dtype
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str):
         return getattr(self.dtype, name)
 
     def __repr__(self):
@@ -76,17 +77,15 @@ class CategoricalArray(BackendArray):
         codes: ZarrArray | H5Array,
         categories: ZarrArray | H5Array,
         ordered: bool,
-        drop_unused_cats: bool = False,
         *args,
         **kwargs,
     ):
         self._categories = categories
         self._ordered = ordered
-        self._drop_unused_cats = drop_unused_cats
         self._categories_cache = None
         self._codes = ZarrOrHDF5Wrapper[type(codes)](codes)
         self.shape = self._codes.shape
-        self.dtype = CategoriesAccessor(
+        self.dtype = CategoricalDtypeAccessor(
             categories=self._categories, ordered=self._ordered
         )
 
@@ -110,7 +109,7 @@ class CategoricalArray(BackendArray):
         categorical_array = pd.Categorical.from_codes(
             codes=codes, categories=self.categories, ordered=self._ordered
         )
-        if self._drop_unused_cats:
+        if settings.should_remove_unused_categories:
             return xr.core.extension_array.PandasExtensionArray(
                 categorical_array.remove_unused_categories()
             )
@@ -131,7 +130,6 @@ class MaskedArray(BackendArray):
         self.dtype = pd.api.types.pandas_dtype(self._values.dtype)
 
     def __getitem__(self, key) -> xr.core.extension_array.PandasExtensionArray:
-        # HACK! TODO(ilan-gold): open issue about hdf5 compat that doesn't allow initialization!
         values = self._values[key]
         if self._mask is not None:
             mask = self._mask[key]
