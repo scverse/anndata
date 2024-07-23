@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata._types import Read, ReadDask, _ReadDaskInternal, _ReadInternal
+from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata.compat import DaskArray, _read_attr
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         WriteCallback,
         _WriteInternal,
     )
+    from anndata.experimental.backed._xarray import Dataset2D
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
@@ -78,8 +79,8 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-_R = TypeVar("_R", _ReadInternal, _ReadDaskInternal)
-R = TypeVar("R", Read, ReadDask)
+_R = TypeVar("_R", _ReadInternal, _ReadLazyInternal)
+R = TypeVar("R", Read, ReadLazy)
 
 
 class IORegistry(Generic[_R, R]):
@@ -213,7 +214,7 @@ class IORegistry(Generic[_R, R]):
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
-_LAZY_REGISTRY: IORegistry[_ReadDaskInternal, ReadDask] = IORegistry()
+_LAZY_REGISTRY: IORegistry[_ReadLazyInternal, ReadLazy] = IORegistry()
 
 
 @singledispatch
@@ -282,18 +283,18 @@ class Reader:
         return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
-class DaskReader(Reader):
+class LazyReader(Reader):
     @report_read_key_on_error
     def read_elem(
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
-    ) -> DaskArray:
+    ) -> DaskArray | Dataset2D:
         """Read a dask element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func: ReadDask = self.registry.get_read(
+        read_func: ReadLazy = self.registry.get_read(
             type(elem), iospec, modifiers, reader=self
         )
         if self.callback is not None:
@@ -378,9 +379,9 @@ def read_elem(elem: StorageType) -> InMemoryElem:
     return Reader(_REGISTRY).read_elem(elem)
 
 
-def read_elem_as_dask(
+def read_elem_lazy(
     elem: StorageType, chunks: tuple[int, ...] | None = None
-) -> DaskArray:
+) -> DaskArray | Dataset2D:
     """
     Read an element from a store lazily.
 
@@ -400,7 +401,7 @@ def read_elem_as_dask(
     -------
         DaskArray
     """
-    return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
+    return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
 
 
 def write_elem(

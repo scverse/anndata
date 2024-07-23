@@ -152,6 +152,9 @@ def fix_known_differences(orig, result, backwards_compat=True):
     for k, dtype in orig.obs.dtypes.items():
         if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
             result.obs[k] = result.obs[k].astype(dtype)
+    for k, dtype in orig.obsm["df"].dtypes.items():
+        if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
+            result.obsm["df"][k] = result.obsm["df"][k].astype(dtype)
 
     return orig, result
 

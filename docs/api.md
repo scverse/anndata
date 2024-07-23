@@ -121,7 +121,7 @@ Low level methods for reading and writing elements of an `AnnData` object to a s
 
    experimental.read_elem
    experimental.write_elem
-   experimental.read_elem_as_dask
+   experimental.read_elem_lazy
 ```
 
 Utilities for customizing the IO process:

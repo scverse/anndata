@@ -8,14 +8,10 @@ from typing import (
 
 import h5py
 
-from anndata._io.specs.registry import read_elem_as_dask
+from anndata._io.specs.registry import read_elem_lazy
 
 from ..._core.anndata import AnnData
-from ...compat import DaskArray
 from .. import read_dispatched
-from ._compat import xr
-from ._lazy_arrays import CategoricalArray, MaskedArray
-from ._xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -59,7 +55,7 @@ def read_backed(
     else:
         f = h5py.File(store, mode="r")
 
-    def callback(func, elem_name: str, elem, iospec, dataset_kwargs):
+    def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             cols = [
                 "obs",
@@ -79,64 +75,19 @@ def read_backed(
             return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
         elif elem_name.startswith("/raw"):
             return None
-        elif iospec.encoding_type in {"dataframe"}:
-            iter_object = [(k, elem[k]) for k in elem.attrs["column-order"]] + [
-                (elem.attrs["_index"], elem[elem.attrs["_index"]])
-            ]
-            d = {k: read_dispatched(v, callback) for k, v in iter_object}
-            d_with_xr = {}
-            index_label = f'{elem_name.replace("/", "")}_names'
-            index = d[
-                elem.attrs["_index"]
-            ]  # no sense in reading this in multiple times
-            for k in d:
-                v = d[k]
-                if type(v) == DaskArray and k != elem.attrs["_index"]:
-                    d_with_xr[k] = xr.DataArray(
-                        v, coords=[index], dims=[index_label], name=k
-                    )
-                elif (
-                    type(v) == CategoricalArray or type(v) == MaskedArray
-                ) and k != elem.attrs["_index"]:
-                    variable = xr.Variable(
-                        data=xr.core.indexing.LazilyIndexedArray(v), dims=[index_label]
-                    )
-                    d_with_xr[k] = xr.DataArray(
-                        variable,
-                        coords=[index],
-                        dims=[index_label],
-                        name=k,
-                    )
-                elif k == elem.attrs["_index"]:
-                    d_with_xr[index_label] = xr.DataArray(
-                        v, coords=[v], dims=[index_label], name=index_label
-                    )
-                else:
-                    d_with_xr[k] = v
-            return Dataset2D(d_with_xr)
-        elif iospec.encoding_type == "categorical":
-            drop_unused_cats = not (
-                elem_name.startswith("/obsm") or elem_name.startswith("/varm")
-            )
-            return CategoricalArray(
-                codes=elem["codes"],
-                categories=elem["categories"],
-                ordered=elem.attrs["ordered"],
-                drop_unused_cats=drop_unused_cats,
-            )
-        elif "nullable" in iospec.encoding_type:
-            return MaskedArray(
-                values=elem["values"],
-                mask=elem["mask"] if "mask" in elem else None,
-                dtype_str=iospec.encoding_type,
-            )
-        elif iospec.encoding_type in {
-            "csr_matrix",
-            "csc_matrix",
-            "array",
-            "string-array",
-        }:
-            return read_elem_as_dask(elem)
+        elif (
+            iospec.encoding_type
+            in {
+                "csr_matrix",
+                "csc_matrix",
+                "array",
+                "string-array",
+                "dataframe",
+                "categorical",
+            }
+            or "nullable" in iospec.encoding_type
+        ):
+            return read_elem_lazy(elem)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         return func(elem)
