@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,7 @@ def dskfmt(request):
     return request.param
 
 
+@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
 def test_access_count_obs_var(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
@@ -90,6 +92,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     )  # never accessed
 
 
+@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
 def test_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
@@ -101,6 +104,7 @@ def test_to_memory(tmp_path, mtx_format, dskfmt):
     assert_equal(remote_to_memory, adata)
 
 
+@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
 def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)

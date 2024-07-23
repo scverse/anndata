@@ -62,9 +62,7 @@ def extract_min_deps(
             for extra in req.extras:
                 extra_deps = pyproject["project"]["optional-dependencies"][extra]
                 dependencies += map(Requirement, extra_deps)
-        elif req.name == "xarray":
-            continue  # xarray requires too high a version of pandas and is experimental anyway
-        else:
+        elif req.name != "xarray":
             yield min_dep(req)
 
 
