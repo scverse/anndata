@@ -119,6 +119,7 @@ def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     assert_equal(adata[:, subset_var], remote[:, subset_var].to_memory())
 
 
+@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
 def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
