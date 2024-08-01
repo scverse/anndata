@@ -66,14 +66,15 @@ dev = [
     "pytest-xdist",
 ]
 doc = [
-    "sphinx>=4.4",
+    "sphinx>=7.4.6",
     "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=1.11.0",
+    "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",
     "sphinx-copybutton",
+    "sphinx-toolbox",
     "sphinxext.opengraph",
     "nbsphinx",
-    "scanpydoc[theme,typehints] >=0.13.4",
+    "scanpydoc[theme,typehints] >=0.13.6",
     "zarr",
     "awkward>=2.0.7",
     "IPython",                          # For syntax highlighting in notebooks
@@ -184,6 +185,9 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
+[tool.ruff.lint.flake8-type-checking]
+exempt-modules = []
+strict = true
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"

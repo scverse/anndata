@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from functools import singledispatch, wraps
 from inspect import Parameter, signature
 from pathlib import Path
-from typing import Any, Union
+from typing import TYPE_CHECKING, Union
 from warnings import warn
 
 import h5py
@@ -20,6 +20,9 @@ import scipy.sparse
 from packaging.version import Version
 
 from .exceptiongroups import add_note  # noqa: F401
+
+if TYPE_CHECKING:
+    from typing import Any
 
 #############################
 # scipy sparse array comapt #
@@ -46,6 +49,7 @@ Index1D = Union[slice, int, str, np.int64, np.ndarray]
 Index = Union[Index1D, tuple[Index1D, Index1D], scipy.sparse.spmatrix, SpArray]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
+H5File = h5py.File
 
 
 #############################
@@ -146,6 +150,15 @@ try:
     from cupyx.scipy.sparse import (
         spmatrix as CupySparseMatrix,
     )
+
+    try:
+        import dask.array as da
+
+        da.register_chunk_type(CupyCSRMatrix)
+        da.register_chunk_type(CupyCSCMatrix)
+    except ImportError:
+        pass
+
 except ImportError:
 
     class CupySparseMatrix:

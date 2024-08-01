@@ -4,7 +4,7 @@ import warnings
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import reduce, singledispatch, wraps
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,7 @@ from .access import ElementRef
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, KeysView, Sequence
+    from typing import Any
 
     from anndata import AnnData
 
