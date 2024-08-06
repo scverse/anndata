@@ -314,8 +314,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.should_remove_unused_categories:
-            self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
-            self._remove_unused_categories(adata_ref.var, var_sub, uns)
+            _remove_unused_categories(adata_ref.obs, obs_sub, uns)
+            _remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
         self._obs = as_view(obs_sub, view_args=(self, "obs"))
         self._var = as_view(var_sub, view_args=(self, "var"))
@@ -1037,14 +1037,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
-
-    def _remove_unused_categories(
-        self,
-        df_full: pd.DataFrame,
-        df_sub: pd.DataFrame,
-        uns: dict[str, Any],  # types are wrong now...
-    ):
-        _remove_unused_categories(df_full, df_sub, uns)
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\
