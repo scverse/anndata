@@ -983,12 +983,20 @@ try:
             return super().__getitem__(key)
 
         def get_access_count(self, key):
+            # access defaultdict when value is not there causes key to be there,
+            # which causes it to be tracked
+            if key not in self._access_count:
+                raise ValueError(f"{key} not found among access count")
             return self._access_count[key]
 
         def get_subkeys_accessed(self, key):
+            if key not in self._accessed:
+                raise ValueError(f"{key} not found among accessed")
             return self._accessed[key]
 
         def get_accessed_keys(self, key):
+            if key not in self._accessed_keys:
+                raise ValueError(f"{key} not found among accessed keys")
             return self._accessed_keys[key]
 
         def initialize_key_trackers(self, keys_to_track):

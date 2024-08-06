@@ -55,6 +55,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     orig.write_zarr(orig_pth)
     store = AccessTrackingStore(orig_pth)
     remote = read_backed(store)
+    store.initialize_key_trackers(["obs/cat/codes", "obs/int64", "var/int64", "X"])
     # a series of methods that should __not__ read in any data
     remote.X  # the initial (non-subset) access to `X` should not read in data
     remote.shape
