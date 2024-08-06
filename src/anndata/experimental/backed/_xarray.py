@@ -28,17 +28,36 @@ def get_index_dim(ds):
 class Dataset2D(Dataset):
     @property
     def index(self) -> pd.Index:
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
+
+        Returns
+        -------
+            The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
+        """
         coord = list(self.coords.keys())[0]
         return pd.Index(self.coords[coord].data)
 
     @property
     def shape(
         self,
-    ):  # aligned mapping classes look for this for DataFrames so this ensures usability with e.g., obsm
+    ):
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability
+
+        Returns
+        -------
+            The (2D) shape of the dataframe resolved from :attr:`~xarray.Dataset.sizes`.
+        """
         return [self.sizes[get_index_dim(self)], len(self)]
 
     @property
     def iloc(self):
+        """:attr:`~anndata.AnnData` internally looks for :meth:`~pandas.DataFrame.iloc` so this ensures usability
+
+        Returns
+        -------
+            Handler class for doing the iloc-style indexing using :meth:`~xarray.Dataset.isel`.
+        """
+
         class IlocGetter:
             def __init__(self, ds):
                 self._ds = ds
