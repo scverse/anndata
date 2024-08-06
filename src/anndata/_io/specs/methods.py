@@ -444,10 +444,20 @@ def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
+@_REGISTRY.register_read(ZarrArray, IOSpec("string-array-nullable", "0.1.0"))
+def read_array_nullable(elem, _reader):
+    return pd.array(elem[()], dtype="string")
+
+
 @_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array_partial(elem, *, items=None, indices=(slice(None, None))):
     return elem[indices]
+
+
+@_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array-nullable", "0.1.0"))
+def read_array_nullable_partial(elem, *, items=None, indices=(slice(None, None))):
+    return pd.array(elem[indices], dtype="string")
 
 
 @_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
@@ -461,9 +471,21 @@ def read_string_array(d: H5Array, *, _reader: Reader):
     return read_array(d.asstr(), _reader=_reader)
 
 
+@_REGISTRY.register_read(H5Array, IOSpec("string-array-nullable", "0.1.0"))
+def read_string_array_nullable(d, _reader):
+    return pd.array(read_array(d.asstr(), _reader=_reader), dtype="string")
+
+
 @_REGISTRY.register_read_partial(H5Array, IOSpec("string-array", "0.2.0"))
 def read_string_array_partial(d, items=None, indices=slice(None)):
     return read_array_partial(d.asstr(), items=items, indices=indices)
+
+
+@_REGISTRY.register_read_partial(H5Array, IOSpec("string-array-nullable", "0.1.0"))
+def read_string_array_nullable_partial(d, items=None, indices=slice(None)):
+    return pd.array(
+        read_array_partial(d.asstr(), items=items, indices=indices), dtype="string"
+    )
 
 
 @_REGISTRY.register_write(
@@ -474,6 +496,9 @@ def read_string_array_partial(d, items=None, indices=slice(None)):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.StringArray, IOSpec("string-array-nullable", "0.1.0")
+)
 def write_vlen_string_array(
     f: H5Group,
     k: str,
@@ -495,6 +520,9 @@ def write_vlen_string_array(
 )
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.StringArray, IOSpec("string-array-nullable", "0.1.0")
+)
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
     k: str,
@@ -507,7 +535,7 @@ def write_vlen_string_array_zarr(
 
     # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
     # TODO: Warn to upgrade numcodecs if fixed
-    if not elem.flags.writeable:
+    if hasattr(elem, "flags") and not elem.flags.writeable:
         elem = elem.copy()
 
     f.create_dataset(
@@ -1090,17 +1118,19 @@ def write_hdf5_scalar(
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
-# fmt: off
 for numeric_scalar_type in [
-    bool, np.bool_,
-    np.uint8, np.uint16, np.uint32, np.uint64,
-    int, np.int8, np.int16, np.int32, np.int64,
-    float, *np.floating.__subclasses__(),
+    *(bool, np.bool_),
+    *(np.uint8, np.uint16, np.uint32, np.uint64),
+    *(int, np.int8, np.int16, np.int32, np.int64),
+    *(float, *np.floating.__subclasses__()),
     *np.complexfloating.__subclasses__(),
 ]:
-    _REGISTRY.register_write(H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_hdf5_scalar)
-    _REGISTRY.register_write(ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_scalar)
-# fmt: on
+    _REGISTRY.register_write(
+        H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
+    )(write_hdf5_scalar)
+    _REGISTRY.register_write(
+        ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
+    )(write_scalar)
 
 _REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar)
 _REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_scalar)
