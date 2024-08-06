@@ -8,7 +8,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
-from functools import partial
+from functools import partial, singledispatch
 from pathlib import Path
 from textwrap import dedent
 from typing import TYPE_CHECKING
@@ -36,7 +36,6 @@ from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
 from .views import (
-    DataFrameView,
     DictView,
     _resolve_idxs,
     as_view,
@@ -78,6 +77,32 @@ def _check_2d_shape(X):
         raise ValueError(
             f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
         )
+
+
+@singledispatch
+def _remove_unused_categories(
+    df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
+):
+    for k in df_full:
+        if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
+            continue
+        all_categories = df_full[k].cat.categories
+        with pd.option_context("mode.chained_assignment", None):
+            df_sub[k] = df_sub[k].cat.remove_unused_categories()
+        # also correct the colors...
+        color_key = f"{k}_colors"
+        if color_key not in uns:
+            continue
+        color_vec = uns[color_key]
+        if np.array(color_vec).ndim == 0:
+            # Make 0D arrays into 1D ones
+            uns[color_key] = np.array(color_vec)[(None,)]
+        elif len(color_vec) != len(all_categories):
+            # Reset colors
+            del uns[color_key]
+        else:
+            idx = np.where(np.isin(all_categories, df_sub[k].cat.categories))[0]
+            uns[color_key] = np.array(color_vec)[(idx,)]
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -289,11 +314,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.should_remove_unused_categories:
-            self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
-            self._remove_unused_categories(adata_ref.var, var_sub, uns)
+            _remove_unused_categories(adata_ref.obs, obs_sub, uns)
+            _remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
-        self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
-        self._var = DataFrameView(var_sub, view_args=(self, "var"))
+        self._obs = as_view(obs_sub, view_args=(self, "obs"))
+        self._var = as_view(var_sub, view_args=(self, "var"))
         self._uns = uns
 
         # set data
@@ -1012,30 +1037,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Returns a sliced view of the object."""
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
-
-    def _remove_unused_categories(
-        self, df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
-    ):
-        for k in df_full:
-            if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
-                continue
-            all_categories = df_full[k].cat.categories
-            with pd.option_context("mode.chained_assignment", None):
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
-            # also correct the colors...
-            color_key = f"{k}_colors"
-            if color_key not in uns:
-                continue
-            color_vec = uns[color_key]
-            if np.array(color_vec).ndim == 0:
-                # Make 0D arrays into 1D ones
-                uns[color_key] = np.array(color_vec)[(None,)]
-            elif len(color_vec) != len(all_categories):
-                # Reset colors
-                del uns[color_key]
-            else:
-                idx = np.where(np.isin(all_categories, df_sub[k].cat.categories))[0]
-                uns[color_key] = np.array(color_vec)[(idx,)]
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\

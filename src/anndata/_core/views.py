@@ -13,6 +13,7 @@ from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
 
+from .._settings import settings
 from ..compat import (
     AwkArray,
     CupyArray,
@@ -292,6 +293,11 @@ def as_view_dask_array(array, view_args):
 
 @as_view.register(pd.DataFrame)
 def as_view_df(df, view_args):
+    if settings.should_remove_unused_categories:
+        for col in df.columns:
+            if isinstance(df[col].dtype, pd.CategoricalDtype):
+                with pd.option_context("mode.chained_assignment", None):
+                    df[col] = df[col].cat.remove_unused_categories()
     return DataFrameView(df, view_args=view_args)
 
 

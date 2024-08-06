@@ -757,6 +757,7 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
     return df
 
 
+# TODO: concat for xarray
 def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     arrays = list(arrays)
     if fill_value is None:

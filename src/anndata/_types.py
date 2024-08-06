@@ -31,7 +31,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from anndata._io.specs.registry import DaskReader
+    from anndata._io.specs.registry import LazyReader
+    from anndata.experimental.backed._xarray import Dataset2D
 
     from ._io.specs.registry import IOSpec, Reader, Writer
 
@@ -89,10 +90,10 @@ class _ReadInternal(Protocol[SCon, CovariantInMemoryType]):
     def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantInMemoryType: ...
 
 
-class _ReadDaskInternal(Protocol[SCon]):
+class _ReadLazyInternal(Protocol[SCon]):
     def __call__(
-        self, elem: SCon, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray: ...
+        self, elem: SCon, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
+    ) -> DaskArray | Dataset2D: ...
 
 
 class Read(Protocol[SCon, CovariantInMemoryType]):
@@ -110,11 +111,11 @@ class Read(Protocol[SCon, CovariantInMemoryType]):
         ...
 
 
-class ReadDask(Protocol[SCon]):
+class ReadLazy(Protocol[SCon]):
     def __call__(
         self, elem: SCon, *, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray:
-        """Low-level reading function for a dask element.
+    ) -> DaskArray | Dataset2D:
+        """Low-level reading function for a lazy element.
 
         Parameters
         ----------
@@ -124,7 +125,7 @@ class ReadDask(Protocol[SCon]):
             The chunk size to be used.
         Returns
         -------
-            The dask element read from the store.
+            The lazy element read from the store.
         """
         ...
 

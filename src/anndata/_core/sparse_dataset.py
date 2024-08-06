@@ -27,9 +27,8 @@ import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
 from anndata._core.index import _fix_slice_bounds
-from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
-from ..compat import SpArray, _read_attr
+from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
