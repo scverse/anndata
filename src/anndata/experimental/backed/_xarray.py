@@ -51,7 +51,7 @@ class Dataset2D(Dataset):
 
     @property
     def iloc(self):
-        """:attr:`~anndata.AnnData` internally looks for :meth:`~pandas.DataFrame.iloc` so this ensures usability
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability
 
         Returns
         -------
