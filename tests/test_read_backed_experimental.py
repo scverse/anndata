@@ -37,7 +37,12 @@ def dskfmt(request):
     return request.param
 
 
-@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
+needs_xarray = pytest.mark.skipif(
+    not find_spec("xarray"), reason="Xarray is not installed"
+)
+
+
+@needs_xarray
 def test_access_count_obs_var(tmp_path, mtx_format):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.zarr"
@@ -93,7 +98,7 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     )  # never accessed
 
 
-@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
+@needs_xarray
 def test_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
@@ -105,7 +110,7 @@ def test_to_memory(tmp_path, mtx_format, dskfmt):
     assert_equal(remote_to_memory, adata)
 
 
-@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
+@needs_xarray
 def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
@@ -120,7 +125,7 @@ def test_view_to_memory(tmp_path, mtx_format, dskfmt):
     assert_equal(adata[:, subset_var], remote[:, subset_var].to_memory())
 
 
-@pytest.mark.skipif(not find_spec("xarray"), reason="Xarray is not installed")
+@needs_xarray
 def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
     adata = gen_adata((1000, 1000), mtx_format)
     base_pth = Path(tmp_path)
@@ -144,4 +149,23 @@ def test_view_of_view_to_memory(tmp_path, mtx_format, dskfmt):
     assert_equal(
         subsetted_subsetted_adata,
         remote[:, subset_var][:, subset_subset_var].to_memory(),
+    )
+
+
+@needs_xarray
+def test_unconsolidated(tmp_path, mtx_format):
+    adata = gen_adata((1000, 1000), mtx_format)
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.zarr"
+    write = lambda x: getattr(x, "write_zarr")(orig_pth)
+    write(adata)
+    (Path(orig_pth) / ".zmetadata").unlink()
+    store = AccessTrackingStore(orig_pth)
+    store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
+    with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
+        remote = read_backed(store)
+    remote_to_memory = remote.to_memory()
+    assert_equal(remote_to_memory, adata)
+    assert store.get_access_count("obs/.zgroup") == 1, store.get_subkeys_accessed(
+        "obs/.zgroup"
     )
