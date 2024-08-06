@@ -99,8 +99,8 @@ test = [
     "pyarrow",
     "pytest_memray",
     "pytest-mock",
-    "anndata[xarray]",
 ]
+test-full = ["anndata[test]", "anndata[xarray]"]
 gpu = [
     "cupy",
     "numpy<2.0.0",
