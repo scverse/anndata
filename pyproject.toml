@@ -99,7 +99,7 @@ test = [
     "pyarrow",
     "pytest_memray",
     "pytest-mock",
-    "xarray>=2024.06.0"
+    "xarray>=2024.06.0",
 ]
 gpu = [
     "cupy",
