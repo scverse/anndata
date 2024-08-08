@@ -298,14 +298,14 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
 @singledispatch
 def _require_group_write_dataframe(
     f: Any, name: str, df: pd.DataFrame, *args, **kwargs
-):
+) -> ZarrGroup | H5Group:
     return f.require_group(name, *args, **kwargs)
 
 
 @_require_group_write_dataframe.register(H5Group)
 def _require_group_write_dataframe_hdf5(
     f: H5Group, name: str, df: pd.DataFrame, *args, **kwargs
-):
+) -> H5Group:
     # Again see this https://github.com/scverse/anndata/issues/874
     if len(df.columns) > 5_000:
         # actually 64kb is the limit, but this should be a conservative estimate
