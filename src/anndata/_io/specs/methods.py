@@ -34,6 +34,7 @@ from anndata.compat import (
     _decode_structured_array,
     _from_fixed_length_strings,
     _read_attr,
+    _require_group_write_dataframe,
 )
 
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -795,7 +796,7 @@ def write_dataframe(
     for reserved in ("_index",):
         if reserved in df.columns:
             raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
-    group = f.require_group(key)
+    group = _require_group_write_dataframe(f, key, df)
     if not df.columns.is_unique:
         duplicates = list(df.columns[df.columns.duplicated()])
         raise ValueError(
