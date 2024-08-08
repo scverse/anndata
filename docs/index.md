@@ -12,6 +12,7 @@ and {ref}`v0.11` for the upcoming release,
 :maxdepth: 1
 
 tutorials/index
+guides/index
 api
 concatenation
 fileformat-prose
