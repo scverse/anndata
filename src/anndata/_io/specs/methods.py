@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import h5py
@@ -26,6 +26,9 @@ from anndata.compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
+    H5Array,
+    H5File,
+    H5Group,
     ZarrArray,
     ZarrGroup,
     _decode_structured_array,
@@ -37,11 +40,19 @@ from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
     from os import PathLike
+    from typing import Any, Literal
 
-H5Array = h5py.Dataset
-H5Group = h5py.Group
-H5File = h5py.File
+    from numpy import typing as npt
 
+    from anndata._types import (
+        ArrayStorageType,
+        GroupStorageType,
+        InMemoryArrayOrScalarType,
+        RWAble,
+    )
+    from anndata.compat import SpArray
+
+    from .registry import Reader, Writer
 
 ####################
 # Dask utils       #
@@ -90,11 +101,13 @@ def _to_cpu_mem_wrapper(write_func):
         f,
         k,
         cupy_val: CupyArray | CupyCSCMatrix | CupyCSRMatrix,
-        _writer,
         *,
-        dataset_kwargs=MappingProxyType,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ):
-        return write_func(f, k, cupy_val.get(), _writer, dataset_kwargs=dataset_kwargs)
+        return write_func(
+            f, k, cupy_val.get(), _writer=_writer, dataset_kwargs=dataset_kwargs
+        )
 
     return wrapper
 
@@ -109,7 +122,9 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5File, IOSpec("", ""))
 @_REGISTRY.register_read(H5Group, IOSpec("", ""))
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
-def read_basic(elem, _reader):
+def read_basic(
+    elem: H5File | H5Group | H5Array, *, _reader: Reader
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import h5ad
 
     warn(
@@ -129,7 +144,9 @@ def read_basic(elem, _reader):
 
 @_REGISTRY.register_read(ZarrGroup, IOSpec("", ""))
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
-def read_basic_zarr(elem, _reader):
+def read_basic_zarr(
+    elem: ZarrGroup | ZarrArray, *, _reader: Reader
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
     from anndata._io import zarr
 
     warn(
@@ -245,7 +262,14 @@ def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
 
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
-def write_anndata(f, k, adata, _writer, dataset_kwargs=MappingProxyType({})):
+def write_anndata(
+    f: GroupStorageType,
+    k: str,
+    adata: AnnData,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     g = f.require_group(k)
     _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
@@ -265,7 +289,7 @@ def write_anndata(f, k, adata, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_read(H5File, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("raw", "0.1.0"))
-def read_anndata(elem, _reader):
+def read_anndata(elem: GroupStorageType | H5File, *, _reader: Reader) -> AnnData:
     d = {}
     for k in [
         "X",
@@ -286,7 +310,14 @@ def read_anndata(elem, _reader):
 
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
-def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
+def write_raw(
+    f: GroupStorageType,
+    k: str,
+    raw: Raw,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     g = f.require_group(k)
     _writer.write_elem(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
@@ -300,13 +331,20 @@ def write_raw(f, k, raw, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
-def read_mapping(elem, _reader):
+def read_mapping(elem: GroupStorageType, *, _reader: Reader) -> dict[str, RWAble]:
     return {k: _reader.read_elem(v) for k, v in elem.items()}
 
 
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
-def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
+def write_mapping(
+    f: GroupStorageType,
+    k: str,
+    v: dict[str, RWAble],
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     g = f.require_group(k)
     for sub_k, sub_v in v.items():
         _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
@@ -319,7 +357,14 @@ def write_mapping(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_write(H5Group, list, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, list, IOSpec("array", "0.2.0"))
-def write_list(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_list(
+    f: GroupStorageType,
+    k: str,
+    elem: list[RWAble],
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     _writer.write_elem(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
 
 
@@ -334,7 +379,14 @@ def write_list(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
-def write_basic(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_basic(
+    f: GroupStorageType,
+    k: str,
+    elem: views.ArrayView | np.ndarray | h5py.Dataset | np.ma.MaskedArray | ZarrArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     """Write methods which underlying library handles natively."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
 
@@ -348,7 +400,14 @@ _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
 
 
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_basic_dask_zarr(
+    f: ZarrGroup,
+    k: str,
+    elem: DaskArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     import dask.array as da
 
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
@@ -358,7 +417,14 @@ def write_basic_dask_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({
 # Adding this separately because h5py isn't serializable
 # https://github.com/pydata/xarray/issues/4242
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_basic_dask_h5(
+    f: H5Group,
+    k: str,
+    elem: DaskArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     import dask.array as da
     import dask.config as dc
 
@@ -374,7 +440,7 @@ def write_basic_dask_h5(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
-def read_array(elem, _reader):
+def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
@@ -391,7 +457,7 @@ def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
 
 # arrays of strings
 @_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
-def read_string_array(d, _reader):
+def read_string_array(d: H5Array, *, _reader: Reader):
     return read_array(d.asstr(), _reader=_reader)
 
 
@@ -408,7 +474,14 @@ def read_string_array_partial(d, items=None, indices=slice(None)):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
-def write_vlen_string_array(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_vlen_string_array(
+    f: H5Group,
+    k: str,
+    elem: np.ndarray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     """Write methods which underlying library handles nativley."""
     str_dtype = h5py.special_dtype(vlen=str)
     f.create_dataset(k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs)
@@ -423,7 +496,12 @@ def write_vlen_string_array(f, k, elem, _writer, dataset_kwargs=MappingProxyType
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
 def write_vlen_string_array_zarr(
-    f, k, elem, _writer, dataset_kwargs=MappingProxyType({})
+    f: ZarrGroup,
+    k: str,
+    elem: np.ndarray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     import numcodecs
 
@@ -460,7 +538,7 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
-def read_recarray(d, _reader):
+def read_recarray(d: ArrayStorageType, *, _reader: Reader) -> np.recarray | npt.NDArray:
     value = d[()]
     dtype = value.dtype
     value = _from_fixed_length_strings(value)
@@ -471,13 +549,27 @@ def read_recarray(d, _reader):
 
 @_REGISTRY.register_write(H5Group, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.recarray, IOSpec("rec-array", "0.2.0"))
-def write_recarray(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_recarray(
+    f: H5Group,
+    k: str,
+    elem: np.ndarray | np.recarray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     f.create_dataset(k, data=_to_hdf5_vlen_strings(elem), **dataset_kwargs)
 
 
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.recarray, IOSpec("rec-array", "0.2.0"))
-def write_recarray_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_recarray_zarr(
+    f: ZarrGroup,
+    k: str,
+    elem: np.ndarray | np.recarray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     from anndata.compat import _to_fixed_length_strings
 
     f.create_dataset(k, data=_to_fixed_length_strings(elem), **dataset_kwargs)
@@ -489,10 +581,11 @@ def write_recarray_zarr(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})
 
 
 def write_sparse_compressed(
-    f,
-    key,
-    value,
-    _writer,
+    f: GroupStorageType,
+    key: str,
+    value: sparse.spmatrix | SpArray,
+    *,
+    _writer: Writer,
     fmt: Literal["csr", "csc"],
     dataset_kwargs=MappingProxyType({}),
 ):
@@ -548,18 +641,48 @@ for store_type, (cls, spec, func) in product(
 @_REGISTRY.register_write(H5Group, CSCDataset, IOSpec("", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, CSRDataset, IOSpec("", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, CSCDataset, IOSpec("", "0.1.0"))
-def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_sparse_dataset(
+    f: GroupStorageType,
+    k: str,
+    elem: CSCDataset | CSRDataset,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     write_sparse_compressed(
         f,
         k,
         elem._to_backed(),
-        _writer,
+        _writer=_writer,
         fmt=elem.format,
         dataset_kwargs=dataset_kwargs,
     )
     # TODO: Cleaner way to do this
     f[k].attrs["encoding-type"] = f"{elem.format}_matrix"
     f[k].attrs["encoding-version"] = "0.1.0"
+
+
+@_REGISTRY.register_write(H5Group, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
+)
+def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+    _writer.write_elem(
+        f,
+        k,
+        elem.map_blocks(lambda x: x.get(), dtype=elem.dtype, meta=elem._meta.get()),
+        dataset_kwargs=dataset_kwargs,
+    )
 
 
 @_REGISTRY.register_write(
@@ -574,7 +697,14 @@ def write_sparse_dataset(f, k, elem, _writer, dataset_kwargs=MappingProxyType({}
 @_REGISTRY.register_write(
     ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
 )
-def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_dask_sparse(
+    f: GroupStorageType,
+    k: str,
+    elem: DaskArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     sparse_format = elem._meta.format
 
     def as_int64_indices(x):
@@ -620,7 +750,9 @@ def write_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
 @_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse(elem, _reader):
+def read_sparse(
+    elem: GroupStorageType, *, _reader: Reader
+) -> sparse.spmatrix | SpArray:
     return sparse_dataset(elem).to_memory()
 
 
@@ -645,7 +777,14 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 @_REGISTRY.register_write(
     ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
 )
-def write_awkward(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
+def write_awkward(
+    f: GroupStorageType,
+    k: str,
+    v: views.AwkwardArrayView | AwkArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     from anndata.compat import awkward as ak
 
     group = f.require_group(k)
@@ -658,7 +797,7 @@ def write_awkward(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
-def read_awkward(elem, _reader):
+def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
     from anndata.compat import awkward as ak
 
     form = _read_attr(elem.attrs, "form")
@@ -677,7 +816,14 @@ def read_awkward(elem, _reader):
 @_REGISTRY.register_write(H5Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
-def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
+def write_dataframe(
+    f: GroupStorageType,
+    key: str,
+    df: views.DataFrameView | pd.DataFrame,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     # Check arguments
     for reserved in ("_index",):
         if reserved in df.columns:
@@ -720,7 +866,7 @@ def write_dataframe(f, key, df, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
-def read_dataframe(elem, _reader):
+def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
@@ -761,7 +907,7 @@ def read_dataframe_partial(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.1.0"))
-def read_dataframe_0_1_0(elem, _reader):
+def read_dataframe_0_1_0(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     columns = _read_attr(elem.attrs, "column-order")
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
@@ -813,7 +959,14 @@ def read_partial_dataframe_0_1_0(
 
 @_REGISTRY.register_write(H5Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
-def write_categorical(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
+def write_categorical(
+    f: GroupStorageType,
+    k: str,
+    v: pd.Categorical,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     g = f.require_group(k)
     g.attrs["ordered"] = bool(v.ordered)
 
@@ -825,7 +978,7 @@ def write_categorical(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
-def read_categorical(elem, _reader):
+def read_categorical(elem: GroupStorageType, *, _reader: Reader) -> pd.Categorical:
     return pd.Categorical.from_codes(
         codes=_reader.read_elem(elem["codes"]),
         categories=_reader.read_elem(elem["categories"]),
@@ -860,7 +1013,14 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
-def write_nullable_integer(f, k, v, _writer, dataset_kwargs=MappingProxyType({})):
+def write_nullable_integer(
+    f: GroupStorageType,
+    k: str,
+    v: pd.arrays.IntegerArray | pd.arrays.BooleanArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     g = f.require_group(k)
     if v._mask is not None:
         _writer.write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
@@ -869,7 +1029,9 @@ def write_nullable_integer(f, k, v, _writer, dataset_kwargs=MappingProxyType({})
 
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
-def read_nullable_integer(elem, _reader):
+def read_nullable_integer(
+    elem: GroupStorageType, *, _reader: Reader
+) -> pd.api.extensions.ExtensionArray:
     if "mask" in elem:
         return pd.arrays.IntegerArray(
             _reader.read_elem(elem["values"]), mask=_reader.read_elem(elem["mask"])
@@ -880,7 +1042,9 @@ def read_nullable_integer(elem, _reader):
 
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))
-def read_nullable_boolean(elem, _reader):
+def read_nullable_boolean(
+    elem: GroupStorageType, *, _reader: Reader
+) -> pd.api.extensions.ExtensionArray:
     if "mask" in elem:
         return pd.arrays.BooleanArray(
             _reader.read_elem(elem["values"]), mask=_reader.read_elem(elem["mask"])
@@ -896,17 +1060,31 @@ def read_nullable_boolean(elem, _reader):
 
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
-def read_scalar(elem, _reader):
+def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
     return elem[()]
 
 
-def write_scalar(f, key, value, _writer, dataset_kwargs=MappingProxyType({})):
+def write_scalar(
+    f: GroupStorageType,
+    key: str,
+    value,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     return f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
-def write_hdf5_scalar(f, key, value, _writer, dataset_kwargs=MappingProxyType({})):
+def write_hdf5_scalar(
+    f: H5Group,
+    key: str,
+    value,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
     # Can’t compress scalars, error is thrown
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs.pop("compression", None)
     dataset_kwargs.pop("compression_opts", None)
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
@@ -929,12 +1107,12 @@ _REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_sc
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))
-def read_hdf5_string(elem, _reader):
+def read_hdf5_string(elem: H5Array, *, _reader: Reader) -> str:
     return elem.asstr()[()]
 
 
 @_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
-def read_zarr_string(elem, _reader):
+def read_zarr_string(elem: ZarrArray, *, _reader: Reader) -> str:
     return str(elem[()])
 
 
@@ -944,7 +1122,14 @@ _REGISTRY.register_read(ZarrArray, IOSpec("bytes", "0.2.0"))(read_scalar)
 
 @_REGISTRY.register_write(H5Group, np.str_, IOSpec("string", "0.2.0"))
 @_REGISTRY.register_write(H5Group, str, IOSpec("string", "0.2.0"))
-def write_string(f, k, v, _writer, dataset_kwargs):
+def write_string(
+    f: H5Group,
+    k: str,
+    v: np.str_ | str,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any],
+):
     dataset_kwargs = dataset_kwargs.copy()
     dataset_kwargs.pop("compression", None)
     dataset_kwargs.pop("compression_opts", None)

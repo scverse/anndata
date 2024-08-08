@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from functools import singledispatch, wraps
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -16,6 +16,7 @@ from .logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+    from typing import Any, Literal
 
 logger = get_logger(__name__)
 

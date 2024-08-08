@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+import weakref
+from collections.abc import Mapping
 from functools import singledispatch
-from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 
 import h5py
 
@@ -11,7 +12,9 @@ from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
 from .sparse_dataset import BaseCompressedSparseDataset
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from os import PathLike
+    from typing import Literal
 
     from . import anndata
 
@@ -25,12 +28,25 @@ class AnnDataFileManager:
         filename: PathLike | None = None,
         filemode: Literal["r", "r+"] | None = None,
     ):
-        self._adata = adata
+        self._adata_ref = weakref.ref(adata)
         self.filename = filename
         self._filemode = filemode
         self._file = None
         if filename:
             self.open()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_adata_ref"] = state["_adata_ref"]()
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state.copy()
+        self.__dict__["_adata_ref"] = weakref.ref(state["_adata_ref"])
+
+    @property
+    def _adata(self):
+        return self._adata_ref()
 
     def __repr__(self) -> str:
         if self.filename is None:
@@ -159,3 +175,18 @@ def _(x):
 @filename.register(ZarrGroup)
 def _(x):
     return x.store.path
+
+
+@singledispatch
+def get_elem_name(x):
+    raise NotImplementedError(f"Not implemented for {type(x)}")
+
+
+@get_elem_name.register(h5py.Group)
+def _(x):
+    return x.name
+
+
+@get_elem_name.register(ZarrGroup)
+def _(x):
+    return PurePosixPath(x.path).name

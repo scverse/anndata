@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from pandas.api.types import is_string_dtype
@@ -11,6 +11,7 @@ from .._warnings import ImplicitModificationWarning
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
+    from typing import Any, Literal
 
 
 @singledispatch

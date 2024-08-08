@@ -3,11 +3,11 @@ from __future__ import annotations
 import random
 import re
 import warnings
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
-from typing import Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -17,7 +17,7 @@ from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
-from anndata._core.aligned_mapping import AlignedMapping
+from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
@@ -32,6 +32,10 @@ from anndata.compat import (
     ZarrArray,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from collections.abc import Collection
+    from typing import Literal
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -581,7 +585,7 @@ def assert_equal_mapping(a, b, exact=False, elem_name=None):
         assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
 
 
-@assert_equal.register(AlignedMapping)
+@assert_equal.register(AlignedMappingBase)
 def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
     a_indices = (a.parent.obs_names, a.parent.var_names)
     b_indices = (b.parent.obs_names, b.parent.var_names)
@@ -689,11 +693,20 @@ def assert_adata_equal(
         )
 
 
+def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
+    def half_rounded_up(x):
+        div, mod = divmod(x, 2)
+        return div + (mod > 0)
+
+    return tuple(half_rounded_up(x) for x in a)
+
+
 @singledispatch
 def as_dense_dask_array(a):
     import dask.array as da
 
-    return da.asarray(a)
+    a = asarray(a)
+    return da.asarray(a, chunks=_half_chunk_size(a.shape))
 
 
 @as_dense_dask_array.register(sparse.spmatrix)
@@ -701,12 +714,9 @@ def _(a):
     return as_dense_dask_array(a.toarray())
 
 
-def _half_chunk_size(a: tuple[int, ...]) -> tuple[int, ...]:
-    def half_rounded_up(x):
-        div, mod = divmod(x, 2)
-        return div + (mod > 0)
-
-    return tuple(half_rounded_up(x) for x in a)
+@as_dense_dask_array.register(DaskArray)
+def _(a):
+    return a.map_blocks(asarray, dtype=a.dtype, meta=np.ndarray)
 
 
 @singledispatch
@@ -733,6 +743,78 @@ def _(a):
 @as_sparse_dask_array.register(DaskArray)
 def _(a):
     return a.map_blocks(sparse.csr_matrix)
+
+
+@singledispatch
+def as_dense_cupy_dask_array(a):
+    import cupy as cp
+
+    return as_dense_dask_array(a).map_blocks(
+        cp.array, meta=cp.array((1.0), dtype=a.dtype), dtype=a.dtype
+    )
+
+
+@as_dense_cupy_dask_array.register(CupyArray)
+def _(a):
+    import cupy as cp
+    import dask.array as da
+
+    return da.from_array(
+        a,
+        chunks=_half_chunk_size(a.shape),
+        meta=cp.array((1.0), dtype=a.dtype),
+    )
+
+
+@as_dense_cupy_dask_array.register(DaskArray)
+def _(a):
+    import cupy as cp
+
+    if isinstance(a._meta, cp.ndarray):
+        return a.copy()
+    return a.map_blocks(
+        partial(as_cupy, typ=CupyArray),
+        dtype=a.dtype,
+        meta=cp.array((1.0), dtype=a.dtype),
+    )
+
+
+try:
+    import cupyx.scipy.sparse as cpsparse
+
+    format_to_memory_class = {"csr": cpsparse.csr_matrix, "csc": cpsparse.csc_matrix}
+except ImportError:
+    format_to_memory_class = {}
+
+
+# TODO: If there are chunks which divide along columns, then a coo_matrix is returned by compute
+# We should try and fix this upstream in dask/ cupy
+@singledispatch
+def as_cupy_sparse_dask_array(a, format="csr"):
+    memory_class = format_to_memory_class[format]
+    cpu_da = as_sparse_dask_array(a)
+    return cpu_da.rechunk((cpu_da.chunks[0], -1)).map_blocks(
+        memory_class, dtype=a.dtype, meta=memory_class(cpu_da._meta)
+    )
+
+
+@as_cupy_sparse_dask_array.register(CupyArray)
+@as_cupy_sparse_dask_array.register(CupySparseMatrix)
+def _(a, format="csr"):
+    import dask.array as da
+
+    memory_class = format_to_memory_class[format]
+    return da.from_array(memory_class(a), chunks=(_half_chunk_size(a.shape)[0], -1))
+
+
+@as_cupy_sparse_dask_array.register(DaskArray)
+def _(a, format="csr"):
+    memory_class = format_to_memory_class[format]
+    if isinstance(a._meta, memory_class):
+        return a.copy()
+    return a.rechunk((a.chunks[0], -1)).map_blocks(
+        partial(as_cupy, typ=memory_class), dtype=a.dtype
+    )
 
 
 @contextmanager
@@ -764,24 +846,32 @@ def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Patter
     ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
 
 
-def as_cupy_type(val, typ=None):
+def resolve_cupy_type(val):
+    if not isinstance(val, type):
+        input_typ = type(val)
+    else:
+        input_typ = val
+
+    if issubclass(input_typ, np.ndarray):
+        typ = CupyArray
+    elif issubclass(input_typ, sparse.csr_matrix):
+        typ = CupyCSRMatrix
+    elif issubclass(input_typ, sparse.csc_matrix):
+        typ = CupyCSCMatrix
+    else:
+        raise NotImplementedError(f"No default target type for input type {input_typ}")
+    return typ
+
+
+@singledispatch
+def as_cupy(val, typ=None):
     """
     Rough conversion function
 
     Will try to infer target type from input type if not specified.
     """
     if typ is None:
-        input_typ = type(val)
-        if issubclass(input_typ, np.ndarray):
-            typ = CupyArray
-        elif issubclass(input_typ, sparse.csr_matrix):
-            typ = CupyCSRMatrix
-        elif issubclass(input_typ, sparse.csc_matrix):
-            typ = CupyCSCMatrix
-        else:
-            raise NotImplementedError(
-                f"No default target type for input type {input_typ}"
-            )
+        typ = resolve_cupy_type(val)
 
     if issubclass(typ, CupyArray):
         import cupy as cp
@@ -809,6 +899,14 @@ def as_cupy_type(val, typ=None):
         raise NotImplementedError(
             f"Conversion from {type(val)} to {typ} not implemented"
         )
+
+
+# TODO: test
+@as_cupy.register(DaskArray)
+def as_cupy_dask(a, typ=None):
+    if typ is None:
+        typ = resolve_cupy_type(a._meta)
+    return a.map_blocks(partial(as_cupy, typ=typ), dtype=a.dtype)
 
 
 @singledispatch
@@ -840,17 +938,28 @@ DASK_MATRIX_PARAMS = [
 
 CUPY_MATRIX_PARAMS = [
     pytest.param(
-        partial(as_cupy_type, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+        partial(as_cupy, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
     ),
     pytest.param(
-        partial(as_cupy_type, typ=CupyCSRMatrix),
+        partial(as_cupy, typ=CupyCSRMatrix),
         id="cupy_csr",
         marks=pytest.mark.gpu,
     ),
     pytest.param(
-        partial(as_cupy_type, typ=CupyCSCMatrix),
+        partial(as_cupy, typ=CupyCSCMatrix),
         id="cupy_csc",
         marks=pytest.mark.gpu,
+    ),
+]
+
+DASK_CUPY_MATRIX_PARAMS = [
+    pytest.param(
+        as_dense_cupy_dask_array,
+        id="cupy_dense_dask_array",
+        marks=pytest.mark.gpu,
+    ),
+    pytest.param(
+        as_cupy_sparse_dask_array, id="cupy_csr_dask_array", marks=pytest.mark.gpu
     ),
 ]
 

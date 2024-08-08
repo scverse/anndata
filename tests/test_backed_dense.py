@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -15,6 +15,7 @@ from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Literal
 
 
 @pytest.fixture(params=["h5ad", "zarr"])
