@@ -303,13 +303,7 @@ def _require_group_write_dataframe(
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):
         # actually 64kb is the limit, but this should be a conservative estimate
-        if name in f:
-            # TODO: One possible solution is to delete the group and recreate it
-            raise ValueError(
-                f"Group {name} already exists in {f} and has too many columns to be added."
-            )
-        else:
-            return f.create_group(name, track_order=True, *args, **kwargs)
+        return f.create_group(name, track_order=True, *args, **kwargs)
     return f.require_group(name, *args, **kwargs)
 
 
