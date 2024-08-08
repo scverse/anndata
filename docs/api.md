@@ -82,7 +82,8 @@ Writing to other formats.
 API's in the experimental module are currently in development and subject to change at any time.
 ```
 
-Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files. In paritcular, for pytorch-based models.
+Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files.
+In particular, for pytorch-based models.
 
 ```{eval-rst}
 .. autosummary::
@@ -112,7 +113,7 @@ Out of core concatenation
    experimental.concat_on_disk
 ```
 
-Low level methods for reading and writing elements of an `` AnnData` `` object to a store:
+Low level methods for reading and writing elements of an `AnnData` object to a store:
 
 ```{eval-rst}
 .. autosummary::
@@ -120,6 +121,7 @@ Low level methods for reading and writing elements of an `` AnnData` `` object t
 
    experimental.read_elem
    experimental.write_elem
+   experimental.read_elem_as_dask
 ```
 
 Utilities for customizing the IO process:
@@ -130,8 +132,22 @@ Utilities for customizing the IO process:
 
    experimental.read_dispatched
    experimental.write_dispatched
-   experimental.IOSpec
+```
 
+Types used by the former:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   experimental.IOSpec
+   experimental.InMemoryElem
+   experimental.RWAble
+   experimental.Read
+   experimental.Write
+   experimental.ReadCallback
+   experimental.WriteCallback
+   experimental.StorageType
 ```
 
 ## Errors and warnings
@@ -141,4 +157,14 @@ Utilities for customizing the IO process:
    :toctree: generated/
 
    ImplicitModificationWarning
+```
+
+## Settings
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   settings
+   settings.override
 ```

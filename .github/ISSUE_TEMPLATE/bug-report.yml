@@ -1,7 +1,9 @@
 name: Bug report
 description: anndata doesn’t do what it should? Please help us fix it!
 #title: ...
-labels: ["Bug 🐛"]
+labels:
+  - Bug 🐛
+  - Triage 🩺
 #assignees: []
 body:
   - type: checkboxes
@@ -56,6 +58,6 @@ body:
         ```python
         >>> import anndata, session_info; session_info.show(html=False, dependencies=True)
         ```
-        render: python
+      render: python
     validations:
       required: true

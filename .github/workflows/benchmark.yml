@@ -2,7 +2,7 @@ name: Benchmark
 
 on:
   push:
-    branches: [main]
+    branches: [main, "[0-9]+.[0-9]+.x"]
   pull_request:
     branches: [main]
 
@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11"]
+        python: ["3.12"]
         os: [ubuntu-latest]
 
     env:

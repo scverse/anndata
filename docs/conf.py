@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime
+from functools import partial
 from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from docutils import nodes
 
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
@@ -15,9 +18,6 @@ sys.path[:0] = [str(HERE / "extensions")]
 
 # -- General configuration ------------------------------------------------
 
-
-needs_sphinx = "1.7"  # autosummary bugfix
-
 # General information
 project = "anndata"
 author = f"{project} developers"
@@ -27,7 +27,7 @@ release = version = metadata.version("anndata")
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = [".rst", ".md"]
+source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 master_doc = "index"
 default_role = "literal"
 exclude_patterns = [
@@ -36,6 +36,8 @@ exclude_patterns = [
     ".DS_Store",
     "**.ipynb_checkpoints",
     "tutorials/notebooks/*.rst",
+    # exclude all 0.x.y.md files, but not index.md
+    "release-notes/[!i]*.md",
 ]
 pygments_style = "sphinx"
 
@@ -51,15 +53,19 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
+    "sphinx_design",
+    "sphinx_search.extension",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
+    "sphinx_toolbox.more_autodoc.autoprotocol",
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
 ]
+myst_heading_anchors = 3
 
 # Generate the API documentation when building
 autosummary_generate = True
@@ -86,6 +92,20 @@ nitpick_ignore = [
         for cls in "Layers AxisArrays PairwiseArrays".split()
         for kind in ["", "View"]
     ],
+    # TODO: sphinx’ builtin autodoc.typehints extension isn’t handled by `qualname_overrides` yet
+    # https://github.com/theislab/scanpydoc/issues/140
+    ("py:class", "h5py._hl.group.Group"),
+    ("py:class", "h5py._hl.dataset.Dataset"),
+    # for experimental callback exports
+    ("py:class", "anndata.compat.ZappyArray"),
+    ("py:class", "anndata.compat.DaskArray"),
+    ("py:class", "anndata.compat.CupyArray"),
+    ("py:class", "anndata.compat.CupySparseMatrix"),
+    ("py:class", "numpy.ma.core.MaskedArray"),
+    ("py:class", "dask.array.core.Array"),
+    ("py:class", "awkward.highlevel.Array"),
+    ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
+    ("py:obj", "numpy._typing._array_like._ScalarType_co"),
 ]
 suppress_warnings = [
     "ref.citation",
@@ -94,8 +114,8 @@ suppress_warnings = [
 
 
 def setup(app: Sphinx):
-    # Don’t allow broken links. DO NOT CHANGE THIS LINE, fix problems instead.
-    app.warningiserror = True
+    app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
+    app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
 
 intersphinx_mapping = dict(
@@ -109,13 +129,27 @@ intersphinx_mapping = dict(
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     xarray=("https://xarray.pydata.org/en/stable/", None),
+    dask=("https://docs.dask.org/en/stable/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
     "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
+    "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",
+    "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
+    "anndata._types.Read": "anndata.experimental.Read",
+    "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.RWAble": "anndata.experimental.RWAble",
 }
+autodoc_type_aliases = dict(
+    NDArray=":data:`~numpy.typing.NDArray`",
+    RWAble=":data:`~anndata.experimental.RWAble`",
+    **{
+        f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryElem`"
+        for v in ["In", "Co", "Contra"]
+    },
+)
 
 # -- Social cards ---------------------------------------------------------
 
@@ -125,11 +159,13 @@ ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema
 # -- Options for HTML output ----------------------------------------------
 
 
-html_theme = "sphinx_book_theme"
+# The theme is sphinx-book-theme, with patches for readthedocs-sphinx-search
+html_theme = "scanpydoc"
 html_theme_options = dict(
     use_repository_button=True,
     repository_url="https://github.com/scverse/anndata",
     repository_branch="main",
+    navigation_with_keys=False,  # https://github.com/pydata/pydata-sphinx-theme/issues/1492
 )
 html_logo = "_static/img/anndata_schema.svg"
 issues_github_path = "scverse/anndata"
@@ -154,3 +190,40 @@ texinfo_documents = [
         "Miscellaneous",
     )
 ]
+
+
+def patch_sphinx_toolbox_autoprotocol():
+    """Compat hack: https://github.com/sphinx-toolbox/sphinx-toolbox/issues/168"""
+
+    from sphinx.ext.autodoc import ObjectMember
+    from sphinx_toolbox.more_autodoc.autoprotocol import ProtocolDocumenter
+
+    if TYPE_CHECKING:
+        from typing import Self
+
+    class ObjectMemberCompat(ObjectMember):
+        @classmethod
+        def from_other(cls, other: ObjectMember) -> Self:
+            return cls(
+                other.__name__,
+                other.object,
+                docstring=other.docstring,
+                class_=other.class_,
+                skipped=other.skipped,
+            )
+
+        def __iter__(self):
+            return iter([self.__name__, self.object])
+
+    filter_orig = ProtocolDocumenter.filter_members
+
+    def filter_members(
+        self, members: list[ObjectMember], want_all: bool
+    ) -> list[tuple[str, object, bool]]:
+        member_tuples = [ObjectMemberCompat.from_other(m) for m in members]
+        return filter_orig(self, member_tuples, want_all)
+
+    ProtocolDocumenter.filter_members = filter_members
+
+
+patch_sphinx_toolbox_autoprotocol()
