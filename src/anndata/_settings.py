@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import inspect
 import os
+import sys
 import textwrap
 import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
 from enum import Enum
+from functools import partial
 from inspect import Parameter, signature
-from typing import TYPE_CHECKING, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar
 
 from anndata.compat.exceptiongroups import add_note
 
@@ -25,13 +28,46 @@ class DeprecatedOption(NamedTuple):
     removal_version: str | None
 
 
-# TODO: inherit from Generic[T] as well after python 3.9 is no longer supported
-class RegisteredOption(NamedTuple):
-    option: str
-    default_value: T
-    doc: str
-    validate: Callable[[T], bool] | None
-    type: object
+def describe(self: RegisteredOption, *, rst: bool = False) -> str:
+    if rst:
+        default_str = repr(self.default_value).replace("\\", "\\\\")
+        doc = f"""\
+        .. attribute:: settings.{self.option}
+           :type: {getattr(self.type, "__name__", None) or str(self.type)}
+           :value: {default_str}
+
+           {self.description}
+        """
+    else:
+        type_str = self.type.__name__ if isinstance(self.type, type) else str(self.type)
+        doc = f"""\
+        {self.option}: `{type_str}`
+            {self.description} (default: `{self.default_value!r}`).
+        """
+    return textwrap.dedent(doc)
+
+
+if sys.version_info >= (3, 10):
+
+    class RegisteredOption(NamedTuple, Generic[T]):
+        option: str
+        default_value: T
+        description: str
+        validate: Callable[[T], bool] | None
+        type: object
+
+        describe = describe
+
+else:
+
+    class RegisteredOption(NamedTuple):
+        option: str
+        default_value: T
+        description: str
+        validate: Callable[[T], bool] | None
+        type: object
+
+        describe = describe
 
 
 def check_and_get_environ_var(
@@ -109,6 +145,7 @@ class SettingsManager:
         option: str | Iterable[str] | None = None,
         *,
         print_description: bool = True,
+        rst: bool = False,
     ) -> str:
         """Print and/or return a (string) description of the option(s).
 
@@ -117,22 +154,19 @@ class SettingsManager:
         option
             Option(s) to be described, by default None (i.e., do all option)
         print_description
-            Whether or not to print the description in addition to returning it., by default True
+            Whether or not to print the description in addition to returning it.
 
         Returns
         -------
         The description.
         """
+        describe = partial(self.describe, print_description=print_description, rst=rst)
         if option is None:
-            return self.describe(
-                self._registered_options.keys(), print_description=print_description
-            )
+            return describe(self._registered_options.keys())
         if isinstance(option, Iterable) and not isinstance(option, str):
-            return "\n".join(
-                [self.describe(k, print_description=print_description) for k in option]
-            )
+            return "\n".join([describe(k) for k in option])
         registered_option = self._registered_options[option]
-        doc = registered_option.doc.rstrip("\n")
+        doc = registered_option.describe(rst=rst).rstrip("\n")
         if option in self._deprecated_options:
             opt = self._deprecated_options[option]
             if opt.message is not None:
@@ -181,7 +215,7 @@ class SettingsManager:
             Description to be used in the docstring.
         validate
             A function which returns True if the option's value is valid and otherwise should raise a `ValueError` or `TypeError`.
-        option
+        option_type
             Optional override for the option type to be displayed.  Otherwise `type(default_value)`.
         get_from_env
             An optional function which takes as arguments the name of the option and a default value and returns the value from the environment variable `ANNDATA_CAPS_OPTION` (or default if not present).
@@ -192,17 +226,9 @@ class SettingsManager:
         except (ValueError, TypeError) as e:
             add_note(e, f"for option {repr(option)}")
             raise e
-        option_type_str = (
-            type(default_value).__name__ if option_type is None else str(option_type)
-        )
         option_type = type(default_value) if option_type is None else option_type
-        doc = f"""\
-        {option}: {option_type_str}
-            {description} Default value of {default_value}.
-        """
-        doc = textwrap.dedent(doc)
         self._registered_options[option] = RegisteredOption(
-            option, default_value, doc, validate, option_type
+            option, default_value, description, validate, option_type
         )
         self._config[option] = get_from_env(option, default_value)
         self._update_override_function_for_new_option(option)
@@ -340,9 +366,14 @@ class SettingsManager:
             for attr, value in restore.items():
                 setattr(self, attr, value)
 
+    def __repr__(self) -> str:
+        params = "".join(f"\t{k}={v!r},\n" for k, v in self._config.items())
+        return f"{type(self).__name__}(\n{params}\n)"
+
     @property
     def __doc__(self):
-        options_description = self.describe(print_description=False)
+        in_sphinx = any("/sphinx/" in frame.filename for frame in inspect.stack())
+        options_description = self.describe(print_description=False, rst=in_sphinx)
         return self.__doc_tmpl__.format(
             options_description=options_description,
         )
