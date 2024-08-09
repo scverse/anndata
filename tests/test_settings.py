@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from enum import Enum
 
 import pytest
@@ -185,7 +186,9 @@ def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
         option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
     )
     monkeypatch.setenv(option_env_var, "Not foo or bar")
-    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+    with pytest.warns(
+        match=f"Value '{re.escape(os.environ[option_env_var])}' is not in allowed"
+    ):
         check_and_get_environ_var(
             option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
         )
@@ -195,17 +198,19 @@ def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_check_and_get_bool(monkeypatch: pytest.MonkeyPatch):
-    option_env_var = "ANNDATA_" + option.upper()
+    option_env_var = f"ANNDATA_{option.upper()}"
     assert not check_and_get_bool(option, default_val)
     monkeypatch.setenv(option_env_var, "1")
     assert check_and_get_bool(option, default_val)
     monkeypatch.setenv(option_env_var, "Not 0 or 1")
-    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+    with pytest.warns(
+        match=f"Value '{re.escape(os.environ[option_env_var])}' is not in allowed"
+    ):
         check_and_get_bool(option, default_val)
 
 
 def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
-    option_env_var = "ANNDATA_" + option.upper()
+    option_env_var = f"ANNDATA_{option.upper()}"
     monkeypatch.setenv(option_env_var, "b")
 
     class TestEnum(Enum):

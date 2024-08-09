@@ -118,7 +118,7 @@ def check_and_get_environ_var(
 
 def check_and_get_bool(option, default_value):
     return check_and_get_environ_var(
-        "ANNDATA_" + option.upper(),
+        f"ANNDATA_{option.upper()}",
         str(int(default_value)),
         ["0", "1"],
         lambda x: bool(int(x)),
@@ -176,7 +176,7 @@ class SettingsManager:
         if option in self._deprecated_options:
             opt = self._deprecated_options[option]
             if opt.message is not None:
-                doc += " *" + opt.message
+                doc += f" *{opt.message}"
             doc += f" {option} will be removed in {opt.removal_version}.*"
         if print_description:
             print(doc)
