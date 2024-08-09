@@ -14,7 +14,7 @@ from scipy.sparse import csr_matrix, issparse
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
 from anndata.compat import CAN_USE_SPARSE_ARRAY
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
@@ -115,6 +115,24 @@ def test_create_from_df():
     assert df.values.tolist() == ad.X.tolist()
     assert df.columns.tolist() == ad.var_names.tolist()
     assert df.index.tolist() == ad.obs_names.tolist()
+
+
+def test_error_create_from_multiindex_df():
+    df = get_multiindex_columns_df((100, 20))
+    with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
+        AnnData(df)
+
+
+def test_error_with_obs_multiindex_df():
+    df = get_multiindex_columns_df((100, 20))
+    with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
+        AnnData(X=np.random.rand(100, 10), obs=df)
+
+
+def test_error_with_obsm_multiindex_df():
+    df = get_multiindex_columns_df((100, 20))
+    with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
+        AnnData(X=np.random.rand(100, 10), obsm={"df": df})
 
 
 def test_create_from_sparse_df():

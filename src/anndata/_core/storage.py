@@ -84,6 +84,11 @@ def coerce_array(
             value = value.A
         return value
     if isinstance(value, pd.DataFrame):
+        if isinstance(value.columns, pd.MultiIndex) and allow_df:
+            raise ValueError(
+                "MultiIndex columns are not supported in AnnData. "
+                "Please use a single-level index."
+            )
         return value if allow_df else ensure_df_homogeneous(value, name)
     # if value is an array-like object, try to convert it
     e = None

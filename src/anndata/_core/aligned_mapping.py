@@ -258,16 +258,22 @@ class AxisArraysBase(AlignedMappingBase):
         return df
 
     def _validate_value(self, val: Value, key: str) -> Value:
-        if isinstance(val, pd.DataFrame) and not val.index.equals(self.dim_names):
-            # Could probably also re-order index if it’s contained
-            try:
-                pd.testing.assert_index_equal(val.index, self.dim_names)
-            except AssertionError as e:
-                msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
-                raise ValueError(msg) from None
-            else:
-                msg = "Index.equals and pd.testing.assert_index_equal disagree"
-                raise AssertionError(msg)
+        if isinstance(val, pd.DataFrame):
+            if isinstance(val.columns, pd.MultiIndex):
+                raise ValueError(
+                    "MultiIndex columns are not supported in AnnData. "
+                    "Please use a single-level index."
+                )
+            if not val.index.equals(self.dim_names):
+                # Could probably also re-order index if it’s contained
+                try:
+                    pd.testing.assert_index_equal(val.index, self.dim_names)
+                except AssertionError as e:
+                    msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
+                    raise ValueError(msg) from None
+                else:
+                    msg = "Index.equals and pd.testing.assert_index_equal disagree"
+                    raise AssertionError(msg)
         return super()._validate_value(val, key)
 
     @property

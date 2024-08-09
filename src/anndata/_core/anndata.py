@@ -234,6 +234,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx: Index1D = None,
         vidx: Index1D = None,
     ):
+        # check for any multi-indices
+        df_elems = [obs, var, X]
+        for xxxm in [obsm, varm]:
+            if xxxm is not None and not isinstance(xxxm, np.ndarray):
+                df_elems += [v for v in xxxm.values() if isinstance(v, pd.DataFrame)]
+        for attr in df_elems:
+            if isinstance(attr, pd.DataFrame) and isinstance(
+                attr.columns, pd.MultiIndex
+            ):
+                raise ValueError(
+                    "MultiIndex columns are not supported in AnnData. "
+                    "Please use a single-level index."
+                )
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError("`X` has to be an AnnData object.")
@@ -736,6 +749,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def _set_dim_df(self, value: pd.DataFrame, attr: str):
         if not isinstance(value, pd.DataFrame):
             raise ValueError(f"Can only assign pd.DataFrame to {attr}.")
+        if isinstance(value.columns, pd.MultiIndex):
+            raise ValueError(
+                "MultiIndex columns are not supported in AnnData. "
+                "Please use a single-level index."
+            )
         value_idx = self._prep_dim_index(value.index, attr)
         if self.is_view:
             self._init_as_actual(self.copy())
