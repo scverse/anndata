@@ -26,14 +26,17 @@ T = TypeVar("T")
 def write_zarr(
     store: MutableMapping | str | Path,
     adata: AnnData,
-    chunks=None,
+    *,
+    chunks: tuple[int, ...] | None = None,
+    strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
-    adata.strings_to_categoricals()
-    if adata.raw is not None:
-        adata.strings_to_categoricals(adata.raw.var)
+    if strings_to_categoricals:
+        adata.strings_to_categoricals()
+        if adata.raw is not None:
+            adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
     f = zarr.open(store, mode="w")
     f.attrs.setdefault("encoding-type", "anndata")
@@ -41,9 +44,8 @@ def write_zarr(
 
     def callback(func, s, k, elem, dataset_kwargs, iospec):
         if chunks is not None and not isinstance(elem, sparse.spmatrix) and k == "/X":
-            func(s, k, elem, dataset_kwargs=dict(chunks=chunks, **dataset_kwargs))
-        else:
-            func(s, k, elem, dataset_kwargs=dataset_kwargs)
+            dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
+        func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
 
