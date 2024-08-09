@@ -782,7 +782,8 @@ def test_dataframe_view_index_setting():
         a2.obs.index = a2.obs.index.map(lambda x: x[-1])
     assert not isinstance(a2.obs, ad._core.views.DataFrameView)
     assert isinstance(a2.obs, pd.DataFrame)
-    assert (a2.obs == a1.obs).all().all()
+    assert a1.obs.index.values.tolist() == ["aa", "bb"]
+    assert a2.obs.index.values.tolist() == ["a", "b"]
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])
