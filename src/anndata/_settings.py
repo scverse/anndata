@@ -11,13 +11,14 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
+from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar
 
 from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-    from typing import Any
+    from typing import Any, TypeGuard
 
 T = TypeVar("T")
 
@@ -28,18 +29,22 @@ class DeprecatedOption(NamedTuple):
     removal_version: str | None
 
 
+def _is_plain_type(obj: object) -> TypeGuard[type]:
+    return isinstance(obj, type) and not isinstance(obj, GenericAlias)
+
+
 def describe(self: RegisteredOption, *, rst: bool = False) -> str:
+    type_str = self.type.__name__ if _is_plain_type(self.type) else str(self.type)
     if rst:
         default_str = repr(self.default_value).replace("\\", "\\\\")
         doc = f"""\
         .. attribute:: settings.{self.option}
-           :type: {getattr(self.type, "__name__", None) or str(self.type)}
+           :type: {type_str}
            :value: {default_str}
 
            {self.description}
         """
     else:
-        type_str = self.type.__name__ if isinstance(self.type, type) else str(self.type)
         doc = f"""\
         {self.option}: `{type_str}`
             {self.description} (default: `{self.default_value!r}`).
