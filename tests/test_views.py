@@ -775,14 +775,14 @@ def test_dataframe_view_index_setting():
         obs={"obs_names": ["aa", "bb"], "property": [True, True]},
         var={"var_names": ["c", "d", "e"]},
     )
-    a1 = a1[:, ["c", "d"]]
+    a2 = a1[:, ["c", "d"]]
     with pytest.warns(
         ad.ImplicitModificationWarning, match=r"Trying to modify index.*"
     ):
-        a1.obs.index = a1.obs.index.map(lambda x: x[-1])
-    selector = np.array([True, True])
-    assert not isinstance(a1, ad._core.views.DataFrameView)
-    assert (a1[selector].obs == a1.obs).all().all()
+        a2.obs.index = a2.obs.index.map(lambda x: x[-1])
+    assert not isinstance(a2.obs, ad._core.views.DataFrameView)
+    assert isinstance(a2.obs, pd.DataFrame)
+    assert (a2.obs == a1.obs).all().all()
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])
