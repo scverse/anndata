@@ -28,12 +28,12 @@ def write_zarr(
     adata: AnnData,
     *,
     chunks: tuple[int, ...] | None = None,
-    strings_to_categoricals: bool = True,
+    convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
     if isinstance(store, Path):
         store = str(store)
-    if strings_to_categoricals:
+    if convert_strings_to_categoricals:
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
