@@ -218,3 +218,28 @@ def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
         b = True
 
     assert check_and_get_environ_var(option_env_var, "a", cast=TestEnum).value
+
+
+@pytest.mark.parametrize(
+    ("rst", "expected"),
+    [
+        pytest.param(
+            True,
+            (
+                ".. attribute:: settings.test_var_3\n"
+                "   :type: list[int]\n"
+                "   :value: [1, 2]\n"
+                "\n"
+                "   My doc string 3!"
+            ),
+            id="rst",
+        ),
+        pytest.param(
+            False,
+            "test_var_3: `list[int]`\n    My doc string 3! (default: `[1, 2]`).",
+            id="plain",
+        ),
+    ],
+)
+def test_describe(rst: bool, expected: str, settings: SettingsManager):
+    assert settings.describe("test_var_3", rst=rst) == expected
