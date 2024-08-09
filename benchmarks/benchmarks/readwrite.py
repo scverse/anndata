@@ -127,8 +127,9 @@ class H5ADReadSuite:
     def peakmem_read_backed(self, *_):
         anndata.read_h5ad(self.filepath, backed="r")
 
-    def mem_read_backed_object(self, *_):
-        return anndata.read_h5ad(self.filepath, backed="r")
+    # causes benchmarking to break from: https://github.com/pympler/pympler/issues/151
+    # def mem_read_backed_object(self, *_):
+    #     return anndata.read_h5ad(self.filepath, backed="r")
 
 
 class H5ADWriteSuite:
