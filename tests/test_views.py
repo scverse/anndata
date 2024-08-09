@@ -769,6 +769,22 @@ def test_empty_list_subset():
     assert subset.varm["sparse"].shape == (0, 100)
 
 
+def test_dataframe_view_index_setting():
+    a1 = ad.AnnData(
+        X=np.array([[1, 2, 3], [4, 5, 6]]),
+        obs={"obs_names": ["aa", "bb"], "property": [True, True]},
+        var={"var_names": ["c", "d", "e"]},
+    )
+    a1 = a1[:, ["c", "d"]]
+    with pytest.warns(
+        ad.ImplicitModificationWarning, match=r"Trying to modify index.*"
+    ):
+        a1.obs.index = a1.obs.index.map(lambda x: x[-1])
+    selector = np.array([True, True])
+    assert not isinstance(a1, ad._core.views.DataFrameView)
+    assert (a1[selector].obs == a1.obs).all().all()
+
+
 # @pytest.mark.parametrize("dim", ["obs", "var"])
 # @pytest.mark.parametrize(
 #     ("idx", "pat"),
