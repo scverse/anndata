@@ -148,7 +148,7 @@ def test_deprecation(settings: SettingsManager):
     warning = "This is a deprecation warning!"
     version = "0.1.0"
     settings.deprecate(option, version, warning)
-    described_option = settings.describe(option, print_description=False)
+    described_option = settings.describe(option, should_print_description=False)
     # first line is message, second two from deprecation
     default_deprecation_message = f"{option} will be removed in {version}.*"
     assert described_option.endswith(default_deprecation_message)
@@ -166,14 +166,14 @@ def test_deprecation(settings: SettingsManager):
 def test_deprecation_no_message(settings: SettingsManager):
     version = "0.1.0"
     settings.deprecate(option, version)
-    described_option = settings.describe(option, print_description=False)
+    described_option = settings.describe(option, should_print_description=False)
     # first line is message, second from deprecation version
     assert described_option.endswith(f"{option} will be removed in {version}.*")
 
 
 def test_option_typing(settings: SettingsManager):
     assert settings._registered_options[option_3].type == type_3
-    assert str(type_3) in settings.describe(option_3, print_description=False)
+    assert str(type_3) in settings.describe(option_3, should_print_description=False)
 
 
 def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):

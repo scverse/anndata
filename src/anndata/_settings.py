@@ -150,7 +150,7 @@ class SettingsManager:
         self,
         option: str | Iterable[str] | None = None,
         *,
-        print_description: bool = True,
+        should_print_description: bool = True,
         rst: bool = False,
     ) -> str:
         """Print and/or return a (string) description of the option(s).
@@ -159,14 +159,16 @@ class SettingsManager:
         ----------
         option
             Option(s) to be described, by default None (i.e., do all option)
-        print_description
+        should_print_description
             Whether or not to print the description in addition to returning it.
 
         Returns
         -------
         The description.
         """
-        describe = partial(self.describe, print_description=print_description, rst=rst)
+        describe = partial(
+            self.describe, should_print_description=should_print_description, rst=rst
+        )
         if option is None:
             return describe(self._registered_options.keys())
         if isinstance(option, Iterable) and not isinstance(option, str):
@@ -178,7 +180,7 @@ class SettingsManager:
             if opt.message is not None:
                 doc += f" *{opt.message}"
             doc += f" {option} will be removed in {opt.removal_version}.*"
-        if print_description:
+        if should_print_description:
             print(doc)
         return doc
 
@@ -272,7 +274,9 @@ class SettingsManager:
         doc = cast(str, self.override.__doc__)
         insert_index = doc.find("\n        Yields")
         option_docstring = "\t" + "\t".join(
-            self.describe(option, print_description=False).splitlines(keepends=True)
+            self.describe(option, should_print_description=False).splitlines(
+                keepends=True
+            )
         )
         self.override.__func__.__doc__ = (
             f"{doc[:insert_index]}\n{option_docstring}{doc[insert_index:]}"
@@ -375,7 +379,9 @@ class SettingsManager:
     @property
     def __doc__(self):
         in_sphinx = any("/sphinx/" in frame.filename for frame in inspect.stack())
-        options_description = self.describe(print_description=False, rst=in_sphinx)
+        options_description = self.describe(
+            should_print_description=False, rst=in_sphinx
+        )
         return self.__doc_tmpl__.format(
             options_description=options_description,
         )
