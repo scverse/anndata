@@ -13,7 +13,13 @@ from scipy.sparse import spmatrix
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray
-from ..utils import axis_len, convert_to_dict, deprecated, warn_once
+from ..utils import (
+    axis_len,
+    convert_to_dict,
+    deprecated,
+    raise_value_error_if_multiindex_columns,
+    warn_once,
+)
 from .access import ElementRef
 from .index import _subset
 from .storage import coerce_array
@@ -259,11 +265,7 @@ class AxisArraysBase(AlignedMappingBase):
 
     def _validate_value(self, val: Value, key: str) -> Value:
         if isinstance(val, pd.DataFrame):
-            if isinstance(val.columns, pd.MultiIndex):
-                raise ValueError(
-                    "MultiIndex columns are not supported in AnnData. "
-                    "Please use a single-level index."
-                )
+            raise_value_error_if_multiindex_columns(val)
             if not val.index.equals(self.dim_names):
                 # Could probably also re-order index if it’s contained
                 try:
