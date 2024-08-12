@@ -33,9 +33,9 @@ def _is_plain_type(obj: object) -> TypeGuard[type]:
     return isinstance(obj, type) and not isinstance(obj, GenericAlias)
 
 
-def describe(self: RegisteredOption, *, rst: bool = False) -> str:
+def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     type_str = self.type.__name__ if _is_plain_type(self.type) else str(self.type)
-    if rst:
+    if as_rst:
         default_str = repr(self.default_value).replace("\\", "\\\\")
         doc = f"""\
         .. attribute:: settings.{self.option}
@@ -151,7 +151,7 @@ class SettingsManager:
         option: str | Iterable[str] | None = None,
         *,
         should_print_description: bool = True,
-        rst: bool = False,
+        as_rst: bool = False,
     ) -> str:
         """Print and/or return a (string) description of the option(s).
 
@@ -167,14 +167,16 @@ class SettingsManager:
         The description.
         """
         describe = partial(
-            self.describe, should_print_description=should_print_description, rst=rst
+            self.describe,
+            should_print_description=should_print_description,
+            as_rst=as_rst,
         )
         if option is None:
             return describe(self._registered_options.keys())
         if isinstance(option, Iterable) and not isinstance(option, str):
             return "\n".join([describe(k) for k in option])
         registered_option = self._registered_options[option]
-        doc = registered_option.describe(rst=rst).rstrip("\n")
+        doc = registered_option.describe(as_rst=as_rst).rstrip("\n")
         if option in self._deprecated_options:
             opt = self._deprecated_options[option]
             if opt.message is not None:
@@ -380,7 +382,7 @@ class SettingsManager:
     def __doc__(self):
         in_sphinx = any("/sphinx/" in frame.filename for frame in inspect.stack())
         options_description = self.describe(
-            should_print_description=False, rst=in_sphinx
+            should_print_description=False, as_rst=in_sphinx
         )
         return self.__doc_tmpl__.format(
             options_description=options_description,

@@ -221,7 +221,7 @@ def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.parametrize(
-    ("rst", "expected"),
+    ("as_rst", "expected"),
     [
         pytest.param(
             True,
@@ -241,5 +241,5 @@ def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
         ),
     ],
 )
-def test_describe(rst: bool, expected: str, settings: SettingsManager):
-    assert settings.describe("test_var_3", rst=rst) == expected
+def test_describe(as_rst: bool, expected: str, settings: SettingsManager):
+    assert settings.describe("test_var_3", as_rst=as_rst) == expected
