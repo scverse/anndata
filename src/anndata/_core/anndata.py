@@ -236,15 +236,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         *,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        oidx: Index1D = None,
-        vidx: Index1D = None,
+        oidx: Index1D | None = None,
+        vidx: Index1D | None = None,
     ):
-        # check for any multi-indices
-        df_elems = [obs, var, X]
-        for xxxm in [obsm, varm]:
-            if xxxm is not None and not isinstance(xxxm, np.ndarray):
-                df_elems += [v for v in xxxm.values() if isinstance(v, pd.DataFrame)]
-        for attr in df_elems:
+        # check for any multi-indices that aren’t later checked in coerce_array
+        for attr in [obs, var, X]:
             if isinstance(attr, pd.DataFrame):
                 raise_value_error_if_multiindex_columns(attr)
         if asview:

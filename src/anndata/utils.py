@@ -404,7 +404,8 @@ class DeprecationMixinMeta(type):
 
 def raise_value_error_if_multiindex_columns(df: pd.DataFrame):
     if isinstance(df.columns, pd.MultiIndex):
-        raise ValueError(
+        msg = (
             "MultiIndex columns are not supported in AnnData. "
             "Please use a single-level index."
         )
+        raise ValueError(msg)
