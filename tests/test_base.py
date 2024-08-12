@@ -117,22 +117,12 @@ def test_create_from_df():
     assert df.index.tolist() == ad.obs_names.tolist()
 
 
-def test_error_create_from_multiindex_df():
+@pytest.mark.parametrize("attr", ["X", "obs", "obsm"])
+def test_error_create_from_multiindex_df(attr):
     df = get_multiindex_columns_df((100, 20))
+    val = df if attr != "obsm" else {"df": df}
     with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
-        AnnData(df)
-
-
-def test_error_with_obs_multiindex_df():
-    df = get_multiindex_columns_df((100, 20))
-    with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
-        AnnData(X=np.random.rand(100, 10), obs=df)
-
-
-def test_error_with_obsm_multiindex_df():
-    df = get_multiindex_columns_df((100, 20))
-    with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
-        AnnData(X=np.random.rand(100, 10), obsm={"df": df})
+        AnnData(**{attr: val}, shape=(100, 10))
 
 
 def test_create_from_sparse_df():
