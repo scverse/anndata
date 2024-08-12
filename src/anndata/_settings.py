@@ -52,7 +52,7 @@ def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     return textwrap.dedent(doc)
 
 
-if sys.version_info >= (3, 10):
+if sys.version_info >= (3, 11):
 
     class RegisteredOption(NamedTuple, Generic[T]):
         option: str
