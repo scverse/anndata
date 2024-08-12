@@ -277,7 +277,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
     def __setattr__(self, key: str, value: Any):
         if key == "index":
             warnings.warn(
-                f"Trying to modify {key} from attribute `.{self._view_args.attrname}` of view, "
+                f"Trying to modify {key} of attribute `.{self._view_args.attrname}` of view, "
                 "initializing view as actual.",
                 ImplicitModificationWarning,
                 stacklevel=2,
