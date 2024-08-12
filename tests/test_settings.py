@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from enum import Enum
 
 import pytest
@@ -147,7 +148,7 @@ def test_deprecation(settings: SettingsManager):
     warning = "This is a deprecation warning!"
     version = "0.1.0"
     settings.deprecate(option, version, warning)
-    described_option = settings.describe(option, print_description=False)
+    described_option = settings.describe(option, should_print_description=False)
     # first line is message, second two from deprecation
     default_deprecation_message = f"{option} will be removed in {version}.*"
     assert described_option.endswith(default_deprecation_message)
@@ -165,14 +166,14 @@ def test_deprecation(settings: SettingsManager):
 def test_deprecation_no_message(settings: SettingsManager):
     version = "0.1.0"
     settings.deprecate(option, version)
-    described_option = settings.describe(option, print_description=False)
+    described_option = settings.describe(option, should_print_description=False)
     # first line is message, second from deprecation version
     assert described_option.endswith(f"{option} will be removed in {version}.*")
 
 
 def test_option_typing(settings: SettingsManager):
     assert settings._registered_options[option_3].type == type_3
-    assert str(type_3) in settings.describe(option_3, print_description=False)
+    assert str(type_3) in settings.describe(option_3, should_print_description=False)
 
 
 def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
@@ -185,7 +186,9 @@ def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
         option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
     )
     monkeypatch.setenv(option_env_var, "Not foo or bar")
-    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+    with pytest.warns(
+        match=f"Value '{re.escape(os.environ[option_env_var])}' is not in allowed"
+    ):
         check_and_get_environ_var(
             option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
         )
@@ -195,17 +198,19 @@ def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_check_and_get_bool(monkeypatch: pytest.MonkeyPatch):
-    option_env_var = "ANNDATA_" + option.upper()
+    option_env_var = f"ANNDATA_{option.upper()}"
     assert not check_and_get_bool(option, default_val)
     monkeypatch.setenv(option_env_var, "1")
     assert check_and_get_bool(option, default_val)
     monkeypatch.setenv(option_env_var, "Not 0 or 1")
-    with pytest.warns(match=f'Value "{os.environ[option_env_var]}" is not in allowed'):
+    with pytest.warns(
+        match=f"Value '{re.escape(os.environ[option_env_var])}' is not in allowed"
+    ):
         check_and_get_bool(option, default_val)
 
 
 def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
-    option_env_var = "ANNDATA_" + option.upper()
+    option_env_var = f"ANNDATA_{option.upper()}"
     monkeypatch.setenv(option_env_var, "b")
 
     class TestEnum(Enum):
@@ -213,3 +218,28 @@ def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
         b = True
 
     assert check_and_get_environ_var(option_env_var, "a", cast=TestEnum).value
+
+
+@pytest.mark.parametrize(
+    ("as_rst", "expected"),
+    [
+        pytest.param(
+            True,
+            (
+                ".. attribute:: settings.test_var_3\n"
+                "   :type: list[int]\n"
+                "   :value: [1, 2]\n"
+                "\n"
+                "   My doc string 3!"
+            ),
+            id="rst",
+        ),
+        pytest.param(
+            False,
+            "test_var_3: `list[int]`\n    My doc string 3! (default: `[1, 2]`).",
+            id="plain",
+        ),
+    ],
+)
+def test_describe(as_rst: bool, expected: str, settings: SettingsManager):
+    assert settings.describe("test_var_3", as_rst=as_rst) == expected
