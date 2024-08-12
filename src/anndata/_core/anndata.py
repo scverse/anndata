@@ -240,9 +240,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         vidx: Index1D | None = None,
     ):
         # check for any multi-indices that aren’t later checked in coerce_array
-        for attr in [obs, var, X]:
+        for attr, key in [(obs, "obs"), (var, "var"), (X, "X")]:
             if isinstance(attr, pd.DataFrame):
-                raise_value_error_if_multiindex_columns(attr)
+                raise_value_error_if_multiindex_columns(attr, key)
         if asview:
             if not isinstance(X, AnnData):
                 raise ValueError("`X` has to be an AnnData object.")
@@ -742,10 +742,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Number of variables/features."""
         return len(self.var_names)
 
-    def _set_dim_df(self, value: pd.DataFrame, attr: str):
+    def _set_dim_df(self, value: pd.DataFrame, attr: Literal["obs", "var"]):
         if not isinstance(value, pd.DataFrame):
             raise ValueError(f"Can only assign pd.DataFrame to {attr}.")
-        raise_value_error_if_multiindex_columns(value)
+        raise_value_error_if_multiindex_columns(value, attr)
         value_idx = self._prep_dim_index(value.index, attr)
         if self.is_view:
             self._init_as_actual(self.copy())

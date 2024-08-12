@@ -89,7 +89,7 @@ def coerce_array(
         return value
     if isinstance(value, pd.DataFrame):
         if allow_df:
-            raise_value_error_if_multiindex_columns(value)
+            raise_value_error_if_multiindex_columns(value, name)
         return value if allow_df else ensure_df_homogeneous(value, name)
     # if value is an array-like object, try to convert it
     e = None

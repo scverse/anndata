@@ -265,7 +265,7 @@ class AxisArraysBase(AlignedMappingBase):
 
     def _validate_value(self, val: Value, key: str) -> Value:
         if isinstance(val, pd.DataFrame):
-            raise_value_error_if_multiindex_columns(val)
+            raise_value_error_if_multiindex_columns(val, f"{self.attrname}.{key}")
             if not val.index.equals(self.dim_names):
                 # Could probably also re-order index if it’s contained
                 try:
