@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import os
-import sys
 import textwrap
 import warnings
 from collections.abc import Iterable
@@ -12,7 +11,10 @@ from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias
-from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
+
+# For why here and not typing: https://github.com/python/typing_extensions/pull/44
+from typing_extensions import NamedTuple
 
 from anndata.compat.exceptiongroups import add_note
 
@@ -52,27 +54,14 @@ def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     return textwrap.dedent(doc)
 
 
-if sys.version_info >= (3, 10):
+class RegisteredOption(NamedTuple, Generic[T]):
+    option: str
+    default_value: T
+    description: str
+    validate: Callable[[T], None]
+    type: object
 
-    class RegisteredOption(NamedTuple, Generic[T]):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
-
-else:
-
-    class RegisteredOption(NamedTuple):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
+    describe = describe
 
 
 def check_and_get_environ_var(
