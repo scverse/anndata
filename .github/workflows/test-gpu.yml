@@ -57,6 +57,9 @@ jobs:
           environment-file: ci/gpu_ci.yml
           post-cleanup: "all"
 
+      - name: Install cupy
+        run: uv pip install cupy-cuda12x, numba, pytest, pytest-cov, pytest-xdist
+
       - name: Install AnnData
         run: uv pip install -e .[dev,test,gpu]
 

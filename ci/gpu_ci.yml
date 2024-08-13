@@ -1,13 +1,6 @@
 name: cupy_env
 channels:
-  - nvidia
   - conda-forge
 dependencies:
   - python=3.12
-  - cuda-version=11.8
-  - cupy
-  - numba
-  - pytest
-  - pytest-cov
-  - pytest-xdist
   - uv
