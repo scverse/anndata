@@ -58,7 +58,7 @@ jobs:
           post-cleanup: "all"
 
       - name: Install cupy
-        run: uv pip install cupy-cuda12x, numba, pytest, pytest-cov, pytest-xdist
+        run: uv pip install cupy-cuda12x numba pytest pytest-cov pytest-xdist
 
       - name: Install AnnData
         run: uv pip install -e .[dev,test,gpu]
