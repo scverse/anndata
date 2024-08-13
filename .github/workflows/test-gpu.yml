@@ -61,7 +61,7 @@ jobs:
         run: uv pip install cupy-cuda12x numba pytest pytest-cov pytest-xdist
 
       - name: Install AnnData
-        run: uv pip install -e .[dev,test,gpu]
+        run: uv pip install -e .[dev,test]
 
       - name: Env list
         run: |

@@ -102,7 +102,6 @@ test = [
 ]
 gpu = [
     "cupy",
-    "numpy<2.0.0",
 ]
 
 [tool.hatch.version]
