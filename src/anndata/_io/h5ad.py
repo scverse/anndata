@@ -47,6 +47,7 @@ def write_h5ad(
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
+    convert_strings_to_categoricals: bool = True,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs,
 ) -> None:
@@ -62,9 +63,10 @@ def write_h5ad(
     if "raw/X" in as_dense and adata.raw is None:
         raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
 
-    adata.strings_to_categoricals()
-    if adata.raw is not None:
-        adata.strings_to_categoricals(adata.raw.var)
+    if convert_strings_to_categoricals:
+        adata.strings_to_categoricals()
+        if adata.raw is not None:
+            adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
     mode = "a" if adata.isbacked else "w"

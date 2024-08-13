@@ -275,6 +275,19 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
         with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
 
+    def __setattr__(self, key: str, value: Any):
+        if key == "index":
+            warnings.warn(
+                f"Trying to modify {key} of attribute `.{self._view_args.attrname}` of view, "
+                "initializing view as actual.",
+                ImplicitModificationWarning,
+                stacklevel=2,
+            )
+            with view_update(*self._view_args) as container:
+                setattr(container, key, value)
+        else:
+            super().__setattr__(key, value)
+
 
 @singledispatch
 def as_view(obj, view_args):
