@@ -22,16 +22,18 @@ if TYPE_CHECKING:
 def read_backed(
     store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
 ) -> AnnData:
-    """Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
+    """
+    Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
     No array data should need to be read into memory with the exception of :class:`awkward.Array` and some older-encoding string arrays.
 
     Parameters
     ----------
-        store: A store-like object to be read in.  If :class:`zarr.hierarchy.Group`, it is best for it to be consolidated.
+    store
+        A store-like object to be read in.  If :class:`zarr.hierarchy.Group`, it is best for it to be consolidated.
 
     Returns
     -------
-        A lazily read-in AnnData object.
+        A lazily read-in :class:`~anndata.AnnData` object.
     """
     is_h5 = False
     if isinstance(store, Path) or isinstance(store, str):
