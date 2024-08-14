@@ -184,7 +184,7 @@ Types used by the former:
    settings.override
 ```
 
-## Custom Array Containers
+## Custom Types/Classes for Readable/Writeable Elements
 
 ```{eval-rst}
 .. autosummary::
@@ -192,4 +192,5 @@ Types used by the former:
 
    CSRDataset
    CSCDataset
+   RWAble
 ```
