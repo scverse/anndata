@@ -476,7 +476,7 @@ That is, we store an indicator array (or mask) of null values alongside the arra
 :sync: hdf5
 
 ```python
->>> from anndata.experimental import write_elem
+>>> from anndata import write_elem
 >>> null_store = h5py.File("tmp.h5", mode="w")
 >>> int_array = pd.array([1, None, 3, 4])
 >>> int_array
@@ -498,7 +498,7 @@ nullable_integer/values <HDF5 dataset "values": shape (4,), type "<i8">
 :sync: zarr
 
 ```python
->>> from anndata.experimental import write_elem
+>>> from anndata import write_elem
 >>> null_store = zarr.open()
 >>> int_array = pd.array([1, None, 3, 4])
 >>> int_array
@@ -635,7 +635,7 @@ function:
 
 ```python
 >>> import awkward as ak
->>> from anndata.experimental import read_elem
+>>> from anndataimport read_elem
 >>> awkward_group = store["varm/transcript"]
 >>> ak.from_buffers(
 ...     awkward_group.attrs["form"],
