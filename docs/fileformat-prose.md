@@ -635,7 +635,7 @@ function:
 
 ```python
 >>> import awkward as ak
->>> from anndataimport read_elem
+>>> from anndata import read_elem
 >>> awkward_group = store["varm/transcript"]
 >>> ak.from_buffers(
 ...     awkward_group.attrs["form"],
