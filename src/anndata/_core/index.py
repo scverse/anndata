@@ -162,10 +162,15 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 @_subset.register(spmatrix)
 @_subset.register(SpArray)
 def _subset_sparse(a: spmatrix | SpArray, subset_idx: Index):
+    from anndata._core.sparse_dataset import BaseCompressedSparseDataset
+
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
-        if issubclass(first_idx.dtype.type, np.bool_):
+        # BaseCompressedSparseDataset handles its own indexing and doesn't need this call.
+        if issubclass(first_idx.dtype.type, np.bool_) and not issubclass(
+            type(a), BaseCompressedSparseDataset
+        ):
             first_idx = np.where(first_idx)[0]
         subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
