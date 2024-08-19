@@ -62,7 +62,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install AnnData
-        run: uv pip install --system -e ".[dev, test, gpucu12]"
+        run: uv pip install --system -e ".[dev, test, cu12]"
 
       - name: Env list
         run: pip list
