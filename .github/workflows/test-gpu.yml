@@ -57,11 +57,11 @@ jobs:
           python-version: "3.x"
           cache: "pip"
 
-      - name: Install uv
+      - name: Install UV
         run: pip install uv
 
       - name: Install AnnData
-        run: uv pip install -e .[dev,test, gpu_cu12]
+        run: uv pip install -e ".[dev,test, gpu_cu12]"
 
       - name: Env list
         run: pip list
