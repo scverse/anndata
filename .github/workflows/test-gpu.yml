@@ -57,11 +57,13 @@ jobs:
           python-version: "3.x"
           cache: "pip"
 
-      - name: Install UV
-        run: pip install uv
-
-      - name: Install AnnData
-        run: uv pip install -e ".[dev,test, gpu_cu12]"
+      - name: Setup UV
+        uses: hynek/setup-cached-uv@v2
+        with:
+          cache-dependency-path: pyproject.toml  
+    
+      - name: Install AnnData   
+        run: uv pip install -e .[dev,test,gpu_cu12]
 
       - name: Env list
         run: pip list
