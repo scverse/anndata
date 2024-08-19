@@ -56,7 +56,7 @@ jobs:
         with:
           python-version: "3.x"
           cache: "pip"
-      
+
       - name: Install uv
         run: pip install uv
 
