@@ -61,7 +61,9 @@ jobs:
         uses: hynek/setup-cached-uv@v2
         with:
           cache-dependency-path: pyproject.toml
-        run: uv pip install -e .[dev, test, gpu_cu12]
+
+      - name: Install AnnData
+        run: uv pip install -e .[dev, test, gpucu12]
 
       - name: Env list
         run: pip list
