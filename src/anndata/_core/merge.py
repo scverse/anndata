@@ -592,7 +592,7 @@ class Reindexer:
         out_shape = list(el.shape)
         out_shape[axis] = len(self.new_idx)
 
-        out = cp.zeros(tuple(out_shape))  # , fill_value)
+        out = cp.full(tuple(out_shape), fill_value)
         out[new_idx_tuple] = el[old_idx_tuple]
 
         return out

@@ -51,17 +51,17 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - uses: mamba-org/setup-micromamba@v1
+      - name: Install Python
+        uses: actions/setup-python@v5
         with:
-          micromamba-version: "1.5.6-0"
-          environment-file: ci/gpu_ci.yml
-          post-cleanup: "all"
-
-      - name: Install cupy
-        run: uv pip install cupy-cuda12x numba pytest pytest-cov pytest-xdist
+          python-version: "3.x"
+          cache: "pip"
+      
+      - name: Install uv
+        run: pip install uv
 
       - name: Install AnnData
-        run: uv pip install -e .[dev,test]
+        run: uv pip install -e .[dev,test, gpu_cu12]
 
       - name: Env list
         run: |
