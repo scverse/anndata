@@ -64,9 +64,7 @@ jobs:
         run: uv pip install -e .[dev,test, gpu_cu12]
 
       - name: Env list
-        run: |
-          micromamba list
-          pip list
+        run: pip list
 
       - name: Run test
         run: pytest -m gpu --cov --cov-report=xml --cov-context=test
