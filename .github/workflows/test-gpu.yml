@@ -55,12 +55,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-          cache: "pip"
 
-      - name: Install AnnData with UV
-        uses: hynek/setup-cached-uv@v2
-        with:
-          cache-dependency-path: pyproject.toml
+      - name: Install UV
+        run: pip install uv
 
       - name: Install AnnData
         run: uv pip install -e ".[dev, test, gpucu12]"
