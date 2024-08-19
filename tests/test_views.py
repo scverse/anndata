@@ -65,7 +65,7 @@ class NDArraySubclass(np.ndarray):
         return self
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm["o"] = np.zeros((100, 50))
