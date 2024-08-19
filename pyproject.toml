@@ -105,12 +105,12 @@ gpu = [
     "numpy <2.0.0",
 ]
 
-gpucu12 = [
+cu12 = [
     "cupy-cuda12x",
     "numpy<2.0.0",
 ]
 
-gpucu11 = [
+cu11 = [
     "cupy-cuda11x",
     "numpy<2.0.0",
 ]
