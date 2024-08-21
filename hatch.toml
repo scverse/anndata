@@ -1,0 +1,8 @@
+[envs.docs]
+installer = "uv"
+features = ["doc"]
+dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
+
+[envs.docs.scripts]
+build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
+clean = "git clean -fX -- docs"
