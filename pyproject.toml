@@ -64,6 +64,7 @@ dev = [
     "setuptools_scm",
     # test speedups
     "pytest-xdist",
+    "towncrier",
 ]
 doc = [
     "sphinx>=7.4.6",
@@ -192,3 +193,18 @@ strict = true
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
 ignore-words-list = "theis,coo,homogenous"
+
+[tool.towncrier]
+package = "anndata"
+directory = "docs/release-notes"
+filename = "{version}.md"
+single_file = false
+package_dir = "src"
+
+[tool.towncrier.fragment.bugfix]
+[tool.towncrier.fragment.doc]
+[tool.towncrier.fragment.feature]
+[tool.towncrier.fragment.misc]
+
+[tool.towncrier.fragment.performance]
+name = "Performance"
