@@ -197,7 +197,7 @@ ignore-words-list = "theis,coo,homogenous"
 [tool.towncrier]
 package = "anndata"
 directory = "docs/release-notes"
-filename = "{version}.md"
+filename = "docs/release-notes/{version}.md"
 single_file = false
 package_dir = "src"
 
