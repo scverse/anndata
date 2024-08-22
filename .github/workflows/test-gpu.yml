@@ -56,11 +56,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install UV
+      - name: Install uv
         uses: yezz123/setup-uv@v4
 
       - name: Install AnnData
-        run: uv pip install --system -e ".[dev, test, cu12]"
+        run: uv pip install --system -e ".[dev,test,cu12]"
 
       - name: Env list
         run: pip list
