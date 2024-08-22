@@ -44,7 +44,7 @@ from anndata.utils import dim_len
 #     assert tag in str(err.value)
 
 
-@pytest.fixture()
+@pytest.fixture
 def reusable_adata():
     """Reusable anndata for when tests shouldn’t mutate it"""
     return gen_adata((10, 10))

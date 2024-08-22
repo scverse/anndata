@@ -179,7 +179,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     assert_eq_concat_on_disk(adatas, tmp_path, file_format)
 
 
-@pytest.fixture()
+@pytest.fixture
 def xxxm_adatas():
     def gen_index(n):
         return [f"cell{i}" for i in range(n)]

@@ -33,7 +33,7 @@ uns_dict = dict(  # unstructured annotation
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata_raw() -> ad.AnnData:
     adata = ad.AnnData(
         np.array(data, dtype="int32"), obs=obs_dict, var=var_dict, uns=uns_dict

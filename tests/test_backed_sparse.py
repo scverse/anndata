@@ -39,7 +39,7 @@ M = 50
 N = 50
 
 
-@pytest.fixture()
+@pytest.fixture
 def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
 ) -> tuple[AnnData, AnnData, AnnData, AnnData]:
