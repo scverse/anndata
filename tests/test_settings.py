@@ -33,7 +33,7 @@ def validate_int_list(val) -> bool:
     return True
 
 
-@pytest.fixture()
+@pytest.fixture
 def settings() -> SettingsManager:
     settings = SettingsManager()
     settings.register(option, default_val, description, validate_bool)

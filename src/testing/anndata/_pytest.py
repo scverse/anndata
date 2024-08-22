@@ -37,7 +37,7 @@ def _suppress_env_for_doctests(request: pytest.FixtureRequest) -> None:
         request.getfixturevalue("_doctest_env")
 
 
-@pytest.fixture()
+@pytest.fixture
 def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
 ) -> Generator[None, None, None]:

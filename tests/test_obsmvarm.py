@@ -11,7 +11,7 @@ from anndata import AnnData
 M, N = (100, 100)
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(
