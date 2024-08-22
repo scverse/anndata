@@ -58,8 +58,6 @@ jobs:
 
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
-        with:
-          cache-dependency-path: pyproject.toml
 
       - name: Install AnnData
         run: uv pip install --system -e ".[dev, test, cu12]"
