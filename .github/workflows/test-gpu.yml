@@ -57,9 +57,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install UV
-        uses: hynek/setup-cached-uv@v2
-        with:
-          cache-dependency-path: pyproject.toml
+        uses: yezz123/setup-uv@v4
 
       - name: Install AnnData
         run: uv pip install --system -e ".[dev, test, cu12]"
