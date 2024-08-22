@@ -80,7 +80,7 @@ def diskfmt(request):
     return request.param
 
 
-@pytest.fixture()
+@pytest.fixture
 def rw(backing_h5ad):
     M, N = 100, 101
     orig = gen_adata((M, N))
