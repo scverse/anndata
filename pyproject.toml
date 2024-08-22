@@ -64,7 +64,8 @@ dev = [
     "setuptools_scm",
     # test speedups
     "pytest-xdist",
-    "towncrier",
+    # until https://github.com/twisted/towncrier/pull/651 is released
+    "towncrier @ git+https://github.com/twisted/towncrier",
 ]
 doc = [
     "sphinx>=7.4.6",
@@ -112,6 +113,8 @@ source = "vcs"
 version-file = "src/anndata/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/anndata", "src/testing"]
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.coverage.run]
 source_pkgs = ["anndata"]
@@ -201,7 +204,7 @@ filename = "docs/release-notes/{version}.md"
 single_file = false
 package_dir = "src"
 issue_format = "[#{issue}](https://github.com/scverse/anndata/pull/{issue})"
-
+title_format = "({version})=\n### {version} `{project_date}`"
 [tool.towncrier.fragment.bugfix]
 [tool.towncrier.fragment.doc]
 [tool.towncrier.fragment.feature]
