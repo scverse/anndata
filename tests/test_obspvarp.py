@@ -16,7 +16,7 @@ from anndata.utils import asarray
 M, N = (200, 100)
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(

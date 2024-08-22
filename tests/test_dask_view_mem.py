@@ -38,7 +38,7 @@ def give_chunks(request):
 
 # Does some stuff so that dask can cache the
 # subclasscheck before the run.
-@pytest.fixture()
+@pytest.fixture
 def _alloc_cache():
     import dask.array as da
 
