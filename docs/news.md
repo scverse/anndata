@@ -1,6 +1,6 @@
 # Muon paper published {small}`2022-02-02`
 
-Muon has been published in Genome Biology [Bredikhin22]_.
+Muon has been published in Genome Biology {cite}`Bredikhin22`.
 Muon is a framework for multimodal data built on top of `AnnData`.
 
 Check out [Muon](https://muon.readthedocs.io/en/latest/) and its datastructure [MuData](https://mudata.readthedocs.io/en/latest/).

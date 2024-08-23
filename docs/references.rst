@@ -20,7 +20,3 @@ References
    Murphy (2012,
    *Machine Learning: A Probabilistic Perspective*,
    MIT Press https://mitpress.mit.edu/9780262018029/machine-learning/.
-
-.. [Wolf18] Wolf *et al.* (2018),
-   *Scanpy: large-scale single-cell gene expression data analysis*,
-   Genome Biology https://doi.org/10.1186/s13059-017-1382-0.
