@@ -100,17 +100,9 @@ test = [
     "pytest_memray",
     "pytest-mock"
 ]
-gpu = [
-    "cupy",
-]
-
-cu12 = [
-    "cupy-cuda12x",
-]
-
-cu11 = [
-    "cupy-cuda11x",
-]
+gpu = ["cupy"]
+cu12 = ["cupy-cuda12x"]
+cu11 = ["cupy-cuda11x"]
 
 [tool.hatch.version]
 source = "vcs"
