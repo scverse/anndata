@@ -50,7 +50,7 @@ jobs:
         displayName: Cache pip packages
 
       # This prevents broken and slow back-tracking in dependency resolution
-      - script: echo "llvmlite>=0.43\nscanpy>=1.10.0rc1" | tee /tmp/constraints.txt
+      - script: printf "llvmlite>=0.43\nscanpy>=1.10.0rc1" | tee /tmp/constraints.txt
         displayName: "Create constraints file for `pre-release` and `latest` jobs"
 
       - script: uv pip install --system --compile "anndata[dev,test] @ ." -c /tmp/constraints.txt
