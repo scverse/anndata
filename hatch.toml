@@ -1,5 +1,8 @@
-[envs.docs]
+[envs.default]
 installer = "uv"
+features = ["dev"]
+
+[envs.docs]
 features = ["doc"]
 dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
 
