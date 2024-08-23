@@ -53,7 +53,7 @@ jobs:
       - script: echo "llvmlite>=0.43\nscanpy>=1.10.0rc1" | tee /tmp/constraints.txt
         displayName: "Create constraints file for `pre-release` and `latest` jobs"
 
-      - script: uv pip install --system --compile "anndata[dev,test] @ ." -r /tmp/constraints.txt
+      - script: uv pip install --system --compile "anndata[dev,test] @ ." -c /tmp/constraints.txt
         displayName: "Install dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'latest')
 
@@ -65,7 +65,7 @@ jobs:
         displayName: "Install minimum dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
 
-      - script: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -r /tmp/constraints.txt
+      - script: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -c /tmp/constraints.txt
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
