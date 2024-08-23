@@ -38,6 +38,7 @@ exclude_patterns = [
     "tutorials/notebooks/*.rst",
     # exclude all 0.x.y.md files, but not index.md
     "release-notes/[!i]*.md",
+    "news.md",  # is `include`d into index.md
 ]
 pygments_style = "sphinx"
 
@@ -61,6 +62,7 @@ extensions = [
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_toolbox.more_autodoc.autoprotocol",
+    "patch_myst_cite",
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
@@ -106,10 +108,6 @@ nitpick_ignore = [
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
-]
-suppress_warnings = [
-    "ref.citation",
-    "myst.header",  # https://github.com/executablebooks/MyST-Parser/issues/262
 ]
 
 
