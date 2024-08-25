@@ -1,16 +1,11 @@
 # Release notes
 
-(v0.11)=
-## Version 0.11
-
-```{include} /release-notes/0.11.0.md
-```
+<!-- towncrier release notes start: feature -->
 
 (v0.10)=
 ## Version 0.10
 
-```{include} /release-notes/0.10.9.md
-```
+<!-- towncrier release notes start: patch -->
 
 ```{include} /release-notes/0.10.8.md
 ```

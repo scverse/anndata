@@ -148,6 +148,7 @@ python_files = "test_*.py"
 testpaths = [
     "anndata", # docstrings (module name due to --pyargs)
     "./tests", # unit tests
+    "./ci/scripts", # CI script tests
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
