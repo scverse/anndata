@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from typing import TypeAlias
 
     Version: TypeAlias = tuple[int, int] | tuple[int, int, int]
+
+
+HERE = Path(__file__).parent
 
 MARKER_F = "<!-- towncrier release notes start: feature -->"
 MARKER_P = "<!-- towncrier release notes start: patch -->"
@@ -87,3 +93,27 @@ def insert_feature(rel_notes: str, version: Version) -> str:
     # insert include for new .0 patch version
     rel_notes = insert_patch(rel_notes, (*version, 0))
     return rel_notes
+
+
+def main(args: Sequence[str] | None = None) -> str | None:
+    if args is None:
+        args = sys.argv[1:]
+
+    if len(args) != 1:
+        return "Usage: python release-notes.py <version>"
+
+    version = tuple(map(int, args[0].split(".")))
+
+    index_path = HERE.parent.parent / "docs" / "release-notes" / "index.md"
+    index = index_path.read_text()
+    if len(version) == 2:
+        index = insert_feature(index, version)
+    elif len(version) == 3:
+        index = insert_patch(index, version)
+    else:
+        return f"Invalid version: {version!r}"
+    index_path.write_text(index)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
