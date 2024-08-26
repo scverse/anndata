@@ -353,8 +353,6 @@ def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
 
 
 class BaseCompressedSparseDataset(ABC):
-    """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
-
     format: Literal["csr", "csc"]
     _group: GroupStorageType
 
@@ -378,6 +376,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
+        """Which file type is used on-disk."""
         if isinstance(self.group, ZarrGroup):
             return "zarr"
         elif isinstance(self.group, H5Group):
@@ -387,6 +386,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def dtype(self) -> np.dtype:
+        """The :attr:`numpy.dtype` of the `data` attribute of the sparse matrix."""
         return self.group["data"].dtype
 
     @classmethod
@@ -395,36 +395,18 @@ class BaseCompressedSparseDataset(ABC):
         assert group_format == cls.format
 
     @property
-    def format_str(self) -> Literal["csr", "csc"]:
-        """DEPRECATED Use .format instead."""
-        warnings.warn(
-            "The attribute .format_str is deprecated and will be removed in the anndata 0.11.0. "
-            "Please use .format instead.",
-            FutureWarning,
-        )
-        return self.format
-
-    @property
     def name(self) -> str:
+        """Name of the group."""
         return self.group.name
 
     @property
     def shape(self) -> tuple[int, int]:
+        """Shape of the matrix read off disk."""
         shape = _read_attr(self.group.attrs, "shape", None)
         if shape is None:
             # TODO warn
             shape = self.group.attrs.get("h5sparse_shape")
         return tuple(map(int, shape))
-
-    @property
-    def value(self) -> ss.csr_matrix | ss.csc_matrix:
-        """DEPRECATED Use .to_memory() instead."""
-        warnings.warn(
-            "The .value attribute is deprecated and will be removed in the anndata 0.11.0. "
-            "Please use .to_memory() instead.",
-            FutureWarning,
-        )
-        return self.to_memory()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
@@ -484,6 +466,24 @@ class BaseCompressedSparseDataset(ABC):
 
     # TODO: split to other classes?
     def append(self, sparse_matrix: _cs_matrix | SpArray) -> None:
+        """Append an in-memory or on-disk sparse matrix to the current object's store.
+
+        Parameters
+        ----------
+        sparse_matrix
+            The matrix to append.
+
+        Raises
+        ------
+        NotImplementedError
+            If the matrix to append is not one of :class:`~scipy.csr_array`, :class:`~scipy.csc_array`, :class:`~scipy.csr_matrix`, or :class:`~scipy.csc_matrix`.
+        ValueError
+            If both the on-disk and to-append matrices are not of the same format i.e., `csr` or `csc.
+        OverflowError
+            If the underlying data store has a 32 bit indptr, and the new matrix is too large to fit in it i.e., would cause a 64 bit `indptr` to be written.
+        AssertionError
+            If the on-disk data does not have `csc` or `csr` format.
+        """
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, BaseCompressedSparseDataset):
@@ -583,6 +583,8 @@ class BaseCompressedSparseDataset(ABC):
 
 _sparse_dataset_doc = """\
     On disk {format} sparse matrix.
+
+    Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices.
 
     Parameters
     ----------
