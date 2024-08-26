@@ -12,7 +12,7 @@ from anndata.tests.helpers import get_multiindex_columns_df
 M, N = (100, 100)
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(
