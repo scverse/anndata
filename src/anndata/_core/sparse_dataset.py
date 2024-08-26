@@ -398,7 +398,7 @@ class BaseCompressedSparseDataset(ABC):
         assert group_format == cls.format
 
     @property
-    def name(self) -> str:
+    def _name(self) -> str:
         """Name of the group."""
         return self.group.name
 
@@ -549,7 +549,7 @@ class BaseCompressedSparseDataset(ABC):
         )
         # Clear cached property
         if hasattr(self, "indptr"):
-            del self.indptr
+            del self._indptr
 
         # indices
         indices = self.group["indices"]
@@ -558,7 +558,7 @@ class BaseCompressedSparseDataset(ABC):
         indices[orig_data_size:] = sparse_matrix.indices
 
     @cached_property
-    def indptr(self) -> np.ndarray:
+    def _indptr(self) -> np.ndarray:
         """\
         Other than `data` and `indices`, this is only as long as the major axis
 
@@ -572,7 +572,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.indptr
+        mtx.indptr = self._indptr
         return mtx
 
     def to_memory(self) -> spmatrix | SpArray:
@@ -586,7 +586,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
-        mtx.indptr = self.indptr
+        mtx.indptr = self._indptr
         return mtx
 
 
