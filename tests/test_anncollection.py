@@ -11,7 +11,7 @@ from anndata.experimental.multi_files import AnnCollection
 _dense = lambda a: a.toarray() if issparse(a) else a
 
 
-@pytest.fixture()
+@pytest.fixture
 def adatas(request):
     adata1 = ad.AnnData(X=request.param([[1, 2, 0], [4, 5, 0], [7, 8, 0]]))
     adata1.obs["a_test"] = ["a", "a", "b"]

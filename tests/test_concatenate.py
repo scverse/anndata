@@ -295,7 +295,7 @@ def test_concatenate_layers(array_type, join_type):
     assert_equal(merged.X, merged.layers["a"])
 
 
-@pytest.fixture()
+@pytest.fixture
 def obsm_adatas():
     def gen_index(n):
         return [f"cell{i}" for i in range(n)]
@@ -1578,7 +1578,7 @@ def test_concat_duplicated_columns(join_type):
         concat([a, b], join=join_type)
 
 
-@pytest.mark.gpu()
+@pytest.mark.gpu
 def test_error_on_mixed_device():
     """https://github.com/scverse/anndata/issues/1083"""
     import cupy
