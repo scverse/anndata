@@ -19,7 +19,7 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     adata = AnnData(
         X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),

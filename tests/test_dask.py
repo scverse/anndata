@@ -43,7 +43,7 @@ def diskfmt(request):
     return request.param
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata(sizes):
     import dask.array as da
     import numpy as np

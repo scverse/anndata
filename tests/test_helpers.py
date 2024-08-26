@@ -56,7 +56,7 @@ from anndata.utils import axis_len
 #     assert tag in str(err.value)
 
 
-@pytest.fixture()
+@pytest.fixture
 def reusable_adata():
     """Reusable anndata for when tests shouldn’t mutate it"""
     return gen_adata((10, 10))
@@ -333,7 +333,7 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     "dask_matrix_type",
     DASK_MATRIX_PARAMS,
 )
-@pytest.mark.gpu()
+@pytest.mark.gpu
 def test_as_cupy_dask(dask_matrix_type):
     SHAPE = (100, 10)
     rng = np.random.default_rng(42)
