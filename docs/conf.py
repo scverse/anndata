@@ -140,11 +140,11 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
-    "anndata._types.RWAble": "anndata.experimental.RWAble",
+    "anndata._types.RWAble": "anndata.RWAble",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
-    RWAble=":data:`~anndata.experimental.RWAble`",
+    RWAble=":data:`~anndata.RWAble`",
     **{
         f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryElem`"
         for v in ["In", "Co", "Contra"]

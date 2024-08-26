@@ -52,6 +52,16 @@ Reading other file formats.
 
 ```
 
+Reading individual portions (`obs`, `varm` etc.) of the `AnnData` object.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   read_elem
+
+```
+
 ## Writing
 
 Writing to anndata’s native file format `.h5ad`.
@@ -72,6 +82,16 @@ Writing to other formats.
    AnnData.write_csvs
    AnnData.write_loom
    AnnData.write_zarr
+```
+
+Writing individual portions (`obs`, `varm` etc.) of the `AnnData` object.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   write_elem
+
 ```
 
 (experimental-api)=
@@ -100,8 +120,6 @@ Interface for accessing on-disk sparse data:
    :toctree: generated/
 
    experimental.sparse_dataset
-   experimental.CSRDataset
-   experimental.CSCDataset
 ```
 
 Out of core concatenation
@@ -119,8 +137,6 @@ Low level methods for reading and writing elements of an `AnnData` object to a s
 .. autosummary::
    :toctree: generated/
 
-   experimental.read_elem
-   experimental.write_elem
    experimental.read_elem_as_dask
 ```
 
@@ -142,7 +158,6 @@ Types used by the former:
 
    experimental.IOSpec
    experimental.InMemoryElem
-   experimental.RWAble
    experimental.Read
    experimental.Write
    experimental.ReadCallback
@@ -167,4 +182,15 @@ Types used by the former:
 
    settings
    settings.override
+```
+
+## Custom Types/Classes for Readable/Writeable Elements
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   CSRDataset
+   CSCDataset
+   RWAble
 ```
