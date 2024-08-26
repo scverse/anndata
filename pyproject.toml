@@ -64,7 +64,7 @@ dev = [
     "setuptools_scm",
     # test speedups
     "pytest-xdist",
-    "towncrier>=24.8.0rc1",
+    "towncrier>=24.8.0",
 ]
 doc = [
     "sphinx>=7.4.6",
