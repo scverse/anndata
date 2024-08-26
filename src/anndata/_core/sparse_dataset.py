@@ -44,6 +44,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal
 
+    from scipy.sparse import spmatrix
+
     from .._types import GroupStorageType
     from .index import Index
 
@@ -386,7 +388,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def dtype(self) -> np.dtype:
-        """The :attr:`numpy.dtype` of the `data` attribute of the sparse matrix."""
+        """The :class:`numpy.dtype` of the `data` attribute of the sparse matrix."""
         return self.group["data"].dtype
 
     @classmethod
@@ -465,7 +467,7 @@ class BaseCompressedSparseDataset(ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: _cs_matrix | SpArray) -> None:
+    def append(self, sparse_matrix: spmatrix | SpArray) -> None:
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters
@@ -476,9 +478,9 @@ class BaseCompressedSparseDataset(ABC):
         Raises
         ------
         NotImplementedError
-            If the matrix to append is not one of :class:`~scipy.csr_array`, :class:`~scipy.csc_array`, :class:`~scipy.csr_matrix`, or :class:`~scipy.csc_matrix`.
+            If the matrix to append is not one of :class:`~scipy.sparse.csr_array`, :class:`~scipy.sparse.csc_array`, :class:`~scipy.sparse.csr_matrix`, or :class:`~scipy.sparse.csc_matrix`.
         ValueError
-            If both the on-disk and to-append matrices are not of the same format i.e., `csr` or `csc.
+            If both the on-disk and to-append matrices are not of the same format i.e., `csr` or `csc`.
         OverflowError
             If the underlying data store has a 32 bit indptr, and the new matrix is too large to fit in it i.e., would cause a 64 bit `indptr` to be written.
         AssertionError
@@ -584,7 +586,7 @@ class BaseCompressedSparseDataset(ABC):
 _sparse_dataset_doc = """\
     On disk {format} sparse matrix.
 
-    Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices.
+    Analogous to :class:`h5py.Dataset` or :class:`zarr.core.Array`, but for sparse matrices.
 
     Parameters
     ----------
