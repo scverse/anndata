@@ -400,3 +400,12 @@ class DeprecationMixinMeta(type):
             for item in type.__dir__(cls)
             if not is_hidden(getattr(cls, item, None))
         ]
+
+
+def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):
+    if isinstance(df.columns, pd.MultiIndex):
+        msg = (
+            "MultiIndex columns are not supported in AnnData. "
+            f"Please use a single-level index for {attr}."
+        )
+        raise ValueError(msg)
