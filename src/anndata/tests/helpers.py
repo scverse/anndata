@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import random
 import re
 import warnings
@@ -785,3 +786,13 @@ except ImportError:
             raise ImportError(
                 "zarr must be imported to create an `AccessTrackingStore` instance."
             )
+
+
+def get_multiindex_columns_df(shape):
+    return pd.DataFrame(
+        np.random.rand(shape[0], shape[1]),
+        columns=pd.MultiIndex.from_tuples(
+            list(itertools.product(["a"], range(shape[1] - (shape[1] // 2))))
+            + list(itertools.product(["b"], range(shape[1] // 2)))
+        ),
+    )
