@@ -356,6 +356,7 @@ def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
 
 class BaseCompressedSparseDataset(ABC):
     format: Literal["csr", "csc"]
+    """The format of the sparse matrix."""
     _group: GroupStorageType
 
     def __init__(self, group: GroupStorageType):
@@ -574,7 +575,13 @@ class BaseCompressedSparseDataset(ABC):
         mtx.indptr = self.indptr
         return mtx
 
-    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix:
+    def to_memory(self) -> spmatrix | SpArray:
+        """Returns an in-memory representation of the sparse matrix.
+
+        Returns
+        -------
+            The in-memory representation of the sparse matrix.
+        """
         format_class = get_memory_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
