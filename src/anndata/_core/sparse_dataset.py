@@ -673,30 +673,3 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
 @_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(d, subset_idx):
     return d[subset_idx]
-
-
-## Backwards compat
-
-_sparsedataset_depr_msg = """\
-SparseDataset is deprecated and will be removed in late 2024. It has been replaced by the public classes CSRDataset and CSCDataset.
-
-For instance checks, use `isinstance(X, (anndata.CSRDataset, anndata.CSCDataset))` instead.
-
-For creation, use `anndata.experimental.sparse_dataset(X)` instead.
-"""
-
-
-class SparseDataset(ABC):
-    """DEPRECATED.
-
-    Use CSRDataset, CSCDataset, and sparse_dataset from anndata.experimental instead.
-    """
-
-    def __new__(cls, group):
-        warnings.warn(FutureWarning(_sparsedataset_depr_msg), stacklevel=2)
-        return sparse_dataset(group)
-
-    @classmethod
-    def __subclasshook__(cls, C):
-        warnings.warn(FutureWarning(_sparsedataset_depr_msg), stacklevel=3)
-        return issubclass(C, (CSRDataset, CSCDataset))
