@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 import warnings
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
@@ -970,7 +970,7 @@ try:
     class AccessTrackingStore(zarr.DirectoryStore):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self._access_count = defaultdict(int)
+            self._access_count = Counter()
             self._accessed = defaultdict(set)
             self._accessed_keys = defaultdict(list)
 
