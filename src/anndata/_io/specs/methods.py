@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping
 from functools import partial
 from itertools import product
@@ -10,6 +11,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -508,10 +510,12 @@ def write_vlen_string_array_zarr(
 ):
     import numcodecs
 
-    # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
-    # TODO: Warn to upgrade numcodecs if fixed
-    if hasattr(elem, "flags") and not elem.flags.writeable:
-        elem = elem.copy()
+    if Version(numcodecs.__version__) < Version("0.13"):
+        msg = "Old numcodecs version detected. Please update for improved performance and stability."
+        warnings.warn(msg)
+        # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
+        if hasattr(elem, "flags") and not elem.flags.writeable:
+            elem = elem.copy()
 
     f.create_dataset(
         k,
