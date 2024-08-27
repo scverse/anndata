@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 import pandas as pd
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from anndata._core.index import Index
 
 
-K = TypeVar("K", bound=Union[H5Array, ZarrArray])
+K = TypeVar("K", H5Array, ZarrArray)
 
 
 class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
