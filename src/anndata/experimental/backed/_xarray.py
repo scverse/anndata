@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from ..._core.anndata import _gen_dataframe, _remove_unused_categories
+from ..._core.anndata import AnnData, _gen_dataframe
 from ..._core.file_backing import to_memory
 from ..._core.index import _subset
 from ..._core.views import as_view
@@ -96,7 +96,7 @@ def _gen_dataframe_xr(
     return anno
 
 
-@_remove_unused_categories.register(Dataset2D)
+@AnnData._remove_unused_categories.register(Dataset2D)
 def _remove_unused_categories_xr(
     df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
 ):
