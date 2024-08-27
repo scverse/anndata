@@ -48,9 +48,8 @@ def read_backed(
         try:
             f = zarr.open_consolidated(store, mode="r")
         except KeyError:
-            warnings.warn(
-                "Did not read zarr as consolidated. Consider consolidating your metadata."
-            )
+            msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
+            warnings.warn(msg)
             has_keys = False
             f = zarr.open(store, mode="r")
     else:
