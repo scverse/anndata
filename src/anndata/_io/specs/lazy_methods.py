@@ -16,9 +16,10 @@ from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
+    from anndata.experimental.backed._compat import xr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.experimental.backed._xarray import Dataset2D
 
@@ -184,6 +185,39 @@ def read_zarr_array(
     return da.from_zarr(elem, chunks=chunks)
 
 
+def _gen_xarray_dict_itetator_from_elems(
+    elem_dict: dict[str, (DaskArray | Dataset2D | CategoricalArray | MaskedArray)],
+    index_label: str,
+    index_key: str,
+    index: ArrayStorageType,
+) -> Iterator[tuple[str, xr.DataArray]]:
+    from anndata.experimental.backed._compat import xr
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+
+    for k, v in elem_dict.items():
+        data_array_name = k
+        if isinstance(v, DaskArray) and k != index_key:
+            data_array = xr.DataArray(v, coords=[index], dims=[index_label], name=k)
+        elif isinstance(v, (CategoricalArray, MaskedArray)) and k != index_key:
+            variable = xr.Variable(
+                data=xr.core.indexing.LazilyIndexedArray(v), dims=[index_label]
+            )
+            data_array = xr.DataArray(
+                variable,
+                coords=[index],
+                dims=[index_label],
+                name=k,
+            )
+        elif k == index_key:
+            data_array = xr.DataArray(
+                v, coords=[v], dims=[index_label], name=index_label
+            )
+            data_array_name = index_label
+        else:
+            raise ValueError(f"Could not read {k}: {v} from into xarray Dataset2D")
+        yield data_array_name, data_array
+
+
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 def read_dataframe(
@@ -192,41 +226,20 @@ def read_dataframe(
     _reader: LazyReader,
     chunks: tuple[int, ...] | None = None,
 ) -> Dataset2D:
-    from anndata.experimental.backed._compat import xr
-    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.experimental.backed._xarray import Dataset2D
 
-    iter_object = [(k, elem[k]) for k in elem.attrs["column-order"]] + [
-        (elem.attrs["_index"], elem[elem.attrs["_index"]])
-    ]
-    d = {k: _reader.read_elem(v) for k, v in iter_object}
-    d_with_xr = {}
+    elem_dict = {
+        k: _reader.read_elem(elem[k])
+        for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
+    }
     elem_name = get_elem_name(elem)
     index_label = f'{elem_name.replace("/", "")}_names'
-    index = d[elem.attrs["_index"]]  # no sense in reading this in multiple times
-    for k in d:
-        v = d[k]
-        if isinstance(v, DaskArray) and k != elem.attrs["_index"]:
-            d_with_xr[k] = xr.DataArray(v, coords=[index], dims=[index_label], name=k)
-        elif (
-            isinstance(v, CategoricalArray) or isinstance(v, MaskedArray)
-        ) and k != elem.attrs["_index"]:
-            variable = xr.Variable(
-                data=xr.core.indexing.LazilyIndexedArray(v), dims=[index_label]
-            )
-            d_with_xr[k] = xr.DataArray(
-                variable,
-                coords=[index],
-                dims=[index_label],
-                name=k,
-            )
-        elif k == elem.attrs["_index"]:
-            d_with_xr[index_label] = xr.DataArray(
-                v, coords=[v], dims=[index_label], name=index_label
-            )
-        else:
-            d_with_xr[k] = v
-    return Dataset2D(d_with_xr)
+    index_key = elem.attrs["_index"]
+    index = elem_dict[index_key]  # no sense in reading this in multiple times
+    elem_xarray_dict = dict(
+        _gen_xarray_dict_itetator_from_elems(elem_dict, index_label, index_key, index)
+    )
+    return Dataset2D(elem_xarray_dict)
 
 
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
