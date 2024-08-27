@@ -194,6 +194,8 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
+    ad.settings.allow_write_nullable_strings = True
+
     key = f"key_for_{encoding_type}"
     write_elem(store, key, value, dataset_kwargs={})
 
@@ -427,6 +429,11 @@ def test_write_io_error(store, obj):
 
     msg = str(exc_info.value)
     assert re.search(full_pattern, msg)
+
+
+def test_write_nullable_string_error(store):
+    with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings.*is False"):
+        write_elem(store, "/el", pd.array([""], dtype="string"))
 
 
 def test_categorical_order_type(store):

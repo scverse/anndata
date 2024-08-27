@@ -1048,6 +1048,16 @@ def write_nullable_string(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    from ..._settings import settings
+
+    if not settings.allow_write_nullable_strings:
+        msg = (
+            "`anndata.settings.allow_write_nullable_strings` is False, "
+            "because writing of `pd.arrays.StringArray` is new "
+            "and not supported in anndata < 0.11, still use by many people. "
+            "Opt-in to writing these arrays by toggling the setting to True."
+        )
+        raise RuntimeError(msg)
     g = f.require_group(k)
     if (mask := v.isna()).any():
         _writer.write_elem(g, "mask", mask, dataset_kwargs=dataset_kwargs)

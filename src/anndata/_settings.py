@@ -396,17 +396,6 @@ settings = SettingsManager()
 ##################################################################################
 
 
-categories_option = "should_remove_unused_categories"
-categories_default_value = True
-categories_description = (
-    "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
-)
-
-uniqueness_option = "should_check_uniqueness"
-uniqueness_default_value = True
-uniqueness_description = "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
-
-
 def validate_bool(val) -> None:
     if not isinstance(val, bool):
         msg = f"{val} not valid boolean"
@@ -414,18 +403,30 @@ def validate_bool(val) -> None:
 
 
 settings.register(
-    categories_option,
-    categories_default_value,
-    categories_description,
-    validate_bool,
+    "should_remove_unused_categories",
+    default_value=True,
+    description=(
+        "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
+    ),
+    validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
 
 settings.register(
-    uniqueness_option,
-    uniqueness_default_value,
-    uniqueness_description,
-    validate_bool,
+    "should_check_uniqueness",
+    default_value=True,
+    description=(
+        "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
+    ),
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "allow_write_nullable_strings",
+    default_value=False,
+    description="Whether or not to allow writing of `pd.arrays.StringArray`.",
+    validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
 
