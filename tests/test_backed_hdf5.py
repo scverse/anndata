@@ -28,7 +28,7 @@ subset_func2 = subset_func
 # -------------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     X_list = [
         [1, 2, 3],

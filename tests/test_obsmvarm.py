@@ -7,11 +7,12 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData
+from anndata.tests.helpers import get_multiindex_columns_df
 
 M, N = (100, 100)
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     X = np.zeros((M, N))
     obs = pd.DataFrame(
@@ -137,3 +138,9 @@ def test_shape_error(adata: AnnData):
         ),
     ):
         adata.obsm["b"] = np.zeros((adata.shape[0] + 1, adata.shape[0]))
+
+
+def test_error_set_multiindex_df(adata: AnnData):
+    df = get_multiindex_columns_df((adata.shape[0], 20))
+    with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
+        adata.obsm["df"] = df

@@ -65,7 +65,7 @@ class NDArraySubclass(np.ndarray):
         return self
 
 
-@pytest.fixture()
+@pytest.fixture
 def adata():
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm["o"] = np.zeros((100, 50))
@@ -767,6 +767,23 @@ def test_empty_list_subset():
     assert subset.X.shape == (10, 0)
     assert subset.obsm["sparse"].shape == (10, 100)
     assert subset.varm["sparse"].shape == (0, 100)
+
+
+def test_dataframe_view_index_setting():
+    a1 = ad.AnnData(
+        X=np.array([[1, 2, 3], [4, 5, 6]]),
+        obs={"obs_names": ["aa", "bb"], "property": [True, True]},
+        var={"var_names": ["c", "d", "e"]},
+    )
+    a2 = a1[:, ["c", "d"]]
+    with pytest.warns(
+        ad.ImplicitModificationWarning, match=r"Trying to modify index.*"
+    ):
+        a2.obs.index = a2.obs.index.map(lambda x: x[-1])
+    assert not isinstance(a2.obs, ad._core.views.DataFrameView)
+    assert isinstance(a2.obs, pd.DataFrame)
+    assert a1.obs.index.values.tolist() == ["aa", "bb"]
+    assert a2.obs.index.values.tolist() == ["a", "b"]
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])

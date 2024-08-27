@@ -205,7 +205,7 @@ def test_io_spec(store, value, encoding_type):
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test
-@pytest.mark.gpu()
+@pytest.mark.gpu
 @pytest.mark.parametrize(
     ("value", "encoding_type"),
     [
