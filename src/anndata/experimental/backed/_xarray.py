@@ -38,16 +38,14 @@ class Dataset2D(Dataset):
         return pd.Index(self.coords[coord].data)
 
     @property
-    def shape(
-        self,
-    ):
+    def shape(self) -> tuple[int, int]:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability
 
         Returns
         -------
             The (2D) shape of the dataframe resolved from :attr:`~xarray.Dataset.sizes`.
         """
-        return [self.sizes[get_index_dim(self)], len(self)]
+        return (self.sizes[get_index_dim(self)], len(self))
 
     @property
     def iloc(self):
