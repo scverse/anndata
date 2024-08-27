@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import singledispatchmethod
+from functools import cached_property, singledispatchmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 import pandas as pd
@@ -43,34 +43,6 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
         )
 
 
-# Prevents first access from having to load the categories array
-class CategoricalDtypeAccessor:
-    def __init__(self, categories: ZarrArray | H5Array, ordered: bool):
-        self._categories = categories
-        self._ordered = ordered
-        self._dtype = None
-
-    def __get__(self, obj, objtype=None):
-        return self.dtype
-
-    @property
-    def dtype(self):
-        if self._dtype is None:
-            self._dtype = pd.CategoricalDtype(
-                categories=self._categories, ordered=self._ordered
-            )
-        return self._dtype
-
-    def __getattr__(self, name: str):
-        return getattr(self.dtype, name)
-
-    def __repr__(self):
-        return repr(self.dtype)
-
-    def __str__(self) -> str:
-        return str(self.dtype)
-
-
 class CategoricalArray(BackendArray):
     def __init__(
         self,
@@ -85,9 +57,6 @@ class CategoricalArray(BackendArray):
         self._categories_cache = None
         self._codes = ZarrOrHDF5Wrapper[type(codes)](codes)
         self.shape = self._codes.shape
-        self.dtype = CategoricalDtypeAccessor(
-            categories=self._categories, ordered=self._ordered
-        )
 
     @property
     def categories(self):  # __slots__ and cached_property are incompatible
@@ -114,6 +83,10 @@ class CategoricalArray(BackendArray):
                 categorical_array.remove_unused_categories()
             )
         return xr.core.extension_array.PandasExtensionArray(categorical_array)
+
+    @cached_property
+    def dtype(self):
+        return pd.CategoricalDtype(categories=self._categories, ordered=self._ordered)
 
 
 class MaskedArray(BackendArray):

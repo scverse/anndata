@@ -1003,6 +1003,7 @@ try:
             for k in keys_to_track:
                 self._access_count[k] = 0
                 self._accessed_keys[k] = []
+                self._accessed[k] = set()
 
         def reset_key_trackers(self):
             self.initialize_key_trackers(self._access_count.keys())

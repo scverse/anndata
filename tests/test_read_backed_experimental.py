@@ -60,17 +60,30 @@ def test_access_count_obs_var(tmp_path, mtx_format):
     orig.write_zarr(orig_pth)
     store = AccessTrackingStore(orig_pth)
     remote = read_backed(store)
-    store.initialize_key_trackers(["obs/cat/codes", "obs/int64", "var/int64", "X"])
+    store.initialize_key_trackers(
+        ["obs/cat/codes", "obs/cat/categories", "obs/int64", "var/int64", "X"]
+    )
     # a series of methods that should __not__ read in any data
     remote.X  # the initial (non-subset) access to `X` should not read in data
     remote.shape
     remote.var
     remote.obs
     remote.obs["int64"]
-    remote.var["int64"]
-    assert store.get_access_count("obs/cat/codes") == 0, store.get_subkeys_accessed(
-        "obs/cat/codes"
+    remote.obs["int64"]
+    remote.obs["cat"]
+    assert store.get_access_count("obs/int64") == 0, store.get_subkeys_accessed(
+        "obs/int64"
     )
+    assert (
+        store.get_access_count("obs/cat/categories") == 0
+    ), store.get_subkeys_accessed("obs/cat/categories")
+    # This should only cause categories to be read in once
+    remote.obs["cat"].dtype
+    remote.obs["cat"].dtype
+    remote.obs["cat"].dtype
+    assert (
+        store.get_access_count("obs/cat/categories") == 1
+    ), store.get_subkeys_accessed("obs/cat/categories")
     subset = remote[
         (remote.obs["cat"] == "a").data, :
     ]  # `.data` for xarray, but should we handle internally?
