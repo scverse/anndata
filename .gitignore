@@ -14,7 +14,6 @@ __pycache__/
 /src/anndata/_version.py
 /requirements*.lock
 /.python-version
-/hatch.toml
 
 # Test results (nunit/junit) and coverage
 /test-data/
