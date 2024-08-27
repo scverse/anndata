@@ -11,14 +11,14 @@ from ..._core.views import as_view
 from ._compat import Dataset
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Hashable, Iterable
     from typing import Any, Literal
 
     from ..._core.index import Index
     from ._compat import DataArray
 
 
-def get_index_dim(ds):
+def get_index_dim(ds: DataArray) -> Hashable:
     assert (
         len(ds.sizes) == 1
     ), f"xarray Dataset should not have more than 1 dims, found {len(ds)}"
