@@ -58,18 +58,15 @@ class CategoricalArray(BackendArray):
         self._codes = ZarrOrHDF5Wrapper[type(codes)](codes)
         self.shape = self._codes.shape
 
-    @property
-    def categories(self):  # __slots__ and cached_property are incompatible
-        if self._categories_cache is None:
-            if isinstance(self._categories, ZarrArray):
-                self._categories_cache = self._categories[...]
-            else:
-                if (
-                    "read_dataset" not in dir()
-                ):  # avoid circular dependency, not sure what caused this all of a sudden after merging https://github.com/scverse/anndata/pull/949/commits/dc9f12fcbca977841e967c8414b9f1032e069250
-                    from ..._io.h5ad import read_dataset
-                self._categories_cache = read_dataset(self._categories)
-        return self._categories_cache
+    @cached_property
+    def categories(self):
+        if isinstance(self._categories, ZarrArray):
+            return self._categories[...]
+        if (
+            "read_dataset" not in dir()
+        ):  # avoid circular dependency, not sure what caused this all of a sudden after merging https://github.com/scverse/anndata/pull/949/commits/dc9f12fcbca977841e967c8414b9f1032e069250
+            from ..._io.h5ad import read_dataset
+        return read_dataset(self._categories)
 
     def __getitem__(
         self, key: xr.core.indexing.ExplicitIndexer
