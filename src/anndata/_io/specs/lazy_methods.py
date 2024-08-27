@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from ..._core.sparse_dataset import CSCDataset, CSRDataset
     from ..._types import ArrayStorageType, StorageType
-    from .registry import DaskReader, LazyReader
+    from .registry import DaskReader, LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
         Literal[None],
@@ -186,7 +186,7 @@ def read_zarr_array(
 
 
 def _gen_xarray_dict_itetator_from_elems(
-    elem_dict: dict[str, (DaskArray | Dataset2D | CategoricalArray | MaskedArray)],
+    elem_dict: dict[str, LazyDataStructures],
     index_label: str,
     index_key: str,
     index: ArrayStorageType,

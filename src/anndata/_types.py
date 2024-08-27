@@ -31,8 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from anndata._io.specs.registry import LazyReader
-    from anndata.experimental.backed._xarray import Dataset2D
+    from anndata._io.specs.registry import LazyDataStructures, LazyReader
 
     from ._io.specs.registry import IOSpec, Reader, Writer
 
@@ -93,7 +92,7 @@ class _ReadInternal(Protocol[SCon, CovariantInMemoryType]):
 class _ReadLazyInternal(Protocol[SCon]):
     def __call__(
         self, elem: SCon, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray | Dataset2D: ...
+    ) -> LazyDataStructures: ...
 
 
 class Read(Protocol[SCon, CovariantInMemoryType]):
@@ -114,7 +113,7 @@ class Read(Protocol[SCon, CovariantInMemoryType]):
 class ReadLazy(Protocol[SCon]):
     def __call__(
         self, elem: SCon, *, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray | Dataset2D:
+    ) -> LazyDataStructures:
         """Low-level reading function for a lazy element.
 
         Parameters

@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
+    LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -292,7 +293,7 @@ class LazyReader(Reader):
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
-    ) -> DaskArray | Dataset2D | CategoricalArray | MaskedArray:
+    ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
