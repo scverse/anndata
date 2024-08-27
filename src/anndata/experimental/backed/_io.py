@@ -38,7 +38,7 @@ def read_backed(
     is_h5 = False
     if isinstance(store, Path) or isinstance(store, str):
         store = str(store)
-        if store.endswith("h5ad"):
+        if Path(store).suffix == ".h5ad":
             is_h5 = True
 
     has_keys = True  # true if consolidated or h5ad
