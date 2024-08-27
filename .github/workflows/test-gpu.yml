@@ -70,7 +70,7 @@ jobs:
       - name: Run test
         run: pytest -m gpu --cov --cov-report=xml --cov-context=test
 
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
