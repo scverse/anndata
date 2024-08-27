@@ -76,9 +76,7 @@ class CategoricalArray(BackendArray):
             codes=codes, categories=self.categories, ordered=self._ordered
         )
         if settings.should_remove_unused_categories:
-            return xr.core.extension_array.PandasExtensionArray(
-                categorical_array.remove_unused_categories()
-            )
+            categorical_array = categorical_array.remove_unused_categories()
         return xr.core.extension_array.PandasExtensionArray(categorical_array)
 
     @cached_property
