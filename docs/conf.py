@@ -62,7 +62,9 @@ extensions = [
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_toolbox.more_autodoc.autoprotocol",
+    # other internal extensions
     "patch_myst_cite",
+    "release_notes",
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
