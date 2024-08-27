@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -301,7 +302,9 @@ class LazyReader(Reader):
         if self.callback is not None:
             msg = "Dask reading does not use a callback. Ignoring callback."
             warnings.warn(msg, stacklevel=2)
-        return read_func(elem, chunks=chunks)
+        if "chunks" in inspect.signature(read_func).parameters:
+            return read_func(elem, chunks=chunks)
+        return read_func(elem)
 
 
 class Writer:

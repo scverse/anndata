@@ -224,7 +224,6 @@ def read_dataframe(
     elem: H5Group | ZarrGroup,
     *,
     _reader: LazyReader,
-    chunks: tuple[int, ...] | None = None,
 ) -> Dataset2D:
     from anndata.experimental.backed._xarray import Dataset2D
 
@@ -248,7 +247,6 @@ def read_categorical(
     elem: H5Group | ZarrGroup,
     *,
     _reader: LazyReader,
-    chunks: tuple[int, ...] | None = None,
 ) -> CategoricalArray:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray
 
@@ -264,7 +262,6 @@ def read_nullable(
     *,
     encoding_type: str,
     _reader: LazyReader,
-    chunks: tuple[int, ...] | None = None,
 ) -> MaskedArray:
     from anndata.experimental.backed._lazy_arrays import MaskedArray
 
