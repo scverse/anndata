@@ -201,7 +201,7 @@ directory = "docs/release-notes"
 filename = "docs/release-notes/{version}.md"
 single_file = false
 package_dir = "src"
-issue_format = "{{issue}}`{issue}`"
+issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
 [tool.towncrier.fragment.bugfix]
 [tool.towncrier.fragment.doc]
