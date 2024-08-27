@@ -39,10 +39,12 @@ from anndata.compat import (
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from os import PathLike
     from typing import Any, Literal
 
     from numpy import typing as npt
+    from numpy.typing import NDArray
 
     from anndata._types import (
         ArrayStorageType,
@@ -444,20 +446,10 @@ def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
-@_REGISTRY.register_read(ZarrArray, IOSpec("string-array-nullable", "0.1.0"))
-def read_array_nullable(elem, _reader):
-    return pd.array(elem[()], dtype="string")
-
-
 @_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array_partial(elem, *, items=None, indices=(slice(None, None))):
     return elem[indices]
-
-
-@_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array-nullable", "0.1.0"))
-def read_array_nullable_partial(elem, *, items=None, indices=(slice(None, None))):
-    return pd.array(elem[indices], dtype="string")
 
 
 @_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
@@ -471,21 +463,9 @@ def read_string_array(d: H5Array, *, _reader: Reader):
     return read_array(d.asstr(), _reader=_reader)
 
 
-@_REGISTRY.register_read(H5Array, IOSpec("string-array-nullable", "0.1.0"))
-def read_string_array_nullable(d, _reader):
-    return pd.array(read_array(d.asstr(), _reader=_reader), dtype="string")
-
-
 @_REGISTRY.register_read_partial(H5Array, IOSpec("string-array", "0.2.0"))
 def read_string_array_partial(d, items=None, indices=slice(None)):
     return read_array_partial(d.asstr(), items=items, indices=indices)
-
-
-@_REGISTRY.register_read_partial(H5Array, IOSpec("string-array-nullable", "0.1.0"))
-def read_string_array_nullable_partial(d, items=None, indices=slice(None)):
-    return pd.array(
-        read_array_partial(d.asstr(), items=items, indices=indices), dtype="string"
-    )
 
 
 @_REGISTRY.register_write(
@@ -496,9 +476,6 @@ def read_string_array_nullable_partial(d, items=None, indices=slice(None)):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
-@_REGISTRY.register_write(
-    H5Group, pd.arrays.StringArray, IOSpec("string-array-nullable", "0.1.0")
-)
 def write_vlen_string_array(
     f: H5Group,
     k: str,
@@ -520,9 +497,6 @@ def write_vlen_string_array(
 )
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
-@_REGISTRY.register_write(
-    ZarrGroup, pd.arrays.StringArray, IOSpec("string-array-nullable", "0.1.0")
-)
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
     k: str,
@@ -1055,17 +1029,34 @@ def write_nullable_integer(
     _writer.write_elem(g, "values", v._data, dataset_kwargs=dataset_kwargs)
 
 
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
+)
+def write_nullable_string(
+    f: GroupStorageType,
+    k: str,
+    v: pd.arrays.StringArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    g = f.require_group(k)
+    if (mask := v.isna()).any():
+        _writer.write_elem(g, "mask", mask, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(
+        g, "values", v.fillna("")._ndarray, dataset_kwargs=dataset_kwargs
+    )
+
+
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
 def read_nullable_integer(
     elem: GroupStorageType, *, _reader: Reader
 ) -> pd.api.extensions.ExtensionArray:
-    if "mask" in elem:
-        return pd.arrays.IntegerArray(
-            _reader.read_elem(elem["values"]), mask=_reader.read_elem(elem["mask"])
-        )
-    else:
-        return pd.array(_reader.read_elem(elem["values"]))
+    return _read_nullable(elem, _reader=_reader, array_type=pd.arrays.IntegerArray)
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
@@ -1073,12 +1064,37 @@ def read_nullable_integer(
 def read_nullable_boolean(
     elem: GroupStorageType, *, _reader: Reader
 ) -> pd.api.extensions.ExtensionArray:
-    if "mask" in elem:
-        return pd.arrays.BooleanArray(
-            _reader.read_elem(elem["values"]), mask=_reader.read_elem(elem["mask"])
-        )
-    else:
-        return pd.array(_reader.read_elem(elem["values"]))
+    return _read_nullable(elem, _reader=_reader, array_type=pd.arrays.BooleanArray)
+
+
+@_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))
+def read_nullable_string(
+    elem: GroupStorageType, *, _reader: Reader
+) -> pd.api.extensions.ExtensionArray:
+    def string_array(
+        values: np.ndarray, mask: np.ndarray
+    ) -> pd.api.extensions.ExtensionArray:
+        arr = pd.array(values, dtype="string")
+        arr[mask] = pd.NA
+        return arr
+
+    return _read_nullable(elem, _reader=_reader, array_type=string_array)
+
+
+def _read_nullable(
+    elem: GroupStorageType,
+    *,
+    _reader: Reader,
+    # BaseMaskedArray
+    array_type: Callable[
+        [NDArray[np.number], NDArray[np.bool_]], pd.api.extensions.ExtensionArray
+    ],
+) -> pd.api.extensions.ExtensionArray:
+    values = _reader.read_elem(elem["values"])
+    if "mask" not in elem:
+        return pd.array(values)
+    return array_type(values, mask=_reader.read_elem(elem["mask"]))
 
 
 ###########

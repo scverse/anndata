@@ -157,9 +157,14 @@ def create_sparse_store(
             pd.Categorical([1, 2, 1, 3], ordered=True), "categorical", id="pd_cat_num"
         ),
         pytest.param(
-            pd.array(["hello", "world", pd.NA], dtype="string"),
-            "string-array-nullable",
+            pd.array(["hello", "world"], dtype="string"),
+            "nullable-string-array",
             id="pd_arr_str",
+        ),
+        pytest.param(
+            pd.array(["hello", "world", pd.NA], dtype="string"),
+            "nullable-string-array",
+            id="pd_arr_str_mask",
         ),
         pytest.param(
             pd.arrays.IntegerArray(
