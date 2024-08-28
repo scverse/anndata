@@ -59,7 +59,6 @@ Reading individual portions (`obs`, `varm` etc.) of the `AnnData` object.
    :toctree: generated/
 
    read_elem
-   InMemoryElem
 
 ```
 
@@ -193,4 +192,5 @@ Types used by the former:
    CSRDataset
    CSCDataset
    RWAble
+   InMemoryElem
 ```
