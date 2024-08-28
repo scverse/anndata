@@ -51,24 +51,26 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - uses: mamba-org/setup-micromamba@v1
+      - name: Install Python
+        uses: actions/setup-python@v5
         with:
-          micromamba-version: "1.5.6-0"
-          environment-file: ci/gpu_ci.yml
-          post-cleanup: "all"
+          python-version: "3.x"
+
+      - name: Install UV
+        uses: hynek/setup-cached-uv@v2
+        with:
+          cache-dependency-path: pyproject.toml
 
       - name: Install AnnData
-        run: uv pip install -e .[dev,test,gpu]
+        run: uv pip install --system -e ".[dev,test,cu12]" llvmlite>=0.43
 
       - name: Env list
-        run: |
-          micromamba list
-          pip list
+        run: pip list
 
       - name: Run test
         run: pytest -m gpu --cov --cov-report=xml --cov-context=test
 
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
