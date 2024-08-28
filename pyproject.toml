@@ -212,3 +212,6 @@ name = "Performance"
 
 [tool.towncrier.fragment.breaking]
 name = "Breaking"
+
+[tool.towncrier.fragment.dev]
+name = "Development Process"
