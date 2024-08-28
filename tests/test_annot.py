@@ -8,6 +8,7 @@ import pytest
 from natsort import natsorted
 
 import anndata as ad
+from anndata.tests.helpers import get_multiindex_columns_df
 
 
 @pytest.mark.parametrize("dtype", [object, "string"])
@@ -63,3 +64,10 @@ def test_non_str_to_not_categorical():
     result_non_transformed = adata.obs.drop(columns=["str_with_nan"])
 
     pd.testing.assert_frame_equal(expected_non_transformed, result_non_transformed)
+
+
+def test_error_multiindex():
+    adata = ad.AnnData(np.random.rand(100, 10))
+    df = get_multiindex_columns_df((adata.shape[0], 20))
+    with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
+        adata.obs = df
