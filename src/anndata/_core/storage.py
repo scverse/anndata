@@ -20,7 +20,11 @@ from ..compat import (
     ZappyArray,
     ZarrArray,
 )
-from ..utils import ensure_df_homogeneous, join_english
+from ..utils import (
+    ensure_df_homogeneous,
+    join_english,
+    raise_value_error_if_multiindex_columns,
+)
 from .sparse_dataset import BaseCompressedSparseDataset
 
 if TYPE_CHECKING:
@@ -28,7 +32,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 
-class StorageType(Enum):
+class ArrayDataStructureType(Enum):
     # Memory
     Array = (np.ndarray, "np.ndarray")
     Masked = (ma.MaskedArray, "numpy.ma.core.MaskedArray")
@@ -77,13 +81,15 @@ def coerce_array(
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
-    if isinstance(value, StorageType.classes()):
+    if isinstance(value, ArrayDataStructureType.classes()):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warnings.warn(msg, ImplicitModificationWarning)
             value = value.A
         return value
     if isinstance(value, pd.DataFrame):
+        if allow_df:
+            raise_value_error_if_multiindex_columns(value, name)
         return value if allow_df else ensure_df_homogeneous(value, name)
     # if value is an array-like object, try to convert it
     e = None
@@ -94,7 +100,7 @@ def coerce_array(
         except (ValueError, TypeError) as _e:
             e = _e
     # if value isn’t the right type or convertible, raise an error
-    msg = f"{name} needs to be of one of {join_english(StorageType.qualnames())}, not {type(value)}."
+    msg = f"{name} needs to be of one of {join_english(ArrayDataStructureType.qualnames())}, not {type(value)}."
     if e is not None:
         msg += " (Failed to convert it to an array, see above for details.)"
     raise ValueError(msg) from e

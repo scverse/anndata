@@ -61,9 +61,11 @@ extensions = [
     "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
-    "patch_sphinx_toolbox_autoprotocol",
+    "patch_sphinx_toolbox_autoprotocol",  # internal extension
     "sphinx_toolbox.more_autodoc.autoprotocol",
+    # other internal extensions
     "patch_myst_cite",
+    "release_notes",
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
@@ -146,7 +148,7 @@ autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     RWAble=":data:`~anndata.RWAble`",
     **{
-        f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryElem`"
+        f"{v}variantInMemoryType": ":data:`~anndata.InMemoryElem`"
         for v in ["In", "Co", "Contra"]
     },
 )
