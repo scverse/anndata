@@ -408,10 +408,7 @@ def _iter_chunks_for_copy(elem, dest):
         n_rows = max(
             entry_chunk_size // shape[0], 1000
         )  # Number of rows that works out to
-        return zip(
-            (slice(i, min(i + n_rows, shape[0])) for i in range(0, shape[0], n_rows)),
-            (slice(None) for _ in range(0, shape[0], n_rows)),
-        )
+        return (slice(i, min(i + n_rows, shape[0])) for i in range(0, shape[0], n_rows))
 
 
 @_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
