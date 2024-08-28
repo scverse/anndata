@@ -101,10 +101,9 @@ test = [
     "pytest_memray",
     "pytest-mock"
 ]
-gpu = [
-    "cupy",
-    "numpy<2.0.0",
-]
+gpu = ["cupy"]
+cu12 = ["cupy-cuda12x"]
+cu11 = ["cupy-cuda11x"]
 
 [tool.hatch.version]
 source = "vcs"
@@ -212,3 +211,6 @@ title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
 
 [tool.towncrier.fragment.performance]
 name = "Performance"
+
+[tool.towncrier.fragment.dev]
+name = "Development Process"
