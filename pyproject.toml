@@ -64,6 +64,7 @@ dev = [
     "setuptools_scm",
     # test speedups
     "pytest-xdist",
+    "towncrier>=24.8.0",
 ]
 doc = [
     "sphinx>=7.4.6",
@@ -146,6 +147,7 @@ python_files = "test_*.py"
 testpaths = [
     "anndata", # docstrings (module name due to --pyargs)
     "./tests", # unit tests
+    "./ci/scripts", # CI script tests
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
@@ -191,3 +193,22 @@ strict = true
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
 ignore-words-list = "theis,coo,homogenous"
+
+[tool.towncrier]
+package = "anndata"
+directory = "docs/release-notes"
+filename = "docs/release-notes/{version}.md"
+single_file = false
+package_dir = "src"
+issue_format = "{{pr}}`{issue}`"
+title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
+[tool.towncrier.fragment.bugfix]
+[tool.towncrier.fragment.doc]
+[tool.towncrier.fragment.feature]
+[tool.towncrier.fragment.misc]
+
+[tool.towncrier.fragment.performance]
+name = "Performance"
+
+[tool.towncrier.fragment.breaking]
+name = "Breaking"
