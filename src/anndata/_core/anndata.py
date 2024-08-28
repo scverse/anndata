@@ -54,6 +54,7 @@ if TYPE_CHECKING:
 
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index, Index1D
+    from .sparse_dataset import CSCDataset, CSRDataset
     from .views import ArrayView
 
 
@@ -541,7 +542,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> np.ndarray | sparse.spmatrix | SpArray | ArrayView | None:
+    def X(
+        self,
+    ) -> (
+        CSRDataset
+        | CSCDataset
+        | np.ndarray
+        | sparse.spmatrix
+        | SpArray
+        | ArrayView
+        | None
+    ):
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
