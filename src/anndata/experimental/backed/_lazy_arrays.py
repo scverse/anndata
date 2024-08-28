@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import cached_property, singledispatchmethod
+from functools import cached_property
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 import pandas as pd
@@ -20,12 +20,9 @@ K = TypeVar("K", H5Array, ZarrArray)
 
 
 class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
-    @singledispatchmethod  # type: ignore
-    def __init__(self, array: ZarrArray):
-        return super().__init__(array)
-
-    @__init__.register
-    def _(self, array: H5Array):
+    def __init__(self, array: K):
+        if isinstance(array, ZarrArray):
+            return super().__init__(array)
         self._array = array
         self.shape = self._array.shape
         self.dtype = self._array.dtype
@@ -91,8 +88,8 @@ class MaskedArray(BackendArray):
         dtype_str: str,
         mask: ZarrArray | H5Array | None = None,
     ):
-        self._mask = ZarrOrHDF5Wrapper[type(mask)](mask)
-        self._values = ZarrOrHDF5Wrapper[type(values)](values)
+        self._mask = ZarrOrHDF5Wrapper(mask)
+        self._values = ZarrOrHDF5Wrapper(values)
         self._dtype_str = dtype_str
         self.shape = self._values.shape
         self.dtype = pd.api.types.pandas_dtype(self._values.dtype)
