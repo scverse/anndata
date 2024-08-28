@@ -3,9 +3,8 @@ from __future__ import annotations
 from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from anndata._io.specs import IOSpec, read_elem, read_elem_lazy, write_elem
 
-from .._core.storage import StorageType
 from .._types import InMemoryElem as _InMemoryElem
-from .._types import Read, ReadCallback, Write, WriteCallback
+from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from .._types import RWAble as _RWAble
 from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_backed

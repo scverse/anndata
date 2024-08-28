@@ -213,3 +213,6 @@ title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
 
 [tool.towncrier.fragment.performance]
 name = "Performance"
+
+[tool.towncrier.fragment.breaking]
+name = "Breaking"
