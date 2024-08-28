@@ -373,13 +373,10 @@ def write_list(
 # It's in the `AnnData.concatenate` docstring, but should we keep it?
 @_REGISTRY.register_write(H5Group, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.ndarray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
 def write_basic(
     f: GroupStorageType,
     k: str,
@@ -390,6 +387,48 @@ def write_basic(
 ):
     """Write methods which underlying library handles natively."""
     f.create_dataset(k, data=elem, **dataset_kwargs)
+
+
+def _iter_chunks_for_copy(elem, dest):
+    """
+    Returns an iterator of tuples of slices for copying chunks from `elem` to `dest`.
+
+    * If `elem` has chunks, it will return the chunks of `elem`.
+    * If `dest` has chunks, it will return the chunks of `dest`.
+    * If neither is chunked, we write it in ~100MB chunks or 1000 rows, whichever is larger.
+    """
+    if elem.chunks:
+        return elem.iter_chunks()
+    elif dest.chunks:
+        return dest.iter_chunks()
+    else:
+        itemsize = elem.dtype.itemsize
+        shape = elem.shape
+        entry_chunk_size = (100 * 1024 * 1024 // itemsize) # number of elements to write
+        n_rows = max(entry_chunk_size // shape[0], 1000) # Number of rows that works out to
+        return zip(
+            (slice(i, min(i + n_rows, shape[0])) for i in range(0, shape[0], n_rows)),
+            (slice(None) for _ in range(0, shape[0], n_rows)),
+        )
+
+
+@_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
+def write_chunked_dense_array(
+    f: GroupStorageType,
+    k: str,
+    elem,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    dest = f.create_dataset_like(k, elem, **dataset_kwargs)
+
+    for chunk in _iter_chunks_for_copy(elem, dest):
+        dest[chunk] = elem[chunk]
+
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
