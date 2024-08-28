@@ -15,11 +15,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
     from typing import Any
 
-    from anndata._core.storage import StorageType
     from anndata._types import (
         GroupStorageType,
         InMemoryElem,
         ReadCallback,
+        StorageType,
         Write,
         WriteCallback,
         _WriteInternal,
