@@ -38,6 +38,7 @@ from ._io import (
 )
 from ._io.specs import read_elem, write_elem
 from ._settings import settings
+from ._types import InMemoryElem
 from ._types import RWAble as _RWAble
 from ._warnings import (
     ExperimentalFeatureWarning,
@@ -85,6 +86,7 @@ __all__ = [
     "read_zarr",
     "read_elem",
     "write_elem",
+    "InMemoryElem",
     "RWAble",
     "CSRDataset",
     "CSCDataset",

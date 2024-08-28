@@ -59,6 +59,7 @@ Reading individual portions (`obs`, `varm` etc.) of the `AnnData` object.
    :toctree: generated/
 
    read_elem
+   InMemoryElem
 
 ```
 
@@ -157,7 +158,6 @@ Types used by the former:
    :toctree: generated/
 
    experimental.IOSpec
-   experimental.InMemoryElem
    experimental.Read
    experimental.Write
    experimental.ReadCallback

@@ -148,7 +148,7 @@ autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     RWAble=":data:`~anndata.RWAble`",
     **{
-        f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryElem`"
+        f"{v}variantInMemoryType": ":data:`~anndata.InMemoryElem`"
         for v in ["In", "Co", "Contra"]
     },
 )
