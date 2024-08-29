@@ -1058,8 +1058,7 @@ def write_nullable_string(
         )
         raise RuntimeError(msg)
     g = f.require_group(k)
-    if (mask := v.isna()).any():
-        _writer.write_elem(g, "mask", mask, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
     _writer.write_elem(
         g, "values", v.fillna("")._ndarray, dataset_kwargs=dataset_kwargs
     )
