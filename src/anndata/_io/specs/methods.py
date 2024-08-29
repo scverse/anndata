@@ -1059,7 +1059,7 @@ def write_nullable_string(
     g = f.require_group(k)
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
     _writer.write_elem(
-        g, "values", v.fillna("")._ndarray, dataset_kwargs=dataset_kwargs
+        g, "values", v.to_numpy(na_value=""), dataset_kwargs=dataset_kwargs
     )
 
 
