@@ -4,6 +4,9 @@ build:
   tools:
     python: "3.12"
   jobs:
+    post_checkout:
+      # unshallow so version can be derived from tag
+      - git fetch --unshallow || true
     pre_build:
       - "( find docs/release-notes -regex '[^.]+[.][^.]+.md' | grep -q . ) && towncrier build --keep"
       - ls docs/release-notes
