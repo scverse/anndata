@@ -24,7 +24,9 @@ def main():
     parse(args.version)
 
     # Run towncrier
-    if subprocess.call(["towncrier", "build", f"--version={version}", "--yes"]):
+    if subprocess.run(
+        ["towncrier", "build", f"--version={version}", "--yes"]
+    ).returncode:
         raise RuntimeError("Failed to build towncrier")
 
     # Check if we are on the main branch to know if we need to backport
@@ -40,13 +42,13 @@ def main():
     branch_name = f"release_notes_{args.version}"
 
     # Create a new branch + commit
-    subprocess.call(["git", "checkout", "-b", branch_name])
-    subprocess.call(["git", "add", "docs/release-notes"])
+    subprocess.run(["git", "checkout", "-b", branch_name])
+    subprocess.run(["git", "add", "docs/release-notes"])
     pr_title = f"(chore): generate {version} release notes"
-    subprocess.call(["git", "commit", "-m", pr_title])
+    subprocess.run(["git", "commit", "-m", pr_title])
 
     # Create a PR
-    subprocess.call(
+    subprocess.run(
         [
             "gh",
             "pr",
@@ -65,7 +67,7 @@ def main():
 
     # Enable auto-merge
     if not args.dry_run:
-        subprocess.call(["gh", "pr", "merge", branch_name, "--auto", "--squash"])
+        subprocess.run(["gh", "pr", "merge", branch_name, "--auto", "--squash"])
     else:
         print("Dry run, not merging")
 
