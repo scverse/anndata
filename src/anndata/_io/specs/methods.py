@@ -1027,7 +1027,7 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
 )
-def write_nullable_integer(
+def write_nullable(
     f: GroupStorageType,
     k: str,
     v: pd.arrays.IntegerArray | pd.arrays.BooleanArray | pd.arrays.StringArray,
