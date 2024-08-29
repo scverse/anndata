@@ -8,21 +8,13 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, Union
 
 import numpy as np
 import pandas as pd
-from numpy.typing import NDArray
-from scipy import sparse
 
 from anndata._core.anndata import AnnData
 
-from ._core.sparse_dataset import BaseCompressedSparseDataset
+from ._core.storage import ArrayDataStructureType
 from .compat import (
-    AwkArray,
-    CupyArray,
-    CupySparseMatrix,
-    DaskArray,
     H5Array,
     H5Group,
-    SpArray,
-    ZappyArray,
     ZarrArray,
     ZarrGroup,
 )
@@ -34,6 +26,7 @@ if TYPE_CHECKING:
     from anndata._io.specs.registry import DaskReader
 
     from ._io.specs.registry import IOSpec, Reader, Writer
+    from .compat import DaskArray
 
 __all__ = [
     "ArrayStorageType",
@@ -42,21 +35,7 @@ __all__ = [
 ]
 
 InMemoryArrayOrScalarType: TypeAlias = Union[
-    NDArray,
-    np.ma.MaskedArray,
-    sparse.spmatrix,
-    SpArray,
-    H5Array,
-    ZarrArray,
-    ZappyArray,
-    BaseCompressedSparseDataset,
-    DaskArray,
-    CupyArray,
-    CupySparseMatrix,
-    AwkArray,
-    pd.DataFrame,
-    np.number,
-    str,
+    pd.DataFrame, np.number, str, ArrayDataStructureType
 ]
 RWAble: TypeAlias = Union[
     InMemoryArrayOrScalarType, dict[str, "RWAble"], list["RWAble"]
