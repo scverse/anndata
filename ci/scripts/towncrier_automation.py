@@ -29,7 +29,10 @@ def main():
 
     # Check if we are on the main branch to know if we need to backport
     base_branch = subprocess.run(
-        ["git", "branch", "show_current"], capture_output=True, text=True, check=True
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
     pr_description = ""
     if base_branch != "main":
