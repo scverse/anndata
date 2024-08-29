@@ -29,10 +29,7 @@ def main():
     parse(args.version)
 
     # Run towncrier
-    if subprocess.run(
-        ["towncrier", "build", f"--version={version}", "--yes"], check=False
-    ).returncode:
-        raise RuntimeError("Failed to build towncrier")
+    subprocess.run(["towncrier", "build", f"--version={version}", "--yes"], check=True)
 
     # Check if we are on the main branch to know if we need to backport
     base_branch = subprocess.run(
