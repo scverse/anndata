@@ -60,6 +60,9 @@ def main():
         ]
     )
 
+    # Enable auto-merge
+    subprocess.call(["gh", "pr", "merge", branch_name, "--auto", "--squash"])
+
 
 if __name__ == "__main__":
     main()
