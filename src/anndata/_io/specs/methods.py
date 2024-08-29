@@ -1064,37 +1064,6 @@ def write_nullable_string(
     )
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
-def read_nullable_integer(
-    elem: GroupStorageType, *, _reader: Reader
-) -> pd.api.extensions.ExtensionArray:
-    return _read_nullable(elem, _reader=_reader, array_type=pd.arrays.IntegerArray)
-
-
-@_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))
-def read_nullable_boolean(
-    elem: GroupStorageType, *, _reader: Reader
-) -> pd.api.extensions.ExtensionArray:
-    return _read_nullable(elem, _reader=_reader, array_type=pd.arrays.BooleanArray)
-
-
-@_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))
-def read_nullable_string(
-    elem: GroupStorageType, *, _reader: Reader
-) -> pd.api.extensions.ExtensionArray:
-    def string_array(
-        values: np.ndarray, mask: np.ndarray
-    ) -> pd.api.extensions.ExtensionArray:
-        arr = pd.array(values, dtype="string")
-        arr[mask] = pd.NA
-        return arr
-
-    return _read_nullable(elem, _reader=_reader, array_type=string_array)
-
-
 def _read_nullable(
     elem: GroupStorageType,
     *,
@@ -1108,6 +1077,37 @@ def _read_nullable(
     if "mask" not in elem:
         return pd.array(values)
     return array_type(values, mask=_reader.read_elem(elem["mask"]))
+
+
+def _string_array(
+    values: np.ndarray, mask: np.ndarray
+) -> pd.api.extensions.ExtensionArray:
+    """Construct a string array with pandas’ BaseMaskedArray API."""
+    arr = pd.array(values, dtype="string")
+    arr[mask] = pd.NA
+    return arr
+
+
+_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
+    read_nullable_integer := partial(_read_nullable, array_type=pd.arrays.IntegerArray)
+)
+_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))(
+    read_nullable_integer
+)
+
+_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))(
+    read_nullable_boolean := partial(_read_nullable, array_type=pd.arrays.BooleanArray)
+)
+_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
+    read_nullable_boolean
+)
+
+_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))(
+    read_nullable_string := partial(_read_nullable, array_type=_string_array)
+)
+_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
+    read_nullable_string
+)
 
 
 ###########
