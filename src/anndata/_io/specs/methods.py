@@ -1030,8 +1030,7 @@ def write_nullable_integer(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    if v._mask is not None:
-        _writer.write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "values", v._data, dataset_kwargs=dataset_kwargs)
 
 
@@ -1073,10 +1072,10 @@ def _read_nullable(
         [NDArray[np.number], NDArray[np.bool_]], pd.api.extensions.ExtensionArray
     ],
 ) -> pd.api.extensions.ExtensionArray:
-    values = _reader.read_elem(elem["values"])
-    if "mask" not in elem:
-        return pd.array(values)
-    return array_type(values, mask=_reader.read_elem(elem["mask"]))
+    return array_type(
+        _reader.read_elem(elem["values"]),
+        mask=_reader.read_elem(elem["mask"]),
+    )
 
 
 def _string_array(
