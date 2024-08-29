@@ -24,7 +24,7 @@ def main():
     parse(args.version)
 
     # Run towncrier
-    if subprocess.call(["towncrier", "build", f"--version={version}"]):
+    if subprocess.call(["towncrier", "build", f"--version={version}", "--yes"]):
         raise RuntimeError("Failed to build towncrier")
 
     # Check if we are on the main branch to know if we need to backport
