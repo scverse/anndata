@@ -10,7 +10,12 @@ from packaging.version import parse
 def main():
     parser = argparse.ArgumentParser(
         prog="towncrier-automation",
-        description="This script runs townncrier for a given version, creates a branch off of the current one, and then creates a PR into the original branch with the changes.  The PR will be backported to main if the current branch is not main.",
+        description=(
+            "This script runs towncrier for a given version, "
+            "creates a branch off of the current one, "
+            "and then creates a PR into the original branch with the changes. "
+            "The PR will be backported to main if the current branch is not main."
+        ),
         usage="python towncrier_automation.py --version <version> [--dry-run]",
     )
     parser.add_argument("--version", type=str, help="What the new version is")
@@ -51,14 +56,10 @@ def main():
             "gh",
             "pr",
             "create",
-            "--base",
-            base_branch,
-            "--head",
-            branch_name,
-            "--title",
-            pr_title,
-            "--body",
-            pr_description,
+            f"--base={base_branch}",
+            f"--head={branch_name}",
+            f"--title={pr_title}",
+            f"--body={pr_description}",
             "--dry-run" if args.dry_run else "",
         ],
         check=False,
