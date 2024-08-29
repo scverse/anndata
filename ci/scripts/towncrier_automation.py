@@ -42,7 +42,7 @@ def main():
     branch_name = f"release_notes_{args.version}"
 
     # Create a new branch + commit
-    subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+    subprocess.run(["git", "switch", "-c", branch_name], check=True)
     subprocess.run(["git", "add", "docs/release-notes"], check=True)
     pr_title = f"(chore): generate {version} release notes"
     subprocess.run(["git", "commit", "-m", pr_title], check=True)
