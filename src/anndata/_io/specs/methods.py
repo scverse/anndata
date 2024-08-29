@@ -1021,34 +1021,24 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
-def write_nullable_integer(
-    f: GroupStorageType,
-    k: str,
-    v: pd.arrays.IntegerArray | pd.arrays.BooleanArray,
-    *,
-    _writer: Writer,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    g = f.require_group(k)
-    _writer.write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "values", v._data, dataset_kwargs=dataset_kwargs)
-
-
 @_REGISTRY.register_write(
     H5Group, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
 )
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
 )
-def write_nullable_string(
+def write_nullable_integer(
     f: GroupStorageType,
     k: str,
-    v: pd.arrays.StringArray,
+    v: pd.arrays.IntegerArray | pd.arrays.BooleanArray | pd.arrays.StringArray,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    if not settings.allow_write_nullable_strings:
+    if (
+        isinstance(v, pd.arrays.StringArray)
+        and not settings.allow_write_nullable_strings
+    ):
         msg = (
             "`anndata.settings.allow_write_nullable_strings` is False, "
             "because writing of `pd.arrays.StringArray` is new "
@@ -1058,9 +1048,7 @@ def write_nullable_string(
         raise RuntimeError(msg)
     g = f.require_group(k)
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(
-        g, "values", v.to_numpy(na_value=""), dataset_kwargs=dataset_kwargs
-    )
+    _writer.write_elem(g, "values", v.to_numpy(), dataset_kwargs=dataset_kwargs)
 
 
 def _read_nullable(
