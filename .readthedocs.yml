@@ -8,8 +8,8 @@ build:
       # unshallow so version can be derived from tag
       - git fetch --unshallow || true
     pre_build:
+      # run towncrier to preview the next version’s release notes
       - "( find docs/release-notes -regex '[^.]+[.][^.]+.md' | grep -q . ) && towncrier build --keep"
-      - ls docs/release-notes
 sphinx:
   configuration: docs/conf.py
   fail_on_warning: true # do not change or you will be fired
