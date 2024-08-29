@@ -59,13 +59,8 @@ Home-page = "https://github.com/scverse/anndata"
 
 
 [project.optional-dependencies]
-dev = [
-    # dev version generation
-    "setuptools_scm",
-    # test speedups
-    "pytest-xdist",
-    "towncrier>=24.8.0",
-]
+dev = ["anndata[dev-base,dev-doc,dev-test]"]
+dev-base = ["setuptools-scm"] # dev version generation
 doc = [
     "sphinx>=7.4.6",
     "sphinx-book-theme>=1.1.0",
@@ -82,8 +77,10 @@ doc = [
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
-    "towncrier>=24.8.0",
+    # for unreleased changes
+    "anndata[dev-base,dev-doc]",
 ]
+dev-doc = ["towncrier>=24.8.0"] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2",
@@ -102,6 +99,7 @@ test = [
     "pytest_memray",
     "pytest-mock"
 ]
+dev-test = ["pytest-xdist"] # test speedups
 gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
