@@ -56,9 +56,9 @@ def main():
             "--head",
             branch_name,
             "--title",
-            repr(pr_title),
+            pr_title,
             "--body",
-            repr(pr_description),
+            pr_description,
             "dry-run" if args.dry_run else "",
         ]
     )
