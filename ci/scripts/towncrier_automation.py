@@ -45,10 +45,10 @@ def main():
     branch_name = f"release_notes_{args.version}"
 
     # Create a new branch + commit
-    subprocess.run(["git", "checkout", "-b", branch_name], check=False)
-    subprocess.run(["git", "add", "docs/release-notes"], check=False)
+    subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+    subprocess.run(["git", "add", "docs/release-notes"], check=True)
     pr_title = f"(chore): generate {version} release notes"
-    subprocess.run(["git", "commit", "-m", pr_title], check=False)
+    subprocess.run(["git", "commit", "-m", pr_title], check=True)
 
     # Create a PR
     subprocess.run(
@@ -62,13 +62,13 @@ def main():
             f"--body={pr_description}",
             *(["--dry-run"] if args.dry_run else []),
         ],
-        check=False,
+        check=True,
     )
 
     # Enable auto-merge
     if not args.dry_run:
         subprocess.run(
-            ["gh", "pr", "merge", branch_name, "--auto", "--squash"], check=False
+            ["gh", "pr", "merge", branch_name, "--auto", "--squash"], check=True
         )
     else:
         print("Dry run, not merging")
