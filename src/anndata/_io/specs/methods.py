@@ -39,6 +39,7 @@ from anndata.compat import (
     _require_group_write_dataframe,
 )
 
+from ..._settings import settings
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -1048,8 +1049,6 @@ def write_nullable_string(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    from ..._settings import settings
-
     if not settings.allow_write_nullable_strings:
         msg = (
             "`anndata.settings.allow_write_nullable_strings` is False, "
