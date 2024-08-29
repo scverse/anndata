@@ -25,7 +25,7 @@ def main():
 
     # Run towncrier
     if subprocess.run(
-        ["towncrier", "build", f"--version={version}", "--yes"]
+        ["towncrier", "build", f"--version={version}", "--yes"], check=False
     ).returncode:
         raise RuntimeError("Failed to build towncrier")
 
@@ -36,16 +36,14 @@ def main():
         text=True,
         check=True,
     ).stdout.strip()
-    pr_description = ""
-    if base_branch != "main":
-        pr_description = "on-merge: backport to main"
+    pr_description = "" if base_branch == "main" else "on-merge: backport to main"
     branch_name = f"release_notes_{args.version}"
 
     # Create a new branch + commit
-    subprocess.run(["git", "checkout", "-b", branch_name])
-    subprocess.run(["git", "add", "docs/release-notes"])
+    subprocess.run(["git", "checkout", "-b", branch_name], check=False)
+    subprocess.run(["git", "add", "docs/release-notes"], check=False)
     pr_title = f"(chore): generate {version} release notes"
-    subprocess.run(["git", "commit", "-m", pr_title])
+    subprocess.run(["git", "commit", "-m", pr_title], check=False)
 
     # Create a PR
     subprocess.run(
@@ -62,12 +60,15 @@ def main():
             "--body",
             pr_description,
             "--dry-run" if args.dry_run else "",
-        ]
+        ],
+        check=False,
     )
 
     # Enable auto-merge
     if not args.dry_run:
-        subprocess.run(["gh", "pr", "merge", branch_name, "--auto", "--squash"])
+        subprocess.run(
+            ["gh", "pr", "merge", branch_name, "--auto", "--squash"], check=False
+        )
     else:
         print("Dry run, not merging")
 
