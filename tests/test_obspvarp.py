@@ -65,21 +65,21 @@ def test_setting_ndarray(adata: AnnData):
 
 
 def test_setting_sparse(adata: AnnData):
-    obsp_sparse = sparse.random(M, M)
+    obsp_sparse = sparse.random(M, M, format="csr")
     adata.obsp["a"] = obsp_sparse
     assert not np.any((adata.obsp["a"] != obsp_sparse).data)
 
-    varp_sparse = sparse.random(N, N)
+    varp_sparse = sparse.random(N, N, format="csr")
     adata.varp["a"] = varp_sparse
     assert not np.any((adata.varp["a"] != varp_sparse).data)
 
     h = joblib.hash(adata)
 
-    bad_obsp_sparse = sparse.random(M * 2, M)
+    bad_obsp_sparse = sparse.random(M * 2, M, format="csr")
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsp["b"] = bad_obsp_sparse
 
-    bad_varp_sparse = sparse.random(N * 2, N)
+    bad_varp_sparse = sparse.random(N * 2, N, format="csr")
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varp["b"] = bad_varp_sparse
 
