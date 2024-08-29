@@ -114,19 +114,6 @@ def issubdtype(
 def gen_random_column(
     n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
 ) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
-    try:
-        n_bits = 8 * (dtype().itemsize if isinstance(dtype, type) else dtype.itemsize)
-    except AttributeError:
-        n_bits = None
-
-    if issubdtype(dtype, np.bool):
-        return "bool", np.random.randint(0, 2, size=n, dtype=dtype)
-    if issubdtype(dtype, np.unsignedinteger):
-        return f"uint{n_bits}", np.random.randint(0, 255, n, dtype=dtype)
-    if issubdtype(dtype, np.signedinteger):
-        return f"int{n_bits}", np.random.randint(-50, 50, n, dtype=dtype)
-    if issubdtype(dtype, np.floating):
-        return f"float{n_bits}", np.random.random(n).astype(dtype)
     if issubdtype(dtype, pd.CategoricalDtype):
         # TODO: Think about allowing index to be passed for n
         letters = np.fromiter(iter(ascii_letters), "U1")
@@ -157,7 +144,22 @@ def gen_random_column(
         return "string", array
     # if issubdtype(dtype, pd.DatetimeTZDtype):
     #    return "datetime", pd.to_datetime(np.random.randint(0, 1000, size=n))
-    pytest.fail(f"Unexpected dtype: {dtype}")
+    if issubdtype(dtype, np.bool_):
+        return "bool", np.random.randint(0, 2, size=n, dtype=dtype)
+
+    if not issubdtype(dtype, np.number):
+        pytest.fail(f"Unexpected dtype: {dtype}")
+
+    n_bits = 8 * (dtype().itemsize if isinstance(dtype, type) else dtype.itemsize)
+
+    if issubdtype(dtype, np.unsignedinteger):
+        return f"uint{n_bits}", np.random.randint(0, 255, n, dtype=dtype)
+    if issubdtype(dtype, np.signedinteger):
+        return f"int{n_bits}", np.random.randint(-50, 50, n, dtype=dtype)
+    if issubdtype(dtype, np.floating):
+        return f"float{n_bits}", np.random.random(n).astype(dtype)
+
+    pytest.fail(f"Unexpected numeric dtype: {dtype}")
 
 
 def gen_typed_df(
