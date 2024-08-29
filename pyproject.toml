@@ -61,10 +61,8 @@ Home-page = "https://github.com/scverse/anndata"
 [project.optional-dependencies]
 dev = [
     # dev version generation
-    "setuptools_scm",
-    # test speedups
-    "pytest-xdist",
-    "towncrier>=24.8.0",
+    "setuptools-scm",
+    "anndata[dev-doc,dev-test]",
 ]
 doc = [
     "sphinx>=7.4.6",
@@ -82,7 +80,10 @@ doc = [
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
+    # for unreleased changes
+    "anndata[dev-doc]",
 ]
+dev-doc = ["towncrier>=24.8.0"] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2",
@@ -101,6 +102,7 @@ test = [
     "pytest_memray",
     "pytest-mock"
 ]
+dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
@@ -212,16 +214,10 @@ single_file = false
 package_dir = "src"
 issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
-[tool.towncrier.fragment.bugfix]
-[tool.towncrier.fragment.doc]
-[tool.towncrier.fragment.feature]
-[tool.towncrier.fragment.misc]
-
-[tool.towncrier.fragment.performance]
-name = "Performance"
-
-[tool.towncrier.fragment.breaking]
-name = "Breaking"
-
-[tool.towncrier.fragment.dev]
-name = "Development Process"
+fragment.bugfix.name = "Bug fixes"
+fragment.doc.name = "Documentation"
+fragment.feature.name = "Features"
+fragment.misc.name = "Miscellaneous improvements"
+fragment.performance.name = "Performance"
+fragment.breaking.name = "Breaking changes"
+fragment.dev.name = "Development Process"
