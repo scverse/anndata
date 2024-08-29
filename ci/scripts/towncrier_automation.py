@@ -60,7 +60,7 @@ def main():
             f"--head={branch_name}",
             f"--title={pr_title}",
             f"--body={pr_description}",
-            "--dry-run" if args.dry_run else "",
+            *(["--dry-run"] if args.dry_run else []),
         ],
         check=False,
     )
