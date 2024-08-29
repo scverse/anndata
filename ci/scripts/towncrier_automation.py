@@ -59,12 +59,15 @@ def main():
             pr_title,
             "--body",
             pr_description,
-            "dry-run" if args.dry_run else "",
+            "--dry-run" if args.dry_run else "",
         ]
     )
 
     # Enable auto-merge
-    subprocess.call(["gh", "pr", "merge", branch_name, "--auto", "--squash"])
+    if not args.dry_run:
+        subprocess.call(["gh", "pr", "merge", branch_name, "--auto", "--squash"])
+    else:
+        print("Dry run, not merging")
 
 
 if __name__ == "__main__":
