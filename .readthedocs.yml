@@ -9,7 +9,7 @@ build:
       - git fetch --unshallow || true
     pre_build:
       # run towncrier to preview the next version’s release notes
-      - "( find docs/release-notes -regex '[^.]+[.][^.]+.md' | grep -q . ) && towncrier build --keep"
+      - ( find docs/release-notes -regex '[^.]+[.][^.]+.md' | grep -q . ) && towncrier build --keep
 sphinx:
   configuration: docs/conf.py
   fail_on_warning: true # do not change or you will be fired
