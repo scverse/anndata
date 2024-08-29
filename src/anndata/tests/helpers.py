@@ -41,6 +41,15 @@ if TYPE_CHECKING:
     DT = TypeVar("DT")
 
 
+try:
+    from pandas.core.arrays.integer import IntegerDtype
+except ImportError:
+    IntegerDtype = (
+        *(pd.Int8Dtype, pd.Int16Dtype, pd.Int32Dtype, pd.Int64Dtype),
+        *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
+    )
+
+
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
     obsm_types=(
@@ -99,8 +108,11 @@ def gen_vstr_recarray(m, n, dtype=None):
 
 
 def issubdtype(
-    a: np.dtype | pd.api.extensions.ExtensionDtype | type, b: type[DT]
+    a: np.dtype | pd.api.extensions.ExtensionDtype | type,
+    b: type[DT] | tuple[type[DT], ...],
 ) -> TypeGuard[DT]:
+    if isinstance(b, tuple):
+        return any(issubdtype(a, t) for t in b)
     if isinstance(a, type) and issubclass(a, pd.api.extensions.ExtensionDtype):
         return issubclass(a, b)
     if isinstance(a, pd.api.extensions.ExtensionDtype):
@@ -129,7 +141,7 @@ def gen_random_column(
                 mask=np.random.randint(0, 2, size=n, dtype=bool),
             ),
         )
-    if issubdtype(dtype, pd.core.arrays.integer.IntegerDtype):
+    if issubdtype(dtype, IntegerDtype):
         return (
             "nullable-int",
             pd.arrays.IntegerArray(
