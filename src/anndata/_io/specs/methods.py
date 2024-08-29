@@ -1047,13 +1047,13 @@ def write_nullable_integer(
         )
         raise RuntimeError(msg)
     g = f.require_group(k)
-    _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
     values = (
         v.to_numpy(na_value="")
         if isinstance(v, pd.arrays.StringArray)
         else v.to_numpy(na_value=0, dtype=v.dtype.numpy_dtype)
     )
     _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
 
 
 def _read_nullable(
