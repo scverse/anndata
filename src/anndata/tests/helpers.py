@@ -119,7 +119,7 @@ def issubdtype(
         return isinstance(a, b)
     try:
         return np.issubdtype(a, b)
-    except TypeError:
+    except TypeError:  # pragma: no cover
         pytest.fail(f"issubdtype can’t handle everything yet: {a} {b}")
 
 
@@ -159,7 +159,7 @@ def gen_random_column(
     if issubdtype(dtype, np.bool_):
         return "bool", np.random.randint(0, 2, size=n, dtype=dtype)
 
-    if not issubdtype(dtype, np.number):
+    if not issubdtype(dtype, np.number):  # pragma: no cover
         pytest.fail(f"Unexpected dtype: {dtype}")
 
     n_bits = 8 * (dtype().itemsize if isinstance(dtype, type) else dtype.itemsize)
@@ -171,7 +171,7 @@ def gen_random_column(
     if issubdtype(dtype, np.floating):
         return f"float{n_bits}", np.random.random(n).astype(dtype)
 
-    pytest.fail(f"Unexpected numeric dtype: {dtype}")
+    pytest.fail(f"Unexpected numeric dtype: {dtype}")  # pragma: no cover
 
 
 def gen_typed_df(
