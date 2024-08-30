@@ -22,7 +22,10 @@ def __getattr__(key: str) -> Any:
     if key in deprecated:
         msg = f"Importing {key} from `anndata.experimental` is deprecated. Import from `anndata` directly."
         warnings.warn(msg, FutureWarning)
-    return globals()[key]
+        import anndata
+
+        return getattr(anndata, key)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
