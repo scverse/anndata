@@ -14,7 +14,7 @@ We have set up some automation around this process.
 To run `towncrier`, create a `PR` into the base branch of the release with the compiled changelog, and backport to `main` if needed (i.e., the base branch is something like `0.10.x`), run
 
 ```shell
-hatch run towncrier:build --version="X.Y.Z"
+hatch run towncrier:build X.Y.Z
 ```
 
 You may add the option `--dry-run` at the end to do the local steps without pushing to Github, although the push will be mocked via [`gh pr --dry-run`](https://cli.github.com/manual/gh_pr_create).
