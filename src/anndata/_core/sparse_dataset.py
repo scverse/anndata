@@ -580,7 +580,7 @@ class BaseCompressedSparseDataset(ABC):
 
         Returns
         -------
-            The in-memory representation of the sparse matrix.
+        The in-memory representation of the sparse matrix.
         """
         format_class = get_memory_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
