@@ -65,6 +65,14 @@ def coerce_array(
             warnings.warn(msg, ImplicitModificationWarning)
             value = value.A
         return value
+    elif isinstance(value, sparse.spmatrix):
+        msg = (
+            f"AnnData previously had undefined behavior around matrices of type {type(value)}."
+            "In 0.12, passing in this type will throw an error. Please convert to a supported type."
+            "Continue using for this minor version at your own risk."
+        )
+        warnings.warn(msg, FutureWarning)
+        return value
     if isinstance(value, pd.DataFrame):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)
