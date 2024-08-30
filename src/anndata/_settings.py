@@ -428,5 +428,13 @@ settings.register(
     get_from_env=check_and_get_bool,
 )
 
+settings.register(
+    "shall_use_sparse_array_on_read",
+    default_value=False,
+    description="Whether or not to use `sparse_array` as the default class when reading in data",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
 ##################################################################################
 ##################################################################################

@@ -25,7 +25,7 @@ from anndata._io.specs import (
     write_elem,
 )
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import ZarrGroup, _read_attr
+from anndata.compat import SpArray, ZarrGroup, _read_attr
 from anndata.tests.helpers import (
     as_cupy,
     as_cupy_sparse_dask_array,
@@ -35,6 +35,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Literal, TypeVar
 
     from anndata.compat import H5Group
@@ -570,3 +571,20 @@ def test_io_pd_cow(store, copy_on_write):
         write_elem(store, "adata", orig)
         from_store = read_elem(store["adata"])
         assert_equal(orig, from_store)
+
+
+def test_read_sparse_array(
+    tmp_path: Path,
+    sparse_format: Literal["csr", "csc"],
+    diskfmt: Literal["h5ad", "zarr"],
+):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    a = sparse.random(100, 100, format=sparse_format)
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+    ad.write_elem(f, "mtx", a)
+    ad.settings.shall_use_sparse_array_on_read = True
+    mtx = ad.read_elem(f["mtx"])
+    assert issubclass(type(mtx), SpArray)

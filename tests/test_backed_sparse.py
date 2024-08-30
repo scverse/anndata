@@ -269,6 +269,24 @@ def test_dataset_append_memory(
     assert_equal(fromdisk, frommem)
 
 
+@pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
+def test_read_array(
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    diskfmt: Literal["h5ad", "zarr"],
+):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    a = sparse_format(sparse.random(100, 100))
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+    ad.write_elem(f, "mtx", a)
+    ad.settings.shall_use_sparse_array_on_read = True
+    diskmtx = sparse_dataset(f["mtx"])
+    assert issubclass(type(diskmtx[...]), SpArray)
+
+
 @pytest.mark.parametrize(
     ("sparse_format", "append_method"),
     [
