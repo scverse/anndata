@@ -15,6 +15,7 @@ import zarr
 from scipy import sparse
 
 import anndata as ad
+import anndata.experimental
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 
@@ -159,3 +160,9 @@ def test_deprecated_sparse_dataset():
 
     with pytest.warns(FutureWarning, match=r"SparseDataset is deprecated"):
         assert isinstance(X, SparseDataset)
+
+
+@pytest.mark.parametrize("name", anndata.experimental._DEPRECATED)
+def test_warn_on_import_from_experimental(name: str):
+    with pytest.warns(FutureWarning, match=rf"Importing {name}"):
+        getattr(anndata.experimental, name)
