@@ -54,8 +54,8 @@ When the variables present in the objects to be concatenated aren't exactly the 
 This is otherwise called taking the `"inner"` (intersection) or `"outer"` (union) join.
 For example, given two anndata objects with differing variables:
 
-    >>> a = AnnData(sparse.eye(3), var=pd.DataFrame(index=list("abc")))
-    >>> b = AnnData(sparse.eye(2), var=pd.DataFrame(index=list("ba")))
+    >>> a = AnnData(sparse.eye(3, format="csr"), var=pd.DataFrame(index=list("abc")))
+    >>> b = AnnData(sparse.eye(2, format="csr"), var=pd.DataFrame(index=list("ba")))
     >>> ad.concat([a, b], join="inner").X.toarray()
     array([[1., 0.],
            [0., 1.],
@@ -208,11 +208,11 @@ Note that comparisons are made after indices are aligned.
 That is, if the objects only share a subset of indices on the alternative axis, it's only required that values for those indices match when using a strategy like `"same"`.
 
     >>> a = AnnData(
-    ...     sparse.eye(3),
+    ...     sparse.eye(3, format="csr"),
     ...     var=pd.DataFrame({"nums": [1, 2, 3]}, index=list("abc"))
     ... )
     >>> b = AnnData(
-    ...     sparse.eye(2),
+    ...     sparse.eye(2, format="csr"),
     ...     var=pd.DataFrame({"nums": [2, 1]}, index=list("ba"))
     ... )
     >>> ad.concat([a, b], merge="same").var
