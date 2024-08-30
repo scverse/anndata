@@ -30,7 +30,7 @@ from anndata._core.index import _fix_slice_bounds
 from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
 from .._settings import settings
-from ..compat import SpArray, _read_attr
+from ..compat import CAN_USE_SPARSE_ARRAY, SpArray, _read_attr
 
 try:
     # Not really important, just for IDEs to be more helpful
@@ -316,6 +316,10 @@ def subset_by_major_axis_mask(
 def get_memory_class(
     format: Literal["csr", "csc"], *, use_sparray_in_io: bool = False
 ) -> type[_cs_matrix]:
+    if not CAN_USE_SPARSE_ARRAY and use_sparray_in_io:
+        msg = "scipy.sparse.cs{r,c}array is not available in current scipy version, falling back to scipy.sparse.spmatrix"
+        warnings.warn(msg)
+        use_sparray_in_io = False
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
             if use_sparray_in_io and issubclass(memory_class, SpArray):
