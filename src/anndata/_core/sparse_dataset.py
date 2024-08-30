@@ -620,7 +620,8 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
 
     >>> import scanpy as sc
     >>> import h5py
-    >>> from anndata.experimental import sparse_dataset, read_elem
+    >>> from anndata.experimental import sparse_dataset
+    >>> from anndata import read_elem
     >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
     Initialize a sparse dataset from storage
@@ -668,7 +669,7 @@ def subset_sparsedataset(d, subset_idx):
 _sparsedataset_depr_msg = """\
 SparseDataset is deprecated and will be removed in late 2024. It has been replaced by the public classes CSRDataset and CSCDataset.
 
-For instance checks, use `isinstance(X, (anndata.experimental.CSRDataset, anndata.experimental.CSCDataset))` instead.
+For instance checks, use `isinstance(X, (anndata.CSRDataset, anndata.CSCDataset))` instead.
 
 For creation, use `anndata.experimental.sparse_dataset(X)` instead.
 """

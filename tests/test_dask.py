@@ -12,7 +12,6 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata.compat import CupyArray, DaskArray
-from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
@@ -123,10 +122,10 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
         orig = adata
         if diskfmt == "h5ad":
             with pytest.raises(ValueError, match=r"Cannot write dask arrays to hdf5"):
-                write_elem(g, "", orig)
+                ad.write_elem(g, "", orig)
             return
-        write_elem(g, "", orig)
-        curr = read_elem(g)
+        ad.write_elem(g, "", orig)
+        curr = ad.read_elem(g)
 
     with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
