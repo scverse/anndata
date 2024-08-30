@@ -4,11 +4,13 @@ features = ["dev"]
 
 [envs.docs]
 features = ["doc"]
-dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
+extra-dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
+scripts.build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
+scripts.clean = "git clean -fX -- docs"
 
-[envs.docs.scripts]
-build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
-clean = "git clean -fX -- docs"
+[envs.towncrier]
+scripts.build = "python3 ci/scripts/towncrier_automation.py {args}"
+scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-notes"
 
 [envs.hatch-test]
 default-args = []

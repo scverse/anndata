@@ -32,9 +32,13 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _suppress_env_for_doctests(request: pytest.FixtureRequest) -> None:
+def _anndata_test_env(request: pytest.FixtureRequest) -> None:
+    import anndata
+
     if isinstance(request.node, pytest.DoctestItem):
         request.getfixturevalue("_doctest_env")
+
+    anndata.settings.reset(anndata.settings._registered_options.keys())
 
 
 @pytest.fixture

@@ -61,10 +61,8 @@ Home-page = "https://github.com/scverse/anndata"
 [project.optional-dependencies]
 dev = [
     # dev version generation
-    "setuptools_scm",
-    # test speedups
-    "pytest-xdist",
-    "towncrier>=24.8.0",
+    "setuptools-scm",
+    "anndata[dev-doc,dev-test]",
 ]
 doc = [
     "sphinx>=7.4.6",
@@ -82,7 +80,10 @@ doc = [
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
+    # for unreleased changes
+    "anndata[dev-doc]",
 ]
+dev-doc = ["towncrier>=24.8.0"] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2",
@@ -101,6 +102,7 @@ test = [
     "pytest_memray",
     "pytest-mock"
 ]
+dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
@@ -113,8 +115,11 @@ version-file = "src/anndata/_version.py"
 packages = ["src/anndata", "src/testing"]
 
 [tool.coverage.run]
+data_file = "test-data/coverage"
 source_pkgs = ["anndata"]
 omit = ["src/anndata/_version.py", "**/test_*.py"]
+[tool.coverage.xml]
+output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = ["./src", "**/site-packages"]
 
@@ -165,9 +170,11 @@ select = [
     "E",   # Error detected by Pycodestyle
     "F",   # Errors detected by Pyflakes
     "W",   # Warning detected by Pycodestyle
+    "PLW", # Pylint
     "UP",  # pyupgrade
     "I",   # isort
     "TCH", # manage type checking blocks
+    "TID", # Banned imports
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
     "PT",  # Pytest conventions
@@ -179,6 +186,10 @@ ignore = [
     "E731",
     # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
     "E741",
+    # We use relative imports from parent modules
+    "TID252",
+    # Shadowing loop variables isn’t a big deal
+    "PLW2901",
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
@@ -186,6 +197,10 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"subprocess.call".msg = "Use `subprocess.run([…])` instead"
+"subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
+"subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = []
 strict = true
@@ -202,16 +217,10 @@ single_file = false
 package_dir = "src"
 issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
-[tool.towncrier.fragment.bugfix]
-[tool.towncrier.fragment.doc]
-[tool.towncrier.fragment.feature]
-[tool.towncrier.fragment.misc]
-
-[tool.towncrier.fragment.performance]
-name = "Performance"
-
-[tool.towncrier.fragment.breaking]
-name = "Breaking"
-
-[tool.towncrier.fragment.dev]
-name = "Development Process"
+fragment.bugfix.name = "Bug fixes"
+fragment.doc.name = "Documentation"
+fragment.feature.name = "Features"
+fragment.misc.name = "Miscellaneous improvements"
+fragment.performance.name = "Performance"
+fragment.breaking.name = "Breaking changes"
+fragment.dev.name = "Development Process"
