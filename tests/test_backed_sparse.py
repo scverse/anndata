@@ -285,6 +285,8 @@ def test_read_array(
     ad.settings.shall_use_sparse_array_on_read = True
     diskmtx = sparse_dataset(f["mtx"])
     assert issubclass(type(diskmtx[...]), SpArray)
+    ad.settings.shall_use_sparse_array_on_read = False
+    assert issubclass(type(diskmtx[...]), sparse.spmatrix)
 
 
 @pytest.mark.parametrize(
