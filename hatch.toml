@@ -10,10 +10,6 @@ dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues
 build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
 clean = "git clean -fX -- docs"
 
-[envs.towncrier]
-features = ["doc"]
-dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
-
 [envs.towncrier.scripts]
 build = "python3 ci/scripts/towncrier_automation.py {args}"
 clean = "git restore --source=HEAD --staged --worktree -- docs/release-notes"
