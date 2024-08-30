@@ -420,5 +420,13 @@ settings.register(
     get_from_env=check_and_get_bool,
 )
 
+settings.register(
+    "allow_write_nullable_strings",
+    default_value=False,
+    description="Whether or not to allow writing of `pd.arrays.StringArray`.",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
 ##################################################################################
 ##################################################################################
