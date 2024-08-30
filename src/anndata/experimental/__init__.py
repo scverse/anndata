@@ -52,7 +52,3 @@ __all__ = [
     "WriteCallback",
     "StorageType",
 ]
-
-
-def __dir__():
-    return sorted(__all__ + __deprecated__)
