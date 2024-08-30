@@ -26,6 +26,7 @@ from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
+    DEFAULT_COL_TYPES,
     GEN_ADATA_DASK_ARGS,
     as_dense_dask_array,
     assert_equal,
@@ -1375,8 +1376,9 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
-    a = gen_adata((5, 7))
-    b = gen_adata(shape)
+    col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype)
+    a = gen_adata((5, 7), obs_dtypes=col_dtypes, var_dtypes=col_dtypes)
+    b = gen_adata(shape, obs_dtypes=col_dtypes, var_dtypes=col_dtypes)
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
