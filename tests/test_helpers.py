@@ -18,6 +18,7 @@ from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
+    DEFAULT_COL_TYPES,
     as_cupy,
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
@@ -26,6 +27,8 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     gen_awkward,
+    gen_random_column,
+    issubdtype,
     report_name,
 )
 from anndata.utils import axis_len
@@ -87,6 +90,18 @@ def test_gen_awkward(shape, datashape):
         assert axis_len(arr, i) == s
     arr_type = ak.types.from_datashape(datashape)
     assert arr.type == arr_type
+
+
+@pytest.mark.parametrize("dtype", [*DEFAULT_COL_TYPES, pd.StringDtype])
+def test_gen_random_column(dtype):
+    _, col = gen_random_column(10, dtype)
+    assert len(col) == 10
+    # CategoricalDtypes are the only one specified as instances currently
+    if isinstance(dtype, pd.CategoricalDtype):
+        assert issubdtype(col.dtype, pd.CategoricalDtype)
+        assert col.dtype.ordered == dtype.ordered
+    else:
+        assert issubdtype(col.dtype, dtype)
 
 
 # Does this work for every warning?

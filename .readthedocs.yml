@@ -3,6 +3,13 @@ build:
   os: ubuntu-20.04
   tools:
     python: "3.12"
+  jobs:
+    post_checkout:
+      # unshallow so version can be derived from tag
+      - git fetch --unshallow || true
+    pre_build:
+      # run towncrier to preview the next version’s release notes
+      - ( find docs/release-notes -regex '[^.]+[.][^.]+.md' | grep -q . ) && towncrier build --keep || true
 sphinx:
   configuration: docs/conf.py
   fail_on_warning: true # do not change or you will be fired
