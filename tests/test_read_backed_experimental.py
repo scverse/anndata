@@ -102,7 +102,7 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     assert store.get_access_count("var/int64") == 0, store.get_subkeys_accessed(
         "var/int64"
     )
-    # all codes read in for subset
+    # all codes read in for subset (from 4 chunks)
     assert store.get_access_count("obs/cat/codes") == 4, store.get_subkeys_accessed(
         "obs/cat/codes"
     )
