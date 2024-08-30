@@ -24,7 +24,7 @@ from ..utils import (
     join_english,
     raise_value_error_if_multiindex_columns,
 )
-from .sparse_dataset import BaseCompressedSparseDataset
+from .sparse_dataset import CSCDataset, CSRDataset
 
 if TYPE_CHECKING:
     from typing import Any, TypeAlias
@@ -39,7 +39,8 @@ ArrayDataStructureType: TypeAlias = Union[
     H5Array,
     ZarrArray,
     ZappyArray,
-    BaseCompressedSparseDataset,
+    CSRDataset,
+    CSCDataset,
     DaskArray,
     CupyArray,
     CupySparseMatrix,
