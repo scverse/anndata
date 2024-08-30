@@ -549,7 +549,7 @@ def test_append_overflow_check(group_fn, sparse_class, tmpdir):
     backed = sparse_dataset(group["mtx"])
 
     # Checking for correct caching behaviour
-    backed.indptr
+    backed._indptr
 
     with pytest.raises(
         OverflowError,

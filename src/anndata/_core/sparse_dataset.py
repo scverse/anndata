@@ -44,6 +44,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal
 
+    from scipy.sparse import spmatrix
+
     from .._types import GroupStorageType
     from .index import Index
 
@@ -353,9 +355,8 @@ def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
 
 
 class BaseCompressedSparseDataset(ABC):
-    """Analogous to :class:`h5py.Dataset <h5py:Dataset>` or `zarr.Array`, but for sparse matrices."""
-
     format: Literal["csr", "csc"]
+    """The format of the sparse matrix."""
     _group: GroupStorageType
 
     def __init__(self, group: GroupStorageType):
@@ -378,6 +379,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
+        """Which file type is used on-disk."""
         if isinstance(self.group, ZarrGroup):
             return "zarr"
         elif isinstance(self.group, H5Group):
@@ -387,6 +389,7 @@ class BaseCompressedSparseDataset(ABC):
 
     @property
     def dtype(self) -> np.dtype:
+        """The :class:`numpy.dtype` of the `data` attribute of the sparse matrix."""
         return self.group["data"].dtype
 
     @classmethod
@@ -395,36 +398,18 @@ class BaseCompressedSparseDataset(ABC):
         assert group_format == cls.format
 
     @property
-    def format_str(self) -> Literal["csr", "csc"]:
-        """DEPRECATED Use .format instead."""
-        warnings.warn(
-            "The attribute .format_str is deprecated and will be removed in the anndata 0.11.0. "
-            "Please use .format instead.",
-            FutureWarning,
-        )
-        return self.format
-
-    @property
-    def name(self) -> str:
+    def _name(self) -> str:
+        """Name of the group."""
         return self.group.name
 
     @property
     def shape(self) -> tuple[int, int]:
+        """Shape of the matrix read off disk."""
         shape = _read_attr(self.group.attrs, "shape", None)
         if shape is None:
             # TODO warn
             shape = self.group.attrs.get("h5sparse_shape")
         return tuple(map(int, shape))
-
-    @property
-    def value(self) -> ss.csr_matrix | ss.csc_matrix:
-        """DEPRECATED Use .to_memory() instead."""
-        warnings.warn(
-            "The .value attribute is deprecated and will be removed in the anndata 0.11.0. "
-            "Please use .to_memory() instead.",
-            FutureWarning,
-        )
-        return self.to_memory()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
@@ -483,7 +468,25 @@ class BaseCompressedSparseDataset(ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: _cs_matrix | SpArray) -> None:
+    def append(self, sparse_matrix: spmatrix | SpArray) -> None:
+        """Append an in-memory or on-disk sparse matrix to the current object's store.
+
+        Parameters
+        ----------
+        sparse_matrix
+            The matrix to append.
+
+        Raises
+        ------
+        NotImplementedError
+            If the matrix to append is not one of :class:`~scipy.sparse.csr_array`, :class:`~scipy.sparse.csc_array`, :class:`~scipy.sparse.csr_matrix`, or :class:`~scipy.sparse.csc_matrix`.
+        ValueError
+            If both the on-disk and to-append matrices are not of the same format i.e., `csr` or `csc`.
+        OverflowError
+            If the underlying data store has a 32 bit indptr, and the new matrix is too large to fit in it i.e., would cause a 64 bit `indptr` to be written.
+        AssertionError
+            If the on-disk data does not have `csc` or `csr` format.
+        """
         # Prep variables
         shape = self.shape
         if isinstance(sparse_matrix, BaseCompressedSparseDataset):
@@ -546,7 +549,7 @@ class BaseCompressedSparseDataset(ABC):
         )
         # Clear cached property
         if hasattr(self, "indptr"):
-            del self.indptr
+            del self._indptr
 
         # indices
         indices = self.group["indices"]
@@ -555,7 +558,7 @@ class BaseCompressedSparseDataset(ABC):
         indices[orig_data_size:] = sparse_matrix.indices
 
     @cached_property
-    def indptr(self) -> np.ndarray:
+    def _indptr(self) -> np.ndarray:
         """\
         Other than `data` and `indices`, this is only as long as the major axis
 
@@ -569,20 +572,28 @@ class BaseCompressedSparseDataset(ABC):
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"]
         mtx.indices = self.group["indices"]
-        mtx.indptr = self.indptr
+        mtx.indptr = self._indptr
         return mtx
 
-    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix:
+    def to_memory(self) -> spmatrix | SpArray:
+        """Returns an in-memory representation of the sparse matrix.
+
+        Returns
+        -------
+        The in-memory representation of the sparse matrix.
+        """
         format_class = get_memory_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
-        mtx.indptr = self.indptr
+        mtx.indptr = self._indptr
         return mtx
 
 
 _sparse_dataset_doc = """\
     On disk {format} sparse matrix.
+
+    Analogous to :class:`h5py.Dataset` or :class:`zarr.core.Array`, but for sparse matrices.
 
     Parameters
     ----------
@@ -662,30 +673,3 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
 @_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(d, subset_idx):
     return d[subset_idx]
-
-
-## Backwards compat
-
-_sparsedataset_depr_msg = """\
-SparseDataset is deprecated and will be removed in late 2024. It has been replaced by the public classes CSRDataset and CSCDataset.
-
-For instance checks, use `isinstance(X, (anndata.CSRDataset, anndata.CSCDataset))` instead.
-
-For creation, use `anndata.experimental.sparse_dataset(X)` instead.
-"""
-
-
-class SparseDataset(ABC):
-    """DEPRECATED.
-
-    Use CSRDataset, CSCDataset, and sparse_dataset from anndata.experimental instead.
-    """
-
-    def __new__(cls, group):
-        warnings.warn(FutureWarning(_sparsedataset_depr_msg), stacklevel=2)
-        return sparse_dataset(group)
-
-    @classmethod
-    def __subclasshook__(cls, C):
-        warnings.warn(FutureWarning(_sparsedataset_depr_msg), stacklevel=3)
-        return issubclass(C, (CSRDataset, CSCDataset))
