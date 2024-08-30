@@ -317,8 +317,8 @@ def get_memory_class(
     format: Literal["csr", "csc"], *, use_sparray_in_io: bool = False
 ) -> type[_cs_matrix]:
     if not CAN_USE_SPARSE_ARRAY and use_sparray_in_io:
-        msg = "scipy.sparse.cs{r,c}array is not available in current scipy version, falling back to scipy.sparse.spmatrix"
-        warnings.warn(msg)
+        msg = "scipy.sparse.cs{r,c}array is not available in current scipy version, falling back to scipy.sparse.spmatrix for reading"
+        warnings.warn(msg, UserWarning, stacklevel=2)
         use_sparray_in_io = False
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
