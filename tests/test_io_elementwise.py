@@ -138,14 +138,33 @@ def create_sparse_store(
             id="sp_mat_csc",
         ),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), "dataframe", id="pd_df"),
-        pytest.param(pd.Categorical(list("aabccedd")), "categorical", id="pd_cat"),
+        pytest.param(
+            pd.Categorical(list("aabccedd") + [pd.NA]),
+            "categorical",
+            id="pd_cat_np_str",
+        ),
         pytest.param(
             pd.Categorical(list("aabccedd"), ordered=True),
             "categorical",
-            id="pd_cat_ord",
+            id="pd_cat_np_str_ord",
+        ),
+        pytest.param(
+            pd.array(list("aabccedd") + [pd.NA], dtype="string").astype("category"),
+            "categorical",
+            id="pd_cat_pd_str",
         ),
         pytest.param(
             pd.Categorical([1, 2, 1, 3], ordered=True), "categorical", id="pd_cat_num"
+        ),
+        pytest.param(
+            pd.array(["hello", "world"], dtype="string"),
+            "nullable-string-array",
+            id="pd_arr_str",
+        ),
+        pytest.param(
+            pd.array(["hello", "world", pd.NA], dtype="string"),
+            "nullable-string-array",
+            id="pd_arr_str_mask",
         ),
         pytest.param(
             pd.arrays.IntegerArray(
@@ -175,6 +194,8 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
+    ad.settings.allow_write_nullable_strings = True
+
     key = f"key_for_{encoding_type}"
     write_elem(store, key, value, dataset_kwargs={})
 
@@ -408,6 +429,11 @@ def test_write_io_error(store, obj):
 
     msg = str(exc_info.value)
     assert re.search(full_pattern, msg)
+
+
+def test_write_nullable_string_error(store):
+    with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings.*is False"):
+        write_elem(store, "/el", pd.array([""], dtype="string"))
 
 
 def test_categorical_order_type(store):

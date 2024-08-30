@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping
 from functools import partial
 from itertools import product
@@ -10,6 +11,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -37,13 +39,16 @@ from anndata.compat import (
     _require_group_write_dataframe,
 )
 
+from ..._settings import settings
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from os import PathLike
     from typing import Any, Literal
 
     from numpy import typing as npt
+    from numpy.typing import NDArray
 
     from anndata._types import (
         ArrayStorageType,
@@ -506,10 +511,12 @@ def write_vlen_string_array_zarr(
 ):
     import numcodecs
 
-    # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
-    # TODO: Warn to upgrade numcodecs if fixed
-    if not elem.flags.writeable:
-        elem = elem.copy()
+    if Version(numcodecs.__version__) < Version("0.13"):
+        msg = "Old numcodecs version detected. Please update for improved performance and stability."
+        warnings.warn(msg)
+        # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
+        if hasattr(elem, "flags") and not elem.flags.writeable:
+            elem = elem.copy()
 
     f.create_dataset(
         k,
@@ -1014,44 +1021,85 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
-def write_nullable_integer(
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
+)
+def write_nullable(
     f: GroupStorageType,
     k: str,
-    v: pd.arrays.IntegerArray | pd.arrays.BooleanArray,
+    v: pd.arrays.IntegerArray | pd.arrays.BooleanArray | pd.arrays.StringArray,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    if (
+        isinstance(v, pd.arrays.StringArray)
+        and not settings.allow_write_nullable_strings
+    ):
+        msg = (
+            "`anndata.settings.allow_write_nullable_strings` is False, "
+            "because writing of `pd.arrays.StringArray` is new "
+            "and not supported in anndata < 0.11, still use by many people. "
+            "Opt-in to writing these arrays by toggling the setting to True."
+        )
+        raise RuntimeError(msg)
     g = f.require_group(k)
-    if v._mask is not None:
-        _writer.write_elem(g, "mask", v._mask, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "values", v._data, dataset_kwargs=dataset_kwargs)
+    values = (
+        v.to_numpy(na_value="")
+        if isinstance(v, pd.arrays.StringArray)
+        else v.to_numpy(na_value=0, dtype=v.dtype.numpy_dtype)
+    )
+    _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))
-def read_nullable_integer(
-    elem: GroupStorageType, *, _reader: Reader
+def _read_nullable(
+    elem: GroupStorageType,
+    *,
+    _reader: Reader,
+    # BaseMaskedArray
+    array_type: Callable[
+        [NDArray[np.number], NDArray[np.bool_]], pd.api.extensions.ExtensionArray
+    ],
 ) -> pd.api.extensions.ExtensionArray:
-    if "mask" in elem:
-        return pd.arrays.IntegerArray(
-            _reader.read_elem(elem["values"]), mask=_reader.read_elem(elem["mask"])
-        )
-    else:
-        return pd.array(_reader.read_elem(elem["values"]))
+    return array_type(
+        _reader.read_elem(elem["values"]),
+        mask=_reader.read_elem(elem["mask"]),
+    )
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))
-def read_nullable_boolean(
-    elem: GroupStorageType, *, _reader: Reader
+def _string_array(
+    values: np.ndarray, mask: np.ndarray
 ) -> pd.api.extensions.ExtensionArray:
-    if "mask" in elem:
-        return pd.arrays.BooleanArray(
-            _reader.read_elem(elem["values"]), mask=_reader.read_elem(elem["mask"])
-        )
-    else:
-        return pd.array(_reader.read_elem(elem["values"]))
+    """Construct a string array from values and mask."""
+    arr = pd.array(values, dtype="string")
+    arr[mask] = pd.NA
+    return arr
+
+
+_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
+    read_nullable_integer := partial(_read_nullable, array_type=pd.arrays.IntegerArray)
+)
+_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))(
+    read_nullable_integer
+)
+
+_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))(
+    read_nullable_boolean := partial(_read_nullable, array_type=pd.arrays.BooleanArray)
+)
+_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
+    read_nullable_boolean
+)
+
+_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))(
+    read_nullable_string := partial(_read_nullable, array_type=_string_array)
+)
+_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
+    read_nullable_string
+)
 
 
 ###########
@@ -1091,17 +1139,19 @@ def write_hdf5_scalar(
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
-# fmt: off
 for numeric_scalar_type in [
-    bool, np.bool_,
-    np.uint8, np.uint16, np.uint32, np.uint64,
-    int, np.int8, np.int16, np.int32, np.int64,
-    float, *np.floating.__subclasses__(),
+    *(bool, np.bool_),
+    *(np.uint8, np.uint16, np.uint32, np.uint64),
+    *(int, np.int8, np.int16, np.int32, np.int64),
+    *(float, *np.floating.__subclasses__()),
     *np.complexfloating.__subclasses__(),
 ]:
-    _REGISTRY.register_write(H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_hdf5_scalar)
-    _REGISTRY.register_write(ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0"))(write_scalar)
-# fmt: on
+    _REGISTRY.register_write(
+        H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
+    )(write_hdf5_scalar)
+    _REGISTRY.register_write(
+        ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
+    )(write_scalar)
 
 _REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar)
 _REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_scalar)

@@ -37,7 +37,19 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Collection
-    from typing import Literal
+    from typing import Callable, Literal, TypeGuard, TypeVar
+
+    DT = TypeVar("DT")
+
+
+try:
+    from pandas.core.arrays.integer import IntegerDtype
+except ImportError:
+    IntegerDtype = (
+        *(pd.Int8Dtype, pd.Int16Dtype, pd.Int32Dtype, pd.Int64Dtype),
+        *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
+    )
+
 
 # Give this to gen_adata when dask array support is expected.
 GEN_ADATA_DASK_ARGS = dict(
@@ -46,30 +58,43 @@ GEN_ADATA_DASK_ARGS = dict(
         np.ndarray,
         pd.DataFrame,
         DaskArray,
+        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
     ),
     varm_types=(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
+        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
     ),
     layers_types=(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
+        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
     ),
 )
-if CAN_USE_SPARSE_ARRAY:
-    GEN_ADATA_DASK_ARGS["obsm_types"] = GEN_ADATA_DASK_ARGS["obsm_types"] + (
-        sparse.csr_array,
-    )
-    GEN_ADATA_DASK_ARGS["varm_types"] = GEN_ADATA_DASK_ARGS["varm_types"] + (
-        sparse.csr_array,
-    )
-    GEN_ADATA_DASK_ARGS["layers_types"] = GEN_ADATA_DASK_ARGS["layers_types"] + (
-        sparse.csr_array,
-    )
+
+
+DEFAULT_KEY_TYPES = (
+    sparse.csr_matrix,
+    np.ndarray,
+    pd.DataFrame,
+    *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+)
+
+
+DEFAULT_COL_TYPES = (
+    pd.CategoricalDtype(ordered=False),
+    pd.CategoricalDtype(ordered=True),
+    np.int64,
+    np.float64,
+    np.uint8,
+    np.bool_,
+    pd.BooleanDtype,
+    pd.Int32Dtype,
+)
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -83,30 +108,82 @@ def gen_vstr_recarray(m, n, dtype=None):
     )
 
 
-def gen_typed_df(n, index=None):
-    # TODO: Think about allowing index to be passed for n
-    letters = np.fromiter(iter(ascii_letters), "U1")
-    if n > len(letters):
-        letters = letters[: n // 2]  # Make sure categories are repeated
-    return pd.DataFrame(
-        {
-            "cat": pd.Categorical(np.random.choice(letters, n)),
-            "cat_ordered": pd.Categorical(np.random.choice(letters, n), ordered=True),
-            "int64": np.random.randint(-50, 50, n),
-            "float64": np.random.random(n),
-            "uint8": np.random.randint(255, size=n, dtype="uint8"),
-            "bool": np.random.randint(0, 2, size=n, dtype=bool),
-            "nullable-bool": pd.arrays.BooleanArray(
+def issubdtype(
+    a: np.dtype | pd.api.extensions.ExtensionDtype | type,
+    b: type[DT] | tuple[type[DT], ...],
+) -> TypeGuard[DT]:
+    if isinstance(b, tuple):
+        return any(issubdtype(a, t) for t in b)
+    if isinstance(a, type) and issubclass(a, pd.api.extensions.ExtensionDtype):
+        return issubclass(a, b)
+    if isinstance(a, pd.api.extensions.ExtensionDtype):
+        return isinstance(a, b)
+    try:
+        return np.issubdtype(a, b)
+    except TypeError:  # pragma: no cover
+        pytest.fail(f"issubdtype can’t handle everything yet: {a} {b}")
+
+
+def gen_random_column(
+    n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
+) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
+    if issubdtype(dtype, pd.CategoricalDtype):
+        # TODO: Think about allowing index to be passed for n
+        letters = np.fromiter(iter(ascii_letters), "U1")
+        if n > len(letters):
+            letters = letters[: n // 2]  # Make sure categories are repeated
+        key = "cat" if dtype.ordered else "cat_unordered"
+        return key, pd.Categorical(np.random.choice(letters, n), dtype=dtype)
+    if issubdtype(dtype, pd.BooleanDtype):
+        return (
+            "nullable-bool",
+            pd.arrays.BooleanArray(
                 np.random.randint(0, 2, size=n, dtype=bool),
                 mask=np.random.randint(0, 2, size=n, dtype=bool),
             ),
-            "nullable-int": pd.arrays.IntegerArray(
+        )
+    if issubdtype(dtype, IntegerDtype):
+        return (
+            "nullable-int",
+            pd.arrays.IntegerArray(
                 np.random.randint(0, 1000, size=n, dtype=np.int32),
                 mask=np.random.randint(0, 2, size=n, dtype=bool),
             ),
-        },
-        index=index,
-    )
+        )
+    if issubdtype(dtype, pd.StringDtype):
+        letters = np.fromiter(iter(ascii_letters), "U1")
+        array = np.array(np.random.choice(letters, n), dtype=dtype)
+        array[np.random.randint(0, 2, size=n, dtype=bool)] = pd.NA
+        return "string", array
+    # if issubdtype(dtype, pd.DatetimeTZDtype):
+    #    return "datetime", pd.to_datetime(np.random.randint(0, 1000, size=n))
+    if issubdtype(dtype, np.bool_):
+        return "bool", np.random.randint(0, 2, size=n, dtype=dtype)
+
+    if not issubdtype(dtype, np.number):  # pragma: no cover
+        pytest.fail(f"Unexpected dtype: {dtype}")
+
+    n_bits = 8 * (dtype().itemsize if isinstance(dtype, type) else dtype.itemsize)
+
+    if issubdtype(dtype, np.unsignedinteger):
+        return f"uint{n_bits}", np.random.randint(0, 255, n, dtype=dtype)
+    if issubdtype(dtype, np.signedinteger):
+        return f"int{n_bits}", np.random.randint(-50, 50, n, dtype=dtype)
+    if issubdtype(dtype, np.floating):
+        return f"float{n_bits}", np.random.random(n).astype(dtype)
+
+    pytest.fail(f"Unexpected numeric dtype: {dtype}")  # pragma: no cover
+
+
+def gen_typed_df(
+    n: int,
+    index: pd.Index[str] | None = None,
+    dtypes: Collection[np.dtype | pd.api.extensions.ExtensionDtype] = DEFAULT_COL_TYPES,
+):
+    columns = [gen_random_column(n, dtype) for dtype in dtypes]
+    col_names = [n for n, _ in columns]
+    assert len(col_names) == len(set(col_names)), "Duplicate column names generated!"
+    return pd.DataFrame(dict(columns), index=index)
 
 
 def _gen_awkward_inner(shape, rng, dtype):
@@ -183,20 +260,11 @@ def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     return df
 
 
-default_key_types = (
-    sparse.csr_matrix,
-    np.ndarray,
-    pd.DataFrame,
-)
-if CAN_USE_SPARSE_ARRAY:
-    default_key_types = default_key_types + (sparse.csr_array,)
-
-
 def maybe_add_sparse_array(
     mapping: Mapping,
     types: Collection[type],
     format: Literal["csr", "csc"],
-    random_state: int,
+    random_state: np.random.Generator,
     shape: tuple[int, int],
 ):
     if CAN_USE_SPARSE_ARRAY:
@@ -210,15 +278,20 @@ def maybe_add_sparse_array(
 # TODO: Use hypothesis for this?
 def gen_adata(
     shape: tuple[int, int],
-    X_type=sparse.csr_matrix,
-    X_dtype=np.float32,
-    # obs_dtypes,
-    # var_dtypes,
-    obsm_types: Collection[type] = default_key_types + (AwkArray,),
-    varm_types: Collection[type] = default_key_types + (AwkArray,),
-    layers_types: Collection[type] = default_key_types,
-    random_state=None,
-    sparse_fmt: str = "csr",
+    X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
+    *,
+    X_dtype: np.dtype = np.float32,
+    obs_dtypes: Collection[
+        np.dtype | pd.api.extensions.ExtensionDtype
+    ] = DEFAULT_COL_TYPES,
+    var_dtypes: Collection[
+        np.dtype | pd.api.extensions.ExtensionDtype
+    ] = DEFAULT_COL_TYPES,
+    obsm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
+    varm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
+    layers_types: Collection[type] = DEFAULT_KEY_TYPES,
+    random_state: np.random.Generator | None = None,
+    sparse_fmt: Literal["csr", "csc"] = "csr",
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -254,8 +327,8 @@ def gen_adata(
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
-    obs = gen_typed_df(M, obs_names)
-    var = gen_typed_df(N, var_names)
+    obs = gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+    var = gen_typed_df(N, var_names, dtypes=var_dtypes)
     # For #147
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
@@ -268,7 +341,7 @@ def gen_adata(
     obsm = dict(
         array=np.random.random((M, 50)),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
-        df=gen_typed_df(M, obs_names),
+        df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
@@ -283,7 +356,7 @@ def gen_adata(
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
-        df=gen_typed_df(N, var_names),
+        df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
     )

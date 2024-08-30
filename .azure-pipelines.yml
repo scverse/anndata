@@ -88,6 +88,7 @@ jobs:
         inputs:
           codeCoverageTool: Cobertura
           summaryFileLocation: "test-data/coverage.xml"
+          failIfCoverageEmpty: true
         condition: eq(variables['TEST_TYPE'], 'coverage')
 
       - task: PublishTestResults@2

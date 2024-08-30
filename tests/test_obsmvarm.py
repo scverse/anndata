@@ -85,21 +85,21 @@ def test_setting_dataframe(adata: AnnData):
 
 
 def test_setting_sparse(adata: AnnData):
-    obsm_sparse = sparse.random(M, 100)
+    obsm_sparse = sparse.random(M, 100, format="csr")
     adata.obsm["a"] = obsm_sparse
     assert not np.any((adata.obsm["a"] != obsm_sparse).data)
 
-    varm_sparse = sparse.random(N, 100)
+    varm_sparse = sparse.random(N, 100, format="csr")
     adata.varm["a"] = varm_sparse
     assert not np.any((adata.varm["a"] != varm_sparse).data)
 
     h = joblib.hash(adata)
 
-    bad_obsm_sparse = sparse.random(M * 2, M)
+    bad_obsm_sparse = sparse.random(M * 2, M, format="csr")
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsm["b"] = bad_obsm_sparse
 
-    bad_varm_sparse = sparse.random(N * 2, N)
+    bad_varm_sparse = sparse.random(N * 2, N, format="csr")
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = bad_varm_sparse
 

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union, get_args
 
 import numpy as np
 import pandas as pd
@@ -25,48 +24,27 @@ from ..utils import (
     join_english,
     raise_value_error_if_multiindex_columns,
 )
-from .sparse_dataset import BaseCompressedSparseDataset
+from .sparse_dataset import CSCDataset, CSRDataset
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-    from typing import Any
+    from typing import Any, TypeAlias
 
-
-class ArrayDataStructureType(Enum):
-    # Memory
-    Array = (np.ndarray, "np.ndarray")
-    Masked = (ma.MaskedArray, "numpy.ma.core.MaskedArray")
-    Sparse = (sparse.spmatrix, "scipy.sparse.spmatrix")
-    SparseArray = (SpArray, "scipy.sparse.sparray")
-    AwkArray = (AwkArray, "awkward.Array")
-    # Backed
-    HDF5Dataset = (H5Array, "h5py.Dataset")
-    ZarrArray = (ZarrArray, "zarr.Array")
-    ZappyArray = (ZappyArray, "zappy.base.ZappyArray")
-    BackedSparseMatrix = (
-        BaseCompressedSparseDataset,
-        "anndata.experimental.[CSC,CSR]Dataset",
-    )
-    # Distributed
-    DaskArray = (DaskArray, "dask.array.Array")
-    CupyArray = (CupyArray, "cupy.ndarray")
-    CupySparseMatrix = (CupySparseMatrix, "cupyx.scipy.sparse.spmatrix")
-
-    @property
-    def cls(self):
-        return self.value[0]
-
-    @property
-    def qualname(self):
-        return self.value[1]
-
-    @classmethod
-    def classes(cls) -> tuple[type, ...]:
-        return tuple(v.cls for v in cls)
-
-    @classmethod
-    def qualnames(cls) -> Generator[str, None, None]:
-        yield from (v.qualname for v in cls)
+ArrayDataStructureType: TypeAlias = Union[
+    np.ndarray,
+    ma.MaskedArray,
+    sparse.csr_matrix,
+    sparse.csc_matrix,
+    SpArray,
+    AwkArray,
+    H5Array,
+    ZarrArray,
+    ZappyArray,
+    CSRDataset,
+    CSCDataset,
+    DaskArray,
+    CupyArray,
+    CupySparseMatrix,
+]
 
 
 def coerce_array(
@@ -91,11 +69,20 @@ def coerce_array(
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
-    if isinstance(value, (*ArrayDataStructureType.classes(), Dataset2D)):
+    array_data_structure_types = get_args(ArrayDataStructureType)
+    if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warnings.warn(msg, ImplicitModificationWarning)
             value = value.A
+        return value
+    elif isinstance(value, sparse.spmatrix):
+        msg = (
+            f"AnnData previously had undefined behavior around matrices of type {type(value)}."
+            "In 0.12, passing in this type will throw an error. Please convert to a supported type."
+            "Continue using for this minor version at your own risk."
+        )
+        warnings.warn(msg, FutureWarning)
         return value
     if isinstance(value, pd.DataFrame):
         if allow_df:
@@ -110,7 +97,7 @@ def coerce_array(
         except (ValueError, TypeError) as _e:
             e = _e
     # if value isn’t the right type or convertible, raise an error
-    msg = f"{name} needs to be of one of {join_english(ArrayDataStructureType.qualnames())}, not {type(value)}."
+    msg = f"{name} needs to be of one of {join_english(map(str, array_data_structure_types))}, not {type(value)}."
     if e is not None:
         msg += " (Failed to convert it to an array, see above for details.)"
     raise ValueError(msg) from e
