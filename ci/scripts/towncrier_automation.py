@@ -26,7 +26,7 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             "The PR will be backported to main if the current branch is not main."
         ),
     )
-    parser.add_argument("version", nargs=1, type=str, help="What the new version is")
+    parser.add_argument("version", type=str, help="What the new version is")
     parser.add_argument(
         "--dry-run",
         help="Whether or not to dry-run the actual creation of the pull request",
