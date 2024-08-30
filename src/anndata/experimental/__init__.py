@@ -34,7 +34,7 @@ def __getattr__(key: str) -> Any:
         import anndata
 
         return getattr(anndata, key)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    raise AttributeError(f"module {__name__!r} has no attribute {key!r}")
 
 
 __all__ = [
