@@ -11,9 +11,11 @@ import warnings
 import h5py
 import numpy as np
 import pytest
+import zarr
 from scipy import sparse
 
 import anndata as ad
+import anndata.experimental
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 
@@ -125,3 +127,42 @@ def test_deprecated_read(tmp_path):
         from_disk = ad.read(tmp_path / "file.h5ad")
 
     assert_equal(memory, from_disk)
+
+
+def test_deprecated_sparse_dataset_values():
+    import zarr
+
+    from anndata.experimental import sparse_dataset
+
+    mtx = sparse.random(50, 50, format="csr")
+    g = zarr.group()
+
+    ad.write_elem(g, "mtx", mtx)
+    mtx_backed = sparse_dataset(g["mtx"])
+
+    with pytest.warns(FutureWarning, match=r"Please use .to_memory()"):
+        mtx_backed.value
+
+    with pytest.warns(FutureWarning, match=r"Please use .format"):
+        mtx_backed.format_str
+
+
+def test_deprecated_sparse_dataset():
+    from anndata._core.sparse_dataset import SparseDataset
+
+    mem_X = sparse.random(50, 50, format="csr")
+    g = zarr.group()
+    ad.write_elem(g, "X", mem_X)
+    with pytest.warns(FutureWarning, match=r"SparseDataset is deprecated"):
+        X = SparseDataset(g["X"])
+
+    assert isinstance(X, ad.CSRDataset)
+
+    with pytest.warns(FutureWarning, match=r"SparseDataset is deprecated"):
+        assert isinstance(X, SparseDataset)
+
+
+@pytest.mark.parametrize("name", anndata.experimental._DEPRECATED)
+def test_warn_on_import_from_experimental(name: str):
+    with pytest.warns(FutureWarning, match=rf"Importing {name}"):
+        getattr(anndata.experimental, name)

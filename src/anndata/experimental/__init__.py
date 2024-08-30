@@ -1,13 +1,33 @@
 from __future__ import annotations
 
-from anndata._core.sparse_dataset import sparse_dataset
-from anndata._io.specs import IOSpec, read_elem_as_dask
+import warnings
+from typing import TYPE_CHECKING
 
+import anndata
+
+from .._core.sparse_dataset import sparse_dataset
+from .._io.specs import IOSpec, read_elem_as_dask
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
+
+if TYPE_CHECKING:
+    from typing import Any
+
+
+_DEPRECATED = ["CSRDataset", "CSCDataset", "read_elem", "write_elem"]
+
+
+def __getattr__(key: str) -> Any:
+    if key in _DEPRECATED:
+        msg = f"Importing {key} from `anndata.experimental` is deprecated. Import from `anndata` directly."
+        warnings.warn(msg, FutureWarning)
+        return getattr(anndata, key)
+    msg = f"module {__name__!r} has no attribute {key!r}"
+    raise AttributeError(msg)
+
 
 __all__ = [
     "AnnCollection",
