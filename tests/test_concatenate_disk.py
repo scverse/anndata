@@ -8,9 +8,8 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from anndata import AnnData, concat
+from anndata import AnnData, concat, read_elem, write_elem
 from anndata._core.merge import _resolve_axis
-from anndata.experimental import read_elem, write_elem
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.tests.helpers import (
     assert_equal,

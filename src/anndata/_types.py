@@ -161,7 +161,7 @@ class ReadCallback(Protocol[SCo, InvariantInMemoryType]):
         Params
         ------
         read_func
-            :func:`anndata.experimental.read_elem` function to call to read the current element given the ``iospec``.
+            :func:`anndata.read_elem` function to call to read the current element given the ``iospec``.
         elem_name
             The key to read in from the group.
         elem
@@ -194,7 +194,7 @@ class WriteCallback(Protocol[InvariantInMemoryType]):
         Params
         ------
         write_func
-            :func:`anndata.experimental.write_elem` function to call to read the current element given the ``iospec``.
+            :func:`anndata.write_elem` function to call to read the current element given the ``iospec``.
         store
             The store to which `elem` should be written.
         elem_name
