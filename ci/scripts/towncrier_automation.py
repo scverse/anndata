@@ -30,7 +30,7 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
         "version",
         type=str,
         help=(
-            "The new version for the release must have at least three parts, like `major.minor.patch` and no `major.minor`."
+            "The new version for the release must have at least three parts, like `major.minor.patch` and no `major.minor`. "
             "It can have a suffix like `major.minor.patch.dev0` or `major.minor.0rc1`."
         ),
     )
