@@ -115,8 +115,11 @@ version-file = "src/anndata/_version.py"
 packages = ["src/anndata", "src/testing"]
 
 [tool.coverage.run]
+data_file = "test-data/coverage"
 source_pkgs = ["anndata"]
 omit = ["src/anndata/_version.py", "**/test_*.py"]
+[tool.coverage.xml]
+output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = ["./src", "**/site-packages"]
 
