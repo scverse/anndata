@@ -403,17 +403,15 @@ def validate_bool(val) -> None:
 
 
 settings.register(
-    "should_remove_unused_categories",
+    "shall_remove_unused_categories",
     default_value=True,
-    description=(
-        "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
-    ),
+    description="Whether or not to remove unused categories with :class:`~pandas.Categorical`.",
     validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
 
 settings.register(
-    "should_check_uniqueness",
+    "shall_check_uniqueness",
     default_value=True,
     description=(
         "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
