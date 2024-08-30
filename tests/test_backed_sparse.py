@@ -283,14 +283,10 @@ def test_read_array(
         f = h5py.File(path, "a")
     ad.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
-    ad.settings.shall_use_sparse_array_on_read = True
     if not CAN_USE_SPARSE_ARRAY:
-        with pytest.warns(
-            UserWarning, match=r"scipy.sparse.cs{r,c}array is not available"
-        ):
-            assert issubclass(type(diskmtx[...]), sparse.spmatrix)
-    else:
-        assert issubclass(type(diskmtx[...]), SpArray)
+        pytest.skip("scipy.sparse.cs{r,c}array not available")
+    ad.settings.shall_use_sparse_array_on_read = True
+    assert issubclass(type(diskmtx[...]), SpArray)
     ad.settings.shall_use_sparse_array_on_read = False
     assert issubclass(type(diskmtx[...]), sparse.spmatrix)
 
