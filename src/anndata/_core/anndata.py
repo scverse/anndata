@@ -55,9 +55,9 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
+    from .._types import ArrayDataStructureType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index, Index1D
-    from .views import ArrayView
 
 
 # for backwards compat
@@ -543,7 +543,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> np.ndarray | sparse.spmatrix | ArrayView | None:
+    def X(self) -> ArrayDataStructureType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:

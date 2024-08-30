@@ -9,3 +9,19 @@ dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues
 [envs.docs.scripts]
 build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
 clean = "git clean -fX -- docs"
+
+[envs.hatch-test]
+default-args = []
+extra-dependencies = ["ipykernel"]
+features = ["dev", "test"]
+overrides.matrix.deps.env-vars = [
+    { key = "UV_PRERELEASE", value = "allow", if = ["pre"] },
+    { key = "UV_RESOLUTION", value = "lowest-direct", if = ["min"] },
+]
+overrides.matrix.deps.python = [
+    { if = ["min"], value = "3.9" },
+    { if = ["stable", "pre"], value = "3.12" },
+]
+
+[[envs.hatch-test.matrix]]
+deps = ["stable", "pre", "min"]
