@@ -1074,7 +1074,7 @@ def _read_nullable(
 def _string_array(
     values: np.ndarray, mask: np.ndarray
 ) -> pd.api.extensions.ExtensionArray:
-    """Construct a string array with pandas’ BaseMaskedArray API."""
+    """Construct a string array from values and mask."""
     arr = pd.array(values, dtype="string")
     arr[mask] = pd.NA
     return arr
