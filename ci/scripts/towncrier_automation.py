@@ -3,11 +3,20 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+from typing import TYPE_CHECKING
 
-from packaging.version import parse
+from packaging import version
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
-def main():
+class Args(argparse.Namespace):
+    version: str
+    dry_run: bool
+
+
+def parse_args(argv: Sequence[str] | None = None) -> Args:
     parser = argparse.ArgumentParser(
         prog="towncrier-automation",
         description=(
@@ -16,20 +25,25 @@ def main():
             "and then creates a PR into the original branch with the changes. "
             "The PR will be backported to main if the current branch is not main."
         ),
-        usage="python towncrier_automation.py --version <version> [--dry-run]",
     )
-    parser.add_argument("--version", type=str, help="What the new version is")
+    parser.add_argument("version", nargs=1, type=str, help="What the new version is")
     parser.add_argument(
         "--dry-run",
         help="Whether or not to dry-run the actual creation of the pull request",
         action="store_true",
     )
-    args = parser.parse_args()
-    version = args.version
-    parse(args.version)
+    args = parser.parse_args(argv, Args())
+    version.parse(args.version)  # validate
+    return args
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = parse_args(argv)
 
     # Run towncrier
-    subprocess.run(["towncrier", "build", f"--version={version}", "--yes"], check=True)
+    subprocess.run(
+        ["towncrier", "build", f"--version={args.version}", "--yes"], check=True
+    )
 
     # Check if we are on the main branch to know if we need to backport
     base_branch = subprocess.run(
@@ -44,7 +58,7 @@ def main():
     # Create a new branch + commit
     subprocess.run(["git", "switch", "-c", branch_name], check=True)
     subprocess.run(["git", "add", "docs/release-notes"], check=True)
-    pr_title = f"(chore): generate {version} release notes"
+    pr_title = f"(chore): generate {args.version} release notes"
     subprocess.run(["git", "commit", "-m", pr_title], check=True)
 
     # Create a PR
