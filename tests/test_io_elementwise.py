@@ -544,3 +544,11 @@ def test_io_pd_cow(store, copy_on_write):
         write_elem(store, "adata", orig)
         from_store = read_elem(store["adata"])
         assert_equal(orig, from_store)
+
+
+def test_warn_on_import_from_experimental():
+    regex = r"Importing ((read)|(write))_elem"
+    with pytest.warns(FutureWarning, match=regex):
+        from anndata.experimental import write_elem  # noqa: F401
+    with pytest.warns(FutureWarning, match=regex):
+        from anndata.experimental import read_elem  # noqa: F401

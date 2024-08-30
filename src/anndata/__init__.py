@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import types
+import warnings
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any
+
 try:  # See https://github.com/maresb/hatch-vcs-footgun-example
     from setuptools_scm import get_version
 
@@ -97,3 +104,15 @@ __all__ = [
     "experimental",
     "settings",
 ]
+
+
+class CustomExperimental(types.ModuleType):
+    def __getattribute__(self, key: str) -> Any:
+        if key in __all__ and hasattr(experimental, key):
+            msg = f"Importing {key} from `anndata.experimental` is deprecated. Import from `anndata` directly."
+            warnings.warn(msg, FutureWarning)
+        return experimental.__getattribute__(key)
+
+
+name = experimental.__name__
+sys.modules[name] = CustomExperimental(name)

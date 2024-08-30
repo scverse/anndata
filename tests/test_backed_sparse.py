@@ -559,3 +559,11 @@ def test_append_overflow_check(group_fn, sparse_class, tmpdir):
 
     # Check for any modification
     assert_equal(backed, orig_mtx)
+
+
+def test_warn_on_import_from_experimental():
+    regex = r"Importing CS(C|R)Dataset"
+    with pytest.warns(FutureWarning, match=regex):
+        from anndata.experimental import CSRDataset  # noqa: F401
+    with pytest.warns(FutureWarning, match=regex):
+        from anndata.experimental import CSCDataset  # noqa: F401
