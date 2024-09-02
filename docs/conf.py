@@ -106,8 +106,6 @@ nitpick_ignore = [
     ("py:class", "anndata.compat.ZappyArray"),
     ("py:class", "anndata.compat.DaskArray"),
     ("py:class", "anndata.compat.CupyArray"),
-    ("py:class", "anndata.compat.CupyCSCArray"),
-    ("py:class", "anndata.compat.CupyCSRArray"),
     ("py:class", "anndata.compat.CupySparseMatrix"),
     ("py:class", "numpy.ma.core.MaskedArray"),
     ("py:class", "dask.array.core.Array"),

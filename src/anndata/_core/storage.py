@@ -12,8 +12,6 @@ from .._warnings import ImplicitModificationWarning
 from ..compat import (
     AwkArray,
     CupyArray,
-    CupyCSCMatrix,
-    CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
     H5Array,
@@ -45,8 +43,6 @@ ArrayDataStructureType: TypeAlias = Union[
     CSCDataset,
     DaskArray,
     CupyArray,
-    CupyCSCMatrix,
-    CupyCSRMatrix,
     CupySparseMatrix,
 ]
 
