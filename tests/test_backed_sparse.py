@@ -273,19 +273,17 @@ def test_dataset_append_memory(
 @pytest.mark.parametrize(
     ("subset_func", "subset_func2"),
     product(
-        (
-            [
-                ad.tests.helpers.array_subset,
-                ad.tests.helpers.slice_subset,
-                ad.tests.helpers.array_int_subset,
-                ad.tests.helpers.array_bool_subset,
-                lambda x: make_randomized_mask(len(x)),
-                lambda x: make_alternating_mask_15(len(x)),
-                lambda x: make_alternating_mask_5(len(x)),
-                lambda x: make_one_group_mask(len(x)),
-                lambda x: make_one_elem_mask(len(x)),
-            ]
-        ),
+        [
+            ad.tests.helpers.array_subset,
+            ad.tests.helpers.slice_subset,
+            ad.tests.helpers.array_int_subset,
+            ad.tests.helpers.array_bool_subset,
+            lambda x: make_randomized_mask(len(x)),
+            lambda x: make_alternating_mask_15(len(x)),
+            lambda x: make_alternating_mask_5(len(x)),
+            lambda x: make_one_group_mask(len(x)),
+            lambda x: make_one_elem_mask(len(x)),
+        ],
         repeat=2,
     ),
 )
