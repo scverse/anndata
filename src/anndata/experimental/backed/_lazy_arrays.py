@@ -72,7 +72,7 @@ class CategoricalArray(BackendArray):
         categorical_array = pd.Categorical.from_codes(
             codes=codes, categories=self.categories, ordered=self._ordered
         )
-        if settings.should_remove_unused_categories:
+        if settings.shall_remove_unused_categories:
             categorical_array = categorical_array.remove_unused_categories()
         return xr.core.extension_array.PandasExtensionArray(categorical_array)
 
