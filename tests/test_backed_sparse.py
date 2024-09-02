@@ -272,26 +272,21 @@ def test_dataset_append_memory(
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize(
     ("subset_func", "subset_func2"),
-    map(
-        lambda x: pytest.param(*x),
-        product(
-            *(
-                [
-                    [
-                        ad.tests.helpers.array_subset,
-                        ad.tests.helpers.slice_subset,
-                        ad.tests.helpers.array_int_subset,
-                        ad.tests.helpers.array_bool_subset,
-                        lambda x: make_randomized_mask(len(x)),
-                        lambda x: make_alternating_mask_15(len(x)),
-                        lambda x: make_alternating_mask_5(len(x)),
-                        lambda x: make_one_group_mask(len(x)),
-                        lambda x: make_one_elem_mask(len(x)),
-                    ]
-                ]
-                * 2
-            )
+    product(
+        (
+            [
+                ad.tests.helpers.array_subset,
+                ad.tests.helpers.slice_subset,
+                ad.tests.helpers.array_int_subset,
+                ad.tests.helpers.array_bool_subset,
+                lambda x: make_randomized_mask(len(x)),
+                lambda x: make_alternating_mask_15(len(x)),
+                lambda x: make_alternating_mask_5(len(x)),
+                lambda x: make_one_group_mask(len(x)),
+                lambda x: make_one_elem_mask(len(x)),
+            ]
         ),
+        repeat=2,
     ),
 )
 def test_read_array(
