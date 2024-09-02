@@ -273,14 +273,12 @@ def test_dataset_append_memory(
 @pytest.mark.parametrize(
     ("subset_func", "subset_func2"),
     product(
-        (
-            [
-                ad.tests.helpers.array_subset,
-                ad.tests.helpers.slice_subset,
-                ad.tests.helpers.array_int_subset,
-                ad.tests.helpers.array_bool_subset,
-            ]
-        ),
+        [
+            ad.tests.helpers.array_subset,
+            ad.tests.helpers.slice_subset,
+            ad.tests.helpers.array_int_subset,
+            ad.tests.helpers.array_bool_subset,
+        ],
         repeat=2,
     ),
 )
