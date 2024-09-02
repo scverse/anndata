@@ -172,9 +172,11 @@ select = [
     "E",   # Error detected by Pycodestyle
     "F",   # Errors detected by Pyflakes
     "W",   # Warning detected by Pycodestyle
+    "PLW", # Pylint
     "UP",  # pyupgrade
     "I",   # isort
     "TCH", # manage type checking blocks
+    "TID", # Banned imports
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
     "PT",  # Pytest conventions
@@ -186,6 +188,10 @@ ignore = [
     "E731",
     # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
     "E741",
+    # We use relative imports from parent modules
+    "TID252",
+    # Shadowing loop variables isn’t a big deal
+    "PLW2901",
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
@@ -193,6 +199,10 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"subprocess.call".msg = "Use `subprocess.run([…])` instead"
+"subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
+"subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = []
 strict = true

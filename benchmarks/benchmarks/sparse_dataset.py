@@ -5,7 +5,8 @@ import zarr
 from scipy import sparse
 
 from anndata import AnnData
-from anndata.experimental import sparse_dataset, write_elem
+from anndata._io.specs import write_elem
+from anndata.experimental import sparse_dataset
 
 
 def make_alternating_mask(n):

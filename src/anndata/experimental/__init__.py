@@ -1,40 +1,46 @@
 from __future__ import annotations
 
-from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
-from anndata._io.specs import IOSpec, read_elem, read_elem_lazy, write_elem
+import warnings
+from typing import TYPE_CHECKING
 
-from .._types import InMemoryElem as _InMemoryElem
+import anndata
+
+from .._core.sparse_dataset import sparse_dataset
+from .._io.specs import IOSpec, read_elem_lazy
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
-from .._types import RWAble as _RWAble
 from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_backed
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
 
-# Sphinx can’t find data docstrings when objects are re-exported
-InMemoryElem = _InMemoryElem
-"""An in-memory element that can be read and written, including an :class:`anndata.AnnData` objects."""
-RWAble = _RWAble
-"""A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
+if TYPE_CHECKING:
+    from typing import Any
+
+
+_DEPRECATED = ["CSRDataset", "CSCDataset", "read_elem", "write_elem"]
+
+
+def __getattr__(key: str) -> Any:
+    if key in _DEPRECATED:
+        msg = f"Importing {key} from `anndata.experimental` is deprecated. Import from `anndata` directly."
+        warnings.warn(msg, FutureWarning)
+        return getattr(anndata, key)
+    msg = f"module {__name__!r} has no attribute {key!r}"
+    raise AttributeError(msg)
+
 
 __all__ = [
     "AnnCollection",
     "AnnLoader",
-    "read_elem",
-    "write_elem",
     "read_elem_lazy",
     "read_dispatched",
     "write_dispatched",
     "IOSpec",
     "concat_on_disk",
     "sparse_dataset",
-    "CSRDataset",
-    "CSCDataset",
-    "InMemoryElem",
-    "read_backed",
     "Read",
-    "RWAble",
+    "read_backed",
     "Write",
     "ReadCallback",
     "WriteCallback",
