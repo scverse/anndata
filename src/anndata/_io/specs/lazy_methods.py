@@ -236,7 +236,7 @@ def read_dataframe(
     index_key = elem.attrs["_index"]
     index = elem_dict[index_key]  # no sense in reading this in multiple times
     elem_xarray_dict = dict(
-        _gen_xarray_dict_itetator_from_elems(elem_dict, index_label, index_key, index)
+        _gen_xarray_dict_iterator_from_elems(elem_dict, index_label, index_key, index)
     )
     return Dataset2D(elem_xarray_dict)
 
