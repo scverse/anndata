@@ -6,7 +6,7 @@ features = ["dev"]
 features = ["doc"]
 extra-dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
 scripts.build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
-scripts.clean = "git clean -fX -- docs"
+scripts.clean = "git clean -fdX -- {args:docs}"
 
 [envs.towncrier]
 scripts.build = "python3 ci/scripts/towncrier_automation.py {args}"
