@@ -50,6 +50,8 @@ def _normalize_index(
     | pd.Index,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
+    from ..experimental.backed._compat import xr
+
     if not isinstance(index, pd.RangeIndex):
         msg = "Don’t call _normalize_index with non-categorical/string names"
         assert index.dtype != float, msg
@@ -107,6 +109,8 @@ def _normalize_index(
                     "are not valid obs/ var names or indices."
                 )
             return positions  # np.ndarray[int]
+    elif isinstance(indexer, xr.DataArray):
+        return indexer.data
     else:
         raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 

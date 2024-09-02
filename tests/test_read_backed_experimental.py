@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from importlib.util import find_spec
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -89,9 +88,7 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     assert (
         store.get_access_count("obs/cat/categories") == 0
     ), store.get_subkeys_accessed("obs/cat/categories")
-    subset = remote[
-        (remote.obs["cat"] == "a").data, :
-    ]  # `.data` for xarray, but should we handle internally?
+    subset = remote[remote.obs["cat"] == "a", :]
     subset.obs["int64"]
     sub_subset = subset[0:10, :]
     sub_subset.obs["int64"]
@@ -174,7 +171,7 @@ def test_view_of_view_to_memory(adata_remote_orig):
 @needs_xarray
 def test_unconsolidated(tmp_path, mtx_format):
     adata = gen_adata((1000, 1000), mtx_format)
-    orig_pth = tmp_pth / "orig.zarr"
+    orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()
     store = AccessTrackingStore(orig_pth)
