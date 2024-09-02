@@ -446,10 +446,15 @@ class BaseCompressedSparseDataset(ABC):
 
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
-        if isinstance(sub, BackedSparseMatrix):
-            return get_memory_class(
-                self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
-            )(sub)
+        # Also need to check if memory format is not matrix
+        mtx_fmt = get_memory_class(
+            self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+        )
+        must_convert_to_array = issubclass(mtx_fmt, SpArray) and not isinstance(
+            sub, SpArray
+        )
+        if isinstance(sub, BackedSparseMatrix) or must_convert_to_array:
+            return mtx_fmt(sub)
         else:
             return sub
 
