@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 from copy import deepcopy
 from operator import mul
+from typing import get_type_hints
 
 import joblib
 import numpy as np
@@ -784,6 +785,42 @@ def test_dataframe_view_index_setting():
     assert isinstance(a2.obs, pd.DataFrame)
     assert a1.obs.index.values.tolist() == ["aa", "bb"]
     assert a2.obs.index.values.tolist() == ["a", "b"]
+
+
+def test_elem_view_class():
+    """
+    Ensure that:
+
+    (a) AnnData views actually produce view classes
+    (b) Produced view classes are subtypes of their original type
+    which then allows distinguishing views from non-views.
+
+    This test tries to then guarantee that `my_adata.is_view and isinstance(my_adata.obsm['my_array'], BaseArrayClass)`
+    tells a user that they are working with a view class of `obsm['my_array']` that inherits from the base class (and has its methods).
+    """
+    orig = gen_adata((10, 10))
+    subset = orig[:8, :8]
+    assert subset.is_view
+    registry = ad._core.views.as_view.registry
+    as_view_funcs = registry.values()
+    base_classes = registry.keys()
+    # Use set membership to ensure the *actual* view class is used
+    view_types = set(
+        get_type_hints(func)["return"]
+        for func in as_view_funcs
+        if "return" in func.__annotations__
+    )
+    base_types = tuple(base_classes)
+    assert type(subset.obs) in view_types
+    assert type(subset.var) in view_types
+    for view_data in (
+        *subset.obsm.values(),
+        *subset.layers.values(),
+        *subset.obsp.values(),
+    ):
+        view_data_type = type(view_data)
+        assert view_data_type in view_types
+        assert isinstance(view_data, base_types)
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])
