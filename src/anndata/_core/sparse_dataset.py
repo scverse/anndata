@@ -450,7 +450,10 @@ class BaseCompressedSparseDataset(ABC):
         mtx_fmt = get_memory_class(
             self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
         )
-        if isinstance(sub, BackedSparseMatrix) or issubclass(mtx_fmt, SpArray):
+        must_convert_to_array = issubclass(mtx_fmt, SpArray) and not isinstance(
+            sub, SpArray
+        )
+        if isinstance(sub, BackedSparseMatrix) or must_convert_to_array:
             return mtx_fmt(sub)
         else:
             return sub
