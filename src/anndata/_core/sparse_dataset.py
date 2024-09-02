@@ -29,6 +29,7 @@ from scipy.sparse import _sparsetools
 from anndata._core.index import _fix_slice_bounds
 from anndata.compat import H5Group, ZarrArray, ZarrGroup
 
+from .._settings import settings
 from ..compat import SpArray, _read_attr
 
 try:
@@ -236,6 +237,8 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
 FORMATS = [
     BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
     BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
+    BackedFormat("csr", backed_csr_matrix, ss.csr_array),
+    BackedFormat("csc", backed_csc_matrix, ss.csc_array),
 ]
 
 
@@ -444,7 +447,9 @@ class BaseCompressedSparseDataset(ABC):
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         if isinstance(sub, BackedSparseMatrix):
-            return get_memory_class(self.format)(sub)
+            return get_memory_class(
+                self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+            )(sub)
         else:
             return sub
 
@@ -582,7 +587,9 @@ class BaseCompressedSparseDataset(ABC):
         -------
         The in-memory representation of the sparse matrix.
         """
-        format_class = get_memory_class(self.format)
+        format_class = get_memory_class(
+            self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+        )
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
         mtx.indices = self.group["indices"][...]
