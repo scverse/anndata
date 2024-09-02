@@ -59,10 +59,8 @@ class CategoricalArray(BackendArray):
     def categories(self):
         if isinstance(self._categories, ZarrArray):
             return self._categories[...]
-        if (
-            "read_dataset" not in dir()
-        ):  # avoid circular dependency, not sure what caused this all of a sudden after merging https://github.com/scverse/anndata/pull/949/commits/dc9f12fcbca977841e967c8414b9f1032e069250
-            from ..._io.h5ad import read_dataset
+        from ..._io.h5ad import read_dataset
+
         return read_dataset(self._categories)
 
     def __getitem__(

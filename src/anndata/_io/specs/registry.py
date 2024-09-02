@@ -386,7 +386,7 @@ def read_elem(elem: StorageType) -> InMemoryElem:
 
 def read_elem_lazy(
     elem: StorageType, chunks: tuple[int, ...] | None = None
-) -> DaskArray | Dataset2D | CategoricalArray | MaskedArray:
+) -> LazyDataStructures:
     """
     Read an element from a store lazily.
 

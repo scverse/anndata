@@ -185,7 +185,7 @@ def read_zarr_array(
     return da.from_zarr(elem, chunks=chunks)
 
 
-def _gen_xarray_dict_itetator_from_elems(
+def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     index_label: str,
     index_key: str,

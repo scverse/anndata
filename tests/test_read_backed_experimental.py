@@ -37,7 +37,7 @@ def dskfmt(request):
 def adata_remote_orig(
     tmp_path_factory, dskfmt: str, mtx_format
 ) -> tuple[AnnData, AnnData]:
-    orig_path = Path(tmp_path_factory.mktemp(f"orig.{dskfmt}"))
+    orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
     orig = gen_adata((1000, 1000), mtx_format)
     orig.write_zarr(orig_path)
     remote = read_backed(orig_path)
@@ -46,7 +46,7 @@ def adata_remote_orig(
 
 @pytest.fixture
 def adata_remote_with_store_tall_skinny(tmp_path_factory, mtx_format):
-    orig_path = Path(tmp_path_factory.mktemp("orig.zarr"))
+    orig_path = tmp_path_factory.mktemp("orig.zarr")
     M = 1000000  # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
     N = 5
     obs_names = pd.Index(f"cell{i}" for i in range(M))
@@ -174,11 +174,9 @@ def test_view_of_view_to_memory(adata_remote_orig):
 @needs_xarray
 def test_unconsolidated(tmp_path, mtx_format):
     adata = gen_adata((1000, 1000), mtx_format)
-    base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.zarr"
-    write = lambda x: getattr(x, "write_zarr")(orig_pth)
-    write(adata)
-    (Path(orig_pth) / ".zmetadata").unlink()
+    orig_pth = tmp_pth / "orig.zarr"
+    adata.write_zarr(orig_pth)
+    (orig_pth / ".zmetadata").unlink()
     store = AccessTrackingStore(orig_pth)
     store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):

@@ -35,11 +35,7 @@ def read_backed(
     -------
         A lazily read-in :class:`~anndata.AnnData` object.
     """
-    is_h5 = False
-    if isinstance(store, Path) or isinstance(store, str):
-        store = str(store)
-        if Path(store).suffix == ".h5ad":
-            is_h5 = True
+    is_h5 = isinstance(store, (Path, str)) and Path(store).suffix == ".h5ad"
 
     has_keys = True  # true if consolidated or h5ad
     if not is_h5:
