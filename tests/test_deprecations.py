@@ -133,7 +133,13 @@ def test_deprecated_read(tmp_path):
 )
 def test_warn_on_import_from_experimental(old_name: str, new_name: str):
     pattern = rf"Importing {old_name}"
-    if new_name != old_name:
-        pattern += rf".*using its new name {new_name}"
+    if (new_sub_name := new_name.split(".")[-1]) != old_name:
+        pattern += rf".*using its new name {new_sub_name}"
+    if "." in new_name:
+        pattern += (
+            r".*anndata." + r".".join(new_name.split(".")[:-1])
+            if "." in new_name
+            else r""
+        )
     with pytest.warns(FutureWarning, match=pattern):
         getattr(anndata.experimental, old_name)
