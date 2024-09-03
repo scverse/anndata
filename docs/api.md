@@ -191,6 +191,6 @@ Types used by the former:
 
    CSRDataset
    CSCDataset
-   AxisArrayStorable
+   AxisStorable
    RWAble
 ```

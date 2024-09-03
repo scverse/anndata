@@ -37,11 +37,11 @@ __all__ = [
 InMemoryArrayOrScalarType: TypeAlias = Union[
     pd.DataFrame, np.number, str, ArrayDataStructureType
 ]
-AxisArrayStorable: TypeAlias = Union[
-    InMemoryArrayOrScalarType, dict[str, "AxisArrayStorable"], list["AxisArrayStorable"]
+AxisStorable: TypeAlias = Union[
+    InMemoryArrayOrScalarType, dict[str, "AxisStorable"], list["AxisStorable"]
 ]  # noqa: TCH010
 RWAble: TypeAlias = Union[
-    AxisArrayStorable,
+    AxisStorable,
     AnnData,
     pd.Categorical,
     pd.api.extensions.ExtensionArray,
