@@ -192,5 +192,5 @@ Types used by the former:
    CSRDataset
    CSCDataset
    AxisArrayStorable
-   InMemoryElem
+   RWAble
 ```

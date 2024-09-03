@@ -39,7 +39,7 @@ from ._io import (
 from ._io.specs import read_elem, write_elem
 from ._settings import settings
 from ._types import AxisArrayStorable as _AxisArrayStorable
-from ._types import InMemoryElem as _InMemoryElem
+from ._types import RWAble as _RWAble
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
@@ -51,7 +51,7 @@ from ._warnings import (
 AxisArrayStorable = _AxisArrayStorable
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
-InMemoryElem = _InMemoryElem
+RWAble = _RWAble
 """A superset of :type:`anndata.AxisArrayStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.read_elem` and :func:`anndata.write_elem`."""
 
 
@@ -89,7 +89,7 @@ __all__ = [
     "read_zarr",
     "read_elem",
     "write_elem",
-    "InMemoryElem",
+    "RWAble",
     "AxisArrayStorable",
     "CSRDataset",
     "CSCDataset",

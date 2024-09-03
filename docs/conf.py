@@ -147,10 +147,7 @@ qualname_overrides = {
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisArrayStorable=":data:`~anndata.AxisArrayStorable`",
-    **{
-        f"{v}variantInMemoryType": ":data:`~anndata.InMemoryElem`"
-        for v in ["In", "Co", "Contra"]
-    },
+    **{f"{v}variantRWAble": ":data:`~anndata.RWAble`" for v in ["In", "Co", "Contra"]},
 )
 
 # -- Social cards ---------------------------------------------------------
