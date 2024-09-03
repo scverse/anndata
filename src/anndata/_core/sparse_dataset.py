@@ -643,7 +643,7 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
 
     >>> import scanpy as sc
     >>> import h5py
-    >>> from anndata.experimental import sparse_dataset
+    >>> from anndata import sparse_dataset
     >>> from anndata import read_elem
     >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
@@ -680,6 +680,7 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
         return CSRDataset(group)
     elif encoding_type == "csc":
         return CSCDataset(group)
+    raise ValueError(f"Unknown encoding type {encoding_type}")
 
 
 @_subset.register(BaseCompressedSparseDataset)
