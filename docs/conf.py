@@ -145,12 +145,14 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
-    "anndata._types.AxisStorable": "anndata.AxisStorable",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
-    AxisStorable=":data:`~anndata.AxisStorable`",
-    **{f"{v}variantRWAble": ":data:`~anndata.RWAble`" for v in ["In", "Co", "Contra"]},
+    AxisStorable=":data:`~anndata.typing.AxisStorable`",
+    **{
+        f"{v}variantRWAble": ":data:`~anndata.typing.RWAble`"
+        for v in ["In", "Co", "Contra"]
+    },
 )
 
 # -- Social cards ---------------------------------------------------------

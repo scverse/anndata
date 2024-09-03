@@ -38,8 +38,6 @@ from ._io import (
 )
 from ._io.specs import read_elem, write_elem
 from ._settings import settings
-from ._types import AxisStorable as _AxisStorable
-from ._types import RWAble as _RWAble
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
@@ -47,16 +45,8 @@ from ._warnings import (
     WriteWarning,
 )
 
-# Sphinx can’t find data docstrings when objects are re-exported
-AxisStorable = _AxisStorable
-"""A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
-
-RWAble = _RWAble
-"""A superset of :type:`anndata.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.read_elem` and :func:`anndata.write_elem`."""
-
-
 # Submodules need to be imported last
-from . import abc, experimental  # noqa: E402 isort: skip
+from . import abc, experimental, typing  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
 from . import _io, logging  # noqa: F401, E402 isort: skip
@@ -80,6 +70,7 @@ __all__ = [
     # Submodules
     "abc",
     "experimental",
+    "typing",
     # Classes
     "AnnData",
     "Raw",
@@ -97,9 +88,6 @@ __all__ = [
     "read_zarr",
     "read_elem",
     "write_elem",
-    # Typing
-    "RWAble",
-    "AxisStorable",
     # Warnings
     "OldFormatWarning",
     "WriteWarning",

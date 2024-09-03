@@ -182,6 +182,6 @@ Types used by the former:
 
    abc.CSRDataset
    abc.CSCDataset
-   AxisStorable
-   RWAble
+   typing.AxisStorable
+   typing.RWAble
 ```

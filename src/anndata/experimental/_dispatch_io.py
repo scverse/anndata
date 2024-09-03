@@ -10,10 +10,10 @@ if TYPE_CHECKING:
     from anndata._types import (
         GroupStorageType,
         ReadCallback,
-        RWAble,
         StorageType,
         WriteCallback,
     )
+    from anndata.typing import RWAble
 
 
 def read_dispatched(

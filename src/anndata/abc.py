@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from .compat import SpArray
 
 
+__all__ = ["CSRDataset", "CSCDataset"]
+
+
 class _AbstractCSDataset(ABC):
     """Base for the public API for CSRDataset/CSCDataset."""
 
@@ -57,9 +60,3 @@ class CSRDataset(_AbstractCSDataset, ABC):
 class CSCDataset(_AbstractCSDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSC")
     format = "csc"
-
-
-__all__ = [
-    "CSRDataset",
-    "CSCDataset",
-]
