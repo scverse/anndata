@@ -50,7 +50,7 @@ def __getattr__(attr_name: str) -> Any:
             export = anndata
             for subname in new_name.split("."):
                 export = getattr(export, subname)
-            return
+            return export
         return getattr(anndata, new_name)
     msg = f"module {__name__!r} has no attribute {attr_name!r}"
     raise AttributeError(msg)
