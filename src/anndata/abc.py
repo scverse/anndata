@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import ClassVar, Literal
 
     import numpy as np
+    from scipy.sparse import csc_matrix, csr_matrix
+
+    from .compat import SpArray
 
 
 class _AbstractCSDataset(ABC):
@@ -21,7 +24,19 @@ class _AbstractCSDataset(ABC):
     dtype: np.dtype
     """The :class:`numpy.dtype` of the `data` attribute of the sparse matrix."""
 
-    # TODO: __getitem__ and __setitem__?
+    backend: Literal["zarr", "hdf5"]
+    """Which file type is used on-disk."""
+
+    # TODO: __getitem__ and maybe __setitem__?
+
+    @abstractmethod
+    def to_memory(self) -> csr_matrix | csc_matrix | SpArray:
+        """Returns an in-memory representation of the sparse matrix.
+
+        Returns
+        -------
+        The in-memory representation of the sparse matrix.
+        """
 
 
 _sparse_dataset_doc = """\

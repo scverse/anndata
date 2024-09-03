@@ -41,8 +41,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal
 
-    from scipy.sparse import spmatrix
-
     from .._types import GroupStorageType
     from .index import Index
 
@@ -470,7 +468,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: spmatrix | SpArray) -> None:
+    def append(self, sparse_matrix: ss.csr_matrix | ss.csc_matrix | SpArray) -> None:
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters
@@ -577,13 +575,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indptr = self._indptr
         return mtx
 
-    def to_memory(self) -> spmatrix | SpArray:
-        """Returns an in-memory representation of the sparse matrix.
-
-        Returns
-        -------
-        The in-memory representation of the sparse matrix.
-        """
+    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix | SpArray:
         format_class = get_memory_class(
             self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
         )
