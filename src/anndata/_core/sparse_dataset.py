@@ -353,17 +353,12 @@ def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
     )
 
 
-class BaseCompressedSparseDataset(ABC):
-    format: Literal["csr", "csc"]
-    """The format of the sparse matrix."""
+class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     _group: GroupStorageType
 
     def __init__(self, group: GroupStorageType):
         type(self)._check_group_format(group)
         self._group = group
-
-    shape: tuple[int, int]
-    """Shape of the matrix."""
 
     @property
     def group(self) -> GroupStorageType:
