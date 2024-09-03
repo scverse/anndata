@@ -614,25 +614,25 @@ _sparse_dataset_doc = """\
 """
 
 
-class AbstractCSRDataset(BaseCompressedSparseDataset, ABC):
+class CSRDataset(BaseCompressedSparseDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSR")
     format = "csr"
 
 
-class CSRDataset(AbstractCSRDataset):
+class _CSRDataset(CSRDataset):
     pass
 
 
-class AbstractCSCDataset(BaseCompressedSparseDataset, ABC):
+class CSCDataset(BaseCompressedSparseDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSC")
     format = "csc"
 
 
-class CSCDataset(AbstractCSCDataset):
+class _CSCDataset(CSCDataset):
     pass
 
 
-def sparse_dataset(group: GroupStorageType) -> AbstractCSRDataset | AbstractCSCDataset:
+def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
@@ -685,9 +685,9 @@ def sparse_dataset(group: GroupStorageType) -> AbstractCSRDataset | AbstractCSCD
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
-        return CSRDataset(group)
+        return _CSRDataset(group)
     elif encoding_type == "csc":
-        return CSCDataset(group)
+        return _CSCDataset(group)
     raise ValueError(f"Unknown encoding type {encoding_type}")
 
 

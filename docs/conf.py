@@ -143,6 +143,8 @@ qualname_overrides = {
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
     "anndata._types.AxisStorable": "anndata.AxisStorable",
+    "anndata._core.sparse_dataset.CSRDataset": "anndata.abc.CSRDataset",
+    "anndata._core.sparse_dataset.CSCDataset": "anndata.abc.CSCDataset",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
