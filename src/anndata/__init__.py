@@ -55,8 +55,8 @@ RWAble = _RWAble
 """A superset of :type:`anndata.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.read_elem` and :func:`anndata.write_elem`."""
 
 
-# Experimental needs to be imported last
-from . import experimental  # noqa: E402 isort: skip
+# Submodules need to be imported last
+from . import abc, experimental  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
 from . import _io, logging  # noqa: F401, E402 isort: skip
@@ -74,10 +74,18 @@ def read(*args, **kwargs):
 
 
 __all__ = [
+    # Attributes
     "__version__",
+    "settings",
+    # Submodules
+    "abc",
+    "experimental",
+    # Classes
     "AnnData",
-    "concat",
     "Raw",
+    # Functions
+    "concat",
+    "sparse_dataset",
     "read_h5ad",
     "read_loom",
     "read_hdf",
@@ -89,13 +97,12 @@ __all__ = [
     "read_zarr",
     "read_elem",
     "write_elem",
+    # Typing
     "RWAble",
     "AxisStorable",
-    "sparse_dataset",
+    # Warnings
     "OldFormatWarning",
     "WriteWarning",
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
-    "experimental",
-    "settings",
 ]

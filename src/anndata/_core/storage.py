@@ -9,6 +9,7 @@ from numpy import ma
 from scipy import sparse
 
 from .._warnings import ImplicitModificationWarning
+from ..abc import CSCDataset, CSRDataset
 from ..compat import (
     AwkArray,
     CupyArray,
@@ -24,7 +25,6 @@ from ..utils import (
     join_english,
     raise_value_error_if_multiindex_columns,
 )
-from .sparse_dataset import AbstractCSCDataset, AbstractCSRDataset
 
 if TYPE_CHECKING:
     from typing import Any, TypeAlias
@@ -39,8 +39,8 @@ ArrayDataStructureType: TypeAlias = Union[
     H5Array,
     ZarrArray,
     ZappyArray,
-    AbstractCSRDataset,
-    AbstractCSCDataset,
+    CSRDataset,
+    CSCDataset,
     DaskArray,
     CupyArray,
     CupySparseMatrix,

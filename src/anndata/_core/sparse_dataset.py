@@ -26,20 +26,16 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from anndata._core.index import _fix_slice_bounds
-from anndata.compat import H5Group, ZarrArray, ZarrGroup
-
-from .._settings import settings
-from ..compat import SpArray, _read_attr
-
 try:
     # Not really important, just for IDEs to be more helpful
     from scipy.sparse._compressed import _cs_matrix
 except ImportError:
     from scipy.sparse import spmatrix as _cs_matrix
 
-
-from .index import _subset, unpack_index
+from .. import abc
+from .._settings import settings
+from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
+from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -415,7 +411,8 @@ class BaseCompressedSparseDataset(ABC):
         return tuple(map(int, shape))
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
+        name = type(self).__name__.removeprefix("_")
+        return f"{name}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
     def __getitem__(
         self, index: Index | tuple[()]
@@ -602,37 +599,15 @@ class BaseCompressedSparseDataset(ABC):
         return mtx
 
 
-_sparse_dataset_doc = """\
-    On disk {format} sparse matrix.
-
-    Analogous to :class:`h5py.Dataset` or :class:`zarr.core.Array`, but for sparse matrices.
-
-    Parameters
-    ----------
-    group
-        The backing group store.
-"""
+class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):
+    """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
-class AbstractCSRDataset(BaseCompressedSparseDataset, ABC):
-    __doc__ = _sparse_dataset_doc.format(format="CSR")
-    format = "csr"
+class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
+    """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
-class CSRDataset(AbstractCSRDataset):
-    pass
-
-
-class AbstractCSCDataset(BaseCompressedSparseDataset, ABC):
-    __doc__ = _sparse_dataset_doc.format(format="CSC")
-    format = "csc"
-
-
-class CSCDataset(AbstractCSCDataset):
-    pass
-
-
-def sparse_dataset(group: GroupStorageType) -> AbstractCSRDataset | AbstractCSCDataset:
+def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
@@ -685,9 +660,9 @@ def sparse_dataset(group: GroupStorageType) -> AbstractCSRDataset | AbstractCSCD
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
-        return CSRDataset(group)
+        return _CSRDataset(group)
     elif encoding_type == "csc":
-        return CSCDataset(group)
+        return _CSCDataset(group)
     raise ValueError(f"Unknown encoding type {encoding_type}")
 
 
