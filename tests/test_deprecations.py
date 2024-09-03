@@ -128,7 +128,12 @@ def test_deprecated_read(tmp_path):
     assert_equal(memory, from_disk)
 
 
-@pytest.mark.parametrize("name", anndata.experimental._DEPRECATED)
-def test_warn_on_import_from_experimental(name: str):
-    with pytest.warns(FutureWarning, match=rf"Importing {name}"):
-        getattr(anndata.experimental, name)
+@pytest.mark.parametrize(
+    ("old_name", "new_name"), anndata.experimental._DEPRECATED.items()
+)
+def test_warn_on_import_from_experimental(old_name: str, new_name: str):
+    pattern = rf"Importing {old_name}"
+    if new_name != old_name:
+        pattern += rf".*using its new name {new_name}"
+    with pytest.warns(FutureWarning, match=pattern):
+        getattr(anndata.experimental, old_name)
