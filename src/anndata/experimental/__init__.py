@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 import anndata
 
-from .._core.sparse_dataset import sparse_dataset
 from .._io.specs import IOSpec, read_elem_as_dask
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from ._dispatch_io import read_dispatched, write_dispatched
@@ -25,6 +24,7 @@ _DEPRECATED = MappingProxyType(
         for kv in (
             "CSRDataset",
             "CSCDataset",
+            "sparse_dataset",
             "read_elem",
             "write_elem",
             ("RWAble", "AxisStorable"),
@@ -55,7 +55,6 @@ __all__ = [
     "write_dispatched",
     "IOSpec",
     "concat_on_disk",
-    "sparse_dataset",
     "Read",
     "Write",
     "ReadCallback",
