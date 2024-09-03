@@ -180,8 +180,8 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   CSRDataset
-   CSCDataset
+   abc.CSRDataset
+   abc.CSCDataset
    AxisStorable
    RWAble
 ```

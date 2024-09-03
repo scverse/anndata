@@ -614,17 +614,25 @@ _sparse_dataset_doc = """\
 """
 
 
-class CSRDataset(BaseCompressedSparseDataset):
+class AbstractCSRDataset(BaseCompressedSparseDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSR")
     format = "csr"
 
 
-class CSCDataset(BaseCompressedSparseDataset):
+class CSRDataset(AbstractCSRDataset):
+    pass
+
+
+class AbstractCSCDataset(BaseCompressedSparseDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSC")
     format = "csc"
 
 
-def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
+class CSCDataset(AbstractCSCDataset):
+    pass
+
+
+def sparse_dataset(group: GroupStorageType) -> AbstractCSRDataset | AbstractCSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
