@@ -24,7 +24,7 @@ if sys.version_info < (3, 11):
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._core.sparse_dataset import CSCDataset, CSRDataset
+from ._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
 from ._io import (
     read_csv,
     read_excel,
@@ -93,6 +93,7 @@ __all__ = [
     "RWAble",
     "CSRDataset",
     "CSCDataset",
+    "sparse_dataset",
     "OldFormatWarning",
     "WriteWarning",
     "ImplicitModificationWarning",

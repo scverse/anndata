@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 import anndata
 
-from .._core.sparse_dataset import sparse_dataset
 from .._io.specs import IOSpec, read_elem_as_dask
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from ._dispatch_io import read_dispatched, write_dispatched
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 
-_DEPRECATED = ["CSRDataset", "CSCDataset", "read_elem", "write_elem"]
+_DEPRECATED = ["CSRDataset", "CSCDataset", "read_elem", "write_elem", "sparse_dataset"]
 
 
 def __getattr__(key: str) -> Any:
@@ -37,7 +36,6 @@ __all__ = [
     "write_dispatched",
     "IOSpec",
     "concat_on_disk",
-    "sparse_dataset",
     "Read",
     "Write",
     "ReadCallback",

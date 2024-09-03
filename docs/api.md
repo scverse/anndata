@@ -59,7 +59,7 @@ Reading individual portions (`obs`, `varm` etc.) of the `AnnData` object.
    :toctree: generated/
 
    read_elem
-
+   sparse_dataset
 ```
 
 ## Writing
@@ -111,15 +111,6 @@ In particular, for pytorch-based models.
 
    experimental.AnnCollection
    experimental.AnnLoader
-```
-
-Interface for accessing on-disk sparse data:
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated/
-
-   experimental.sparse_dataset
 ```
 
 Out of core concatenation
