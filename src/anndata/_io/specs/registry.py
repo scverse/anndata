@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
-        InMemoryElem,
         ReadCallback,
+        RWAble,
         StorageType,
         Write,
         WriteCallback,
@@ -270,7 +270,7 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-    ) -> InMemoryElem:
+    ) -> RWAble:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
@@ -323,7 +323,7 @@ class Writer:
         self,
         store: GroupStorageType,
         k: str,
-        elem: InMemoryElem,
+        elem: RWAble,
         *,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
         modifiers: frozenset[str] = frozenset(),
@@ -363,7 +363,7 @@ class Writer:
         )
 
 
-def read_elem(elem: StorageType) -> InMemoryElem:
+def read_elem(elem: StorageType) -> RWAble:
     """
     Read an element from a store.
 
@@ -406,7 +406,7 @@ def read_elem_as_dask(
 def write_elem(
     store: GroupStorageType,
     k: str,
-    elem: InMemoryElem,
+    elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:

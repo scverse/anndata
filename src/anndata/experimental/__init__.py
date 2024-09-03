@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import anndata
@@ -16,15 +17,33 @@ if TYPE_CHECKING:
     from typing import Any
 
 
-_DEPRECATED = ["CSRDataset", "CSCDataset", "read_elem", "write_elem", "sparse_dataset"]
+# Map old name in `anndata.experimental` to new name in `anndata`
+_DEPRECATED = MappingProxyType(
+    dict(
+        (kv if isinstance(kv, tuple) else (kv, kv))
+        for kv in (
+            "CSRDataset",
+            "CSCDataset",
+            "sparse_dataset",
+            "read_elem",
+            "write_elem",
+            ("RWAble", "AxisStorable"),
+            ("InMemoryElem", "RWAble"),
+        )
+    )
+)
 
 
-def __getattr__(key: str) -> Any:
-    if key in _DEPRECATED:
-        msg = f"Importing {key} from `anndata.experimental` is deprecated. Import from `anndata` directly."
+def __getattr__(attr_name: str) -> Any:
+    if new_name := _DEPRECATED.get(attr_name):
+        rename = f"using its new name {new_name} " if new_name != attr_name else ""
+        msg = (
+            f"Importing {attr_name} from `anndata.experimental` is deprecated. "
+            f"Import {rename}from `anndata` directly."
+        )
         warnings.warn(msg, FutureWarning)
-        return getattr(anndata, key)
-    msg = f"module {__name__!r} has no attribute {key!r}"
+        return getattr(anndata, new_name)
+    msg = f"module {__name__!r} has no attribute {attr_name!r}"
     raise AttributeError(msg)
 
 
