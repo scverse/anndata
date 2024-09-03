@@ -4,7 +4,8 @@ import numpy as np
 import zarr
 from scipy import sparse
 
-from anndata import AnnData, sparse_dataset
+from anndata import AnnData
+from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs import write_elem
 
 
