@@ -27,15 +27,18 @@ class _AbstractCSDataset(ABC):
     backend: Literal["zarr", "hdf5"]
     """Which file type is used on-disk."""
 
-    # TODO: __getitem__ and maybe __setitem__?
+    # TODO: index type
+    @abstractmethod
+    def __getitem__(self, index) -> float | csr_matrix | csc_matrix | SpArray:
+        """Load a slice or an element from the sparse dataset into memory."""
 
     @abstractmethod
     def to_memory(self) -> csr_matrix | csc_matrix | SpArray:
-        """Returns an in-memory representation of the sparse matrix.
+        """Load the sparse dataset into memory.
 
         Returns
         -------
-        The in-memory representation of the sparse matrix.
+        The in-memory representation of the sparse dataset.
         """
 
 

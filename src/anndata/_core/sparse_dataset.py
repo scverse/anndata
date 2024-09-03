@@ -409,7 +409,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
     def __getitem__(
         self, index: Index | tuple[()]
-    ) -> float | ss.csr_matrix | ss.csc_matrix:
+    ) -> float | ss.csr_matrix | ss.csc_matrix | SpArray:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
