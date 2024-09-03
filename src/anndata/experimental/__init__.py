@@ -35,7 +35,6 @@ _DEPRECATED = MappingProxyType(
 
 
 def __getattr__(attr_name: str) -> Any:
-    print(_DEPRECATED.get(attr_name))
     if new_name := _DEPRECATED.get(attr_name):
         new_sub_name = new_name.split(".")[-1]
         rename = (
