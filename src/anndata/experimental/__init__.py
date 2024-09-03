@@ -22,27 +22,31 @@ _DEPRECATED = MappingProxyType(
     dict(
         (kv if isinstance(kv, tuple) else (kv, kv))
         for kv in (
-            "CSRDataset",
-            "CSCDataset",
+            ("CSRDataset", "abc.CSRDataset"),
+            ("CSCDataset", "abc.CSCDataset"),
             "sparse_dataset",
             "read_elem",
             "write_elem",
-            ("RWAble", "AxisStorable"),
-            ("InMemoryElem", "RWAble"),
+            ("RWAble", "typing.AxisStorable"),
+            ("InMemoryElem", "typing.RWAble"),
         )
     )
 )
 
 
 def __getattr__(attr_name: str) -> Any:
-    if new_name := _DEPRECATED.get(attr_name):
-        rename = f"using its new name {new_name} " if new_name != attr_name else ""
+    if new_path := _DEPRECATED.get(attr_name):
         msg = (
             f"Importing {attr_name} from `anndata.experimental` is deprecated. "
-            f"Import {rename}from `anndata` directly."
+            f"Import anndata.{new_path} instead."
         )
         warnings.warn(msg, FutureWarning)
-        return getattr(anndata, new_name)
+        # hacky import_object_by_name, but we test all these
+        mod = anndata
+        while "." in new_path:
+            mod_name, new_path = new_path.split(".", 1)
+            mod = getattr(mod, mod_name)
+        return getattr(mod, new_path)
     msg = f"module {__name__!r} has no attribute {attr_name!r}"
     raise AttributeError(msg)
 
