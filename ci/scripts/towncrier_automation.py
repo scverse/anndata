@@ -75,16 +75,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     subprocess.run(["git", "commit", "-m", pr_title], check=True)
 
     # push
-    subprocess.run(
-        [
-            "git",
-            "push",
-            "--set-upstream",
-            "origin",
-            branch_name,
-        ],
-        check=True,
-    )
+    if not args.dry_run:
+        subprocess.run(
+            [
+                "git",
+                "push",
+                "--set-upstream",
+                "origin",
+                branch_name,
+            ],
+            check=True,
+        )
+    else:
+        print("Dry run, not pushing")
 
     # Create a PR
     subprocess.run(
@@ -100,7 +103,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             pr_description,
             "--label",
             "skip-gpu-ci",
-            *(["no milestone"] if branch_name == "main" else []),
+            *(["--label", "no milestone"] if branch_name == "main" else []),
             *(["--dry-run"] if args.dry_run else []),
         ],
         check=True,
