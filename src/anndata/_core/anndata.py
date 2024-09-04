@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
-    from .._types import ArrayDataStructureType
+    from ..typing import ArrayDataStructureType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index, Index1D
 

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
-    from ..._core.sparse_dataset import CSCDataset, CSRDataset
+    from ..._core.sparse_dataset import _CSCDataset, _CSRDataset
     from ..._types import ArrayStorageType, StorageType
     from ...compat import DaskArray
     from .registry import DaskReader
@@ -66,7 +66,7 @@ def make_dask_chunk(
     block_info: BlockInfo | None = None,
     *,
     wrap: Callable[[ArrayStorageType], ArrayStorageType]
-    | Callable[[H5Group | ZarrGroup], CSRDataset | CSCDataset] = lambda g: g,
+    | Callable[[H5Group | ZarrGroup], _CSRDataset | _CSCDataset] = lambda g: g,
 ):
     if block_info is None:
         msg = "Block info is required"

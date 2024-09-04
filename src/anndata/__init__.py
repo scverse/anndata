@@ -24,7 +24,7 @@ if sys.version_info < (3, 11):
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
+from ._core.sparse_dataset import sparse_dataset
 from ._io import (
     read_csv,
     read_excel,
@@ -38,8 +38,6 @@ from ._io import (
 )
 from ._io.specs import read_elem, write_elem
 from ._settings import settings
-from ._types import AxisStorable as _AxisStorable
-from ._types import RWAble as _RWAble
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
@@ -47,16 +45,8 @@ from ._warnings import (
     WriteWarning,
 )
 
-# Sphinx can’t find data docstrings when objects are re-exported
-AxisStorable = _AxisStorable
-"""A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
-
-RWAble = _RWAble
-"""A superset of :type:`anndata.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.read_elem` and :func:`anndata.write_elem`."""
-
-
-# Experimental needs to be imported last
-from . import experimental  # noqa: E402 isort: skip
+# Submodules need to be imported last
+from . import abc, experimental, typing  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
 from . import _io, logging  # noqa: F401, E402 isort: skip
@@ -74,10 +64,19 @@ def read(*args, **kwargs):
 
 
 __all__ = [
+    # Attributes
     "__version__",
+    "settings",
+    # Submodules
+    "abc",
+    "experimental",
+    "typing",
+    # Classes
     "AnnData",
-    "concat",
     "Raw",
+    # Functions
+    "concat",
+    "sparse_dataset",
     "read_h5ad",
     "read_loom",
     "read_hdf",
@@ -89,15 +88,9 @@ __all__ = [
     "read_zarr",
     "read_elem",
     "write_elem",
-    "RWAble",
-    "AxisStorable",
-    "CSRDataset",
-    "CSCDataset",
-    "sparse_dataset",
+    # Warnings
     "OldFormatWarning",
     "WriteWarning",
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
-    "experimental",
-    "settings",
 ]

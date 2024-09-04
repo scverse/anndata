@@ -13,7 +13,8 @@ if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE / "extensions")]
+_extension_dir = HERE / "extensions"
+sys.path[:0] = [str(_extension_dir)]
 
 
 # -- General configuration ------------------------------------------------
@@ -63,9 +64,11 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "patch_sphinx_toolbox_autoprotocol",  # internal extension
     "sphinx_toolbox.more_autodoc.autoprotocol",
-    # other internal extensions
-    "patch_myst_cite",
-    "release_notes",
+    *(  # other internal extensions
+        p.stem
+        for p in _extension_dir.glob("*.py")
+        if p.stem != "patch_sphinx_toolbox_autoprotocol"
+    ),
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
@@ -142,12 +145,14 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
-    "anndata._types.AxisStorable": "anndata.AxisStorable",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
-    AxisStorable=":data:`~anndata.AxisStorable`",
-    **{f"{v}variantRWAble": ":data:`~anndata.RWAble`" for v in ["In", "Co", "Contra"]},
+    AxisStorable=":data:`~anndata.typing.AxisStorable`",
+    **{
+        f"{v}variantRWAble": ":data:`~anndata.typing.RWAble`"
+        for v in ["In", "Co", "Contra"]
+    },
 )
 
 # -- Social cards ---------------------------------------------------------

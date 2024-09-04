@@ -6,26 +6,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, TypeVar, Union
 
-import numpy as np
-import pandas as pd
-
-from anndata._core.anndata import AnnData
-
-from ._core.storage import ArrayDataStructureType
 from .compat import (
     H5Array,
     H5Group,
     ZarrArray,
     ZarrGroup,
 )
+from .typing import RWAble
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from anndata._io.specs.registry import DaskReader
-
-    from ._io.specs.registry import IOSpec, Reader, Writer
+    from ._io.specs.registry import DaskReader, IOSpec, Reader, Writer
     from .compat import DaskArray
 
 __all__ = [
@@ -34,27 +27,14 @@ __all__ = [
     "StorageType",
 ]
 
-InMemoryArrayOrScalarType: TypeAlias = Union[
-    pd.DataFrame, np.number, str, ArrayDataStructureType
-]
-AxisStorable: TypeAlias = Union[
-    InMemoryArrayOrScalarType, dict[str, "AxisStorable"], list["AxisStorable"]
-]  # noqa: TCH010
-RWAble: TypeAlias = Union[
-    AxisStorable,
-    AnnData,
-    pd.Categorical,
-    pd.api.extensions.ExtensionArray,
-]
-
 ArrayStorageType: TypeAlias = Union[ZarrArray, H5Array]
 GroupStorageType: TypeAlias = Union[ZarrGroup, H5Group]
 StorageType: TypeAlias = Union[ArrayStorageType, GroupStorageType]
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
-ContravariantRWAble = TypeVar("ContravariantRWAble", bound="RWAble", contravariant=True)
-CovariantRWAble = TypeVar("CovariantRWAble", bound="RWAble", covariant=True)
-InvariantRWAble = TypeVar("InvariantRWAble", bound="RWAble")
+ContravariantRWAble = TypeVar("ContravariantRWAble", bound=RWAble, contravariant=True)
+CovariantRWAble = TypeVar("CovariantRWAble", bound=RWAble, covariant=True)
+InvariantRWAble = TypeVar("InvariantRWAble", bound=RWAble)
 
 SCo = TypeVar("SCo", covariant=True, bound=StorageType)
 SCon = TypeVar("SCon", contravariant=True, bound=StorageType)

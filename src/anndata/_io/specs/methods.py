@@ -19,7 +19,7 @@ from anndata import AnnData, Raw
 from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
-from anndata._core.sparse_dataset import CSCDataset, CSRDataset, sparse_dataset
+from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
 from anndata._io.utils import H5PY_V3, check_key
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
@@ -50,13 +50,9 @@ if TYPE_CHECKING:
     from numpy import typing as npt
     from numpy.typing import NDArray
 
-    from anndata._types import (
-        ArrayStorageType,
-        AxisStorable,
-        GroupStorageType,
-        InMemoryArrayOrScalarType,
-    )
+    from anndata._types import ArrayStorageType, GroupStorageType
     from anndata.compat import SpArray
+    from anndata.typing import AxisStorable, InMemoryArrayOrScalarType
 
     from .registry import Reader, Writer
 
@@ -645,14 +641,14 @@ for store_type, (cls, spec, func) in product(
     _REGISTRY.register_write(store_type, cls, spec)(func)
 
 
-@_REGISTRY.register_write(H5Group, CSRDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(H5Group, CSCDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, CSRDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, CSCDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, _CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, _CSCDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, _CSRDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, _CSCDataset, IOSpec("", "0.1.0"))
 def write_sparse_dataset(
     f: GroupStorageType,
     k: str,
-    elem: CSCDataset | CSRDataset,
+    elem: _CSCDataset | _CSRDataset,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),

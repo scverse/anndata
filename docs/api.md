@@ -183,8 +183,8 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   CSRDataset
-   CSCDataset
-   AxisStorable
-   RWAble
+   abc.CSRDataset
+   abc.CSCDataset
+   typing.AxisStorable
+   typing.RWAble
 ```

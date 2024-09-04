@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     from anndata._types import (
         GroupStorageType,
         ReadCallback,
-        RWAble,
         StorageType,
         Write,
         WriteCallback,
         _WriteInternal,
     )
+    from anndata.typing import RWAble
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
