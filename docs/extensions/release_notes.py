@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
 
-FULL_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:\.dev.*)?$")
+FULL_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:(\.dev.*)|(rc.*))?$")
 
 
 class ReleaseNotes(SphinxDirective):
