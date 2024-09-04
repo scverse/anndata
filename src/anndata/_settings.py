@@ -435,7 +435,7 @@ def validate_sparse_settings(val: Any) -> None:
     if not CAN_USE_SPARSE_ARRAY and cast(bool, val):
         msg = (
             "scipy.sparse.cs{r,c}array is not available in current scipy version. "
-            "Falling back to scipy.sparse.spmatrix for reading."
+            "Falling back to scipy.sparse.cs{r,c}_matrix for reading."
         )
         raise ValueError(msg)
 
@@ -443,7 +443,7 @@ def validate_sparse_settings(val: Any) -> None:
 settings.register(
     "shall_use_sparse_array_on_read",
     default_value=False,
-    description="Whether or not to use `sparse_array` as the default class when reading in data",
+    description="Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data",
     validate=validate_sparse_settings,
     get_from_env=check_and_get_bool,
 )
