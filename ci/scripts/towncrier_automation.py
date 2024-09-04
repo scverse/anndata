@@ -92,8 +92,6 @@ def main(argv: Sequence[str] | None = None) -> None:
             "create",
             "--base",
             f"origin/{base_branch}",
-            "--head",
-            f"origin/{branch_name}",
             "--title",
             pr_title,
             "--body",
