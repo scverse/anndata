@@ -72,6 +72,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     pr_title = f"(chore): generate {args.version} release notes"
     subprocess.run(["git", "commit", "-m", pr_title], check=True)
 
+    # push
+    subprocess.run(
+        [
+            "git",
+            "push",
+            "--set-upstream",
+            "origin",
+            branch_name,
+        ],
+        check=True,
+    )
+
     # Create a PR
     subprocess.run(
         [
