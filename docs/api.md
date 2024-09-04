@@ -15,7 +15,8 @@ The central class:
 
 ## Combining
 
-Combining AnnData objects. See also the section on concatenation.
+Combining {class}`AnnData` objects.
+See also the section on concatenation.
 
 ```{eval-rst}
 .. autosummary::
@@ -26,16 +27,31 @@ Combining AnnData objects. See also the section on concatenation.
 
 ## Reading
 
-Reading anndata’s native file format `.h5ad`.
+Reading anndata’s native formats `.h5ad` and `zarr`.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
    read_h5ad
+   read_zarr
 ```
 
-Reading other file formats.
+Reading individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   read_elem
+   sparse_dataset
+```
+
+Reading file formats that cannot represent all aspects of {class}`AnnData` objects.
+
+```{tip}
+You might have more success by assembling the {class}`AnnData` object yourself from the individual parts.
+```
 
 ```{eval-rst}
 .. autosummary::
@@ -48,32 +64,30 @@ Reading other file formats.
    read_mtx
    read_text
    read_umi_tools
-   read_zarr
-
-```
-
-Reading individual portions (`obs`, `varm` etc.) of the `AnnData` object.
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated/
-
-   read_elem
-   sparse_dataset
 ```
 
 ## Writing
 
-Writing to anndata’s native file format `.h5ad`.
+Writing a complete {class}`AnnData` object to disk in anndata’s native formats `.h5ad` and `zarr`.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
    AnnData.write
+   AnnData.write_zarr
 ```
 
-Writing to other formats.
+Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   write_elem
+```
+
+Writing formats that cannot represent all aspects of {class}`AnnData` objects.
 
 ```{eval-rst}
 .. autosummary::
@@ -81,17 +95,6 @@ Writing to other formats.
 
    AnnData.write_csvs
    AnnData.write_loom
-   AnnData.write_zarr
-```
-
-Writing individual portions (`obs`, `varm` etc.) of the `AnnData` object.
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated/
-
-   write_elem
-
 ```
 
 (experimental-api)=
@@ -99,10 +102,10 @@ Writing individual portions (`obs`, `varm` etc.) of the `AnnData` object.
 ## Experimental API
 
 ```{warning}
-API's in the experimental module are currently in development and subject to change at any time.
+APIs in the experimental module are currently in development and subject to change at any time.
 ```
 
-Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files.
+Two classes for working with batched access to collections of many {class}`AnnData` objects or `.h5ad` files.
 In particular, for pytorch-based models.
 
 ```{eval-rst}
@@ -122,7 +125,7 @@ Out of core concatenation
    experimental.concat_on_disk
 ```
 
-Low level methods for reading and writing elements of an `AnnData` object to a store:
+Low level methods for reading and writing elements of an {class}`AnnData` object to a store:
 
 ```{eval-rst}
 .. autosummary::
