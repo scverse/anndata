@@ -12,7 +12,7 @@ from anndata._types import Read, ReadDask, _ReadDaskInternal, _ReadInternal
 from anndata.compat import DaskArray, _read_attr
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable
+    from collections.abc import Callable, Generator, Iterable, Iterator
     from typing import Any
 
     from anndata._types import (
@@ -289,6 +289,7 @@ class DaskReader(Reader):
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
+        reopen: None | Callable[[], Iterator[StorageType]] = None,
     ) -> DaskArray:
         """Read a dask element from a store. See exported function for more details."""
 
@@ -299,7 +300,7 @@ class DaskReader(Reader):
         if self.callback is not None:
             msg = "Dask reading does not use a callback. Ignoring callback."
             warnings.warn(msg, stacklevel=2)
-        return read_func(elem, chunks=chunks)
+        return read_func(elem, chunks=chunks, reopen=reopen)
 
 
 class Writer:
@@ -379,7 +380,9 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_as_dask(
-    elem: StorageType, chunks: tuple[int, ...] | None = None
+    elem: StorageType,
+    chunks: tuple[int, ...] | None = None,
+    reopen: None | Callable[[], Iterator[StorageType]] = None,
 ) -> DaskArray:
     """
     Read an element from a store lazily.
@@ -395,12 +398,13 @@ def read_elem_as_dask(
     chunks, optional
        length `n`, the same `n` as the size of the underlying array.
        Note that the minor axis dimension must match the shape for sparse.
-
+    reopen, optional
+        A custom function for re-opening your store in the dask reader.
     Returns
     -------
         DaskArray
     """
-    return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
+    return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, reopen=reopen)
 
 
 def write_elem(
