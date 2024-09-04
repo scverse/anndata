@@ -131,8 +131,6 @@ Low level methods for reading and writing elements of an {class}`AnnData` object
 .. autosummary::
    :toctree: generated/
 
-   experimental.read_elem
-   experimental.write_elem
    experimental.read_elem_lazy
    experimental.read_backed
 ```
