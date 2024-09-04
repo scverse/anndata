@@ -105,9 +105,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     # Enable auto-merge
     if not args.dry_run:
-        subprocess.run(
-            ["gh", "pr", "merge", branch_name, "--auto", "--squash"], check=True
-        )
+        subprocess.run(["gh", "pr", "merge", branch_name, "--squash"], check=True)
     else:
         print("Dry run, not merging")
 
