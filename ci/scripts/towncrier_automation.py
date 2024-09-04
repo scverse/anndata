@@ -96,6 +96,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             pr_title,
             "--body",
             pr_description,
+            "--label",
+            "skip-gpu-ci",
             *(["--dry-run"] if args.dry_run else []),
         ],
         check=True,
