@@ -26,25 +26,20 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-from anndata._core.index import _fix_slice_bounds
-
-from .._settings import settings
-from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
-
 try:
     # Not really important, just for IDEs to be more helpful
     from scipy.sparse._compressed import _cs_matrix
 except ImportError:
     from scipy.sparse import spmatrix as _cs_matrix
 
-
-from .index import _subset, unpack_index
+from .. import abc
+from .._settings import settings
+from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
+from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal
-
-    from scipy.sparse import spmatrix
 
     from .._types import GroupStorageType
     from .index import Index
@@ -356,17 +351,12 @@ def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
     )
 
 
-class BaseCompressedSparseDataset(ABC):
-    format: Literal["csr", "csc"]
-    """The format of the sparse matrix."""
+class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     _group: GroupStorageType
 
     def __init__(self, group: GroupStorageType):
         type(self)._check_group_format(group)
         self._group = group
-
-    shape: tuple[int, int]
-    """Shape of the matrix."""
 
     @property
     def group(self) -> GroupStorageType:
@@ -414,11 +404,12 @@ class BaseCompressedSparseDataset(ABC):
         return tuple(map(int, shape))
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
+        name = type(self).__name__.removeprefix("_")
+        return f"{name}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
     def __getitem__(
         self, index: Index | tuple[()]
-    ) -> float | ss.csr_matrix | ss.csc_matrix:
+    ) -> float | ss.csr_matrix | ss.csc_matrix | SpArray:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
@@ -445,10 +436,15 @@ class BaseCompressedSparseDataset(ABC):
 
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
-        if isinstance(sub, BackedSparseMatrix):
-            return get_memory_class(
-                self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
-            )(sub)
+        # Also need to check if memory format is not matrix
+        mtx_fmt = get_memory_class(
+            self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+        )
+        must_convert_to_array = issubclass(mtx_fmt, SpArray) and not isinstance(
+            sub, SpArray
+        )
+        if isinstance(sub, BackedSparseMatrix) or must_convert_to_array:
+            return mtx_fmt(sub)
         else:
             return sub
 
@@ -472,7 +468,7 @@ class BaseCompressedSparseDataset(ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: spmatrix | SpArray) -> None:
+    def append(self, sparse_matrix: ss.csr_matrix | ss.csc_matrix | SpArray) -> None:
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters
@@ -579,13 +575,7 @@ class BaseCompressedSparseDataset(ABC):
         mtx.indptr = self._indptr
         return mtx
 
-    def to_memory(self) -> spmatrix | SpArray:
-        """Returns an in-memory representation of the sparse matrix.
-
-        Returns
-        -------
-        The in-memory representation of the sparse matrix.
-        """
+    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix | SpArray:
         format_class = get_memory_class(
             self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
         )
@@ -596,29 +586,15 @@ class BaseCompressedSparseDataset(ABC):
         return mtx
 
 
-_sparse_dataset_doc = """\
-    On disk {format} sparse matrix.
-
-    Analogous to :class:`h5py.Dataset` or :class:`zarr.core.Array`, but for sparse matrices.
-
-    Parameters
-    ----------
-    group
-        The backing group store.
-"""
+class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):
+    """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
-class CSRDataset(BaseCompressedSparseDataset):
-    __doc__ = _sparse_dataset_doc.format(format="CSR")
-    format = "csr"
+class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
+    """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
-class CSCDataset(BaseCompressedSparseDataset):
-    __doc__ = _sparse_dataset_doc.format(format="CSC")
-    format = "csc"
-
-
-def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
+def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
@@ -637,7 +613,7 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
 
     >>> import scanpy as sc
     >>> import h5py
-    >>> from anndata.experimental import sparse_dataset
+    >>> from anndata import sparse_dataset
     >>> from anndata import read_elem
     >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
@@ -671,9 +647,10 @@ def sparse_dataset(group: GroupStorageType) -> CSRDataset | CSCDataset:
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
-        return CSRDataset(group)
+        return _CSRDataset(group)
     elif encoding_type == "csc":
-        return CSCDataset(group)
+        return _CSCDataset(group)
+    raise ValueError(f"Unknown encoding type {encoding_type}")
 
 
 @_subset.register(BaseCompressedSparseDataset)

@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
-        InMemoryElem,
         ReadCallback,
         StorageType,
         Write,
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     )
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.experimental.backed._xarray import Dataset2D
+    from anndata.typing import RWAble
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
@@ -274,7 +274,7 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-    ) -> InMemoryElem:
+    ) -> RWAble:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
@@ -329,7 +329,7 @@ class Writer:
         self,
         store: GroupStorageType,
         k: str,
-        elem: InMemoryElem,
+        elem: RWAble,
         *,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
         modifiers: frozenset[str] = frozenset(),
@@ -369,7 +369,7 @@ class Writer:
         )
 
 
-def read_elem(elem: StorageType) -> InMemoryElem:
+def read_elem(elem: StorageType) -> RWAble:
     """
     Read an element from a store.
 
@@ -412,7 +412,7 @@ def read_elem_lazy(
 def write_elem(
     store: GroupStorageType,
     k: str,
-    elem: InMemoryElem,
+    elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:

@@ -6,26 +6,25 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, TypeVar, Union
 
-import numpy as np
-import pandas as pd
-
-from anndata._core.anndata import AnnData
-
-from ._core.storage import ArrayDataStructureType
 from .compat import (
     H5Array,
     H5Group,
     ZarrArray,
     ZarrGroup,
 )
+from .typing import RWAble
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from anndata._io.specs.registry import LazyDataStructures, LazyReader
-
-    from ._io.specs.registry import IOSpec, Reader, Writer
+    from ._io.specs.registry import (
+        IOSpec,
+        LazyDataStructures,
+        LazyReader,
+        Reader,
+        Writer,
+    )
 
 __all__ = [
     "ArrayStorageType",
@@ -33,38 +32,21 @@ __all__ = [
     "StorageType",
 ]
 
-InMemoryArrayOrScalarType: TypeAlias = Union[
-    pd.DataFrame, np.number, str, ArrayDataStructureType
-]
-RWAble: TypeAlias = Union[
-    InMemoryArrayOrScalarType, dict[str, "RWAble"], list["RWAble"]
-]  # noqa: TCH010
-InMemoryElem: TypeAlias = Union[
-    RWAble,
-    AnnData,
-    pd.Categorical,
-    pd.api.extensions.ExtensionArray,
-]
-
 ArrayStorageType: TypeAlias = Union[ZarrArray, H5Array]
 GroupStorageType: TypeAlias = Union[ZarrGroup, H5Group]
 StorageType: TypeAlias = Union[ArrayStorageType, GroupStorageType]
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
-ContravariantInMemoryType = TypeVar(
-    "ContravariantInMemoryType", bound="InMemoryElem", contravariant=True
-)
-CovariantInMemoryType = TypeVar(
-    "CovariantInMemoryType", bound="InMemoryElem", covariant=True
-)
-InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryElem")
+ContravariantRWAble = TypeVar("ContravariantRWAble", bound=RWAble, contravariant=True)
+CovariantRWAble = TypeVar("CovariantRWAble", bound=RWAble, covariant=True)
+InvariantRWAble = TypeVar("InvariantRWAble", bound=RWAble)
 
 SCo = TypeVar("SCo", covariant=True, bound=StorageType)
 SCon = TypeVar("SCon", contravariant=True, bound=StorageType)
 
 
-class _ReadInternal(Protocol[SCon, CovariantInMemoryType]):
-    def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantInMemoryType: ...
+class _ReadInternal(Protocol[SCon, CovariantRWAble]):
+    def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
 
 
 class _ReadLazyInternal(Protocol[SCon]):
@@ -73,8 +55,8 @@ class _ReadLazyInternal(Protocol[SCon]):
     ) -> LazyDataStructures: ...
 
 
-class Read(Protocol[SCon, CovariantInMemoryType]):
-    def __call__(self, elem: SCon) -> CovariantInMemoryType:
+class Read(Protocol[SCon, CovariantRWAble]):
+    def __call__(self, elem: SCon) -> CovariantRWAble:
         """Low-level reading function for an element.
 
         Parameters
@@ -107,24 +89,24 @@ class ReadLazy(Protocol[SCon]):
         ...
 
 
-class _WriteInternal(Protocol[ContravariantInMemoryType]):
+class _WriteInternal(Protocol[ContravariantRWAble]):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: ContravariantInMemoryType,
+        v: ContravariantRWAble,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
     ) -> None: ...
 
 
-class Write(Protocol[ContravariantInMemoryType]):
+class Write(Protocol[ContravariantRWAble]):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: ContravariantInMemoryType,
+        v: ContravariantRWAble,
         *,
         dataset_kwargs: Mapping[str, Any],
     ) -> None:
@@ -144,16 +126,16 @@ class Write(Protocol[ContravariantInMemoryType]):
         ...
 
 
-class ReadCallback(Protocol[SCo, InvariantInMemoryType]):
+class ReadCallback(Protocol[SCo, InvariantRWAble]):
     def __call__(
         self,
         /,
-        read_func: Read[SCo, InvariantInMemoryType],
+        read_func: Read[SCo, InvariantRWAble],
         elem_name: str,
         elem: StorageType,
         *,
         iospec: IOSpec,
-    ) -> InvariantInMemoryType:
+    ) -> InvariantRWAble:
         """
         Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
 
@@ -175,14 +157,14 @@ class ReadCallback(Protocol[SCo, InvariantInMemoryType]):
         ...
 
 
-class WriteCallback(Protocol[InvariantInMemoryType]):
+class WriteCallback(Protocol[InvariantRWAble]):
     def __call__(
         self,
         /,
-        write_func: Write[InvariantInMemoryType],
+        write_func: Write[InvariantRWAble],
         store: StorageType,
         elem_name: str,
-        elem: InvariantInMemoryType,
+        elem: InvariantRWAble,
         *,
         iospec: IOSpec,
         dataset_kwargs: Mapping[str, Any],

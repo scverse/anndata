@@ -1,50 +1,21 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Union, get_args
+from typing import TYPE_CHECKING, get_args
 
 import numpy as np
 import pandas as pd
-from numpy import ma
 from scipy import sparse
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import (
-    AwkArray,
-    CupyArray,
-    CupySparseMatrix,
-    DaskArray,
-    H5Array,
-    SpArray,
-    ZappyArray,
-    ZarrArray,
-)
 from ..utils import (
     ensure_df_homogeneous,
     join_english,
     raise_value_error_if_multiindex_columns,
 )
-from .sparse_dataset import CSCDataset, CSRDataset
 
 if TYPE_CHECKING:
-    from typing import Any, TypeAlias
-
-ArrayDataStructureType: TypeAlias = Union[
-    np.ndarray,
-    ma.MaskedArray,
-    sparse.csr_matrix,
-    sparse.csc_matrix,
-    SpArray,
-    AwkArray,
-    H5Array,
-    ZarrArray,
-    ZappyArray,
-    CSRDataset,
-    CSCDataset,
-    DaskArray,
-    CupyArray,
-    CupySparseMatrix,
-]
+    from typing import Any
 
 
 def coerce_array(
@@ -65,6 +36,8 @@ def coerce_array(
                 return "mock anndata.experimental.backed._xarray."
 
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
+    from ..typing import ArrayDataStructureType
+
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
