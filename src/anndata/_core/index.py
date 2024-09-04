@@ -110,6 +110,8 @@ def _normalize_index(
                 )
             return positions  # np.ndarray[int]
     elif isinstance(indexer, xr.DataArray):
+        if isinstance(indexer.data, DaskArray):
+            return indexer.data.compute()
         return indexer.data
     else:
         raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
