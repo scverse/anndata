@@ -15,6 +15,7 @@ from .compat import (
     CupySparseMatrix,
     DaskArray,
     H5Array,
+    Index,
     SpArray,
     ZappyArray,
     ZarrArray,
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-__all__ = ["RWAble", "AxisStorable"]
+__all__ = ["RWAble", "AxisStorable", "Index"]
 
 
 ArrayDataStructureType: TypeAlias = Union[

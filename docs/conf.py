@@ -115,6 +115,8 @@ nitpick_ignore = [
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
+    # https://github.com/sphinx-doc/sphinx/issues/10974
+    ("py:class", "numpy.int64"),
 ]
 
 
