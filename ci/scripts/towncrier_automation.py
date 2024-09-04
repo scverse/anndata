@@ -63,7 +63,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         text=True,
         check=True,
     ).stdout.strip()
-    pr_description = "" if base_branch == "main" else "on-merge: backport to main"
+    pr_description = (
+        "" if base_branch == "main" else "@meeseeksmachine backport to main"
+    )
     branch_name = f"release_notes_{args.version}"
 
     # Create a new branch + commit
@@ -72,16 +74,32 @@ def main(argv: Sequence[str] | None = None) -> None:
     pr_title = f"(chore): generate {args.version} release notes"
     subprocess.run(["git", "commit", "-m", pr_title], check=True)
 
+    # push
+    subprocess.run(
+        [
+            "git",
+            "push",
+            "--set-upstream",
+            "origin",
+            branch_name,
+        ],
+        check=True,
+    )
+
     # Create a PR
     subprocess.run(
         [
             "gh",
             "pr",
             "create",
-            f"--base={base_branch}",
-            f"--head={branch_name}",
-            f"--title={pr_title}",
-            f"--body={pr_description}",
+            "--base",
+            base_branch,
+            "--title",
+            pr_title,
+            "--body",
+            pr_description,
+            "--label",
+            "skip-gpu-ci",
             *(["--dry-run"] if args.dry_run else []),
         ],
         check=True,
