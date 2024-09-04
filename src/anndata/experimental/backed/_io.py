@@ -35,7 +35,10 @@ def read_backed(
     -------
         A lazily read-in :class:`~anndata.AnnData` object.
     """
-    is_h5 = isinstance(store, (Path, str)) and Path(store).suffix == ".h5ad"
+    is_h5_store = isinstance(store, (h5py.Dataset, h5py.File))
+    is_h5 = (
+        isinstance(store, (Path, str)) and Path(store).suffix == ".h5ad"
+    ) or is_h5_store
 
     has_keys = True  # true if consolidated or h5ad
     if not is_h5:
@@ -49,7 +52,10 @@ def read_backed(
             has_keys = False
             f = zarr.open(store, mode="r")
     else:
-        f = h5py.File(store, mode="r")
+        if is_h5_store:
+            f = store
+        else:
+            f = h5py.File(store, mode="r")
 
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
