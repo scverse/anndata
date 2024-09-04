@@ -100,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             pr_description,
             "--label",
             "skip-gpu-ci",
-            *(["no-milestone"] if branch_name == "main" else []),
+            *(["no milestone"] if branch_name == "main" else []),
             *(["--dry-run"] if args.dry_run else []),
         ],
         check=True,
