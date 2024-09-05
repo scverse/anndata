@@ -20,15 +20,15 @@ authors:
   - name: Philipp Angerer^[Co-creator]
     orcid: 0000-0002-0369-2888
     affiliation: "2"
-  - name: F. Alexander Wolf^[Co-creator; present affiliation at Lamin Labs.]
+  - name: F. Alexander Wolf^[Co-creator; present affiliation at Lamin]
     orcid: 0000-0002-8760-7838
     affiliation: "2"
 affiliations:
- - name: "University of Melbourne."
+ - name: "University of Melbourne, Australia"
    index: 1
- - name: "Helmholtz Munich."
+ - name: "Helmholtz Munich, Germany"
    index: 2
- - name: "TU Munich."
+ - name: "TU Munich, Germany"
    index: 3
 date: December 16, 2021
 bibliography: paper.bib
