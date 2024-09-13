@@ -62,13 +62,8 @@ extensions = [
     "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
-    "patch_sphinx_toolbox_autoprotocol",  # internal extension
     "sphinx_toolbox.more_autodoc.autoprotocol",
-    *(  # other internal extensions
-        p.stem
-        for p in _extension_dir.glob("*.py")
-        if p.stem != "patch_sphinx_toolbox_autoprotocol"
-    ),
+    *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
