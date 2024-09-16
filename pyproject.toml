@@ -70,10 +70,10 @@ doc = [
     "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",
     "sphinx-copybutton",
-    "sphinx-toolbox",
+    "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "nbsphinx",
-    "scanpydoc[theme,typehints] >=0.13.6",
+    "scanpydoc[theme,typehints] >=0.14.1",
     "zarr",
     "awkward>=2.0.7",
     "IPython",                          # For syntax highlighting in notebooks
