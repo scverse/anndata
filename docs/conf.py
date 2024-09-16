@@ -13,7 +13,8 @@ if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE / "extensions")]
+_extension_dir = HERE / "extensions"
+sys.path[:0] = [str(_extension_dir)]
 
 
 # -- General configuration ------------------------------------------------
@@ -62,9 +63,7 @@ extensions = [
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_toolbox.more_autodoc.autoprotocol",
-    # other internal extensions
-    "patch_myst_cite",
-    "release_notes",
+    *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
