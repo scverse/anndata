@@ -128,7 +128,7 @@ intersphinx_mapping = dict(
     scipy=("https://docs.scipy.org/doc/scipy/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
-    xarray=("https://xarray.pydata.org/en/stable/", None),
+    xarray=("https://docs.xarray.dev/en/stable/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
