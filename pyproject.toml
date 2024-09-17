@@ -114,6 +114,7 @@ dask = ["dask[array]>=2022.09.2,<2024.8.0"]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "src/anndata/_version.py"
+raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
 packages = ["src/anndata", "src/testing"]
 
