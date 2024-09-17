@@ -19,12 +19,17 @@ from .compat import (
     ZappyArray,
     ZarrArray,
 )
+from .compat import Index as _Index
 
 if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-__all__ = ["RWAble", "AxisStorable"]
+__all__ = ["Index", "RWAble", "AxisStorable"]
+
+
+Index = _Index
+"""1D or 2D index an :class:`~anndata.AnnData` object can be sliced with."""
 
 
 ArrayDataStructureType: TypeAlias = Union[
