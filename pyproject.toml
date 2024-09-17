@@ -96,16 +96,19 @@ test = [
     "boltons",
     "scanpy",
     "httpx", # For data downloading
-    "dask[array,distributed]>=2022.09.2,<2024.8.0",
+    "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
-    "pytest-mock"
+    "pytest-mock",
+    "anndata[dask]",
 ]
 dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
+# https://github.com/dask/dask/issues/11290
+dask = ["dask[array]>=2022.09.2,<2024.8.0"]
 
 [tool.hatch.version]
 source = "vcs"
