@@ -41,7 +41,7 @@ class _AbstractCSDataset(ABC):
 
         Returns
         -------
-            The desired data read off disk.
+        The desired data read off disk.
         """
 
     @abstractmethod
