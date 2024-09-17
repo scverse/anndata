@@ -96,7 +96,7 @@ test = [
     "boltons",
     "scanpy",
     "httpx", # For data downloading
-    "dask[distributed]>=2022.09.2",
+    "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
