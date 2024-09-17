@@ -101,7 +101,7 @@ test = [
     "pyarrow",
     "pytest_memray",
     "pytest-mock",
-    "anndata[dask]"
+    "anndata[dask]",
 ]
 dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
