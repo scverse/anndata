@@ -107,7 +107,7 @@ dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
-xarray = ["xarray>=2024.06.0"]
+xarray = ["xarray>=2024.06.0", "aiohttp", "requests", "zarr<3.0.0a0"]
 
 [tool.hatch.version]
 source = "vcs"
