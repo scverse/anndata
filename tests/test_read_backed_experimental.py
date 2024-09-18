@@ -91,6 +91,7 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     subset.obs["int64"]
     sub_subset = subset[0:10, :]
     sub_subset.obs["int64"]
+    sub_subset.var["int64"]
     assert store.get_access_count("X") == 0, store.get_subkeys_accessed("X")
     assert store.get_access_count("obs/int64") == 0, store.get_subkeys_accessed(
         "obs/int64"
@@ -106,10 +107,10 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     assert store.get_access_count("obs/int64") == 1, store.get_subkeys_accessed(
         "obs/int64"
     )
-    # one for 0, .zmetadata handles .zarray
+    # .zmetadata handles .zarray so simple access does not cause any read
     assert store.get_access_count("var/int64") == 0, store.get_subkeys_accessed(
         "var/int64"
-    )  # never accessed
+    )
 
 
 def test_access_count_dtype(adata_remote_with_store_tall_skinny):
