@@ -81,51 +81,33 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     remote.obs["int64"]
     remote.obs["int64"]
     remote.obs["cat"]
-    assert store.get_access_count("obs/int64") == 0, store.get_subkeys_accessed(
-        "obs/int64"
-    )
-    assert (
-        store.get_access_count("obs/cat/categories") == 0
-    ), store.get_subkeys_accessed("obs/cat/categories")
+    store.assert_access_count("obs/int64", 0)
+    store.assert_access_count("obs/cat/categories", 0)
     subset = remote[remote.obs["cat"] == "a", :]
     subset.obs["int64"]
     sub_subset = subset[0:10, :]
     sub_subset.obs["int64"]
     sub_subset.var["int64"]
-    assert store.get_access_count("X") == 0, store.get_subkeys_accessed("X")
-    assert store.get_access_count("obs/int64") == 0, store.get_subkeys_accessed(
-        "obs/int64"
-    )
-    assert store.get_access_count("var/int64") == 0, store.get_subkeys_accessed(
-        "var/int64"
-    )
+    store.assert_access_count("X", 0)
+    store.assert_access_count("obs/int64", 0)
+    store.assert_access_count("var/int64", 0)
     # all codes read in for subset (from 4 chunks)
-    assert store.get_access_count("obs/cat/codes") == 4, store.get_subkeys_accessed(
-        "obs/cat/codes"
-    )
+    store.assert_access_count("obs/cat/codes", 4)
     remote[0:10, :].obs["int64"][0:10].compute()
-    assert store.get_access_count("obs/int64") == 1, store.get_subkeys_accessed(
-        "obs/int64"
-    )
+    store.assert_access_count("obs/int64", 1)
     # .zmetadata handles .zarray so simple access does not cause any read
-    assert store.get_access_count("var/int64") == 0, store.get_subkeys_accessed(
-        "var/int64"
-    )
+    store.assert_access_count("var/int64", 0)
 
 
 def test_access_count_dtype(adata_remote_with_store_tall_skinny):
     remote, store = adata_remote_with_store_tall_skinny
     store.initialize_key_trackers(["obs/cat/categories"])
-    assert (
-        store.get_access_count("obs/cat/categories") == 0
-    ), store.get_subkeys_accessed("obs/cat/categories")
+    store.assert_access_count("obs/cat/categories", 0)
     # This should only cause categories to be read in once
     remote.obs["cat"].dtype
     remote.obs["cat"].dtype
     remote.obs["cat"].dtype
-    assert (
-        store.get_access_count("obs/cat/categories") == 1
-    ), store.get_subkeys_accessed("obs/cat/categories")
+    store.assert_access_count("obs/cat/categories", 1)
 
 
 def test_to_memory(adata_remote_orig):
@@ -175,6 +157,4 @@ def test_unconsolidated(tmp_path, mtx_format):
         remote = read_backed(store)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
-    assert store.get_access_count("obs/.zgroup") == 1, store.get_subkeys_accessed(
-        "obs/.zgroup"
-    )
+    store.assert_access_count("obs/.zgroup", 1)

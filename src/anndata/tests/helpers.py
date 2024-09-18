@@ -1048,7 +1048,7 @@ try:
             self._accessed = defaultdict(set)
             self._accessed_keys = defaultdict(list)
 
-        def __getitem__(self, key):
+        def __getitem__(self, key: str):
             for tracked in self._access_count:
                 if tracked in key:
                     self._access_count[tracked] += 1
@@ -1056,24 +1056,24 @@ try:
                     self._accessed_keys[tracked] += [key]
             return super().__getitem__(key)
 
-        def get_access_count(self, key):
+        def get_access_count(self, key: str) -> int:
             # access defaultdict when value is not there causes key to be there,
             # which causes it to be tracked
             if key not in self._access_count:
                 raise ValueError(f"{key} not found among access count")
             return self._access_count[key]
 
-        def get_subkeys_accessed(self, key):
+        def get_subkeys_accessed(self, key: str) -> set[str]:
             if key not in self._accessed:
                 raise ValueError(f"{key} not found among accessed")
             return self._accessed[key]
 
-        def get_accessed_keys(self, key):
+        def get_accessed_keys(self, key: str) -> list[str]:
             if key not in self._accessed_keys:
                 raise ValueError(f"{key} not found among accessed keys")
             return self._accessed_keys[key]
 
-        def initialize_key_trackers(self, keys_to_track):
+        def initialize_key_trackers(self, keys_to_track: Collection[str]):
             for k in keys_to_track:
                 self._access_count[k] = 0
                 self._accessed_keys[k] = []
@@ -1081,6 +1081,9 @@ try:
 
         def reset_key_trackers(self):
             self.initialize_key_trackers(self._access_count.keys())
+
+        def assert_access_count(self, key: str, count: int):
+            assert self.get_access_count(key) == count, self.get_subkeys_accessed(key)
 
 except ImportError:
 
