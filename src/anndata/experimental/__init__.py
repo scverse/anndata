@@ -9,7 +9,7 @@ import anndata
 from .._io.specs import IOSpec, read_elem_lazy
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from ._dispatch_io import read_dispatched, write_dispatched
-from .backed import read_backed
+from .backed import read_lazy
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
@@ -61,7 +61,7 @@ __all__ = [
     "IOSpec",
     "concat_on_disk",
     "Read",
-    "read_backed",
+    "read_lazy",
     "Write",
     "ReadCallback",
     "WriteCallback",
