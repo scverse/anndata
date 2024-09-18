@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     import numpy as np
     from scipy.sparse import csc_matrix, csr_matrix
 
-    from .compat import SpArray
+    from .compat import Index, SpArray
 
 
 __all__ = ["CSRDataset", "CSCDataset"]
@@ -30,10 +30,19 @@ class _AbstractCSDataset(ABC):
     backend: Literal["zarr", "hdf5"]
     """Which file type is used on-disk."""
 
-    # TODO: index type
     @abstractmethod
-    def __getitem__(self, index) -> float | csr_matrix | csc_matrix | SpArray:
-        """Load a slice or an element from the sparse dataset into memory."""
+    def __getitem__(self, index: Index) -> float | csr_matrix | csc_matrix | SpArray:
+        """Load a slice or an element from the sparse dataset into memory.
+
+        Parameters
+        ----------
+        index
+            Index to load.
+
+        Returns
+        -------
+        The desired data read off disk.
+        """
 
     @abstractmethod
     def to_memory(self) -> csr_matrix | csc_matrix | SpArray:

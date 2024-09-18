@@ -62,13 +62,8 @@ extensions = [
     "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
-    "patch_sphinx_toolbox_autoprotocol",  # internal extension
     "sphinx_toolbox.more_autodoc.autoprotocol",
-    *(  # other internal extensions
-        p.stem
-        for p in _extension_dir.glob("*.py")
-        if p.stem != "patch_sphinx_toolbox_autoprotocol"
-    ),
+    *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
@@ -116,6 +111,8 @@ nitpick_ignore = [
     ("py:class", "awkward.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
+    # https://github.com/sphinx-doc/sphinx/issues/10974
+    ("py:class", "numpy.int64"),
 ]
 
 
@@ -134,7 +131,7 @@ intersphinx_mapping = dict(
     scipy=("https://docs.scipy.org/doc/scipy/", None),
     sklearn=("https://scikit-learn.org/stable/", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
-    xarray=("https://xarray.pydata.org/en/stable/", None),
+    xarray=("https://docs.xarray.dev/en/stable/", None),
     dask=("https://docs.dask.org/en/stable/", None),
 )
 qualname_overrides = {

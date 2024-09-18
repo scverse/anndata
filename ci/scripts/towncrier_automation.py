@@ -1,11 +1,11 @@
-#!python3
+#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
 import subprocess
 from typing import TYPE_CHECKING
 
-from packaging import version
+from packaging.version import Version
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -40,11 +40,10 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
         action="store_true",
     )
     args = parser.parse_args(argv, Args())
-    if len(version.Version(args.version).release) != 3:
-        raise ValueError(
-            f"Version argument {args.version} must contain major, minor, and patch version."
-        )
-    version.parse(args.version)  # validate
+    # validate the version
+    if len(Version(args.version).release) != 3:
+        msg = f"Version argument {args.version} must contain major, minor, and patch version."
+        raise ValueError(msg)
     return args
 
 
@@ -77,14 +76,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     # push
     if not args.dry_run:
         subprocess.run(
-            [
-                "git",
-                "push",
-                "--set-upstream",
-                "origin",
-                branch_name,
-            ],
-            check=True,
+            ["git", "push", "--set-upstream", "origin", branch_name], check=True
         )
     else:
         print("Dry run, not pushing")
@@ -95,15 +87,11 @@ def main(argv: Sequence[str] | None = None) -> None:
             "gh",
             "pr",
             "create",
-            "--base",
-            base_branch,
-            "--title",
-            pr_title,
-            "--body",
-            pr_description,
-            "--label",
-            "skip-gpu-ci",
-            *(["--label", "no milestone"] if base_branch == "main" else []),
+            f"--base={base_branch}",
+            f"--title={pr_title}",
+            f"--body={pr_description}",
+            "--label=skip-gpu-ci",
+            *(["--label=no milestone"] if base_branch == "main" else []),
             *(["--dry-run"] if args.dry_run else []),
         ],
         check=True,
