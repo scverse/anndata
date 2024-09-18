@@ -63,12 +63,11 @@ def adata_remote_with_store_tall_skinny(tmp_path_factory, mtx_format):
     return remote, store
 
 
-needs_xarray = pytest.mark.skipif(
+pytestmark = pytest.mark.skipif(
     not find_spec("xarray"), reason="Xarray is not installed"
 )
 
 
-@needs_xarray
 def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     remote, store = adata_remote_with_store_tall_skinny
     store.initialize_key_trackers(
@@ -113,7 +112,6 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     )  # never accessed
 
 
-@needs_xarray
 def test_access_count_dtype(adata_remote_with_store_tall_skinny):
     remote, store = adata_remote_with_store_tall_skinny
     store.initialize_key_trackers(["obs/cat/categories"])
@@ -129,14 +127,12 @@ def test_access_count_dtype(adata_remote_with_store_tall_skinny):
     ), store.get_subkeys_accessed("obs/cat/categories")
 
 
-@needs_xarray
 def test_to_memory(adata_remote_orig):
     remote, orig = adata_remote_orig
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, orig)
 
 
-@needs_xarray
 def test_view_to_memory(adata_remote_orig):
     remote, orig = adata_remote_orig
     subset_obs = orig.obs["obs_cat"] == "a"
@@ -146,7 +142,6 @@ def test_view_to_memory(adata_remote_orig):
     assert_equal(orig[:, subset_var], remote[:, subset_var].to_memory())
 
 
-@needs_xarray
 def test_view_of_view_to_memory(adata_remote_orig):
     remote, orig = adata_remote_orig
     subset_obs = (orig.obs["obs_cat"] == "a") | (orig.obs["obs_cat"] == "b")
@@ -168,7 +163,6 @@ def test_view_of_view_to_memory(adata_remote_orig):
     )
 
 
-@needs_xarray
 def test_unconsolidated(tmp_path, mtx_format):
     adata = gen_adata((1000, 1000), mtx_format)
     orig_pth = tmp_path / "orig.zarr"
