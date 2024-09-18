@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from ...compat import ZarrGroup
 
 
-def read_backed(
+def read_lazy(
     store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
 ) -> AnnData:
     """

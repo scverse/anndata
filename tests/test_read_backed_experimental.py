@@ -8,7 +8,7 @@ import pytest
 from scipy import sparse
 
 from anndata._core.anndata import AnnData
-from anndata.experimental import read_backed
+from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     AccessTrackingStore,
     as_dense_dask_array,
@@ -39,7 +39,7 @@ def adata_remote_orig(
     orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
     orig = gen_adata((1000, 1000), mtx_format)
     orig.write_zarr(orig_path)
-    remote = read_backed(orig_path)
+    remote = read_lazy(orig_path)
     return remote, orig
 
 
@@ -59,7 +59,7 @@ def adata_remote_with_store_tall_skinny(tmp_path_factory, mtx_format):
     )
     orig.write_zarr(orig_path)
     store = AccessTrackingStore(orig_path)
-    remote = read_backed(store)
+    remote = read_lazy(store)
     return remote, store
 
 
@@ -154,7 +154,7 @@ def test_unconsolidated(tmp_path, mtx_format):
     store = AccessTrackingStore(orig_pth)
     store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
-        remote = read_backed(store)
+        remote = read_lazy(store)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
     store.assert_access_count("obs/.zgroup", 1)
