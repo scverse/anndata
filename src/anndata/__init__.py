@@ -21,11 +21,19 @@ if sys.version_info < (3, 11):
     # Backport package for exception groups
     import exceptiongroup  # noqa: F401
 
+from . import io
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
 from ._core.sparse_dataset import sparse_dataset
-from ._io import (
+from ._settings import settings
+from ._warnings import (
+    ExperimentalFeatureWarning,
+    ImplicitModificationWarning,
+    OldFormatWarning,
+    WriteWarning,
+)
+from .io import (
     read_csv,
     read_excel,
     read_h5ad,
@@ -36,20 +44,13 @@ from ._io import (
     read_umi_tools,
     read_zarr,
 )
-from ._io.specs import read_elem, write_elem
-from ._settings import settings
-from ._warnings import (
-    ExperimentalFeatureWarning,
-    ImplicitModificationWarning,
-    OldFormatWarning,
-    WriteWarning,
-)
+from .io.specs import read_elem, write_elem
 
 # Submodules need to be imported last
 from . import abc, experimental, typing  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
-from . import _io, logging  # noqa: F401, E402 isort: skip
+from . import logging  # noqa: F401, E402 isort: skip
 
 
 def read(*args, **kwargs):
@@ -71,6 +72,7 @@ __all__ = [
     "abc",
     "experimental",
     "typing",
+    "io",
     # Classes
     "AnnData",
     "Raw",

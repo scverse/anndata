@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from ._io.specs.registry import DaskReader, IOSpec, Reader, Writer
     from .compat import DaskArray
+    from .io.specs.registry import DaskReader, IOSpec, Reader, Writer
 
 __all__ = [
     "ArrayStorageType",

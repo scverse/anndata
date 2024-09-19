@@ -7,9 +7,9 @@ from functools import partial, singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._types import Read, ReadDask, _ReadDaskInternal, _ReadInternal
 from anndata.compat import DaskArray, _read_attr
+from anndata.io.utils import report_read_key_on_error, report_write_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable

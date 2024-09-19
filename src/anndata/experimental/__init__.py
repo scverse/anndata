@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 import anndata
 
-from .._io.specs import IOSpec, read_elem_as_dask
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
+from ..io.specs import IOSpec, read_elem_as_dask
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
 from .multi_files import AnnCollection

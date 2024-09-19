@@ -9,9 +9,9 @@ import pytest
 import zarr
 
 import anndata as ad
-from anndata._io.specs.registry import IORegistryError
-from anndata._io.utils import report_read_key_on_error
 from anndata.compat import _clean_uns
+from anndata.io.specs.registry import IORegistryError
+from anndata.io.utils import report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable

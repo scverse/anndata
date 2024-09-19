@@ -198,7 +198,7 @@ def report_read_key_on_error(func):
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
-        from anndata._io.specs import Reader
+        from anndata.io.specs import Reader
 
         # Figure out signature (method vs function) by going through args
         for arg in args:
@@ -234,7 +234,7 @@ def report_write_key_on_error(func):
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
-        from anndata._io.specs import Writer
+        from anndata.io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
         for arg, key in pairwise(args):

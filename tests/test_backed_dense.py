@@ -10,7 +10,7 @@ import pytest
 import zarr
 
 from anndata import AnnData
-from anndata._io.specs import write_elem
+from anndata.io.specs import write_elem
 from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:

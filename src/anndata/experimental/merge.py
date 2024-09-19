@@ -25,8 +25,8 @@ from .._core.merge import (
     unify_dtypes,
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
-from .._io.specs import read_elem, write_elem
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _map_cat_to_str
+from ..io.specs import read_elem, write_elem
 from . import read_dispatched
 
 if TYPE_CHECKING:

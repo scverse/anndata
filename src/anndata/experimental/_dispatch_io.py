@@ -35,7 +35,7 @@ def read_dispatched(
     --------
     :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
-    from anndata._io.specs import _REGISTRY, Reader
+    from anndata.io.specs import _REGISTRY, Reader
 
     reader = Reader(_REGISTRY, callback=callback)
 
@@ -70,7 +70,7 @@ def write_dispatched(
     --------
     :doc:`/tutorials/notebooks/{read,write}_dispatched`
     """
-    from anndata._io.specs import _REGISTRY, Writer
+    from anndata.io.specs import _REGISTRY, Writer
 
     writer = Writer(_REGISTRY, callback=callback)
 
