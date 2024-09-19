@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .._core.sparse_dataset import sparse_dataset
 from .h5ad import read_h5ad, write_h5ad
 from .read import (
     read_csv,
@@ -11,6 +12,7 @@ from .read import (
     read_umi_tools,
     read_zarr,
 )
+from .specs import read_elem, write_elem
 from .write import write_csvs, write_loom
 
 
@@ -37,4 +39,7 @@ __all__ = [
     "write_h5ad",
     "write_loom",
     "write_zarr",
+    "write_elem",
+    "read_elem",
+    "sparse_dataset",
 ]

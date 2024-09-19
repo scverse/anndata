@@ -30,7 +30,6 @@ if sys.version_info < (3, 11):
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._core.sparse_dataset import sparse_dataset
 from ._settings import settings
 from ._warnings import (
     ExperimentalFeatureWarning,
@@ -38,18 +37,6 @@ from ._warnings import (
     OldFormatWarning,
     WriteWarning,
 )
-from .io import (
-    read_csv,
-    read_excel,
-    read_h5ad,
-    read_hdf,
-    read_loom,
-    read_mtx,
-    read_text,
-    read_umi_tools,
-    read_zarr,
-)
-from .io.specs import read_elem, write_elem
 from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
@@ -57,17 +44,6 @@ from . import abc, experimental, typing, io  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
 from . import logging  # noqa: F401, E402 isort: skip
-
-
-def read(*args, **kwargs):
-    import warnings
-
-    warnings.warn(
-        "`anndata.read` is deprecated, use `anndata.read_h5ad` instead. "
-        "`ad.read` will be removed in mid 2024.",
-        FutureWarning,
-    )
-    return read_h5ad(*args, **kwargs)
 
 
 _DEPRECATED = MappingProxyType(
@@ -109,18 +85,6 @@ __all__ = [
     "Raw",
     # Functions
     "concat",
-    "sparse_dataset",
-    "read_h5ad",
-    "read_loom",
-    "read_hdf",
-    "read_excel",
-    "read_umi_tools",
-    "read_csv",
-    "read_text",
-    "read_mtx",
-    "read_zarr",
-    "read_elem",
-    "write_elem",
     # Warnings
     "OldFormatWarning",
     "WriteWarning",
