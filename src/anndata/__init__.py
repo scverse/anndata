@@ -21,7 +21,6 @@ if sys.version_info < (3, 11):
     # Backport package for exception groups
     import exceptiongroup  # noqa: F401
 
-from . import io
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
@@ -47,7 +46,7 @@ from .io import (
 from .io.specs import read_elem, write_elem
 
 # Submodules need to be imported last
-from . import abc, experimental, typing  # noqa: E402 isort: skip
+from . import abc, experimental, typing, io  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
 from . import logging  # noqa: F401, E402 isort: skip
