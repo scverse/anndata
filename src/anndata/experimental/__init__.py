@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import warnings
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-import anndata
-
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from ..io.specs import IOSpec, read_elem_as_dask
+from ..utils import module_get_attr_redirect
 from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
@@ -35,20 +33,9 @@ _DEPRECATED = MappingProxyType(
 
 
 def __getattr__(attr_name: str) -> Any:
-    if new_path := _DEPRECATED.get(attr_name):
-        msg = (
-            f"Importing {attr_name} from `anndata.experimental` is deprecated. "
-            f"Import anndata.{new_path} instead."
-        )
-        warnings.warn(msg, FutureWarning)
-        # hacky import_object_by_name, but we test all these
-        mod = anndata
-        while "." in new_path:
-            mod_name, new_path = new_path.split(".", 1)
-            mod = getattr(mod, mod_name)
-        return getattr(mod, new_path)
-    msg = f"module {__name__!r} has no attribute {attr_name!r}"
-    raise AttributeError(msg)
+    return module_get_attr_redirect(
+        attr_name, old_module_path="experimental", deprecated_mapping=_DEPRECATED
+    )
 
 
 __all__ = [

@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+import anndata
+
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import CupyArray, CupySparseMatrix, DaskArray, SpArray
 from .logging import get_logger
@@ -409,3 +411,22 @@ def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):
             f"Please use a single-level index for {attr}."
         )
         raise ValueError(msg)
+
+
+def module_get_attr_redirect(
+    attr_name: str, old_module_path: str, deprecated_mapping: Mapping[str, str]
+) -> Any:
+    if new_path := deprecated_mapping.get(attr_name):
+        msg = (
+            f"Importing {attr_name} from `anndata.{old_module_path}` is deprecated. "
+            f"Import anndata.{new_path} instead."
+        )
+        warnings.warn(msg, FutureWarning)
+        # hacky import_object_by_name, but we test all these
+        mod = anndata
+        while "." in new_path:
+            mod_name, new_path = new_path.split(".", 1)
+            mod = getattr(mod, mod_name)
+        return getattr(mod, new_path)
+    msg = f"module {__name__!r} has no attribute {attr_name!r}"
+    raise AttributeError(msg)
