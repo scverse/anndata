@@ -129,8 +129,13 @@ def test_deprecated_read(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("old_name", "new_name"), anndata.experimental._DEPRECATED.items()
+    ("old_name", "new_name", "module"),
+    (
+        (old_name, new_name, module)
+        for module in [anndata, anndata.experimental]
+        for (old_name, new_name) in module._DEPRECATED.items()
+    ),
 )
-def test_warn_on_import_from_experimental(old_name: str, new_name: str):
+def test_warn_on_import_with_redirect(old_name: str, new_name: str, module):
     with pytest.warns(FutureWarning, match=rf"Importing {old_name}.*is deprecated"):
-        getattr(anndata.experimental, old_name)
+        getattr(module, old_name)

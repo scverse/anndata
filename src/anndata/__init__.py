@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any
+
 try:  # See https://github.com/maresb/hatch-vcs-footgun-example
     from setuptools_scm import get_version
 
@@ -44,6 +50,7 @@ from .io import (
     read_zarr,
 )
 from .io.specs import read_elem, write_elem
+from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
 from . import abc, experimental, typing, io  # noqa: E402 isort: skip
@@ -61,6 +68,31 @@ def read(*args, **kwargs):
         FutureWarning,
     )
     return read_h5ad(*args, **kwargs)
+
+
+_DEPRECATED = MappingProxyType(
+    dict(
+        (method, f"io.{method}")
+        for method in [
+            "sparse_dataset",
+            "read_h5ad",
+            "read_loom",
+            "read_hdf",
+            "read_excel",
+            "read_umi_tools",
+            "read_csv",
+            "read_text",
+            "read_mtx",
+            "read_zarr",
+            "read_elem",
+            "write_elem",
+        ]
+    )
+)
+
+
+def __getattr__(attr_name: str) -> Any:
+    return module_get_attr_redirect(attr_name, deprecated_mapping=_DEPRECATED)
 
 
 __all__ = [

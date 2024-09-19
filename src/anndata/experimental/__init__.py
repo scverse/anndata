@@ -34,7 +34,7 @@ _DEPRECATED = MappingProxyType(
 
 def __getattr__(attr_name: str) -> Any:
     return module_get_attr_redirect(
-        attr_name, old_module_path="experimental", deprecated_mapping=_DEPRECATED
+        attr_name, deprecated_mapping=_DEPRECATED, old_module_path="experimental"
     )
 
 

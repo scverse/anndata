@@ -414,11 +414,13 @@ def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):
 
 
 def module_get_attr_redirect(
-    attr_name: str, old_module_path: str, deprecated_mapping: Mapping[str, str]
+    attr_name: str,
+    deprecated_mapping: Mapping[str, str],
+    old_module_path: str | None = None,
 ) -> Any:
     if new_path := deprecated_mapping.get(attr_name):
         msg = (
-            f"Importing {attr_name} from `anndata.{old_module_path}` is deprecated. "
+            f"Importing {attr_name} from `anndata{"." + old_module_path if old_module_path is not None else ""}` is deprecated. "
             f"Import anndata.{new_path} instead."
         )
         warnings.warn(msg, FutureWarning)
