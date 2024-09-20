@@ -419,7 +419,7 @@ def module_get_attr_redirect(
     old_module_path: str | None = None,
 ) -> Any:
     full_old_module_path = (
-        f"anndata{"." + old_module_path if old_module_path is not None else ""}"
+        f"anndata{'.' + old_module_path if old_module_path is not None else ''}"
     )
     if new_path := deprecated_mapping.get(attr_name):
         msg = (
