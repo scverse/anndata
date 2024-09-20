@@ -430,5 +430,5 @@ def module_get_attr_redirect(
             mod_name, new_path = new_path.split(".", 1)
             mod = getattr(mod, mod_name)
         return getattr(mod, new_path)
-    msg = f"module {__name__!r} has no attribute {attr_name!r}"
+    msg = f"module {old_module_path.__name__!r} has no attribute {attr_name!r}"
     raise AttributeError(msg)
