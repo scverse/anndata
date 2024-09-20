@@ -33,8 +33,8 @@ Reading anndata’s native formats `.h5ad` and `zarr`.
 .. autosummary::
    :toctree: generated/
 
-   read_h5ad
-   read_zarr
+   io.read_h5ad
+   io.read_zarr
 ```
 
 Reading individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.
@@ -43,8 +43,8 @@ Reading individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) o
 .. autosummary::
    :toctree: generated/
 
-   read_elem
-   sparse_dataset
+   io.read_elem
+   io.sparse_dataset
 ```
 
 Reading file formats that cannot represent all aspects of {class}`AnnData` objects.
@@ -57,13 +57,13 @@ You might have more success by assembling the {class}`AnnData` object yourself f
 .. autosummary::
    :toctree: generated/
 
-   read_csv
-   read_excel
-   read_hdf
-   read_loom
-   read_mtx
-   read_text
-   read_umi_tools
+   io.read_csv
+   io.read_excel
+   io.read_hdf
+   io.read_loom
+   io.read_mtx
+   io.read_text
+   io.read_umi_tools
 ```
 
 ## Writing
@@ -84,7 +84,7 @@ Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) o
 .. autosummary::
    :toctree: generated/
 
-   write_elem
+   io.write_elem
 ```
 
 Writing formats that cannot represent all aspects of {class}`AnnData` objects.
