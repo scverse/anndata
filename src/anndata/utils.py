@@ -418,9 +418,12 @@ def module_get_attr_redirect(
     deprecated_mapping: Mapping[str, str],
     old_module_path: str | None = None,
 ) -> Any:
+    full_old_module_path = (
+        f"anndata{"." + old_module_path if old_module_path is not None else ""}"
+    )
     if new_path := deprecated_mapping.get(attr_name):
         msg = (
-            f"Importing {attr_name} from `anndata{"." + old_module_path if old_module_path is not None else ""}` is deprecated. "
+            f"Importing {attr_name} from `{full_old_module_path}` is deprecated. "
             f"Import anndata.{new_path} instead."
         )
         warnings.warn(msg, FutureWarning)
@@ -430,5 +433,5 @@ def module_get_attr_redirect(
             mod_name, new_path = new_path.split(".", 1)
             mod = getattr(mod, mod_name)
         return getattr(mod, new_path)
-    msg = f"module {old_module_path.__name__!r} has no attribute {attr_name!r}"
+    msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
     raise AttributeError(msg)
