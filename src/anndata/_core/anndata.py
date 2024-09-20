@@ -134,15 +134,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     See Also
     --------
-    read_h5ad
-    read_csv
-    read_excel
-    read_hdf
-    read_loom
-    read_zarr
-    read_mtx
-    read_text
-    read_umi_tools
+    io.read_h5ad
+    io.read_csv
+    io.read_excel
+    io.read_hdf
+    io.read_loom
+    io.read_zarr
+    io.read_mtx
+    io.read_text
+    io.read_umi_tools
 
     Notes
     -----
@@ -995,7 +995,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # as the data is stored on disk, we can safely set self._X to None
             self._X = None
 
-    def _set_baiod(self, attr, value):
+    def _set_backed(self, attr, value):
         from ..io.utils import write_attribute
 
         write_attribute(self.file._file, attr, value)
@@ -1399,7 +1399,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         .. code:: python
 
             import anndata
-            backed = anndata.read_h5ad("file.h5ad", backed="r")
+            backed = anndata.io.read_h5ad("file.h5ad", backed="r")
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         new = {}
