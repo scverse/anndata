@@ -735,7 +735,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
     filepth1 = tmp_path / f"test1.{diskfmt}"
     filepth2 = tmp_path / f"test2.{diskfmt2}"
 
-    import scanpy as sc
+    with pytest.warns(
+        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
+    ):
+        import scanpy as sc
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
@@ -753,7 +756,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_scanpy_krumsiek11(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
-    import scanpy as sc
+    with pytest.warns(
+        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
+    ):
+        import scanpy as sc
 
     # TODO: this should be fixed in scanpy instead
     with pytest.warns(UserWarning, match=r"Observation names are not unique"):
@@ -777,7 +783,10 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
     reason="File not present.",
 )
 def test_backwards_compat_zarr():
-    import scanpy as sc
+    with pytest.warns(
+        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
+    ):
+        import scanpy as sc
     import zarr
 
     pbmc_orig = sc.datasets.pbmc68k_reduced()

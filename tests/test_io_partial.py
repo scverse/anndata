@@ -44,7 +44,10 @@ def test_read_partial_X(tmp_path, typ, accessor):
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.parametrize("accessor", ["h5ad", "zarr"])
 def test_read_partial_adata(tmp_path, accessor):
-    import scanpy as sc
+    with pytest.warns(
+        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
+    ):
+        import scanpy as sc
 
     adata = sc.datasets.pbmc68k_reduced()
 
