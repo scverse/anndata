@@ -30,6 +30,7 @@ if sys.version_info < (3, 11):
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
+from ._io import read_h5ad, read_zarr
 from ._settings import settings
 from ._warnings import (
     ExperimentalFeatureWarning,
@@ -37,11 +38,10 @@ from ._warnings import (
     OldFormatWarning,
     WriteWarning,
 )
-from .io import read_h5ad, read_zarr
 from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
-from . import abc, experimental, typing, io  # noqa: E402 isort: skip
+from . import abc, experimental, typing, _io  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
 from . import logging  # noqa: F401, E402 isort: skip
@@ -86,7 +86,7 @@ __all__ = [
     "abc",
     "experimental",
     "typing",
-    "io",
+    "_io",
     # Classes
     "AnnData",
     "Raw",

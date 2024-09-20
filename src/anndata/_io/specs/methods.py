@@ -20,6 +20,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
+from anndata._io.utils import H5PY_V3, check_key
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -37,7 +38,6 @@ from anndata.compat import (
     _read_attr,
     _require_group_write_dataframe,
 )
-from anndata.io.utils import H5PY_V3, check_key
 
 from ..._settings import settings
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -127,7 +127,7 @@ def _to_cpu_mem_wrapper(write_func):
 def read_basic(
     elem: H5File | H5Group | H5Array, *, _reader: Reader
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
-    from anndata.io import h5ad
+    from anndata._io import h5ad
 
     warn(
         f"Element '{elem.name}' was written without encoding metadata.",
@@ -149,7 +149,7 @@ def read_basic(
 def read_basic_zarr(
     elem: ZarrGroup | ZarrArray, *, _reader: Reader
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
-    from anndata.io import zarr
+    from anndata._io import zarr
 
     warn(
         f"Element '{elem.name}' was written without encoding metadata.",

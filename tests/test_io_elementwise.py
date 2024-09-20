@@ -16,16 +16,14 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
-from anndata.io.specs import (
+from anndata._io.specs import (
     _REGISTRY,
     IOSpec,
     get_spec,
-    read_elem,
-    read_elem_as_dask,
-    write_elem,
 )
-from anndata.io.specs.registry import IORegistryError
+from anndata._io.specs.registry import IORegistryError
+from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
+from anndata.io import read_elem, read_elem_as_dask, write_elem
 from anndata.tests.helpers import (
     as_cupy,
     as_cupy_sparse_dask_array,

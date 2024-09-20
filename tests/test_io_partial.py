@@ -11,9 +11,8 @@ import zarr
 from scipy.sparse import csr_matrix
 
 from anndata import AnnData
-from anndata.io import write_h5ad, write_zarr
-from anndata.io.specs import read_elem
-from anndata.io.specs.registry import read_elem_partial
+from anndata._io.specs.registry import read_elem_partial
+from anndata.io import read_elem, write_h5ad, write_zarr
 
 X = np.array([[1.0, 0.0, 3.0], [4.0, 0.0, 6.0], [0.0, 8.0, 0.0]], dtype="float32")
 X_check = np.array([[4.0, 0.0], [0.0, 8.0]], dtype="float32")
