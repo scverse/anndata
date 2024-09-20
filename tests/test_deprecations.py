@@ -138,3 +138,10 @@ def test_deprecated_read(tmp_path):
 def test_warn_on_import_with_redirect(old_name: str, new_name: str, module):
     with pytest.warns(FutureWarning, match=rf"Importing {old_name}.*is deprecated"):
         getattr(module, old_name)
+
+
+def test_warn_on_deprecated__io_module():
+    with pytest.warns(
+        FutureWarning, match=r"Importing read_h5ad from `anndata._io` is deprecated"
+    ):
+        from anndata._io import read_h5ad  # noqa
