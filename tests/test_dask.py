@@ -125,7 +125,7 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
                 ad.write_elem(g, "", orig)
             return
         ad.write_elem(g, "", orig)
-        curr = ad.read_elem(g)
+        curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])

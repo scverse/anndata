@@ -43,7 +43,7 @@ def test_read_dispatched_dask():
             "awkward-array",
         }:
             # Preventing recursing inside of these types
-            return ad.read_elem(elem)
+            return ad.io.read_elem(elem)
         elif iospec.encoding_type == "array":
             return da.from_zarr(elem)
         else:
@@ -59,7 +59,7 @@ def test_read_dispatched_dask():
     assert isinstance(dask_adata.obsm["array"], da.Array)
     assert isinstance(dask_adata.uns["nested"]["nested_further"]["array"], da.Array)
 
-    expected = ad.read_elem(z)
+    expected = ad.io.read_elem(z)
     actual = dask_adata.to_memory(copy=False)
 
     assert_equal(expected, actual)
@@ -70,8 +70,8 @@ def test_read_dispatched_null_case():
     z = zarr.group()
     ad.write_elem(z, "/", adata)
 
-    expected = ad.read_elem(z)
-    actual = read_dispatched(z, lambda _, __, x, **___: ad.read_elem(x))
+    expected = ad.io.read_elem(z)
+    actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
 
     assert_equal(expected, actual)
 

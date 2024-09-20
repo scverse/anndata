@@ -113,4 +113,4 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
     group["a/b"].attrs["encoding-type"] = "not a real encoding type"
 
     with pytest.raises(IORegistryError, match=pattern):
-        ad.read_elem(group)
+        ad.io.read_elem(group)

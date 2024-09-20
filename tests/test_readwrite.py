@@ -405,7 +405,7 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
         )
         adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
 
-    adata = ad.read_loom(
+    adata = ad.io.read_loom(
         tmp_path / "test.loom",
         sparse=typ is csr_matrix,
         obsm_mapping=obsm_mapping,
@@ -455,37 +455,37 @@ def test_readloom_deprecations(tmp_path):
     # obsm_names -> obsm_mapping
     obsm_mapping = {"df": adata_src.obs.columns}
     with pytest.warns(FutureWarning):
-        depr_result = ad.read_loom(loom_pth, obsm_names=obsm_mapping)
-    actual_result = ad.read_loom(loom_pth, obsm_mapping=obsm_mapping)
+        depr_result = ad.io.read_loom(loom_pth, obsm_names=obsm_mapping)
+    actual_result = ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping)
     assert_equal(actual_result, depr_result)
     with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
+        ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
 
     # varm_names -> varm_mapping
     varm_mapping = {"df": adata_src.var.columns}
     with pytest.warns(FutureWarning):
-        depr_result = ad.read_loom(loom_pth, varm_names=varm_mapping)
-    actual_result = ad.read_loom(loom_pth, varm_mapping=varm_mapping)
+        depr_result = ad.io.read_loom(loom_pth, varm_names=varm_mapping)
+    actual_result = ad.io.read_loom(loom_pth, varm_mapping=varm_mapping)
     assert_equal(actual_result, depr_result)
     with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
+        ad.io.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
 
     # positional -> keyword
     with pytest.warns(FutureWarning, match=r"sparse"):
-        depr_result = ad.read_loom(loom_pth, True)
-    actual_result = ad.read_loom(loom_pth, sparse=True)
+        depr_result = ad.io.read_loom(loom_pth, True)
+    actual_result = ad.io.read_loom(loom_pth, sparse=True)
     assert type(depr_result.X) == type(actual_result.X)
 
 
 def test_read_csv():
-    adata = ad.read_csv(HERE / "data" / "adata.csv")
+    adata = ad.io.read_csv(HERE / "data" / "adata.csv")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
     assert adata.X.tolist() == X_list
 
 
 def test_read_tsv_strpath():
-    adata = ad.read_text(str(HERE / "data" / "adata-comments.tsv"), "\t")
+    adata = ad.io.read_text(str(HERE / "data" / "adata-comments.tsv"), "\t")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
     assert adata.X.tolist() == X_list
@@ -543,7 +543,7 @@ def test_write_csv_view(typ, tmp_path):
     [
         pytest.param(ad.read_h5ad, ad.io.write_h5ad, "test_empty.h5ad"),
         pytest.param(
-            ad.read_loom,
+            ad.io.read_loom,
             ad.io.write_loom,
             "test_empty.loom",
             marks=pytest.mark.xfail(reason="Loom can’t handle 0×0 matrices"),
@@ -570,7 +570,7 @@ def test_read_excel():
 
 
 def test_read_umi_tools():
-    adata = ad.read_umi_tools(HERE / "data/umi_tools.tsv.gz")
+    adata = ad.io.read_umi_tools(HERE / "data/umi_tools.tsv.gz")
     assert adata.obs_names.name == "cell"
     assert adata.var_names.name == "gene"
     assert adata.shape == (2, 13)

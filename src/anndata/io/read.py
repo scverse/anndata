@@ -330,7 +330,7 @@ def read_text(
     """\
     Read `.txt`, `.tab`, `.data` (text) file.
 
-    Same as :func:`~anndata.read_csv` but with default delimiter `None`.
+    Same as :func:`~anndata.io.read_csv` but with default delimiter `None`.
 
     Parameters
     ----------
