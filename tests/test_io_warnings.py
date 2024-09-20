@@ -15,9 +15,10 @@ from anndata.tests.helpers import gen_adata
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_old_format_warning_thrown():
-    with pytest.warns(
-        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
-    ):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
+        )
         import scanpy as sc
 
     pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"

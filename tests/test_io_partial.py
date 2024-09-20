@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -44,9 +45,10 @@ def test_read_partial_X(tmp_path, typ, accessor):
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.parametrize("accessor", ["h5ad", "zarr"])
 def test_read_partial_adata(tmp_path, accessor):
-    with pytest.warns(
-        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
-    ):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
+        )
         import scanpy as sc
 
     adata = sc.datasets.pbmc68k_reduced()

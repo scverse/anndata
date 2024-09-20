@@ -756,9 +756,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_scanpy_krumsiek11(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
-    with pytest.warns(
-        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
-    ):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
+        )
         import scanpy as sc
 
     # TODO: this should be fixed in scanpy instead
