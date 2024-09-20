@@ -24,7 +24,7 @@ def test_read_dispatched_w_regex():
     adata = gen_adata((1000, 100))
     z = zarr.group()
 
-    ad.write_elem(z, "/", adata)
+    ad.io.write_elem(z, "/", adata)
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
     actual = read_dispatched(z, read_only_axis_dfs)
@@ -51,7 +51,7 @@ def test_read_dispatched_dask():
 
     adata = gen_adata((1000, 100))
     z = zarr.group()
-    ad.write_elem(z, "/", adata)
+    ad.io.write_elem(z, "/", adata)
 
     dask_adata = read_dispatched(z, read_as_dask_array)
 
@@ -68,7 +68,7 @@ def test_read_dispatched_dask():
 def test_read_dispatched_null_case():
     adata = gen_adata((100, 100))
     z = zarr.group()
-    ad.write_elem(z, "/", adata)
+    ad.io.write_elem(z, "/", adata)
 
     expected = ad.io.read_elem(z)
     actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
