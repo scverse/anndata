@@ -1,29 +1,26 @@
 from __future__ import annotations
 
-import warnings
+from .._core.sparse_dataset import sparse_dataset
+from .._io.h5ad import read_h5ad, write_h5ad
+from .._io.read import (
+    read_csv,
+    read_excel,
+    read_hdf,
+    read_loom,
+    read_mtx,
+    read_text,
+    read_umi_tools,
+    read_zarr,
+)
+from .._io.specs import read_elem, write_elem
+from .._io.write import write_csvs, write_loom
 
-with warnings.catch_warnings():
-    warnings.filterwarnings(
-        "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-    )
-    from .._io import (
-        read_csv,
-        read_elem,
-        read_excel,
-        read_h5ad,
-        read_hdf,
-        read_loom,
-        read_mtx,
-        read_text,
-        read_umi_tools,
-        read_zarr,
-        sparse_dataset,
-        write_csvs,
-        write_elem,
-        write_h5ad,
-        write_loom,
-        write_zarr,
-    )
+
+def write_zarr(*args, **kw):
+    from .._io.zarr import write_zarr
+
+    return write_zarr(*args, **kw)
+
 
 __all__ = [
     "read_csv",
