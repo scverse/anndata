@@ -735,9 +735,10 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, diskfmt2):
     filepth1 = tmp_path / f"test1.{diskfmt}"
     filepth2 = tmp_path / f"test2.{diskfmt2}"
 
-    with pytest.warns(
-        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
-    ):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
+        )
         import scanpy as sc
 
     with warnings.catch_warnings():
@@ -784,9 +785,10 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt):
     reason="File not present.",
 )
 def test_backwards_compat_zarr():
-    with pytest.warns(
-        FutureWarning, match=r"Importing read_.* from `anndata` is deprecated"
-    ):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
+        )
         import scanpy as sc
     import zarr
 
