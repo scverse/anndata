@@ -66,4 +66,4 @@ RWAble: TypeAlias = Union[
     pd.Categorical,
     pd.api.extensions.ExtensionArray,
 ]
-"""A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.read_elem` and :func:`anndata.write_elem`."""
+"""A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""

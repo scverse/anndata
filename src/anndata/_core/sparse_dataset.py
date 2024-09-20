@@ -613,8 +613,8 @@ def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
 
     >>> import scanpy as sc
     >>> import h5py
-    >>> from anndata import sparse_dataset
-    >>> from anndata import read_elem
+    >>> from anndata.io import sparse_dataset
+    >>> from anndata.io import read_elem
     >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
     Initialize a sparse dataset from storage
