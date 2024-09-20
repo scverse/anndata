@@ -66,11 +66,11 @@ _DEPRECATED_IO = (
     "read_text",
     "read_mtx",
 )
+_DEPRECATED = dict((method, f"io.{method}") for method in _DEPRECATED_IO)
 
 
 def __getattr__(attr_name: str) -> Any:
-    deprecated = dict((method, f"io.{method}") for method in _DEPRECATED_IO)
-    return module_get_attr_redirect(attr_name, deprecated_mapping=deprecated)
+    return module_get_attr_redirect(attr_name, deprecated_mapping=_DEPRECATED)
 
 
 __all__ = [
