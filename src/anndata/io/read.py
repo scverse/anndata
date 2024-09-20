@@ -39,7 +39,7 @@ def read_csv(
     """\
     Read `.csv` file.
 
-    Same as :func:`~anndata.read_text` but with default delimiter `','`.
+    Same as :func:`~anndata.io.read_text` but with default delimiter `','`.
 
     Parameters
     ----------
@@ -208,7 +208,7 @@ def read_loom(
 
     .. code:: python
 
-        pbmc = anndata.read_loom(
+        pbmc = anndata.io.read_loom(
             "pbmc.loom",
             sparse=True,
             X_name="lognorm",
