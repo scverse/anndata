@@ -36,6 +36,10 @@ Please consider making a tax-deductible [donation](https://numfocus.org/donate-t
   >
 </a>
 
+## Public API
+
+Our public API is documented [in the API section of these docs](https://anndata.readthedocs.io/en/stable/api.html).  We cannot guarantee the stability of our internal APIs, whether it's the location of a function, its arguments, or something else.  In other words, we do not officially support (or encourage users to do) something like `from anndata._core import AnnData` as `_core` is both not documented and [contains a leading underscore](https://peps.python.org/pep-0008/#public-and-internal-interfaces).  However, we are aware that [many users do use these internal APIs](https://github.com/search?q=%22anndata._io%22&type=code) and thus encourage them to open an [issue](https://github.com/scverse/anndata/issues/new/choose) or migrate to the public API.  That is, if something is missing from out public API as documented, for example a feature you wish to be exported publicly, please open an issue.
+
 ## Citation
 
 If you use `anndata` in your work, please cite the `anndata` pre-print as follows:
