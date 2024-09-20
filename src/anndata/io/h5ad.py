@@ -22,6 +22,7 @@ from ..compat import (
     _decode_structured_array,
     _from_fixed_length_strings,
 )
+from ..experimental import read_dispatched
 from .specs import read_elem, write_elem
 from .specs.registry import IOSpec, write_spec
 from .utils import (
@@ -174,8 +175,6 @@ def read_h5ad(
     as_sparse_fmt: type[sparse.spmatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
-    from ..experimental import read_dispatched
-
     """\
     Read `.h5ad`-formatted hdf5 file.
 
