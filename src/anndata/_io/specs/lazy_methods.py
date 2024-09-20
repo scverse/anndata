@@ -189,7 +189,7 @@ def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     index_label: str,
     index_key: str,
-    index: ArrayStorageType,
+    index: np.NDArray,
 ) -> Iterator[tuple[str, xr.DataArray]]:
     from anndata.experimental.backed._compat import xr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
@@ -234,7 +234,7 @@ def read_dataframe(
     elem_name = get_elem_name(elem)
     index_label = f'{elem_name.replace("/", "")}_names'
     index_key = elem.attrs["_index"]
-    index = elem_dict[index_key]  # no sense in reading this in multiple times
+    index = elem_dict[index_key].compute()  # no sense in reading this in multiple times
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, index_label, index_key, index)
     )
