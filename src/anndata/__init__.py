@@ -47,6 +47,17 @@ from . import abc, experimental, typing, io  # noqa: E402 isort: skip
 from . import logging  # noqa: F401, E402 isort: skip
 
 
+def read(*args, **kwargs):
+    import warnings
+
+    warnings.warn(
+        "`anndata.read` is deprecated, use `anndata.read_h5ad` instead. "
+        "`ad.read` will be removed in mid 2024.",
+        FutureWarning,
+    )
+    return read_h5ad(*args, **kwargs)
+
+
 _DEPRECATED = MappingProxyType(
     dict(
         (method, f"io.{method}")
@@ -83,6 +94,7 @@ __all__ = [
     "concat",
     "read_zarr",
     "read_h5ad",
+    "read",
     # Warnings
     "OldFormatWarning",
     "WriteWarning",
