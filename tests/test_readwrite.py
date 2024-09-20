@@ -493,7 +493,7 @@ def test_read_tsv_strpath():
 
 def test_read_tsv_iter():
     with (HERE / "data" / "adata-comments.tsv").open() as f:
-        adata = ad.read_text(f, "\t")
+        adata = ad.io.read_text(f, "\t")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
     assert adata.X.tolist() == X_list
@@ -565,7 +565,7 @@ def test_read_excel():
             message=r"datetime.datetime.utcnow\(\) is deprecated",
             category=DeprecationWarning,
         )
-        adata = ad.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
+        adata = ad.io.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
     assert adata.X.tolist() == X_list
 
 
