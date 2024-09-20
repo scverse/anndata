@@ -51,29 +51,29 @@ PBMC_3K_URL = "https://falexwolf.de/data/pbmc3k_raw.h5ad"
 #         self.filepath = pooch.retrieve(url=input_url, known_hash=None)
 
 #     def time_read_full(self, input_url):
-#         anndata.io.read_zarr(self.filepath)
+#         anndata._io.read_zarr(self.filepath)
 
 #     def peakmem_read_full(self, input_url):
-#         anndata.io.read_zarr(self.filepath)
+#         anndata._io.read_zarr(self.filepath)
 
 #     def mem_readfull_object(self, input_url):
-#         return anndata.io.read_zarr(self.filepath)
+#         return anndata._io.read_zarr(self.filepath)
 
 #     def track_read_full_memratio(self, input_url):
 #         mem_recording = memory_usage(
-#             (sedate(anndata.io.read_zarr, 0.005), (self.filepath,)), interval=0.001
+#             (sedate(anndata._io.read_zarr, 0.005), (self.filepath,)), interval=0.001
 #         )
-#         adata = anndata.io.read_zarr(self.filepath)
+#         adata = anndata._io.read_zarr(self.filepath)
 #         base_size = mem_recording[-1] - mem_recording[0]
 #         print(np.max(mem_recording) - np.min(mem_recording))
 #         print(base_size)
 #         return (np.max(mem_recording) - np.min(mem_recording)) / base_size
 
 #     def peakmem_read_backed(self, input_url):
-#         anndata.io.read_zarr(self.filepath, backed="r")
+#         anndata._io.read_zarr(self.filepath, backed="r")
 
 #     def mem_read_backed_object(self, input_url):
-#         return anndata.io.read_zarr(self.filepath, backed="r")
+#         return anndata._io.read_zarr(self.filepath, backed="r")
 
 
 class H5ADInMemorySizeSuite:
@@ -85,13 +85,13 @@ class H5ADInMemorySizeSuite:
         self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
 
     def track_in_memory_size(self, *_):
-        adata = anndata.io.read_h5ad(self.filepath)
+        adata = anndata._io.read_h5ad(self.filepath)
         adata_size = sys.getsizeof(adata)
 
         return adata_size
 
     def track_actual_in_memory_size(self, *_):
-        adata = anndata.io.read_h5ad(self.filepath)
+        adata = anndata._io.read_h5ad(self.filepath)
         adata_size = get_actualsize(adata)
 
         return adata_size
@@ -106,30 +106,30 @@ class H5ADReadSuite:
         self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
 
     def time_read_full(self, *_):
-        anndata.io.read_h5ad(self.filepath)
+        anndata._io.read_h5ad(self.filepath)
 
     def peakmem_read_full(self, *_):
-        anndata.io.read_h5ad(self.filepath)
+        anndata._io.read_h5ad(self.filepath)
 
     def mem_readfull_object(self, *_):
-        return anndata.io.read_h5ad(self.filepath)
+        return anndata._io.read_h5ad(self.filepath)
 
     def track_read_full_memratio(self, *_):
         mem_recording = memory_usage(
-            (sedate(anndata.io.read_h5ad, 0.005), (self.filepath,)), interval=0.001
+            (sedate(anndata._io.read_h5ad, 0.005), (self.filepath,)), interval=0.001
         )
-        # adata = anndata.io.read_h5ad(self.filepath)
+        # adata = anndata._io.read_h5ad(self.filepath)
         base_size = mem_recording[-1] - mem_recording[0]
         print(np.max(mem_recording) - np.min(mem_recording))
         print(base_size)
         return (np.max(mem_recording) - np.min(mem_recording)) / base_size
 
     def peakmem_read_backed(self, *_):
-        anndata.io.read_h5ad(self.filepath, backed="r")
+        anndata._io.read_h5ad(self.filepath, backed="r")
 
     # causes benchmarking to break from: https://github.com/pympler/pympler/issues/151
     # def mem_read_backed_object(self, *_):
-    #     return anndata.io.read_h5ad(self.filepath, backed="r")
+    #     return anndata._io.read_h5ad(self.filepath, backed="r")
 
 
 class H5ADWriteSuite:
@@ -140,7 +140,7 @@ class H5ADWriteSuite:
     def setup(self, input_data: str):
         mem_recording, adata = memory_usage(
             (
-                sedate(anndata.io.read_h5ad, 0.005),
+                sedate(anndata._io.read_h5ad, 0.005),
                 (pooch.retrieve(self._urls[input_data], known_hash=None),),
             ),
             retval=True,
@@ -183,7 +183,7 @@ class H5ADBackedWriteSuite(H5ADWriteSuite):
     def setup(self, input_data):
         mem_recording, adata = memory_usage(
             (
-                sedate(anndata.io.read_h5ad, 0.005),
+                sedate(anndata._io.read_h5ad, 0.005),
                 (pooch.retrieve(self._urls[input_data], known_hash=None),),
                 {"backed": "r"},
             ),
