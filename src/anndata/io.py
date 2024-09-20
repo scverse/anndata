@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from .._core.sparse_dataset import sparse_dataset
-from .._io.h5ad import read_h5ad, write_h5ad
-from .._io.read import (
+from ._core.sparse_dataset import sparse_dataset
+from ._io.h5ad import read_h5ad, write_h5ad
+from ._io.read import (
     read_csv,
     read_excel,
     read_hdf,
@@ -10,17 +10,10 @@ from .._io.read import (
     read_mtx,
     read_text,
     read_umi_tools,
-    read_zarr,
 )
-from .._io.specs import read_elem, write_elem
-from .._io.write import write_csvs, write_loom
-
-
-def write_zarr(*args, **kw):
-    from .._io.zarr import write_zarr
-
-    return write_zarr(*args, **kw)
-
+from ._io.specs import read_elem, write_elem
+from ._io.write import write_csvs, write_loom
+from ._io.zarr import read_zarr, write_zarr
 
 __all__ = [
     "read_csv",

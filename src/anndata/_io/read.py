@@ -21,14 +21,6 @@ from .utils import is_float
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
 
-try:
-    from .zarr import read_zarr
-except ImportError as _e:
-    e = _e
-
-    def read_zarr(*_, **__):
-        raise e
-
 
 def read_csv(
     filename: PathLike | Iterator[str],
