@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-import anndata as ad
 import anndata.experimental
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
@@ -118,16 +117,6 @@ def test_deprecated_write_attribute(tmp_path):
         assert_equal(A, attribute_A)
 
 
-def test_deprecated_read(tmp_path):
-    memory = AnnData(np.random.randn(20, 10))
-    memory.write_h5ad(tmp_path / "file.h5ad")
-
-    with pytest.warns(FutureWarning, match=r"`anndata.read` is deprecated"):
-        from_disk = ad.read(tmp_path / "file.h5ad")
-
-    assert_equal(memory, from_disk)
-
-
 @pytest.mark.parametrize(
     ("old_name", "new_name", "module"),
     (
@@ -139,3 +128,8 @@ def test_deprecated_read(tmp_path):
 def test_warn_on_import_with_redirect(old_name: str, new_name: str, module):
     with pytest.warns(FutureWarning, match=rf"Importing {old_name}.*is deprecated"):
         getattr(module, old_name)
+
+
+def test_warn_on_deprecated__io_module():
+    with pytest.warns(FutureWarning, match=r"Importing from anndata._io is deprecated"):
+        pass

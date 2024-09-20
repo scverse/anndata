@@ -48,21 +48,26 @@ from . import logging  # noqa: F401, E402 isort: skip
 
 _DEPRECATED = MappingProxyType(
     dict(
-        (method, f"io.{method}")
-        for method in [
-            "sparse_dataset",
-            "read_h5ad",
-            "read_loom",
-            "read_hdf",
-            "read_excel",
-            "read_umi_tools",
-            "read_csv",
-            "read_text",
-            "read_mtx",
-            "read_zarr",
-            "read_elem",
-            "write_elem",
-        ]
+        (
+            *(
+                (method, f"io.{method}")
+                for method in [
+                    "sparse_dataset",
+                    "read_h5ad",
+                    "read_loom",
+                    "read_hdf",
+                    "read_excel",
+                    "read_umi_tools",
+                    "read_csv",
+                    "read_text",
+                    "read_mtx",
+                    "read_zarr",
+                    "read_elem",
+                    "write_elem",
+                ]
+            ),
+            ("_io", "io"),
+        )
     )
 )
 
