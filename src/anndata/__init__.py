@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -58,24 +57,20 @@ def read(*args, **kwargs):
     return read_h5ad(*args, **kwargs)
 
 
-_DEPRECATED = MappingProxyType(
-    dict(
-        (method, f"io.{method}")
-        for method in [
-            "read_loom",
-            "read_hdf",
-            "read_excel",
-            "read_umi_tools",
-            "read_csv",
-            "read_text",
-            "read_mtx",
-        ]
-    )
+_DEPRECATED_IO = (
+    "read_loom",
+    "read_hdf",
+    "read_excel",
+    "read_umi_tools",
+    "read_csv",
+    "read_text",
+    "read_mtx",
 )
 
 
 def __getattr__(attr_name: str) -> Any:
-    return module_get_attr_redirect(attr_name, deprecated_mapping=_DEPRECATED)
+    deprecated = dict((method, f"io.{method}") for method in _DEPRECATED_IO)
+    return module_get_attr_redirect(attr_name, deprecated_mapping=deprecated)
 
 
 __all__ = [
