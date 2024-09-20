@@ -23,7 +23,8 @@ from anndata._io.specs import (
 )
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
-from anndata.io import read_elem, read_elem_as_dask, write_elem
+from anndata.experimental import read_elem_as_dask
+from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
     as_cupy,
     as_cupy_sparse_dask_array,
