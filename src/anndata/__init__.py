@@ -37,6 +37,7 @@ from ._warnings import (
     OldFormatWarning,
     WriteWarning,
 )
+from .io import read_h5ad, read_zarr
 from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
@@ -52,8 +53,6 @@ _DEPRECATED = MappingProxyType(
             *(
                 (method, f"io.{method}")
                 for method in [
-                    "sparse_dataset",
-                    "read_h5ad",
                     "read_loom",
                     "read_hdf",
                     "read_excel",
@@ -61,9 +60,6 @@ _DEPRECATED = MappingProxyType(
                     "read_csv",
                     "read_text",
                     "read_mtx",
-                    "read_zarr",
-                    "read_elem",
-                    "write_elem",
                 ]
             ),
             ("_io", "io"),
@@ -90,6 +86,8 @@ __all__ = [
     "Raw",
     # Functions
     "concat",
+    "read_zarr",
+    "read_h5ad",
     # Warnings
     "OldFormatWarning",
     "WriteWarning",
