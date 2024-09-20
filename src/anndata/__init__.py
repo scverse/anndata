@@ -49,21 +49,16 @@ from . import logging  # noqa: F401, E402 isort: skip
 
 _DEPRECATED = MappingProxyType(
     dict(
-        (
-            *(
-                (method, f"io.{method}")
-                for method in [
-                    "read_loom",
-                    "read_hdf",
-                    "read_excel",
-                    "read_umi_tools",
-                    "read_csv",
-                    "read_text",
-                    "read_mtx",
-                ]
-            ),
-            ("_io", "io"),
-        )
+        (method, f"io.{method}")
+        for method in [
+            "read_loom",
+            "read_hdf",
+            "read_excel",
+            "read_umi_tools",
+            "read_csv",
+            "read_text",
+            "read_mtx",
+        ]
     )
 )
 
