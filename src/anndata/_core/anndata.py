@@ -694,7 +694,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         The :attr:`raw` attribute is initialized with the current content
         of an object by setting::
 
-            adata.raw = adata
+            adata.raw = adata.copy()
 
         Its content can be deleted::
 

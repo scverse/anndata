@@ -667,9 +667,9 @@ def test_concatenate_with_raw():
         layers=dict(Xs=X4),
     )
 
-    adata1.raw = adata1
-    adata2.raw = adata2
-    adata3.raw = adata3
+    adata1.raw = adata1.copy()
+    adata2.raw = adata2.copy()
+    adata3.raw = adata3.copy()
 
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert isinstance(adata_all.raw, Raw)
@@ -683,7 +683,7 @@ def test_concatenate_with_raw():
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
     assert np.array_equal(np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X))
 
-    adata3.raw = adata4
+    adata3.raw = adata4.copy()
     adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == set("abcdz")
