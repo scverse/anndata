@@ -161,15 +161,19 @@ def test_unconsolidated(tmp_path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
-def test_concat(tmp_path):
+def test_concat_simple(tmp_path):
+    from anndata.experimental.backed._compat import Dataset
+
+    lazy_adatas = []
     adatas = []
     M = 1000
     N = 50
-    for dataset_index in range(5):
+    n_datasets = 2
+    for dataset_index in range(n_datasets):
         orig_path = tmp_path / f"orig_{dataset_index}.zarr"
         orig_path.mkdir()
         obs_names = pd.Index(f"cell_{dataset_index}_{i}" for i in range(M))
-        var_names = pd.Index(f"gene_{dataset_index}_{i}" for i in range(N))
+        var_names = pd.Index(f"gene_{i}" for i in range(N))
         obs = gen_typed_df(M, obs_names)
         var = gen_typed_df(N, var_names)
         orig = AnnData(
@@ -181,5 +185,11 @@ def test_concat(tmp_path):
         )
         orig.write_zarr(orig_path)
         store = AccessTrackingStore(orig_path)
-        adatas += read_lazy(store)
-    ad.concat(adatas)
+        lazy_adatas += [read_lazy(store)]
+        adatas += [orig]
+    concated_remote = ad.concat(lazy_adatas)
+    assert isinstance(concated_remote.obs, Dataset)
+    df = ad.concat(adatas).obs
+    # account for differences
+    df.index.name = "obs_names"
+    assert_equal(concated_remote.obs.to_pandas(), df)
