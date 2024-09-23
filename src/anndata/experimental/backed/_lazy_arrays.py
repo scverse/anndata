@@ -90,7 +90,6 @@ class MaskedArray(BackendArray):
         self._values = ZarrOrHDF5Wrapper(values)
         self._dtype_str = dtype_str
         self.shape = self._values.shape
-        self.dtype = pd.api.types.pandas_dtype(self._values.dtype)
 
     def __getitem__(self, key) -> xr.core.extension_array.PandasExtensionArray:
         values = self._values[key]
@@ -106,6 +105,16 @@ class MaskedArray(BackendArray):
                     pd.arrays.BooleanArray(values, mask=mask)
                 )
         return xr.core.extension_array.PandasExtensionArray(pd.array(values))
+
+    @cached_property
+    def dtype(self):
+        if self._dtype_str == "nullable-integer":
+            return pd.array(
+                [],
+                dtype=str(pd.api.types.pandas_dtype(self._values.dtype)).capitalize(),
+            ).dtype
+        elif self._dtype_str == "nullable-boolean":
+            return pd.BooleanDtype()
 
 
 @_subset.register(DataArray)
