@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+from typing import TYPE_CHECKING
+
 from ._core.sparse_dataset import sparse_dataset
 from ._io.h5ad import read_h5ad, write_h5ad
 from ._io.read import (
@@ -14,17 +17,20 @@ from ._io.read import (
 from ._io.specs import read_elem, write_elem
 from ._io.write import write_csvs, write_loom
 
+if "zarr" in sys.modules or TYPE_CHECKING:
+    from ._io.zarr import read_zarr, write_zarr
+else:
+    # Importing zarr is slow, so unless it’s already imported,
+    # we wrap these functions into shims.
+    def read_zarr(*args, **kw):  # pragma: no cover
+        from ._io.zarr import read_zarr
 
-def read_zarr(*args, **kw):
-    from ._io.zarr import read_zarr
+        return read_zarr(*args, **kw)
 
-    return read_zarr(*args, **kw)
+    def write_zarr(*args, **kw):  # pragma: no cover
+        from ._io.zarr import write_zarr
 
-
-def write_zarr(*args, **kw):
-    from ._io.zarr import write_zarr
-
-    return write_zarr(*args, **kw)
+        return write_zarr(*args, **kw)
 
 
 __all__ = [
