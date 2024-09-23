@@ -7,7 +7,8 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from anndata._core.anndata import AnnData
+import anndata as ad
+from anndata import AnnData
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     AccessTrackingStore,
@@ -158,3 +159,27 @@ def test_unconsolidated(tmp_path, mtx_format):
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
     store.assert_access_count("obs/.zgroup", 1)
+
+
+def test_concat(tmp_path):
+    adatas = []
+    M = 1000
+    N = 50
+    for dataset_index in range(5):
+        orig_path = tmp_path / f"orig_{dataset_index}.zarr"
+        orig_path.mkdir()
+        obs_names = pd.Index(f"cell_{dataset_index}_{i}" for i in range(M))
+        var_names = pd.Index(f"gene_{dataset_index}_{i}" for i in range(N))
+        obs = gen_typed_df(M, obs_names)
+        var = gen_typed_df(N, var_names)
+        orig = AnnData(
+            obs=obs,
+            var=var,
+            X=sparse.csr_matrix(
+                np.random.binomial(100, 0.005, (M, N)).astype(np.float32)
+            ),
+        )
+        orig.write_zarr(orig_path)
+        store = AccessTrackingStore(orig_path)
+        adatas += read_lazy(store)
+    ad.concat(adatas)
