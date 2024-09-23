@@ -37,6 +37,11 @@ class Dataset2D(Dataset):
         coord = list(self.coords.keys())[0]
         return pd.Index(self.coords[coord].data)
 
+    @index.setter
+    def index(self, val) -> None:
+        coord = list(self.coords.keys())[0]
+        self.coords[coord] = val
+
     @property
     def shape(self) -> tuple[int, int]:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability
