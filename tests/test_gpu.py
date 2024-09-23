@@ -24,7 +24,7 @@ def test_adata_raw_gpu():
     adata = AnnData(
         X=cupy_sparse.random(500, 50, density=0.01, format="csr", dtype=cp.float32)
     )
-    adata.raw = adata
+    adata.raw = adata.copy()
     assert isinstance(adata.raw.X, sparse.csr_matrix)
 
 
