@@ -375,7 +375,7 @@ def test_write_indptr_dtype_override(store, sparse_format):
 
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
-    adata.raw = adata
+    adata.raw = adata.copy()
 
     write_elem(store, "adata", adata)
 
