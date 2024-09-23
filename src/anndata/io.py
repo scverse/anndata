@@ -22,12 +22,12 @@ if "zarr" in sys.modules or TYPE_CHECKING:
 else:
     # Importing zarr is slow, so unless it’s already imported,
     # we wrap these functions into shims.
-    def read_zarr(*args, **kw):
+    def read_zarr(*args, **kw):  # pragma: no cover
         from ._io.zarr import read_zarr
 
         return read_zarr(*args, **kw)
 
-    def write_zarr(*args, **kw):
+    def write_zarr(*args, **kw):  # pragma: no cover
         from ._io.zarr import write_zarr
 
         return write_zarr(*args, **kw)
