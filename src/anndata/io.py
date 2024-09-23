@@ -13,7 +13,19 @@ from ._io.read import (
 )
 from ._io.specs import read_elem, write_elem
 from ._io.write import write_csvs, write_loom
-from ._io.zarr import read_zarr, write_zarr
+
+
+def read_zarr(*args, **kw):
+    from .._io.zarr import read_zarr
+
+    return read_zarr(*args, **kw)
+
+
+def write_zarr(*args, **kw):
+    from .._io.zarr import write_zarr
+
+    return write_zarr(*args, **kw)
+
 
 __all__ = [
     "read_csv",
