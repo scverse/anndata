@@ -165,3 +165,10 @@ def test_to_adata_populates_obs():
     from_raw = adata_w_raw.raw.to_adata()
 
     assert_equal(adata, from_raw)
+
+
+def test_no_copy():
+    adata = gen_adata((20, 10), X_type=np.asarray)
+    adata.raw = adata  # no .copy() herer
+    np.log1p(adata.X, out=adata.X)
+    assert adata.X is adata.raw.X
