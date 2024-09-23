@@ -301,9 +301,9 @@ def test_read_array(
     diskmtx = sparse_dataset(f["mtx"])
     if not CAN_USE_SPARSE_ARRAY:
         pytest.skip("scipy.sparse.cs{r,c}array not available")
-    ad.settings.shall_use_sparse_array_on_read = True
+    ad.settings.use_sparse_array_on_read = True
     assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
-    ad.settings.shall_use_sparse_array_on_read = False
+    ad.settings.use_sparse_array_on_read = False
     assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
 
 

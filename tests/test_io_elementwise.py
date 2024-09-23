@@ -586,6 +586,6 @@ def test_read_sparse_array(
     ad.io.write_elem(f, "mtx", a)
     if not CAN_USE_SPARSE_ARRAY:
         pytest.skip("scipy.sparse.cs{r,c}array not available")
-    ad.settings.shall_use_sparse_array_on_read = True
+    ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
     assert issubclass(type(mtx), SpArray)
