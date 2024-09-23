@@ -528,7 +528,7 @@ def test_layers_view():
 # TODO: This can be flaky. Make that stop
 def test_view_of_view(matrix_type, subset_func, subset_func2):
     adata = gen_adata((30, 15), X_type=matrix_type)
-    adata.raw = adata
+    adata.raw = adata.copy()
     if subset_func is single_subset:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)

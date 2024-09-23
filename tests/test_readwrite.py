@@ -132,7 +132,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
-    adata_src.raw = adata_src
+    adata_src.raw = adata_src.copy()
 
     if storage == "h5ad":
         adata_src.write(backing_h5ad, **dataset_kwargs)
@@ -236,7 +236,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
 
     M, N = 100, 101
     adata = gen_adata((M, N), X_type=typ)
-    adata.raw = adata
+    adata.raw = adata.copy()
 
     adata.write_h5ad(h5ad_pth)
     adata.write_zarr(zarr_pth)

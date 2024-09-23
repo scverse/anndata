@@ -273,7 +273,7 @@ def test_setting_dim_index(dim):
     mapping_attr = f"{dim}m"
 
     orig = gen_adata((5, 5))
-    orig.raw = orig
+    orig.raw = orig.copy()
     curr = orig.copy()
     view = orig[:, :]
     new_idx = pd.Index(list("abcde"), name="letters")
@@ -565,7 +565,7 @@ def test_convenience():
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
-    adata.raw = adata
+    adata.raw = adata.copy()
     adata.X = adata.X / 2
     adata_dense = adata.copy()
     adata_dense.X = adata_dense.X.toarray()

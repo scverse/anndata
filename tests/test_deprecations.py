@@ -27,7 +27,7 @@ def adata():
         obs=dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         var=dict(var_names=["a", "b", "c"]),
     )
-    adata.raw = adata
+    adata.raw = adata.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
     adata.X = adata.X / 2
