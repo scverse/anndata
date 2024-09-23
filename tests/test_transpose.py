@@ -24,7 +24,7 @@ def test_transpose_orig():
 
 def _add_raw(adata, *, var_subset=slice(None)):
     new = adata[:, var_subset].copy()
-    new.raw = adata
+    new.raw = adata.copy()
     return new
 
 
