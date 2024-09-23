@@ -16,13 +16,13 @@ from ._io.write import write_csvs, write_loom
 
 
 def read_zarr(*args, **kw):
-    from .._io.zarr import read_zarr
+    from ._io.zarr import read_zarr
 
     return read_zarr(*args, **kw)
 
 
 def write_zarr(*args, **kw):
-    from .._io.zarr import write_zarr
+    from ._io.zarr import write_zarr
 
     return write_zarr(*args, **kw)
 
