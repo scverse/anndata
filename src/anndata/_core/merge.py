@@ -1313,11 +1313,13 @@ def concat(
     are_annotations_mixed_type = are_any_annotations_dataframes and any(
         isinstance(a, Dataset) for a in annotations
     )
-    if are_annotations_mixed_type:
-        annotations_in_memory = annotations.copy()
-        for i, a in enumerate(annotations):
-            annotations_in_memory[i] = a.to_pandas() if isinstance(a, Dataset) else a
     if are_any_annotations_dataframes:
+        annotations_in_memory = annotations.copy()
+        if are_annotations_mixed_type:
+            for i, a in enumerate(annotations):
+                annotations_in_memory[i] = (
+                    a.to_pandas() if isinstance(a, Dataset) else a
+                )
         concat_annot = pd.concat(
             unify_dtypes(a for a in annotations_in_memory),
             join=join,
