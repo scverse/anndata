@@ -41,6 +41,8 @@ if typing.TYPE_CHECKING:
 
     from pandas.api.extensions import ExtensionDtype
 
+    from anndata.experimental.backed._xarray import Dataset2D
+
 T = TypeVar("T")
 
 ###################
@@ -225,7 +227,9 @@ def as_cp_sparse(x) -> CupySparseMatrix:
         return cpsparse.csr_matrix(x)
 
 
-def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
+def unify_dtypes(
+    dfs: Iterable[pd.DataFrame | Dataset2D],
+) -> list[pd.DataFrame | Dataset2D]:
     """
     Attempts to unify datatypes from multiple dataframes.
 
@@ -1255,6 +1259,8 @@ def concat(
     >>> dict(ad.concat([a, b, c], uns_merge="first").uns)
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
+    from anndata.experimental.backed._compat import Dataset, xr
+
     # Argument normalization
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
@@ -1300,11 +1306,25 @@ def concat(
 
     # Annotation for concatenation axis
     check_combinable_cols([getattr(a, axis_name).columns for a in adatas], join=join)
-    concat_annot = pd.concat(
-        unify_dtypes(getattr(a, axis_name) for a in adatas),
-        join=join,
-        ignore_index=True,
+    annotations = [getattr(a, axis_name) for a in adatas]
+    are_any_annotations_dataframes = any(
+        isinstance(a, pd.DataFrame) for a in annotations
     )
+    are_annotations_mixed_type = are_any_annotations_dataframes and any(
+        isinstance(a, Dataset) for a in annotations
+    )
+    if are_annotations_mixed_type:
+        annotations_in_memory = annotations.copy()
+        for i, a in enumerate(annotations):
+            annotations_in_memory[i] = a.to_pandas() if isinstance(a, Dataset) else a
+    if are_any_annotations_dataframes:
+        concat_annot = pd.concat(
+            unify_dtypes(a for a in annotations_in_memory),
+            join=join,
+            ignore_index=True,
+        )
+    else:
+        concat_annot = xr.concat(annotations, join=join, dim=f"{axis_name}_names")
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
