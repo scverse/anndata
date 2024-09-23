@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ._core.sparse_dataset import sparse_dataset
 from ._io.h5ad import read_h5ad, write_h5ad
 from ._io.read import (
@@ -14,17 +16,19 @@ from ._io.read import (
 from ._io.specs import read_elem, write_elem
 from ._io.write import write_csvs, write_loom
 
+if TYPE_CHECKING:
+    from ._core.anndata import AnnData
 
-def read_zarr(*args, **kw):
-    from ._io.zarr import read_zarr
+try:
+    from ._io.zarr import read_zarr, write_zarr
+except ImportError as e:
+    _zarr_exc = e
 
-    return read_zarr(*args, **kw)
+    def read_zarr(*_, **__) -> AnnData:
+        raise _zarr_exc from None
 
-
-def write_zarr(*args, **kw):
-    from ._io.zarr import write_zarr
-
-    return write_zarr(*args, **kw)
+    def write_zarr(*_, **__) -> None:
+        raise _zarr_exc from None
 
 
 __all__ = [
