@@ -29,7 +29,7 @@ def write_zarr(*args, **kw):
     return write_zarr(*args, **kw)
 
 
-if os.environ.get("READTHEDOCS", "") != "True":
+if os.environ.get("READTHEDOCS", "") == "True":
     # This makes the lazy import above into a direct one. Importing zarr is slow.
     from ._io.zarr import read_zarr, write_zarr  # noqa: TCH004
 
