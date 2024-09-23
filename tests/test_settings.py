@@ -245,7 +245,7 @@ def test_describe(as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
 
 
-def test_shall_use_sparse_array_on_read():
+def test_use_sparse_array_on_read():
     import anndata as ad
 
     if not ad.compat.CAN_USE_SPARSE_ARRAY:
@@ -253,6 +253,6 @@ def test_shall_use_sparse_array_on_read():
             ValueError,
             match=r"scipy.sparse.cs{r,c}array is not available in current scipy version",
         ):
-            ad.settings.shall_use_sparse_array_on_read = True
+            ad.settings.use_sparse_array_on_read = True
     else:
-        ad.settings.shall_use_sparse_array_on_read = True
+        ad.settings.use_sparse_array_on_read = True

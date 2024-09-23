@@ -438,7 +438,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         # Not sure what the performance is on that operation
         # Also need to check if memory format is not matrix
         mtx_fmt = get_memory_class(
-            self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
         must_convert_to_array = issubclass(mtx_fmt, SpArray) and not isinstance(
             sub, SpArray
@@ -577,7 +577,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
     def to_memory(self) -> ss.csr_matrix | ss.csc_matrix | SpArray:
         format_class = get_memory_class(
-            self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
