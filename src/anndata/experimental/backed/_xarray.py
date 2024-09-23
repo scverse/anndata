@@ -66,6 +66,18 @@ class Dataset2D(Dataset):
 
         return IlocGetter(self)
 
+    @property
+    def columns(self) -> pd.Index:
+        """
+        :class:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.columns` so this ensures usability
+
+        Returns
+        -------
+            :class:`pandas.Index` that represents the "columns."
+        """
+        columns_list = list(self.keys())
+        return pd.Index(columns_list)
+
 
 @_subset.register(Dataset2D)
 def _(a: DataArray, subset_idx: Index):
