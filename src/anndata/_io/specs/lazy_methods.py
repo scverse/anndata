@@ -16,7 +16,7 @@ from ...compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
     from ..._core.sparse_dataset import _CSCDataset, _CSRDataset
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 @contextmanager
 def maybe_open_h5(
     path_or_group: Path | ZarrGroup, elem_name: str
-) -> Generator[StorageType, None, None]:
+) -> Callable[[], Iterator[StorageType]]:
     if not isinstance(path_or_group, Path):
         yield path_or_group
         return
@@ -67,13 +67,18 @@ def make_dask_chunk(
     *,
     wrap: Callable[[ArrayStorageType], ArrayStorageType]
     | Callable[[H5Group | ZarrGroup], _CSRDataset | _CSCDataset] = lambda g: g,
+    reopen: None | Callable[[], Iterator[StorageType]] = None,
 ):
     if block_info is None:
         msg = "Block info is required"
         raise ValueError(msg)
     # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
     # https://github.com/scverse/anndata/issues/1105
-    with maybe_open_h5(path_or_group, elem_name) as f:
+    with (
+        contextmanager(reopen)()
+        if reopen is not None
+        else maybe_open_h5(path_or_group, elem_name)
+    ) as f:
         mtx = wrap(f)
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
@@ -91,6 +96,7 @@ def read_sparse_as_dask(
     *,
     _reader: DaskReader,
     chunks: tuple[int, ...] | None = None,  # only tuple[int, int] is supported here
+    reopen: None | Callable[[], Iterator[StorageType]] = None,
 ) -> DaskArray:
     import dask.array as da
 
@@ -120,7 +126,7 @@ def read_sparse_as_dask(
     )
     memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     make_chunk = partial(
-        make_dask_chunk, path_or_group, elem_name, wrap=ad.sparse_dataset
+        make_dask_chunk, path_or_group, elem_name, wrap=ad.sparse_dataset, reopen=reopen
     )
     da_mtx = da.map_blocks(
         make_chunk,
@@ -133,7 +139,11 @@ def read_sparse_as_dask(
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
-    elem: H5Array, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
+    elem: H5Array,
+    *,
+    _reader: DaskReader,
+    chunks: tuple[int, ...] | None = None,
+    reopen: None | Callable[[], Iterator[StorageType]] = None,
 ) -> DaskArray:
     import dask.array as da
 
@@ -156,7 +166,11 @@ def read_h5_array(
 
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
-    elem: ZarrArray, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
+    elem: ZarrArray,
+    *,
+    _reader: DaskReader,
+    chunks: tuple[int, ...] | None = None,
+    reopen: None | Callable[[], Iterator[StorageType]] = None,
 ) -> DaskArray:
     chunks: tuple[int, ...] = chunks if chunks is not None else elem.chunks
     import dask.array as da
