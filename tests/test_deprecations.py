@@ -13,9 +13,8 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-import anndata as ad
 import anndata.experimental
-from anndata import AnnData
+from anndata import AnnData, read
 from anndata.tests.helpers import assert_equal
 
 
@@ -102,8 +101,8 @@ def test_dtype_warning():
 def test_deprecated_write_attribute(tmp_path):
     pth = tmp_path / "file.h5"
     A = np.random.randn(20, 10)
-    from anndata import read_elem
     from anndata._io.utils import read_attribute, write_attribute
+    from anndata.io import read_elem
 
     with h5py.File(pth, "w") as f:
         with pytest.warns(DeprecationWarning, match=r"write_elem"):
@@ -123,14 +122,26 @@ def test_deprecated_read(tmp_path):
     memory.write_h5ad(tmp_path / "file.h5ad")
 
     with pytest.warns(FutureWarning, match=r"`anndata.read` is deprecated"):
-        from_disk = ad.read(tmp_path / "file.h5ad")
+        from_disk = read(tmp_path / "file.h5ad")
 
     assert_equal(memory, from_disk)
 
 
 @pytest.mark.parametrize(
-    ("old_name", "new_name"), anndata.experimental._DEPRECATED.items()
+    ("old_name", "new_name", "module"),
+    (
+        (old_name, new_name, module)
+        for module in [anndata, anndata.experimental]
+        for (old_name, new_name) in module._DEPRECATED.items()
+    ),
 )
-def test_warn_on_import_from_experimental(old_name: str, new_name: str):
+def test_warn_on_import_with_redirect(old_name: str, new_name: str, module):
     with pytest.warns(FutureWarning, match=rf"Importing {old_name}.*is deprecated"):
-        getattr(anndata.experimental, old_name)
+        getattr(module, old_name)
+
+
+def test_warn_on_deprecated__io_module():
+    with pytest.warns(
+        FutureWarning, match=r"Importing read_h5ad from `anndata._io` is deprecated"
+    ):
+        from anndata._io import read_h5ad  # noqa
