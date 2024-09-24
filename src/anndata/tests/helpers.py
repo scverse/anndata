@@ -4,9 +4,11 @@ import itertools
 import random
 import re
 import warnings
+from collections import Counter
 from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
+from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
@@ -35,7 +37,7 @@ from anndata.compat import (
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Iterable
     from typing import Callable, Literal, TypeGuard, TypeVar
 
     DT = TypeVar("DT")
@@ -1037,46 +1039,49 @@ DASK_CUPY_MATRIX_PARAMS = [
     ),
 ]
 
-try:
-    import zarr
+if find_spec("zarr") or TYPE_CHECKING:
+    from zarr import DirectoryStore
+else:
 
-    class AccessTrackingStore(zarr.DirectoryStore):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self._access_count = {}
-            self._accessed_keys = {}
-
-        def __getitem__(self, key):
-            for tracked in self._access_count:
-                if tracked in key:
-                    self._access_count[tracked] += 1
-                    self._accessed_keys[tracked] += [key]
-            return super().__getitem__(key)
-
-        def get_access_count(self, key):
-            return self._access_count[key]
-
-        def get_accessed_keys(self, key):
-            return self._accessed_keys[key]
-
-        def initialize_key_trackers(self, keys_to_track):
-            for k in keys_to_track:
-                self._access_count[k] = 0
-                self._accessed_keys[k] = []
-
-        def reset_key_trackers(self):
-            self.initialize_key_trackers(self._access_count.keys())
-
-except ImportError:
-
-    class AccessTrackingStore:
+    class DirectoryStore:
         def __init__(self, *_args, **_kwargs) -> None:
-            raise ImportError(
-                "zarr must be imported to create an `AccessTrackingStore` instance."
-            )
+            cls_name = type(self).__name__
+            msg = f"zarr must be imported to create a {cls_name} instance."
+            raise ImportError(msg)
 
 
-def get_multiindex_columns_df(shape):
+class AccessTrackingStore(DirectoryStore):
+    _access_count: Counter[str]
+    _accessed_keys: dict[str, list[str]]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._access_count = Counter()
+        self._accessed_keys = {}
+
+    def __getitem__(self, key: str) -> object:
+        for tracked in self._access_count:
+            if tracked in key:
+                self._access_count[tracked] += 1
+                self._accessed_keys[tracked] += [key]
+        return super().__getitem__(key)
+
+    def get_access_count(self, key: str) -> int:
+        return self._access_count[key]
+
+    def get_accessed_keys(self, key: str) -> list[str]:
+        return self._accessed_keys[key]
+
+    def initialize_key_trackers(self, keys_to_track: Iterable[str]) -> None:
+        for k in keys_to_track:
+            self._access_count[k] = 0
+            self._accessed_keys[k] = []
+
+    def reset_key_trackers(self) -> None:
+        self.initialize_key_trackers(self._access_count.keys())
+
+
+def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
     return pd.DataFrame(
         np.random.rand(shape[0], shape[1]),
         columns=pd.MultiIndex.from_tuples(

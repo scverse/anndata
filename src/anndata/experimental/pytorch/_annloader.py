@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import copy
 from functools import partial
+from importlib.util import find_spec
 from math import ceil
 from typing import TYPE_CHECKING
 
@@ -14,10 +15,10 @@ from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-try:
+if find_spec("torch") or TYPE_CHECKING:
     import torch
     from torch.utils.data import BatchSampler, DataLoader, Sampler
-except ImportError:
+else:
     Sampler, BatchSampler, DataLoader = object, object, object
 
 

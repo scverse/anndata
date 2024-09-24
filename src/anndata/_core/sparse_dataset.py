@@ -26,12 +26,6 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-try:
-    # Not really important, just for IDEs to be more helpful
-    from scipy.sparse._compressed import _cs_matrix
-except ImportError:
-    from scipy.sparse import spmatrix as _cs_matrix
-
 from .. import abc
 from .._settings import settings
 from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
@@ -41,8 +35,12 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal
 
+    from scipy.sparse._compressed import _cs_matrix
+
     from .._types import GroupStorageType
     from .index import Index
+else:
+    from scipy.sparse import spmatrix as _cs_matrix
 
 
 class BackedFormat(NamedTuple):

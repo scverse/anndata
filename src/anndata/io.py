@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sys
+from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 from ._core.sparse_dataset import sparse_dataset
@@ -17,20 +17,15 @@ from ._io.read import (
 from ._io.specs import read_elem, write_elem
 from ._io.write import write_csvs, write_loom
 
-if "zarr" in sys.modules or TYPE_CHECKING:
+if find_spec("zarr") or TYPE_CHECKING:
     from ._io.zarr import read_zarr, write_zarr
-else:
-    # In case zarr is not imported (and maybe not installed),
-    # wrap these functions into shims.
-    def read_zarr(*args, **kw):  # pragma: no cover
-        from ._io.zarr import read_zarr
+else:  # pragma: no cover
 
-        return read_zarr(*args, **kw)
+    def read_zarr(*args, **kw):
+        raise ImportError("zarr is not installed")
 
-    def write_zarr(*args, **kw):  # pragma: no cover
-        from ._io.zarr import write_zarr
-
-        return write_zarr(*args, **kw)
+    def write_zarr(*args, **kw):
+        raise ImportError("zarr is not installed")
 
 
 __all__ = [

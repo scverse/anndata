@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from functools import singledispatch, wraps
+from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar, Union
@@ -90,10 +91,10 @@ else:
 # Optional deps
 #############################
 
-try:
+if find_spec("zarr") or TYPE_CHECKING:
     from zarr.core import Array as ZarrArray
     from zarr.hierarchy import Group as ZarrGroup
-except ImportError:
+else:
 
     class ZarrArray:
         @staticmethod
@@ -106,12 +107,10 @@ except ImportError:
             return "mock zarr.core.Group"
 
 
-try:
-    import awkward
-
-    AwkArray = awkward.Array
-
-except ImportError:
+if find_spec("awkward") or TYPE_CHECKING:
+    import awkward  # noqa: F401
+    from awkward import Array as AwkArray
+else:
 
     class AwkArray:
         @staticmethod
@@ -119,9 +118,9 @@ except ImportError:
             return "mock awkward.highlevel.Array"
 
 
-try:
+if find_spec("zappy") or TYPE_CHECKING:
     from zappy.base import ZappyArray
-except ImportError:
+else:
 
     class ZappyArray:
         @staticmethod
@@ -129,9 +128,12 @@ except ImportError:
             return "mock zappy.base.ZappyArray"
 
 
-try:
+if TYPE_CHECKING:
+    # type checkers are confused and can only see …core.Array
+    from dask.array.core import Array as DaskArray
+elif find_spec("dask"):
     from dask.array import Array as DaskArray
-except ImportError:
+else:
 
     class DaskArray:
         @staticmethod
@@ -139,27 +141,20 @@ except ImportError:
             return "mock dask.array.core.Array"
 
 
-try:
+if find_spec("cupy") or TYPE_CHECKING:
     from cupy import ndarray as CupyArray
-    from cupyx.scipy.sparse import (
-        csc_matrix as CupyCSCMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        csr_matrix as CupyCSRMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        spmatrix as CupySparseMatrix,
-    )
+    from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
+    from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
+    from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
 
     try:
         import dask.array as da
-
-        da.register_chunk_type(CupyCSRMatrix)
-        da.register_chunk_type(CupyCSCMatrix)
     except ImportError:
         pass
-
-except ImportError:
+    else:
+        da.register_chunk_type(CupyCSRMatrix)
+        da.register_chunk_type(CupyCSCMatrix)
+else:
 
     class CupySparseMatrix:
         @staticmethod
