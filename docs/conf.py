@@ -7,7 +7,6 @@ from importlib import metadata
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-import zarr as _  # noqa: F401  # Makes {read,write}_zarr show up in docs.
 from docutils import nodes
 
 if TYPE_CHECKING:
