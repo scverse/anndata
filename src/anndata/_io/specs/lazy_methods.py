@@ -120,7 +120,7 @@ def read_sparse_as_dask(
     )
     memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     make_chunk = partial(
-        make_dask_chunk, path_or_group, elem_name, wrap=ad.sparse_dataset
+        make_dask_chunk, path_or_group, elem_name, wrap=ad.io.sparse_dataset
     )
     da_mtx = da.map_blocks(
         make_chunk,

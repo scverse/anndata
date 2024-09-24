@@ -107,10 +107,10 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
     pattern = r"(?s)^((?!Error raised while writing key '/?a').)*$"
 
     with pytest.raises(IORegistryError, match=pattern):
-        ad.write_elem(group, "/", {"a": {"b": Foo()}})
+        ad.io.write_elem(group, "/", {"a": {"b": Foo()}})
 
-    ad.write_elem(group, "/", {"a": {"b": [1, 2, 3]}})
+    ad.io.write_elem(group, "/", {"a": {"b": [1, 2, 3]}})
     group["a/b"].attrs["encoding-type"] = "not a real encoding type"
 
     with pytest.raises(IORegistryError, match=pattern):
-        ad.read_elem(group)
+        ad.io.read_elem(group)
