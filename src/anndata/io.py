@@ -19,17 +19,13 @@ from ._io.write import write_csvs, write_loom
 
 if find_spec("zarr") or TYPE_CHECKING:
     from ._io.zarr import read_zarr, write_zarr
-else:
+else:  # pragma: no cover
 
-    def read_zarr(*args, **kw):  # pragma: no cover
-        from ._io.zarr import read_zarr
+    def read_zarr(*args, **kw):
+        raise ImportError("zarr is not installed")
 
-        return read_zarr(*args, **kw)
-
-    def write_zarr(*args, **kw):  # pragma: no cover
-        from ._io.zarr import write_zarr
-
-        return write_zarr(*args, **kw)
+    def write_zarr(*args, **kw):
+        raise ImportError("zarr is not installed")
 
 
 __all__ = [
