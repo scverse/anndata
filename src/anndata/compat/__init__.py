@@ -108,6 +108,7 @@ else:
 
 
 if find_spec("awkward") or TYPE_CHECKING:
+    import awkward  # noqa: F401
     from awkward import Array as AwkArray
 else:
 
