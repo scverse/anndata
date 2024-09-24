@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from functools import singledispatch, wraps
+from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar, Union
@@ -90,107 +91,89 @@ else:
 # Optional deps
 #############################
 
-if TYPE_CHECKING:
+if find_spec("zarr") or TYPE_CHECKING:
     from zarr.core import Array as ZarrArray
     from zarr.hierarchy import Group as ZarrGroup
 else:
-    try:
-        from zarr.core import Array as ZarrArray
-        from zarr.hierarchy import Group as ZarrGroup
-    except ImportError:
 
-        class ZarrArray:
-            @staticmethod
-            def __repr__():
-                return "mock zarr.core.Array"
+    class ZarrArray:
+        @staticmethod
+        def __repr__():
+            return "mock zarr.core.Array"
 
-        class ZarrGroup:
-            @staticmethod
-            def __repr__():
-                return "mock zarr.core.Group"
+    class ZarrGroup:
+        @staticmethod
+        def __repr__():
+            return "mock zarr.core.Group"
 
 
-if TYPE_CHECKING:
+if find_spec("awkward") or TYPE_CHECKING:
     from awkward import Array as AwkArray
 else:
-    try:
-        from awkward import Array as AwkArray
-    except ImportError:
 
-        class AwkArray:
-            @staticmethod
-            def __repr__():
-                return "mock awkward.highlevel.Array"
+    class AwkArray:
+        @staticmethod
+        def __repr__():
+            return "mock awkward.highlevel.Array"
 
 
-if TYPE_CHECKING:
+if find_spec("zappy") or TYPE_CHECKING:
     from zappy.base import ZappyArray
 else:
-    try:
-        from zappy.base import ZappyArray
-    except ImportError:
 
-        class ZappyArray:
-            @staticmethod
-            def __repr__():
-                return "mock zappy.base.ZappyArray"
+    class ZappyArray:
+        @staticmethod
+        def __repr__():
+            return "mock zappy.base.ZappyArray"
 
 
 if TYPE_CHECKING:
     # type checkers are confused and can only see …core.Array
     from dask.array.core import Array as DaskArray
+elif find_spec("dask"):
+    from dask.array import Array as DaskArray
 else:
-    try:
-        from dask.array import Array as DaskArray
-    except ImportError:
 
-        class DaskArray:
-            @staticmethod
-            def __repr__():
-                return "mock dask.array.core.Array"
+    class DaskArray:
+        @staticmethod
+        def __repr__():
+            return "mock dask.array.core.Array"
 
 
-if TYPE_CHECKING:
+if find_spec("cupy") or TYPE_CHECKING:
     from cupy import ndarray as CupyArray
     from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
     from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
     from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
-else:
+
     try:
-        from cupy import ndarray as CupyArray
-        from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
-        from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
-        from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
-
-        try:
-            import dask.array as da
-        except ImportError:
-            pass
-        else:
-            da.register_chunk_type(CupyCSRMatrix)
-            da.register_chunk_type(CupyCSCMatrix)
-
+        import dask.array as da
     except ImportError:
+        pass
+    else:
+        da.register_chunk_type(CupyCSRMatrix)
+        da.register_chunk_type(CupyCSCMatrix)
+else:
 
-        class CupySparseMatrix:
-            @staticmethod
-            def __repr__():
-                return "mock cupyx.scipy.sparse.spmatrix"
+    class CupySparseMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.spmatrix"
 
-        class CupyCSRMatrix:
-            @staticmethod
-            def __repr__():
-                return "mock cupyx.scipy.sparse.csr_matrix"
+    class CupyCSRMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csr_matrix"
 
-        class CupyCSCMatrix:
-            @staticmethod
-            def __repr__():
-                return "mock cupyx.scipy.sparse.csc_matrix"
+    class CupyCSCMatrix:
+        @staticmethod
+        def __repr__():
+            return "mock cupyx.scipy.sparse.csc_matrix"
 
-        class CupyArray:
-            @staticmethod
-            def __repr__():
-                return "mock cupy.ndarray"
+    class CupyArray:
+        @staticmethod
+        def __repr__():
+            return "mock cupy.ndarray"
 
 
 #############################

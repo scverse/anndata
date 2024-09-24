@@ -8,6 +8,7 @@ from collections import Counter
 from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
+from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
@@ -1038,18 +1039,15 @@ DASK_CUPY_MATRIX_PARAMS = [
     ),
 ]
 
-if TYPE_CHECKING:
+if find_spec("zarr") or TYPE_CHECKING:
     from zarr import DirectoryStore
 else:
-    try:
-        from zarr import DirectoryStore
-    except ImportError:
 
-        class DirectoryStore:
-            def __init__(self, *_args, **_kwargs) -> None:
-                cls_name = type(self).__name__
-                msg = f"zarr must be imported to create a {cls_name} instance."
-                raise ImportError(msg)
+    class DirectoryStore:
+        def __init__(self, *_args, **_kwargs) -> None:
+            cls_name = type(self).__name__
+            msg = f"zarr must be imported to create a {cls_name} instance."
+            raise ImportError(msg)
 
 
 class AccessTrackingStore(DirectoryStore):
