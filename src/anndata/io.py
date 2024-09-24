@@ -20,8 +20,8 @@ from ._io.write import write_csvs, write_loom
 if "zarr" in sys.modules or TYPE_CHECKING:
     from ._io.zarr import read_zarr, write_zarr
 else:
-    # Importing zarr is slow, so unless it’s already imported,
-    # we wrap these functions into shims.
+    # In case zarr is not imported (and maybe not installed),
+    # wrap these functions into shims.
     def read_zarr(*args, **kw):  # pragma: no cover
         from ._io.zarr import read_zarr
 
