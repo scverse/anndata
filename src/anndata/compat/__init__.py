@@ -90,96 +90,107 @@ else:
 # Optional deps
 #############################
 
-try:
+if TYPE_CHECKING:
     from zarr.core import Array as ZarrArray
     from zarr.hierarchy import Group as ZarrGroup
-except ImportError:
-
-    class ZarrArray:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.core.Array"
-
-    class ZarrGroup:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.core.Group"
-
-
-try:
-    import awkward
-
-    AwkArray = awkward.Array
-
-except ImportError:
-
-    class AwkArray:
-        @staticmethod
-        def __repr__():
-            return "mock awkward.highlevel.Array"
-
-
-try:
-    from zappy.base import ZappyArray
-except ImportError:
-
-    class ZappyArray:
-        @staticmethod
-        def __repr__():
-            return "mock zappy.base.ZappyArray"
-
-
-try:
-    from dask.array import Array as DaskArray
-except ImportError:
-
-    class DaskArray:
-        @staticmethod
-        def __repr__():
-            return "mock dask.array.core.Array"
-
-
-try:
-    from cupy import ndarray as CupyArray
-    from cupyx.scipy.sparse import (
-        csc_matrix as CupyCSCMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        csr_matrix as CupyCSRMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        spmatrix as CupySparseMatrix,
-    )
-
+else:
     try:
-        import dask.array as da
-
-        da.register_chunk_type(CupyCSRMatrix)
-        da.register_chunk_type(CupyCSCMatrix)
+        from zarr.core import Array as ZarrArray
+        from zarr.hierarchy import Group as ZarrGroup
     except ImportError:
-        pass
 
-except ImportError:
+        class ZarrArray:
+            @staticmethod
+            def __repr__():
+                return "mock zarr.core.Array"
 
-    class CupySparseMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.spmatrix"
+        class ZarrGroup:
+            @staticmethod
+            def __repr__():
+                return "mock zarr.core.Group"
 
-    class CupyCSRMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csr_matrix"
 
-    class CupyCSCMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csc_matrix"
+if TYPE_CHECKING:
+    from awkward import Array as AwkArray
+else:
+    try:
+        from awkward import Array as AwkArray
+    except ImportError:
 
-    class CupyArray:
-        @staticmethod
-        def __repr__():
-            return "mock cupy.ndarray"
+        class AwkArray:
+            @staticmethod
+            def __repr__():
+                return "mock awkward.highlevel.Array"
+
+
+if TYPE_CHECKING:
+    from zappy.base import ZappyArray
+else:
+    try:
+        from zappy.base import ZappyArray
+    except ImportError:
+
+        class ZappyArray:
+            @staticmethod
+            def __repr__():
+                return "mock zappy.base.ZappyArray"
+
+
+if TYPE_CHECKING:
+    # type checkers are confused and can only see …core.Array
+    from dask.array.core import Array as DaskArray
+else:
+    try:
+        from dask.array import Array as DaskArray
+    except ImportError:
+
+        class DaskArray:
+            @staticmethod
+            def __repr__():
+                return "mock dask.array.core.Array"
+
+
+if TYPE_CHECKING:
+    from cupy import ndarray as CupyArray
+    from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
+    from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
+    from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
+else:
+    try:
+        from cupy import ndarray as CupyArray
+        from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
+        from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
+        from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
+
+        try:
+            import dask.array as da
+        except ImportError:
+            pass
+        else:
+            da.register_chunk_type(CupyCSRMatrix)
+            da.register_chunk_type(CupyCSCMatrix)
+
+    except ImportError:
+
+        class CupySparseMatrix:
+            @staticmethod
+            def __repr__():
+                return "mock cupyx.scipy.sparse.spmatrix"
+
+        class CupyCSRMatrix:
+            @staticmethod
+            def __repr__():
+                return "mock cupyx.scipy.sparse.csr_matrix"
+
+        class CupyCSCMatrix:
+            @staticmethod
+            def __repr__():
+                return "mock cupyx.scipy.sparse.csc_matrix"
+
+        class CupyArray:
+            @staticmethod
+            def __repr__():
+                return "mock cupy.ndarray"
 
 
 #############################

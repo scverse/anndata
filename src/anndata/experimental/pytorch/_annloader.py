@@ -14,11 +14,14 @@ from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-try:
     import torch
     from torch.utils.data import BatchSampler, DataLoader, Sampler
-except ImportError:
-    Sampler, BatchSampler, DataLoader = object, object, object
+else:
+    try:
+        import torch
+        from torch.utils.data import BatchSampler, DataLoader, Sampler
+    except ImportError:
+        Sampler, BatchSampler, DataLoader = object, object, object
 
 
 # Custom sampler to get proper batches instead of joined separate indices
