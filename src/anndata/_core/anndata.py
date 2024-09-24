@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
+from legacy_api_wrap import legacy_api
 from natsort import natsorted
 from numpy import ma
 from pandas.api.types import infer_dtype
@@ -218,12 +219,24 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         var={"var_names", "col_names", "index"},
     )
 
+    @legacy_api(
+        "obsm",
+        "varm",
+        "layers",
+        "raw",
+        "dtype",
+        "shape",
+        "filename",
+        "filemode",
+        "asview",
+    )
     def __init__(
         self,
         X: np.ndarray | sparse.spmatrix | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
+        *,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
@@ -233,7 +246,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename: PathLike | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
-        *,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         oidx: Index1D | None = None,
@@ -469,7 +481,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # layers
         self.layers = layers
 
-    def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
+    @legacy_api("show_stratified", "with_disk")
+    def __sizeof__(
+        self, *, show_stratified: bool = False, with_disk: bool = False
+    ) -> int:
         def get_size(X) -> int:
             def cs_to_bytes(X) -> int:
                 return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
@@ -1250,7 +1265,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
-    def _get_X(self, use_raw=False, layer=None):
+    def _get_X(self, *, use_raw: bool = False, layer: str | None = None):
         """\
         Convenience method for getting expression values
         with common arguments and error handling.
@@ -1334,8 +1349,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 layer = None
         return get_vector(self, k, "var", "obs", layer=layer)
 
-    @utils.deprecated("obs_vector")
-    def _get_obs_array(self, k, use_raw=False, layer=None):
+    @deprecated("obs_vector")
+    def _get_obs_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
         """\
         Get an array from the layer (default layer='X') along the :attr:`obs`
         dimension by first looking up `obs.keys` and then :attr:`obs_names`.
@@ -1345,8 +1360,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             return self.raw.obs_vector(k)
 
-    @utils.deprecated("var_vector")
-    def _get_var_array(self, k, use_raw=False, layer=None):
+    @deprecated("var_vector")
+    def _get_var_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
         """\
         Get an array from the layer (default layer='X') along the :attr:`var`
         dimension by first looking up `var.keys` and then :attr:`var_names`.
@@ -1385,7 +1400,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    def to_memory(self, copy=False) -> AnnData:
+    @legacy_api("copy")
+    def to_memory(self, *, copy: bool = False) -> AnnData:
         """Return a new AnnData object with all backed arrays loaded into memory.
 
         Params
@@ -1878,7 +1894,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     write = write_h5ad  # a shortcut and backwards compat
 
-    def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ","):
+    @legacy_api("skip_data", "sep")
+    def write_csvs(self, dirname: PathLike, *, skip_data: bool = True, sep: str = ","):
         """\
         Write annotation to `.csv` files.
 
@@ -1898,7 +1915,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
-    def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
+    @legacy_api("write_obsm_varm")
+    def write_loom(self, filename: PathLike, *, write_obsm_varm: bool = False):
         """\
         Write `.loom`-formatted hdf5 file.
 
@@ -1951,9 +1969,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if start < n:
             yield (self.X[start:n], start, n)
 
+    @legacy_api("replace")
     def chunk_X(
         self,
         select: int | Sequence[int] | np.ndarray = 1000,
+        *,
         replace: bool = True,
     ):
         """\
@@ -2011,7 +2031,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     # --------------------------------------------------------------------------
 
     @property
-    @utils.deprecated("is_view")
+    @deprecated("is_view")
     def isview(self):
         return self.is_view
 

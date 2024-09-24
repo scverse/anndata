@@ -125,7 +125,9 @@ def merge_strategy(request):
     return request.param
 
 
-def fix_known_differences(orig, result, backwards_compat=True):
+def fix_known_differences(
+    orig: AnnData, result: AnnData, *, backwards_compat: bool = True
+):
     """
     Helper function for reducing anndata's to only the elements we expect to be
     equivalent after concatenation.

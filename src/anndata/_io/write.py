@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+from legacy_api_wrap import legacy_api
 from scipy.sparse import issparse
 
 from .._warnings import WriteWarning
@@ -21,8 +22,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@legacy_api("skip_data", "sep")
 def write_csvs(
-    dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ","
+    dirname: PathLike, adata: AnnData, *, skip_data: bool = True, sep: str = ","
 ):
     """See :meth:`~anndata.AnnData.write_csvs`."""
     dirname = Path(dirname)
@@ -75,7 +77,8 @@ def write_csvs(
         )
 
 
-def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
+@legacy_api("write_obsm_varm")
+def write_loom(filename: PathLike, adata: AnnData, *, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
     row_names = adata.var_names

@@ -472,7 +472,7 @@ def test_readloom_deprecations(tmp_path):
 
     # positional -> keyword
     with pytest.warns(FutureWarning, match=r"sparse"):
-        depr_result = ad.io.read_loom(loom_pth, True)
+        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
     actual_result = ad.io.read_loom(loom_pth, sparse=True)
     assert type(depr_result.X) == type(actual_result.X)
 

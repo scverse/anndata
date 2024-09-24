@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 import pandas as pd
 from h5py import Dataset
+from legacy_api_wrap import legacy_api
 
 from ..._core.aligned_mapping import AxisArrays
 from ..._core.anndata import AnnData
@@ -18,7 +19,7 @@ from ..._core.views import _resolve_idx
 from ...compat import _map_cat_to_str
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
     from typing import Literal
 
     from ..._core.index import Index
@@ -123,9 +124,11 @@ class _ConcatViewMixin:
 
 
 class _IterateViewMixin:
+    @legacy_api("axis", "shuffle", "drop_last")
     def iterate_axis(
         self,
         batch_size: int,
+        *,
         axis: Literal[0, 1] = 0,
         shuffle: bool = False,
         drop_last: bool = False,
@@ -189,7 +192,7 @@ class MapObsView:
         self.dtypes = dtypes
         self.obs_names = obs_names
 
-    def __getitem__(self, key, use_convert=True):
+    def __getitem__(self, key: str, *, use_convert: bool = True):
         if self._keys is not None and key not in self._keys:
             raise KeyError(f"No {key} in {self.attr} view")
 
@@ -237,11 +240,12 @@ class MapObsView:
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
-    def to_dict(self, keys=None, use_convert=True):
+    @legacy_api("use_convert")
+    def to_dict(self, keys: Iterable[str] | None = None, *, use_convert=True):
         dct = {}
         keys = self.keys() if keys is None else keys
         for key in keys:
-            dct[key] = self.__getitem__(key, use_convert)
+            dct[key] = self.__getitem__(key, use_convert=use_convert)
         return dct
 
     @property
@@ -299,7 +303,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         self._convert_X = None
         self.convert = convert
 
-    def _lazy_init_attr(self, attr, set_vidx=False):
+    def _lazy_init_attr(self, attr: str, *, set_vidx: bool = False):
         if getattr(self, f"_{attr}_view") is not None:
             return
         keys = None
@@ -544,7 +548,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
 
-    def to_adata(self, ignore_X: bool = False, ignore_layers: bool = False):
+    @legacy_api("ignore_X", "ignore_layers")
+    def to_adata(self, *, ignore_X: bool = False, ignore_layers: bool = False):
         """Convert this AnnCollectionView object to an AnnData object.
 
         Parameters
@@ -675,9 +680,21 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     100
     """
 
+    @legacy_api(
+        "join_obs",
+        "join_obsm",
+        "join_vars",
+        "label",
+        "keys",
+        "index_unique",
+        "convert",
+        "harmonize_dtypes",
+        "indices_strict",
+    )
     def __init__(
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
+        *,
         join_obs: Literal["inner", "outer"] | None = "inner",
         join_obsm: Literal["inner"] | None = None,
         join_vars: Literal["inner"] | None = None,

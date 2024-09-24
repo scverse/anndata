@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Literal
 
+    from .._types import ArrayStorageType
     from . import anndata
 
 
@@ -118,7 +119,7 @@ class AnnDataFileManager:
 
 
 @singledispatch
-def to_memory(x, copy=False):
+def to_memory(x, *, copy: bool = False):
     """Permissivley convert objects to in-memory representation.
 
     If they already are in-memory, (or are just unrecognized) pass a copy through.
@@ -131,27 +132,27 @@ def to_memory(x, copy=False):
 
 @to_memory.register(ZarrArray)
 @to_memory.register(h5py.Dataset)
-def _(x, copy=False):
+def _(x: ArrayStorageType, *, copy: bool = False):
     return x[...]
 
 
 @to_memory.register(BaseCompressedSparseDataset)
-def _(x: BaseCompressedSparseDataset, copy=True):
+def _(x: BaseCompressedSparseDataset, *, copy: bool = False):
     return x.to_memory()
 
 
 @to_memory.register(DaskArray)
-def _(x, copy=False):
+def _(x: DaskArray, *, copy: bool = False):
     return x.compute()
 
 
 @to_memory.register(Mapping)
-def _(x: Mapping, copy=False):
+def _(x: Mapping, *, copy: bool = False):
     return {k: to_memory(v, copy=copy) for k, v in x.items()}
 
 
 @to_memory.register(AwkArray)
-def _(x, copy=False):
+def _(x: AwkArray, *, copy: bool = False):
     from copy import copy as _copy
 
     if copy:

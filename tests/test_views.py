@@ -627,7 +627,7 @@ def test_invalid_scalar_index(adata, index):
 
 @pytest.mark.parametrize("obs", [False, True])
 @pytest.mark.parametrize("index", [-100, -50, -1])
-def test_negative_scalar_index(adata, index: int, obs: bool):
+def test_negative_scalar_index(*, adata, index: int, obs: bool):
     pos_index = index + (adata.n_obs if obs else adata.n_vars)
 
     if obs:
