@@ -207,6 +207,7 @@ required-imports = ["from __future__ import annotations"]
 "subprocess.call".msg = "Use `subprocess.run([…])` instead"
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
+"legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = []
 strict = true

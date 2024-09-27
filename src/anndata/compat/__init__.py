@@ -6,7 +6,7 @@ from codecs import decode
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from functools import singledispatch, wraps
+from functools import partial, singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
@@ -175,6 +175,16 @@ else:
         @staticmethod
         def __repr__():
             return "mock cupy.ndarray"
+
+
+if find_spec("legacy_api_wrap") or TYPE_CHECKING:
+    from legacy_api_wrap import legacy_api  # noqa: TID251
+
+    old_positionals = partial(legacy_api, category=FutureWarning)
+else:
+
+    def old_positionals(*old_positionals):
+        return lambda func: func
 
 
 #############################

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 import pandas as pd
 from h5py import Dataset
-from legacy_api_wrap import legacy_api
 
 from ..._core.aligned_mapping import AxisArrays
 from ..._core.anndata import AnnData
@@ -16,7 +15,7 @@ from ..._core.index import _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
-from ...compat import _map_cat_to_str
+from ...compat import _map_cat_to_str, old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -124,7 +123,7 @@ class _ConcatViewMixin:
 
 
 class _IterateViewMixin:
-    @legacy_api("axis", "shuffle", "drop_last")
+    @old_positionals("axis", "shuffle", "drop_last")
     def iterate_axis(
         self,
         batch_size: int,
@@ -240,7 +239,7 @@ class MapObsView:
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
-    @legacy_api("use_convert")
+    @old_positionals("use_convert")
     def to_dict(self, keys: Iterable[str] | None = None, *, use_convert=True):
         dct = {}
         keys = self.keys() if keys is None else keys
@@ -548,7 +547,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
 
-    @legacy_api("ignore_X", "ignore_layers")
+    @old_positionals("ignore_X", "ignore_layers")
     def to_adata(self, *, ignore_X: bool = False, ignore_layers: bool = False):
         """Convert this AnnCollectionView object to an AnnData object.
 
@@ -680,7 +679,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     100
     """
 
-    @legacy_api(
+    @old_positionals(
         "join_obs",
         "join_obsm",
         "join_vars",

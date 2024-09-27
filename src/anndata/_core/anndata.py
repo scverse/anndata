@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
-from legacy_api_wrap import legacy_api
 from natsort import natsorted
 from numpy import ma
 from pandas.api.types import infer_dtype
@@ -25,7 +24,7 @@ from scipy.sparse import issparse
 
 from .. import utils
 from .._settings import settings
-from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx
+from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx, old_positionals
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -219,7 +218,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         var={"var_names", "col_names", "index"},
     )
 
-    @legacy_api(
+    @old_positionals(
         "obsm",
         "varm",
         "layers",
@@ -481,7 +480,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # layers
         self.layers = layers
 
-    @legacy_api("show_stratified", "with_disk")
+    @old_positionals("show_stratified", "with_disk")
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
@@ -1400,7 +1399,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
-    @legacy_api("copy")
+    @old_positionals("copy")
     def to_memory(self, *, copy: bool = False) -> AnnData:
         """Return a new AnnData object with all backed arrays loaded into memory.
 
@@ -1894,7 +1893,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     write = write_h5ad  # a shortcut and backwards compat
 
-    @legacy_api("skip_data", "sep")
+    @old_positionals("skip_data", "sep")
     def write_csvs(self, dirname: PathLike, *, skip_data: bool = True, sep: str = ","):
         """\
         Write annotation to `.csv` files.
@@ -1915,7 +1914,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
-    @legacy_api("write_obsm_varm")
+    @old_positionals("write_obsm_varm")
     def write_loom(self, filename: PathLike, *, write_obsm_varm: bool = False):
         """\
         Write `.loom`-formatted hdf5 file.
@@ -1969,7 +1968,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if start < n:
             yield (self.X[start:n], start, n)
 
-    @legacy_api("replace")
+    @old_positionals("replace")
     def chunk_X(
         self,
         select: int | Sequence[int] | np.ndarray = 1000,

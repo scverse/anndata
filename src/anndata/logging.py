@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from legacy_api_wrap import legacy_api
+from .compat import old_positionals
 
 _previous_memory_usage = None
 
@@ -40,7 +40,7 @@ def get_memory_usage() -> tuple[float, float]:
     return mem, mem_diff
 
 
-@legacy_api("newline")
+@old_positionals("newline")
 def format_memory_usage(
     mem_usage: tuple[float, float], msg: str = "", *, newline: bool = False
 ):
@@ -53,6 +53,6 @@ def format_memory_usage(
     )
 
 
-@legacy_api("newline")
+@old_positionals("newline")
 def print_memory_usage(msg: str = "", *, newline: bool = False):
     print(format_memory_usage(get_memory_usage(), msg, newline))

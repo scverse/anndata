@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from legacy_api_wrap import legacy_api
 from scipy.sparse import issparse
 
 from .._warnings import WriteWarning
+from ..compat import old_positionals
 from ..logging import get_logger
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@legacy_api("skip_data", "sep")
+@old_positionals("skip_data", "sep")
 def write_csvs(
     dirname: PathLike, adata: AnnData, *, skip_data: bool = True, sep: str = ","
 ):
@@ -77,7 +77,7 @@ def write_csvs(
         )
 
 
-@legacy_api("write_obsm_varm")
+@old_positionals("write_obsm_varm")
 def write_loom(filename: PathLike, adata: AnnData, *, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}

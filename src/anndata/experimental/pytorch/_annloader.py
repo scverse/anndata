@@ -8,10 +8,10 @@ from math import ceil
 from typing import TYPE_CHECKING
 
 import numpy as np
-from legacy_api_wrap import legacy_api
 from scipy.sparse import issparse
 
 from ..._core.anndata import AnnData
+from ...compat import old_positionals
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
 if find_spec("torch") or TYPE_CHECKING:
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 # Custom sampler to get proper batches instead of joined separate indices
 # maybe move to multi_files
 class BatchIndexSampler(Sampler):
-    @legacy_api("batch_size", "shuffle", "drop_last")
+    @old_positionals("batch_size", "shuffle", "drop_last")
     def __init__(
         self,
         n_obs: int,
@@ -147,7 +147,7 @@ class AnnLoader(DataLoader):
         arguments for `AnnCollection` initialization.
     """
 
-    @legacy_api("batch_size", "shuffle", "use_default_converter", "use_cuda")
+    @old_positionals("batch_size", "shuffle", "use_default_converter", "use_cuda")
     def __init__(
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
