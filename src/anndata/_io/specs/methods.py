@@ -377,6 +377,8 @@ def write_list(
 @_REGISTRY.register_write(ZarrGroup, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
 def write_basic(
     f: GroupStorageType,
     k: str,
@@ -389,17 +391,14 @@ def write_basic(
     f.create_dataset(k, data=elem, **dataset_kwargs)
 
 
-def _iter_chunks_for_copy(elem, dest):
+def _iter_chunks_for_copy(elem: ArrayStorageType, dest: ArrayStorageType):
     """
     Returns an iterator of tuples of slices for copying chunks from `elem` to `dest`.
 
-    * If `elem` has chunks, it will return the chunks of `elem`.
     * If `dest` has chunks, it will return the chunks of `dest`.
-    * If neither is chunked, we write it in ~100MB chunks or 1000 rows, whichever is larger.
+    * If `dest` is not chunked, we write it in ~100MB chunks or 1000 rows, whichever is larger.
     """
-    if elem.chunks:
-        return elem.iter_chunks()
-    elif dest.chunks:
+    if dest.chunks:
         return dest.iter_chunks()
     else:
         itemsize = elem.dtype.itemsize
@@ -413,17 +412,21 @@ def _iter_chunks_for_copy(elem, dest):
 
 @_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
-def write_chunked_dense_array(
+def write_chunked_dense_array_to_h5(
     f: GroupStorageType,
     k: str,
-    elem,
+    elem: ArrayStorageType,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    dest = f.create_dataset_like(k, elem, **dataset_kwargs)
+    """Write to a h5py.Dataset in chunks.
+
+    `h5py.Group.create_dataset(..., data: h5py.Dataset)` will load all of `data` into memory
+    before writing. Instead, we will write in chunks to avoid this. We don't need to do this for
+    zarr since zarr handles this automatically.
+    """
+    dest = f.create_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
 
     for chunk in _iter_chunks_for_copy(elem, dest):
         dest[chunk] = elem[chunk]
