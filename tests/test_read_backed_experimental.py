@@ -166,12 +166,16 @@ def test_unconsolidated(tmp_path, mtx_format):
 
 
 @pytest.mark.parametrize("join", ["outer", "inner"])
-def test_concat_simple(tmp_path, join: Literal["outer", "inner"]):
+@pytest.mark.parametrize("are_vars_different", [True, False])
+def test_concat_simple(
+    tmp_path, join: Literal["outer", "inner"], are_vars_different: bool
+):
     from anndata.experimental.backed._compat import Dataset
 
     lazy_adatas = []
     adatas = []
     stores: list[AccessTrackingStore] = []
+    var_indices = []
     M = 1000
     N = 50
     n_datasets = 2
@@ -179,7 +183,11 @@ def test_concat_simple(tmp_path, join: Literal["outer", "inner"]):
         orig_path = tmp_path / f"orig_{dataset_index}.zarr"
         orig_path.mkdir()
         obs_names = pd.Index(f"cell_{dataset_index}_{i}" for i in range(M))
-        var_names = pd.Index(f"gene_{i}" for i in range(N))
+        var_names = pd.Index(
+            f"gene_{i}{f'_{dataset_index}_ds' if are_vars_different and (i % 2) else ''}"
+            for i in range(N)
+        )
+        var_indices.append(var_names)
         obs = gen_typed_df(M, obs_names)
         var = gen_typed_df(N, var_names)
         orig = AnnData(
@@ -200,16 +208,36 @@ def test_concat_simple(tmp_path, join: Literal["outer", "inner"]):
     for i in range(n_datasets):
         stores[i].assert_access_count("obs/int64", 0)
         stores[i].assert_access_count("var/int64", 0)
-    df = ad.concat(adatas, join=join).obs
+    concatenated_memory = ad.concat(adatas, join=join)
     # account for differences
 
     # name is lost normally, should fix
-    df.index.name = "obs_names"
+    obs_memory = concatenated_memory.obs
+    obs_memory.index.name = "obs_names"
 
     # remote has object dtype, need to convert back for integers booleans etc.
-    remote_df = concated_remote.obs.to_pandas()
-    for col in df.columns:
-        dtype = df[col].dtype
-        if pd.api.types.is_extension_array_dtype(dtype):
-            remote_df[col] = remote_df[col].astype(dtype)
-    assert_equal(remote_df, df)
+    def correct_extension_dtype_differences(remote: pd.DataFrame, memory: pd.DataFrame):
+        for col in memory.columns:
+            dtype = memory[col].dtype
+            if pd.api.types.is_extension_array_dtype(dtype):
+                remote[col] = remote[col].astype(dtype)
+        return remote, memory
+
+    assert_equal(
+        *correct_extension_dtype_differences(
+            concated_remote.obs.to_pandas(), obs_memory
+        )
+    )
+    # check non-different variables, taken from first annotation.  all others are null so incomparable
+    pd_index = pd.Index(filter(lambda x: not x.endswith("ds"), var_indices[0]))
+    var_df = adatas[0][:, pd_index].var.copy()
+    var_df.index.name = "var_names"
+    remote_df_corrected, _ = correct_extension_dtype_differences(
+        concated_remote[:, pd_index].var.to_pandas(), var_df
+    )
+    #  TODO:xr.merge always upcasts to float due to NA and you can't downcast?
+    for col in remote_df_corrected.columns:
+        dtype = remote_df_corrected[col].dtype
+        if dtype in [np.float64, np.float32]:
+            var_df[col] = var_df[col].astype(dtype)
+    assert_equal(remote_df_corrected, var_df)

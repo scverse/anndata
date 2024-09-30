@@ -1058,52 +1058,67 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
         return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
 
 
-def concat_dataset2d_on_annot_axis(
-    annotations: Iterable[Dataset2D],
-    axis_label: Literal["obs_names", "var_names"],
-    join: Join_T,
-):
+def make_dask_col_from_extension_dtype(col):
     import dask.array as da
 
     from anndata._io.specs.lazy_methods import compute_chunk_layout_for_axis_size
-    from anndata.experimental.backed._compat import xr
-    from anndata.experimental.backed._xarray import Dataset2D
 
+    new_col = col.copy()
+
+    def get_chunk(block_info=None):
+        idx = tuple(
+            slice(start, stop) for start, stop in block_info[None]["array-location"]
+        )
+        return np.array(new_col.data[idx].array)
+
+    # TODO: fix dtype
+    dtype = "object"
+    # TODO: get good chunk size?
+    return da.map_blocks(
+        get_chunk,
+        chunks=compute_chunk_layout_for_axis_size(1000, col.shape[0]),
+        meta=np.array([], dtype=dtype),
+    )
+
+
+def make_xarray_extension_dtypes_dask(
+    annotations: Iterable[Dataset2D],
+    axis_label: Literal["obs_names", "var_names"],
+):
     new_annotations = []
 
-    def make_dask_col(col: xr.DataArray):
-        new_col = col.copy()
-
-        def get_chunk(block_info=None):
-            idx = tuple(
-                slice(start, stop) for start, stop in block_info[None]["array-location"]
-            )
-            return np.array(new_col.data[idx].array)
-
-        # TODO: fix dtype
-        dtype = "object"
-        # TODO: get good chunk size?
-        return da.map_blocks(
-            get_chunk,
-            chunks=compute_chunk_layout_for_axis_size(1000, a.shape[0]),
-            meta=np.array([], dtype=dtype),
-        )
-
     for a in annotations:
+        extension_cols = []
         for col in a.columns:
             if col != axis_label:
-                extension_cols = []
                 if pd.api.types.is_extension_array_dtype(a[col]):
                     extension_cols += [col]
         new_annotations += [
             a.copy(
                 data={
-                    **{col: make_dask_col(a[col]) for col in extension_cols},
+                    **{
+                        col: make_dask_col_from_extension_dtype(a[col])
+                        for col in extension_cols
+                    },
                     **{col: a[col] for col in a.columns if col not in extension_cols},
                 }
             )
         ]
-    return Dataset2D(xr.concat(new_annotations, join=join, dim=axis_label))
+    return new_annotations
+
+
+def concat_dataset2d_on_annot_axis(
+    annotations: Iterable[Dataset2D],
+    axis_label: Literal["obs_names", "var_names"],
+    join: Join_T,
+):
+    from anndata.experimental.backed._compat import xr
+    from anndata.experimental.backed._xarray import Dataset2D
+
+    annotations_with_only_dask = make_xarray_extension_dtypes_dask(
+        annotations, axis_label
+    )
+    return Dataset2D(xr.concat(annotations_with_only_dask, join=join, dim=axis_label))
 
 
 def concat(
@@ -1143,6 +1158,8 @@ def concat(
         * `"unique"`: Elements for which there is only one possible value.
         * `"first"`: The first element seen at each from each position.
         * `"only"`: Elements that show up in only one of the objects.
+
+        For :class:`xarray.Dataset` objects, we use their :func:`xarray.merge` with `override` to stay lazy.
     uns_merge
         How the elements of `.uns` are selected. Uses the same set of strategies as
         the `merge` argument, except applied recursively.
@@ -1308,6 +1325,7 @@ def concat(
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
 
+    from anndata.experimental.backed._compat import xr
     from anndata.experimental.backed._xarray import Dataset2D
 
     # Argument normalization
@@ -1398,8 +1416,15 @@ def concat(
                 )
         alt_annot = merge_dataframes(alt_annotations, alt_indices, merge)
     else:
-        # TODO: figure out off-axis mapping
-        alt_annot = pd.DataFrame(index=alt_indices)
+        # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
+        # the only "lazy" setting so I'm not sure we really want that.
+        axis_label = cast(Literal["obs_names", "var_names"], f"{alt_axis_name}_names")
+        annotations_with_only_dask = make_xarray_extension_dtypes_dask(
+            alt_annotations, axis_label
+        )
+        alt_annot = Dataset2D(
+            xr.merge(annotations_with_only_dask, join=join, compat="override")
+        )
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
