@@ -199,7 +199,7 @@ def test_concat_simple(
         )
         orig.write_zarr(orig_path)
         store = AccessTrackingStore(orig_path)
-        store.initialize_key_trackers(["obs/int64", "var/int64"])
+        store.initialize_key_trackers(["obs/int64", "var/int64", "X"])
         lazy_adatas += [read_lazy(store)]
         adatas += [orig]
         stores += [store]
@@ -207,6 +207,7 @@ def test_concat_simple(
     assert isinstance(concated_remote.obs, Dataset)
     for i in range(n_datasets):
         stores[i].assert_access_count("obs/int64", 0)
+        stores[i].assert_access_count("X", 0)
         stores[i].assert_access_count("var/int64", 0)
     concatenated_memory = ad.concat(adatas, join=join)
     # account for differences
