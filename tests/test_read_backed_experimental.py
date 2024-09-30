@@ -241,3 +241,5 @@ def test_concat_simple(
         if dtype in [np.float64, np.float32]:
             var_df[col] = var_df[col].astype(dtype)
     assert_equal(remote_df_corrected, var_df)
+
+    assert_equal(concated_remote.X, concatenated_memory.X)
