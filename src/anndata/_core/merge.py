@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Literal, TypeVar
+from typing import Literal, TypeVar, cast
 from warnings import warn
 
 import numpy as np
@@ -1375,16 +1375,31 @@ def concat(
             ignore_index=True,
         )
     else:
-        axis_label = f"{axis_name}_names"
+        axis_label = cast(Literal["obs_names", "var_names"], f"{axis_name}_names")
         concat_annot = concat_dataset2d_on_annot_axis(annotations, axis_label, join)
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
 
     # Annotation for other axis
-    alt_annot = merge_dataframes(
-        [getattr(a, alt_axis_name) for a in adatas], alt_indices, merge
+    alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
+    are_any_alt_annotations_dataframes = any(
+        isinstance(a, pd.DataFrame) for a in alt_annotations
     )
+    are_alt_annotations_mixed_type = are_any_alt_annotations_dataframes and any(
+        isinstance(a, Dataset2D) for a in alt_annotations
+    )
+    if are_any_alt_annotations_dataframes:
+        alt_annotations_in_memory = alt_annotations.copy()
+        if are_alt_annotations_mixed_type:
+            for i, a in enumerate(alt_annotations):
+                alt_annotations_in_memory[i] = (
+                    a.to_pandas() if isinstance(a, Dataset2D) else a
+                )
+        alt_annot = merge_dataframes(alt_annotations, alt_indices, merge)
+    else:
+        # TODO: figure out off-axis mapping
+        alt_annot = pd.DataFrame(index=alt_indices)
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 

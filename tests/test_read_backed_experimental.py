@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from importlib.util import find_spec
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -17,6 +18,9 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_typed_df,
 )
+
+if TYPE_CHECKING:
+    from typing import Literal
 
 
 @pytest.fixture(
@@ -161,11 +165,13 @@ def test_unconsolidated(tmp_path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
-def test_concat_simple(tmp_path):
+@pytest.mark.parametrize("join", ["outer", "inner"])
+def test_concat_simple(tmp_path, join: Literal["outer", "inner"]):
     from anndata.experimental.backed._compat import Dataset
 
     lazy_adatas = []
     adatas = []
+    stores: list[AccessTrackingStore] = []
     M = 1000
     N = 50
     n_datasets = 2
@@ -185,11 +191,25 @@ def test_concat_simple(tmp_path):
         )
         orig.write_zarr(orig_path)
         store = AccessTrackingStore(orig_path)
+        store.initialize_key_trackers(["obs/int64", "var/int64"])
         lazy_adatas += [read_lazy(store)]
         adatas += [orig]
-    concated_remote = ad.concat(lazy_adatas)
+        stores += [store]
+    concated_remote = ad.concat(lazy_adatas, join=join)
     assert isinstance(concated_remote.obs, Dataset)
-    df = ad.concat(adatas).obs
+    for i in range(n_datasets):
+        stores[i].assert_access_count("obs/int64", 0)
+        stores[i].assert_access_count("var/int64", 0)
+    df = ad.concat(adatas, join=join).obs
     # account for differences
+
+    # name is lost normally, should fix
     df.index.name = "obs_names"
-    assert_equal(concated_remote.obs.to_pandas(), df)
+
+    # remote has object dtype, need to convert back for integers booleans etc.
+    remote_df = concated_remote.obs.to_pandas()
+    for col in df.columns:
+        dtype = df[col].dtype
+        if pd.api.types.is_extension_array_dtype(dtype):
+            remote_df[col] = remote_df[col].astype(dtype)
+    assert_equal(remote_df, df)
