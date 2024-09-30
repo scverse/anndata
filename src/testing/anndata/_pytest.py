@@ -45,7 +45,11 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
 def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
 ) -> Generator[None, None, None]:
-    from scanpy import settings
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
+        )
+        from scanpy import settings
 
     from anndata.compat import chdir
     from anndata.utils import import_name

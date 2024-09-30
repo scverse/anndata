@@ -277,7 +277,7 @@ def test_setting_dim_index(dim):
     mapping_attr = f"{dim}m"
 
     orig = gen_adata((5, 5))
-    orig.raw = orig
+    orig.raw = orig.copy()
     curr = orig.copy()
     view = orig[:, :]
     new_idx = pd.Index(list("abcde"), name="letters")
@@ -453,7 +453,7 @@ def test_slicing_remove_unused_categories():
 
 
 def test_slicing_dont_remove_unused_categories():
-    with settings.override(shall_remove_unused_categories=False):
+    with settings.override(remove_unused_categories=False):
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
         )
@@ -462,7 +462,7 @@ def test_slicing_dont_remove_unused_categories():
 
 
 def test_no_uniqueness_check_gives_repeat_indices():
-    with settings.override(shall_check_uniqueness=False):
+    with settings.override(check_uniqueness=False):
         obs_names = ["0", "0", "1", "1"]
         with warnings.catch_warnings():
             warnings.simplefilter("error")
@@ -590,7 +590,7 @@ def test_convenience():
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
-    adata.raw = adata
+    adata.raw = adata.copy()
     adata.X = adata.X / 2
     adata_dense = adata.copy()
     adata_dense.X = adata_dense.X.toarray()

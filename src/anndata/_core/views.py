@@ -306,7 +306,7 @@ def as_view_dask_array(array, view_args):
 
 @as_view.register(pd.DataFrame)
 def as_view_df(df, view_args):
-    if settings.shall_remove_unused_categories:
+    if settings.remove_unused_categories:
         for col in df.columns:
             if isinstance(df[col].dtype, pd.CategoricalDtype):
                 with pd.option_context("mode.chained_assignment", None):

@@ -36,7 +36,7 @@ def test_amgibuous_keys():
         ),
     )
 
-    adata.raw = adata
+    adata.raw = adata.copy()
 
     for k in var_keys:
         # These are mostly to check that the test is working

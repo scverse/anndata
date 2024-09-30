@@ -258,7 +258,7 @@ def test_dataset_append_memory(
         f = zarr.open_group(path, "a")
     else:
         f = h5py.File(path, "a")
-    ad.write_elem(f, "mtx", a)
+    ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
 
     diskmtx.append(b)
@@ -297,13 +297,13 @@ def test_read_array(
         f = zarr.open_group(path, "a")
     else:
         f = h5py.File(path, "a")
-    ad.write_elem(f, "mtx", a)
+    ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
     if not CAN_USE_SPARSE_ARRAY:
         pytest.skip("scipy.sparse.cs{r,c}array not available")
-    ad.settings.shall_use_sparse_array_on_read = True
+    ad.settings.use_sparse_array_on_read = True
     assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
-    ad.settings.shall_use_sparse_array_on_read = False
+    ad.settings.use_sparse_array_on_read = False
     assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
 
 
@@ -328,8 +328,8 @@ def test_dataset_append_disk(
         f = zarr.open_group(path, "a")
     else:
         f = h5py.File(path, "a")
-    ad.write_elem(f, "a", a)
-    ad.write_elem(f, "b", b)
+    ad.io.write_elem(f, "a", a)
+    ad.io.write_elem(f, "b", b)
     a_disk = sparse_dataset(f["a"])
     b_disk = sparse_dataset(f["b"])
 
@@ -349,7 +349,7 @@ def test_indptr_cache(
     path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
     f = zarr.open_group(path, "a")
-    ad.write_elem(f, "X", a)
+    ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/indptr"])
     f = zarr.open_group(store, "a")
@@ -434,7 +434,7 @@ def test_data_access(
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
     f = zarr.open_group(path, "a")
-    ad.write_elem(f, "X", a)
+    ad.io.write_elem(f, "X", a)
     data = f["X/data"][...]
     del f["X/data"]
     # chunk one at a time to count properly
@@ -480,8 +480,8 @@ def test_wrong_shape(
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "a", a_mem)
-    ad.write_elem(f, "b", b_mem)
+    ad.io.write_elem(f, "a", a_mem)
+    ad.io.write_elem(f, "b", b_mem)
     a_disk = sparse_dataset(f["a"])
     b_disk = sparse_dataset(f["b"])
 
@@ -498,7 +498,7 @@ def test_reset_group(tmp_path: Path):
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "base", base)
+    ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
     with pytest.raises(AttributeError):
         disk_mtx.group = f
@@ -513,7 +513,7 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "base", base)
+    ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
     pre_checks = disk_mtx.to_memory()
 
@@ -542,7 +542,7 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "/", base)
+    ad.io.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))
     assert_equal(adata.X, base)
 
@@ -583,7 +583,7 @@ def test_append_overflow_check(group_fn, sparse_class, tmpdir):
         shape=(1, 2),
     )
 
-    ad.write_elem(group, "mtx", orig_mtx)
+    ad.io.write_elem(group, "mtx", orig_mtx)
     backed = sparse_dataset(group["mtx"])
 
     # Checking for correct caching behaviour

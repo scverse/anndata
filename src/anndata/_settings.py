@@ -404,7 +404,7 @@ def validate_bool(val: Any) -> None:
 
 
 settings.register(
-    "shall_remove_unused_categories",
+    "remove_unused_categories",
     default_value=True,
     description="Whether or not to remove unused categories with :class:`~pandas.Categorical`.",
     validate=validate_bool,
@@ -412,7 +412,7 @@ settings.register(
 )
 
 settings.register(
-    "shall_check_uniqueness",
+    "check_uniqueness",
     default_value=True,
     description=(
         "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
@@ -441,7 +441,7 @@ def validate_sparse_settings(val: Any) -> None:
 
 
 settings.register(
-    "shall_use_sparse_array_on_read",
+    "use_sparse_array_on_read",
     default_value=False,
     description="Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data",
     validate=validate_sparse_settings,

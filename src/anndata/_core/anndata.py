@@ -133,15 +133,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     See Also
     --------
-    read_h5ad
-    read_csv
-    read_excel
-    read_hdf
-    read_loom
-    read_zarr
-    read_mtx
-    read_text
-    read_umi_tools
+    io.read_h5ad
+    io.read_csv
+    io.read_excel
+    io.read_hdf
+    io.read_loom
+    io.read_zarr
+    io.read_mtx
+    io.read_text
+    io.read_umi_tools
 
     Notes
     -----
@@ -296,7 +296,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         var_sub = adata_ref.var.iloc[vidx]
         # fix categories
         uns = copy(adata_ref._uns)
-        if settings.shall_remove_unused_categories:
+        if settings.remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
@@ -446,7 +446,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # Backwards compat for connectivities matrices in uns["neighbors"]
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
         self._check_dimensions()
-        if settings.shall_check_uniqueness:
+        if settings.check_uniqueness:
             self._check_uniqueness()
 
         if self.filename:
@@ -695,7 +695,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         The :attr:`raw` attribute is initialized with the current content
         of an object by setting::
 
-            adata.raw = adata
+            adata.raw = adata.copy()
 
         Its content can be deleted::
 
@@ -1400,7 +1400,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         .. code:: python
 
             import anndata
-            backed = anndata.read_h5ad("file.h5ad", backed="r")
+            backed = anndata.io.read_h5ad("file.h5ad", backed="r")
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         new = {}
@@ -1445,7 +1445,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 return self._mutated_copy()
         else:
-            from .._io import read_h5ad, write_h5ad
+            from ..io import read_h5ad, write_h5ad
 
             if filename is None:
                 raise ValueError(
@@ -1859,7 +1859,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
         """
-        from .._io import write_h5ad
+        from ..io import write_h5ad
 
         if filename is None and not self.isbacked:
             raise ValueError("Provide a filename!")
@@ -1895,7 +1895,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         sep
              Separator for the data.
         """
-        from .._io import write_csvs
+        from ..io import write_csvs
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
@@ -1908,7 +1908,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             The filename.
         """
-        from .._io import write_loom
+        from ..io import write_loom
 
         write_loom(filename, self, write_obsm_varm=write_obsm_varm)
 
@@ -1927,7 +1927,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         chunks
             Chunk shape.
         """
-        from .._io import write_zarr
+        from ..io import write_zarr
 
         write_zarr(store, self, chunks=chunks)
 

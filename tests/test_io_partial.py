@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -10,9 +11,8 @@ import zarr
 from scipy.sparse import csr_matrix
 
 from anndata import AnnData
-from anndata._io import write_h5ad, write_zarr
-from anndata._io.specs import read_elem
 from anndata._io.specs.registry import read_elem_partial
+from anndata.io import read_elem, write_h5ad, write_zarr
 
 X = np.array([[1.0, 0.0, 3.0], [4.0, 0.0, 6.0], [0.0, 8.0, 0.0]], dtype="float32")
 X_check = np.array([[4.0, 0.0], [0.0, 8.0]], dtype="float32")
@@ -44,7 +44,11 @@ def test_read_partial_X(tmp_path, typ, accessor):
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.parametrize("accessor", ["h5ad", "zarr"])
 def test_read_partial_adata(tmp_path, accessor):
-    import scanpy as sc
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
+        )
+        import scanpy as sc
 
     adata = sc.datasets.pbmc68k_reduced()
 

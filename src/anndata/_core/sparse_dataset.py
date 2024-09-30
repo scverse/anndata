@@ -26,12 +26,6 @@ import numpy as np
 import scipy.sparse as ss
 from scipy.sparse import _sparsetools
 
-try:
-    # Not really important, just for IDEs to be more helpful
-    from scipy.sparse._compressed import _cs_matrix
-except ImportError:
-    from scipy.sparse import spmatrix as _cs_matrix
-
 from .. import abc
 from .._settings import settings
 from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
@@ -41,8 +35,12 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal
 
+    from scipy.sparse._compressed import _cs_matrix
+
     from .._types import GroupStorageType
     from .index import Index
+else:
+    from scipy.sparse import spmatrix as _cs_matrix
 
 
 class BackedFormat(NamedTuple):
@@ -438,7 +436,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         # Not sure what the performance is on that operation
         # Also need to check if memory format is not matrix
         mtx_fmt = get_memory_class(
-            self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
         must_convert_to_array = issubclass(mtx_fmt, SpArray) and not isinstance(
             sub, SpArray
@@ -577,7 +575,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
     def to_memory(self) -> ss.csr_matrix | ss.csc_matrix | SpArray:
         format_class = get_memory_class(
-            self.format, use_sparray_in_io=settings.shall_use_sparse_array_on_read
+            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.data = self.group["data"][...]
@@ -613,8 +611,8 @@ def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
 
     >>> import scanpy as sc
     >>> import h5py
-    >>> from anndata import sparse_dataset
-    >>> from anndata import read_elem
+    >>> from anndata.io import sparse_dataset
+    >>> from anndata.io import read_elem
     >>> sc.datasets.pbmc68k_reduced().raw.to_adata().write_h5ad("pbmc.h5ad")
 
     Initialize a sparse dataset from storage
