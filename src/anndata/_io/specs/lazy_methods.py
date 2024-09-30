@@ -53,11 +53,11 @@ def maybe_open_h5(
 _DEFAULT_STRIDE = 1000
 
 
-def compute_chunk_layout_for_axis_shape(
-    chunk_axis_shape: int, full_axis_shape: int
+def compute_chunk_layout_for_axis_size(
+    chunk_axis_size: int, full_axis_size: int
 ) -> tuple[int, ...]:
-    n_strides, rest = np.divmod(full_axis_shape, chunk_axis_shape)
-    chunk = (chunk_axis_shape,) * n_strides
+    n_strides, rest = np.divmod(full_axis_size, chunk_axis_size)
+    chunk = (chunk_axis_size,) * n_strides
     if rest > 0:
         chunk += (rest,)
     return chunk
@@ -116,7 +116,7 @@ def read_sparse_as_dask(
         stride = chunks[major_dim]
 
     shape_minor, shape_major = shape if is_csc else shape[::-1]
-    chunks_major = compute_chunk_layout_for_axis_shape(stride, shape_major)
+    chunks_major = compute_chunk_layout_for_axis_size(stride, shape_major)
     chunks_minor = (shape_minor,)
     chunk_layout = (
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
@@ -166,7 +166,7 @@ def read_h5_array(
     )
 
     chunk_layout = tuple(
-        compute_chunk_layout_for_axis_shape(chunks[i], shape[i])
+        compute_chunk_layout_for_axis_size(chunks[i], shape[i])
         for i in range(len(shape))
     )
 

@@ -1259,7 +1259,11 @@ def concat(
     >>> dict(ad.concat([a, b, c], uns_merge="first").uns)
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
-    from anndata.experimental.backed._compat import Dataset, xr
+    import dask.array as da
+
+    from anndata._io.specs.lazy_methods import compute_chunk_layout_for_axis_size
+    from anndata.experimental.backed._compat import xr
+    from anndata.experimental.backed._xarray import Dataset2D
 
     # Argument normalization
     merge = resolve_merge_strategy(merge)
@@ -1311,14 +1315,14 @@ def concat(
         isinstance(a, pd.DataFrame) for a in annotations
     )
     are_annotations_mixed_type = are_any_annotations_dataframes and any(
-        isinstance(a, Dataset) for a in annotations
+        isinstance(a, Dataset2D) for a in annotations
     )
     if are_any_annotations_dataframes:
         annotations_in_memory = annotations.copy()
         if are_annotations_mixed_type:
             for i, a in enumerate(annotations):
                 annotations_in_memory[i] = (
-                    a.to_pandas() if isinstance(a, Dataset) else a
+                    a.to_pandas() if isinstance(a, Dataset2D) else a
                 )
         concat_annot = pd.concat(
             unify_dtypes(a for a in annotations_in_memory),
@@ -1326,7 +1330,47 @@ def concat(
             ignore_index=True,
         )
     else:
-        concat_annot = xr.concat(annotations, join=join, dim=f"{axis_name}_names")
+        axis_label = f"{axis_name}_names"
+        new_annotations = []
+
+        def make_dask_col(a, col):
+            new_col = a[col].copy()
+
+            def get_chunk(block_info=None):
+                idx = tuple(
+                    slice(start, stop)
+                    for start, stop in block_info[None]["array-location"]
+                )
+                return np.array(new_col.data[idx].array)
+
+            # TODO: fix dtype
+            dtype = "object"
+            # TODO: get good chunk size?
+            return da.map_blocks(
+                get_chunk,
+                chunks=compute_chunk_layout_for_axis_size(1000, a.shape[0]),
+                meta=np.array([], dtype=dtype),
+            )
+
+        for a in annotations:
+            for col in a.columns:
+                if col != axis_label:
+                    extension_cols = []
+                    if pd.api.types.is_extension_array_dtype(a[col]):
+                        extension_cols += [col]
+            new_annotations += [
+                a.copy(
+                    data={
+                        **{col: make_dask_col(a, col) for col in extension_cols},
+                        **{
+                            col: a[col]
+                            for col in a.columns
+                            if col not in extension_cols
+                        },
+                    }
+                )
+            ]
+        concat_annot = xr.concat(new_annotations, join=join, dim=f"{axis_name}_names")
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
