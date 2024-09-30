@@ -168,7 +168,7 @@ def test_unconsolidated(tmp_path, mtx_format):
 @pytest.mark.parametrize("join", ["outer", "inner"])
 @pytest.mark.parametrize("are_vars_different", [True, False])
 def test_concat_simple(
-    tmp_path, join: Literal["outer", "inner"], are_vars_different: bool
+    tmp_path, join: Literal["outer", "inner"], are_vars_different: bool, mtx_format
 ):
     from anndata.experimental.backed._compat import Dataset
 
@@ -193,9 +193,7 @@ def test_concat_simple(
         orig = AnnData(
             obs=obs,
             var=var,
-            X=sparse.csr_matrix(
-                np.random.binomial(100, 0.005, (M, N)).astype(np.float32)
-            ),
+            X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
         )
         orig.write_zarr(orig_path)
         store = AccessTrackingStore(orig_path)
