@@ -35,6 +35,7 @@ def read_lazy(
     load_annotation_index
         Whether or not to use a range index for the `{obs,var}` :class:`xarray.Dataset` so as not to load the index into memory.
         If `False`, the real `index` will be inserted as `{obs,var}_names` in the object but not be one of the `coords` thereby preventing read operations.
+        Access to `adata.obs.index` will also only give the dummy index, and not the "real" index that is file-backed.
 
     Returns
     -------
