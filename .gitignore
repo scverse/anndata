@@ -5,14 +5,14 @@
 # Caches for compiled and downloaded files
 __pycache__/
 /*cache/
+/node_modules/
 /data/
 
 # Distribution / packaging
 /dist/
-/anndata/_version.py
+/src/anndata/_version.py
 /requirements*.lock
 /.python-version
-/hatch.toml
 
 # Test results (nunit/junit) and coverage
 /test-data/
@@ -33,3 +33,4 @@ __pycache__/
 .asv
 benchmark/benchmarks/data
 benchmarks/benchmarks/data
+benchmarks/pkgs
