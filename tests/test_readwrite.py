@@ -661,15 +661,9 @@ def test_write_large_categorical(tmp_path, diskfmt):
 
 
 def test_write_string_type_error(tmp_path, diskfmt):
-    adata = ad.AnnData(
-        obs=pd.DataFrame(
-            np.ones((3, 2)),
-            columns=["a", np.str_("b")],
-            index=["a", "b", "c"],
-        ),
-    )
-
+    adata = ad.AnnData(obs=dict(obs_names=list("abc")))
     adata.obs[b"c"] = np.zeros(3)
+
     # This should error, and tell you which key is at fault
     with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
         getattr(adata, f"write_{diskfmt}")(tmp_path / f"adata.{diskfmt}")
@@ -724,9 +718,6 @@ def _do_roundtrip(
 @pytest.fixture
 def roundtrip(diskfmt):
     return partial(_do_roundtrip, diskfmt=diskfmt)
-
-
-diskfmt2 = diskfmt
 
 
 def test_write_string_types(tmp_path, diskfmt, roundtrip):
