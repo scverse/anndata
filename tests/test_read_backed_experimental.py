@@ -38,19 +38,19 @@ def dskfmt(request):
 
 
 @pytest.fixture(params=[True, False], scope="session")
-def use_range_index(request):
+def load_annotation_index(request):
     return request.param
 
 
 @pytest.fixture(scope="session")
 def adata_remote_orig(
-    tmp_path_factory, dskfmt: str, mtx_format, use_range_index: bool
+    tmp_path_factory, dskfmt: str, mtx_format, load_annotation_index: bool
 ) -> tuple[AnnData, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
     orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
     orig = gen_adata((1000, 1000), mtx_format)
     orig.write_zarr(orig_path)
-    return read_lazy(orig_path, use_range_index=use_range_index), orig
+    return read_lazy(orig_path, load_annotation_index=load_annotation_index), orig
 
 
 @pytest.fixture
@@ -115,7 +115,7 @@ def test_access_count_index(adata_remote_with_store_tall_skinny):
     _, store = adata_remote_with_store_tall_skinny
     store.reset_key_trackers()
     store.initialize_key_trackers(["obs/_index"])
-    read_lazy(store, use_range_index=True)
+    read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obs/_index", 0)
     read_lazy(store)
     # 16 is number of chunks
