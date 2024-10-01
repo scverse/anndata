@@ -293,6 +293,7 @@ class LazyReader(Reader):
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
+        **kwargs,
     ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
 
@@ -303,8 +304,21 @@ class LazyReader(Reader):
         if self.callback is not None:
             msg = "Dask reading does not use a callback. Ignoring callback."
             warnings.warn(msg, stacklevel=2)
+        read_params = inspect.signature(read_func).parameters
+        has_extra_args = False
+        for kwarg in kwargs:
+            if kwarg not in read_params:
+                msg = (
+                    f"Keyword argument {kwarg} passed to read_elem_lazy are not supported by the "
+                    "registered read function."
+                )
+                raise ValueError(msg)
+            has_extra_args = True
         if "chunks" in inspect.signature(read_func).parameters:
-            return read_func(elem, chunks=chunks)
+            has_extra_args = True
+            kwargs["chunks"] = chunks
+        if has_extra_args:
+            return read_func(elem, **kwargs)
         return read_func(elem)
 
 
@@ -385,7 +399,7 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType, chunks: tuple[int, ...] | None = None
+    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.
@@ -406,7 +420,7 @@ def read_elem_lazy(
     -------
         DaskArray
     """
-    return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
+    return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
 
 
 def write_elem(

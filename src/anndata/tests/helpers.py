@@ -1092,7 +1092,11 @@ class AccessTrackingStore(DirectoryStore):
         self.initialize_key_trackers(self._access_count.keys())
 
     def assert_access_count(self, key: str, count: int):
-        assert self.get_access_count(key) == count, self.get_subkeys_accessed(key)
+        keys_accessed = self.get_subkeys_accessed(key)
+        access_count = self.get_access_count(key)
+        assert (
+            self.get_access_count(key) == count
+        ), f"Found {access_count} accesses at {keys_accessed}"
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:

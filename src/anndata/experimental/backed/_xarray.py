@@ -86,7 +86,7 @@ class Dataset2D(Dataset):
 
 @_subset.register(Dataset2D)
 def _(a: Dataset2D, subset_idx: Index):
-    key = get_index_dim(a)
+    key = a.attrs["indexing_key"]
     # xarray seems to have some code looking for a second entry in tuples
     if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
         subset_idx = subset_idx[0]

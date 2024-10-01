@@ -49,7 +49,9 @@ def adata_remote_orig(
 
 
 @pytest.fixture
-def adata_remote_with_store_tall_skinny(tmp_path_factory, mtx_format):
+def adata_remote_with_store_tall_skinny(
+    tmp_path_factory, mtx_format
+) -> tuple[AnnData, AccessTrackingStore]:
     orig_path = tmp_path_factory.mktemp("orig.zarr")
     M = 1000000  # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
     N = 5
@@ -102,6 +104,17 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     store.assert_access_count("obs/int64", 1)
     # .zmetadata handles .zarray so simple access does not cause any read
     store.assert_access_count("var/int64", 0)
+
+
+def test_access_count_index(adata_remote_with_store_tall_skinny):
+    _, store = adata_remote_with_store_tall_skinny
+    store.reset_key_trackers()
+    store.initialize_key_trackers(["obs/_index"])
+    read_lazy(store, use_range_index=True)
+    store.assert_access_count("obs/_index", 0)
+    read_lazy(store)
+    # 16 is number of chunks
+    store.assert_access_count("obs/_index", 16)
 
 
 def test_access_count_dtype(adata_remote_with_store_tall_skinny):

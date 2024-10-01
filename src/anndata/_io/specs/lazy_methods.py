@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
 import anndata as ad
@@ -185,6 +186,9 @@ def read_zarr_array(
     return da.from_zarr(elem, chunks=chunks)
 
 
+DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
+
+
 def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     index_label: str,
@@ -216,6 +220,11 @@ def _gen_xarray_dict_iterator_from_elems(
         else:
             raise ValueError(f"Could not read {k}: {v} from into xarray Dataset2D")
         yield data_array_name, data_array
+    if index_key == DUMMY_RANGE_INDEX_KEY:
+        yield (
+            index_label,
+            xr.DataArray(index, coords=[index], dims=[index_label], name=index_label),
+        )
 
 
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
@@ -224,6 +233,7 @@ def read_dataframe(
     elem: H5Group | ZarrGroup,
     *,
     _reader: LazyReader,
+    use_range_index: bool = False,
 ) -> Dataset2D:
     from anndata.experimental.backed._xarray import Dataset2D
 
@@ -232,13 +242,21 @@ def read_dataframe(
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
     elem_name = get_elem_name(elem)
-    index_label = f'{elem_name.replace("/", "")}_names'
-    index_key = elem.attrs["_index"]
-    index = elem_dict[index_key].compute()  # no sense in reading this in multiple times
+    label_based_indexing_key = f'{elem_name.replace("/", "")}_names'
+    if not use_range_index:
+        index_label = label_based_indexing_key
+        index_key = elem.attrs["_index"]
+        index = elem_dict[
+            index_key
+        ].compute()  # no sense in reading this in multiple times
+    else:
+        index_label = DUMMY_RANGE_INDEX_KEY
+        index_key = DUMMY_RANGE_INDEX_KEY
+        index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]]))
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, index_label, index_key, index)
     )
-    return Dataset2D(elem_xarray_dict)
+    return Dataset2D(elem_xarray_dict, attrs={"indexing_key": label_based_indexing_key})
 
 
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
