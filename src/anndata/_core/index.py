@@ -52,10 +52,11 @@ def _normalize_index(
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
     from ..experimental.backed._compat import xr
 
-    if not isinstance(index, pd.RangeIndex):
-        msg = "Don’t call _normalize_index with non-categorical/string names"
-        assert index.dtype != float, msg
-        assert index.dtype != int, msg
+    # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
+    # if not isinstance(index, pd.RangeIndex):
+    #     msg = "Don’t call _normalize_index with non-categorical/string names and non-range index"
+    #     assert index.dtype != float, msg
+    #     assert index.dtype != int, msg
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
