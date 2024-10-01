@@ -256,7 +256,10 @@ def read_dataframe(
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, index_label, index_key, index)
     )
-    return Dataset2D(elem_xarray_dict, attrs={"indexing_key": label_based_indexing_key})
+    ds = Dataset2D(elem_xarray_dict, attrs={"indexing_key": label_based_indexing_key})
+    if use_range_index:
+        return ds.rename_vars({elem.attrs["_index"]: label_based_indexing_key})
+    return ds
 
 
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
