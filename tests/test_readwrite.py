@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from contextlib import contextmanager
+from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
 from string import ascii_letters
@@ -25,6 +26,7 @@ from testing.anndata._helpers import xfail_if_numpy2_loompy
 
 if TYPE_CHECKING:
     from os import PathLike
+    from typing import Literal
 
 HERE = Path(__file__).parent
 
@@ -658,30 +660,13 @@ def test_write_large_categorical(tmp_path, diskfmt):
     assert_equal(orig, curr)
 
 
-def test_write_string_types(tmp_path, diskfmt):
-    # https://github.com/scverse/anndata/issues/456
-    adata_pth = tmp_path / f"adata.{diskfmt}"
-
-    adata = ad.AnnData(
-        obs=pd.DataFrame(
-            np.ones((3, 2)),
-            columns=["a", np.str_("b")],
-            index=["a", "b", "c"],
-        ),
-    )
-
-    write = getattr(adata, f"write_{diskfmt}")
-    read = getattr(ad, f"read_{diskfmt}")
-
-    write(adata_pth)
-    from_disk = read(adata_pth)
-
-    assert_equal(adata, from_disk)
-
+def test_write_string_type_error(tmp_path, diskfmt):
+    adata = ad.AnnData(obs=dict(obs_names=list("abc")))
     adata.obs[b"c"] = np.zeros(3)
+
     # This should error, and tell you which key is at fault
     with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
-        write(adata_pth)
+        getattr(adata, f"write_{diskfmt}")(tmp_path / f"adata.{diskfmt}")
 
     assert "b'c'" in str(exc_info.value)
 
@@ -723,23 +708,38 @@ def test_zarr_chunk_X(tmp_path):
 ################################
 
 
+def _do_roundtrip(
+    adata: ad.AnnData, pth: Path, diskfmt: Literal["h5ad", "zarr"]
+) -> ad.AnnData:
+    getattr(adata, f"write_{diskfmt}")(pth)
+    return getattr(ad, f"read_{diskfmt}")(pth)
+
+
 @pytest.fixture
 def roundtrip(diskfmt):
-    def roundtrip(adata: ad.AnnData, pth: Path):
-        getattr(adata, f"write_{diskfmt}")(pth)
-        return getattr(ad, f"read_{diskfmt}")(pth)
-
-    return roundtrip
+    return partial(_do_roundtrip, diskfmt=diskfmt)
 
 
-diskfmt2 = diskfmt
+def test_write_string_types(tmp_path, diskfmt, roundtrip):
+    # https://github.com/scverse/anndata/issues/456
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+
+    adata = ad.AnnData(
+        obs=pd.DataFrame(
+            np.ones((3, 2)),
+            columns=["a", np.str_("b")],
+            index=["a", "b", "c"],
+        ),
+    )
+
+    from_disk = roundtrip(adata, adata_pth)
+
+    assert_equal(adata, from_disk)
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
-    def roundtrip2(adata, pth):
-        getattr(adata, f"write_{diskfmt2}")(pth)
-        return getattr(ad, f"read_{diskfmt2}")(pth)
+    roundtrip2 = partial(_do_roundtrip, diskfmt=diskfmt2)
 
     filepth1 = tmp_path / f"test1.{diskfmt}"
     filepth2 = tmp_path / f"test2.{diskfmt2}"
