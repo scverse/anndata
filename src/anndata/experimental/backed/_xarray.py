@@ -34,6 +34,9 @@ class Dataset2D(Dataset):
         -------
             The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
         """
+        if "indexing_key" in self.attrs:
+            key = self.attrs["indexing_key"]
+            return pd.Index(self[key].data)
         coord = list(self.coords.keys())[0]
         return pd.Index(self.coords[coord].data)
 
@@ -120,5 +123,9 @@ def _remove_unused_categories_xr(
 @to_memory.register(Dataset2D)
 def to_memory(ds: Dataset2D, copy=False):
     df = ds.to_dataframe()
+    if "indexing_key" in ds.attrs:
+        index_key = ds.attrs["indexing_key"]
+        if df.index.name != index_key:
+            df.set_index(index_key, inplace=True)
     df.index.name = None  # matches old AnnData object
     return df
