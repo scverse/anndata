@@ -42,6 +42,11 @@ def load_annotation_index(request):
     return request.param
 
 
+@pytest.fixture(params=["outer", "inner"], scope="session")
+def join(request):
+    return request.param
+
+
 @pytest.fixture(scope="session")
 def adata_remote_orig(
     tmp_path_factory, dskfmt: str, mtx_format, load_annotation_index: bool
@@ -58,7 +63,7 @@ def adata_remote_with_store_tall_skinny(
     tmp_path_factory, mtx_format
 ) -> tuple[AnnData, AccessTrackingStore]:
     orig_path = tmp_path_factory.mktemp("orig.zarr")
-    M = 1000000  # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
+    M = 100_000  # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
     N = 5
     obs_names = pd.Index(f"cell{i}" for i in range(M))
     var_names = pd.Index(f"gene{i}" for i in range(N))
@@ -104,8 +109,9 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     store.assert_access_count("obs/int64", 0)
     store.assert_access_count("var/int64", 0)
     # all codes read in for subset (from 4 chunks)
-    store.assert_access_count("obs/cat/codes", 4)
-    remote[0:10, :].obs["int64"][0:10].compute()
+    store.assert_access_count("obs/cat/codes", 1)
+    # only one chunk needed for 0:10 subset
+    remote[0:10, :].obs["int64"].compute()
     store.assert_access_count("obs/int64", 1)
     # .zmetadata handles .zarray so simple access does not cause any read
     store.assert_access_count("var/int64", 0)
@@ -118,8 +124,8 @@ def test_access_count_index(adata_remote_with_store_tall_skinny):
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obs/_index", 0)
     read_lazy(store)
-    # 16 is number of chunks
-    store.assert_access_count("obs/_index", 16)
+    # 8 is number of chunks
+    store.assert_access_count("obs/_index", 4)
 
 
 def test_access_count_dtype(adata_remote_with_store_tall_skinny):
@@ -183,6 +189,15 @@ def test_unconsolidated(tmp_path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
+# remote has object dtype, need to convert back for integers booleans etc.
+def correct_extension_dtype_differences(remote: pd.DataFrame, memory: pd.DataFrame):
+    for col in memory.columns:
+        dtype = memory[col].dtype
+        if pd.api.types.is_extension_array_dtype(dtype):
+            remote[col] = remote[col].astype(dtype)
+    return remote, memory
+
+
 @pytest.mark.parametrize("join", ["outer", "inner"])
 @pytest.mark.parametrize("are_vars_different", [True, False])
 def test_concat(
@@ -232,14 +247,6 @@ def test_concat(
     obs_memory = concatenated_memory.obs
     obs_memory.index.name = "obs_names"
 
-    # remote has object dtype, need to convert back for integers booleans etc.
-    def correct_extension_dtype_differences(remote: pd.DataFrame, memory: pd.DataFrame):
-        for col in memory.columns:
-            dtype = memory[col].dtype
-            if pd.api.types.is_extension_array_dtype(dtype):
-                remote[col] = remote[col].astype(dtype)
-        return remote, memory
-
     assert_equal(
         *correct_extension_dtype_differences(
             concated_remote.obs.to_pandas(), obs_memory
@@ -260,3 +267,54 @@ def test_concat(
     assert_equal(remote_df_corrected, var_df)
 
     assert_equal(concated_remote.X, concatenated_memory.X)
+
+
+def test_concat_without_annotation_index(adata_remote_with_store_tall_skinny, join):
+    _, store = adata_remote_with_store_tall_skinny
+    remote = read_lazy(store, load_annotation_index=False)
+    orig = remote.to_memory()
+    with pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric"):
+        remote_concatenated = ad.concat([remote, remote], join=join)
+    orig_concatenated = ad.concat([orig, orig], join=join)
+    in_memory_remote_concatenated = remote_concatenated.to_memory()
+    corrected_remote_obs, corrected_memory_obs = correct_extension_dtype_differences(
+        in_memory_remote_concatenated.obs, orig_concatenated.obs
+    )
+    assert_equal(corrected_remote_obs, corrected_memory_obs)
+    assert_equal(in_memory_remote_concatenated.X, orig_concatenated.X)
+    assert all(in_memory_remote_concatenated.var_names == orig_concatenated.var_names)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(
+            slice(95_000, 105_000),
+            id="slice",
+        ),
+        pytest.param(
+            np.arange(95_000, 105_000),
+            id="consecutive integer array",
+        ),
+        pytest.param(
+            np.random.choice(np.arange(80_000, 110_000), 500),
+            id="random integer array",
+        ),
+        pytest.param(
+            np.random.choice([True, False], 200_000),
+            id="boolean array",
+        ),
+    ],
+)
+def test_concat_subsets(adata_remote_with_store_tall_skinny, join, index):
+    remote, _ = adata_remote_with_store_tall_skinny
+    orig = remote.to_memory()
+    remote_concatenated = ad.concat([remote, remote], join=join)[index]
+    orig_concatenated = ad.concat([orig, orig], join=join)[index]
+    in_memory_remote_concatenated = remote_concatenated.to_memory()
+    corrected_remote_obs, corrected_memory_obs = correct_extension_dtype_differences(
+        in_memory_remote_concatenated.obs, orig_concatenated.obs
+    )
+    assert_equal(corrected_remote_obs, corrected_memory_obs)
+    assert_equal(in_memory_remote_concatenated.X, orig_concatenated.X)
+    assert all(in_memory_remote_concatenated.var_names == orig_concatenated.var_names)

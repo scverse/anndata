@@ -5,12 +5,13 @@ Code for merging/ concatenating AnnData objects.
 from __future__ import annotations
 
 import typing
+import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Literal, TypeVar, cast
+from typing import Literal, TypeVar
 from warnings import warn
 
 import numpy as np
@@ -1090,16 +1091,14 @@ def make_dask_col_from_extension_dtype(col):
 
 def make_xarray_extension_dtypes_dask(
     annotations: Iterable[Dataset2D],
-    axis_label: Literal["obs_names", "var_names"],
 ):
     new_annotations = []
 
     for a in annotations:
         extension_cols = []
         for col in a.columns:
-            if col != axis_label:
-                if pd.api.types.is_extension_array_dtype(a[col]):
-                    extension_cols += [col]
+            if pd.api.types.is_extension_array_dtype(a[col]):
+                extension_cols += [col]
         new_annotations += [
             a.copy(
                 data={
@@ -1114,18 +1113,34 @@ def make_xarray_extension_dtypes_dask(
     return new_annotations
 
 
+def get_attrs(annotations: Iterable[Dataset2D]) -> dict:
+    index_names = np.unique([a.index.name for a in annotations])
+    assert len(index_names) == 1, "All annotations must have the same index name."
+    if any(a.index.dtype == "int64" for a in annotations):
+        msg = "Concatenating with a pandas numeric index among the indices.  Index may likely not be unique."
+        warnings.warn(msg, UserWarning)
+    index_keys = [
+        a.attrs["indexing_key"] for a in annotations if "indexing_key" in a.attrs
+    ]
+    attrs = {}
+    if len(np.unique(index_keys)) == 1:
+        attrs["indexing_key"] = index_keys[0]
+    return attrs
+
+
 def concat_dataset2d_on_annot_axis(
     annotations: Iterable[Dataset2D],
-    axis_label: Literal["obs_names", "var_names"],
     join: Join_T,
 ):
     from anndata.experimental.backed._compat import xr
     from anndata.experimental.backed._xarray import Dataset2D
 
-    annotations_with_only_dask = make_xarray_extension_dtypes_dask(
-        annotations, axis_label
+    annotations_with_only_dask = make_xarray_extension_dtypes_dask(annotations)
+    attrs = get_attrs(annotations_with_only_dask)
+    index_name = np.unique([a.index.name for a in annotations])[0]
+    return Dataset2D(
+        xr.concat(annotations_with_only_dask, join=join, dim=index_name), attrs=attrs
     )
-    return Dataset2D(xr.concat(annotations_with_only_dask, join=join, dim=axis_label))
 
 
 def concat(
@@ -1400,8 +1415,7 @@ def concat(
             ignore_index=True,
         )
     else:
-        axis_label = cast(Literal["obs_names", "var_names"], f"{axis_name}_names")
-        concat_annot = concat_dataset2d_on_annot_axis(annotations, axis_label, join)
+        concat_annot = concat_dataset2d_on_annot_axis(annotations, join)
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
@@ -1425,12 +1439,11 @@ def concat(
     else:
         # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
         # the only "lazy" setting so I'm not sure we really want that.
-        axis_label = cast(Literal["obs_names", "var_names"], f"{alt_axis_name}_names")
-        annotations_with_only_dask = make_xarray_extension_dtypes_dask(
-            alt_annotations, axis_label
-        )
+        annotations_with_only_dask = make_xarray_extension_dtypes_dask(alt_annotations)
+        attrs = get_attrs(annotations_with_only_dask)
         alt_annot = Dataset2D(
-            xr.merge(annotations_with_only_dask, join=join, compat="override")
+            xr.merge(annotations_with_only_dask, join=join, compat="override"),
+            attrs=attrs,
         )
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
