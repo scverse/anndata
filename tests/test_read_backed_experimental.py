@@ -37,15 +37,20 @@ def dskfmt(request):
     return request.param
 
 
+@pytest.fixture(params=[True, False], scope="session")
+def use_range_index(request):
+    return request.param
+
+
 @pytest.fixture(scope="session")
 def adata_remote_orig(
-    tmp_path_factory, dskfmt: str, mtx_format
+    tmp_path_factory, dskfmt: str, mtx_format, use_range_index: bool
 ) -> tuple[AnnData, AnnData]:
+    """Create remote fixtures, one without a range index and the other with"""
     orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
     orig = gen_adata((1000, 1000), mtx_format)
     orig.write_zarr(orig_path)
-    remote = read_lazy(orig_path)
-    return remote, orig
+    return read_lazy(orig_path, use_range_index=use_range_index), orig
 
 
 @pytest.fixture
