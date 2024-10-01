@@ -185,7 +185,7 @@ def test_unconsolidated(tmp_path, mtx_format):
 
 @pytest.mark.parametrize("join", ["outer", "inner"])
 @pytest.mark.parametrize("are_vars_different", [True, False])
-def test_concat_simple(
+def test_concat(
     tmp_path, join: Literal["outer", "inner"], are_vars_different: bool, mtx_format
 ):
     from anndata.experimental.backed._compat import Dataset
