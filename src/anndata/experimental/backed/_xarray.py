@@ -22,7 +22,7 @@ def get_index_dim(ds: DataArray) -> Hashable:
     assert (
         len(ds.sizes) == 1
     ), f"xarray Dataset should not have more than 1 dims, found {len(ds)}"
-    return list(ds.sizes.keys())[0]
+    return list(ds.indexes.keys())[0]
 
 
 class Dataset2D(Dataset):
@@ -34,15 +34,12 @@ class Dataset2D(Dataset):
         -------
             The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
         """
-        if "indexing_key" in self.attrs:
-            key = self.attrs["indexing_key"]
-            return pd.Index(self[key].data)
-        coord = list(self.coords.keys())[0]
-        return pd.Index(self.coords[coord].data)
+        coord = get_index_dim(self)
+        return self.indexes[coord]
 
     @index.setter
     def index(self, val) -> None:
-        coord = list(self.coords.keys())[0]
+        coord = get_index_dim(self)
         self.coords[coord] = val
 
     @property
