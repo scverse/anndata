@@ -33,7 +33,7 @@ def read_lazy(
     store
         A store-like object to be read in.  If :class:`zarr.hierarchy.Group`, it is best for it to be consolidated.
     load_annotation_index
-        Whether or not to use a range index for the `{obs,var}` :class:`xr.Dataset` so as not to load the index into memory.
+        Whether or not to use a range index for the `{obs,var}` :class:`xarray.Dataset` so as not to load the index into memory.
         If `False`, the real `index` will be inserted as `{obs,var}_names` in the object but not be one of the `coords` thereby preventing read operations.
 
     Returns
