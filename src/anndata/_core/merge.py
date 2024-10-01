@@ -1083,7 +1083,7 @@ def make_dask_col_from_extension_dtype(col):
     # TODO: get good chunk size?
     return da.map_blocks(
         get_chunk,
-        chunks=compute_chunk_layout_for_axis_size(1000, col.shape[0]),
+        chunks=(compute_chunk_layout_for_axis_size(1000, col.shape[0]),),
         meta=np.array([], dtype=dtype),
     )
 
