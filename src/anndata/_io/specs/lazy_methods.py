@@ -210,7 +210,7 @@ def _gen_xarray_dict_iterator_from_elems(
             )
         elif k == index_key:
             data_array = xr.DataArray(
-                v, coords=[v], dims=[index_label], name=index_label
+                index, coords=[index], dims=[index_label], name=index_label
             )
             data_array_name = index_label
         else:
