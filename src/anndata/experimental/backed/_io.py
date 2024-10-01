@@ -32,7 +32,7 @@ def read_lazy(
     store
         A store-like object to be read in.  If :class:`zarr.hierarchy.Group`, it is best for it to be consolidated.
     use_range_index
-        Whether or not to use a range index for the :class:`xr.Dataset` so as not to load the `index` into memory.
+        Whether or not to use a range index for the `{obs,var}` :class:`xr.Dataset` so as not to load the `index` into memory.
         If `True`, the real `index` will be loaded as `{obs,var}_names` in the object but not be one of the `coords`.
 
     Returns
@@ -93,7 +93,7 @@ def read_lazy(
             }
             or "nullable" in iospec.encoding_type
         ):
-            if "dataframe" == iospec.encoding_type:
+            if "dataframe" == iospec.encoding_type and elem_name in {"obs", "var"}:
                 return read_elem_lazy(elem, use_range_index=use_range_index)
             return read_elem_lazy(elem)
         elif iospec.encoding_type in {"awkward-array"}:
