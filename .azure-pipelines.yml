@@ -76,6 +76,10 @@ jobs:
         displayName: "PyTest"
         condition: eq(variables['TEST_TYPE'], 'standard')
 
+      - script: pytest -k "not anndata.experimental.backed"
+        displayName: "PyTest (minimum)"
+        condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
+
       - script: pytest --cov --cov-report=xml --cov-context=test
         displayName: "PyTest (coverage)"
         condition: eq(variables['TEST_TYPE'], 'coverage')
