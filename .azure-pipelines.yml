@@ -76,7 +76,7 @@ jobs:
         displayName: "PyTest"
         condition: eq(variables['TEST_TYPE'], 'standard')
 
-      - script: pytest -k "not anndata.experimental.backed"
+      - script: pytest
         displayName: "PyTest (minimum)"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
 
