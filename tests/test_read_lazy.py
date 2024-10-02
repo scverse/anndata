@@ -56,7 +56,7 @@ def adata_remote_orig(
         orig_path = tmp_path_factory.mktemp("h5ad_file_dir") / f"orig.{dskfmt}"
     else:
         orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
-    orig = gen_adata((1000, 1000), mtx_format)
+    orig = gen_adata((1000, 1100), mtx_format)
     getattr(orig, f"write_{dskfmt}")(orig_path)
     return read_lazy(orig_path, load_annotation_index=load_annotation_index), orig
 
@@ -292,26 +292,26 @@ def test_concat_without_annotation_index(adata_remote_with_store_tall_skinny, jo
     "index",
     [
         pytest.param(
-            slice(95_000, 105_000),
+            slice(500, 1500),
             id="slice",
         ),
         pytest.param(
-            np.arange(95_000, 105_000),
+            np.arange(950, 1050),
             id="consecutive integer array",
         ),
         pytest.param(
-            np.random.choice(np.arange(80_000, 110_000), 500),
+            np.random.choice(np.arange(800, 1100), 500),
             id="random integer array",
         ),
         pytest.param(
-            np.random.choice([True, False], 200_000),
+            np.random.choice([True, False], 2000),
             id="boolean array",
         ),
+        pytest.param(slice(None), id="full"),
     ],
 )
-def test_concat_subsets(adata_remote_with_store_tall_skinny, join, index):
-    remote, _ = adata_remote_with_store_tall_skinny
-    orig = remote.to_memory()
+def test_concat_subsets(adata_remote_orig, join, index):
+    remote, orig = adata_remote_orig
     remote_concatenated = ad.concat([remote, remote], join=join)[index]
     orig_concatenated = ad.concat([orig, orig], join=join)[index]
     in_memory_remote_concatenated = remote_concatenated.to_memory()
