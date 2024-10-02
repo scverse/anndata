@@ -1071,13 +1071,11 @@ def make_dask_col_from_extension_dtype(col):
 
     from anndata._io.specs.lazy_methods import compute_chunk_layout_for_axis_size
 
-    new_col = col.copy()
-
     def get_chunk(block_info=None):
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
-        return np.array(new_col.data[idx].array)
+        return np.array(col.data[idx].array)
 
     # TODO: fix dtype
     dtype = "object"
