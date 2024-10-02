@@ -21,7 +21,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from typing import Literal
+    from typing import Callable, Literal
 
 
 @pytest.fixture(
@@ -48,10 +48,12 @@ def join(request):
     return request.param
 
 
+# TODO: why does `read_lazy().to_memory()` cause `Dataset2D.to_memory()` to lose index name in
+# multi-threaded tests when only opened once i.e., without this Callable?
 @pytest.fixture(scope="session")
 def adata_remote_orig(
     tmp_path_factory, dskfmt: str, mtx_format, load_annotation_index: bool
-) -> tuple[AnnData, AnnData]:
+) -> tuple[Callable[[], AnnData], AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
     if dskfmt == "h5ad":
         orig_path = tmp_path_factory.mktemp("h5ad_file_dir") / f"orig.{dskfmt}"
@@ -59,13 +61,15 @@ def adata_remote_orig(
         orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
     orig = gen_adata((1000, 1100), mtx_format)
     getattr(orig, f"write_{dskfmt}")(orig_path)
-    return read_lazy(orig_path, load_annotation_index=load_annotation_index), orig
+    return lambda: read_lazy(
+        orig_path, load_annotation_index=load_annotation_index
+    ), orig
 
 
 @pytest.fixture
 def adata_remote_with_store_tall_skinny(
     tmp_path_factory, mtx_format
-) -> tuple[AnnData, AccessTrackingStore]:
+) -> tuple[Callable[[], AnnData], AccessTrackingStore]:
     orig_path = tmp_path_factory.mktemp("orig.zarr")
     M = 100_000  # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
     N = 5
@@ -80,8 +84,7 @@ def adata_remote_with_store_tall_skinny(
     )
     orig.write_zarr(orig_path)
     store = AccessTrackingStore(orig_path)
-    remote = read_lazy(store)
-    return remote, store
+    return lambda: read_lazy(store), store
 
 
 pytestmark = pytest.mark.skipif(
@@ -90,7 +93,8 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
-    remote, store = adata_remote_with_store_tall_skinny
+    remote_generator, store = adata_remote_with_store_tall_skinny
+    remote = remote_generator()
     store.initialize_key_trackers(
         ["obs/cat/codes", "obs/cat/categories", "obs/int64", "var/int64", "X"]
     )
@@ -133,7 +137,8 @@ def test_access_count_index(adata_remote_with_store_tall_skinny):
 
 
 def test_access_count_dtype(adata_remote_with_store_tall_skinny):
-    remote, store = adata_remote_with_store_tall_skinny
+    remote_generator, store = adata_remote_with_store_tall_skinny
+    remote = remote_generator()
     store.initialize_key_trackers(["obs/cat/categories"])
     store.assert_access_count("obs/cat/categories", 0)
     # This should only cause categories to be read in once
@@ -144,13 +149,15 @@ def test_access_count_dtype(adata_remote_with_store_tall_skinny):
 
 
 def test_to_memory(adata_remote_orig):
-    remote, orig = adata_remote_orig
+    remote_generator, orig = adata_remote_orig
+    remote = remote_generator()
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, orig)
 
 
 def test_view_to_memory(adata_remote_orig):
-    remote, orig = adata_remote_orig
+    remote_generator, orig = adata_remote_orig
+    remote = remote_generator()
     subset_obs = orig.obs["obs_cat"] == "a"
     assert_equal(orig[subset_obs, :], remote[subset_obs, :].to_memory())
 
@@ -159,7 +166,8 @@ def test_view_to_memory(adata_remote_orig):
 
 
 def test_view_of_view_to_memory(adata_remote_orig):
-    remote, orig = adata_remote_orig
+    remote_generator, orig = adata_remote_orig
+    remote = remote_generator()
     subset_obs = (orig.obs["obs_cat"] == "a") | (orig.obs["obs_cat"] == "b")
     subsetted_adata = orig[subset_obs, :]
     subset_subset_obs = subsetted_adata.obs["obs_cat"] == "b"
@@ -297,7 +305,8 @@ def test_concat(
     ],
 )
 def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation_index):
-    remote, orig = adata_remote_orig
+    remote_generator, orig = adata_remote_orig
+    remote = remote_generator()
 
     @contextmanager
     def empty_context():

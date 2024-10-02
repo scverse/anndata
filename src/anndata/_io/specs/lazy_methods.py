@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
@@ -242,7 +243,12 @@ def read_dataframe(
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
     elem_name = get_elem_name(elem)
-    label_based_indexing_key = f'{elem_name.replace("/", "")}_names'
+    # remove end for obsm/varm
+    obs_var_match = re.findall(r"(obs|var)", elem_name)
+    if not len(obs_var_match):
+        label_based_indexing_key = "index"
+    else:
+        label_based_indexing_key = f"{obs_var_match[0]}_names"
     if not use_range_index:
         index_label = label_based_indexing_key
         index_key = elem.attrs["_index"]
