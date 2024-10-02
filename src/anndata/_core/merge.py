@@ -1095,9 +1095,7 @@ def make_dask_col_from_extension_dtype(col):
     )
 
 
-def make_xarray_extension_dtypes_dask(
-    annotations: Iterable[Dataset2D],
-):
+def make_xarray_extension_dtypes_dask(annotations: Iterable[Dataset2D]):
     new_annotations = []
 
     for a in annotations:
