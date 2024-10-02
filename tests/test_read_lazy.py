@@ -52,9 +52,12 @@ def adata_remote_orig(
     tmp_path_factory, dskfmt: str, mtx_format, load_annotation_index: bool
 ) -> tuple[AnnData, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
-    orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
+    if dskfmt == "h5ad":
+        orig_path = tmp_path_factory.mktemp("h5ad_file_dir") / f"orig.{dskfmt}"
+    else:
+        orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
     orig = gen_adata((1000, 1000), mtx_format)
-    orig.write_zarr(orig_path)
+    getattr(orig, f"write_{dskfmt}")(orig_path)
     return read_lazy(orig_path, load_annotation_index=load_annotation_index), orig
 
 
