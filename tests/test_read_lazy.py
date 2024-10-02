@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
@@ -272,22 +273,6 @@ def test_concat(
     assert_equal(concated_remote.X, concatenated_memory.X)
 
 
-def test_concat_without_annotation_index(adata_remote_with_store_tall_skinny, join):
-    _, store = adata_remote_with_store_tall_skinny
-    remote = read_lazy(store, load_annotation_index=False)
-    orig = remote.to_memory()
-    with pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric"):
-        remote_concatenated = ad.concat([remote, remote], join=join)
-    orig_concatenated = ad.concat([orig, orig], join=join)
-    in_memory_remote_concatenated = remote_concatenated.to_memory()
-    corrected_remote_obs, corrected_memory_obs = correct_extension_dtype_differences(
-        in_memory_remote_concatenated.obs, orig_concatenated.obs
-    )
-    assert_equal(corrected_remote_obs, corrected_memory_obs)
-    assert_equal(in_memory_remote_concatenated.X, orig_concatenated.X)
-    assert all(in_memory_remote_concatenated.var_names == orig_concatenated.var_names)
-
-
 @pytest.mark.parametrize(
     "index",
     [
@@ -307,13 +292,29 @@ def test_concat_without_annotation_index(adata_remote_with_store_tall_skinny, jo
             np.random.choice([True, False], 2000),
             id="boolean array",
         ),
-        pytest.param(slice(None), id="full"),
+        pytest.param(slice(None), id="full slice"),
+        pytest.param(None, id="No index"),
     ],
 )
-def test_concat_subsets(adata_remote_orig, join, index):
+def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation_index):
     remote, orig = adata_remote_orig
-    remote_concatenated = ad.concat([remote, remote], join=join)[index]
-    orig_concatenated = ad.concat([orig, orig], join=join)[index]
+
+    @contextmanager
+    def empty_context():
+        yield
+
+    maybe_warning_context = (
+        pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric")
+        if not load_annotation_index
+        else empty_context()
+    )
+    with maybe_warning_context:
+        remote_concatenated = ad.concat([remote, remote], join=join)
+    if index is not None:
+        remote_concatenated = remote_concatenated[index]
+    orig_concatenated = ad.concat([orig, orig], join=join)
+    if index is not None:
+        orig_concatenated = orig_concatenated[index]
     in_memory_remote_concatenated = remote_concatenated.to_memory()
     corrected_remote_obs, corrected_memory_obs = correct_extension_dtype_differences(
         in_memory_remote_concatenated.obs, orig_concatenated.obs
