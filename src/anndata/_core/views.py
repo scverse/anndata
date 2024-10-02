@@ -294,64 +294,64 @@ def as_view(obj, view_args):
 
 
 @as_view.register(np.ndarray)
-def as_view_array(array, view_args):
+def as_view_array(array, view_args) -> ArrayView:
     return ArrayView(array, view_args=view_args)
 
 
 @as_view.register(DaskArray)
-def as_view_dask_array(array, view_args):
+def as_view_dask_array(array, view_args) -> DaskArrayView:
     return DaskArrayView(array, view_args=view_args)
 
 
 @as_view.register(pd.DataFrame)
-def as_view_df(df, view_args):
+def as_view_df(df, view_args) -> DataFrameView:
     return DataFrameView(df, view_args=view_args)
 
 
 @as_view.register(sparse.csr_matrix)
-def as_view_csr_matrix(mtx, view_args):
+def as_view_csr_matrix(mtx, view_args) -> SparseCSRMatrixView:
     return SparseCSRMatrixView(mtx, view_args=view_args)
 
 
 @as_view.register(sparse.csc_matrix)
-def as_view_csc_matrix(mtx, view_args):
+def as_view_csc_matrix(mtx, view_args) -> SparseCSCMatrixView:
     return SparseCSCMatrixView(mtx, view_args=view_args)
 
 
 @as_view.register(sparse.csr_array)
-def as_view_csr_array(mtx, view_args):
+def as_view_csr_array(mtx, view_args) -> SparseCSRArrayView:
     return SparseCSRArrayView(mtx, view_args=view_args)
 
 
 @as_view.register(sparse.csc_array)
-def as_view_csc_array(mtx, view_args):
+def as_view_csc_array(mtx, view_args) -> SparseCSCArrayView:
     return SparseCSCArrayView(mtx, view_args=view_args)
 
 
 @as_view.register(dict)
-def as_view_dict(d, view_args):
+def as_view_dict(d, view_args) -> DictView:
     return DictView(d, view_args=view_args)
 
 
 @as_view.register(ZappyArray)
-def as_view_zappy(z, view_args):
+def as_view_zappy(z, view_args) -> ZappyArray:
     # Previous code says ZappyArray works as view,
     # but as far as I can tell they’re immutable.
     return z
 
 
 @as_view.register(CupyArray)
-def as_view_cupy(array, view_args):
+def as_view_cupy(array, view_args) -> CupyArrayView:
     return CupyArrayView(array, view_args=view_args)
 
 
 @as_view.register(CupyCSRMatrix)
-def as_view_cupy_csr(mtx, view_args):
+def as_view_cupy_csr(mtx, view_args) -> CupySparseCSRView:
     return CupySparseCSRView(mtx, view_args=view_args)
 
 
 @as_view.register(CupyCSCMatrix)
-def as_view_cupy_csc(mtx, view_args):
+def as_view_cupy_csc(mtx, view_args) -> CupySparseCSCView:
     return CupySparseCSCView(mtx, view_args=view_args)
 
 
@@ -373,7 +373,7 @@ try:
             to be attached as "behavior". These "behaviors" cannot take any additional parameters (as we do
             for other data types to store `_view_args`). Therefore, we need to store `_view_args` using awkward's
             parameter mechanism. These parameters need to be json-serializable, which is why we can't store
-            ElementRef directly, but need to replace the reference to the parent AnnDataView container with a weak
+            ElementRef directly, but need to replace the reference to the parent AnnData container with a weak
             reference.
             """
             parent_key, attrname, keys = self.layout.parameter(_PARAM_NAME)
@@ -394,7 +394,7 @@ try:
             return array
 
     @as_view.register(AwkArray)
-    def as_view_awkarray(array, view_args):
+    def as_view_awkarray(array, view_args) -> AwkwardArrayView:
         parent, attrname, keys = view_args
         parent_key = f"target-{id(parent)}"
         _registry[parent_key] = parent
