@@ -61,6 +61,7 @@ def adata_remote_orig(
     else:
         orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
     orig = gen_adata((1000, 1100), mtx_format)
+    orig.raw = gen_adata((1000, 1100), mtx_format)
     getattr(orig, f"write_{dskfmt}")(orig_path)
     return lambda: read_lazy(
         orig_path, load_annotation_index=load_annotation_index
@@ -83,6 +84,7 @@ def adata_remote_with_store_tall_skinny(
         var=var,
         X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
     )
+    orig.raw = orig.copy()
     orig.write_zarr(orig_path)
     store = AccessTrackingStore(orig_path)
     return lambda: read_lazy(store), store
@@ -97,13 +99,16 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     remote_generator, store = adata_remote_with_store_tall_skinny
     remote = remote_generator()
     store.initialize_key_trackers(
-        ["obs/cat/codes", "obs/cat/categories", "obs/int64", "var/int64", "X"]
+        ["obs/cat/codes", "obs/cat/categories", "obs/int64", "var/int64", "X", "raw"]
     )
     # a series of methods that should __not__ read in any data
     remote.X  # the initial (non-subset) access to `X` should not read in data
     remote.shape
     remote.var
     remote.obs
+    remote.raw
+    remote.raw.var
+    remote.raw.X
     remote.obs["int64"]
     remote.obs["int64"]
     remote.obs["cat"]
@@ -124,6 +129,7 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
     store.assert_access_count("obs/int64", 1)
     # .zmetadata handles .zarray so simple access does not cause any read
     store.assert_access_count("var/int64", 0)
+    store.assert_access_count("raw", 0)
 
 
 def test_access_count_index(adata_remote_with_store_tall_skinny):

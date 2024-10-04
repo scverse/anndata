@@ -114,7 +114,7 @@ def read_lazy(
             f = h5py.File(store, mode="r")
 
     def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
-        if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+        if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):
             cols = [
                 "obs",
                 "var",
@@ -131,8 +131,6 @@ def read_lazy(
                 elem.items() if has_keys else [(k, elem[k]) for k in cols if k in elem]
             )
             return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
-        elif elem_name.startswith("/raw"):
-            return None
         elif (
             iospec.encoding_type
             in {
