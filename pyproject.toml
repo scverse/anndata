@@ -84,7 +84,7 @@ doc = [
     "anndata[dev-doc]",
 ]
 dev-doc = ["towncrier>=24.8.0"] # release notes tool
-test-full = ["anndata[test]", "anndata[lazy]"]
+test-full = ["anndata[test,lazy]"]
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2",
