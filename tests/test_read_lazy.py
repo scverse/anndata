@@ -333,7 +333,7 @@ def test_concat_access_count(
     ],
 )
 def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation_index):
-    from anndata.experimental.backed._xarray import Dataset2D
+    from anndata.experimental.backed._compat import Dataset2D
 
     remote_generator, orig = adata_remote_orig
     remote = remote_generator()

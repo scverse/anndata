@@ -50,7 +50,7 @@ def _normalize_index(
     | pd.Index,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
-    from ..experimental.backed._compat import xr
+    from ..experimental.backed._compat import DataArray
 
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     # if not isinstance(index, pd.RangeIndex):
@@ -110,7 +110,7 @@ def _normalize_index(
                     "are not valid obs/ var names or indices."
                 )
             return positions  # np.ndarray[int]
-    elif isinstance(indexer, xr.DataArray):
+    elif isinstance(indexer, DataArray):
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
         return indexer.data

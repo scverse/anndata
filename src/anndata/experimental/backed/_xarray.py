@@ -8,17 +8,25 @@ from ..._core.anndata import AnnData, _gen_dataframe
 from ..._core.file_backing import to_memory
 from ..._core.index import _subset
 from ..._core.views import as_view
-from ._compat import Dataset
+
+try:
+    from xarray import Dataset
+except ImportError:
+
+    class Dataset:
+        def __repr__(self) -> str:
+            return "mock Dataset"
+
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable
     from typing import Any, Literal
 
     from ..._core.index import Index
-    from ._compat import DataArray
+    from ._compat import xarray as xr
 
 
-def get_index_dim(ds: DataArray) -> Hashable:
+def get_index_dim(ds: xr.DataArray) -> Hashable:
     assert (
         len(ds.sizes) == 1
     ), f"xarray Dataset should not have more than 1 dims, found {len(ds)}"

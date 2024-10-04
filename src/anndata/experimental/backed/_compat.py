@@ -10,9 +10,9 @@ except ImportError:
 
 
 try:
-    import xarray as xr
+    import xarray
 except ImportError:
-    xr = None
+    xarray = None
 
 
 try:
@@ -33,10 +33,4 @@ except ImportError:
             return "mock BackendArray"
 
 
-try:
-    from xarray import Dataset
-except ImportError:
-
-    class Dataset:
-        def __repr__(self) -> str:
-            return "mock Dataset"
+from ._xarray import Dataset, Dataset2D  # noqa: F401

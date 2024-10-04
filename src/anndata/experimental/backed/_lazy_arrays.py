@@ -10,7 +10,8 @@ from anndata._core.views import as_view
 from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
-from ._compat import BackendArray, DataArray, ZarrArrayWrapper, xr
+from ._compat import BackendArray, DataArray, ZarrArrayWrapper
+from ._compat import xarray as xr
 
 if TYPE_CHECKING:
     from anndata._core.index import Index

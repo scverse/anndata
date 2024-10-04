@@ -21,9 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
-    from anndata.experimental.backed._compat import xr
+    from anndata.experimental.backed._compat import DataArray, Dataset2D
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
-    from anndata.experimental.backed._xarray import Dataset2D
 
     from ..._core.sparse_dataset import _CSCDataset, _CSRDataset
     from ..._types import ArrayStorageType, StorageType
@@ -195,26 +194,27 @@ def _gen_xarray_dict_iterator_from_elems(
     index_label: str,
     index_key: str,
     index: np.NDArray,
-) -> Iterator[tuple[str, xr.DataArray]]:
-    from anndata.experimental.backed._compat import xr
+) -> Iterator[tuple[str, DataArray]]:
+    from anndata.experimental.backed._compat import DataArray
+    from anndata.experimental.backed._compat import xarray as xr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     for k, v in elem_dict.items():
         data_array_name = k
         if isinstance(v, DaskArray) and k != index_key:
-            data_array = xr.DataArray(v, coords=[index], dims=[index_label], name=k)
+            data_array = DataArray(v, coords=[index], dims=[index_label], name=k)
         elif isinstance(v, (CategoricalArray, MaskedArray)) and k != index_key:
             variable = xr.Variable(
                 data=xr.core.indexing.LazilyIndexedArray(v), dims=[index_label]
             )
-            data_array = xr.DataArray(
+            data_array = DataArray(
                 variable,
                 coords=[index],
                 dims=[index_label],
                 name=k,
             )
         elif k == index_key:
-            data_array = xr.DataArray(
+            data_array = DataArray(
                 index, coords=[index], dims=[index_label], name=index_label
             )
             data_array_name = index_label
@@ -224,7 +224,7 @@ def _gen_xarray_dict_iterator_from_elems(
     if index_key == DUMMY_RANGE_INDEX_KEY:
         yield (
             index_label,
-            xr.DataArray(index, coords=[index], dims=[index_label], name=index_label),
+            DataArray(index, coords=[index], dims=[index_label], name=index_label),
         )
 
 
@@ -236,7 +236,7 @@ def read_dataframe(
     _reader: LazyReader,
     use_range_index: bool = False,
 ) -> Dataset2D:
-    from anndata.experimental.backed._xarray import Dataset2D
+    from anndata.experimental.backed._compat import Dataset2D
 
     elem_dict = {
         k: _reader.read_elem(elem[k])

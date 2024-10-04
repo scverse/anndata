@@ -26,7 +26,7 @@ def coerce_array(
     allow_array_like: bool = False,
 ):
     try:
-        from anndata.experimental.backed._xarray import Dataset2D
+        from anndata.experimental.backed._compat import Dataset2D
     except ImportError:
 
         class Dataset2D:

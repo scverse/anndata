@@ -42,7 +42,7 @@ if typing.TYPE_CHECKING:
 
     from pandas.api.extensions import ExtensionDtype
 
-    from anndata.experimental.backed._xarray import Dataset2D
+    from anndata.experimental.backed._compat import Dataset2D
 
     Join_T = Literal["inner", "outer"]
 
@@ -770,7 +770,7 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
 
 
 def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
-    from anndata.experimental.backed._xarray import Dataset2D
+    from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
     if fill_value is None:
@@ -1142,8 +1142,8 @@ def concat_dataset2d_on_annot_axis(
     annotations: Iterable[Dataset2D],
     join: Join_T,
 ):
-    from anndata.experimental.backed._compat import xr
-    from anndata.experimental.backed._xarray import Dataset2D
+    from anndata.experimental.backed._compat import Dataset2D
+    from anndata.experimental.backed._compat import xarray as xr
 
     annotations_with_only_dask = make_xarray_extension_dtypes_dask(annotations)
     attrs = get_attrs(annotations_with_only_dask)
@@ -1357,8 +1357,8 @@ def concat(
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
 
-    from anndata.experimental.backed._compat import xr
-    from anndata.experimental.backed._xarray import Dataset2D
+    from anndata.experimental.backed._compat import Dataset2D
+    from anndata.experimental.backed._compat import xarray as xr
 
     # Argument normalization
     merge = resolve_merge_strategy(merge)
