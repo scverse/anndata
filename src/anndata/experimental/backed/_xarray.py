@@ -66,7 +66,7 @@ class Dataset2D(Dataset):
                 self._ds = ds
 
             def __getitem__(self, idx):
-                coord = list(self._ds.coords.keys())[0]
+                coord = get_index_dim(self._ds)
                 return self._ds.isel(**{coord: idx})
 
         return IlocGetter(self)

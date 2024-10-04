@@ -220,18 +220,16 @@ def correct_extension_dtype_differences(remote: pd.DataFrame, memory: pd.DataFra
 
 @pytest.mark.parametrize("join", ["outer", "inner"])
 @pytest.mark.parametrize("are_vars_different", [True, False])
-def test_concat(
-    tmp_path, join: Literal["outer", "inner"], are_vars_different: bool, mtx_format
+def test_concat_access_count(
+    tmp_path, join: Literal["outer", "inner"], are_vars_different: bool
 ):
-    from anndata.experimental.backed._compat import Dataset
-
     lazy_adatas = []
     adatas = []
     stores: list[AccessTrackingStore] = []
     var_indices = []
     M = 1000
     N = 50
-    n_datasets = 2
+    n_datasets = 3
     for dataset_index in range(n_datasets):
         orig_path = tmp_path / f"orig_{dataset_index}.zarr"
         orig_path.mkdir()
@@ -246,16 +244,15 @@ def test_concat(
         orig = AnnData(
             obs=obs,
             var=var,
-            X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
+            X=np.random.binomial(100, 0.005, (M, N)).astype(np.float32),
         )
         orig.write_zarr(orig_path)
         store = AccessTrackingStore(orig_path)
-        store.initialize_key_trackers(["obs/int64", "var/int64", "X"])
+        store.initialize_key_trackers(["obs/int64", "X", "var/int64"])
         lazy_adatas += [read_lazy(store)]
         adatas += [orig]
         stores += [store]
     concated_remote = ad.concat(lazy_adatas, join=join)
-    assert isinstance(concated_remote.obs, Dataset)
     for i in range(n_datasets):
         stores[i].assert_access_count("obs/int64", 0)
         stores[i].assert_access_count("X", 0)
@@ -269,24 +266,46 @@ def test_concat(
 
     assert_equal(
         *correct_extension_dtype_differences(
-            concated_remote.obs.to_pandas(), obs_memory
+            concated_remote[:M].obs.to_pandas(), concatenated_memory[:M].obs
         )
     )
-    # check non-different variables, taken from first annotation.  all others are null so incomparable
-    pd_index = pd.Index(filter(lambda x: not x.endswith("ds"), var_indices[0]))
-    var_df = adatas[0][:, pd_index].var.copy()
-    var_df.index.name = "var_names"
-    remote_df_corrected, _ = correct_extension_dtype_differences(
-        concated_remote[:, pd_index].var.to_pandas(), var_df
-    )
-    #  TODO:xr.merge always upcasts to float due to NA and you can't downcast?
-    for col in remote_df_corrected.columns:
-        dtype = remote_df_corrected[col].dtype
-        if dtype in [np.float64, np.float32]:
-            var_df[col] = var_df[col].astype(dtype)
-    assert_equal(remote_df_corrected, var_df)
+    # check access count for the stores - only the first should be accessed
+    stores[0].assert_access_count("obs/int64", 1)
+    for i in range(1, n_datasets):
+        stores[i].assert_access_count("obs/int64", 0)
 
-    assert_equal(concated_remote.X, concatenated_memory.X)
+    # subsetting should not read data into memory
+    concated_remote[:M].X
+    for i in range(n_datasets):
+        stores[i].assert_access_count("X", 0)
+
+    # check non-different variables, taken from first annotation.
+    pd_index_overlapping = pd.Index(
+        filter(lambda x: not x.endswith("ds"), var_indices[0])
+    )
+    var_df_overlapping = adatas[0][:, pd_index_overlapping].var.copy()
+    test_cases = [(pd_index_overlapping, var_df_overlapping, 0)]
+    if are_vars_different and join == "outer":
+        # check a set of unique variables from the first object since we only take from there if different
+        pd_index_only_ds_0 = pd.Index(filter(lambda x: "0_ds" in x, var_indices[1]))
+        var_df_only_ds_0 = adatas[0][:, pd_index_only_ds_0].var.copy()
+        test_cases.append((pd_index_only_ds_0, var_df_only_ds_0, 0))
+    for pd_index, var_df, store_idx in test_cases:
+        var_df.index.name = "var_names"
+        remote_df = concated_remote[:, pd_index].var.to_pandas()
+        remote_df_corrected, _ = correct_extension_dtype_differences(remote_df, var_df)
+        #  TODO:xr.merge always upcasts to float due to NA and you can't downcast?
+        for col in remote_df_corrected.columns:
+            dtype = remote_df_corrected[col].dtype
+            if dtype in [np.float64, np.float32]:
+                var_df[col] = var_df[col].astype(dtype)
+        assert_equal(remote_df_corrected, var_df)
+
+        stores[store_idx].assert_access_count("var/int64", 1)
+        for store in stores:
+            if store != stores[store_idx]:
+                store.assert_access_count("var/int64", 0)
+        stores[store_idx].reset_key_trackers()
 
 
 @pytest.mark.parametrize(
@@ -309,10 +328,13 @@ def test_concat(
             id="boolean array",
         ),
         pytest.param(slice(None), id="full slice"),
+        pytest.param("a", id="categorical_subset"),
         pytest.param(None, id="No index"),
     ],
 )
 def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation_index):
+    from anndata.experimental.backed._xarray import Dataset2D
+
     remote_generator, orig = adata_remote_orig
     remote = remote_generator()
 
@@ -328,7 +350,17 @@ def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation
     with maybe_warning_context:
         remote_concatenated = ad.concat([remote, remote], join=join)
     if index is not None:
+        if np.isscalar(index) and index == "a":
+            index = remote_concatenated.obs["obs_cat"] == "a"
         remote_concatenated = remote_concatenated[index]
+    assert isinstance(remote_concatenated.obs, Dataset2D)
+    # check preservation of non-categorical dtypes on the concat axis
+    assert remote_concatenated.obs["int64"].dtype == "int64"
+    assert remote_concatenated.obs["uint8"].dtype == "uint8"
+    assert remote_concatenated.obs["nullable-int"].dtype == "int32"
+    assert remote_concatenated.obs["float64"].dtype == "float64"
+    assert remote_concatenated.obs["bool"].dtype == "bool"
+    assert remote_concatenated.obs["nullable-bool"].dtype == "bool"
     orig_concatenated = ad.concat([orig, orig], join=join)
     if index is not None:
         orig_concatenated = orig_concatenated[index]
