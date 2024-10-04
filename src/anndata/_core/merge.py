@@ -770,16 +770,16 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
 
 
 def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
-    from anndata.experimental.backed._compat import Dataset
+    from anndata.experimental.backed._xarray import Dataset2D
 
     arrays = list(arrays)
     if fill_value is None:
         fill_value = default_fill_value(arrays)
 
-    if any(isinstance(a, Dataset) for a in arrays):
-        if not all(isinstance(a, Dataset) for a in arrays):
+    if any(isinstance(a, Dataset2D) for a in arrays):
+        if not all(isinstance(a, Dataset2D) for a in arrays):
             raise NotImplementedError(
-                "Cannot concatenate a Dataset with other array types."
+                "Cannot concatenate a Dataset2D with other array types."
             )
         return concat_dataset2d_on_annot_axis(arrays, join="outer")
     if any(isinstance(a, pd.DataFrame) for a in arrays):
