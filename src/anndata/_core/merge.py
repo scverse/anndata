@@ -1073,7 +1073,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
         return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
 
 
-def make_dask_col_from_extension_dtype(col):
+def make_dask_col_from_extension_dtype(col, use_only_object_dtype: bool = False):
     import dask.array as da
 
     from anndata._io.specs.lazy_methods import compute_chunk_layout_for_axis_size
@@ -1084,17 +1084,22 @@ def make_dask_col_from_extension_dtype(col):
         )
         return np.array(col.data[idx].array)
 
-    # TODO: fix dtype
-    dtype = "object"
+    if col.dtype == "category" or use_only_object_dtype:
+        dtype = "object"
+    else:
+        dtype = col.dtype.numpy_dtype
     # TODO: get good chunk size?
     return da.map_blocks(
         get_chunk,
         chunks=(compute_chunk_layout_for_axis_size(1000, col.shape[0]),),
         meta=np.array([], dtype=dtype),
+        dtype=dtype,
     )
 
 
-def make_xarray_extension_dtypes_dask(annotations: Iterable[Dataset2D]):
+def make_xarray_extension_dtypes_dask(
+    annotations: Iterable[Dataset2D], use_only_object_dtype=False
+):
     new_annotations = []
 
     for a in annotations:
@@ -1106,7 +1111,9 @@ def make_xarray_extension_dtypes_dask(annotations: Iterable[Dataset2D]):
             a.copy(
                 data={
                     **{
-                        col: make_dask_col_from_extension_dtype(a[col])
+                        col: make_dask_col_from_extension_dtype(
+                            a[col], use_only_object_dtype
+                        )
                         for col in extension_cols
                     },
                     **{col: a[col] for col in a.columns if col not in extension_cols},
@@ -1442,7 +1449,10 @@ def concat(
     else:
         # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
         # the only "lazy" setting so I'm not sure we really want that.
-        annotations_with_only_dask = make_xarray_extension_dtypes_dask(alt_annotations)
+        # Because of xarray's merge upcasting, it's safest to simply assume that all dtypes are objects.
+        annotations_with_only_dask = make_xarray_extension_dtypes_dask(
+            alt_annotations, use_only_object_dtype=True
+        )
         attrs = get_attrs(annotations_with_only_dask)
         alt_annot = Dataset2D(
             xr.merge(annotations_with_only_dask, join=join, compat="override"),
