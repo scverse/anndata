@@ -150,9 +150,11 @@ def fix_known_differences(orig, result, backwards_compat=True):
         result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
-    for k, dtype in orig.obs.dtypes.items():
-        if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
-            result.obs[k] = result.obs[k].astype(dtype)
+    for get_df in [lambda k: getattr(k, "obs"), lambda k: getattr(k, "obsm")["df"]]:
+        str_to_df_converted = get_df(result)
+        for k, dtype in get_df(orig).dtypes.items():
+            if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
+                str_to_df_converted[k] = str_to_df_converted[k].astype(dtype)
 
     return orig, result
 
@@ -1529,6 +1531,29 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     assert_equal(result1, target1)
     assert_equal(result2, target2)
+
+
+def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
+    import dask.array as da
+    from scipy import sparse
+
+    import anndata as ad
+
+    X = sparse.random(50, 20, density=0.5, format="csr")
+    X_dask = da.from_array(X, chunks=(5, 20))
+    var_names_1 = [f"gene_{i}" for i in range(20)]
+    var_names_2 = [f"gene_{i}{'_foo' if (i%2) else ''}" for i in range(20, 40)]
+
+    ad1 = ad.AnnData(X=X, var=pd.DataFrame(index=var_names_1))
+    ad2 = ad.AnnData(X=X, var=pd.DataFrame(index=var_names_2))
+
+    ad1_dask = ad.AnnData(X=X_dask, var=pd.DataFrame(index=var_names_1))
+    ad2_dask = ad.AnnData(X=X_dask, var=pd.DataFrame(index=var_names_2))
+
+    res_in_memory = ad.concat([ad1, ad2], join=join_type, merge=merge_strategy)
+    res_dask = ad.concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
+
+    assert_equal(res_in_memory, res_dask)
 
 
 def test_outer_concat_with_missing_value_for_df():

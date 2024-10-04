@@ -847,3 +847,11 @@ def test_h5py_attr_limit(tmp_path):
         np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
     )
     a.write(tmp_path / "tmp.h5ad")
+
+
+@pytest.mark.skipif(
+    find_spec("xarray"), reason="Xarray is installed so `read_lazy` will not error"
+)
+def test_read_lazy_import_error():
+    with pytest.raises(ImportError, match="xarray"):
+        ad.experimental.read_lazy("test.zarr")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from functools import singledispatch
 from typing import TYPE_CHECKING
 
@@ -10,13 +11,26 @@ from pandas.api.types import is_string_dtype
 from .._warnings import ImplicitModificationWarning
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
     from typing import Any, Literal
 
 
 @singledispatch
 def _gen_dataframe(
-    anno: Mapping[str, Any],
+    anno: Any,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+) -> pd.DataFrame:
+    raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
+
+
+@_gen_dataframe.register(Mapping)
+@_gen_dataframe.register(type(None))
+def _gen_dataframe_mapping(
+    anno: Mapping[str, Any] | None,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],
