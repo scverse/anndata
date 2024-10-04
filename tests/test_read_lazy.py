@@ -11,6 +11,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
+from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     AccessTrackingStore,
@@ -151,6 +152,7 @@ def test_access_count_dtype(adata_remote_with_store_tall_skinny):
 def test_to_memory(adata_remote_orig):
     remote_generator, orig = adata_remote_orig
     remote = remote_generator()
+    assert isinstance(remote.uns["nested"]["nested_further"]["array"], DaskArray)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, orig)
 

@@ -17,6 +17,9 @@ from .. import read_dispatched
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from anndata._io.specs.registry import IOSpec
+    from anndata._types import Read, StorageType
+
     from ...compat import ZarrGroup
 
 
@@ -26,7 +29,7 @@ def read_lazy(
 ) -> AnnData:
     """
     Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
-    No array data should need to be read into memory with the exception of :class:`awkward.Array` and some older-encoding string arrays.
+    No array data should need to be read into memory with the exception of :class:`awkward.Array`, scalars, and some older-encoding arrays.
 
     Parameters
     ----------
@@ -110,7 +113,7 @@ def read_lazy(
         else:
             f = h5py.File(store, mode="r")
 
-    def callback(func, elem_name: str, elem, iospec):
+    def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             cols = [
                 "obs",
@@ -147,6 +150,8 @@ def read_lazy(
             return read_elem_lazy(elem)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
+        elif iospec.encoding_type == "dict":
+            return {k: read_dispatched(v, callback=callback) for k, v in elem.items()}
         return func(elem)
 
     with settings.override(check_uniqueness=load_annotation_index):
