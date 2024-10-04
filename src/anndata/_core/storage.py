@@ -26,7 +26,6 @@ def coerce_array(
     allow_array_like: bool = False,
 ):
     try:
-        # Needs to be done here to prevent circular imports, and StorageType is immutable
         from anndata.experimental.backed._xarray import Dataset2D
     except ImportError:
 
