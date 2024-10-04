@@ -91,6 +91,12 @@ def read_lazy(
         obsm: 'X_harmony', 'X_pca', 'X_umap', 'X_spatial'
         layers: 'counts', 'scale.data'
     """
+    try:
+        import xarray  # noqa: F401
+    except ImportError:
+        raise ImportError(
+            "xarray is required to use the `read_lazy` function. Please install xarray."
+        )
     is_h5_store = isinstance(store, (h5py.Dataset, h5py.File))
     is_h5 = (
         isinstance(store, (Path, str)) and Path(store).suffix == ".h5ad"
