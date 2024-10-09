@@ -17,14 +17,13 @@ import h5py
 import numpy as np
 import pandas as pd
 from natsort import natsorted
-from numpy import ma
 from pandas.api.types import infer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 
 from .. import utils
 from .._settings import settings
-from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx
+from ..compat import SpArray, _move_adj_mtx
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -71,18 +70,6 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
     """Generates single-column keys from multicolumn key."""
     keys = [f"{key_multicol}{i + 1:03}of{n_keys:03}" for i in range(n_keys)]
     return keys
-
-
-def _check_2d_shape(X):
-    """\
-    Check shape of array or sparse matrix.
-
-    Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
-    """
-    if X.dtype.names is None and len(X.shape) != 2:
-        raise ValueError(
-            f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
-        )
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -228,7 +215,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
         raw: Mapping[str, Any] | None = None,
-        dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
         filename: PathLike | None = None,
         filemode: Literal["r", "r+"] | None = None,
@@ -257,7 +243,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varm=varm,
                 raw=raw,
                 layers=layers,
-                dtype=dtype,
                 shape=shape,
                 obsp=obsp,
                 varp=varp,
@@ -329,7 +314,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp=None,
         raw=None,
         layers=None,
-        dtype=None,
         shape=None,
         filename=None,
         filemode=None,
@@ -359,8 +343,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     raise ValueError(
                         "If `X` is a dict no further arguments must be provided."
                     )
-                X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
-                    X._X,
+                obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                     X.obs,
                     X.var,
                     X.uns,
@@ -371,6 +354,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X.layers,
                     X.raw,
                 )
+                X = X.layers.get(None)
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
@@ -394,22 +378,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = coerce_array(X, name="X")
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
-            _check_2d_shape(X)
-            # if type doesn’t match, a copy is made, otherwise, use a view
-            if dtype is not None:
-                warnings.warn(
-                    "The dtype argument is deprecated and will be removed in late 2024.",
-                    FutureWarning,
-                )
-                if issparse(X) or isinstance(X, ma.MaskedArray):
-                    # TODO: maybe use view on data attribute of sparse matrix
-                    #       as in readwrite.read_10x_h5
-                    if X.dtype != np.dtype(dtype):
-                        X = X.astype(dtype)
-                elif isinstance(X, (ZarrArray, DaskArray)):
-                    X = X.astype(dtype)
-                else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                    X = np.asarray(X, dtype)
             # data matrix and shape
             self._X = X
             n_obs, n_vars = X.shape
@@ -656,11 +624,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
 
     @X.deleter
-    def X(self):
-        self.X = None
+    def X(self) -> None:
+        del self.layers[None]
 
-    layers: AlignedMappingProperty[Layers | LayersView] = AlignedMappingProperty(
-        "layers", Layers
+    layers: AlignedMappingProperty[str | None, Layers | LayersView] = (
+        AlignedMappingProperty("layers", Layers)
     )
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
@@ -870,8 +838,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def uns(self):
         self.uns = OrderedDict()
 
-    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "obsm", AxisArrays, 0
+    obsm: AlignedMappingProperty[str, AxisArrays | AxisArraysView] = (
+        AlignedMappingProperty("obsm", AxisArrays, 0)
     )
     """\
     Multi-dimensional annotation of observations
@@ -882,8 +850,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "varm", AxisArrays, 1
+    varm: AlignedMappingProperty[str, AxisArrays | AxisArraysView] = (
+        AlignedMappingProperty("varm", AxisArrays, 1)
     )
     """\
     Multi-dimensional annotation of variables/features
@@ -894,7 +862,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
-    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    obsp: AlignedMappingProperty[str, PairwiseArrays | PairwiseArraysView] = (
         AlignedMappingProperty("obsp", PairwiseArrays, 0)
     )
     """\
@@ -906,7 +874,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    varp: AlignedMappingProperty[str, PairwiseArrays | PairwiseArraysView] = (
         AlignedMappingProperty("varp", PairwiseArrays, 1)
     )
     """\
