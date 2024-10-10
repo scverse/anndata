@@ -63,8 +63,7 @@ class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
     """The parent object that this mapping is aligned to."""
 
     def __repr__(self) -> str:
-        str_keys = (k for k in self.keys() if k is not None)
-        return f"{type(self).__name__} with keys: {', '.join(str_keys)}"
+        return f"{type(self).__name__} with keys: {', '.join(map(repr, self.keys()))}"
 
     def _ipython_key_completions_(self) -> list[K]:
         return list(self.keys())
