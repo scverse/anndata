@@ -106,7 +106,12 @@ def write_h5ad(
         write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
         write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
         write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
+        write_elem(
+            f,
+            "layers",
+            {k: v for k, v in adata.layers.items() if k is not None},
+            dataset_kwargs=dataset_kwargs,
+        )
         write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
 
 

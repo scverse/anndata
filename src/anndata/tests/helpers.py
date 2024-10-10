@@ -524,7 +524,7 @@ def subset_func(request):
 ###################
 
 
-def format_msg(elem_name):
+def format_msg(elem_name: str | None) -> str:
     if elem_name is not None:
         return f"Error raised from element {elem_name!r}."
     else:
@@ -562,6 +562,11 @@ def _assert_equal(a, b):
 
 @singledispatch
 def assert_equal(a, b, exact=False, elem_name=None):
+    a_handler, b_handler, default_handler = map(
+        assert_equal.dispatch, (type(a), type(b), object)
+    )
+    if (a_handler is default_handler) and (b_handler is not default_handler):
+        return assert_equal(b, a, exact=exact, elem_name=elem_name)
     _assert_equal(a, b, _elem_name=elem_name)
 
 
@@ -654,7 +659,9 @@ def assert_equal_awkarray(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(Mapping)
 def assert_equal_mapping(a, b, exact=False, elem_name=None):
-    assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
+    assert set(a.keys()) == set(b.keys()), (
+        format_msg(elem_name) + f" {a.keys()} != {b.keys()}"
+    )
     for k in a.keys():
         if elem_name is None:
             elem_name = ""

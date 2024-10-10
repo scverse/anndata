@@ -51,7 +51,9 @@ class Raw:
             self.varm = varm
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
-            if isinstance(adata.X, (CupyArray, CupySparseMatrix)):
+            if adata.X is None:
+                self._X = None
+            elif isinstance(adata.X, (CupyArray, CupySparseMatrix)):
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
