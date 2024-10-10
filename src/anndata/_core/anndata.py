@@ -31,19 +31,17 @@ from ..utils import (
     ensure_df_homogeneous,
     raise_value_error_if_multiindex_columns,
 )
-from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
 from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
-from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import coerce_array
 from .views import (
     DataFrameView,
     DictView,
     _resolve_idxs,
-    as_view,
 )
 
 if TYPE_CHECKING:
@@ -290,10 +288,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
         self._uns = uns
 
-        # set data
-        if self.isbacked:
-            self._X = None
-
         # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
@@ -379,11 +373,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
             # data matrix and shape
-            self._X = X
             n_obs, n_vars = X.shape
             source = "X"
         else:
-            self._X = None
             n_obs, n_vars = (None, None) if shape is None else shape
             source = "shape"
 
@@ -436,6 +428,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         # layers
         self.layers = layers
+        self.X = X
 
     def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
         def get_size(X) -> int:
@@ -511,117 +504,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def X(self) -> ArrayDataStructureType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
-        if self.isbacked:
-            if not self.file.is_open:
-                self.file.open()
-            X = self.file["X"]
-            if isinstance(X, h5py.Group):
-                X = sparse_dataset(X)
-            # This is so that we can index into a backed dense dataset with
-            # indices that aren’t strictly increasing
-            if self.is_view:
-                X = _subset(X, (self._oidx, self._vidx))
-        elif self.is_view and self._adata_ref.X is None:
-            X = None
-        elif self.is_view:
-            X = as_view(
-                _subset(self._adata_ref.X, (self._oidx, self._vidx)),
-                ElementRef(self, "X"),
-            )
-        else:
-            X = self._X
-        return X
-        # if self.n_obs == 1 and self.n_vars == 1:
-        #     return X[0, 0]
-        # elif self.n_obs == 1 or self.n_vars == 1:
-        #     if issparse(X): X = X.toarray()
-        #     return X.flatten()
-        # else:
-        #     return X
+        return self.layers.get(None)
 
     @X.setter
     def X(self, value: np.ndarray | sparse.spmatrix | SpArray | None):
-        if value is None:
-            if self.isbacked:
-                raise NotImplementedError(
-                    "Cannot currently remove data matrix from backed object."
-                )
-            if self.is_view:
-                self._init_as_actual(self.copy())
-            self._X = None
-            return
-        value = coerce_array(value, name="X", allow_array_like=True)
-
-        # If indices are both arrays, we need to modify them
-        # so we don’t set values like coordinates
-        # This can occur if there are successive views
-        if (
-            self.is_view
-            and isinstance(self._oidx, np.ndarray)
-            and isinstance(self._vidx, np.ndarray)
-        ):
-            oidx, vidx = np.ix_(self._oidx, self._vidx)
-        else:
-            oidx, vidx = self._oidx, self._vidx
-        if (
-            np.isscalar(value)
-            or (hasattr(value, "shape") and (self.shape == value.shape))
-            or (self.n_vars == 1 and self.n_obs == len(value))
-            or (self.n_obs == 1 and self.n_vars == len(value))
-        ):
-            if not np.isscalar(value):
-                if self.is_view and any(
-                    isinstance(idx, np.ndarray)
-                    and len(np.unique(idx)) != len(idx.ravel())
-                    for idx in [oidx, vidx]
-                ):
-                    msg = (
-                        "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
-                        "The resulting `adata.X` will likely not equal the value to which you set it. "
-                        "To avoid this potential issue, please make a copy of the data first. "
-                        "In the future, this operation will throw an error."
-                    )
-                    warnings.warn(msg, FutureWarning, stacklevel=1)
-                if self.shape != value.shape:
-                    # For assigning vector of values to 2d array or matrix
-                    # Not necessary for row of 2d array
-                    value = value.reshape(self.shape)
-            if self.isbacked:
-                if self.is_view:
-                    X = self.file["X"]
-                    if isinstance(X, h5py.Group):
-                        X = sparse_dataset(X)
-                    X[oidx, vidx] = value
-                else:
-                    self._set_backed("X", value)
-            else:
-                if self.is_view:
-                    if sparse.issparse(self._adata_ref._X) and isinstance(
-                        value, np.ndarray
-                    ):
-                        if isinstance(self._adata_ref.X, SpArray):
-                            memory_class = sparse.coo_array
-                        else:
-                            memory_class = sparse.coo_matrix
-                        value = memory_class(value)
-                    elif sparse.issparse(value) and isinstance(
-                        self._adata_ref._X, np.ndarray
-                    ):
-                        warnings.warn(
-                            "Trying to set a dense array with a sparse array on a view."
-                            "Densifying the sparse array."
-                            "This may incur excessive memory usage",
-                            stacklevel=2,
-                        )
-                        value = value.toarray()
-                    self._adata_ref._X[oidx, vidx] = value
-                else:
-                    self._X = value
-        else:
-            raise ValueError(
-                f"Data matrix has wrong shape {value.shape}, "
-                f"need to be {self.shape}."
-            )
+        self.layers[None] = value
 
     @X.deleter
     def X(self) -> None:
@@ -960,8 +847,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
-            # as the data is stored on disk, we can safely set self._X to None
-            self._X = None
+            # as the data is stored on disk, we can safely set self.X to None
+            del self.X
 
     def _set_backed(self, attr, value):
         from .._io.utils import write_attribute
@@ -976,7 +863,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
         if not self.isbacked:
-            del self._X[obs, var]
+            del self.X[obs, var]
         else:
             X = self.file["X"]
             del X[obs, var]
@@ -1145,7 +1032,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("Object is view and cannot be accessed with `[]`.")
         obs, var = self._normalize_indices(index)
         if not self.isbacked:
-            self._X[obs, var] = val
+            self.X[obs, var] = val
         else:
             X = self.file["X"]
             X[obs, var] = val

@@ -209,13 +209,16 @@ class AlignedActual(AlignedMappingBase[K], Generic[K]):
         self._parent = parent
         self._data = store
         for k, v in self._data.items():
+            if v is None:
+                continue
             self._data[k] = self._validate_value(v, k)
 
     def __getitem__(self, key: K) -> Value:
         return self._data[key]
 
     def __setitem__(self, key: K, value: Value):
-        value = self._validate_value(value, key)
+        if value is not None:
+            value = self._validate_value(value, key)
         self._data[key] = value
 
     def __contains__(self, key: K) -> bool:
