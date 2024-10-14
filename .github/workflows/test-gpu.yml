@@ -51,12 +51,9 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - name: Install toml-cli
-        run: sudo apt-get update && sudo apt-get install -y cargo && cargo install toml-cli
-
       - name: Extract max Python version from classifiers
-        id: extract_version
         run: |
+          sudo apt-get update && sudo apt-get install -y cargo && cargo install toml-cli
           classifiers=$(toml get pyproject.toml project.classifiers | grep -oP 'Python :: \K[0-9.]+')
           max_version=$(echo "$classifiers" | sort -V | tail -1)
           echo "max_python_version=$max_version" >> $GITHUB_ENV
