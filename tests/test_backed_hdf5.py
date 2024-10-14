@@ -200,8 +200,8 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     var_idx = subset_func2(mem_adata.var_names)
     if (
         array_type is asarray
-        and isinstance(obs_idx, (list, np.ndarray, sparse.spmatrix, SpArray))
-        and isinstance(var_idx, (list, np.ndarray, sparse.spmatrix, SpArray))
+        and isinstance(obs_idx, list | np.ndarray | sparse.spmatrix | SpArray)
+        and isinstance(var_idx, list | np.ndarray | sparse.spmatrix | SpArray)
     ):
         pytest.xfail(
             "Fancy indexing does not work with multiple arrays on a h5py.Dataset"

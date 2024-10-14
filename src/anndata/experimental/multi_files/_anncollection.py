@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Mapping
 from functools import reduce
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -584,7 +584,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
 
 DictCallable = dict[str, Callable]
-ConvertType = Union[Callable, dict[str, Callable | DictCallable]]
+ConvertType = Callable | dict[str, Callable | DictCallable]
 
 
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):

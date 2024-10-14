@@ -272,12 +272,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 "that is, you cannot make a view of a view."
             )
         self._is_view = True
-        if isinstance(oidx, (int, np.integer)):
+        if isinstance(oidx, int | np.integer):
             if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
                 raise IndexError(f"Observation index `{oidx}` is out of range.")
             oidx += adata_ref.n_obs * (oidx < 0)
             oidx = slice(oidx, oidx + 1, 1)
-        if isinstance(vidx, (int, np.integer)):
+        if isinstance(vidx, int | np.integer):
             if not (-adata_ref.n_vars <= vidx < adata_ref.n_vars):
                 raise IndexError(f"Variable index `{vidx}` is out of range.")
             vidx += adata_ref.n_vars * (vidx < 0)
@@ -406,7 +406,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     #       as in readwrite.read_10x_h5
                     if X.dtype != np.dtype(dtype):
                         X = X.astype(dtype)
-                elif isinstance(X, (ZarrArray, DaskArray)):
+                elif isinstance(X, ZarrArray | DaskArray):
                     X = X.astype(dtype)
                 else:  # is np.ndarray or a subclass, convert to true np.ndarray
                     X = np.asarray(X, dtype)
@@ -763,16 +763,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
             )
-        if isinstance(value, pd.Index) and not isinstance(
-            value.name, (str, type(None))
-        ):
+        if isinstance(value, pd.Index) and not isinstance(value.name, str | type(None)):
             raise ValueError(
                 f"AnnData expects .{attr}.index.name to be a string or None, "
                 f"but you passed a name of type {type(value.name).__name__!r}"
             )
         else:
             value = pd.Index(value)
-            if not isinstance(value.name, (str, type(None))):
+            if not isinstance(value.name, str | type(None)):
                 value.name = None
         if (
             len(value) > 0
@@ -1976,7 +1974,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs
             choice = np.random.choice(self.n_obs, select, replace)
-        elif isinstance(select, (np.ndarray, Sequence)):
+        elif isinstance(select, np.ndarray | Sequence):
             choice = np.asarray(select)
         else:
             raise ValueError("select should be int or array")
