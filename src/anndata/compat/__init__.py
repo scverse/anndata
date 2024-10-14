@@ -288,7 +288,7 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-Group_T = TypeVar("Group_T", bound=Union[ZarrGroup, h5py.Group])
+Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
 
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
