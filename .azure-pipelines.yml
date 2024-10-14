@@ -19,13 +19,13 @@ jobs:
           RUN_COVERAGE: yes
           TEST_TYPE: "coverage"
         Python3.9:
-          python.version: "3.9"
+          python.version: "3.10"
         PreRelease:
           python.version: "3.12"
           DEPENDENCIES_VERSION: "pre-release"
           TEST_TYPE: "strict-warning"
         minimum_versions:
-          python.version: "3.9"
+          python.version: "3.10"
           DEPENDENCIES_VERSION: "minimum"
           TEST_TYPE: "coverage"
     steps:
