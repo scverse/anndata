@@ -42,7 +42,7 @@ dependencies = [
     "numpy>=1.23",
     # https://github.com/scverse/anndata/issues/1434
     "scipy >1.8",
-    "h5py>=3.1",
+    "h5py>=3.6",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
     "packaging>=20.0",
