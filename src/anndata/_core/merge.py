@@ -4,14 +4,13 @@ Code for merging/ concatenating AnnData objects.
 
 from __future__ import annotations
 
-import typing
 import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Literal, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar
 from warnings import warn
 
 import numpy as np
@@ -36,7 +35,7 @@ from ..utils import asarray, axis_len, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Sequence
     from typing import Any
 
@@ -1154,7 +1153,7 @@ def concat_dataset2d_on_annot_axis(
 
 
 def concat(
-    adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
+    adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
     axis: Literal["obs", 0, "var", 1] = "obs",
     join: Join_T = "inner",

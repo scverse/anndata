@@ -23,7 +23,7 @@ def _gen_dataframe(
     source: Literal["X", "shape"],
     attr: Literal["obs", "var"],
     length: int | None = None,
-) -> pd.DataFrame:
+) -> pd.DataFrame:  # pragma: no cover
     raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
 
 
