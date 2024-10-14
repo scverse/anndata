@@ -210,7 +210,7 @@ strict = true
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous"
+ignore-words-list = "theis,coo,homogenous,crate"
 
 [tool.towncrier]
 package = "anndata"
