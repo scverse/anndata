@@ -9,19 +9,11 @@ on:
       - opened
       - synchronize
 
-# Cancel the job if new commits are pushed
-# https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# There are two jobs:
-# 1. `check` determines if the second job (`test`) will be run (through a job dependency).
-# 2. `test` runs on an AWS runner and executes the GPU tests.
 jobs:
-  # If the `skip-gpu-ci` label is set, this job is skipped, and consequently the `test` job too.
-  # If the `run-gpu-ci` label is set or we reacted to a `push` event, this job succeeds (and `test` is run).
-  # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
     name: "Triage: Check if GPU tests are allowed to run"
     if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
@@ -30,13 +22,11 @@ jobs:
       - uses: flying-sheep/check@v1
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
-  # If `check` wasn’t skipped or failed, start an AWS runner and run the GPU tests on it.
+
   test:
     name: GPU Tests
     needs: check
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
-    # Setting a timeout of 30 minutes, as the AWS costs money
-    # At time of writing, a typical run takes about 5 minutes
     timeout-minutes: 30
 
     defaults:
@@ -51,10 +41,20 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
+      - name: Install toml-cli
+        run: cargo install toml-cli
+
+      - name: Extract max Python version from classifiers
+        id: extract_version
+        run: |
+          classifiers=$(toml get pyproject.toml project.classifiers | grep -oP 'Python :: \K[0-9.]+')
+          max_version=$(echo "$classifiers" | sort -V | tail -1)
+          echo "max_python_version=$max_version" >> $GITHUB_ENV
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: ${{ env.max_python_version }}
 
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
