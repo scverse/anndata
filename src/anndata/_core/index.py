@@ -70,25 +70,25 @@ def _normalize_index(
             stop = None if stop is None else stop + 1
         step = indexer.step
         return slice(start, stop, step)
-    elif isinstance(indexer, (np.integer, int)):
+    elif isinstance(indexer, np.integer | int):
         return indexer
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, (Sequence, np.ndarray, pd.Index, spmatrix, np.matrix, SpArray)
+        indexer, Sequence | np.ndarray | pd.Index | spmatrix | np.matrix | SpArray
     ):
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
-            if isinstance(indexer, (spmatrix, SpArray)):
+            if isinstance(indexer, spmatrix | SpArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
-        if not isinstance(indexer, (np.ndarray, pd.Index)):
+        if not isinstance(indexer, np.ndarray | pd.Index):
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
-        if issubclass(indexer.dtype.type, (np.integer, np.floating)):
+        if issubclass(indexer.dtype.type, np.integer | np.floating):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
             if indexer.shape != index.shape:

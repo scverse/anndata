@@ -96,7 +96,7 @@ def test_write_dispatched_chunks():
         # TODO: Should the passed path be absolute?
         path = "/" + store.path + "/" + k
         if hasattr(elem, "shape") and not isinstance(
-            elem, (sparse.spmatrix, SpArray, ad.AnnData)
+            elem, sparse.spmatrix | SpArray | ad.AnnData
         ):
             if re.match(r"^/((X)|(layers)).*", path):
                 chunks = (M, N)
