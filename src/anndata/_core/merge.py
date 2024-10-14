@@ -4,7 +4,6 @@ Code for merging/ concatenating AnnData objects.
 
 from __future__ import annotations
 
-import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
@@ -1127,7 +1126,7 @@ def get_attrs(annotations: Iterable[Dataset2D]) -> dict:
     assert len(index_names) == 1, "All annotations must have the same index name."
     if any(a.index.dtype == "int64" for a in annotations):
         msg = "Concatenating with a pandas numeric index among the indices.  Index may likely not be unique."
-        warnings.warn(msg, UserWarning)
+        warn(msg, UserWarning)
     index_keys = [
         a.attrs["indexing_key"] for a in annotations if "indexing_key" in a.attrs
     ]
