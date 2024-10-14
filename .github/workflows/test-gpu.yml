@@ -52,7 +52,7 @@ jobs:
         run: nvidia-smi
 
       - name: Install toml-cli
-        run: sudo apt-get install -y cargo && cargo install toml-cli
+        run: sudo apt-get update && sudo apt-get install -y cargo && cargo install toml-cli
 
       - name: Extract max Python version from classifiers
         id: extract_version
