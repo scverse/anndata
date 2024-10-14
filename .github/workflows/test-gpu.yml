@@ -51,13 +51,10 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - name: Install toml-cli from crates.io
-        uses: baptiste0928/cargo-install@v3
-        with:
-          crate: toml-cli
-
       - name: Extract max Python version from classifiers
         run: |
+          sudo apt-get update && sudo apt-get install -y cargo && cargo install toml-cli
+          echo "export PATH=$HOME/.cargo/bin:\$PATH" >> $GITHUB_ENV
           classifiers=$(toml get pyproject.toml project.classifiers | grep -oP 'Python :: \K[0-9.]+')
           max_version=$(echo "$classifiers" | sort -V | tail -1)
           echo "max_python_version=$max_version" >> $GITHUB_ENV
