@@ -51,21 +51,20 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
+      - name: Install yq
+        run: |
+          snap install yq
+
+      - name: Extract max Python version from classifiers
+        run: |
+          classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep -oP 'Python :: \K[0-9.]+')
+          max_version=$(echo "$classifiers" | sort -V | tail -1)
+          echo "max_python_version=$max_version" >> $GITHUB_ENV
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.max_python_version }}
-
-      - name: Install yq
-        run: |
-          sudo apt-get update && sudo apt-get install -y jq
-          pip install yq
-
-      - name: Extract max Python version from classifiers
-        run: |
-          classifiers=$(tomlq .project.classifiers pyproject.toml  | grep -oP 'Python :: \K[0-9.]+')
-          max_version=$(echo "$classifiers" | sort -V | tail -1)
-          echo "max_python_version=$max_version" >> $GITHUB_ENV
 
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
