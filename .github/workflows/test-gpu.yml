@@ -58,8 +58,7 @@ jobs:
       - name: Extract max Python version from classifiers
         run: |
           classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep -oP 'Python :: \K[0-9.]+')
-          max_version=$(echo "$classifiers" | sort -V | tail -1)
-          echo "max_python_version=$max_version" >> $GITHUB_ENV
+          echo "max_version=$(echo "$classifiers" | sort -V | tail -1)" >> $GITHUB_ENV
 
       - name: Install Python
         uses: actions/setup-python@v5
