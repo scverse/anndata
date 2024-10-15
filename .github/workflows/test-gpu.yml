@@ -53,7 +53,7 @@ jobs:
 
       - name: Install yq
         run: |
-          snap install yq
+          sudo snap install yq
 
       - name: Extract max Python version from classifiers
         run: |
