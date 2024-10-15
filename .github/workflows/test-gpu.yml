@@ -57,7 +57,7 @@ jobs:
 
       - name: Extract max Python version from classifiers
         run: |
-          classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep --only-matching --perl-regexp '(?<=Python :: )\d+([0-9.])+')
+          classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep --only-matching --perl-regexp '(?<=Python :: )(\d\.\d+)')
           max_version=$(echo "$classifiers" | sort -V | tail -1)
           echo "max_python_version=$max_version" >> $GITHUB_ENV
 
