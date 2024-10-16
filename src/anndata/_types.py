@@ -4,7 +4,7 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypeVar, Union
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from .compat import (
     H5Array,
@@ -32,9 +32,9 @@ __all__ = [
     "StorageType",
 ]
 
-ArrayStorageType: TypeAlias = Union[ZarrArray, H5Array]
-GroupStorageType: TypeAlias = Union[ZarrGroup, H5Group]
-StorageType: TypeAlias = Union[ArrayStorageType, GroupStorageType]
+ArrayStorageType: TypeAlias = ZarrArray | H5Array
+GroupStorageType: TypeAlias = ZarrGroup | H5Group
+StorageType: TypeAlias = ArrayStorageType | GroupStorageType
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
 ContravariantRWAble = TypeVar("ContravariantRWAble", bound=RWAble, contravariant=True)
