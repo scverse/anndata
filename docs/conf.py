@@ -108,6 +108,7 @@ nitpick_ignore = [
     ("py:class", "numpy.ma.core.MaskedArray"),
     ("py:class", "dask.array.core.Array"),
     ("py:class", "awkward.highlevel.Array"),
+    # https://github.com/sphinx-doc/sphinx/issues/10591
     ("py:class", "awkward.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
