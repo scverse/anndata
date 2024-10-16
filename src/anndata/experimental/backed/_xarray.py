@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 
 def get_index_dim(ds: xr.DataArray) -> Hashable:
-    assert (
-        len(ds.sizes) == 1
-    ), f"xarray Dataset should not have more than 1 dims, found {len(ds)}"
+    if len(ds.sizes) != 1:
+        msg = f"xarray Dataset should not have more than 1 dims, found {len(ds)}"
+        raise ValueError(msg)
     return list(ds.indexes.keys())[0]
 
 
