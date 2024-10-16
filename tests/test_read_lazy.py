@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import nullcontext
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
@@ -368,14 +368,10 @@ def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation
 
     remote, orig = adata_remote_orig
 
-    @contextmanager
-    def empty_context():
-        yield
-
     maybe_warning_context = (
         pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric")
         if not load_annotation_index
-        else empty_context()
+        else nullcontext()
     )
     with maybe_warning_context:
         remote_concatenated = ad.concat([remote, remote], join=join)
@@ -400,4 +396,7 @@ def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation
     )
     assert_equal(corrected_remote_obs, corrected_memory_obs)
     assert_equal(in_memory_remote_concatenated.X, orig_concatenated.X)
-    assert all(in_memory_remote_concatenated.var_names == orig_concatenated.var_names)
+    assert (
+        in_memory_remote_concatenated.var_names.tolist()
+        == orig_concatenated.var_names.tolist()
+    )
