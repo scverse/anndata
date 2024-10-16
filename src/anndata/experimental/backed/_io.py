@@ -22,6 +22,19 @@ if TYPE_CHECKING:
 
     from ...compat import ZarrGroup
 
+ANNDATA_ELEMS = [
+    "obs",
+    "var",
+    "obsm",
+    "varm",
+    "obsp",
+    "varp",
+    "layers",
+    "X",
+    "raw",
+    "uns",
+]
+
 
 def read_lazy(
     store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
@@ -97,9 +110,9 @@ def read_lazy(
         raise ImportError(
             "xarray is required to use the `read_lazy` function. Please install xarray."
         )
-    is_h5_store = isinstance(store, (h5py.Dataset, h5py.File))
+    is_h5_store = isinstance(store, h5py.Dataset | h5py.File)
     is_h5 = (
-        isinstance(store, (Path, str)) and Path(store).suffix == ".h5ad"
+        isinstance(store, Path | str) and Path(store).suffix == ".h5ad"
     ) or is_h5_store
 
     has_keys = True  # true if consolidated or h5ad
@@ -121,20 +134,10 @@ def read_lazy(
 
     def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
         if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):
-            cols = [
-                "obs",
-                "var",
-                "obsm",
-                "varm",
-                "obsp",
-                "varp",
-                "layers",
-                "X",
-                "raw",
-                "uns",
-            ]
             iter_object = (
-                elem.items() if has_keys else [(k, elem[k]) for k in cols if k in elem]
+                elem.items()
+                if has_keys
+                else [(k, elem[k]) for k in ANNDATA_ELEMS if k in elem]
             )
             return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
         elif (

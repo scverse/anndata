@@ -13,6 +13,7 @@ import anndata as ad
 from anndata import AnnData
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
+from anndata.experimental.backed._io import ANNDATA_ELEMS
 from anndata.tests.helpers import (
     AccessTrackingStore,
     as_dense_dask_array,
@@ -112,40 +113,53 @@ def adata_remote_with_store_tall_skinny(adata_remote_with_store_tall_skinny_path
     return remote, store
 
 
-def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
+@pytest.mark.parametrize(
+    ("elem_key", "sub_key"),
+    [
+        ("raw", "X"),
+        ("obs", "cat"),
+        ("obs", "int64"),
+        *((elem_name, None) for elem_name in ANNDATA_ELEMS),
+    ],
+)
+@pytest.mark.parametrize(
+    ("subset_func"),
+    [
+        pytest.param(lambda x: x, id="full"),
+        pytest.param(lambda x: x[0:10, :], id="subset"),
+    ],
+)
+def test_access_count_elem_access(
+    adata_remote_with_store_tall_skinny, elem_key, sub_key, subset_func
+):
     remote, store = adata_remote_with_store_tall_skinny
-    store.initialize_key_trackers(
-        ["obs/cat/codes", "obs/cat/categories", "obs/int64", "var/int64", "X", "raw"]
-    )
+    full_path = f"{elem_key}/{sub_key}" if sub_key is not None else elem_key
+    store.initialize_key_trackers({full_path, "X"})
     # a series of methods that should __not__ read in any data
-    remote.X  # the initial (non-subset) access to `X` should not read in data
-    remote.shape
-    remote.var
-    remote.obs
-    remote.raw
-    remote.raw.var
-    remote.raw.X
-    remote.obs["int64"]
-    remote.obs["int64"]
-    remote.obs["cat"]
-    store.assert_access_count("obs/int64", 0)
-    store.assert_access_count("obs/cat/categories", 0)
-    subset = remote[remote.obs["cat"] == "a", :]
-    subset.obs["int64"]
-    sub_subset = subset[0:10, :]
-    sub_subset.obs["int64"]
-    sub_subset.var["int64"]
+    elem = getattr(subset_func(remote), elem_key)
+    if sub_key is not None:
+        getattr(elem, sub_key)
+    store.assert_access_count(full_path, 0)
     store.assert_access_count("X", 0)
-    store.assert_access_count("obs/int64", 0)
-    store.assert_access_count("var/int64", 0)
-    # all codes read in for subset (from 4 chunks)
+
+
+def test_access_count_subset(adata_remote_with_store_tall_skinny):
+    remote, store = adata_remote_with_store_tall_skinny
+    non_obs_elem_names = filter(lambda e: e != "obs", ANNDATA_ELEMS)
+    store.initialize_key_trackers(["obs/cat/codes", *non_obs_elem_names])
+    remote[remote.obs["cat"] == "a", :]
+    # all codes read in for subset (from 1 chunk)
     store.assert_access_count("obs/cat/codes", 1)
-    # only one chunk needed for 0:10 subset
-    remote[0:10, :].obs["int64"].compute()
+    for elem_name in non_obs_elem_names:
+        store.assert_access_count(elem_name, 0)
+
+
+def test_access_count_subset_column_compute(adata_remote_with_store_tall_skinny):
+    remote, store = adata_remote_with_store_tall_skinny
+    store.initialize_key_trackers(["obs/int64"])
+    remote[remote.shape[0] // 2, :].obs["int64"].compute()
+    # two chunks needed for 0:10 subset
     store.assert_access_count("obs/int64", 1)
-    # .zmetadata handles .zarray so simple access does not cause any read
-    store.assert_access_count("var/int64", 0)
-    store.assert_access_count("raw", 0)
 
 
 def test_access_count_index(adata_remote_with_store_tall_skinny):
@@ -169,9 +183,13 @@ def test_access_count_dtype(adata_remote_with_store_tall_skinny):
     store.assert_access_count("obs/cat/categories", 1)
 
 
+def test_uns_uses_dask(adata_remote_orig):
+    remote, _ = adata_remote_orig
+    assert isinstance(remote.uns["nested"]["nested_further"]["array"], DaskArray)
+
+
 def test_to_memory(adata_remote_orig):
     remote, orig = adata_remote_orig
-    assert isinstance(remote.uns["nested"]["nested_further"]["array"], DaskArray)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, orig)
 
