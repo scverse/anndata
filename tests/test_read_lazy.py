@@ -22,7 +22,12 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from typing import Callable, Literal
+    from pathlib import Path
+    from typing import Literal
+
+pytestmark = pytest.mark.skipif(
+    not find_spec("xarray"), reason="Xarray is not installed"
+)
 
 
 @pytest.fixture(
@@ -35,7 +40,7 @@ def mtx_format(request):
 
 
 @pytest.fixture(params=["zarr", "h5ad"], scope="session")
-def dskfmt(request):
+def diskfmt(request):
     return request.param
 
 
@@ -52,27 +57,38 @@ def join(request):
 # TODO: why does `read_lazy().to_memory()` cause `Dataset2D.to_memory()` to lose index name in
 # multi-threaded tests when only opened once i.e., without this Callable?
 @pytest.fixture(scope="session")
-def adata_remote_orig(
-    tmp_path_factory, dskfmt: str, mtx_format, load_annotation_index: bool
-) -> tuple[Callable[[], AnnData], AnnData]:
+def adata_remote_orig_with_path(
+    tmp_path_factory,
+    diskfmt: str,
+    mtx_format,
+    load_annotation_index: bool,
+    worker_id: str = "serial",
+) -> tuple[AnnData, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
-    if dskfmt == "h5ad":
-        orig_path = tmp_path_factory.mktemp("h5ad_file_dir") / f"orig.{dskfmt}"
+    file_name = f"orig_{worker_id}.{diskfmt}"
+    if diskfmt == "h5ad":
+        orig_path = tmp_path_factory.mktemp("h5ad_file_dir") / file_name
     else:
-        orig_path = tmp_path_factory.mktemp(f"orig.{dskfmt}")
+        orig_path = tmp_path_factory.mktemp(file_name)
     orig = gen_adata((1000, 1100), mtx_format)
-    orig.raw = gen_adata((1000, 1100), mtx_format)
-    getattr(orig, f"write_{dskfmt}")(orig_path)
-    return lambda: read_lazy(
-        orig_path, load_annotation_index=load_annotation_index
-    ), orig
+    orig.raw = orig.copy()
+    getattr(orig, f"write_{diskfmt}")(orig_path)
+    return orig_path, orig
 
 
 @pytest.fixture
-def adata_remote_with_store_tall_skinny(
-    tmp_path_factory, mtx_format
-) -> tuple[Callable[[], AnnData], AccessTrackingStore]:
-    orig_path = tmp_path_factory.mktemp("orig.zarr")
+def adata_remote_orig(adata_remote_orig_with_path, load_annotation_index):
+    orig_path, orig = adata_remote_orig_with_path
+    return read_lazy(orig_path, load_annotation_index=load_annotation_index), orig
+
+
+@pytest.fixture(scope="session")
+def adata_remote_with_store_tall_skinny_path(
+    tmp_path_factory,
+    mtx_format,
+    worker_id: str = "serial",
+) -> Path:
+    orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}.zarr")
     M = 100_000  # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
     N = 5
     obs_names = pd.Index(f"cell{i}" for i in range(M))
@@ -86,18 +102,18 @@ def adata_remote_with_store_tall_skinny(
     )
     orig.raw = orig.copy()
     orig.write_zarr(orig_path)
-    store = AccessTrackingStore(orig_path)
-    return lambda: read_lazy(store), store
+    return orig_path
 
 
-pytestmark = pytest.mark.skipif(
-    not find_spec("xarray"), reason="Xarray is not installed"
-)
+@pytest.fixture
+def adata_remote_with_store_tall_skinny(adata_remote_with_store_tall_skinny_path):
+    store = AccessTrackingStore(adata_remote_with_store_tall_skinny_path)
+    remote = read_lazy(store)
+    return remote, store
 
 
 def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
-    remote_generator, store = adata_remote_with_store_tall_skinny
-    remote = remote_generator()
+    remote, store = adata_remote_with_store_tall_skinny
     store.initialize_key_trackers(
         ["obs/cat/codes", "obs/cat/categories", "obs/int64", "var/int64", "X", "raw"]
     )
@@ -144,8 +160,7 @@ def test_access_count_index(adata_remote_with_store_tall_skinny):
 
 
 def test_access_count_dtype(adata_remote_with_store_tall_skinny):
-    remote_generator, store = adata_remote_with_store_tall_skinny
-    remote = remote_generator()
+    remote, store = adata_remote_with_store_tall_skinny
     store.initialize_key_trackers(["obs/cat/categories"])
     store.assert_access_count("obs/cat/categories", 0)
     # This should only cause categories to be read in once
@@ -156,16 +171,14 @@ def test_access_count_dtype(adata_remote_with_store_tall_skinny):
 
 
 def test_to_memory(adata_remote_orig):
-    remote_generator, orig = adata_remote_orig
-    remote = remote_generator()
+    remote, orig = adata_remote_orig
     assert isinstance(remote.uns["nested"]["nested_further"]["array"], DaskArray)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, orig)
 
 
 def test_view_to_memory(adata_remote_orig):
-    remote_generator, orig = adata_remote_orig
-    remote = remote_generator()
+    remote, orig = adata_remote_orig
     subset_obs = orig.obs["obs_cat"] == "a"
     assert_equal(orig[subset_obs, :], remote[subset_obs, :].to_memory())
 
@@ -174,8 +187,7 @@ def test_view_to_memory(adata_remote_orig):
 
 
 def test_view_of_view_to_memory(adata_remote_orig):
-    remote_generator, orig = adata_remote_orig
-    remote = remote_generator()
+    remote, orig = adata_remote_orig
     subset_obs = (orig.obs["obs_cat"] == "a") | (orig.obs["obs_cat"] == "b")
     subsetted_adata = orig[subset_obs, :]
     subset_subset_obs = subsetted_adata.obs["obs_cat"] == "b"
@@ -335,8 +347,7 @@ def test_concat_access_count(
 def test_concat_full_and_subsets(adata_remote_orig, join, index, load_annotation_index):
     from anndata.experimental.backed._compat import Dataset2D
 
-    remote_generator, orig = adata_remote_orig
-    remote = remote_generator()
+    remote, orig = adata_remote_orig
 
     @contextmanager
     def empty_context():
