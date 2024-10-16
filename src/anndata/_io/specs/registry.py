@@ -305,7 +305,6 @@ class LazyReader(Reader):
             msg = "Dask reading does not use a callback. Ignoring callback."
             warnings.warn(msg, stacklevel=2)
         read_params = inspect.signature(read_func).parameters
-        has_extra_args = False
         for kwarg in kwargs:
             if kwarg not in read_params:
                 msg = (
@@ -313,13 +312,9 @@ class LazyReader(Reader):
                     "registered read function."
                 )
                 raise ValueError(msg)
-            has_extra_args = True
         if "chunks" in read_params:
-            has_extra_args = True
             kwargs["chunks"] = chunks
-        if has_extra_args:
-            return read_func(elem, **kwargs)
-        return read_func(elem)
+        return read_func(elem, **kwargs)
 
 
 class Writer:
