@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
     from pandas.api.extensions import ExtensionDtype
 
-    from anndata.experimental.backed._compat import Dataset2D
+    from anndata.experimental.backed._compat import DataArray, Dataset2D
 
     Join_T = Literal["inner", "outer"]
 
@@ -1071,7 +1071,23 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
         return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
 
 
-def make_dask_col_from_extension_dtype(col, use_only_object_dtype: bool = False):
+def make_dask_col_from_extension_dtype(
+    col: DataArray, use_only_object_dtype: bool = False
+) -> DaskArray:
+    """
+    Creates dask arrays from :class:`pandas.api.extensions.ExtensionArray` dtype :class:`xarray.DataArray`s.
+
+    Parameters
+    ----------
+    col
+        The columns to be converted
+    use_only_object_dtype, optional
+        Whether or not to cast all :class:`pandas.api.extensions.ExtensionArray` dtypes to `object` type, by default False
+
+    Returns
+    -------
+        A :class:`dask.Array`: representation of the column.
+    """
     import dask.array as da
 
     from anndata._io.specs.lazy_methods import compute_chunk_layout_for_axis_size
@@ -1130,6 +1146,17 @@ def make_xarray_extension_dtypes_dask(
 
 
 def get_attrs(annotations: Iterable[Dataset2D]) -> dict:
+    """Generate the `attrs` from `annotations`.
+
+    Parameters
+    ----------
+    annotations
+        The datasets with `attrs`.
+
+    Returns
+    -------
+        `attrs`.
+    """
     index_names = np.unique([a.index.name for a in annotations])
     assert len(index_names) == 1, "All annotations must have the same index name."
     if any(a.index.dtype == "int64" for a in annotations):
@@ -1148,6 +1175,19 @@ def concat_dataset2d_on_annot_axis(
     annotations: Iterable[Dataset2D],
     join: Join_T,
 ):
+    """Create a concatenate dataset from a list of :class:`~anndata.experimental.backed._xarray.Dataset2D` objects.
+
+    Parameters
+    ----------
+    annotations
+        The :class:`~anndata.experimental.backed._xarray.Dataset2D` objects to be concatenated.
+    join
+        Type of join operation
+
+    Returns
+    -------
+        Concatenated :class:`~anndata.experimental.backed._xarray.Dataset2D`
+    """
     from anndata.experimental.backed._compat import Dataset2D
     from anndata.experimental.backed._compat import xarray as xr
 
