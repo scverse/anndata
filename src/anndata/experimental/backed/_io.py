@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import typing
 import warnings
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING
 
 import h5py
 
 from anndata._io.specs.registry import read_elem_lazy
+from anndata._types import ANNDATA_ELEMS
 
 from ..._core.anndata import AnnData
 from ..._settings import settings
@@ -21,19 +21,6 @@ if TYPE_CHECKING:
     from anndata._types import Read, StorageType
 
     from ...compat import ZarrGroup
-
-ANNDATA_ELEMS = [
-    "obs",
-    "var",
-    "obsm",
-    "varm",
-    "obsp",
-    "varp",
-    "layers",
-    "X",
-    "raw",
-    "uns",
-]
 
 
 def read_lazy(
@@ -137,7 +124,7 @@ def read_lazy(
             iter_object = (
                 elem.items()
                 if has_keys
-                else [(k, elem[k]) for k in ANNDATA_ELEMS if k in elem]
+                else [(k, elem[k]) for k in typing.get_args(ANNDATA_ELEMS) if k in elem]
             )
             return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
         elif (

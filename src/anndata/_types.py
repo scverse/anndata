@@ -4,7 +4,7 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from typing import TYPE_CHECKING, Literal, Protocol, TypeVar
 
 from .compat import (
     H5Array,
@@ -188,3 +188,17 @@ class WriteCallback(Protocol[InvariantRWAble]):
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
         """
         ...
+
+
+ANNDATA_ELEMS = Literal[
+    "obs",
+    "var",
+    "obsm",
+    "varm",
+    "obsp",
+    "varp",
+    "layers",
+    "X",
+    "raw",
+    "uns",
+]
