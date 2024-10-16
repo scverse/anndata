@@ -128,9 +128,8 @@ def _remove_unused_categories_xr(
 @to_memory.register(Dataset2D)
 def to_memory(ds: Dataset2D, copy=False):
     df = ds.to_dataframe()
-    if "indexing_key" in ds.attrs:
-        index_key = ds.attrs["indexing_key"]
-        if df.index.name != index_key:
-            df.set_index(index_key, inplace=True)
+    index_key = ds.attrs.get("indexing_key", None)
+    if df.index.name != index_key and index_key is not None:
+        df = df.set_index(index_key)
     df.index.name = None  # matches old AnnData object
     return df
