@@ -248,7 +248,9 @@ def correct_extension_dtype_differences(remote: pd.DataFrame, memory: pd.DataFra
 
 
 @pytest.mark.parametrize("join", ["outer", "inner"])
-@pytest.mark.parametrize("are_vars_different", [True, False])
+@pytest.mark.parametrize(
+    "are_vars_different", [True, False], ids=["vars_different", "vars_same"]
+)
 def test_concat_access_count(
     tmp_path, join: Literal["outer", "inner"], are_vars_different: bool
 ):
