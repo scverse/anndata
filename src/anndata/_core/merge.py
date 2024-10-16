@@ -1456,18 +1456,12 @@ def concat(
     are_any_annotations_dataframes = any(
         isinstance(a, pd.DataFrame) for a in annotations
     )
-    are_annotations_mixed_type = are_any_annotations_dataframes and any(
-        isinstance(a, Dataset2D) for a in annotations
-    )
     if are_any_annotations_dataframes:
-        annotations_in_memory = annotations.copy()
-        if are_annotations_mixed_type:
-            for i, a in enumerate(annotations):
-                annotations_in_memory[i] = (
-                    a.to_pandas() if isinstance(a, Dataset2D) else a
-                )
+        annotations_in_memory = (
+            a.to_pandas() if isinstance(a, Dataset2D) else a for a in annotations
+        )
         concat_annot = pd.concat(
-            unify_dtypes(a for a in annotations_in_memory),
+            unify_dtypes(annotations_in_memory),
             join=join,
             ignore_index=True,
         )
@@ -1482,17 +1476,11 @@ def concat(
     are_any_alt_annotations_dataframes = any(
         isinstance(a, pd.DataFrame) for a in alt_annotations
     )
-    are_alt_annotations_mixed_type = are_any_alt_annotations_dataframes and any(
-        isinstance(a, Dataset2D) for a in alt_annotations
-    )
     if are_any_alt_annotations_dataframes:
-        alt_annotations_in_memory = alt_annotations.copy()
-        if are_alt_annotations_mixed_type:
-            for i, a in enumerate(alt_annotations):
-                alt_annotations_in_memory[i] = (
-                    a.to_pandas() if isinstance(a, Dataset2D) else a
-                )
-        alt_annot = merge_dataframes(alt_annotations, alt_indices, merge)
+        alt_annotations_in_memory = [
+            a.to_pandas() if isinstance(a, Dataset2D) else a for a in alt_annotations
+        ]
+        alt_annot = merge_dataframes(alt_annotations_in_memory, alt_indices, merge)
     else:
         # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
         # the only "lazy" setting so I'm not sure we really want that.
