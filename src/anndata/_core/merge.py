@@ -35,7 +35,7 @@ from .anndata import AnnData
 from .index import _subset, make_slice
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable, Sequence
+    from collections.abc import Collection, Generator, Iterable, Sequence
     from typing import Any
 
     from pandas.api.extensions import ExtensionDtype
@@ -1097,28 +1097,36 @@ def make_dask_col_from_extension_dtype(col, use_only_object_dtype: bool = False)
 
 def make_xarray_extension_dtypes_dask(
     annotations: Iterable[Dataset2D], use_only_object_dtype: bool = False
-):
-    new_annotations = []
+) -> Generator[Dataset2D, None, None]:
+    """
+    Creates a generator of Dataset2D objects with dask arrays in place of :class:`pandas.api.extensions.ExtensionArray` dtype columns.
 
+    Parameters
+    ----------
+    annotations
+        The datasets to be altered
+    use_only_object_dtype, optional
+        Whether or not to cast all :class:`pandas.api.extensions.ExtensionArray` dtypes to `object` type, by default False
+
+    Yields
+    ------
+        An altered dataset.
+    """
     for a in annotations:
-        extension_cols = []
-        for col in a.columns:
-            if pd.api.types.is_extension_array_dtype(a[col]):
-                extension_cols += [col]
-        new_annotations += [
-            a.copy(
-                data={
-                    **{
-                        col: make_dask_col_from_extension_dtype(
-                            a[col], use_only_object_dtype
-                        )
-                        for col in extension_cols
-                    },
-                    **{col: a[col] for col in a.columns if col not in extension_cols},
-                }
-            )
-        ]
-    return new_annotations
+        extension_cols = set(
+            filter(lambda col: pd.api.types.is_extension_array_dtype(a[col]), a.columns)
+        )
+
+        yield a.copy(
+            data={
+                name: (
+                    make_dask_col_from_extension_dtype(col, use_only_object_dtype)
+                    if name in extension_cols
+                    else col
+                )
+                for name, col in a.items()
+            }
+        )
 
 
 def get_attrs(annotations: Iterable[Dataset2D]) -> dict:
@@ -1143,7 +1151,7 @@ def concat_dataset2d_on_annot_axis(
     from anndata.experimental.backed._compat import Dataset2D
     from anndata.experimental.backed._compat import xarray as xr
 
-    annotations_with_only_dask = make_xarray_extension_dtypes_dask(annotations)
+    annotations_with_only_dask = list(make_xarray_extension_dtypes_dask(annotations))
     attrs = get_attrs(annotations_with_only_dask)
     index_name = np.unique([a.index.name for a in annotations])[0]
     return Dataset2D(
@@ -1448,8 +1456,10 @@ def concat(
         # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
         # the only "lazy" setting so I'm not sure we really want that.
         # Because of xarray's merge upcasting, it's safest to simply assume that all dtypes are objects.
-        annotations_with_only_dask = make_xarray_extension_dtypes_dask(
-            alt_annotations, use_only_object_dtype=True
+        annotations_with_only_dask = list(
+            make_xarray_extension_dtypes_dask(
+                alt_annotations, use_only_object_dtype=True
+            )
         )
         attrs = get_attrs(annotations_with_only_dask)
         alt_annot = Dataset2D(
