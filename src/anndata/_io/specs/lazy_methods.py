@@ -254,9 +254,8 @@ def read_dataframe(
     if not use_range_index:
         index_label = label_based_indexing_key
         index_key = elem.attrs["_index"]
-        index = elem_dict[
-            index_key
-        ].compute()  # no sense in reading this in multiple times
+        # no sense in reading this in multiple times
+        index = elem_dict[index_key].compute()
     else:
         index_label = DUMMY_RANGE_INDEX_KEY
         index_key = DUMMY_RANGE_INDEX_KEY
