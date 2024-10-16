@@ -314,7 +314,7 @@ class LazyReader(Reader):
                 )
                 raise ValueError(msg)
             has_extra_args = True
-        if "chunks" in inspect.signature(read_func).parameters:
+        if "chunks" in read_params:
             has_extra_args = True
             kwargs["chunks"] = chunks
         if has_extra_args:
