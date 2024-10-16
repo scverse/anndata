@@ -14,6 +14,8 @@ from ._compat import BackendArray, DataArray, ZarrArrayWrapper
 from ._compat import xarray as xr
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from anndata._core.index import Index
 
 
@@ -41,10 +43,14 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
         )
 
 
-class CategoricalArray(BackendArray):
+class CategoricalArray(BackendArray, Generic[K]):
+    _codes: ZarrOrHDF5Wrapper[K]
+    _categories: ZarrArray | H5Array
+    shape: tuple[int, ...]
+
     def __init__(
         self,
-        codes: ZarrArray | H5Array,
+        codes: K,
         categories: ZarrArray | H5Array,
         ordered: bool,
         *args,
@@ -52,8 +58,7 @@ class CategoricalArray(BackendArray):
     ):
         self._categories = categories
         self._ordered = ordered
-        self._categories_cache = None
-        self._codes = ZarrOrHDF5Wrapper[type(codes)](codes)
+        self._codes = ZarrOrHDF5Wrapper(codes)
         self.shape = self._codes.shape
 
     @cached_property
@@ -80,11 +85,16 @@ class CategoricalArray(BackendArray):
         return pd.CategoricalDtype(categories=self._categories, ordered=self._ordered)
 
 
-class MaskedArray(BackendArray):
+class MaskedArray(BackendArray, Generic[K]):
+    _mask: ZarrOrHDF5Wrapper[K]
+    _values: ZarrOrHDF5Wrapper[K]
+    _dtype_str: Literal["nullable-integer", "nullable-boolean"]
+    shape: tuple[int, ...]
+
     def __init__(
         self,
         values: ZarrArray | H5Array,
-        dtype_str: str,
+        dtype_str: Literal["nullable-integer", "nullable-boolean"],
         mask: ZarrArray | H5Array | None = None,
     ):
         self._mask = ZarrOrHDF5Wrapper(mask)
@@ -98,13 +108,12 @@ class MaskedArray(BackendArray):
             mask = self._mask[key]
             if self._dtype_str == "nullable-integer":
                 # numpy does not support nan ints
-                return xr.core.extension_array.PandasExtensionArray(
-                    pd.arrays.IntegerArray(values, mask=mask)
-                )
+                extension_array = pd.arrays.IntegerArray(values, mask=mask)
             elif self._dtype_str == "nullable-boolean":
-                return xr.core.extension_array.PandasExtensionArray(
-                    pd.arrays.BooleanArray(values, mask=mask)
-                )
+                extension_array = pd.arrays.BooleanArray(values, mask=mask)
+            else:
+                raise ValueError(f"Invalid dtype_str {self._dtype_str}")
+            return xr.core.extension_array.PandasExtensionArray(extension_array)
         return xr.core.extension_array.PandasExtensionArray(pd.array(values))
 
     @cached_property
@@ -116,6 +125,8 @@ class MaskedArray(BackendArray):
             ).dtype
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
+        else:
+            raise ValueError(f"Invalid dtype_str {self._dtype_str}")
 
 
 @_subset.register(DataArray)
