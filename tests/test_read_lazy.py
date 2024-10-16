@@ -150,7 +150,6 @@ def test_access_count_obs_var(adata_remote_with_store_tall_skinny):
 
 def test_access_count_index(adata_remote_with_store_tall_skinny):
     _, store = adata_remote_with_store_tall_skinny
-    store.reset_key_trackers()
     store.initialize_key_trackers(["obs/_index"])
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obs/_index", 0)
