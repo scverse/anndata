@@ -243,12 +243,14 @@ def read_dataframe(
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
     elem_name = get_elem_name(elem)
-    # remove end for obsm/varm
-    obs_var_match = re.findall(r"(obs|var)", elem_name)
-    if not len(obs_var_match):
+    # Determine whether we can use label based indexing i.e., is the elem `obs` or `var`
+    obs_var_matches = re.findall(r"(obs|var)", elem_name)
+    if not len(obs_var_matches) == 1:
         label_based_indexing_key = "index"
     else:
-        label_based_indexing_key = f"{obs_var_match[0]}_names"
+        label_based_indexing_key = f"{obs_var_matches[0]}_names"
+    # If we are not using a range index, the underlying on disk label for the index
+    # could be different than {obs,var}_names - otherwise we use a dummy value.
     if not use_range_index:
         index_label = label_based_indexing_key
         index_key = elem.attrs["_index"]
