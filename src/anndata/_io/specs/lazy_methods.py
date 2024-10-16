@@ -18,7 +18,7 @@ from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
     from anndata.experimental.backed._compat import DataArray, Dataset2D
@@ -194,7 +194,7 @@ def _gen_xarray_dict_iterator_from_elems(
     index_label: str,
     index_key: str,
     index: np.NDArray,
-) -> Iterator[tuple[str, DataArray]]:
+) -> Generator[tuple[str, DataArray]]:
     from anndata.experimental.backed._compat import DataArray
     from anndata.experimental.backed._compat import xarray as xr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
@@ -203,7 +203,7 @@ def _gen_xarray_dict_iterator_from_elems(
         data_array_name = k
         if isinstance(v, DaskArray) and k != index_key:
             data_array = DataArray(v, coords=[index], dims=[index_label], name=k)
-        elif isinstance(v, (CategoricalArray, MaskedArray)) and k != index_key:
+        elif isinstance(v, CategoricalArray | MaskedArray) and k != index_key:
             variable = xr.Variable(
                 data=xr.core.indexing.LazilyIndexedArray(v), dims=[index_label]
             )
