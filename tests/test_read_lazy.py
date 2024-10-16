@@ -154,7 +154,7 @@ def test_access_count_index(adata_remote_with_store_tall_skinny):
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obs/_index", 0)
     read_lazy(store)
-    # 8 is number of chunks
+    # 4 is number of chunks
     store.assert_access_count("obs/_index", 4)
 
 
