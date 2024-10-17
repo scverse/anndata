@@ -121,17 +121,17 @@ def setup(app: Sphinx):
 
 
 intersphinx_mapping = dict(
-    h5py=("https://docs.h5py.org/en/latest/", None),
-    hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest/", None),
-    loompy=("https://linnarssonlab.org/loompy/", None),
-    numpy=("https://numpy.org/doc/stable/", None),
-    pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
+    h5py=("https://docs.h5py.org/en/latest", None),
+    hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest", None),
+    loompy=("https://linnarssonlab.org/loompy", None),
+    numpy=("https://numpy.org/doc/stable", None),
+    pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
     python=("https://docs.python.org/3", None),
-    scipy=("https://docs.scipy.org/doc/scipy/", None),
-    sklearn=("https://scikit-learn.org/stable/", None),
-    zarr=("https://zarr.readthedocs.io/en/stable/", None),
-    xarray=("https://docs.xarray.dev/en/stable/", None),
-    dask=("https://docs.dask.org/en/stable/", None),
+    scipy=("https://docs.scipy.org/doc/scipy", None),
+    sklearn=("https://scikit-learn.org/stable", None),
+    zarr=("https://zarr.readthedocs.io/en/stable", None),
+    xarray=("https://docs.xarray.dev/en/stable", None),
+    dask=("https://docs.dask.org/en/stable", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
