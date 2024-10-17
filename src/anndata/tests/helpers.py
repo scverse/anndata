@@ -4,7 +4,7 @@ import itertools
 import random
 import re
 import warnings
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
@@ -37,7 +37,7 @@ from anndata.compat import (
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable
+    from collections.abc import Callable, Collection
     from typing import Literal, TypeGuard, TypeVar
 
     DT = TypeVar("DT")
@@ -1053,32 +1053,54 @@ else:
 class AccessTrackingStore(DirectoryStore):
     _access_count: Counter[str]
     _accessed_keys: dict[str, list[str]]
+    _accessed: dict[str, set]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
-        self._accessed_keys = {}
+        self._accessed = defaultdict(set)
+        self._accessed_keys = defaultdict(list)
 
     def __getitem__(self, key: str) -> object:
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
+                self._accessed[tracked].add(key)
                 self._accessed_keys[tracked] += [key]
         return super().__getitem__(key)
 
     def get_access_count(self, key: str) -> int:
+        # access defaultdict when value is not there causes key to be there,
+        # which causes it to be tracked
+        if key not in self._access_count:
+            raise ValueError(f"{key} not found among access count")
         return self._access_count[key]
 
+    def get_subkeys_accessed(self, key: str) -> set[str]:
+        if key not in self._accessed:
+            raise ValueError(f"{key} not found among accessed")
+        return self._accessed[key]
+
     def get_accessed_keys(self, key: str) -> list[str]:
+        if key not in self._accessed_keys:
+            raise ValueError(f"{key} not found among accessed keys")
         return self._accessed_keys[key]
 
-    def initialize_key_trackers(self, keys_to_track: Iterable[str]) -> None:
+    def initialize_key_trackers(self, keys_to_track: Collection[str]):
         for k in keys_to_track:
             self._access_count[k] = 0
             self._accessed_keys[k] = []
+            self._accessed[k] = set()
 
-    def reset_key_trackers(self) -> None:
+    def reset_key_trackers(self):
         self.initialize_key_trackers(self._access_count.keys())
+
+    def assert_access_count(self, key: str, count: int):
+        keys_accessed = self.get_subkeys_accessed(key)
+        access_count = self.get_access_count(key)
+        assert (
+            self.get_access_count(key) == count
+        ), f"Found {access_count} accesses at {keys_accessed}"
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
