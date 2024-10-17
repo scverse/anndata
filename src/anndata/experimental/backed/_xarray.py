@@ -34,6 +34,8 @@ def get_index_dim(ds: xr.DataArray) -> Hashable:
 
 
 class Dataset2D(Dataset):
+    __slots__ = ()
+
     @property
     def index(self) -> pd.Index:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
