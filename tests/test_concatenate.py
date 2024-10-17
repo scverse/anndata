@@ -1635,3 +1635,23 @@ def test_concat_on_var_outer_join(array_type):
     # This shouldn't error
     # TODO: specify expected result while accounting for null value
     _ = concat([a, b], join="outer", axis=1)
+
+
+def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
+    import dask.array as da
+
+    X = sparse.random(50, 20, density=0.5, format="csr")
+    X_dask = da.from_array(X, chunks=(5, 20))
+    var_names_1 = [f"gene_{i}" for i in range(20)]
+    var_names_2 = [f"gene_{i}{'_foo' if (i%2) else ''}" for i in range(20, 40)]
+
+    ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
+    ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
+
+    ad1_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_1))
+    ad2_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_2))
+
+    res_in_memory = concat([ad1, ad2], join=join_type, merge=merge_strategy)
+    res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
+
+    assert_equal(res_in_memory, res_dask)

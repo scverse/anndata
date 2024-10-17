@@ -723,7 +723,14 @@ def default_fill_value(els):
 
     This is largely due to backwards compat, and might not be the ideal solution.
     """
-    if any(isinstance(el, sparse.spmatrix | SpArray) for el in els):
+    if any(
+        isinstance(el, sparse.spmatrix | SpArray)
+        or (
+            isinstance(el, DaskArray)
+            and isinstance(el._meta, sparse.spmatrix | SpArray)
+        )
+        for el in els
+    ):
         return 0
     else:
         return np.nan
