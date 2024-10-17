@@ -65,7 +65,7 @@ class Read(Protocol[SCon, CovariantRWAble]):
             The element to read from.
         Returns
         -------
-            The element read from the store.
+        The element read from the store.
         """
         ...
 
@@ -84,7 +84,7 @@ class ReadLazy(Protocol[SCon]):
             The chunk size to be used.
         Returns
         -------
-            The lazy element read from the store.
+        The lazy element read from the store.
         """
         ...
 
@@ -152,7 +152,7 @@ class ReadCallback(Protocol[SCo, InvariantRWAble]):
 
         Returns
         -------
-            The element read from the store.
+        The element read from the store.
         """
         ...
 

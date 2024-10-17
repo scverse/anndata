@@ -40,7 +40,7 @@ class Dataset2D(Dataset):
 
         Returns
         -------
-            The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
+        The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
         """
         coord = get_index_dim(self)
         return self.indexes[coord]
@@ -56,7 +56,7 @@ class Dataset2D(Dataset):
 
         Returns
         -------
-            The (2D) shape of the dataframe resolved from :attr:`~xarray.Dataset.sizes`.
+        The (2D) shape of the dataframe resolved from :attr:`~xarray.Dataset.sizes`.
         """
         return (self.sizes[get_index_dim(self)], len(self))
 
@@ -66,7 +66,7 @@ class Dataset2D(Dataset):
 
         Returns
         -------
-            Handler class for doing the iloc-style indexing using :meth:`~xarray.Dataset.isel`.
+        Handler class for doing the iloc-style indexing using :meth:`~xarray.Dataset.isel`.
         """
 
         class IlocGetter:
@@ -86,7 +86,7 @@ class Dataset2D(Dataset):
 
         Returns
         -------
-            :class:`pandas.Index` that represents the "columns."
+        :class:`pandas.Index` that represents the "columns."
         """
         columns_list = list(self.keys())
         return pd.Index(columns_list)
