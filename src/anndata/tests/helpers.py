@@ -1051,13 +1051,17 @@ else:
 
 
 class AccessTrackingStore(DirectoryStore):
+    _access_count: Counter[str]
+    _accessed_keys: dict[str, list[str]]
+    _accessed: dict[str, set]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> object:
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
