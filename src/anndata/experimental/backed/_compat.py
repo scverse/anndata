@@ -1,32 +1,26 @@
 from __future__ import annotations
 
-try:
+from importlib.util import find_spec
+from typing import TYPE_CHECKING
+
+if find_spec("xarray") or TYPE_CHECKING:
+    import xarray
     from xarray import DataArray
-except ImportError:
+    from xarray.backends import BackendArray
+    from xarray.backends.zarr import ZarrArrayWrapper
+
+
+else:
 
     class DataArray:
         def __repr__(self) -> str:
             return "mock DataArray"
 
-
-try:
-    import xarray
-except ImportError:
     xarray = None
-
-
-try:
-    from xarray.backends.zarr import ZarrArrayWrapper
-except ImportError:
 
     class ZarrArrayWrapper:
         def __repr__(self) -> str:
             return "mock ZarrArrayWrapper"
-
-
-try:
-    from xarray.backends import BackendArray
-except ImportError:
 
     class BackendArray:
         def __repr__(self) -> str:
