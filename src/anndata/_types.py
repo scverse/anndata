@@ -202,3 +202,5 @@ ANNDATA_ELEMS = Literal[
     "raw",
     "uns",
 ]
+
+Join_T = Literal["inner", "outer"]

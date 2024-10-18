@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from numpy.typing import NDArray
+
+    from anndata._types import Join_T
+
 pytestmark = pytest.mark.skipif(
     not find_spec("xarray"), reason="Xarray is not installed"
 )
@@ -354,7 +357,7 @@ def test_concat_access_count(
     concatenation_objects: tuple[
         list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
     ],
-    join: Literal["outer", "inner"],
+    join: Join_T,
     elem_key: ANNDATA_ELEMS,
     sub_key: str,
     simple_subset_func: Callable[[AnnData], AnnData],
@@ -384,7 +387,7 @@ def test_concat_to_memory_obs_access_count(
     concatenation_objects: tuple[
         list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
     ],
-    join: Literal["outer", "inner"],
+    join: Join_T,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
     adatas, _, stores, lazy_adatas = concatenation_objects
@@ -409,7 +412,7 @@ def test_concat_to_memory_obs(
     concatenation_objects: tuple[
         list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
     ],
-    join: Literal["outer", "inner"],
+    join: Join_T,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
     adatas, _, _, lazy_adatas = concatenation_objects
@@ -429,7 +432,7 @@ def test_concat_to_memory_obs_dtypes(
     concatenation_objects: tuple[
         list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
     ],
-    join: Literal["outer", "inner"],
+    join: Join_T,
 ):
     _, _, _, lazy_adatas = concatenation_objects
     concated_remote = ad.concat(lazy_adatas, join=join)
@@ -446,7 +449,7 @@ def test_concat_to_memory_var(
     concatenation_objects: tuple[
         list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
     ],
-    join: Literal["outer", "inner"],
+    join: Join_T,
     are_vars_different: bool,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
