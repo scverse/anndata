@@ -4,13 +4,12 @@ Code for merging/ concatenating AnnData objects.
 
 from __future__ import annotations
 
-import typing
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Literal, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeVar
 from warnings import warn
 
 import numpy as np
@@ -19,6 +18,7 @@ from natsort import natsorted
 from scipy import sparse
 from scipy.sparse import spmatrix
 
+from anndata._core.file_backing import to_memory
 from anndata._warnings import ExperimentalFeatureWarning
 
 from ..compat import (
@@ -35,11 +35,14 @@ from ..utils import asarray, axis_len, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 
-if typing.TYPE_CHECKING:
-    from collections.abc import Collection, Iterable, Sequence
+if TYPE_CHECKING:
+    from collections.abc import Collection, Generator, Iterable, Sequence
     from typing import Any
 
     from pandas.api.extensions import ExtensionDtype
+
+    from anndata._types import Join_T
+    from anndata.experimental.backed._compat import DataArray, Dataset2D
 
 T = TypeVar("T")
 
@@ -206,6 +209,8 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x, use_sparse_array=False):
+    if isinstance(x, DaskArray):
+        x = x.compute()
     if not isinstance(x, sparse.spmatrix | SpArray):
         if CAN_USE_SPARSE_ARRAY and use_sparse_array:
             return sparse.csr_array(x)
@@ -225,7 +230,9 @@ def as_cp_sparse(x) -> CupySparseMatrix:
         return cpsparse.csr_matrix(x)
 
 
-def unify_dtypes(dfs: Iterable[pd.DataFrame]) -> list[pd.DataFrame]:
+def unify_dtypes(
+    dfs: Iterable[pd.DataFrame | Dataset2D],
+) -> list[pd.DataFrame | Dataset2D]:
     """
     Attempts to unify datatypes from multiple dataframes.
 
@@ -302,7 +309,7 @@ def try_unifying_dtype(
         return None
 
 
-def check_combinable_cols(cols: list[pd.Index], join: Literal["inner", "outer"]):
+def check_combinable_cols(cols: list[pd.Index], join: Join_T):
     """Given columns for a set of dataframes, checks if the can be combined.
 
     Looks for if there are duplicated column names that would show up in the result.
@@ -706,9 +713,7 @@ class Reindexer:
             return el[self.old_idx.get_indexer(self.new_idx)]
 
 
-def merge_indices(
-    inds: Iterable[pd.Index], join: Literal["inner", "outer"]
-) -> pd.Index:
+def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
     if join == "inner":
         return reduce(lambda x, y: x.intersection(y), inds)
     elif join == "outer":
@@ -765,10 +770,20 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
 
 
 def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
+    from anndata.experimental.backed._compat import Dataset2D
+
     arrays = list(arrays)
     if fill_value is None:
         fill_value = default_fill_value(arrays)
 
+    if any(isinstance(a, Dataset2D) for a in arrays):
+        if all(isinstance(a, Dataset2D | pd.DataFrame) for a in arrays):
+            arrays = [to_memory(a) if isinstance(a, Dataset2D) else a for a in arrays]
+        elif not all(isinstance(a, Dataset2D) for a in arrays):
+            msg = f"Cannot concatenate a Dataset2D with other array types {[type(a) for a in arrays if not isinstance(a, Dataset2D)]}."
+            raise ValueError(msg)
+        else:
+            return concat_dataset2d_on_annot_axis(arrays, join="outer")
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
         if not all(
@@ -1060,11 +1075,140 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
         return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
 
 
+def make_dask_col_from_extension_dtype(
+    col: DataArray, use_only_object_dtype: bool = False
+) -> DaskArray:
+    """
+    Creates dask arrays from :class:`pandas.api.extensions.ExtensionArray` dtype :class:`xarray.DataArray`s.
+
+    Parameters
+    ----------
+    col
+        The columns to be converted
+    use_only_object_dtype, optional
+        Whether or not to cast all :class:`pandas.api.extensions.ExtensionArray` dtypes to `object` type, by default False
+
+    Returns
+    -------
+        A :class:`dask.Array`: representation of the column.
+    """
+    import dask.array as da
+
+    from anndata._io.specs.lazy_methods import compute_chunk_layout_for_axis_size
+
+    def get_chunk(block_info=None):
+        idx = tuple(
+            slice(start, stop) for start, stop in block_info[None]["array-location"]
+        )
+        return np.array(col.data[idx].array)
+
+    if col.dtype == "category" or use_only_object_dtype:
+        dtype = "object"
+    else:
+        dtype = col.dtype.numpy_dtype
+    # TODO: get good chunk size?
+    return da.map_blocks(
+        get_chunk,
+        chunks=(compute_chunk_layout_for_axis_size(1000, col.shape[0]),),
+        meta=np.array([], dtype=dtype),
+        dtype=dtype,
+    )
+
+
+def make_xarray_extension_dtypes_dask(
+    annotations: Iterable[Dataset2D], use_only_object_dtype: bool = False
+) -> Generator[Dataset2D, None, None]:
+    """
+    Creates a generator of Dataset2D objects with dask arrays in place of :class:`pandas.api.extensions.ExtensionArray` dtype columns.
+
+    Parameters
+    ----------
+    annotations
+        The datasets to be altered
+    use_only_object_dtype, optional
+        Whether or not to cast all :class:`pandas.api.extensions.ExtensionArray` dtypes to `object` type, by default False
+
+    Yields
+    ------
+        An altered dataset.
+    """
+    for a in annotations:
+        extension_cols = set(
+            filter(lambda col: pd.api.types.is_extension_array_dtype(a[col]), a.columns)
+        )
+
+        yield a.copy(
+            data={
+                name: (
+                    make_dask_col_from_extension_dtype(col, use_only_object_dtype)
+                    if name in extension_cols
+                    else col
+                )
+                for name, col in a.items()
+            }
+        )
+
+
+def get_attrs(annotations: Iterable[Dataset2D]) -> dict:
+    """Generate the `attrs` from `annotations`.
+
+    Parameters
+    ----------
+    annotations
+        The datasets with `attrs`.
+
+    Returns
+    -------
+        `attrs`.
+    """
+    index_names = np.unique([a.index.name for a in annotations])
+    assert len(index_names) == 1, "All annotations must have the same index name."
+    if any(a.index.dtype == "int64" for a in annotations):
+        msg = "Concatenating with a pandas numeric index among the indices.  Index may likely not be unique."
+        warn(msg, UserWarning)
+    index_keys = [
+        a.attrs["indexing_key"] for a in annotations if "indexing_key" in a.attrs
+    ]
+    attrs = {}
+    if len(np.unique(index_keys)) == 1:
+        attrs["indexing_key"] = index_keys[0]
+    return attrs
+
+
+def concat_dataset2d_on_annot_axis(
+    annotations: Iterable[Dataset2D],
+    join: Join_T,
+):
+    """Create a concatenate dataset from a list of :class:`~anndata.experimental.backed._xarray.Dataset2D` objects.
+
+    Parameters
+    ----------
+    annotations
+        The :class:`~anndata.experimental.backed._xarray.Dataset2D` objects to be concatenated.
+    join
+        Type of join operation
+
+    Returns
+    -------
+        Concatenated :class:`~anndata.experimental.backed._xarray.Dataset2D`
+    """
+    from anndata.experimental.backed._compat import Dataset2D
+    from anndata.experimental.backed._compat import xarray as xr
+
+    annotations_with_only_dask = list(make_xarray_extension_dtypes_dask(annotations))
+    attrs = get_attrs(annotations_with_only_dask)
+    index_name = np.unique([a.index.name for a in annotations])[0]
+    [index_name] = {a.index.name for a in annotations}
+    return Dataset2D(
+        xr.concat(annotations_with_only_dask, join=join, dim=index_name), attrs=attrs
+    )
+
+
 def concat(
-    adatas: Collection[AnnData] | typing.Mapping[str, AnnData],
+    adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
     axis: Literal["obs", 0, "var", 1] = "obs",
-    join: Literal["inner", "outer"] = "inner",
+    join: Join_T = "inner",
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
     label: str | None = None,
@@ -1097,6 +1241,8 @@ def concat(
         * `"unique"`: Elements for which there is only one possible value.
         * `"first"`: The first element seen at each from each position.
         * `"only"`: Elements that show up in only one of the objects.
+
+        For :class:`xarray.Dataset` objects, we use their :func:`xarray.merge` with `override` to stay lazy.
     uns_merge
         How the elements of `.uns` are selected. Uses the same set of strategies as
         the `merge` argument, except applied recursively.
@@ -1261,6 +1407,10 @@ def concat(
     >>> dict(ad.concat([a, b, c], uns_merge="first").uns)
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
+
+    from anndata.experimental.backed._compat import Dataset2D
+    from anndata.experimental.backed._compat import xarray as xr
+
     # Argument normalization
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
@@ -1306,19 +1456,49 @@ def concat(
 
     # Annotation for concatenation axis
     check_combinable_cols([getattr(a, axis_name).columns for a in adatas], join=join)
-    concat_annot = pd.concat(
-        unify_dtypes(getattr(a, axis_name) for a in adatas),
-        join=join,
-        ignore_index=True,
+    annotations = [getattr(a, axis_name) for a in adatas]
+    are_any_annotations_dataframes = any(
+        isinstance(a, pd.DataFrame) for a in annotations
     )
+    if are_any_annotations_dataframes:
+        annotations_in_memory = (
+            a.to_pandas() if isinstance(a, Dataset2D) else a for a in annotations
+        )
+        concat_annot = pd.concat(
+            unify_dtypes(annotations_in_memory),
+            join=join,
+            ignore_index=True,
+        )
+    else:
+        concat_annot = concat_dataset2d_on_annot_axis(annotations, join)
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
 
     # Annotation for other axis
-    alt_annot = merge_dataframes(
-        [getattr(a, alt_axis_name) for a in adatas], alt_indices, merge
+    alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
+    are_any_alt_annotations_dataframes = any(
+        isinstance(a, pd.DataFrame) for a in alt_annotations
     )
+    if are_any_alt_annotations_dataframes:
+        alt_annotations_in_memory = [
+            a.to_pandas() if isinstance(a, Dataset2D) else a for a in alt_annotations
+        ]
+        alt_annot = merge_dataframes(alt_annotations_in_memory, alt_indices, merge)
+    else:
+        # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
+        # the only "lazy" setting so I'm not sure we really want that.
+        # Because of xarray's merge upcasting, it's safest to simply assume that all dtypes are objects.
+        annotations_with_only_dask = list(
+            make_xarray_extension_dtypes_dask(
+                alt_annotations, use_only_object_dtype=True
+            )
+        )
+        attrs = get_attrs(annotations_with_only_dask)
+        alt_annot = Dataset2D(
+            xr.merge(annotations_with_only_dask, join=join, compat="override"),
+            attrs=attrs,
+        )
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
