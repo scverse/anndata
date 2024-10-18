@@ -12,6 +12,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
+from anndata._core.file_backing import to_memory
 from anndata._types import ANNDATA_ELEMS
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
@@ -81,15 +82,13 @@ def simple_subset_func(request):
     return request.param
 
 
-# TODO: why does `read_lazy().to_memory()` cause `Dataset2D.to_memory()` to lose index name in
-# multi-threaded tests when only opened once i.e., without this Callable?
 @pytest.fixture(scope="session")
 def adata_remote_orig_with_path(
     tmp_path_factory,
     diskfmt: str,
     mtx_format,
     worker_id: str = "serial",
-) -> tuple[AnnData, AnnData]:
+) -> tuple[Path, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
     file_name = f"orig_{worker_id}.{diskfmt}"
     if diskfmt == "h5ad":
@@ -513,7 +512,7 @@ def test_concat_to_memory_var(
 )
 def test_concat_full_and_subsets(
     adata_remote_orig: tuple[AnnData, AnnData],
-    join,
+    join: Join_T,
     index: slice | NDArray | Literal["a"] | None,
     load_annotation_index: bool,
 ):
@@ -546,3 +545,47 @@ def test_concat_full_and_subsets(
         in_memory_remote_concatenated.var_names.tolist()
         == orig_concatenated.var_names.tolist()
     )
+
+
+@pytest.mark.parametrize(
+    "elem_key",
+    map(
+        lambda x: pytest.param(x, id="-".join(map(str, x))),
+        [("obs", None), ("var", None), ("obsm", "df"), ("varm", "df")],
+    ),
+)
+def test_concat_df_ds_mixed_types(
+    adata_remote_orig: tuple[AnnData, AnnData],
+    load_annotation_index: bool,
+    join: Join_T,
+    elem_key: tuple[str, str | None],
+):
+    def elem_to_memory(adata: AnnData, elem_key: tuple[str, str | None]):
+        parent_elem = getattr(adata, elem_key[0])
+        if elem_key[1] is not None:
+            getattr(adata, elem_key[0])[elem_key[1]] = to_memory(
+                parent_elem[elem_key[1]]
+            )
+            return adata
+        else:
+            setattr(adata, elem_key[0], to_memory(parent_elem))
+            return adata
+
+    if not load_annotation_index:
+        pytest.skip(
+            "Testing for mixed types is independent of the axis since the indices always have to match."
+        )
+    remote, orig = adata_remote_orig
+    remote = elem_to_memory(remote, elem_key)
+    in_memory_concatenated = ad.concat([orig, orig], join=join)
+    mixed_concatenated = ad.concat([remote, orig], join=join)
+    assert_equal(mixed_concatenated, in_memory_concatenated)
+
+
+def test_concat_bad_mixed_types(tmp_path: str):
+    orig = gen_adata((100, 200), np.array)
+    orig.write_zarr(tmp_path)
+    remote = read_lazy(tmp_path)
+    orig.obsm["df"] = orig.obsm["array"]
+    with pytest.raises(ValueError, match=r"Cannot concatenate a Dataset2D*"):
+        ad.concat([remote, orig], join="outer")

@@ -18,6 +18,7 @@ from natsort import natsorted
 from scipy import sparse
 from scipy.sparse import spmatrix
 
+from anndata._core.file_backing import to_memory
 from anndata._warnings import ExperimentalFeatureWarning
 
 from ..compat import (
@@ -208,6 +209,8 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x, use_sparse_array=False):
+    if isinstance(x, DaskArray):
+        x = x.compute()
     if not isinstance(x, sparse.spmatrix | SpArray):
         if CAN_USE_SPARSE_ARRAY and use_sparse_array:
             return sparse.csr_array(x)
@@ -774,11 +777,13 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         fill_value = default_fill_value(arrays)
 
     if any(isinstance(a, Dataset2D) for a in arrays):
-        if not all(isinstance(a, Dataset2D) for a in arrays):
-            raise NotImplementedError(
-                "Cannot concatenate a Dataset2D with other array types."
-            )
-        return concat_dataset2d_on_annot_axis(arrays, join="outer")
+        if all(isinstance(a, Dataset2D | pd.DataFrame) for a in arrays):
+            arrays = [to_memory(a) if isinstance(a, Dataset2D) else a for a in arrays]
+        elif not all(isinstance(a, Dataset2D) for a in arrays):
+            msg = f"Cannot concatenate a Dataset2D with other array types {[type(a) for a in arrays if not isinstance(a, Dataset2D)]}."
+            raise ValueError(msg)
+        else:
+            return concat_dataset2d_on_annot_axis(arrays, join="outer")
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
         if not all(
