@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
-    from ..typing import ArrayDataStructureType
+    from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index, Index1D
 
@@ -540,7 +540,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> ArrayDataStructureType | None:
+    def X(self) -> XDataType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:

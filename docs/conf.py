@@ -130,6 +130,7 @@ intersphinx_mapping = dict(
     zarr=("https://zarr.readthedocs.io/en/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
+    ak=("https://awkward-array.org/doc/stable/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
@@ -140,6 +141,7 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "awkward.highlevel.Array": "ak.Array",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
