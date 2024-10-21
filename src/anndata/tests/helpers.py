@@ -1040,17 +1040,17 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 if find_spec("zarr") or TYPE_CHECKING:
-    from zarr import DirectoryStore
+    from zarr.storage import LocalStore
 else:
 
-    class DirectoryStore:
+    class LocalStore:
         def __init__(self, *_args, **_kwargs) -> None:
             cls_name = type(self).__name__
             msg = f"zarr must be imported to create a {cls_name} instance."
             raise ImportError(msg)
 
 
-class AccessTrackingStore(DirectoryStore):
+class AccessTrackingStore(LocalStore):
     _access_count: Counter[str]
     _accessed_keys: dict[str, list[str]]
 

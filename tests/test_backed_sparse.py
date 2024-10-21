@@ -73,7 +73,10 @@ def ondisk_equivalent_adata(
             def callback(func, elem_name, elem, iospec):
                 if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                     return AnnData(
-                        **{k: read_dispatched(v, callback) for k, v in elem.items()}
+                        **{
+                            k: read_dispatched(v, callback)
+                            for k, v in dict(elem).items()
+                        }
                     )
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
                     return sparse_dataset(elem)

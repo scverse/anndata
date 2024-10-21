@@ -80,8 +80,8 @@ else:
 #############################
 
 if find_spec("zarr") or TYPE_CHECKING:
-    from zarr.core import Array as ZarrArray
-    from zarr.hierarchy import Group as ZarrGroup
+    from zarr import Array as ZarrArray
+    from zarr import Group as ZarrGroup
 else:
 
     class ZarrArray:

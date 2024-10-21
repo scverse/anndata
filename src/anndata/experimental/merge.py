@@ -142,7 +142,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in elem.items()}
+            return {k: read_as_backed(v) for k, v in dict(elem).items()}
         else:
             return func(elem)
 
