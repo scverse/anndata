@@ -352,7 +352,7 @@ def _write_concat_sequence(
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, (pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray))
+        isinstance(a, pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray)
         for a in arrays
     ):
         _write_concat_arrays(

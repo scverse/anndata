@@ -10,7 +10,7 @@ from functools import partial, singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar, Union
+from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
 import h5py
@@ -46,8 +46,8 @@ class Empty:
     pass
 
 
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, tuple[Index1D, Index1D], scipy.sparse.spmatrix, SpArray]
+Index1D = slice | int | str | np.int64 | np.ndarray
+Index = Index1D | tuple[Index1D, Index1D] | scipy.sparse.spmatrix | SpArray
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
@@ -73,18 +73,6 @@ else:
 
         def __exit__(self, *_exc_info) -> None:
             os.chdir(self._old_cwd.pop())
-
-
-if sys.version_info >= (3, 10):
-    from itertools import pairwise
-else:
-
-    def pairwise(iterable):
-        from itertools import tee
-
-        a, b = tee(iterable)
-        next(b, None)
-        return zip(a, b)
 
 
 #############################
@@ -298,7 +286,7 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-Group_T = TypeVar("Group_T", bound=Union[ZarrGroup, h5py.Group])
+Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
 
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
@@ -329,7 +317,7 @@ def _clean_uns(adata: AnnData):  # noqa: F821
             continue
         name = cats_name.replace("_categories", "")
         # fix categories with a single category
-        if isinstance(cats, (str, int)):
+        if isinstance(cats, str | int):
             cats = [cats]
         for ann in [adata.obs, adata.var]:
             if name not in ann:
@@ -354,7 +342,7 @@ def _move_adj_mtx(d):
     for k in ("distances", "connectivities"):
         if (
             (k in n)
-            and isinstance(n[k], (scipy.sparse.spmatrix, np.ndarray))
+            and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
             warn(

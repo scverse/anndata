@@ -174,7 +174,7 @@ def equal_sparse(a, b) -> bool:
 
     xp = array_api_compat.array_namespace(a.data)
 
-    if isinstance(b, (CupySparseMatrix, sparse.spmatrix, SpArray)):
+    if isinstance(b, CupySparseMatrix | sparse.spmatrix | SpArray):
         if isinstance(a, CupySparseMatrix):
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
@@ -206,7 +206,7 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x, *, use_sparse_array=False):
-    if not isinstance(x, (sparse.spmatrix, SpArray)):
+    if not isinstance(x, sparse.spmatrix | SpArray):
         if CAN_USE_SPARSE_ARRAY and use_sparse_array:
             return sparse.csr_array(x)
         return sparse.csr_matrix(x)
@@ -536,7 +536,7 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, (sparse.spmatrix, SpArray, CupySparseMatrix)):
+        elif isinstance(el, sparse.spmatrix | SpArray | CupySparseMatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -723,7 +723,14 @@ def default_fill_value(els):
 
     This is largely due to backwards compat, and might not be the ideal solution.
     """
-    if any(isinstance(el, (sparse.spmatrix, SpArray)) for el in els):
+    if any(
+        isinstance(el, sparse.spmatrix | SpArray)
+        or (
+            isinstance(el, DaskArray)
+            and isinstance(el._meta, sparse.spmatrix | SpArray)
+        )
+        for el in els
+    ):
         return 0
     else:
         return np.nan
@@ -794,7 +801,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         import cupyx.scipy.sparse as cpsparse
 
         if not all(
-            isinstance(a, (CupySparseMatrix, CupyArray)) or 0 in a.shape for a in arrays
+            isinstance(a, CupySparseMatrix | CupyArray) or 0 in a.shape for a in arrays
         ):
             raise NotImplementedError(
                 "Cannot concatenate a cupy array with other array types."
@@ -821,7 +828,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             axis=axis,
         )
-    elif any(isinstance(a, (sparse.spmatrix, SpArray)) for a in arrays):
+    elif any(isinstance(a, sparse.spmatrix | SpArray) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         use_sparse_array = any(issubclass(type(a), SpArray) for a in arrays)
         return sparse_stack(
@@ -980,7 +987,7 @@ def concat_pairwise_mapping(
         els = [
             m.get(k, sparse_class((s, s), dtype=bool)) for m, s in zip(mappings, shapes)
         ]
-        if all(isinstance(el, (CupySparseMatrix, CupyArray)) for el in els):
+        if all(isinstance(el, CupySparseMatrix | CupyArray) for el in els):
             result[k] = _cp_block_diag(els, format="csr")
         elif all(isinstance(el, DaskArray) for el in els):
             result[k] = _dask_block_diag(els)
