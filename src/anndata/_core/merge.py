@@ -777,7 +777,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         fill_value = default_fill_value(arrays)
 
     if any(isinstance(a, Dataset2D) for a in arrays):
-        if all(isinstance(a, Dataset2D | pd.DataFrame) for a in arrays):
+        if any(isinstance(a, pd.DataFrame) for a in arrays):
             arrays = [to_memory(a) if isinstance(a, Dataset2D) else a for a in arrays]
         elif not all(isinstance(a, Dataset2D) for a in arrays):
             msg = f"Cannot concatenate a Dataset2D with other array types {[type(a) for a in arrays if not isinstance(a, Dataset2D)]}."
