@@ -73,3 +73,10 @@ jobs:
       - uses: codecov/codecov-action@v4
         with:
           flags: gpu-tests
+
+      - name: Remove 'run-gpu-ci' Label
+        if: always()
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: "run-gpu-ci"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
