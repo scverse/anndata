@@ -560,23 +560,24 @@ def test_concat_df_ds_mixed_types(
     join: Join_T,
     elem_key: tuple[str, str | None],
 ):
-    def elem_to_memory(adata: AnnData, elem_key: tuple[str, str | None]):
+    def with_elem_in_memory(
+        adata: AnnData, elem_key: tuple[str, str | None]
+    ) -> AnnData:
         parent_elem = getattr(adata, elem_key[0])
         if elem_key[1] is not None:
             getattr(adata, elem_key[0])[elem_key[1]] = to_memory(
                 parent_elem[elem_key[1]]
             )
             return adata
-        else:
-            setattr(adata, elem_key[0], to_memory(parent_elem))
-            return adata
+        setattr(adata, elem_key[0], to_memory(parent_elem))
+        return adata
 
     if not load_annotation_index:
         pytest.skip(
             "Testing for mixed types is independent of the axis since the indices always have to match."
         )
     remote, orig = adata_remote_orig
-    remote = elem_to_memory(remote, elem_key)
+    remote = with_elem_in_memory(remote, elem_key)
     in_memory_concatenated = ad.concat([orig, orig], join=join)
     mixed_concatenated = ad.concat([remote, orig], join=join)
     assert_equal(mixed_concatenated, in_memory_concatenated)
