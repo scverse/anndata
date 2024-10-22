@@ -25,7 +25,7 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -33,18 +33,18 @@ jobs:
         if: ${{ github.ref_name != 'main' }}
         # Errors on main branch
 
-      - uses: mamba-org/setup-micromamba@v1
+      - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: asv
           cache-environment: true
           create-args: >-
-            python=3.11
+            python=${{ matrix.python }}
             asv
-            mamba
+            libmambapy
             packaging
 
       - name: Cache datasets
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache
