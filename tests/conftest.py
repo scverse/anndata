@@ -54,7 +54,7 @@ def tokenize_anndata(adata: ad.AnnData):
     res.extend([tokenize(adata.obs), tokenize(adata.var)])
     for attr in ["obsm", "varm", "obsp", "varp", "layers"]:
         elem = getattr(adata, attr)
-        res.append(tokenize(list(elem.items())))
+        res.append(tokenize(list(dict(elem).items())))
     res.append(joblib.hash(adata.uns))
     if adata.raw is not None:
         res.append(tokenize(adata.raw.to_adata()))

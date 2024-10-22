@@ -519,7 +519,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
         write_elem(z, "table/table", adata)
 
         if consolidated:
-            zarr.convenience.consolidate_metadata(z.store)
+            zarr.consolidate_metadata(z.store)
 
     if consolidated:
         read_func = zarr.open_consolidated
