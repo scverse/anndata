@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 from copy import deepcopy
 from operator import mul
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
@@ -34,6 +35,9 @@ from anndata.tests.helpers import (
     subset_func,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from typing import Literal
 
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(
     "ignore:Changing the sparsity structure:scipy.sparse.SparseEfficiencyWarning"
@@ -786,11 +790,24 @@ def test_dataframe_view_index_setting():
     assert a2.obs.index.values.tolist() == ["a", "b"]
 
 
-def test_ellipsis_index(adata, subset_func, matrix_type):
+@pytest.mark.parametrize("axis", ["obs", "var", None])
+def test_ellipsis_index(
+    adata: ad.AnnData, subset_func, matrix_type, axis: Literal["obs", "var"] | None
+):
     adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
-    subset_obs_names = subset_func(adata.obs_names)
-    subset_ellipsis = adata[subset_obs_names, ...]
-    subset = adata[subset_obs_names, :]
+    if axis is not None:
+        axis_subset = subset_func(getattr(adata, f"{axis}_names"))
+        subset_with_ellipsis = (
+            (axis_subset, Ellipsis) if axis == "obs" else (Ellipsis, axis_subset)
+        )
+        subset_with_slice = (
+            (axis_subset, slice(None)) if axis == "obs" else (slice(None), axis_subset)
+        )
+    else:
+        subset_with_ellipsis = Ellipsis
+        subset_with_slice = (slice(None), slice(None))
+    subset_ellipsis = adata[subset_with_ellipsis]
+    subset = adata[subset_with_slice]
     assert_equal(subset_ellipsis, subset)
 
 
