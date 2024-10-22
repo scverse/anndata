@@ -31,14 +31,12 @@ __all__ = ["Index", "RWAble", "AxisStorable"]
 Index = _Index
 """1D or 2D index an :class:`~anndata.AnnData` object can be sliced with."""
 
-
-ArrayDataStructureType: TypeAlias = (
+XDataType: TypeAlias = (
     np.ndarray
     | ma.MaskedArray
     | sparse.csr_matrix
     | sparse.csc_matrix
     | SpArray
-    | AwkArray
     | H5Array
     | ZarrArray
     | ZappyArray
@@ -48,6 +46,7 @@ ArrayDataStructureType: TypeAlias = (
     | CupyArray
     | CupySparseMatrix
 )
+ArrayDataStructureType: TypeAlias = XDataType | AwkArray
 
 
 InMemoryArrayOrScalarType: TypeAlias = (
