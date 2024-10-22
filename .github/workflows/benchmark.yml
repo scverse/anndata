@@ -41,7 +41,7 @@ jobs:
             python=${{ matrix.python }}
             asv
             libmambapy
-            packaging
+            conda-build
 
       - name: Cache datasets
         uses: actions/cache@v4
