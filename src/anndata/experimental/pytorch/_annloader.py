@@ -22,11 +22,12 @@ else:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
-    from typing import TypeAlias
+    from typing import TypeAlias, Union
 
     from scipy.sparse import spmatrix
 
-    Array: TypeAlias = torch.Tensor | np.ndarray | spmatrix
+    # need to use Union because of autodoc_mock_imports
+    Array: TypeAlias = Union[torch.Tensor, np.ndarray, spmatrix]  # noqa: UP007
 
 
 # Custom sampler to get proper batches instead of joined separate indices

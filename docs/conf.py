@@ -73,9 +73,10 @@ myst_heading_anchors = 3
 # Generate the API documentation when building
 autosummary_generate = True
 autodoc_member_order = "bysource"
+autodoc_mock_imports = ["torch"]
+# autodoc_default_flags = ['members']
 issues_github_path = "scverse/anndata"
 rtd_links_prefix = PurePosixPath("src")
-# autodoc_default_flags = ['members']
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
