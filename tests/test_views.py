@@ -786,6 +786,14 @@ def test_dataframe_view_index_setting():
     assert a2.obs.index.values.tolist() == ["a", "b"]
 
 
+def test_ellipsis_index(adata, subset_func, matrix_type):
+    adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
+    subset_obs_names = subset_func(adata.obs_names)
+    subset_ellipsis = adata[subset_obs_names, ...]
+    subset = adata[subset_obs_names, :]
+    assert_equal(subset_ellipsis, subset)
+
+
 # @pytest.mark.parametrize("dim", ["obs", "var"])
 # @pytest.mark.parametrize(
 #     ("idx", "pat"),

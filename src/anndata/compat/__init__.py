@@ -10,6 +10,7 @@ from functools import singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
+from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
@@ -46,7 +47,7 @@ class Empty:
     pass
 
 
-Index1D = slice | int | str | np.int64 | np.ndarray
+Index1D = slice | int | str | np.int64 | np.ndarray | EllipsisType
 Index = Index1D | tuple[Index1D, Index1D] | scipy.sparse.spmatrix | SpArray
 H5Group = h5py.Group
 H5Array = h5py.Dataset

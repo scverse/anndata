@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from functools import singledispatch
 from itertools import repeat
+from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import h5py
@@ -47,7 +48,8 @@ def _normalize_index(
     | str
     | Sequence[bool | int | np.integer]
     | np.ndarray
-    | pd.Index,
+    | pd.Index
+    | EllipsisType,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
     if not isinstance(index, pd.RangeIndex):
@@ -72,6 +74,8 @@ def _normalize_index(
         return slice(start, stop, step)
     elif isinstance(indexer, np.integer | int):
         return indexer
+    elif isinstance(indexer, EllipsisType):
+        return slice(None)
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
@@ -107,8 +111,7 @@ def _normalize_index(
                     "are not valid obs/ var names or indices."
                 )
             return positions  # np.ndarray[int]
-    else:
-        raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
+    raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
