@@ -395,7 +395,9 @@ def read_elem_as_dask(
     chunks, optional
        length `n`, the same `n` as the size of the underlying array.
        Note that the minor axis dimension must match the shape for sparse.
-       Defaults to `(1000, adata.shape[1])`.
+       Defaults to `(1000, adata.shape[1])` for CSR sparse,
+       `(adata.shape[0], 1000)` for CSC sparse,
+       and the on-disk chunking otherwise for zarr.
 
     Returns
     -------
