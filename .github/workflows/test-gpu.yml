@@ -85,3 +85,10 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
+
+      - name: Remove 'run-gpu-ci' Label
+        if: always()
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: "run-gpu-ci"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
