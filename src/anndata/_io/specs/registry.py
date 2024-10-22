@@ -397,7 +397,7 @@ def read_elem_as_dask(
        Note that the minor axis dimension must match the shape for sparse.
        Defaults to `(1000, adata.shape[1])` for CSR sparse,
        `(adata.shape[0], 1000)` for CSC sparse,
-       and the on-disk chunking otherwise for zarr.
+       and the on-disk chunking otherwise for dense.
 
     Returns
     -------
