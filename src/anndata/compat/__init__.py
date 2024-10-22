@@ -47,8 +47,15 @@ class Empty:
     pass
 
 
-Index1D = slice | int | str | np.int64 | np.ndarray | EllipsisType
-Index = Index1D | tuple[Index1D, Index1D] | scipy.sparse.spmatrix | SpArray
+Index1D = slice | int | str | np.int64 | np.ndarray
+IndexRest = Index1D | EllipsisType
+Index = (
+    IndexRest
+    | tuple[Index1D, IndexRest]
+    | tuple[IndexRest, Index1D]
+    | scipy.sparse.spmatrix
+    | SpArray
+)
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
