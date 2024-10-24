@@ -576,8 +576,8 @@ def test_append_overflow_check(group_fn, sparse_class, tmpdir):
     # Minimally allocating new matrix
     new_mtx = sparse_class(
         (
-            np.broadcast_to(True, typemax_int32 - 1),
-            np.broadcast_to(np.int32(1), typemax_int32 - 1),
+            np.ones(typemax_int32 - 1, dtype=np.bool_),
+            np.ones(typemax_int32 - 1, dtype=np.int32),
             [0, typemax_int32 - 1],
         ),
         shape=(1, 2),
