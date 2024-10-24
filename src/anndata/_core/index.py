@@ -14,7 +14,7 @@ from scipy.sparse import issparse, spmatrix
 from ..compat import AwkArray, DaskArray, SpArray
 
 if TYPE_CHECKING:
-    from ..compat import Index, Index1D
+    from ..compat import Index, IndexRest
 
 
 def _normalize_indices(
@@ -140,7 +140,7 @@ def _fix_slice_bounds(s: slice, length: int) -> slice:
     return slice(start, stop, step)
 
 
-def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
+def unpack_index(index: Index) -> tuple[IndexRest, IndexRest]:
     if not isinstance(index, tuple):
         return index, slice(None)
     elif len(index) == 2:
