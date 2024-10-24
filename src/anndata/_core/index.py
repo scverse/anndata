@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from functools import singledispatch
 from itertools import repeat
+from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import h5py
@@ -13,7 +14,7 @@ from scipy.sparse import issparse, spmatrix
 from ..compat import AwkArray, DaskArray, SpArray
 
 if TYPE_CHECKING:
-    from ..compat import Index, Index1D
+    from ..compat import Index, IndexRest
 
 
 def _normalize_indices(
@@ -27,7 +28,14 @@ def _normalize_indices(
         index: Index = index.values
     if isinstance(index, tuple):
         if len(index) > 2:
-            raise ValueError("AnnData can only be sliced in rows and columns.")
+            # only one remaining ellipsis
+            num_ellipsis = sum(isinstance(i, EllipsisType) for i in index)
+            if num_ellipsis == 1:
+                index = tuple(i for i in index if not isinstance(i, EllipsisType))
+            elif num_ellipsis > 1:
+                raise IndexError("an index can only have a single ellipsis ('...')")
+            if len(index) > 2:
+                raise ValueError("AnnData can only be sliced in rows and columns.")
         # deal with pd.Series
         # TODO: The series should probably be aligned first
         if isinstance(index[1], pd.Series):
@@ -47,7 +55,8 @@ def _normalize_index(
     | str
     | Sequence[bool | int | np.integer]
     | np.ndarray
-    | pd.Index,
+    | pd.Index
+    | EllipsisType,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
     if not isinstance(index, pd.RangeIndex):
@@ -72,6 +81,8 @@ def _normalize_index(
         return slice(start, stop, step)
     elif isinstance(indexer, np.integer | int):
         return indexer
+    elif isinstance(indexer, EllipsisType):
+        return slice(None)
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
@@ -107,8 +118,7 @@ def _normalize_index(
                     "are not valid obs/ var names or indices."
                 )
             return positions  # np.ndarray[int]
-    else:
-        raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
+    raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
@@ -130,7 +140,7 @@ def _fix_slice_bounds(s: slice, length: int) -> slice:
     return slice(start, stop, step)
 
 
-def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
+def unpack_index(index: Index) -> tuple[IndexRest, IndexRest]:
     if not isinstance(index, tuple):
         return index, slice(None)
     elif len(index) == 2:

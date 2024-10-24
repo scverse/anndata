@@ -52,9 +52,10 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
+    from ..compat import Index1D
     from ..typing import ArrayDataStructureType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import Index, Index1D
+    from .index import Index
 
 
 # for backwards compat
