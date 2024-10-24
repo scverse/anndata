@@ -1429,13 +1429,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ]:
             attr = getattr(self, attr_name, None)
             if attr is not None:
-                new[attr_name] = to_memory(attr, copy)
+                new[attr_name] = to_memory(attr, copy=copy)
 
         if self.raw is not None:
             new["raw"] = {
-                "X": to_memory(self.raw.X, copy),
-                "var": to_memory(self.raw.var, copy),
-                "varm": to_memory(self.raw.varm, copy),
+                "X": to_memory(self.raw.X, copy=copy),
+                "var": to_memory(self.raw.var, copy=copy),
+                "varm": to_memory(self.raw.varm, copy=copy),
             }
 
         if self.isbacked:
