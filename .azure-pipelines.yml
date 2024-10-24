@@ -4,7 +4,7 @@ trigger:
 
 variables:
   RUN_COVERAGE: no
-  PYTEST_ADDOPTS: --color=yes --junitxml=test-data/test-results.xml
+  PYTEST_ADDOPTS: -v --color=yes --junitxml=test-data/test-results.xml
   DEPENDENCIES_VERSION: "latest" # |"pre-release" | "minimum-version"
   TEST_TYPE: "standard" # | "coverage"
 
