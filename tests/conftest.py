@@ -43,8 +43,28 @@ def backing_h5ad(tmp_path):
         ),
     ]
 )
-def ellipsis_index_with_equivalent(request) -> tuple[EllipsisType | slice]:
+def ellipsis_index_with_equivalent(
+    request,
+) -> tuple[tuple[EllipsisType | slice], tuple[slice, slice]]:
     return request.param
+
+
+@pytest.fixture
+def ellipsis_index(
+    ellipsis_index_with_equivalent: tuple[
+        tuple[EllipsisType | slice], tuple[slice, slice]
+    ],
+) -> tuple[EllipsisType | slice]:
+    return ellipsis_index_with_equivalent[0]
+
+
+@pytest.fixture
+def equivalent_ellipsis_index(
+    ellipsis_index_with_equivalent: tuple[
+        tuple[EllipsisType | slice], tuple[slice, slice]
+    ],
+) -> tuple[slice, slice]:
+    return ellipsis_index_with_equivalent[1]
 
 
 #####################

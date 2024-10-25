@@ -130,13 +130,13 @@ def test_backed_indexing(
 
 def test_backed_ellipsis_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
-    ellipsis_index_with_equivalent: tuple[EllipsisType | slice, ...],
+    ellipsis_index: tuple[EllipsisType | slice],
+    equivalent_ellipsis_index: tuple[slice],
 ):
-    ellipsis_index, equivalent_index = ellipsis_index_with_equivalent
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
-    assert_equal(csr_mem.X[equivalent_index], csr_disk.X[ellipsis_index])
-    assert_equal(csr_mem.X[equivalent_index], csc_disk.X[ellipsis_index])
+    assert_equal(csr_mem.X[equivalent_ellipsis_index], csr_disk.X[ellipsis_index])
+    assert_equal(csr_mem.X[equivalent_ellipsis_index], csc_disk.X[ellipsis_index])
 
 
 def make_randomized_mask(size: int) -> np.ndarray:

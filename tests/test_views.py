@@ -791,12 +791,13 @@ def test_dataframe_view_index_setting():
 
 
 def test_ellipsis_index(
-    ellipsis_index_with_equivalent: tuple[slice | EllipsisType, ...], matrix_type
+    ellipsis_index: tuple[EllipsisType | slice],
+    equivalent_ellipsis_index: tuple[slice],
+    matrix_type,
 ):
-    ellipsis_index, equivalent_index = ellipsis_index_with_equivalent
     adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
     subset_ellipsis = adata[ellipsis_index]
-    subset = adata[equivalent_index]
+    subset = adata[equivalent_ellipsis_index]
     assert_equal(subset_ellipsis, subset)
 
 
