@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import partial
+from typing import TYPE_CHECKING
 
 import joblib
 import pytest
@@ -10,10 +11,35 @@ from scipy import sparse
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
 
+if TYPE_CHECKING:
+    from types import EllipsisType
+
 
 @pytest.fixture
 def backing_h5ad(tmp_path):
     return tmp_path / "test.h5ad"
+
+
+@pytest.fixture(
+    params=[
+        ((...), (slice(None), slice(None))),
+        ((..., slice(0, 10)), (slice(None), slice(0, 10))),
+        ((slice(0, 10), ...), (slice(0, 10), slice(None))),
+        ((slice(0, 10), slice(0, 10), ...), (slice(0, 10), slice(0, 10))),
+        ((..., slice(0, 10), slice(0, 10)), (slice(0, 10), slice(0, 10))),
+        ((slice(0, 10), ..., slice(0, 10)), (slice(0, 10), slice(0, 10))),
+    ],
+    ids=[
+        "ellipsis",
+        "obs-ellipsis",
+        "var-ellipsis",
+        "obs-var-ellipsis",
+        "ellipsis-obs-var",
+        "obs-ellipsis-var",
+    ],
+)
+def ellipsis_index_with_equivalent(request) -> tuple[EllipsisType | slice]:
+    return request.param
 
 
 #####################

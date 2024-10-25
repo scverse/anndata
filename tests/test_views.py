@@ -37,7 +37,7 @@ from anndata.tests.helpers import (
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
-    from typing import Literal
+    from types import EllipsisType
 
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(
     "ignore:Changing the sparsity structure:scipy.sparse.SparseEfficiencyWarning"
@@ -790,47 +790,27 @@ def test_dataframe_view_index_setting():
     assert a2.obs.index.values.tolist() == ["a", "b"]
 
 
-@pytest.mark.parametrize("axis", ["obs", "var", None])
-def test_ellipsis_index_2d(
-    adata: ad.AnnData, subset_func, matrix_type, axis: Literal["obs", "var"] | None
+def test_ellipsis_index(
+    ellipsis_index_with_equivalent: tuple[slice | EllipsisType, ...], matrix_type
 ):
+    ellipsis_index, equivalent_index = ellipsis_index_with_equivalent
     adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
-    if axis is not None:
-        axis_subset = subset_func(getattr(adata, f"{axis}_names"))
-        subset_with_ellipsis = (
-            (axis_subset, Ellipsis) if axis == "obs" else (Ellipsis, axis_subset)
-        )
-        subset_with_slice = (
-            (axis_subset, slice(None)) if axis == "obs" else (slice(None), axis_subset)
-        )
-    else:
-        subset_with_ellipsis = Ellipsis
-        subset_with_slice = (slice(None), slice(None))
-    subset_ellipsis = adata[subset_with_ellipsis]
-    subset = adata[subset_with_slice]
+    subset_ellipsis = adata[ellipsis_index]
+    subset = adata[equivalent_index]
     assert_equal(subset_ellipsis, subset)
 
 
-@pytest.mark.parametrize("ellipsis_index_loc", [0, 1, 2])
-def test_ellipsis_index_3d(
-    adata: ad.AnnData, subset_func, matrix_type, ellipsis_index_loc
-):
-    adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
-    obs_subset = subset_func(getattr(adata, "obs_names"))
-    var_subset = subset_func(getattr(adata, "var_names"))
-    generator = iter((obs_subset, var_subset))
-    subset_with_ellipsis = tuple(
-        Ellipsis if i == ellipsis_index_loc else next(generator) for i in range(3)
-    )
-    subset_with_slice = (obs_subset, var_subset)
-    subset_ellipsis = adata[subset_with_ellipsis]
-    subset = adata[subset_with_slice]
-    assert_equal(subset_ellipsis, subset)
-
-
-def test_ellipsis_index_3d_2_ellipses_errors(adata: ad.AnnData):
-    with pytest.raises(IndexError, match=r"only have a single ellipsis"):
-        gen_adata((10, 10))[..., 0, ...]
+@pytest.mark.parametrize(
+    ("index", "expected_error"),
+    [
+        ((..., 0, ...), r"only have a single ellipsis"),
+        ((0, 0, 0), r"Received a length 3 index"),
+    ],
+    ids=["ellipsis-int-ellipsis", "int-int-int"],
+)
+def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: str):
+    with pytest.raises(IndexError, match=expected_error):
+        gen_adata((10, 10))[index]
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])
