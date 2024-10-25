@@ -791,8 +791,8 @@ def test_dataframe_view_index_setting():
 
 
 def test_ellipsis_index(
-    ellipsis_index: tuple[EllipsisType | slice],
-    equivalent_ellipsis_index: tuple[slice],
+    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    equivalent_ellipsis_index: tuple[slice, slice],
     matrix_type,
 ):
     adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)

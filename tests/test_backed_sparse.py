@@ -130,8 +130,8 @@ def test_backed_indexing(
 
 def test_backed_ellipsis_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
-    ellipsis_index: tuple[EllipsisType | slice],
-    equivalent_ellipsis_index: tuple[slice],
+    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    equivalent_ellipsis_index: tuple[slice, slice],
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 

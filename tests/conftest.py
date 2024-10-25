@@ -22,7 +22,8 @@ def backing_h5ad(tmp_path):
 
 @pytest.fixture(
     params=[
-        pytest.param(((...), (slice(None), slice(None))), id="ellipsis"),
+        pytest.param((..., (slice(None), slice(None))), id="ellipsis"),
+        pytest.param(((...,), (slice(None), slice(None))), id="ellipsis_tuple"),
         pytest.param(
             ((..., slice(0, 10)), (slice(None), slice(0, 10))), id="obs-ellipsis"
         ),
@@ -45,23 +46,23 @@ def backing_h5ad(tmp_path):
 )
 def ellipsis_index_with_equivalent(
     request,
-) -> tuple[tuple[EllipsisType | slice], tuple[slice, slice]]:
+) -> tuple[tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]]:
     return request.param
 
 
 @pytest.fixture
 def ellipsis_index(
     ellipsis_index_with_equivalent: tuple[
-        tuple[EllipsisType | slice], tuple[slice, slice]
+        tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]
     ],
-) -> tuple[EllipsisType | slice]:
+) -> tuple[EllipsisType | slice, ...] | EllipsisType:
     return ellipsis_index_with_equivalent[0]
 
 
 @pytest.fixture
 def equivalent_ellipsis_index(
     ellipsis_index_with_equivalent: tuple[
-        tuple[EllipsisType | slice], tuple[slice, slice]
+        tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]
     ],
 ) -> tuple[slice, slice]:
     return ellipsis_index_with_equivalent[1]
