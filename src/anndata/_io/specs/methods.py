@@ -280,7 +280,12 @@ def write_anndata(
     _writer.write_elem(g, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(
+        g,
+        "layers",
+        {k: v for k, v in adata.layers.items() if k is not None},
+        dataset_kwargs=dataset_kwargs,
+    )
     _writer.write_elem(g, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
 
