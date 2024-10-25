@@ -164,7 +164,7 @@ class Raw:
         from anndata import AnnData
 
         return AnnData(
-            X=self.X.copy(),
+            X=None if self.X is None else self.X.copy(),
             var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
             obs=self._adata.obs.copy(),

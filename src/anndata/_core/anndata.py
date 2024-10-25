@@ -421,7 +421,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         elif isinstance(raw, Mapping):
             self._raw = Raw(self, **raw)
         else:  # is a Raw from another AnnData
-            self._raw = Raw(self, raw._X, raw.var, raw.varm)
+            self._raw = Raw(self, raw.X, raw.var, raw.varm)
 
         # clean up old formats
         self._clean_up_old_format(uns)

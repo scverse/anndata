@@ -172,7 +172,10 @@ class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
             stacklevel=2,
         )
         with view_update(self.parent, self.attrname, ()) as new_mapping:
-            new_mapping[key] = value
+            if value is None:
+                del new_mapping[key]
+            else:
+                new_mapping[key] = value
 
     def __delitem__(self, key: K) -> None:
         if key not in self:
@@ -444,4 +447,5 @@ class AlignedMappingProperty(property, Generic[K, T]):
         setattr(obj, f"_{self.name}", value)
 
     def __delete__(self, obj: AnnData) -> None:
-        setattr(obj, self.name, dict())
+        new = {None: x} if (x := getattr(obj, self.name).get(None)) is not None else {}
+        setattr(obj, self.name, new)
