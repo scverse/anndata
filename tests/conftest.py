@@ -22,21 +22,26 @@ def backing_h5ad(tmp_path):
 
 @pytest.fixture(
     params=[
-        ((...), (slice(None), slice(None))),
-        ((..., slice(0, 10)), (slice(None), slice(0, 10))),
-        ((slice(0, 10), ...), (slice(0, 10), slice(None))),
-        ((slice(0, 10), slice(0, 10), ...), (slice(0, 10), slice(0, 10))),
-        ((..., slice(0, 10), slice(0, 10)), (slice(0, 10), slice(0, 10))),
-        ((slice(0, 10), ..., slice(0, 10)), (slice(0, 10), slice(0, 10))),
-    ],
-    ids=[
-        "ellipsis",
-        "obs-ellipsis",
-        "var-ellipsis",
-        "obs-var-ellipsis",
-        "ellipsis-obs-var",
-        "obs-ellipsis-var",
-    ],
+        pytest.param(((...), (slice(None), slice(None))), id="ellipsis"),
+        pytest.param(
+            ((..., slice(0, 10)), (slice(None), slice(0, 10))), id="obs-ellipsis"
+        ),
+        pytest.param(
+            ((slice(0, 10), ...), (slice(0, 10), slice(None))), id="var-ellipsis"
+        ),
+        pytest.param(
+            ((slice(0, 10), slice(0, 10), ...), (slice(0, 10), slice(0, 10))),
+            id="obs-var-ellipsis",
+        ),
+        pytest.param(
+            ((..., slice(0, 10), slice(0, 10)), (slice(0, 10), slice(0, 10))),
+            id="ellipsis-obs-var",
+        ),
+        pytest.param(
+            ((slice(0, 10), ..., slice(0, 10)), (slice(0, 10), slice(0, 10))),
+            id="obs-ellipsis-var",
+        ),
+    ]
 )
 def ellipsis_index_with_equivalent(request) -> tuple[EllipsisType | slice]:
     return request.param
