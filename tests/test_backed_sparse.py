@@ -130,10 +130,11 @@ def test_backed_indexing(
 @pytest.mark.parametrize(
     "indexing_func",
     [
-        lambda x: (Ellipsis, slice(0, 10)),
-        lambda x: (slice(0, 10), Ellipsis),
-        lambda x: (slice(0, 10), slice(0, 10), Ellipsis),
-        lambda x: (Ellipsis, slice(0, 10), slice(0, 10)),
+        (..., slice(0, 10)),
+        (slice(0, 10), ...),
+        (slice(0, 10), slice(0, 10), ...),
+        (..., slice(0, 10), slice(0, 10)),
+        (slice(0, 10), ..., slice(0, 10)),
     ],
     ids=["obs-ellipsis", "var-ellipsis", "obs-var-ellipsis", "ellipsis-obs-var"],
 )
