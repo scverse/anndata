@@ -37,8 +37,8 @@ from anndata.compat import (
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterable
-    from typing import Callable, Literal, TypeGuard, TypeVar
+    from collections.abc import Callable, Collection, Iterable
+    from typing import Literal, TypeGuard, TypeVar
 
     DT = TypeVar("DT")
 

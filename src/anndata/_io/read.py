@@ -337,7 +337,7 @@ def read_text(
     dtype
         Numpy data type.
     """
-    if not isinstance(filename, (PathLike, str, bytes)):
+    if not isinstance(filename, PathLike | str | bytes):
         return _read_text(filename, delimiter, first_column_names, dtype)
 
     filename = Path(filename)

@@ -343,7 +343,7 @@ def _get_group_format(group: GroupStorageType) -> str:
 def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
-        (isinstance(major_indexer, (int, np.integer)))
+        (isinstance(major_indexer, int | np.integer))
         or (isinstance(major_indexer, slice))
         or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
     )

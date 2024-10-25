@@ -40,7 +40,7 @@ class Raw:
         # construct manually
         if adata.isbacked == (X is None):
             # Move from GPU to CPU since it's large and not always used
-            if isinstance(X, (CupyArray, CupySparseMatrix)):
+            if isinstance(X, CupyArray | CupySparseMatrix):
                 self._X = X.get()
             else:
                 self._X = X
@@ -53,7 +53,7 @@ class Raw:
             # Move from GPU to CPU since it's large and not always used
             if adata.X is None:
                 self._X = None
-            elif isinstance(adata.X, (CupyArray, CupySparseMatrix)):
+            elif isinstance(adata.X, CupyArray | CupySparseMatrix):
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
@@ -126,9 +126,9 @@ class Raw:
         oidx, vidx = self._normalize_indices(index)
 
         # To preserve two dimensional shape
-        if isinstance(vidx, (int, np.integer)):
+        if isinstance(vidx, int | np.integer):
             vidx = slice(vidx, vidx + 1, 1)
-        if isinstance(oidx, (int, np.integer)):
+        if isinstance(oidx, int | np.integer):
             oidx = slice(oidx, oidx + 1, 1)
 
         if not self._adata.isbacked:
