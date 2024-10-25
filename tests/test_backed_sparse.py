@@ -127,6 +127,28 @@ def test_backed_indexing(
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
+@pytest.mark.parametrize(
+    "indexing_func",
+    [
+        lambda x: (Ellipsis, slice(0, 10)),
+        lambda x: (slice(0, 10), Ellipsis),
+        lambda x: (slice(0, 10), slice(0, 10), Ellipsis),
+        lambda x: (Ellipsis, slice(0, 10), slice(0, 10)),
+    ],
+    ids=["obs-ellipsis", "var-ellipsis", "obs-var-ellipsis", "ellipsis-obs-var"],
+)
+def test_backed_ellipsis_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    indexing_func,
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    index = indexing_func(csr_mem)
+
+    assert_equal(csr_mem.X[index], csr_disk.X[index])
+    assert_equal(csr_disk.X[index], csc_disk.X[index])
+
+
 def make_randomized_mask(size: int) -> np.ndarray:
     randomized_mask = np.zeros(size, dtype=bool)
     inds = np.random.choice(size, 20, replace=False)

@@ -53,6 +53,8 @@ Index = (
     IndexRest
     | tuple[Index1D, IndexRest]
     | tuple[IndexRest, Index1D]
+    | tuple[Index1D, Index1D, EllipsisType]
+    | tuple[EllipsisType, Index1D, Index1D]
     | scipy.sparse.spmatrix
     | SpArray
 )

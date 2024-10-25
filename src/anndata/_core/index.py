@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from functools import singledispatch
 from itertools import repeat
-from types import EllipsisType
 from typing import TYPE_CHECKING
 
 import h5py
@@ -14,7 +13,7 @@ from scipy.sparse import issparse, spmatrix
 from ..compat import AwkArray, DaskArray, SpArray
 
 if TYPE_CHECKING:
-    from ..compat import Index, IndexRest
+    from ..compat import Index, Index1D
 
 
 def _normalize_indices(
@@ -30,11 +29,9 @@ def _normalize_indices(
         if len(index) > 2:
             # only one remaining ellipsis
             num_ellipsis = sum(i is Ellipsis for i in index)
-            if num_ellipsis == 1:
-                index = tuple(i for i in index if i is not Ellipsis)
-            elif num_ellipsis > 1:
+            if num_ellipsis > 1:
                 raise IndexError("an index can only have a single ellipsis ('...')")
-            if len(index) > 2:
+            if num_ellipsis == 0:
                 raise ValueError("AnnData can only be sliced in rows and columns.")
         # deal with pd.Series
         # TODO: The series should probably be aligned first
@@ -55,8 +52,7 @@ def _normalize_index(
     | str
     | Sequence[bool | int | np.integer]
     | np.ndarray
-    | pd.Index
-    | EllipsisType,
+    | pd.Index,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
     if not isinstance(index, pd.RangeIndex):
@@ -81,8 +77,6 @@ def _normalize_index(
         return slice(start, stop, step)
     elif isinstance(indexer, np.integer | int):
         return indexer
-    elif isinstance(indexer, EllipsisType):
-        return slice(None)
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
@@ -140,15 +134,30 @@ def _fix_slice_bounds(s: slice, length: int) -> slice:
     return slice(start, stop, step)
 
 
-def unpack_index(index: Index) -> tuple[IndexRest, IndexRest]:
+def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     if not isinstance(index, tuple):
+        if index is Ellipsis:
+            index = slice(None)
         return index, slice(None)
-    elif len(index) == 2:
+    num_ellipsis = sum(i is Ellipsis for i in index)
+    if num_ellipsis > 1:
+        raise IndexError("an index can only have a single ellipsis ('...')")
+    # If index has Ellipsis, filter it out (and if not, error)
+    if len(index) > 2:
+        if not num_ellipsis:
+            raise IndexError("Received a length 3 index without an ellipsis")
+        index = tuple(i for i in index if i is not Ellipsis)
         return index
-    elif len(index) == 1:
-        return index[0], slice(None)
-    else:
-        raise IndexError("invalid number of indices")
+    # If index has Ellipsis, replace it with slice
+    if len(index) == 2:
+        index = tuple(slice(None) if i is Ellipsis else i for i in index)
+        return index
+    if len(index) == 1:
+        index = index[0]
+        if index is Ellipsis:
+            index = slice(None)
+        return index, slice(None)
+    raise IndexError("invalid number of indices")
 
 
 @singledispatch
