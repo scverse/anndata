@@ -112,6 +112,7 @@ nitpick_ignore = [
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
     # https://github.com/sphinx-doc/sphinx/issues/10974
     ("py:class", "numpy.int64"),
+    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/498
     ("py:class", "types.EllipsisType"),
 ]
 
