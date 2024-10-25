@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, Sequence
 from copy import copy
 from dataclasses import dataclass
+from types import NoneType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
@@ -121,7 +122,8 @@ class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
     def copy(self) -> dict[K, Value]:
         # Shallow copy for awkward array since their buffers are immutable
         return {
-            k: copy(v) if isinstance(v, AwkArray) else v.copy() for k, v in self.items()
+            k: copy(v) if isinstance(v, AwkArray | NoneType) else v.copy()
+            for k, v in self.items()
         }
 
     def _view(self, parent: AnnData, subset_idx: I) -> AlignedView[K, Self, I]:
@@ -158,6 +160,8 @@ class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
             self._axis = parent_mapping._axis  # type: ignore
 
     def __getitem__(self, key: K) -> Value:
+        if self.parent_mapping[key] is None:
+            return None
         return as_view(
             _subset(self.parent_mapping[key], self.subset_idx),
             ElementRef(self.parent, self.attrname, (key,)),

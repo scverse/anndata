@@ -1224,10 +1224,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = kwargs[key]
             else:
                 new[key] = getattr(self, key).copy()
-        if "X" in kwargs:
-            new["X"] = kwargs["X"]
-        elif self._has_X():
-            new["X"] = self.X.copy()
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
