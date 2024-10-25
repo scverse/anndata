@@ -61,7 +61,11 @@ def diskfmt(request):
     return request.param
 
 
-@pytest.fixture(params=[True, False], scope="session")
+@pytest.fixture(
+    params=[True, False],
+    scope="session",
+    ids=["load-annotation-index", "dont-load-annotation-index"],
+)
 def load_annotation_index(request):
     return request.param
 
