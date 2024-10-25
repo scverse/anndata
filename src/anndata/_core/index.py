@@ -26,13 +26,8 @@ def _normalize_indices(
     if isinstance(index, pd.Series):
         index: Index = index.values
     if isinstance(index, tuple):
-        if len(index) == 2:
-            # deal with pd.Series
-            # TODO: The series should probably be aligned first
-            if isinstance(index[1], pd.Series):
-                index = index[0], index[1].values
-            if isinstance(index[0], pd.Series):
-                index = index[0].values, index[1]
+        # TODO: The series should probably be aligned first
+        index = tuple(i.values if isinstance(i, pd.Series) else i for i in index)
     ax0, ax1 = unpack_index(index)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
