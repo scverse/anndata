@@ -26,19 +26,13 @@ def _normalize_indices(
     if isinstance(index, pd.Series):
         index: Index = index.values
     if isinstance(index, tuple):
-        if len(index) > 2:
-            # only one remaining ellipsis
-            num_ellipsis = sum(i is Ellipsis for i in index)
-            if num_ellipsis > 1:
-                raise IndexError("an index can only have a single ellipsis ('...')")
-            if num_ellipsis == 0:
-                raise ValueError("AnnData can only be sliced in rows and columns.")
-        # deal with pd.Series
-        # TODO: The series should probably be aligned first
-        if isinstance(index[1], pd.Series):
-            index = index[0], index[1].values
-        if isinstance(index[0], pd.Series):
-            index = index[0].values, index[1]
+        if len(index) == 2:
+            # deal with pd.Series
+            # TODO: The series should probably be aligned first
+            if isinstance(index[1], pd.Series):
+                index = index[0], index[1].values
+            if isinstance(index[0], pd.Series):
+                index = index[0].values, index[1]
     ax0, ax1 = unpack_index(index)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
