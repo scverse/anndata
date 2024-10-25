@@ -136,7 +136,7 @@ def test_backed_ellipsis_indexing(
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
     assert_equal(csr_mem.X[equivalent_index], csr_disk.X[ellipsis_index])
-    assert_equal(csr_disk.X[equivalent_index], csc_disk.X[ellipsis_index])
+    assert_equal(csr_mem.X[equivalent_index], csc_disk.X[ellipsis_index])
 
 
 def make_randomized_mask(size: int) -> np.ndarray:
