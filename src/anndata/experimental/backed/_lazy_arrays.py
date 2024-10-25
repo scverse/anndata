@@ -29,7 +29,7 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
         if set(self.__slots__) != {"dtype", "shape", "_array"}:
             msg = "Expected attributes of xarray ZarrArrayWrapper have changed - "
             "please file an issue with anndata and consider downgrading xarray"
-            raise ValueError(msg)
+            raise AssertionError(msg)
         self._array = array
         self.shape = self._array.shape
         self.dtype = self._array.dtype
