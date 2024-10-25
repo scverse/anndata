@@ -29,9 +29,9 @@ def _normalize_indices(
     if isinstance(index, tuple):
         if len(index) > 2:
             # only one remaining ellipsis
-            num_ellipsis = sum(isinstance(i, EllipsisType) for i in index)
+            num_ellipsis = sum(i is Ellipsis for i in index)
             if num_ellipsis == 1:
-                index = tuple(i for i in index if not isinstance(i, EllipsisType))
+                index = tuple(i for i in index if i is not Ellipsis)
             elif num_ellipsis > 1:
                 raise IndexError("an index can only have a single ellipsis ('...')")
             if len(index) > 2:
