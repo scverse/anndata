@@ -16,6 +16,8 @@ from ._compat import xarray as xr
 if TYPE_CHECKING:
     from typing import Literal
 
+    import numpy as np
+
     from anndata._core.index import Index
 
 
@@ -34,7 +36,7 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
         self.shape = self._array.shape
         self.dtype = self._array.dtype
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: xr.core.indexing.ExplicitIndexer):
         if isinstance(self._array, ZarrArray):
             return super().__getitem__(key)
         # adapted from https://github.com/pydata/xarray/blob/main/xarray/backends/h5netcdf_.py#L50-L58C13
@@ -66,7 +68,7 @@ class CategoricalArray(BackendArray, Generic[K]):
         self.shape = self._codes.shape
 
     @cached_property
-    def categories(self):
+    def categories(self) -> np.ndarray:
         if isinstance(self._categories, ZarrArray):
             return self._categories[...]
         from ..._io.h5ad import read_dataset
@@ -106,19 +108,19 @@ class MaskedArray(BackendArray, Generic[K]):
         self._dtype_str = dtype_str
         self.shape = self._values.shape
 
-    def __getitem__(self, key) -> xr.core.extension_array.PandasExtensionArray:
+    def __getitem__(
+        self, key: xr.core.indexing.ExplicitIndexer
+    ) -> xr.core.extension_array.PandasExtensionArray:
         values = self._values[key]
-        if self._mask is not None:
-            mask = self._mask[key]
-            if self._dtype_str == "nullable-integer":
-                # numpy does not support nan ints
-                extension_array = pd.arrays.IntegerArray(values, mask=mask)
-            elif self._dtype_str == "nullable-boolean":
-                extension_array = pd.arrays.BooleanArray(values, mask=mask)
-            else:
-                raise ValueError(f"Invalid dtype_str {self._dtype_str}")
-            return xr.core.extension_array.PandasExtensionArray(extension_array)
-        return xr.core.extension_array.PandasExtensionArray(pd.array(values))
+        mask = self._mask[key]
+        if self._dtype_str == "nullable-integer":
+            # numpy does not support nan ints
+            extension_array = pd.arrays.IntegerArray(values, mask=mask)
+        elif self._dtype_str == "nullable-boolean":
+            extension_array = pd.arrays.BooleanArray(values, mask=mask)
+        else:
+            raise RuntimeError(f"Invalid dtype_str {self._dtype_str}")
+        return xr.core.extension_array.PandasExtensionArray(extension_array)
 
     @cached_property
     def dtype(self):
@@ -129,8 +131,7 @@ class MaskedArray(BackendArray, Generic[K]):
             ).dtype
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
-        else:
-            raise ValueError(f"Invalid dtype_str {self._dtype_str}")
+        raise RuntimeError(f"Invalid dtype_str {self._dtype_str}")
 
 
 @_subset.register(DataArray)
