@@ -128,23 +128,20 @@ def test_backed_indexing(
 
 
 @pytest.mark.parametrize(
-    "indexing_func",
+    "index",
     [
-        (..., slice(0, 10)),
-        (slice(0, 10), ...),
-        (slice(0, 10), slice(0, 10), ...),
-        (..., slice(0, 10), slice(0, 10)),
-        (slice(0, 10), ..., slice(0, 10)),
+        pytest.param((..., slice(0, 10)), id="obs-ellipsis"),
+        pytest.param((slice(0, 10), ...), id="ellipsis-var"),
+        pytest.param((slice(0, 10), slice(0, 10), ...), id="obs-var-ellipsis"),
+        pytest.param((..., slice(0, 10), slice(0, 10)), id="ellipsis-obs-var"),
+        pytest.param((slice(0, 10), ..., slice(0, 10)), id="obs-ellipsis-var"),
     ],
-    ids=["obs-ellipsis", "var-ellipsis", "obs-var-ellipsis", "ellipsis-obs-var"],
 )
 def test_backed_ellipsis_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
-    indexing_func,
+    index,
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
-
-    index = indexing_func(csr_mem)
 
     assert_equal(csr_mem.X[index], csr_disk.X[index])
     assert_equal(csr_disk.X[index], csc_disk.X[index])
