@@ -331,8 +331,24 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
-# remote has object dtype, need to convert back for integers booleans etc.
-def correct_extension_dtype_differences(remote: pd.DataFrame, memory: pd.DataFrame):
+def unify_extension_dtypes(
+    remote: pd.DataFrame, memory: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    For concatenated lazy datasets, we send the extension arrays through dask
+    But this means we lose the pandas dtype, so this function corrects that.
+
+    Parameters
+    ----------
+    remote
+        The dataset that comes from the concatenated lazy operation
+    memory
+        The in-memory, "correct" version
+
+    Returns
+    -------
+        The two dataframes unified
+    """
     for col in memory.columns:
         dtype = memory[col].dtype
         if pd.api.types.is_extension_array_dtype(dtype):
@@ -421,7 +437,7 @@ def test_concat_to_memory_obs(
     obs_memory = concatenated_memory.obs
     obs_memory.index.name = "obs_names"
     assert_equal(
-        *correct_extension_dtype_differences(
+        *unify_extension_dtypes(
             concated_remote.obs.to_pandas(), concatenated_memory.obs
         )
     )
@@ -471,7 +487,7 @@ def test_concat_to_memory_var(
     for pd_index, var_df, store_idx in test_cases:
         var_df.index.name = "var_names"
         remote_df = concated_remote[:, pd_index].var.to_pandas()
-        remote_df_corrected, _ = correct_extension_dtype_differences(remote_df, var_df)
+        remote_df_corrected, _ = unify_extension_dtypes(remote_df, var_df)
         #  TODO:xr.merge always upcasts to float due to NA and you can't downcast?
         for col in remote_df_corrected.columns:
             dtype = remote_df_corrected[col].dtype
@@ -535,7 +551,7 @@ def test_concat_full_and_subsets(
     if index is not None:
         orig_concatenated = orig_concatenated[index]
     in_memory_remote_concatenated = remote_concatenated.to_memory()
-    corrected_remote_obs, corrected_memory_obs = correct_extension_dtype_differences(
+    corrected_remote_obs, corrected_memory_obs = unify_extension_dtypes(
         in_memory_remote_concatenated.obs, orig_concatenated.obs
     )
     assert isinstance(remote_concatenated.obs, Dataset2D)
@@ -548,28 +564,25 @@ def test_concat_full_and_subsets(
 
 
 @pytest.mark.parametrize(
-    "elem_key",
-    map(
-        lambda x: pytest.param(x, id="-".join(map(str, x))),
-        [("obs", None), ("var", None), ("obsm", "df"), ("varm", "df")],
+    ("attr", "key"),
+    (
+        pytest.param(param[0], param[1], id="-".join(map(str, param)))
+        for param in [("obs", None), ("var", None), ("obsm", "df"), ("varm", "df")]
     ),
 )
 def test_concat_df_ds_mixed_types(
     adata_remote_orig: tuple[AnnData, AnnData],
     load_annotation_index: bool,
     join: Join_T,
-    elem_key: tuple[str, str | None],
+    attr: str,
+    key: str | None,
 ):
-    def with_elem_in_memory(
-        adata: AnnData, elem_key: tuple[str, str | None]
-    ) -> AnnData:
-        parent_elem = getattr(adata, elem_key[0])
-        if elem_key[1] is not None:
-            getattr(adata, elem_key[0])[elem_key[1]] = to_memory(
-                parent_elem[elem_key[1]]
-            )
+    def with_elem_in_memory(adata: AnnData, attr: str, key: str | None) -> AnnData:
+        parent_elem = getattr(adata, attr)
+        if key is not None:
+            getattr(adata, attr)[key] = to_memory(parent_elem[key])
             return adata
-        setattr(adata, elem_key[0], to_memory(parent_elem))
+        setattr(adata, attr, to_memory(parent_elem))
         return adata
 
     if not load_annotation_index:
@@ -577,7 +590,7 @@ def test_concat_df_ds_mixed_types(
             "Testing for mixed types is independent of the axis since the indices always have to match."
         )
     remote, orig = adata_remote_orig
-    remote = with_elem_in_memory(remote, elem_key)
+    remote = with_elem_in_memory(remote, attr, key)
     in_memory_concatenated = ad.concat([orig, orig], join=join)
     mixed_concatenated = ad.concat([remote, orig], join=join)
     assert_equal(mixed_concatenated, in_memory_concatenated)
