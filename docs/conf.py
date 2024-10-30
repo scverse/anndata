@@ -109,6 +109,8 @@ nitpick_ignore = [
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
+    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/498
+    ("py:class", "types.EllipsisType"),
 ]
 
 

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from functools import singledispatch, wraps
 from inspect import Parameter, signature
 from pathlib import Path
+from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar, Union
 from warnings import warn
 
@@ -29,7 +30,16 @@ class Empty:
 
 
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, tuple[Index1D, Index1D], spmatrix]
+IndexRest = Union[Index1D, EllipsisType]
+Index = Union[
+    IndexRest,
+    tuple[Index1D, IndexRest],
+    tuple[IndexRest, Index1D],
+    tuple[Index1D, Index1D, EllipsisType],
+    tuple[EllipsisType, Index1D, Index1D],
+    tuple[Index1D, EllipsisType, Index1D],
+    spmatrix,
+]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
