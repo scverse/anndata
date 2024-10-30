@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from functools import singledispatch, wraps
 from inspect import Parameter, signature
 from pathlib import Path
-from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar, Union
 from warnings import warn
 
@@ -24,11 +23,17 @@ from .exceptiongroups import add_note  # noqa: F401
 if TYPE_CHECKING:
     from typing import Any
 
+if sys.version_info > (3, 9):
+    from types import EllipsisType
+else:
+    EllipsisType = type(Ellipsis)
+
 
 class Empty:
     pass
 
 
+EllipsisType = type(Ellipsis)
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
 IndexRest = Union[Index1D, EllipsisType]
 Index = Union[
