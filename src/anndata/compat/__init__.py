@@ -23,13 +23,28 @@ from .exceptiongroups import add_note  # noqa: F401
 if TYPE_CHECKING:
     from typing import Any
 
+if sys.version_info >= (3, 10):
+    from types import EllipsisType
+else:
+    EllipsisType = type(Ellipsis)
+
 
 class Empty:
     pass
 
 
+EllipsisType = type(Ellipsis)
 Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, tuple[Index1D, Index1D], spmatrix]
+IndexRest = Union[Index1D, EllipsisType]
+Index = Union[
+    IndexRest,
+    tuple[Index1D, IndexRest],
+    tuple[IndexRest, Index1D],
+    tuple[Index1D, Index1D, EllipsisType],
+    tuple[EllipsisType, Index1D, Index1D],
+    tuple[Index1D, EllipsisType, Index1D],
+    spmatrix,
+]
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File

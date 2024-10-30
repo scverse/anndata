@@ -56,8 +56,9 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._types import ArrayDataStructureType
+    from ..compat import Index1D
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import Index, Index1D
+    from .index import Index
 
 
 # for backwards compat
