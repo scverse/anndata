@@ -23,7 +23,7 @@ from .exceptiongroups import add_note  # noqa: F401
 if TYPE_CHECKING:
     from typing import Any
 
-if sys.version_info > (3, 9):
+if sys.version_info >= (3, 10):
     from types import EllipsisType
 else:
     EllipsisType = type(Ellipsis)
