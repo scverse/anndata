@@ -540,12 +540,11 @@ def test_concat_full_and_subsets(
 
     remote, orig = adata_remote_orig
 
-    maybe_warning_context = (
+    with (
         pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric")
         if not load_annotation_index
         else nullcontext()
-    )
-    with maybe_warning_context:
+    ):
         remote_concatenated = ad.concat([remote, remote], join=join)
     if index is not None:
         if np.isscalar(index) and index == "a":
