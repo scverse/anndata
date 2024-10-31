@@ -194,7 +194,7 @@ def _gen_xarray_dict_iterator_from_elems(
     index_label: str,
     index_key: str,
     index: np.NDArray,
-) -> Generator[tuple[str, DataArray]]:
+) -> Generator[tuple[str, DataArray], None, None]:
     from anndata.experimental.backed._compat import DataArray
     from anndata.experimental.backed._compat import xarray as xr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray

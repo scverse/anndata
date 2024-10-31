@@ -190,7 +190,7 @@ class WriteCallback(Protocol[InvariantRWAble]):
         ...
 
 
-ANNDATA_ELEMS = Literal[
+AnnDataElem = Literal[
     "obs",
     "var",
     "obsm",

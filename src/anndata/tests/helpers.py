@@ -1052,8 +1052,8 @@ else:
 
 class AccessTrackingStore(DirectoryStore):
     _access_count: Counter[str]
-    _accessed_keys: dict[str, list[str]]
-    _accessed: dict[str, set]
+    _accessed: defaultdict[str, set]
+    _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
