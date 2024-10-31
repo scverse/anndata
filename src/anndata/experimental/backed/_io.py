@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import h5py
 
 from anndata._io.specs.registry import read_elem_lazy
-from anndata._types import ANNDATA_ELEMS
+from anndata._types import AnnDataElem
 
 from ..._core.anndata import AnnData
 from ..._settings import settings
@@ -124,7 +124,7 @@ def read_lazy(
             iter_object = (
                 elem.items()
                 if has_keys
-                else [(k, elem[k]) for k in typing.get_args(ANNDATA_ELEMS) if k in elem]
+                else [(k, elem[k]) for k in typing.get_args(AnnDataElem) if k in elem]
             )
             return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
         elif (

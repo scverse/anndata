@@ -13,7 +13,7 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 from anndata._core.file_backing import to_memory
-from anndata._types import ANNDATA_ELEMS
+from anndata._types import AnnDataElem
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
@@ -37,7 +37,7 @@ pytestmark = pytest.mark.skipif(
     not find_spec("xarray"), reason="Xarray is not installed"
 )
 
-ANNDATA_ELEMS_LIST = typing.get_args(ANNDATA_ELEMS)
+ANNDATA_ELEMS = typing.get_args(AnnDataElem)
 
 
 @pytest.fixture(
@@ -212,12 +212,12 @@ def get_key_trackers_for_columns_on_axis(
         ("raw", "X"),
         ("obs", "cat"),
         ("obs", "int64"),
-        *((elem_name, None) for elem_name in ANNDATA_ELEMS_LIST),
+        *((elem_name, None) for elem_name in ANNDATA_ELEMS),
     ],
 )
 def test_access_count_elem_access(
     adata_remote_with_store_tall_skinny: tuple[AnnData, AccessTrackingStore],
-    elem_key: ANNDATA_ELEMS,
+    elem_key: AnnDataElem,
     sub_key: str,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
@@ -236,7 +236,7 @@ def test_access_count_subset(
     adata_remote_with_store_tall_skinny: tuple[AnnData, AccessTrackingStore],
 ):
     remote, store = adata_remote_with_store_tall_skinny
-    non_obs_elem_names = filter(lambda e: e != "obs", ANNDATA_ELEMS_LIST)
+    non_obs_elem_names = filter(lambda e: e != "obs", ANNDATA_ELEMS)
     store.initialize_key_trackers(["obs/cat/codes", *non_obs_elem_names])
     remote[remote.obs["cat"] == "a", :]
     # all codes read in for subset (from 1 chunk)
@@ -360,7 +360,7 @@ def unify_extension_dtypes(
     return remote, memory
 
 
-ANNDATA_ELEMS_LIST = typing.get_args(ANNDATA_ELEMS)
+ANNDATA_ELEMS = typing.get_args(AnnDataElem)
 
 
 @pytest.mark.parametrize("join", ["outer", "inner"])
@@ -369,7 +369,7 @@ ANNDATA_ELEMS_LIST = typing.get_args(ANNDATA_ELEMS)
     [
         ("obs", "cat"),
         ("obs", "int64"),
-        *((elem_name, None) for elem_name in ANNDATA_ELEMS_LIST),
+        *((elem_name, None) for elem_name in ANNDATA_ELEMS),
     ],
 )
 def test_concat_access_count(
@@ -377,7 +377,7 @@ def test_concat_access_count(
         list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
     ],
     join: Join_T,
-    elem_key: ANNDATA_ELEMS,
+    elem_key: AnnDataElem,
     sub_key: str,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
@@ -388,7 +388,7 @@ def test_concat_access_count(
         for elem in ["obs", "var"]
         for col in adatas[0].obs.columns
     )
-    non_obs_var_keys = filter(lambda e: e not in {"obs", "var"}, ANNDATA_ELEMS_LIST)
+    non_obs_var_keys = filter(lambda e: e not in {"obs", "var"}, ANNDATA_ELEMS)
     keys_to_track = [*non_categorical_columns, *non_obs_var_keys]
     for store in stores:
         store.initialize_key_trackers(keys_to_track)
