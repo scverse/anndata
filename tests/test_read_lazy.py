@@ -106,11 +106,17 @@ def adata_remote_orig_with_path(
 
 
 @pytest.fixture
-def adata_remote_orig(
+def adata_remote(
     adata_remote_orig_with_path: tuple[Path, AnnData], load_annotation_index: bool
-) -> tuple[AnnData, AnnData]:
-    orig_path, orig = adata_remote_orig_with_path
-    return read_lazy(orig_path, load_annotation_index=load_annotation_index), orig
+) -> AnnData:
+    orig_path, _ = adata_remote_orig_with_path
+    return read_lazy(orig_path, load_annotation_index=load_annotation_index)
+
+
+@pytest.fixture
+def adata_orig(adata_remote_orig_with_path: tuple[Path, AnnData]) -> AnnData:
+    _, orig = adata_remote_orig_with_path
+    return orig
 
 
 @pytest.fixture(scope="session")
@@ -168,13 +174,34 @@ def adatas_paths_var_indices_for_concatenation(
 
 
 @pytest.fixture
-def concatenation_objects(
+def var_indices_for_concat(
     adatas_paths_var_indices_for_concatenation,
-) -> tuple[list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]]:
-    adatas, paths, var_indices = adatas_paths_var_indices_for_concatenation
-    stores = [AccessTrackingStore(path) for path in paths]
-    lazys = [read_lazy(store) for store in stores]
-    return adatas, var_indices, stores, lazys
+) -> list[pd.Index]:
+    _, _, var_indices = adatas_paths_var_indices_for_concatenation
+    return var_indices
+
+
+@pytest.fixture
+def adatas_for_concat(
+    adatas_paths_var_indices_for_concatenation,
+) -> list[AnnData]:
+    adatas, _, _ = adatas_paths_var_indices_for_concatenation
+    return adatas
+
+
+@pytest.fixture
+def stores_for_concat(
+    adatas_paths_var_indices_for_concatenation,
+) -> list[AccessTrackingStore]:
+    _, paths, _ = adatas_paths_var_indices_for_concatenation
+    return [AccessTrackingStore(path) for path in paths]
+
+
+@pytest.fixture
+def lazy_adatas_for_concat(
+    stores_for_concat,
+) -> list[AnnData]:
+    return [read_lazy(store) for store in stores_for_concat]
 
 
 @pytest.fixture
@@ -184,6 +211,21 @@ def adata_remote_with_store_tall_skinny(
     store = AccessTrackingStore(adata_remote_with_store_tall_skinny_path)
     remote = read_lazy(store)
     return remote, store
+
+
+@pytest.fixture
+def remote_store_tall_skinny(
+    adata_remote_with_store_tall_skinny_path: Path,
+) -> AccessTrackingStore:
+    return AccessTrackingStore(adata_remote_with_store_tall_skinny_path)
+
+
+@pytest.fixture
+def adata_remote_tall_skinny(
+    remote_store_tall_skinny: AccessTrackingStore,
+) -> AnnData:
+    remote = read_lazy(remote_store_tall_skinny)
+    return remote
 
 
 def get_key_trackers_for_columns_on_axis(
@@ -216,108 +258,107 @@ def get_key_trackers_for_columns_on_axis(
     ],
 )
 def test_access_count_elem_access(
-    adata_remote_with_store_tall_skinny: tuple[AnnData, AccessTrackingStore],
+    remote_store_tall_skinny: AccessTrackingStore,
+    adata_remote_tall_skinny: AnnData,
     elem_key: AnnDataElem,
     sub_key: str,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
-    remote, store = adata_remote_with_store_tall_skinny
     full_path = f"{elem_key}/{sub_key}" if sub_key is not None else elem_key
-    store.initialize_key_trackers({full_path, "X"})
+    remote_store_tall_skinny.initialize_key_trackers({full_path, "X"})
     # a series of methods that should __not__ read in any data
-    elem = getattr(simple_subset_func(remote), elem_key)
+    elem = getattr(simple_subset_func(adata_remote_tall_skinny), elem_key)
     if sub_key is not None:
         getattr(elem, sub_key)
-    store.assert_access_count(full_path, 0)
-    store.assert_access_count("X", 0)
+    remote_store_tall_skinny.assert_access_count(full_path, 0)
+    remote_store_tall_skinny.assert_access_count("X", 0)
 
 
 def test_access_count_subset(
-    adata_remote_with_store_tall_skinny: tuple[AnnData, AccessTrackingStore],
+    remote_store_tall_skinny: AccessTrackingStore,
+    adata_remote_tall_skinny: AnnData,
 ):
-    remote, store = adata_remote_with_store_tall_skinny
     non_obs_elem_names = filter(lambda e: e != "obs", ANNDATA_ELEMS)
-    store.initialize_key_trackers(["obs/cat/codes", *non_obs_elem_names])
-    remote[remote.obs["cat"] == "a", :]
+    remote_store_tall_skinny.initialize_key_trackers(
+        ["obs/cat/codes", *non_obs_elem_names]
+    )
+    adata_remote_tall_skinny[adata_remote_tall_skinny.obs["cat"] == "a", :]
     # all codes read in for subset (from 1 chunk)
-    store.assert_access_count("obs/cat/codes", 1)
+    remote_store_tall_skinny.assert_access_count("obs/cat/codes", 1)
     for elem_name in non_obs_elem_names:
-        store.assert_access_count(elem_name, 0)
+        remote_store_tall_skinny.assert_access_count(elem_name, 0)
 
 
 def test_access_count_subset_column_compute(
-    adata_remote_with_store_tall_skinny: tuple[AnnData, AccessTrackingStore],
+    remote_store_tall_skinny: AccessTrackingStore,
+    adata_remote_tall_skinny: AnnData,
 ):
-    remote, store = adata_remote_with_store_tall_skinny
-    store.initialize_key_trackers(["obs/int64"])
-    remote[remote.shape[0] // 2, :].obs["int64"].compute()
+    remote_store_tall_skinny.initialize_key_trackers(["obs/int64"])
+    adata_remote_tall_skinny[adata_remote_tall_skinny.shape[0] // 2, :].obs[
+        "int64"
+    ].compute()
     # two chunks needed for 0:10 subset
-    store.assert_access_count("obs/int64", 1)
+    remote_store_tall_skinny.assert_access_count("obs/int64", 1)
 
 
 def test_access_count_index(
-    adata_remote_with_store_tall_skinny: tuple[AnnData, AccessTrackingStore],
+    remote_store_tall_skinny: AccessTrackingStore,
 ):
-    _, store = adata_remote_with_store_tall_skinny
-    store.initialize_key_trackers(["obs/_index"])
-    read_lazy(store, load_annotation_index=False)
-    store.assert_access_count("obs/_index", 0)
-    read_lazy(store)
+    remote_store_tall_skinny.initialize_key_trackers(["obs/_index"])
+    read_lazy(remote_store_tall_skinny, load_annotation_index=False)
+    remote_store_tall_skinny.assert_access_count("obs/_index", 0)
+    read_lazy(remote_store_tall_skinny)
     # 4 is number of chunks
-    store.assert_access_count("obs/_index", 4)
+    remote_store_tall_skinny.assert_access_count("obs/_index", 4)
 
 
 def test_access_count_dtype(
-    adata_remote_with_store_tall_skinny: tuple[AnnData, AccessTrackingStore],
+    remote_store_tall_skinny: AccessTrackingStore,
+    adata_remote_tall_skinny: AnnData,
 ):
-    remote, store = adata_remote_with_store_tall_skinny
-    store.initialize_key_trackers(["obs/cat/categories"])
-    store.assert_access_count("obs/cat/categories", 0)
+    remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
     # This should only cause categories to be read in once
-    remote.obs["cat"].dtype
-    remote.obs["cat"].dtype
-    remote.obs["cat"].dtype
-    store.assert_access_count("obs/cat/categories", 1)
+    adata_remote_tall_skinny.obs["cat"].dtype
+    adata_remote_tall_skinny.obs["cat"].dtype
+    adata_remote_tall_skinny.obs["cat"].dtype
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
 
 
-def test_uns_uses_dask(adata_remote_orig: tuple[AnnData, AnnData]):
-    remote, _ = adata_remote_orig
-    assert isinstance(remote.uns["nested"]["nested_further"]["array"], DaskArray)
+def test_uns_uses_dask(adata_remote: AnnData):
+    assert isinstance(adata_remote.uns["nested"]["nested_further"]["array"], DaskArray)
 
 
-def test_to_memory(adata_remote_orig: tuple[AnnData, AnnData]):
-    remote, orig = adata_remote_orig
-    remote_to_memory = remote.to_memory()
-    assert_equal(remote_to_memory, orig)
+def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
+    remote_to_memory = adata_remote.to_memory()
+    assert_equal(remote_to_memory, adata_orig)
 
 
-def test_view_to_memory(adata_remote_orig: tuple[AnnData, AnnData]):
-    remote, orig = adata_remote_orig
-    subset_obs = orig.obs["obs_cat"] == "a"
-    assert_equal(orig[subset_obs, :], remote[subset_obs, :].to_memory())
+def test_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
+    subset_obs = adata_orig.obs["obs_cat"] == "a"
+    assert_equal(adata_orig[subset_obs, :], adata_remote[subset_obs, :].to_memory())
 
-    subset_var = orig.var["var_cat"] == "a"
-    assert_equal(orig[:, subset_var], remote[:, subset_var].to_memory())
+    subset_var = adata_orig.var["var_cat"] == "a"
+    assert_equal(adata_orig[:, subset_var], adata_remote[:, subset_var].to_memory())
 
 
-def test_view_of_view_to_memory(adata_remote_orig: tuple[AnnData, AnnData]):
-    remote, orig = adata_remote_orig
-    subset_obs = (orig.obs["obs_cat"] == "a") | (orig.obs["obs_cat"] == "b")
-    subsetted_adata = orig[subset_obs, :]
+def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
+    subset_obs = (adata_orig.obs["obs_cat"] == "a") | (adata_orig.obs["obs_cat"] == "b")
+    subsetted_adata = adata_orig[subset_obs, :]
     subset_subset_obs = subsetted_adata.obs["obs_cat"] == "b"
     subsetted_subsetted_adata = subsetted_adata[subset_subset_obs, :]
     assert_equal(
         subsetted_subsetted_adata,
-        remote[subset_obs, :][subset_subset_obs, :].to_memory(),
+        adata_remote[subset_obs, :][subset_subset_obs, :].to_memory(),
     )
 
-    subset_var = (orig.var["var_cat"] == "a") | (orig.var["var_cat"] == "b")
-    subsetted_adata = orig[:, subset_var]
+    subset_var = (adata_orig.var["var_cat"] == "a") | (adata_orig.var["var_cat"] == "b")
+    subsetted_adata = adata_orig[:, subset_var]
     subset_subset_var = subsetted_adata.var["var_cat"] == "b"
     subsetted_subsetted_adata = subsetted_adata[:, subset_subset_var]
     assert_equal(
         subsetted_subsetted_adata,
-        remote[:, subset_var][:, subset_subset_var].to_memory(),
+        adata_remote[:, subset_var][:, subset_subset_var].to_memory(),
     )
 
 
@@ -373,70 +414,68 @@ ANNDATA_ELEMS = typing.get_args(AnnDataElem)
     ],
 )
 def test_concat_access_count(
-    concatenation_objects: tuple[
-        list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
-    ],
+    adatas_for_concat: list[AnnData],
+    stores_for_concat: list[AccessTrackingStore],
+    lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
     elem_key: AnnDataElem,
     sub_key: str,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
-    adatas, _, stores, lazy_adatas = concatenation_objects
     # track all elems except codes because they must be read in for concatenation
     non_categorical_columns = (
         f"{elem}/{col}" if "cat" not in col else f"{elem}/{col}/codes"
         for elem in ["obs", "var"]
-        for col in adatas[0].obs.columns
+        for col in adatas_for_concat[0].obs.columns
     )
     non_obs_var_keys = filter(lambda e: e not in {"obs", "var"}, ANNDATA_ELEMS)
     keys_to_track = [*non_categorical_columns, *non_obs_var_keys]
-    for store in stores:
+    for store in stores_for_concat:
         store.initialize_key_trackers(keys_to_track)
-    concated_remote = ad.concat(lazy_adatas, join=join)
+    concated_remote = ad.concat(lazy_adatas_for_concat, join=join)
     # a series of methods that should __not__ read in any data
     elem = getattr(simple_subset_func(concated_remote), elem_key)
     if sub_key is not None:
         getattr(elem, sub_key)
-    for store in stores:
+    for store in stores_for_concat:
         for elem in keys_to_track:
             store.assert_access_count(elem, 0)
 
 
 def test_concat_to_memory_obs_access_count(
-    concatenation_objects: tuple[
-        list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
-    ],
+    adatas_for_concat: list[AnnData],
+    stores_for_concat: list[AccessTrackingStore],
+    lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
-    adatas, _, stores, lazy_adatas = concatenation_objects
-    concated_remote = simple_subset_func(ad.concat(lazy_adatas, join=join))
+    concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
     concated_remote_subset = simple_subset_func(concated_remote)
-    n_datasets = len(adatas)
-    obs_keys_to_track = get_key_trackers_for_columns_on_axis(adatas[0], "obs")
-    for store in stores:
+    n_datasets = len(adatas_for_concat)
+    obs_keys_to_track = get_key_trackers_for_columns_on_axis(
+        adatas_for_concat[0], "obs"
+    )
+    for store in stores_for_concat:
         store.initialize_key_trackers(obs_keys_to_track)
     concated_remote_subset.to_memory()
     # check access count for the stores - only the first should be accessed when reading into memory
     for col in obs_keys_to_track:
-        stores[0].assert_access_count(col, 1)
+        stores_for_concat[0].assert_access_count(col, 1)
         for i in range(1, n_datasets):
             # if the shapes are the same, data was read in to bring the object into memory; otherwise, not
-            stores[i].assert_access_count(
+            stores_for_concat[i].assert_access_count(
                 col, concated_remote_subset.shape[0] == concated_remote.shape[0]
             )
 
 
 def test_concat_to_memory_obs(
-    concatenation_objects: tuple[
-        list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
-    ],
+    adatas_for_concat: list[AnnData],
+    lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
-    adatas, _, _, lazy_adatas = concatenation_objects
-    concatenated_memory = simple_subset_func(ad.concat(adatas, join=join))
-    concated_remote = simple_subset_func(ad.concat(lazy_adatas, join=join))
+    concatenated_memory = simple_subset_func(ad.concat(adatas_for_concat, join=join))
+    concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
     # TODO: name is lost normally, should fix
     obs_memory = concatenated_memory.obs
     obs_memory.index.name = "obs_names"
@@ -448,13 +487,10 @@ def test_concat_to_memory_obs(
 
 
 def test_concat_to_memory_obs_dtypes(
-    concatenation_objects: tuple[
-        list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
-    ],
+    lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
 ):
-    _, _, _, lazy_adatas = concatenation_objects
-    concated_remote = ad.concat(lazy_adatas, join=join)
+    concated_remote = ad.concat(lazy_adatas_for_concat, join=join)
     # check preservation of non-categorical dtypes on the concat axis
     assert concated_remote.obs["int64"].dtype == "int64"
     assert concated_remote.obs["uint8"].dtype == "uint8"
@@ -465,28 +501,32 @@ def test_concat_to_memory_obs_dtypes(
 
 
 def test_concat_to_memory_var(
-    concatenation_objects: tuple[
-        list[AnnData], list[pd.Index], list[AccessTrackingStore], list[AnnData]
-    ],
+    var_indices_for_concat: list[pd.Index],
+    adatas_for_concat: list[AnnData],
+    stores_for_concat: list[AccessTrackingStore],
+    lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
     are_vars_different: bool,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
-    adatas, var_indices, stores, lazy_adatas = concatenation_objects
-    concated_remote = simple_subset_func(ad.concat(lazy_adatas, join=join))
-    var_keys_to_track = get_key_trackers_for_columns_on_axis(adatas[0], "var")
-    for store in stores:
+    concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
+    var_keys_to_track = get_key_trackers_for_columns_on_axis(
+        adatas_for_concat[0], "var"
+    )
+    for store in stores_for_concat:
         store.initialize_key_trackers(var_keys_to_track)
     # check non-different variables, taken from first annotation.
     pd_index_overlapping = pd.Index(
-        filter(lambda x: not x.endswith("ds"), var_indices[0])
+        filter(lambda x: not x.endswith("ds"), var_indices_for_concat[0])
     )
-    var_df_overlapping = adatas[0][:, pd_index_overlapping].var.copy()
+    var_df_overlapping = adatas_for_concat[0][:, pd_index_overlapping].var.copy()
     test_cases = [(pd_index_overlapping, var_df_overlapping, 0)]
     if are_vars_different and join == "outer":
         # check a set of unique variables from the first object since we only take from there if different
-        pd_index_only_ds_0 = pd.Index(filter(lambda x: "0_ds" in x, var_indices[1]))
-        var_df_only_ds_0 = adatas[0][:, pd_index_only_ds_0].var.copy()
+        pd_index_only_ds_0 = pd.Index(
+            filter(lambda x: "0_ds" in x, var_indices_for_concat[1])
+        )
+        var_df_only_ds_0 = adatas_for_concat[0][:, pd_index_only_ds_0].var.copy()
         test_cases.append((pd_index_only_ds_0, var_df_only_ds_0, 0))
     for pd_index, var_df, store_idx in test_cases:
         var_df.index.name = "var_names"
@@ -499,11 +539,11 @@ def test_concat_to_memory_var(
                 var_df[col] = var_df[col].astype(dtype)
         assert_equal(remote_df_corrected, var_df)
         for key in var_keys_to_track:
-            stores[store_idx].assert_access_count(key, 1)
-            for store in stores:
-                if store != stores[store_idx]:
+            stores_for_concat[store_idx].assert_access_count(key, 1)
+            for store in stores_for_concat:
+                if store != stores_for_concat[store_idx]:
                     store.assert_access_count(key, 0)
-        stores[store_idx].reset_key_trackers()
+        stores_for_concat[store_idx].reset_key_trackers()
 
 
 @pytest.mark.parametrize(
@@ -531,14 +571,13 @@ def test_concat_to_memory_var(
     ],
 )
 def test_concat_full_and_subsets(
-    adata_remote_orig: tuple[AnnData, AnnData],
+    adata_remote: AnnData,
+    adata_orig: AnnData,
     join: Join_T,
     index: slice | NDArray | Literal["a"] | None,
     load_annotation_index: bool,
 ):
     from anndata.experimental.backed._compat import Dataset2D
-
-    remote, orig = adata_remote_orig
 
     maybe_warning_context = (
         pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric")
@@ -546,12 +585,12 @@ def test_concat_full_and_subsets(
         else nullcontext()
     )
     with maybe_warning_context:
-        remote_concatenated = ad.concat([remote, remote], join=join)
+        remote_concatenated = ad.concat([adata_remote, adata_remote], join=join)
     if index is not None:
         if np.isscalar(index) and index == "a":
             index = remote_concatenated.obs["obs_cat"] == "a"
         remote_concatenated = remote_concatenated[index]
-    orig_concatenated = ad.concat([orig, orig], join=join)
+    orig_concatenated = ad.concat([adata_orig, adata_orig], join=join)
     if index is not None:
         orig_concatenated = orig_concatenated[index]
     in_memory_remote_concatenated = remote_concatenated.to_memory()
@@ -575,7 +614,8 @@ def test_concat_full_and_subsets(
     ),
 )
 def test_concat_df_ds_mixed_types(
-    adata_remote_orig: tuple[AnnData, AnnData],
+    adata_remote: AnnData,
+    adata_orig: AnnData,
     load_annotation_index: bool,
     join: Join_T,
     attr: str,
@@ -593,10 +633,9 @@ def test_concat_df_ds_mixed_types(
         pytest.skip(
             "Testing for mixed types is independent of the axis since the indices always have to match."
         )
-    remote, orig = adata_remote_orig
-    remote = with_elem_in_memory(remote, attr, key)
-    in_memory_concatenated = ad.concat([orig, orig], join=join)
-    mixed_concatenated = ad.concat([remote, orig], join=join)
+    remote = with_elem_in_memory(adata_remote, attr, key)
+    in_memory_concatenated = ad.concat([adata_orig, adata_orig], join=join)
+    mixed_concatenated = ad.concat([remote, adata_orig], join=join)
     assert_equal(mixed_concatenated, in_memory_concatenated)
 
 
