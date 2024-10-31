@@ -438,18 +438,16 @@ def read_elem_lazy(
     Reading a sparse matrix from a zarr store lazily, with custom chunk size and default:
 
     >>> g = zarr.open(zarr_path)
-    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"])
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"])
     >>> adata.X
     dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(1000, 32738), chunktype=scipy.csr_matrix>
-    >>> adata.X = ad.experimental.read_elem_as_dask(
-    ...     g["X"], chunks=(500, adata.shape[1])
-    ... )
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, adata.shape[1]))
     >>> adata.X
     dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(500, 32738), chunktype=scipy.csr_matrix>
 
     Reading a dense matrix from a zarr store lazily:
 
-    >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
+    >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
     >>> adata.layers["dense"]
     dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(169, 2047), chunktype=numpy.ndarray>
 
@@ -462,10 +460,8 @@ def read_elem_lazy(
     ...     obsm=ad.io.read_elem(g["obsm"]),
     ...     varm=ad.io.read_elem(g["varm"]),
     ... )
-    >>> adata.X = ad.experimental.read_elem_as_dask(
-    ...     g["X"], chunks=(500, adata.shape[1])
-    ... )
-    >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, adata.shape[1]))
+    >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
     """
     return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
 
