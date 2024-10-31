@@ -1086,13 +1086,13 @@ class AccessTrackingStore(DirectoryStore):
             raise KeyError(f"{key} not found among accessed keys")
         return self._accessed_keys[key]
 
-    def initialize_key_trackers(self, keys_to_track: Collection[str]):
+    def initialize_key_trackers(self, keys_to_track: Collection[str]) -> None:
         for k in keys_to_track:
             self._access_count[k] = 0
             self._accessed_keys[k] = []
             self._accessed[k] = set()
 
-    def reset_key_trackers(self):
+    def reset_key_trackers(self) -> None:
         self.initialize_key_trackers(self._access_count.keys())
 
     def assert_access_count(self, key: str, count: int):
