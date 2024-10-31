@@ -558,7 +558,7 @@ def test_concat_to_memory_var(
             id="consecutive integer array",
         ),
         pytest.param(
-            np.random.choice(np.arange(800, 1100), 500),
+            np.random.randint(800, 1100, 500),
             id="random integer array",
         ),
         pytest.param(
