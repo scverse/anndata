@@ -249,6 +249,19 @@ def test_awkward_io(tmp_path, array):
     assert_equal(adata.uns["awk"], adata2.uns["awk"], exact=True)
 
 
+def test_awkward_io_view(tmp_path):
+    """Check that views are converted to actual arrays on save, i.e. the _view_args and __list__ parameters are removed"""
+    adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
+    adata.obsm["awk"] = ak.Array([1, 2, 3])
+
+    v = adata[1:]
+    adata_path = tmp_path / "adata.h5ad"
+    v.write_h5ad(adata_path)
+
+    adata2 = read_h5ad(adata_path)
+    assert ak.parameters(adata2.obsm["awk"]) == {}
+
+
 # @pytest.mark.parametrize("join", ["outer", "inner"])
 @pytest.mark.parametrize(
     ("arrays", "join", "expected"),
