@@ -259,7 +259,8 @@ def test_awkward_io_view(tmp_path):
     v.write_h5ad(adata_path)
 
     adata2 = read_h5ad(adata_path)
-    assert ak.parameters(adata2.obsm["awk"]) == {}
+    # parameters are not fully removed, but set to None
+    assert ak.parameters(adata2.obsm["awk"]) == {"__list__": None, "_view_args": None}
 
 
 # @pytest.mark.parametrize("join", ["outer", "inner"])
