@@ -15,6 +15,7 @@ from anndata import (
     ImplicitModificationWarning,
     read_h5ad,
 )
+from anndata.compat import AwkArray
 from anndata.compat import awkward as ak
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
 from anndata.utils import dim_len
@@ -247,6 +248,22 @@ def test_awkward_io(tmp_path, array):
     adata2 = read_h5ad(adata_path)
 
     assert_equal(adata.uns["awk"], adata2.uns["awk"], exact=True)
+
+
+def test_awkward_io_view(tmp_path):
+    """Check that views are converted to actual arrays on save, i.e. the _view_args and __list__ parameters are removed"""
+    adata = gen_adata((3, 3), varm_types=(), obsm_types=(AwkArray,), layers_types=())
+
+    v = adata[1:]
+    adata_path = tmp_path / "adata.h5ad"
+    v.write_h5ad(adata_path)
+
+    adata2 = read_h5ad(adata_path)
+    # parameters are not fully removed, but set to None
+    assert ak.parameters(adata2.obsm["awk_2d_ragged"]) == {
+        "__list__": None,
+        "_view_args": None,
+    }
 
 
 # @pytest.mark.parametrize("join", ["outer", "inner"])
