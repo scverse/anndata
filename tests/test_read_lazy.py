@@ -546,6 +546,19 @@ def test_concat_to_memory_var(
         stores_for_concat[store_idx].reset_key_trackers()
 
 
+def test_concat_data_with_cluster_to_memory(
+    adata_remote: AnnData,
+    join: Join_T,
+):
+    import dask.distributed as dd
+
+    with (
+        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
+        dd.Client(cluster),
+    ):
+        ad.concat([adata_remote, adata_remote], join=join).to_memory()
+
+
 @pytest.mark.parametrize(
     "index",
     [
@@ -570,7 +583,7 @@ def test_concat_to_memory_var(
         pytest.param(None, id="No index"),
     ],
 )
-def test_concat_full_and_subsets(
+def test_concat_data(
     adata_remote: AnnData,
     adata_orig: AnnData,
     join: Join_T,

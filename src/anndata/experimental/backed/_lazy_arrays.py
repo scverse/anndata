@@ -14,11 +14,13 @@ from ._compat import BackendArray, DataArray, ZarrArrayWrapper
 from ._compat import xarray as xr
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Literal
 
     import numpy as np
 
     from anndata._core.index import Index
+    from anndata.compat import ZarrGroup
 
 
 K = TypeVar("K", H5Array, ZarrArray)
@@ -35,8 +37,6 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
     def __getitem__(self, key: xr.core.indexing.ExplicitIndexer):
         if isinstance(self._array, ZarrArray):
             return super().__getitem__(key)
-        # adapted from https://github.com/pydata/xarray/blob/main/xarray/backends/h5netcdf_.py#L50-L58C13
-        # TODO: locks?
         return xr.core.indexing.explicit_indexing_adapter(
             key,
             self.shape,
@@ -49,12 +49,16 @@ class CategoricalArray(BackendArray, Generic[K]):
     _codes: ZarrOrHDF5Wrapper[K]
     _categories: ZarrArray | H5Array
     shape: tuple[int, ...]
+    base_path_or_zarr_group: Path | ZarrGroup
+    elem_name: str
 
     def __init__(
         self,
         codes: K,
         categories: ZarrArray | H5Array,
         ordered: bool,
+        base_path_or_zarr_group: Path | ZarrGroup,
+        elem_name: str,
         *args,
         **kwargs,
     ):
@@ -62,6 +66,9 @@ class CategoricalArray(BackendArray, Generic[K]):
         self._ordered = ordered
         self._codes = ZarrOrHDF5Wrapper(codes)
         self.shape = self._codes.shape
+        self.base_path_or_zarr_group = base_path_or_zarr_group
+        self.file_format = "zarr" if isinstance(codes, ZarrArray) else "h5"
+        self.elem_name = elem_name
 
     @cached_property
     def categories(self) -> np.ndarray:
@@ -92,17 +99,24 @@ class MaskedArray(BackendArray, Generic[K]):
     _values: ZarrOrHDF5Wrapper[K]
     _dtype_str: Literal["nullable-integer", "nullable-boolean"]
     shape: tuple[int, ...]
+    base_path_or_zarr_group: Path | ZarrGroup
+    elem_name: str
 
     def __init__(
         self,
         values: ZarrArray | H5Array,
         dtype_str: Literal["nullable-integer", "nullable-boolean"],
-        mask: ZarrArray | H5Array | None = None,
+        mask: ZarrArray | H5Array,
+        base_path_or_zarr_group: Path | ZarrGroup,
+        elem_name: str,
     ):
         self._mask = ZarrOrHDF5Wrapper(mask)
         self._values = ZarrOrHDF5Wrapper(values)
         self._dtype_str = dtype_str
         self.shape = self._values.shape
+        self.base_path_or_zarr_group = base_path_or_zarr_group
+        self.file_format = "zarr" if isinstance(mask, ZarrArray) else "h5"
+        self.elem_name = elem_name
 
     def __getitem__(
         self, key: xr.core.indexing.ExplicitIndexer

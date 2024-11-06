@@ -1094,13 +1094,35 @@ def make_dask_col_from_extension_dtype(
     """
     import dask.array as da
 
-    from anndata._io.specs.lazy_methods import compute_chunk_layout_for_axis_size
+    from anndata._io.specs.lazy_methods import (
+        compute_chunk_layout_for_axis_size,
+        maybe_open_h5,
+    )
+    from anndata.experimental import read_lazy
+    from anndata.experimental.backed._compat import DataArray
+    from anndata.experimental.backed._compat import xarray as xr
+
+    base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
+    elem_name = col.attrs.get("elem_name")
+    dims = col.dims
+    coords = col.coords.copy()
 
     def get_chunk(block_info=None):
-        idx = tuple(
-            slice(start, stop) for start, stop in block_info[None]["array-location"]
-        )
-        return np.array(col.data[idx].array)
+        with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
+            v = read_lazy(f)
+            variable = xr.Variable(
+                data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
+            )
+            data_array = DataArray(
+                variable,
+                coords=coords,
+                dims=dims,
+            )
+            idx = tuple(
+                slice(start, stop) for start, stop in block_info[None]["array-location"]
+            )
+            chunk = np.array(data_array.data[idx].array)
+        return chunk
 
     if col.dtype == "category" or use_only_object_dtype:
         dtype = "object"

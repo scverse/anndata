@@ -212,6 +212,10 @@ def _gen_xarray_dict_iterator_from_elems(
                 coords=[index],
                 dims=[index_label],
                 name=k,
+                attrs={
+                    "base_path_or_zarr_group": v.base_path_or_zarr_group,
+                    "elem_name": v.elem_name,
+                },
             )
         elif k == index_key:
             data_array = DataArray(
@@ -278,25 +282,37 @@ def read_categorical(
 ) -> CategoricalArray:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray
 
+    base_path_or_zarr_group = (
+        Path(filename(elem)) if isinstance(elem, H5Group) else elem
+    )
+    elem_name = get_elem_name(elem)
     return CategoricalArray(
         codes=elem["codes"],
         categories=elem["categories"],
         ordered=elem.attrs["ordered"],
+        base_path_or_zarr_group=base_path_or_zarr_group,
+        elem_name=elem_name,
     )
 
 
 def read_nullable(
     elem: H5Group | ZarrGroup,
     *,
-    encoding_type: str,
+    encoding_type: Literal["nullable-integer", "nullable-boolean"],
     _reader: LazyReader,
 ) -> MaskedArray:
     from anndata.experimental.backed._lazy_arrays import MaskedArray
 
+    base_path_or_zarr_group = (
+        Path(filename(elem)) if isinstance(elem, H5Group) else elem
+    )
+    elem_name = get_elem_name(elem)
     return MaskedArray(
         values=elem["values"],
         mask=elem["mask"] if "mask" in elem else None,
         dtype_str=encoding_type,
+        base_path_or_zarr_group=base_path_or_zarr_group,
+        elem_name=elem_name,
     )
 
 
