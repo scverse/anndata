@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import copy
 from functools import partial
 from itertools import product
 from types import MappingProxyType
@@ -756,6 +757,9 @@ def write_awkward(
     from anndata.compat import awkward as ak
 
     group = f.require_group(k)
+    if isinstance(v, views.AwkwardArrayView):
+        # copy to remove the view attributes
+        v = copy(v)
     form, length, container = ak.to_buffers(ak.to_packed(v))
     group.attrs["length"] = length
     group.attrs["form"] = form.to_json()
