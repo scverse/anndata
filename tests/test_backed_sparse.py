@@ -20,6 +20,7 @@ from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
     from pathlib import Path
+    from types import EllipsisType
 
     from _pytest.mark import ParameterSet
     from numpy.typing import ArrayLike, NDArray
@@ -125,6 +126,17 @@ def test_backed_indexing(
     assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
     assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
+
+
+def test_backed_ellipsis_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    equivalent_ellipsis_index: tuple[slice, slice],
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    assert_equal(csr_mem.X[equivalent_ellipsis_index], csr_disk.X[ellipsis_index])
+    assert_equal(csr_mem.X[equivalent_ellipsis_index], csc_disk.X[ellipsis_index])
 
 
 def make_randomized_mask(size: int) -> np.ndarray:
