@@ -31,7 +31,7 @@ def get_memory_usage():
         meminfo = process.get_memory_info()
     mem = meminfo[0] / 2**30  # output in GB
     mem_diff = mem
-    global _previous_memory_usage  # noqa: PLW0603
+    global _previous_memory_usage
     if _previous_memory_usage is not None:
         mem_diff = mem - _previous_memory_usage
     _previous_memory_usage = mem
