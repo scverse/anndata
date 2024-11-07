@@ -547,8 +547,7 @@ def test_concat_to_memory_var(
 
 
 def test_concat_data_with_cluster_to_memory(
-    adata_remote: AnnData,
-    join: Join_T,
+    adata_remote: AnnData, join: Join_T, load_annotation_index: bool
 ):
     import dask.distributed as dd
 
@@ -556,7 +555,12 @@ def test_concat_data_with_cluster_to_memory(
         dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
         dd.Client(cluster),
     ):
-        ad.concat([adata_remote, adata_remote], join=join).to_memory()
+        with (
+            pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric")
+            if not load_annotation_index
+            else nullcontext()
+        ):
+            ad.concat([adata_remote, adata_remote], join=join).to_memory()
 
 
 @pytest.mark.parametrize(
