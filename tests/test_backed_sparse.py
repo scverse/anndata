@@ -285,7 +285,7 @@ def test_dataset_append_memory(
     assert_equal(fromdisk, frommem)
 
 
-def test_append_array_cache_bust(tmp_path: Path, diskfmt):
+def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format="csr")
     if diskfmt == "zarr":
