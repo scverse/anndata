@@ -454,9 +454,7 @@ def read_elem_as_dask(
 
     We also support using -1 as a chunk size to signfiy the reading the whole axis:
 
-    >>> >>> adata.X = ad.experimental.read_elem_as_dask(
-    ...     g["X"], chunks=(500, -1)
-    ... )
+    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, -1))
     """
     return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
 
