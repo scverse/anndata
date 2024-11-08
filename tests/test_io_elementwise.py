@@ -335,12 +335,21 @@ def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks):
     else:
         arr_store = create_sparse_store(arr_type, store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
-    if chunks is not None:
-        assert X_dask_from_disk.chunksize == chunks
+    if arr_type != "dense":
+        if chunks is not None:
+            expected_chunks = chunks
+            if -1 in expected_chunks:
+                missing_axis = expected_chunks.index(-1)
+                missing_aixs_size_size = SIZE * (1 + missing_axis)
+                expected_chunks = list(expected_chunks)
+                expected_chunks[missing_axis] = missing_aixs_size_size
+                expected_chunks = tuple(expected_chunks)
+            assert X_dask_from_disk.chunksize == expected_chunks
+            # assert that sparse chunks are set correctly by default
+            minor_index = int(arr_type == "csr")
+            assert X_dask_from_disk.chunksize[minor_index] == SIZE * (1 + minor_index)
     else:
-        minor_index = int(arr_type == "csr")
-        # assert that sparse chunks are set correctly by default
-        assert X_dask_from_disk.chunksize[minor_index] == SIZE * (1 + minor_index)
+        assert X_dask_from_disk.chunksize == chunks
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
 
