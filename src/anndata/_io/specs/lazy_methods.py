@@ -35,20 +35,20 @@ if TYPE_CHECKING:
 
 @overload
 @contextmanager
-def maybe_open_h5(path_or_dataset: D, elem_name: str) -> Generator[D, None, None]: ...
+def maybe_open_h5(path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
 @overload
 @contextmanager
 def maybe_open_h5(
-    path_or_dataset: Path, elem_name: str
+    path_or_other: Path, elem_name: str
 ) -> Generator[H5File, None, None]: ...
 @contextmanager
 def maybe_open_h5(
-    path_or_dataset: Any, elem_name: str
+    path_or_other: Any, elem_name: str
 ) -> Generator[H5File | D, None, None]:
-    if not isinstance(path_or_dataset, Path):
-        yield path_or_dataset
+    if not isinstance(path_or_other, Path):
+        yield path_or_other
         return
-    file = h5py.File(path_or_dataset, "r")
+    file = h5py.File(path_or_other, "r")
     try:
         yield file[elem_name]
     finally:
