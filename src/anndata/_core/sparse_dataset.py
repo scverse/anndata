@@ -545,16 +545,17 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         indptr[orig_data_size:] = (
             sparse_matrix.indptr[1:].astype(np.int64) + indptr_offset
         )
-        # Clear cached property
-        for attr in ["_indptr", "_indices", "_data"]:
-            if hasattr(self, attr):
-                delattr(self, attr)
 
         # indices
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
+
+        # Clear cached property
+        for attr in ["_indptr", "_indices", "_data"]:
+            if hasattr(self, attr):
+                delattr(self, attr)
 
     @cached_property
     def _indptr(self) -> np.ndarray:

@@ -285,6 +285,25 @@ def test_dataset_append_memory(
     assert_equal(fromdisk, frommem)
 
 
+def test_append_array_cache_bust(tmp_path: Path, diskfmt):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    a = sparse.random(100, 100, format="csr")
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+    ad.io.write_elem(f, "mtx", a)
+    ad.io.write_elem(f, "mtx_2", a)
+    diskmtx = sparse_dataset(f["mtx"])
+    old_array_shapes = {}
+    array_names = ["indptr", "indices", "data"]
+    for name in array_names:
+        old_array_shapes[name] = getattr(diskmtx, f"_{name}").shape
+    diskmtx.append(sparse_dataset(f["mtx_2"]))
+    for name in array_names:
+        assert old_array_shapes[name] != getattr(diskmtx, f"_{name}").shape
+
+
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize(
     ("subset_func", "subset_func2"),
