@@ -146,7 +146,9 @@ def read_h5_array(
     shape = tuple(elem.shape)
     dtype = elem.dtype
     chunks: tuple[int, ...] = (
-        tuple(c if c not in {None, -1} else shape[i] for i, c in enumerate(chunks))
+        tuple(
+            c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
+        )
         if chunks is not None
         else (_DEFAULT_STRIDE,) * len(shape)
     )
