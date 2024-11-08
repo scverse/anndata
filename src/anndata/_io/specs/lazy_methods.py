@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     P = ParamSpec("P")
     R = TypeVar("R")
-    D = TypeVar("D", bound=CSCDataset | CSRDataset)
+    D = TypeVar("D")
 
 
 @overload

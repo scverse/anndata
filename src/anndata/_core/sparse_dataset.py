@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
+    from ..compat import H5Array
     from .index import Index
 else:
     from scipy.sparse import spmatrix as _cs_matrix
@@ -568,14 +569,14 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         return arr
 
     @cached_property
-    def _indices(self) -> np.ndarray:
+    def _indices(self) -> H5Array | ZarrArray:
         """\
         Cache access to the indices to prevent unnecessary reads of the zarray
         """
         return self.group["indices"]
 
     @cached_property
-    def _data(self) -> np.ndarray:
+    def _data(self) -> H5Array | ZarrArray:
         """\
         Cache access to the data to prevent unnecessary reads of the zarray
         """
