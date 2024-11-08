@@ -284,6 +284,7 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (2, (200, 400)),
         (1, None),
         (2, None),
+        (2, (400, -1)),
     ],
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
@@ -323,6 +324,8 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         ("csr", (10, SIZE * 2)),
         ("csc", None),
         ("csr", None),
+        ("csr", (10, -1)),
+        ("csc", (-1, 10)),
     ],
 )
 def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks):
