@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING
 
 import joblib
 import pytest
-from dask.base import normalize_seq, normalize_token, tokenize
+from dask.base import normalize_token, tokenize
+from dask.tokenize import normalize_seq
 from scipy import sparse
 
 import anndata as ad
