@@ -105,12 +105,16 @@ def read_sparse_as_dask(
     if chunks is not None:
         if len(chunks) != 2:
             raise ValueError("`chunks` must be a tuple of two integers")
-        if chunks[minor_dim] not in {shape[minor_dim], -1}:
+        if chunks[minor_dim] not in {shape[minor_dim], -1, None}:
             raise ValueError(
                 "Only the major axis can be chunked. "
                 f"Try setting chunks to {((-1, _DEFAULT_STRIDE) if is_csc else (_DEFAULT_STRIDE, -1))}"
             )
-        stride = chunks[major_dim]
+        stride = (
+            chunks[major_dim]
+            if chunks[major_dim] not in {None, -1}
+            else shape[major_dim]
+        )
 
     shape_minor, shape_major = shape if is_csc else shape[::-1]
     chunks_major = compute_chunk_layout_for_axis_shape(stride, shape_major)
@@ -142,7 +146,9 @@ def read_h5_array(
     shape = tuple(elem.shape)
     dtype = elem.dtype
     chunks: tuple[int, ...] = (
-        chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(shape)
+        tuple(c if c not in {None, -1} else shape[i] for i, c in enumerate(chunks))
+        if chunks is not None
+        else (_DEFAULT_STRIDE,) * len(shape)
     )
 
     chunk_layout = tuple(
