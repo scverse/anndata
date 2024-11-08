@@ -1057,7 +1057,7 @@ class AccessTrackingStore(DirectoryStore):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
-        self._accessed_keys = {}
+        self._accessed_keys = dict()
 
     def __getitem__(self, key: str) -> object:
         for tracked in self._access_count:
