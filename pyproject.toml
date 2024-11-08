@@ -181,6 +181,7 @@ select = [
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
     "PT",  # Pytest conventions
+    "PYI"  # Typing
 ]
 ignore = [
     # line too long -> we accept long comment lines; formatter gets rid of long code lines
