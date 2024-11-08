@@ -285,6 +285,7 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (1, None),
         (2, None),
         (2, (400, -1)),
+        (2, (400, None)),
     ],
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
@@ -317,39 +318,31 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("arr_type", "chunks"),
+    ("arr_type", "chunks", "expected_chunksize"),
     [
-        ("dense", (100, 100)),
-        ("csc", (SIZE, 10)),
-        ("csr", (10, SIZE * 2)),
-        ("csc", None),
-        ("csr", None),
-        ("csr", (10, -1)),
-        ("csc", (-1, 10)),
+        ("dense", (100, 100), (100, 100)),
+        ("csc", (SIZE, 10), (SIZE, 10)),
+        ("csr", (10, SIZE * 2), (10, SIZE * 2)),
+        ("csc", None, (SIZE, 1000)),
+        ("csr", None, (1000, SIZE * 2)),
+        ("csr", (10, -1), (10, SIZE * 2)),
+        ("csc", (-1, 10), (SIZE, 10)),
+        ("csr", (10, None), (10, SIZE * 2)),
+        ("csc", (None, 10), (SIZE, 10)),
+        ("csc", (None, None), (SIZE, SIZE * 2)),
+        ("csr", (None, None), (SIZE, SIZE * 2)),
+        ("csr", (-1, -1), (SIZE, SIZE * 2)),
+        ("csc", (-1, -1), (SIZE, SIZE * 2)),
     ],
 )
-def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks):
+def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks, expected_chunksize):
     if arr_type == "dense":
         arr_store = create_dense_store(store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
     else:
         arr_store = create_sparse_store(arr_type, store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
-    if arr_type != "dense":
-        if chunks is not None:
-            expected_chunks = chunks
-            if -1 in expected_chunks:
-                missing_axis = expected_chunks.index(-1)
-                missing_aixs_size_size = SIZE * (1 + missing_axis)
-                expected_chunks = list(expected_chunks)
-                expected_chunks[missing_axis] = missing_aixs_size_size
-                expected_chunks = tuple(expected_chunks)
-            assert X_dask_from_disk.chunksize == expected_chunks
-            # assert that sparse chunks are set correctly by default
-            minor_index = int(arr_type == "csr")
-            assert X_dask_from_disk.chunksize[minor_index] == SIZE * (1 + minor_index)
-    else:
-        assert X_dask_from_disk.chunksize == chunks
+    assert X_dask_from_disk.chunksize == expected_chunksize
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
 
