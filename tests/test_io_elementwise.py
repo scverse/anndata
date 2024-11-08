@@ -335,7 +335,12 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         ("csc", (-1, -1), (SIZE, SIZE * 2)),
     ],
 )
-def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks, expected_chunksize):
+def test_read_lazy_2d_chunk_kwargs(
+    store: H5Group | ZarrGroup,
+    arr_type: Literal["csr", "csc", "dense"],
+    chunks: None | tuple[int | None, int | None],
+    expected_chunksize: tuple[int, int],
+):
     if arr_type == "dense":
         arr_store = create_dense_store(store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
