@@ -452,7 +452,7 @@ def read_elem_as_dask(
     ... )
     >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
 
-    We also support using -1 as a chunk size to signfiy the reading the whole axis:
+    We also support using -1 as a chunk size to signify the reading the whole axis:
 
     >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, -1))
     """
