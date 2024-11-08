@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
     from typing import Any, Literal, ParamSpec, TypeVar
 
-    from ...compat import DaskArray, H5File
+    from ...compat import DaskArray, H5File, SpArray
     from .registry import DaskReader
 
     BlockInfo = Mapping[
@@ -69,10 +69,10 @@ def compute_chunk_layout_for_axis_shape(
 
 
 def make_dask_chunk(
-    path_or_sparse_dataset: Path | CSRDataset | CSCDataset,
+    path_or_sparse_dataset: Path | D,
     elem_name: str,
     block_info: BlockInfo | None = None,
-):
+) -> sparse.csr_matrix | sparse.csc_matrix | SpArray:
     if block_info is None:
         msg = "Block info is required"
         raise ValueError(msg)
