@@ -18,7 +18,7 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from typing import Any, Literal, ParamSpec, TypeVar
+    from typing import Literal, ParamSpec, TypeVar
 
     from ...compat import DaskArray, H5File, SpArray
     from .registry import DaskReader
@@ -35,15 +35,15 @@ if TYPE_CHECKING:
 
 @overload
 @contextmanager
-def maybe_open_h5(path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
-@overload
-@contextmanager
 def maybe_open_h5(
     path_or_other: Path, elem_name: str
 ) -> Generator[H5File, None, None]: ...
+@overload
+@contextmanager
+def maybe_open_h5(path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
 @contextmanager
 def maybe_open_h5(
-    path_or_other: Any, elem_name: str
+    path_or_other: H5File | D, elem_name: str
 ) -> Generator[H5File | D, None, None]:
     if not isinstance(path_or_other, Path):
         yield path_or_other
