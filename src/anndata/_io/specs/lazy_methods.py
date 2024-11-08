@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -18,10 +18,9 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from typing import Literal, ParamSpec, TypeVar
+    from typing import Any, Literal, ParamSpec, TypeVar
 
-    from ..._types import StorageType
-    from ...compat import DaskArray
+    from ...compat import DaskArray, H5File
     from .registry import DaskReader
 
     BlockInfo = Mapping[
@@ -31,12 +30,21 @@ if TYPE_CHECKING:
 
     P = ParamSpec("P")
     R = TypeVar("R")
+    D = TypeVar("D", bound=CSCDataset | CSRDataset)
 
 
+@overload
+@contextmanager
+def maybe_open_h5(path_or_dataset: D, elem_name: str) -> Generator[D, None, None]: ...
+@overload
 @contextmanager
 def maybe_open_h5(
-    path_or_dataset: Path | CSRDataset | CSCDataset, elem_name: str
-) -> Generator[StorageType, None, None]:
+    path_or_dataset: Path, elem_name: str
+) -> Generator[H5File, None, None]: ...
+@contextmanager
+def maybe_open_h5(
+    path_or_dataset: Any, elem_name: str
+) -> Generator[H5File | D, None, None]:
     if not isinstance(path_or_dataset, Path):
         yield path_or_dataset
         return
