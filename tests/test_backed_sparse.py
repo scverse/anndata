@@ -395,6 +395,7 @@ def test_lazy_array_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
+    # one each for .zarray and actual access
     assert store.get_access_count("X/indptr") == 2
     for elem_not_indptr in elems - {"indptr"}:
         assert (
