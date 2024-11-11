@@ -107,7 +107,7 @@ gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
 # https://github.com/dask/dask/issues/11290
-dask = ["dask[array]>=2022.09.2,<2024.8.0"]
+dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*"]
 
 [tool.hatch.version]
 source = "vcs"
