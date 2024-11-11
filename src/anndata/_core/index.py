@@ -82,7 +82,9 @@ def _normalize_index(
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
-        if isinstance(indexer, np.ndarray) and indexer.dtype == float:
+        if isinstance(indexer, np.ndarray) and np.issubdtype(
+            indexer.dtype, np.floating
+        ):
             indexer_int = indexer.astype(int)
             if np.all((indexer - indexer_int) != 0):
                 raise IndexError(f"Indexer {indexer!r} has floating point values.")
