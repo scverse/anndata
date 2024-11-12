@@ -16,6 +16,10 @@ class Args(argparse.Namespace):
     dry_run: bool
 
 
+class NoPatchReleaseOnMainError(Exception):
+    pass
+
+
 def parse_args(argv: Sequence[str] | None = None) -> Args:
     parser = argparse.ArgumentParser(
         prog="towncrier-automation",
@@ -62,6 +66,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         text=True,
         check=True,
     ).stdout.strip()
+    if Version(args.version).micro != 0 and base_branch == "main":
+        raise NoPatchReleaseOnMainError(
+            f"Version {args.version} is a patch release, but you are trying to release from main branch."
+        )
     pr_description = (
         "" if base_branch == "main" else "@meeseeksmachine backport to main"
     )
