@@ -25,6 +25,9 @@ __all__ = [
     "ArrayStorageType",
     "GroupStorageType",
     "StorageType",
+    "_ReadInternal",
+    "_ReadDaskInternal",
+    "_WriteInternal",
 ]
 
 ArrayStorageType: TypeAlias = ZarrArray | H5Array

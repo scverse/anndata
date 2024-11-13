@@ -3,9 +3,16 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING
 
+import dask
 import joblib
 import pytest
-from dask.base import normalize_seq, normalize_token, tokenize
+from dask.base import normalize_token, tokenize
+from packaging.version import Version
+
+if Version(dask.__version__) < Version("2024.8.0"):
+    from dask.base import normalize_seq
+else:
+    from dask.tokenize import normalize_seq
 from scipy import sparse
 
 import anndata as ad

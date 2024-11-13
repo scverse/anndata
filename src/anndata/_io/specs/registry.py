@@ -398,6 +398,7 @@ def read_elem_as_dask(
        Defaults to `(1000, adata.shape[1])` for CSR sparse,
        `(adata.shape[0], 1000)` for CSC sparse,
        and the on-disk chunking otherwise for dense.
+       Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
 
     Returns
     -------
@@ -451,6 +452,11 @@ def read_elem_as_dask(
     ...     g["X"], chunks=(500, adata.shape[1])
     ... )
     >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
+
+    We also support using -1 and None as a chunk size to signify the reading the whole axis:
+
+    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, -1))
+    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, None))
     """
     return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
 
