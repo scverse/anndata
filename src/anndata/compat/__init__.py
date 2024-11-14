@@ -140,7 +140,16 @@ else:
             return "mock dask.array.core.Array"
 
 
-if find_spec("cupy") or TYPE_CHECKING:
+# https://github.com/scverse/anndata/issues/1749
+def is_cupy_importable() -> bool:
+    try:
+        import cupy  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+if is_cupy_importable() or TYPE_CHECKING:
     from cupy import ndarray as CupyArray
     from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
     from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix

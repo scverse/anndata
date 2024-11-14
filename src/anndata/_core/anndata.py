@@ -1183,9 +1183,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(
-        self, index: Index, val: int | float | np.ndarray | sparse.spmatrix
-    ):
+    def __setitem__(self, index: Index, val: float | np.ndarray | sparse.spmatrix):
         if self.is_view:
             raise ValueError("Object is view and cannot be accessed with `[]`.")
         obs, var = self._normalize_indices(index)
