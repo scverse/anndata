@@ -82,9 +82,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         msg = f"Version {args.version} is a minor or major release, "
         "but you are trying to release not from main: {base_branch}."
         raise NoMinorMajorReleaseOffMainError(msg)
-    pr_description = (
-        "" if base_branch == "main" else "@meeseeksmachine backport to main"
-    )
+    pr_description = "" if base_branch == "main" else "@meeseeksdev backport to main"
     branch_name = f"release_notes_{args.version}"
 
     # Create a new branch + commit
