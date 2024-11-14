@@ -30,7 +30,7 @@ GEN_ADATA_OOC_CONCAT_ARGS = dict(
         pd.DataFrame,
     ),
     varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    layers_types=(sparse.spmatrix, np.ndarray, pd.DataFrame),
+    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
 )
 
 

@@ -13,7 +13,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray
+from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, SpMatrix
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -259,8 +259,8 @@ def test_consecutive_bool(
 )
 def test_dataset_append_memory(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], SpMatrix],
+    append_method: Callable[[list[SpMatrix]], SpMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -296,7 +296,7 @@ def test_dataset_append_memory(
 )
 def test_read_array(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], SpMatrix],
     diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
@@ -316,7 +316,7 @@ def test_read_array(
     ad.settings.use_sparse_array_on_read = True
     assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
     ad.settings.use_sparse_array_on_read = False
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpMatrix)
 
 
 @pytest.mark.parametrize(
@@ -328,8 +328,8 @@ def test_read_array(
 )
 def test_dataset_append_disk(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], SpMatrix],
+    append_method: Callable[[list[SpMatrix]], SpMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -356,7 +356,7 @@ def test_dataset_append_disk(
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 def test_indptr_cache(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], SpMatrix],
 ):
     path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
@@ -438,7 +438,7 @@ def width_idx_kinds(
 )
 def test_data_access(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], SpMatrix],
     idx_maj: Idx,
     idx_min: Idx,
     exp: Sequence[str],

@@ -20,7 +20,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, CupySparseMatrix, DaskArray, SpArray
+from anndata.compat import AwkArray, CupySparseMatrix, DaskArray, SpArray, SpMatrix
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -61,7 +61,7 @@ def _filled_array(a, fill_value=None):
     return as_dense_dask_array(_filled_array_np(a, fill_value))
 
 
-@filled_like.register(sparse.spmatrix)
+@filled_like.register(SpMatrix)
 def _filled_sparse(a, fill_value=None):
     if fill_value is None:
         return sparse.csr_matrix(a.shape)
@@ -200,7 +200,7 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
         if isinstance(orig.X, SpArray):
             base_type = SpArray
         else:
-            base_type = sparse.spmatrix
+            base_type = SpMatrix
     if isinstance(orig.X, CupySparseMatrix):
         base_type = CupySparseMatrix
     assert isinstance(result.X, base_type)
@@ -404,7 +404,7 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
         ),
     )
 
-    assert isinstance(outer.obsm["sparse"], sparse.spmatrix)
+    assert isinstance(outer.obsm["sparse"], SpMatrix)
     np.testing.assert_equal(
         outer.obsm["sparse"].toarray(),
         np.array(
@@ -1496,7 +1496,7 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
     if sparse.issparse(result.X):
         # See https://github.com/scipy/scipy/issues/20389 for why this doesn't work with csc
         if sparse_indexer_type == np.int64 and (
-            issubclass(cpu_array_type, sparse.spmatrix) or adata.X.format == "csc"
+            issubclass(cpu_array_type, SpMatrix) or adata.X.format == "csc"
         ):
             pytest.xfail(
                 "Data type int64 is not maintained for sparse matrices or csc array"
