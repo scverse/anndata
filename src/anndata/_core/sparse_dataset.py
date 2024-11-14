@@ -28,7 +28,7 @@ from scipy.sparse import _sparsetools
 
 from .. import abc
 from .._settings import settings
-from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
+from ..compat import H5Group, SpArray, SpMatrix, ZarrArray, ZarrGroup, _read_attr
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
@@ -312,7 +312,7 @@ def get_memory_class(
         if format == fmt:
             if use_sparray_in_io and issubclass(memory_class, SpArray):
                 return memory_class
-            elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
+            elif not use_sparray_in_io and issubclass(memory_class, SpMatrix):
                 return memory_class
     raise ValueError(f"Format string {format} is not supported.")
 
@@ -324,7 +324,7 @@ def get_backed_class(
         if format == fmt:
             if use_sparray_in_io and issubclass(backed_class, SpArray):
                 return backed_class
-            elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
+            elif not use_sparray_in_io and issubclass(backed_class, SpMatrix):
                 return backed_class
     raise ValueError(f"Format string {format} is not supported.")
 

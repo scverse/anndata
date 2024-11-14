@@ -186,8 +186,8 @@ def test_set_dense_x_view_from_sparse():
 
 def test_warn_on_non_csr_csc_matrix():
     X = sparse.eye(100)
-    with pytest.warns(
-        FutureWarning,
-        match=rf"AnnData previously had undefined behavior around matrices of type {type(X)}.*",
+    with pytest.raises(
+        ValueError,
+        match=r"X needs to be of one of",
     ):
         ad.AnnData(X=X)

@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray
+from ..compat import AwkArray, SpMatrix
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -36,7 +35,7 @@ if TYPE_CHECKING:
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | spmatrix | np.ndarray
+Value = pd.DataFrame | SpMatrix | np.ndarray
 
 P = TypeVar("P", bound="AlignedMappingBase")
 """Parent mapping an AlignedView is based on."""

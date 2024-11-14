@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, get_args
 
 import numpy as np
 import pandas as pd
-from scipy import sparse
 
 from .._warnings import ImplicitModificationWarning
+from ..compat import SpMatrix
 from ..utils import (
     ensure_df_homogeneous,
     join_english,
@@ -39,7 +39,7 @@ def coerce_array(
             warnings.warn(msg, ImplicitModificationWarning)
             value = value.A
         return value
-    elif isinstance(value, sparse.spmatrix):
+    elif isinstance(value, SpMatrix):
         msg = (
             f"AnnData previously had undefined behavior around matrices of type {type(value)}."
             "In 0.12, passing in this type will throw an error. Please convert to a supported type."

@@ -18,7 +18,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy
-import scipy.sparse
 from packaging.version import Version
 
 from .exceptiongroups import add_note  # noqa: F401
@@ -32,6 +31,7 @@ if TYPE_CHECKING:
 
 
 CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
+SpMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
 
 if not CAN_USE_SPARSE_ARRAY:
 
@@ -40,7 +40,7 @@ if not CAN_USE_SPARSE_ARRAY:
         def __repr__():
             return "mock scipy.sparse.sparray"
 else:
-    SpArray = scipy.sparse.sparray
+    SpArray = scipy.sparse.csr_array | scipy.sparse.csc_array
 
 
 class Empty:
@@ -56,7 +56,7 @@ Index = (
     | tuple[Index1D, Index1D, EllipsisType]
     | tuple[EllipsisType, Index1D, Index1D]
     | tuple[Index1D, EllipsisType, Index1D]
-    | scipy.sparse.spmatrix
+    | SpMatrix
     | SpArray
 )
 H5Group = h5py.Group
