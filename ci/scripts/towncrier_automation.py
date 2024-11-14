@@ -63,7 +63,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         check=True,
     ).stdout.strip()
     pr_description = (
-        "" if base_branch == "main" else "@meeseeksmachine backport to main"
+        "" if base_branch == "main" else "@meeseeksdev backport to main"
     )
     branch_name = f"release_notes_{args.version}"
 
