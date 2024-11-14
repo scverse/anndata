@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,10 @@ class Args(argparse.Namespace):
 
 
 class NoPatchReleaseOnMainError(Exception):
+    pass
+
+
+class NoMinorMajorReleaseOffMainError(Exception):
     pass
 
 
@@ -66,9 +71,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         text=True,
         check=True,
     ).stdout.strip()
-    if Version(args.version).micro != 0 and base_branch == "main":
+    patch_branch_pattern = r"\d+\.\d+\.x"
+    if Version(args.version).micro != 0 and not re.fullmatch(
+        patch_branch_pattern, base_branch
+    ):
         raise NoPatchReleaseOnMainError(
-            f"Version {args.version} is a patch release, but you are trying to release from main branch."
+            f"Version {args.version} is a patch release, but you are trying to release from a non-patch release branch: {base_branch}."
+        )
+    if Version(args.version).micro == 0 and base_branch != "main":
+        raise NoMinorMajorReleaseOffMainError(
+            f"Version {args.version} is a minor or major release, but you are trying to release not from main: {base_branch}."
         )
     pr_description = (
         "" if base_branch == "main" else "@meeseeksmachine backport to main"
