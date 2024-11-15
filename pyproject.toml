@@ -101,7 +101,7 @@ test = [
     "pytest_memray",
     "pytest-mock",
     "anndata[dask]",
-    "numba @ git+https://git@github.com/numba/numba"
+    "numba @ git+https://github.com/numba/numba"
 ]
 dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
