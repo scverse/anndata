@@ -388,7 +388,8 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    f.create_dataset(k, data=elem, **dataset_kwargs)
+    dtype = dataset_kwargs.get("dtype", elem.dtype)
+    f.create_dataset(k, data=elem, **dataset_kwargs, dtype=dtype)
 
 
 def _iter_chunks_for_copy(elem: ArrayStorageType, dest: ArrayStorageType):
@@ -412,7 +413,6 @@ def _iter_chunks_for_copy(elem: ArrayStorageType, dest: ArrayStorageType):
 
 @_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
 def write_chunked_dense_array_to_group(
     f: GroupStorageType,
     k: str,
@@ -432,24 +432,6 @@ def write_chunked_dense_array_to_group(
 
     for chunk in _iter_chunks_for_copy(elem, dest):
         dest[chunk] = elem[chunk]
-
-
-@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
-def write_chunked_dense_array_to_zarr(
-    f: ZarrGroup,
-    k: str,
-    elem: ZarrArray,
-    *,
-    _writer: Writer,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    """Write to a h5py.Dataset in chunks.
-    `h5py.Group.create_dataset(..., data: h5py.Dataset)` will load all of `data` into memory
-    before writing. Instead, we will write in chunks to avoid this. We don't need to do this for
-    zarr since zarr handles this automatically.
-    """
-    dtype = dataset_kwargs.get("dtype", elem.dtype)
-    f.create_dataset(k, shape=elem.shape, data=elem, **dataset_kwargs, dtype=dtype)
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
