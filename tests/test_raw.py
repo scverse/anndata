@@ -38,7 +38,7 @@ def adata_raw() -> ad.AnnData:
     adata = ad.AnnData(
         np.array(data, dtype="int32"), obs=obs_dict, var=var_dict, uns=uns_dict
     )
-    adata.raw = adata
+    adata.raw = adata.copy()
     # Make them different shapes
     adata = adata[:, [0, 1]].copy()
     return adata
@@ -131,7 +131,7 @@ def test_raw_as_parent_view():
     # https://github.com/scverse/anndata/issues/288
     a = ad.AnnData(np.ones((4, 3)))
     a.varm["PCs"] = np.ones((3, 3))
-    a.raw = a
+    a.raw = a.copy()
     # create a Raw containing views. This used to trigger #288.
     b = a.raw[:, "0"]
     # actualize
@@ -165,3 +165,10 @@ def test_to_adata_populates_obs():
     from_raw = adata_w_raw.raw.to_adata()
 
     assert_equal(adata, from_raw)
+
+
+def test_no_copy():
+    adata = gen_adata((20, 10), X_type=np.asarray)
+    adata.raw = adata  # no .copy() herer
+    np.log1p(adata.X, out=adata.X)
+    assert adata.X is adata.raw.X

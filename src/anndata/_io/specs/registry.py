@@ -17,13 +17,13 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
-        InMemoryElem,
         ReadCallback,
         StorageType,
         Write,
         WriteCallback,
         _WriteInternal,
     )
+    from anndata.typing import RWAble
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
@@ -270,7 +270,7 @@ class Reader:
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-    ) -> InMemoryElem:
+    ) -> RWAble:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
@@ -323,7 +323,7 @@ class Writer:
         self,
         store: GroupStorageType,
         k: str,
-        elem: InMemoryElem,
+        elem: RWAble,
         *,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
         modifiers: frozenset[str] = frozenset(),
@@ -363,7 +363,7 @@ class Writer:
         )
 
 
-def read_elem(elem: StorageType) -> InMemoryElem:
+def read_elem(elem: StorageType) -> RWAble:
     """
     Read an element from a store.
 
@@ -395,10 +395,68 @@ def read_elem_as_dask(
     chunks, optional
        length `n`, the same `n` as the size of the underlying array.
        Note that the minor axis dimension must match the shape for sparse.
+       Defaults to `(1000, adata.shape[1])` for CSR sparse,
+       `(adata.shape[0], 1000)` for CSC sparse,
+       and the on-disk chunking otherwise for dense.
+       Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
 
     Returns
     -------
         DaskArray
+
+    Examples
+    --------
+
+    Setting up our example:
+
+    >>> from scanpy.datasets import pbmc3k
+    >>> import tempfile
+    >>> import anndata as ad
+    >>> import zarr
+
+    >>> tmp_path = tempfile.gettempdir()
+    >>> zarr_path = tmp_path + "/adata.zarr"
+
+    >>> adata = pbmc3k()
+    >>> adata.layers["dense"] = adata.X.toarray()
+    >>> adata.write_zarr(zarr_path)
+
+    Reading a sparse matrix from a zarr store lazily, with custom chunk size and default:
+
+    >>> g = zarr.open(zarr_path)
+    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"])
+    >>> adata.X
+    dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(1000, 32738), chunktype=scipy.csr_matrix>
+    >>> adata.X = ad.experimental.read_elem_as_dask(
+    ...     g["X"], chunks=(500, adata.shape[1])
+    ... )
+    >>> adata.X
+    dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(500, 32738), chunktype=scipy.csr_matrix>
+
+    Reading a dense matrix from a zarr store lazily:
+
+    >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
+    >>> adata.layers["dense"]
+    dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(169, 2047), chunktype=numpy.ndarray>
+
+    Making a new anndata object from on-disk, with custom chunks:
+
+    >>> adata = ad.AnnData(
+    ...     obs=ad.io.read_elem(g["obs"]),
+    ...     var=ad.io.read_elem(g["var"]),
+    ...     uns=ad.io.read_elem(g["uns"]),
+    ...     obsm=ad.io.read_elem(g["obsm"]),
+    ...     varm=ad.io.read_elem(g["varm"]),
+    ... )
+    >>> adata.X = ad.experimental.read_elem_as_dask(
+    ...     g["X"], chunks=(500, adata.shape[1])
+    ... )
+    >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
+
+    We also support using -1 and None as a chunk size to signify the reading the whole axis:
+
+    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, -1))
+    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, None))
     """
     return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
 
@@ -406,7 +464,7 @@ def read_elem_as_dask(
 def write_elem(
     store: GroupStorageType,
     k: str,
-    elem: InMemoryElem,
+    elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:

@@ -4,89 +4,47 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypeVar, Union
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
-import numpy as np
-import pandas as pd
-from numpy.typing import NDArray
-from scipy import sparse
-
-from anndata._core.anndata import AnnData
-
-from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import (
-    AwkArray,
-    CupyArray,
-    CupySparseMatrix,
-    DaskArray,
     H5Array,
     H5Group,
-    SpArray,
-    ZappyArray,
     ZarrArray,
     ZarrGroup,
 )
+from .typing import RWAble
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from anndata._io.specs.registry import DaskReader
-
-    from ._io.specs.registry import IOSpec, Reader, Writer
+    from ._io.specs.registry import DaskReader, IOSpec, Reader, Writer
+    from .compat import DaskArray
 
 __all__ = [
     "ArrayStorageType",
     "GroupStorageType",
     "StorageType",
+    "_ReadInternal",
+    "_ReadDaskInternal",
+    "_WriteInternal",
 ]
 
-InMemoryArrayOrScalarType: TypeAlias = Union[
-    NDArray,
-    np.ma.MaskedArray,
-    sparse.spmatrix,
-    SpArray,
-    H5Array,
-    ZarrArray,
-    ZappyArray,
-    BaseCompressedSparseDataset,
-    DaskArray,
-    CupyArray,
-    CupySparseMatrix,
-    AwkArray,
-    pd.DataFrame,
-    np.number,
-    str,
-]
-RWAble: TypeAlias = Union[
-    InMemoryArrayOrScalarType, dict[str, "RWAble"], list["RWAble"]
-]  # noqa: TCH010
-InMemoryElem: TypeAlias = Union[
-    RWAble,
-    AnnData,
-    pd.Categorical,
-    pd.api.extensions.ExtensionArray,
-]
-
-ArrayStorageType: TypeAlias = Union[ZarrArray, H5Array]
-GroupStorageType: TypeAlias = Union[ZarrGroup, H5Group]
-StorageType: TypeAlias = Union[ArrayStorageType, GroupStorageType]
+ArrayStorageType: TypeAlias = ZarrArray | H5Array
+GroupStorageType: TypeAlias = ZarrGroup | H5Group
+StorageType: TypeAlias = ArrayStorageType | GroupStorageType
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
-ContravariantInMemoryType = TypeVar(
-    "ContravariantInMemoryType", bound="InMemoryElem", contravariant=True
-)
-CovariantInMemoryType = TypeVar(
-    "CovariantInMemoryType", bound="InMemoryElem", covariant=True
-)
-InvariantInMemoryType = TypeVar("InvariantInMemoryType", bound="InMemoryElem")
+ContravariantRWAble = TypeVar("ContravariantRWAble", bound=RWAble, contravariant=True)
+CovariantRWAble = TypeVar("CovariantRWAble", bound=RWAble, covariant=True)
+InvariantRWAble = TypeVar("InvariantRWAble", bound=RWAble)
 
 SCo = TypeVar("SCo", covariant=True, bound=StorageType)
 SCon = TypeVar("SCon", contravariant=True, bound=StorageType)
 
 
-class _ReadInternal(Protocol[SCon, CovariantInMemoryType]):
-    def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantInMemoryType: ...
+class _ReadInternal(Protocol[SCon, CovariantRWAble]):
+    def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
 
 
 class _ReadDaskInternal(Protocol[SCon]):
@@ -95,8 +53,8 @@ class _ReadDaskInternal(Protocol[SCon]):
     ) -> DaskArray: ...
 
 
-class Read(Protocol[SCon, CovariantInMemoryType]):
-    def __call__(self, elem: SCon) -> CovariantInMemoryType:
+class Read(Protocol[SCon, CovariantRWAble]):
+    def __call__(self, elem: SCon) -> CovariantRWAble:
         """Low-level reading function for an element.
 
         Parameters
@@ -129,24 +87,24 @@ class ReadDask(Protocol[SCon]):
         ...
 
 
-class _WriteInternal(Protocol[ContravariantInMemoryType]):
+class _WriteInternal(Protocol[ContravariantRWAble]):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: ContravariantInMemoryType,
+        v: ContravariantRWAble,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
     ) -> None: ...
 
 
-class Write(Protocol[ContravariantInMemoryType]):
+class Write(Protocol[ContravariantRWAble]):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: ContravariantInMemoryType,
+        v: ContravariantRWAble,
         *,
         dataset_kwargs: Mapping[str, Any],
     ) -> None:
@@ -166,23 +124,23 @@ class Write(Protocol[ContravariantInMemoryType]):
         ...
 
 
-class ReadCallback(Protocol[SCo, InvariantInMemoryType]):
+class ReadCallback(Protocol[SCo, InvariantRWAble]):
     def __call__(
         self,
         /,
-        read_func: Read[SCo, InvariantInMemoryType],
+        read_func: Read[SCo, InvariantRWAble],
         elem_name: str,
         elem: StorageType,
         *,
         iospec: IOSpec,
-    ) -> InvariantInMemoryType:
+    ) -> InvariantRWAble:
         """
         Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
 
         Params
         ------
         read_func
-            :func:`anndata.experimental.read_elem` function to call to read the current element given the ``iospec``.
+            :func:`anndata.io.read_elem` function to call to read the current element given the ``iospec``.
         elem_name
             The key to read in from the group.
         elem
@@ -197,14 +155,14 @@ class ReadCallback(Protocol[SCo, InvariantInMemoryType]):
         ...
 
 
-class WriteCallback(Protocol[InvariantInMemoryType]):
+class WriteCallback(Protocol[InvariantRWAble]):
     def __call__(
         self,
         /,
-        write_func: Write[InvariantInMemoryType],
+        write_func: Write[InvariantRWAble],
         store: StorageType,
         elem_name: str,
-        elem: InvariantInMemoryType,
+        elem: InvariantRWAble,
         *,
         iospec: IOSpec,
         dataset_kwargs: Mapping[str, Any],
@@ -215,7 +173,7 @@ class WriteCallback(Protocol[InvariantInMemoryType]):
         Params
         ------
         write_func
-            :func:`anndata.experimental.write_elem` function to call to read the current element given the ``iospec``.
+            :func:`anndata.io.write_elem` function to call to read the current element given the ``iospec``.
         store
             The store to which `elem` should be written.
         elem_name

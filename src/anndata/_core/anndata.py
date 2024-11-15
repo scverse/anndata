@@ -52,9 +52,10 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
+    from ..compat import Index1D
+    from ..typing import ArrayDataStructureType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import Index, Index1D
-    from .views import ArrayView
+    from .index import Index
 
 
 # for backwards compat
@@ -134,15 +135,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     See Also
     --------
-    read_h5ad
-    read_csv
-    read_excel
-    read_hdf
-    read_loom
-    read_zarr
-    read_mtx
-    read_text
-    read_umi_tools
+    io.read_h5ad
+    io.read_csv
+    io.read_excel
+    io.read_hdf
+    io.read_loom
+    io.read_zarr
+    io.read_mtx
+    io.read_text
+    io.read_umi_tools
 
     Notes
     -----
@@ -272,12 +273,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 "that is, you cannot make a view of a view."
             )
         self._is_view = True
-        if isinstance(oidx, (int, np.integer)):
+        if isinstance(oidx, int | np.integer):
             if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
                 raise IndexError(f"Observation index `{oidx}` is out of range.")
             oidx += adata_ref.n_obs * (oidx < 0)
             oidx = slice(oidx, oidx + 1, 1)
-        if isinstance(vidx, (int, np.integer)):
+        if isinstance(vidx, int | np.integer):
             if not (-adata_ref.n_vars <= vidx < adata_ref.n_vars):
                 raise IndexError(f"Variable index `{vidx}` is out of range.")
             vidx += adata_ref.n_vars * (vidx < 0)
@@ -297,7 +298,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         var_sub = adata_ref.var.iloc[vidx]
         # fix categories
         uns = copy(adata_ref._uns)
-        if settings.should_remove_unused_categories:
+        if settings.remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
@@ -406,7 +407,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     #       as in readwrite.read_10x_h5
                     if X.dtype != np.dtype(dtype):
                         X = X.astype(dtype)
-                elif isinstance(X, (ZarrArray, DaskArray)):
+                elif isinstance(X, ZarrArray | DaskArray):
                     X = X.astype(dtype)
                 else:  # is np.ndarray or a subclass, convert to true np.ndarray
                     X = np.asarray(X, dtype)
@@ -447,7 +448,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # Backwards compat for connectivities matrices in uns["neighbors"]
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
         self._check_dimensions()
-        if settings.should_check_uniqueness:
+        if settings.check_uniqueness:
             self._check_uniqueness()
 
         if self.filename:
@@ -541,7 +542,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> np.ndarray | sparse.spmatrix | SpArray | ArrayView | None:
+    def X(self) -> ArrayDataStructureType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -696,7 +697,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         The :attr:`raw` attribute is initialized with the current content
         of an object by setting::
 
-            adata.raw = adata
+            adata.raw = adata.copy()
 
         Its content can be deleted::
 
@@ -763,16 +764,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError(
                 f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
             )
-        if isinstance(value, pd.Index) and not isinstance(
-            value.name, (str, type(None))
-        ):
+        if isinstance(value, pd.Index) and not isinstance(value.name, str | type(None)):
             raise ValueError(
                 f"AnnData expects .{attr}.index.name to be a string or None, "
                 f"but you passed a name of type {type(value.name).__name__!r}"
             )
         else:
             value = pd.Index(value)
-            if not isinstance(value.name, (str, type(None))):
+            if not isinstance(value.name, str | type(None)):
                 value.name = None
         if (
             len(value) > 0
@@ -1170,9 +1169,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(
-        self, index: Index, val: int | float | np.ndarray | sparse.spmatrix
-    ):
+    def __setitem__(self, index: Index, val: float | np.ndarray | sparse.spmatrix):
         if self.is_view:
             raise ValueError("Object is view and cannot be accessed with `[]`.")
         obs, var = self._normalize_indices(index)
@@ -1399,7 +1396,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         .. code:: python
 
             import anndata
-            backed = anndata.read_h5ad("file.h5ad", backed="r")
+            backed = anndata.io.read_h5ad("file.h5ad", backed="r")
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         new = {}
@@ -1444,7 +1441,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 return self._mutated_copy()
         else:
-            from .._io import read_h5ad, write_h5ad
+            from ..io import read_h5ad, write_h5ad
 
             if filename is None:
                 raise ValueError(
@@ -1858,7 +1855,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
         """
-        from .._io import write_h5ad
+        from ..io import write_h5ad
 
         if filename is None and not self.isbacked:
             raise ValueError("Provide a filename!")
@@ -1894,7 +1891,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         sep
              Separator for the data.
         """
-        from .._io import write_csvs
+        from ..io import write_csvs
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
@@ -1907,7 +1904,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         filename
             The filename.
         """
-        from .._io import write_loom
+        from ..io import write_loom
 
         write_loom(filename, self, write_obsm_varm=write_obsm_varm)
 
@@ -1926,7 +1923,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         chunks
             Chunk shape.
         """
-        from .._io import write_zarr
+        from ..io import write_zarr
 
         write_zarr(store, self, chunks=chunks)
 
@@ -1976,7 +1973,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if isinstance(select, int):
             select = select if select < self.n_obs else self.n_obs
             choice = np.random.choice(self.n_obs, select, replace)
-        elif isinstance(select, (np.ndarray, Sequence)):
+        elif isinstance(select, np.ndarray | Sequence):
             choice = np.asarray(select)
         else:
             raise ValueError("select should be int or array")

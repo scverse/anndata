@@ -7,9 +7,11 @@ from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from functools import singledispatch, wraps
+from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar, Union
+from types import EllipsisType
+from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
 import h5py
@@ -45,8 +47,18 @@ class Empty:
     pass
 
 
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, tuple[Index1D, Index1D], scipy.sparse.spmatrix, SpArray]
+Index1D = slice | int | str | np.int64 | np.ndarray
+IndexRest = Index1D | EllipsisType
+Index = (
+    IndexRest
+    | tuple[Index1D, IndexRest]
+    | tuple[IndexRest, Index1D]
+    | tuple[Index1D, Index1D, EllipsisType]
+    | tuple[EllipsisType, Index1D, Index1D]
+    | tuple[Index1D, EllipsisType, Index1D]
+    | scipy.sparse.spmatrix
+    | SpArray
+)
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
@@ -74,26 +86,14 @@ else:
             os.chdir(self._old_cwd.pop())
 
 
-if sys.version_info >= (3, 10):
-    from itertools import pairwise
-else:
-
-    def pairwise(iterable):
-        from itertools import tee
-
-        a, b = tee(iterable)
-        next(b, None)
-        return zip(a, b)
-
-
 #############################
 # Optional deps
 #############################
 
-try:
+if find_spec("zarr") or TYPE_CHECKING:
     from zarr.core import Array as ZarrArray
     from zarr.hierarchy import Group as ZarrGroup
-except ImportError:
+else:
 
     class ZarrArray:
         @staticmethod
@@ -106,12 +106,10 @@ except ImportError:
             return "mock zarr.core.Group"
 
 
-try:
-    import awkward
-
-    AwkArray = awkward.Array
-
-except ImportError:
+if find_spec("awkward") or TYPE_CHECKING:
+    import awkward  # noqa: F401
+    from awkward import Array as AwkArray
+else:
 
     class AwkArray:
         @staticmethod
@@ -119,9 +117,9 @@ except ImportError:
             return "mock awkward.highlevel.Array"
 
 
-try:
+if find_spec("zappy") or TYPE_CHECKING:
     from zappy.base import ZappyArray
-except ImportError:
+else:
 
     class ZappyArray:
         @staticmethod
@@ -129,9 +127,12 @@ except ImportError:
             return "mock zappy.base.ZappyArray"
 
 
-try:
+if TYPE_CHECKING:
+    # type checkers are confused and can only see …core.Array
+    from dask.array.core import Array as DaskArray
+elif find_spec("dask"):
     from dask.array import Array as DaskArray
-except ImportError:
+else:
 
     class DaskArray:
         @staticmethod
@@ -139,27 +140,29 @@ except ImportError:
             return "mock dask.array.core.Array"
 
 
-try:
+# https://github.com/scverse/anndata/issues/1749
+def is_cupy_importable() -> bool:
+    try:
+        import cupy  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+if is_cupy_importable() or TYPE_CHECKING:
     from cupy import ndarray as CupyArray
-    from cupyx.scipy.sparse import (
-        csc_matrix as CupyCSCMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        csr_matrix as CupyCSRMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        spmatrix as CupySparseMatrix,
-    )
+    from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
+    from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
+    from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
 
     try:
         import dask.array as da
-
-        da.register_chunk_type(CupyCSRMatrix)
-        da.register_chunk_type(CupyCSCMatrix)
     except ImportError:
         pass
-
-except ImportError:
+    else:
+        da.register_chunk_type(CupyCSRMatrix)
+        da.register_chunk_type(CupyCSCMatrix)
+else:
 
     class CupySparseMatrix:
         @staticmethod
@@ -293,7 +296,7 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-Group_T = TypeVar("Group_T", bound=Union[ZarrGroup, h5py.Group])
+Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
 
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
@@ -324,7 +327,7 @@ def _clean_uns(adata: AnnData):  # noqa: F821
             continue
         name = cats_name.replace("_categories", "")
         # fix categories with a single category
-        if isinstance(cats, (str, int)):
+        if isinstance(cats, str | int):
             cats = [cats]
         for ann in [adata.obs, adata.var]:
             if name not in ann:
@@ -349,7 +352,7 @@ def _move_adj_mtx(d):
     for k in ("distances", "connectivities"):
         if (
             (k in n)
-            and isinstance(n[k], (scipy.sparse.spmatrix, np.ndarray))
+            and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
             warn(

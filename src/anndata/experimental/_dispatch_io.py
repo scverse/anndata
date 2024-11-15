@@ -9,17 +9,17 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
-        InMemoryElem,
         ReadCallback,
         StorageType,
         WriteCallback,
     )
+    from anndata.typing import RWAble
 
 
 def read_dispatched(
     elem: StorageType,
     callback: ReadCallback,
-) -> InMemoryElem:
+) -> RWAble:
     """
     Read elem, calling the callback at each sub-element.
 
@@ -45,7 +45,7 @@ def read_dispatched(
 def write_dispatched(
     store: GroupStorageType,
     key: str,
-    elem: InMemoryElem,
+    elem: RWAble,
     callback: WriteCallback,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),

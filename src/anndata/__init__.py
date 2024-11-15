@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any
+
 try:  # See https://github.com/maresb/hatch-vcs-footgun-example
     from setuptools_scm import get_version
 
@@ -24,17 +29,6 @@ if sys.version_info < (3, 11):
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._io import (
-    read_csv,
-    read_excel,
-    read_h5ad,
-    read_hdf,
-    read_loom,
-    read_mtx,
-    read_text,
-    read_umi_tools,
-    read_zarr,
-)
 from ._settings import settings
 from ._warnings import (
     ExperimentalFeatureWarning,
@@ -42,12 +36,14 @@ from ._warnings import (
     OldFormatWarning,
     WriteWarning,
 )
+from .io import read_h5ad, read_zarr
+from .utils import module_get_attr_redirect
 
-# Experimental needs to be imported last
-from . import experimental  # isort: skip
+# Submodules need to be imported last
+from . import abc, experimental, typing, io  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
-from . import _io, logging  # noqa: F401 isort: skip
+from . import logging  # noqa: F401, E402 isort: skip
 
 
 def read(*args, **kwargs):
@@ -61,12 +57,7 @@ def read(*args, **kwargs):
     return read_h5ad(*args, **kwargs)
 
 
-__all__ = [
-    "__version__",
-    "AnnData",
-    "concat",
-    "Raw",
-    "read_h5ad",
+_DEPRECATED_IO = (
     "read_loom",
     "read_hdf",
     "read_excel",
@@ -74,11 +65,34 @@ __all__ = [
     "read_csv",
     "read_text",
     "read_mtx",
+)
+_DEPRECATED = dict((method, f"io.{method}") for method in _DEPRECATED_IO)
+
+
+def __getattr__(attr_name: str) -> Any:
+    return module_get_attr_redirect(attr_name, deprecated_mapping=_DEPRECATED)
+
+
+__all__ = [
+    # Attributes
+    "__version__",
+    "settings",
+    # Submodules
+    "abc",
+    "experimental",
+    "typing",
+    "io",
+    # Classes
+    "AnnData",
+    "Raw",
+    # Functions
+    "concat",
     "read_zarr",
+    "read_h5ad",
+    "read",
+    # Warnings
     "OldFormatWarning",
     "WriteWarning",
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
-    "experimental",
-    "settings",
 ]

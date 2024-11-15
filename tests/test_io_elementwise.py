@@ -20,12 +20,11 @@ from anndata._io.specs import (
     _REGISTRY,
     IOSpec,
     get_spec,
-    read_elem,
-    read_elem_as_dask,
-    write_elem,
 )
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import ZarrGroup, _read_attr
+from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
+from anndata.experimental import read_elem_as_dask
+from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
     as_cupy,
     as_cupy_sparse_dask_array,
@@ -35,6 +34,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Literal, TypeVar
 
     from anndata.compat import H5Group
@@ -138,14 +138,33 @@ def create_sparse_store(
             id="sp_mat_csc",
         ),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), "dataframe", id="pd_df"),
-        pytest.param(pd.Categorical(list("aabccedd")), "categorical", id="pd_cat"),
+        pytest.param(
+            pd.Categorical(list("aabccedd") + [pd.NA]),
+            "categorical",
+            id="pd_cat_np_str",
+        ),
         pytest.param(
             pd.Categorical(list("aabccedd"), ordered=True),
             "categorical",
-            id="pd_cat_ord",
+            id="pd_cat_np_str_ord",
+        ),
+        pytest.param(
+            pd.array(list("aabccedd") + [pd.NA], dtype="string").astype("category"),
+            "categorical",
+            id="pd_cat_pd_str",
         ),
         pytest.param(
             pd.Categorical([1, 2, 1, 3], ordered=True), "categorical", id="pd_cat_num"
+        ),
+        pytest.param(
+            pd.array(["hello", "world"], dtype="string"),
+            "nullable-string-array",
+            id="pd_arr_str",
+        ),
+        pytest.param(
+            pd.array(["hello", "world", pd.NA], dtype="string"),
+            "nullable-string-array",
+            id="pd_arr_str_mask",
         ),
         pytest.param(
             pd.arrays.IntegerArray(
@@ -187,6 +206,8 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
+    ad.settings.allow_write_nullable_strings = True
+
     key = f"key_for_{encoding_type}"
     write_elem(store, key, value, dataset_kwargs={})
 
@@ -275,6 +296,8 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (2, (200, 400)),
         (1, None),
         (2, None),
+        (2, (400, -1)),
+        (2, (400, None)),
     ],
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
@@ -307,28 +330,36 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("arr_type", "chunks"),
+    ("arr_type", "chunks", "expected_chunksize"),
     [
-        ("dense", (100, 100)),
-        ("csc", (SIZE, 10)),
-        ("csr", (10, SIZE * 2)),
-        ("csc", None),
-        ("csr", None),
+        ("dense", (100, 100), (100, 100)),
+        ("csc", (SIZE, 10), (SIZE, 10)),
+        ("csr", (10, SIZE * 2), (10, SIZE * 2)),
+        ("csc", None, (SIZE, 1000)),
+        ("csr", None, (1000, SIZE * 2)),
+        ("csr", (10, -1), (10, SIZE * 2)),
+        ("csc", (-1, 10), (SIZE, 10)),
+        ("csr", (10, None), (10, SIZE * 2)),
+        ("csc", (None, 10), (SIZE, 10)),
+        ("csc", (None, None), (SIZE, SIZE * 2)),
+        ("csr", (None, None), (SIZE, SIZE * 2)),
+        ("csr", (-1, -1), (SIZE, SIZE * 2)),
+        ("csc", (-1, -1), (SIZE, SIZE * 2)),
     ],
 )
-def test_read_lazy_2d_chunk_kwargs(store, arr_type, chunks):
+def test_read_lazy_2d_chunk_kwargs(
+    store: H5Group | ZarrGroup,
+    arr_type: Literal["csr", "csc", "dense"],
+    chunks: None | tuple[int | None, int | None],
+    expected_chunksize: tuple[int, int],
+):
     if arr_type == "dense":
         arr_store = create_dense_store(store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
     else:
         arr_store = create_sparse_store(arr_type, store)
         X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
-    if chunks is not None:
-        assert X_dask_from_disk.chunksize == chunks
-    else:
-        minor_index = int(arr_type == "csr")
-        # assert that sparse chunks are set correctly by default
-        assert X_dask_from_disk.chunksize[minor_index] == SIZE * (1 + minor_index)
+    assert X_dask_from_disk.chunksize == expected_chunksize
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
 
@@ -365,7 +396,7 @@ def test_write_indptr_dtype_override(store, sparse_format):
 
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2))
-    adata.raw = adata
+    adata.raw = adata.copy()
 
     write_elem(store, "adata", adata)
 
@@ -420,6 +451,11 @@ def test_write_io_error(store, obj):
 
     msg = str(exc_info.value)
     assert re.search(full_pattern, msg)
+
+
+def test_write_nullable_string_error(store):
+    with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings.*is False"):
+        write_elem(store, "/el", pd.array([""], dtype="string"))
 
 
 def test_categorical_order_type(store):
@@ -556,3 +592,22 @@ def test_io_pd_cow(store, copy_on_write):
         write_elem(store, "adata", orig)
         from_store = read_elem(store["adata"])
         assert_equal(orig, from_store)
+
+
+def test_read_sparse_array(
+    tmp_path: Path,
+    sparse_format: Literal["csr", "csc"],
+    diskfmt: Literal["h5ad", "zarr"],
+):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    a = sparse.random(100, 100, format=sparse_format)
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+    ad.io.write_elem(f, "mtx", a)
+    if not CAN_USE_SPARSE_ARRAY:
+        pytest.skip("scipy.sparse.cs{r,c}array not available")
+    ad.settings.use_sparse_array_on_read = True
+    mtx = ad.io.read_elem(f["mtx"])
+    assert issubclass(type(mtx), SpArray)

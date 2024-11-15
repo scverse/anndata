@@ -26,6 +26,7 @@ from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
     DASK_MATRIX_PARAMS,
+    DEFAULT_COL_TYPES,
     GEN_ADATA_DASK_ARGS,
     as_dense_dask_array,
     assert_equal,
@@ -494,19 +495,19 @@ def test_concatenate_fill_value(fill_val):
     adata1.obsm = {
         k: v
         for k, v in adata1.obsm.items()
-        if not isinstance(v, (pd.DataFrame, AwkArray))
+        if not isinstance(v, pd.DataFrame | AwkArray)
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, (pd.DataFrame, AwkArray))
+        if not isinstance(v, pd.DataFrame | AwkArray)
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, (pd.DataFrame, AwkArray))
+        if not isinstance(v, pd.DataFrame | AwkArray)
     }
     # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
     for tmp_ad in [adata1, adata2, adata3]:
@@ -696,9 +697,9 @@ def test_concatenate_with_raw():
         layers=dict(Xs=X4),
     )
 
-    adata1.raw = adata1
-    adata2.raw = adata2
-    adata3.raw = adata3
+    adata1.raw = adata1.copy()
+    adata2.raw = adata2.copy()
+    adata3.raw = adata3.copy()
 
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert isinstance(adata_all.raw, Raw)
@@ -712,7 +713,7 @@ def test_concatenate_with_raw():
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
     assert np.array_equal(np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X))
 
-    adata3.raw = adata4
+    adata3.raw = adata4.copy()
     adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == set("abcdz")
@@ -1375,8 +1376,9 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
-    a = gen_adata((5, 7))
-    b = gen_adata(shape)
+    col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype)
+    a = gen_adata((5, 7), obs_dtypes=col_dtypes, var_dtypes=col_dtypes)
+    b = gen_adata(shape, obs_dtypes=col_dtypes, var_dtypes=col_dtypes)
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
@@ -1633,3 +1635,23 @@ def test_concat_on_var_outer_join(array_type):
     # This shouldn't error
     # TODO: specify expected result while accounting for null value
     _ = concat([a, b], join="outer", axis=1)
+
+
+def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
+    import dask.array as da
+
+    X = sparse.random(50, 20, density=0.5, format="csr")
+    X_dask = da.from_array(X, chunks=(5, 20))
+    var_names_1 = [f"gene_{i}" for i in range(20)]
+    var_names_2 = [f"gene_{i}{'_foo' if (i%2) else ''}" for i in range(20, 40)]
+
+    ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
+    ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
+
+    ad1_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_1))
+    ad2_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_2))
+
+    res_in_memory = concat([ad1, ad2], join=join_type, merge=merge_strategy)
+    res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
+
+    assert_equal(res_in_memory, res_dask)

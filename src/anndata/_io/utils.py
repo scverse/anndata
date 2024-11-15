@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import wraps
+from itertools import pairwise
 from typing import TYPE_CHECKING, cast
 from warnings import warn
 
@@ -8,16 +9,16 @@ import h5py
 from packaging.version import Version
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from ..compat import add_note, pairwise
+from ..compat import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from typing import Literal, Union
+    from typing import Literal
 
     from .._types import StorageType
     from ..compat import H5Group, ZarrGroup
 
-    Storage = Union[StorageType, BaseCompressedSparseDataset]
+    Storage = StorageType | BaseCompressedSparseDataset
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442

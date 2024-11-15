@@ -51,10 +51,20 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
+      - name: Install yq
+        run: |
+          sudo snap install yq
+
+      - name: Extract max Python version from classifiers
+        run: |
+          classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep --only-matching --perl-regexp '(?<=Python :: )(\d\.\d+)')
+          max_version=$(echo "$classifiers" | sort -V | tail -1)
+          echo "max_python_version=$max_version" >> $GITHUB_ENV
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: ${{ env.max_python_version }}
 
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
@@ -75,3 +85,10 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
+
+      - name: Remove 'run-gpu-ci' Label
+        if: always()
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: "run-gpu-ci"
+          github_token: ${{ secrets.GITHUB_TOKEN }}

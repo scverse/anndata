@@ -13,7 +13,8 @@ if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
 HERE = Path(__file__).parent
-sys.path[:0] = [str(HERE / "extensions")]
+_extension_dir = HERE / "extensions"
+sys.path[:0] = [str(_extension_dir)]
 
 
 # -- General configuration ------------------------------------------------
@@ -61,11 +62,8 @@ extensions = [
     "sphinx.ext.linkcode",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
-    "patch_sphinx_toolbox_autoprotocol",  # internal extension
     "sphinx_toolbox.more_autodoc.autoprotocol",
-    # other internal extensions
-    "patch_myst_cite",
-    "release_notes",
+    *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
@@ -112,6 +110,10 @@ nitpick_ignore = [
     ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
+    # https://github.com/sphinx-doc/sphinx/issues/10974
+    ("py:class", "numpy.int64"),
+    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/498
+    ("py:class", "types.EllipsisType"),
 ]
 
 
@@ -121,17 +123,17 @@ def setup(app: Sphinx):
 
 
 intersphinx_mapping = dict(
-    h5py=("https://docs.h5py.org/en/latest/", None),
-    hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest/", None),
-    loompy=("https://linnarssonlab.org/loompy/", None),
-    numpy=("https://numpy.org/doc/stable/", None),
-    pandas=("https://pandas.pydata.org/pandas-docs/stable/", None),
+    h5py=("https://docs.h5py.org/en/latest", None),
+    hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest", None),
+    loompy=("https://linnarssonlab.org/loompy", None),
+    numpy=("https://numpy.org/doc/stable", None),
+    pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
     python=("https://docs.python.org/3", None),
-    scipy=("https://docs.scipy.org/doc/scipy/", None),
-    sklearn=("https://scikit-learn.org/stable/", None),
-    zarr=("https://zarr.readthedocs.io/en/stable/", None),
-    xarray=("https://xarray.pydata.org/en/stable/", None),
-    dask=("https://docs.dask.org/en/stable/", None),
+    scipy=("https://docs.scipy.org/doc/scipy", None),
+    sklearn=("https://scikit-learn.org/stable", None),
+    zarr=("https://zarr.readthedocs.io/en/stable", None),
+    xarray=("https://docs.xarray.dev/en/stable", None),
+    dask=("https://docs.dask.org/en/stable", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
@@ -142,13 +144,12 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
-    "anndata._types.RWAble": "anndata.experimental.RWAble",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
-    RWAble=":data:`~anndata.experimental.RWAble`",
+    AxisStorable=":data:`~anndata.typing.AxisStorable`",
     **{
-        f"{v}variantInMemoryType": ":data:`~anndata.experimental.InMemoryElem`"
+        f"{v}variantRWAble": ":data:`~anndata.typing.RWAble`"
         for v in ["In", "Co", "Contra"]
     },
 )

@@ -4,8 +4,26 @@ features = ["dev"]
 
 [envs.docs]
 features = ["doc"]
-dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
+extra-dependencies = ["setuptools"]  # https://bitbucket.org/pybtex-devs/pybtex/issues/169
+scripts.build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
+scripts.clean = "git clean -fdX -- {args:docs}"
 
-[envs.docs.scripts]
-build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
-clean = "git clean -fX -- docs"
+[envs.towncrier]
+scripts.build = "python3 ci/scripts/towncrier_automation.py {args}"
+scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-notes"
+
+[envs.hatch-test]
+default-args = []
+extra-dependencies = ["ipykernel"]
+features = ["dev", "test"]
+overrides.matrix.deps.env-vars = [
+    { key = "UV_PRERELEASE", value = "allow", if = ["pre"] },
+    { key = "UV_RESOLUTION", value = "lowest-direct", if = ["min"] },
+]
+overrides.matrix.deps.python = [
+    { if = ["min"], value = "3.10" },
+    { if = ["stable", "pre"], value = "3.12" },
+]
+
+[[envs.hatch-test.matrix]]
+deps = ["stable", "pre", "min"]

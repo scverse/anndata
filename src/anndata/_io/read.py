@@ -21,14 +21,6 @@ from .utils import is_float
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
 
-try:
-    from .zarr import read_zarr
-except ImportError as _e:
-    e = _e
-
-    def read_zarr(*_, **__):
-        raise e
-
 
 def read_csv(
     filename: PathLike | Iterator[str],
@@ -39,7 +31,7 @@ def read_csv(
     """\
     Read `.csv` file.
 
-    Same as :func:`~anndata.read_text` but with default delimiter `','`.
+    Same as :func:`~anndata.io.read_text` but with default delimiter `','`.
 
     Parameters
     ----------
@@ -208,7 +200,7 @@ def read_loom(
 
     .. code:: python
 
-        pbmc = anndata.read_loom(
+        pbmc = anndata.io.read_loom(
             "pbmc.loom",
             sparse=True,
             X_name="lognorm",
@@ -330,7 +322,7 @@ def read_text(
     """\
     Read `.txt`, `.tab`, `.data` (text) file.
 
-    Same as :func:`~anndata.read_csv` but with default delimiter `None`.
+    Same as :func:`~anndata.io.read_csv` but with default delimiter `None`.
 
     Parameters
     ----------
@@ -345,7 +337,7 @@ def read_text(
     dtype
         Numpy data type.
     """
-    if not isinstance(filename, (PathLike, str, bytes)):
+    if not isinstance(filename, PathLike | str | bytes):
         return _read_text(filename, delimiter, first_column_names, dtype)
 
     filename = Path(filename)

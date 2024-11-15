@@ -14,6 +14,7 @@ from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
+from anndata.compat import CAN_USE_SPARSE_ARRAY
 from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
@@ -396,36 +397,54 @@ settings = SettingsManager()
 ##################################################################################
 
 
-categories_option = "should_remove_unused_categories"
-categories_default_value = True
-categories_description = (
-    "Whether or not to remove unused categories with :class:`~pandas.Categorical`."
-)
-
-uniqueness_option = "should_check_uniqueness"
-uniqueness_default_value = True
-uniqueness_description = "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
-
-
-def validate_bool(val) -> None:
+def validate_bool(val: Any) -> None:
     if not isinstance(val, bool):
         msg = f"{val} not valid boolean"
         raise TypeError(msg)
 
 
 settings.register(
-    categories_option,
-    categories_default_value,
-    categories_description,
-    validate_bool,
+    "remove_unused_categories",
+    default_value=True,
+    description="Whether or not to remove unused categories with :class:`~pandas.Categorical`.",
+    validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
 
 settings.register(
-    uniqueness_option,
-    uniqueness_default_value,
-    uniqueness_description,
-    validate_bool,
+    "check_uniqueness",
+    default_value=True,
+    description=(
+        "Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."
+    ),
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "allow_write_nullable_strings",
+    default_value=False,
+    description="Whether or not to allow writing of `pd.arrays.StringArray`.",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+
+def validate_sparse_settings(val: Any) -> None:
+    validate_bool(val)
+    if not CAN_USE_SPARSE_ARRAY and cast(bool, val):
+        msg = (
+            "scipy.sparse.cs{r,c}array is not available in current scipy version. "
+            "Falling back to scipy.sparse.cs{r,c}_matrix for reading."
+        )
+        raise ValueError(msg)
+
+
+settings.register(
+    "use_sparse_array_on_read",
+    default_value=False,
+    description="Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data",
+    validate=validate_sparse_settings,
     get_from_env=check_and_get_bool,
 )
 

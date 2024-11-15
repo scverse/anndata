@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/anndata.svg)](https://pypi.org/project/anndata)
 [![Downloads](https://static.pepy.tech/badge/anndata/month)](https://pepy.tech/project/anndata)
 [![Downloads](https://static.pepy.tech/badge/anndata)](https://pepy.tech/project/anndata)
-[![Stars](https://img.shields.io/github/stars/scverse/anndata?logo=GitHub&color=yellow)](https://github.com/scverse/anndata/stargazers)
+[![Stars](https://img.shields.io/github/stars/scverse/anndata?style=flat&logo=github&color=yellow)](https://github.com/scverse/anndata/stargazers)
 [![Powered by NumFOCUS](https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A)](http://numfocus.org)
 
 <img
@@ -36,15 +36,29 @@ Please consider making a tax-deductible [donation](https://numfocus.org/donate-t
   >
 </a>
 
+## Public API
+
+Our public API is documented in the [API section][] of these docs.
+We cannot guarantee the stability of our internal APIs, whether it's the location of a function, its arguments, or something else.
+In other words, we do not officially support (or encourage users to do) something like `from anndata._core import AnnData` as `_core` is both not documented and contains a [leading underscore][].
+However, we are aware that [many users do use these internal APIs][] and thus encourage them to [open an issue][] or migrate to the public API.
+That is, if something is missing from our public API as documented, for example a feature you wish to be exported publicly, please open an issue.
+
+[api section]: https://anndata.readthedocs.io/en/stable/api.html
+[leading underscore]: https://peps.python.org/pep-0008/#public-and-internal-interfaces
+[many users do use these internal APIs]: https://github.com/search?q=%22anndata._io%22&type=code
+[open an issue]: https://github.com/scverse/anndata/issues/new/choose
+
+
 ## Citation
 
-If you use `anndata` in your work, please cite the `anndata` pre-print as follows:
+If you use `anndata` in your work, please cite the `anndata` publication as follows:
 
 > **anndata: Annotated data**
 >
 > Isaac Virshup, Sergei Rybakov, Fabian J. Theis, Philipp Angerer, F. Alexander Wolf
 >
-> _bioRxiv_ 2021 Dec 19. doi: [10.1101/2021.12.16.473007](https://doi.org/10.1101/2021.12.16.473007).
+> _JOSS_ 2024 Sep 16. doi: [10.21105/joss.04371](https://doi.org/10.21105/joss.04371).
 
 You can cite the scverse publication as follows:
 

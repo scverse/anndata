@@ -243,3 +243,16 @@ def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
 )
 def test_describe(as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
+
+
+def test_use_sparse_array_on_read():
+    import anndata as ad
+
+    if not ad.compat.CAN_USE_SPARSE_ARRAY:
+        with pytest.raises(
+            ValueError,
+            match=r"scipy.sparse.cs{r,c}array is not available in current scipy version",
+        ):
+            ad.settings.use_sparse_array_on_read = True
+    else:
+        ad.settings.use_sparse_array_on_read = True

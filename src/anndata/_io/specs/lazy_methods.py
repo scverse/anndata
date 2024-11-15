@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
-    from ..._core.sparse_dataset import CSCDataset, CSRDataset
+    from ..._core.sparse_dataset import _CSCDataset, _CSRDataset
     from ..._types import ArrayStorageType, StorageType
     from ...compat import DaskArray
     from .registry import DaskReader
@@ -66,7 +66,7 @@ def make_dask_chunk(
     block_info: BlockInfo | None = None,
     *,
     wrap: Callable[[ArrayStorageType], ArrayStorageType]
-    | Callable[[H5Group | ZarrGroup], CSRDataset | CSCDataset] = lambda g: g,
+    | Callable[[H5Group | ZarrGroup], _CSRDataset | _CSCDataset] = lambda g: g,
 ):
     if block_info is None:
         msg = "Block info is required"
@@ -105,12 +105,16 @@ def read_sparse_as_dask(
     if chunks is not None:
         if len(chunks) != 2:
             raise ValueError("`chunks` must be a tuple of two integers")
-        if chunks[minor_dim] != shape[minor_dim]:
+        if chunks[minor_dim] not in {shape[minor_dim], -1, None}:
             raise ValueError(
                 "Only the major axis can be chunked. "
                 f"Try setting chunks to {((-1, _DEFAULT_STRIDE) if is_csc else (_DEFAULT_STRIDE, -1))}"
             )
-        stride = chunks[major_dim]
+        stride = (
+            chunks[major_dim]
+            if chunks[major_dim] not in {None, -1}
+            else shape[major_dim]
+        )
 
     shape_minor, shape_major = shape if is_csc else shape[::-1]
     chunks_major = compute_chunk_layout_for_axis_shape(stride, shape_major)
@@ -120,7 +124,7 @@ def read_sparse_as_dask(
     )
     memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     make_chunk = partial(
-        make_dask_chunk, path_or_group, elem_name, wrap=ad.experimental.sparse_dataset
+        make_dask_chunk, path_or_group, elem_name, wrap=ad.io.sparse_dataset
     )
     da_mtx = da.map_blocks(
         make_chunk,
@@ -142,7 +146,11 @@ def read_h5_array(
     shape = tuple(elem.shape)
     dtype = elem.dtype
     chunks: tuple[int, ...] = (
-        chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(shape)
+        tuple(
+            c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
+        )
+        if chunks is not None
+        else (_DEFAULT_STRIDE,) * len(shape)
     )
 
     chunk_layout = tuple(

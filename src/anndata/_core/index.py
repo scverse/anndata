@@ -26,14 +26,8 @@ def _normalize_indices(
     if isinstance(index, pd.Series):
         index: Index = index.values
     if isinstance(index, tuple):
-        if len(index) > 2:
-            raise ValueError("AnnData can only be sliced in rows and columns.")
-        # deal with pd.Series
         # TODO: The series should probably be aligned first
-        if isinstance(index[1], pd.Series):
-            index = index[0], index[1].values
-        if isinstance(index[0], pd.Series):
-            index = index[0].values, index[1]
+        index = tuple(i.values if isinstance(i, pd.Series) else i for i in index)
     ax0, ax1 = unpack_index(index)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
@@ -70,25 +64,25 @@ def _normalize_index(
             stop = None if stop is None else stop + 1
         step = indexer.step
         return slice(start, stop, step)
-    elif isinstance(indexer, (np.integer, int)):
+    elif isinstance(indexer, np.integer | int):
         return indexer
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, (Sequence, np.ndarray, pd.Index, spmatrix, np.matrix, SpArray)
+        indexer, Sequence | np.ndarray | pd.Index | spmatrix | np.matrix | SpArray
     ):
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
-            if isinstance(indexer, (spmatrix, SpArray)):
+            if isinstance(indexer, spmatrix | SpArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
-        if not isinstance(indexer, (np.ndarray, pd.Index)):
+        if not isinstance(indexer, np.ndarray | pd.Index):
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
-        if issubclass(indexer.dtype.type, (np.integer, np.floating)):
+        if issubclass(indexer.dtype.type, np.integer | np.floating):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
             if indexer.shape != index.shape:
@@ -107,8 +101,7 @@ def _normalize_index(
                     "are not valid obs/ var names or indices."
                 )
             return positions  # np.ndarray[int]
-    else:
-        raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
+    raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
@@ -132,13 +125,28 @@ def _fix_slice_bounds(s: slice, length: int) -> slice:
 
 def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     if not isinstance(index, tuple):
+        if index is Ellipsis:
+            index = slice(None)
         return index, slice(None)
-    elif len(index) == 2:
+    num_ellipsis = sum(i is Ellipsis for i in index)
+    if num_ellipsis > 1:
+        raise IndexError("an index can only have a single ellipsis ('...')")
+    # If index has Ellipsis, filter it out (and if not, error)
+    if len(index) > 2:
+        if not num_ellipsis:
+            raise IndexError("Received a length 3 index without an ellipsis")
+        index = tuple(i for i in index if i is not Ellipsis)
         return index
-    elif len(index) == 1:
-        return index[0], slice(None)
-    else:
-        raise IndexError("invalid number of indices")
+    # If index has Ellipsis, replace it with slice
+    if len(index) == 2:
+        index = tuple(slice(None) if i is Ellipsis else i for i in index)
+        return index
+    if len(index) == 1:
+        index = index[0]
+        if index is Ellipsis:
+            index = slice(None)
+        return index, slice(None)
+    raise IndexError("invalid number of indices")
 
 
 @singledispatch

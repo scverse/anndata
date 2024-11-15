@@ -30,7 +30,7 @@ def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]))
     AnnData(np.array([[1, 2], [3, 4]]), {}, {})
     AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
-    AnnData(sp.eye(2))
+    AnnData(sp.eye(2, format="csr"))
     if CAN_USE_SPARSE_ARRAY:
         AnnData(sp.eye_array(2))
     X = np.array([[1, 2, 3], [4, 5, 6]])
@@ -95,7 +95,7 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
 def test_invalid_X():
     with pytest.raises(
         ValueError,
-        match=r"X needs to be of one of np\.ndarray.*not <class 'str'>\.",
+        match=r"X needs to be of one of <class 'numpy.ndarray'>.*not <class 'str'>\.",
     ):
         AnnData("string is not a valid X")
 
@@ -126,7 +126,7 @@ def test_error_create_from_multiindex_df(attr):
 
 
 def test_create_from_sparse_df():
-    s = sp.random(20, 30, density=0.2)
+    s = sp.random(20, 30, density=0.2, format="csr")
     obs_names = [f"obs{i}" for i in range(20)]
     var_names = [f"var{i}" for i in range(30)]
     df = pd.DataFrame.sparse.from_spmatrix(s, index=obs_names, columns=var_names)
@@ -277,7 +277,7 @@ def test_setting_dim_index(dim):
     mapping_attr = f"{dim}m"
 
     orig = gen_adata((5, 5))
-    orig.raw = orig
+    orig.raw = orig.copy()
     curr = orig.copy()
     view = orig[:, :]
     new_idx = pd.Index(list("abcde"), name="letters")
@@ -453,7 +453,7 @@ def test_slicing_remove_unused_categories():
 
 
 def test_slicing_dont_remove_unused_categories():
-    with settings.override(should_remove_unused_categories=False):
+    with settings.override(remove_unused_categories=False):
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
         )
@@ -462,7 +462,7 @@ def test_slicing_dont_remove_unused_categories():
 
 
 def test_no_uniqueness_check_gives_repeat_indices():
-    with settings.override(should_check_uniqueness=False):
+    with settings.override(check_uniqueness=False):
         obs_names = ["0", "0", "1", "1"]
         with warnings.catch_warnings():
             warnings.simplefilter("error")
@@ -590,7 +590,7 @@ def test_convenience():
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
-    adata.raw = adata
+    adata.raw = adata.copy()
     adata.X = adata.X / 2
     adata_dense = adata.copy()
     adata_dense.X = adata_dense.X.toarray()

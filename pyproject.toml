@@ -5,7 +5,7 @@ requires = ["hatchling", "hatch-vcs"]
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "BSD-3-Clause"
 authors = [
     { name = "Philipp Angerer" },
@@ -29,7 +29,6 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -43,7 +42,7 @@ dependencies = [
     "numpy>=1.23",
     # https://github.com/scverse/anndata/issues/1434
     "scipy >1.8",
-    "h5py>=3.1",
+    "h5py>=3.6",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
     "packaging>=20.0",
@@ -61,10 +60,8 @@ Home-page = "https://github.com/scverse/anndata"
 [project.optional-dependencies]
 dev = [
     # dev version generation
-    "setuptools_scm",
-    # test speedups
-    "pytest-xdist",
-    "towncrier>=24.8.0",
+    "setuptools-scm",
+    "anndata[dev-doc,dev-test]",
 ]
 doc = [
     "sphinx>=7.4.6",
@@ -72,17 +69,20 @@ doc = [
     "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",
     "sphinx-copybutton",
-    "sphinx-toolbox",
+    "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "nbsphinx",
-    "scanpydoc[theme,typehints] >=0.13.6",
+    "scanpydoc[theme,typehints] >=0.14.1",
     "zarr",
     "awkward>=2.0.7",
     "IPython",                          # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
+    # for unreleased changes
+    "anndata[dev-doc]",
 ]
+dev-doc = ["towncrier>=24.8.0"] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2",
@@ -95,26 +95,34 @@ test = [
     "boltons",
     "scanpy",
     "httpx", # For data downloading
-    "dask[array,distributed]>=2022.09.2,<2024.8.0",
+    "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
     "pytest_memray",
-    "pytest-mock"
+    "pytest-mock",
+    "anndata[dask]",
 ]
+dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
+# https://github.com/dask/dask/issues/11290
+dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*"]
 
 [tool.hatch.version]
 source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "src/anndata/_version.py"
+raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
 packages = ["src/anndata", "src/testing"]
 
 [tool.coverage.run]
+data_file = "test-data/coverage"
 source_pkgs = ["anndata"]
 omit = ["src/anndata/_version.py", "**/test_*.py"]
+[tool.coverage.xml]
+output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = ["./src", "**/site-packages"]
 
@@ -165,12 +173,15 @@ select = [
     "E",   # Error detected by Pycodestyle
     "F",   # Errors detected by Pyflakes
     "W",   # Warning detected by Pycodestyle
+    "PLW", # Pylint
     "UP",  # pyupgrade
     "I",   # isort
     "TCH", # manage type checking blocks
+    "TID", # Banned imports
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
     "PT",  # Pytest conventions
+    "PYI", # Typing
 ]
 ignore = [
     # line too long -> we accept long comment lines; formatter gets rid of long code lines
@@ -179,6 +190,10 @@ ignore = [
     "E731",
     # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
     "E741",
+    # We use relative imports from parent modules
+    "TID252",
+    # Shadowing loop variables isn’t a big deal
+    "PLW2901",
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
@@ -186,6 +201,10 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["anndata"]
 required-imports = ["from __future__ import annotations"]
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"subprocess.call".msg = "Use `subprocess.run([…])` instead"
+"subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
+"subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = []
 strict = true
@@ -202,16 +221,10 @@ single_file = false
 package_dir = "src"
 issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
-[tool.towncrier.fragment.bugfix]
-[tool.towncrier.fragment.doc]
-[tool.towncrier.fragment.feature]
-[tool.towncrier.fragment.misc]
-
-[tool.towncrier.fragment.performance]
-name = "Performance"
-
-[tool.towncrier.fragment.breaking]
-name = "Breaking"
-
-[tool.towncrier.fragment.dev]
-name = "Development Process"
+fragment.bugfix.name = "Bug fixes"
+fragment.doc.name = "Documentation"
+fragment.feature.name = "Features"
+fragment.misc.name = "Miscellaneous improvements"
+fragment.performance.name = "Performance"
+fragment.breaking.name = "Breaking changes"
+fragment.dev.name = "Development Process"
