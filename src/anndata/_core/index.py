@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse, spmatrix
+from scipy.sparse import issparse
 
-from ..compat import AwkArray, DaskArray, SpArray
+from ..compat import AwkArray, DaskArray, SpArray, SpMatrix
 
 if TYPE_CHECKING:
     from ..compat import Index, Index1D
@@ -69,13 +69,13 @@ def _normalize_index(
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | spmatrix | np.matrix | SpArray
+        indexer, Sequence | np.ndarray | pd.Index | SpMatrix | np.matrix | SpArray
     ):
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
-            if isinstance(indexer, spmatrix | SpArray):
+            if isinstance(indexer, SpMatrix | SpArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
         if not isinstance(indexer, np.ndarray | pd.Index):
@@ -167,9 +167,9 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
     return a[subset_idx]
 
 
-@_subset.register(spmatrix)
+@_subset.register(SpMatrix)
 @_subset.register(SpArray)
-def _subset_sparse(a: spmatrix | SpArray, subset_idx: Index):
+def _subset_sparse(a: SpMatrix | SpArray, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import os
-import sys
 import textwrap
 import warnings
 from collections.abc import Iterable
@@ -53,27 +52,14 @@ def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     return textwrap.dedent(doc)
 
 
-if sys.version_info >= (3, 11):
+class RegisteredOption(NamedTuple, Generic[T]):
+    option: str
+    default_value: T
+    description: str
+    validate: Callable[[T], None]
+    type: object
 
-    class RegisteredOption(NamedTuple, Generic[T]):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
-
-else:
-
-    class RegisteredOption(NamedTuple):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
+    describe = describe
 
 
 def check_and_get_environ_var(

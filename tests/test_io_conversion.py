@@ -10,6 +10,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
+from anndata.compat import SpMatrix
 from anndata.tests.helpers import assert_equal, gen_adata
 
 
@@ -99,8 +100,8 @@ def test_dense_to_sparse_memory(tmp_path, spmtx_format, to_convert):
     orig = gen_adata((50, 50), np.array)
     orig.raw = orig.copy()
     orig.write_h5ad(dense_path)
-    assert not isinstance(orig.X, sparse.spmatrix)
-    assert not isinstance(orig.raw.X, sparse.spmatrix)
+    assert not isinstance(orig.X, SpMatrix)
+    assert not isinstance(orig.raw.X, SpMatrix)
 
     curr = ad.read_h5ad(dense_path, as_sparse=to_convert, as_sparse_fmt=spmtx_format)
 

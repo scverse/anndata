@@ -51,7 +51,8 @@ def _doctest_env(
         )
         from scanpy import settings
 
-    from anndata.compat import chdir
+    from contextlib import chdir
+
     from anndata.utils import import_name
 
     assert isinstance(request.node.parent, pytest.Module)
