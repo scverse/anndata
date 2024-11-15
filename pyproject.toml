@@ -93,7 +93,6 @@ test = [
     "openpyxl",
     "joblib",
     "boltons",
-    "scanpy",
     "httpx", # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
@@ -101,7 +100,6 @@ test = [
     "pytest_memray",
     "pytest-mock",
     "anndata[dask]",
-    "numba @ git+https://github.com/numba/numba"
 ]
 dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
