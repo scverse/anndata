@@ -398,7 +398,7 @@ def _iter_chunks_for_copy(elem: ArrayStorageType, dest: ArrayStorageType):
     * If `dest` has chunks, it will return the chunks of `dest`.
     * If `dest` is not chunked, we write it in ~100MB chunks or 1000 rows, whichever is larger.
     """
-    if dest.chunks:
+    if dest.chunks and hasattr(dest, "iter_chunks"):
         return dest.iter_chunks()
     else:
         itemsize = elem.dtype.itemsize
@@ -412,7 +412,8 @@ def _iter_chunks_for_copy(elem: ArrayStorageType, dest: ArrayStorageType):
 
 @_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
-def write_chunked_dense_array_to_h5(
+@_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
+def write_chunked_dense_array_to_group(
     f: GroupStorageType,
     k: str,
     elem: ArrayStorageType,
@@ -426,10 +427,29 @@ def write_chunked_dense_array_to_h5(
     before writing. Instead, we will write in chunks to avoid this. We don't need to do this for
     zarr since zarr handles this automatically.
     """
-    dest = f.create_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    dtype = dataset_kwargs.get("dtype", elem.dtype)
+    dest = f.create_dataset(k, shape=elem.shape, **dataset_kwargs, dtype=dtype)
 
     for chunk in _iter_chunks_for_copy(elem, dest):
         dest[chunk] = elem[chunk]
+
+
+@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
+def write_chunked_dense_array_to_zarr(
+    f: ZarrGroup,
+    k: str,
+    elem: ZarrArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    """Write to a h5py.Dataset in chunks.
+    `h5py.Group.create_dataset(..., data: h5py.Dataset)` will load all of `data` into memory
+    before writing. Instead, we will write in chunks to avoid this. We don't need to do this for
+    zarr since zarr handles this automatically.
+    """
+    dtype = dataset_kwargs.get("dtype", elem.dtype)
+    f.create_dataset(k, shape=elem.shape, data=elem, **dataset_kwargs, dtype=dtype)
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
@@ -638,10 +658,14 @@ def write_sparse_compressed(
     # Allow resizing for hdf5
     if isinstance(f, H5Group) and "maxshape" not in dataset_kwargs:
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
-
-    g.create_dataset("data", data=value.data, **dataset_kwargs)
-    g.create_dataset("indices", data=value.indices, **dataset_kwargs)
-    g.create_dataset("indptr", data=value.indptr, dtype=indptr_dtype, **dataset_kwargs)
+    _writer.write_elem(g, "data", value.data, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(g, "indices", value.indices, dataset_kwargs=dataset_kwargs)
+    _writer.write_elem(
+        g,
+        "indptr",
+        value.indptr,
+        dataset_kwargs={"dtype": indptr_dtype, **dataset_kwargs},
+    )
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
