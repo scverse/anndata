@@ -14,7 +14,7 @@ jobs:
       vmImage: "ubuntu-22.04"
     strategy:
       matrix:
-        Python3.12:
+        Python3.13:
           python.version: "3.13"
           RUN_COVERAGE: yes
           TEST_TYPE: "coverage"
