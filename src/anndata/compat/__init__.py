@@ -10,6 +10,7 @@ from functools import singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
+from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
@@ -47,7 +48,17 @@ class Empty:
 
 
 Index1D = slice | int | str | np.int64 | np.ndarray
-Index = Index1D | tuple[Index1D, Index1D] | scipy.sparse.spmatrix | SpArray
+IndexRest = Index1D | EllipsisType
+Index = (
+    IndexRest
+    | tuple[Index1D, IndexRest]
+    | tuple[IndexRest, Index1D]
+    | tuple[Index1D, Index1D, EllipsisType]
+    | tuple[EllipsisType, Index1D, Index1D]
+    | tuple[Index1D, EllipsisType, Index1D]
+    | scipy.sparse.spmatrix
+    | SpArray
+)
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
@@ -129,7 +140,16 @@ else:
             return "mock dask.array.core.Array"
 
 
-if find_spec("cupy") or TYPE_CHECKING:
+# https://github.com/scverse/anndata/issues/1749
+def is_cupy_importable() -> bool:
+    try:
+        import cupy  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+if is_cupy_importable() or TYPE_CHECKING:
     from cupy import ndarray as CupyArray
     from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
     from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
