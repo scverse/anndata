@@ -343,12 +343,16 @@ class Writer:
             return lambda *_, **__: None
 
         # Normalize k to absolute path
+        is_zarr_group_and_is_zarr_package_v2 = False
         if isinstance(store, ZarrGroup):
             import zarr
 
             if Version(zarr.__version__) < Version("3.0.0b0"):
-                if not PurePosixPath(k).is_absolute():
-                    k = str(PurePosixPath(store.name) / k)
+                is_zarr_group_and_is_zarr_package_v2 = True
+
+        if is_zarr_group_and_is_zarr_package_v2 or isinstance(store, h5py.Group):
+            if not PurePosixPath(k).is_absolute():
+                k = str(PurePosixPath(store.name) / k)
 
         if k == "/":
             if isinstance(store, ZarrGroup):
