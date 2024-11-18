@@ -75,12 +75,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     if Version(args.version).micro != 0 and not re.fullmatch(
         patch_branch_pattern, base_branch
     ):
-        msg = f"Version {args.version} is a patch release, but "
-        "you are trying to release from a non-patch release branch: {base_branch}."
+        msg = (
+            f"Version {args.version} is a patch release, but "
+            f"you are trying to release from a non-patch release branch: {base_branch}."
+        )
         raise NoPatchReleaseOnMainError(msg)
     if Version(args.version).micro == 0 and base_branch != "main":
-        msg = f"Version {args.version} is a minor or major release, "
-        "but you are trying to release not from main: {base_branch}."
+        msg = (
+            f"Version {args.version} is a minor or major release, "
+            f"but you are trying to release not from main: {base_branch}."
+        )
         raise NoMinorMajorReleaseOffMainError(msg)
     pr_description = "" if base_branch == "main" else "@meeseeksdev backport to main"
     branch_name = f"release_notes_{args.version}"
