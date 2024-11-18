@@ -438,7 +438,7 @@ settings.register(
 )
 
 settings.register(
-    "zarr_write_version",
+    "zarr_write_format",
     default_value=2,
     description="Which version of zarr to write to.",
     validate=validate_int,

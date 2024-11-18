@@ -536,8 +536,8 @@ def write_vlen_string_array_zarr(
         f.create_array(
             k,
             shape=elem.shape,
-            dtype=str if ad.settings.zarr_write_version == 3 else object,
-            codecs=[VLenUTF8Codec()] if ad.settings.zarr_write_version == 3 else None,
+            dtype=str if ad.settings.zarr_write_format == 3 else object,
+            codecs=[VLenUTF8Codec()] if ad.settings.zarr_write_format == 3 else None,
             **dataset_kwargs,
         )
         f[k][:] = elem
