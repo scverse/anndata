@@ -53,7 +53,9 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         file = h5py.File(tmp_path / "test.h5", "w")
         store = file["/"]
     elif request.param == "zarr":
-        store = zarr.open(tmp_path / "test.zarr", "w")
+        store = zarr.open(
+            tmp_path / "test.zarr", "w", zarr_version=ad.settings.zarr_write_version
+        )
     else:
         pytest.fail(f"Unknown store type: {request.param}")
 

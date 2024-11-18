@@ -1040,7 +1040,7 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 if find_spec("zarr") or TYPE_CHECKING:
-    from zarr.storage import LocalStore
+    from zarr.storage import DirectoryStore as LocalStore
 else:
 
     class LocalStore:

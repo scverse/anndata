@@ -395,12 +395,20 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
+V = TypeVar("V")
 
 
-def validate_bool(val: Any) -> None:
-    if not isinstance(val, bool):
-        msg = f"{val} not valid boolean"
-        raise TypeError(msg)
+def gen_validator(_type: type[V]) -> Callable[[V], None]:
+    def validate_type(val: V) -> None:
+        if not isinstance(val, _type):
+            msg = f"{val} not valid {_type}"
+            raise TypeError(msg)
+
+    return validate_type
+
+
+validate_bool = gen_validator(bool)
+validate_int = gen_validator(int)
 
 
 settings.register(
@@ -427,6 +435,19 @@ settings.register(
     description="Whether or not to allow writing of `pd.arrays.StringArray`.",
     validate=validate_bool,
     get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "zarr_write_version",
+    default_value=2,
+    description="Which version of zarr to write to.",
+    validate=validate_int,
+    get_from_env=lambda name, default: check_and_get_environ_var(
+        f"ANNDATA_{name.upper()}",
+        str(default),
+        ["2", "3"],
+        lambda x: int(x),
+    ),
 )
 
 
