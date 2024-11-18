@@ -39,7 +39,7 @@ def write_zarr(
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
-    f = zarr.open(store, mode="w", zarr_version=settings.zarr_write_version)
+    f = zarr.open_group(store, mode="w", zarr_version=settings.zarr_write_version)
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 

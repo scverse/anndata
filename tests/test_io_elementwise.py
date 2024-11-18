@@ -53,7 +53,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         file = h5py.File(tmp_path / "test.h5", "w")
         store = file["/"]
     elif request.param == "zarr":
-        store = zarr.open(
+        store = zarr.open_group(
             tmp_path / "test.zarr", "w", zarr_version=ad.settings.zarr_write_version
         )
     else:

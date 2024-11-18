@@ -16,6 +16,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -1040,7 +1041,12 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 if find_spec("zarr") or TYPE_CHECKING:
-    from zarr.storage import DirectoryStore as LocalStore
+    import zarr
+
+    if Version(zarr.__version__) > Version("3.0.0b0"):
+        from zarr.storage import LocalStore
+    else:
+        from zarr.storage import DirectoryStore as LocalStore
 else:
 
     class LocalStore:
