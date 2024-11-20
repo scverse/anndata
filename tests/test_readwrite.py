@@ -15,12 +15,11 @@ import pandas as pd
 import pytest
 import zarr
 from numba.core.errors import NumbaDeprecationWarning
-from scipy import sparse
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import DaskArray, SpArray, _read_attr
+from anndata.compat import DaskArray, SpArray, SpMatrix, _read_attr
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 from testing.anndata._helpers import xfail_if_numpy2_loompy
 
@@ -161,7 +160,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     # since we tested if assigned types and loaded types are DaskArray
     # this would also work if they work
     if isinstance(adata_src.raw.X, SpArray):
-        assert isinstance(adata.raw.X, sparse.spmatrix)
+        assert isinstance(adata.raw.X, SpMatrix)
     else:
         assert isinstance(adata_src.raw.X, type(adata.raw.X) | DaskArray)
     assert isinstance(

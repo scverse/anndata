@@ -32,7 +32,7 @@ def test_creation():
     AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
     AnnData(sp.eye(2, format="csr"))
     if CAN_USE_SPARSE_ARRAY:
-        AnnData(sp.eye_array(2))
+        AnnData(sp.eye_array(2, format="csr"))
     X = np.array([[1, 2, 3], [4, 5, 6]])
     adata = AnnData(
         X=X,

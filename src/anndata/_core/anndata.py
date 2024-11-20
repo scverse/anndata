@@ -221,13 +221,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __init__(
         self,
-        X: np.ndarray | sparse.spmatrix | pd.DataFrame | None = None,
+        X: ArrayDataStructureType | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
+        layers: Mapping[str, ArrayDataStructureType] | None = None,
         raw: Mapping[str, Any] | None = None,
         dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
@@ -573,7 +573,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X
 
     @X.setter
-    def X(self, value: np.ndarray | sparse.spmatrix | SpArray | None):
+    def X(self, value: ArrayDataStructureType | None):
         if value is None:
             if self.isbacked:
                 raise NotImplementedError(
@@ -1169,7 +1169,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: float | np.ndarray | sparse.spmatrix):
+    def __setitem__(self, index: Index, val: ArrayDataStructureType):
         if self.is_view:
             raise ValueError("Object is view and cannot be accessed with `[]`.")
         obs, var = self._normalize_indices(index)
