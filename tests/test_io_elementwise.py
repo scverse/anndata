@@ -319,7 +319,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
-def test_undersized_shape_to_default(store):
+def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
     shape = (3000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_as_dask(arr_store["X"])
