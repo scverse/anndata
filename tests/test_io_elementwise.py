@@ -73,8 +73,10 @@ def sparse_format(request):
     return request.param
 
 
-def create_dense_store(store, n_dims: int = 2):
-    X = np.random.randn(*[SIZE * (i + 1) for i in range(n_dims)])
+def create_dense_store(
+    store: str, n_dims: int = 2, shape=(SIZE, SIZE * 2)
+) -> H5Group | ZarrGroup:
+    X = np.random.randn(*shape)
 
     write_elem(store, "X", X)
     return store
@@ -315,6 +317,14 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         dd.Client(cluster) as _client,
     ):
         assert_equal(X_from_disk, X_dask_from_disk)
+
+
+def test_undersized_shape_to_default(store):
+    shape = (3000, 50)
+    arr_store = create_dense_store(store, shape=shape)
+    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape))
+    assert X_dask_from_disk.shape == shape
 
 
 @pytest.mark.parametrize(
