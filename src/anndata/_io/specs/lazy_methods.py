@@ -160,7 +160,7 @@ def read_h5_array(
             c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
         )
         if chunks is not None
-        else (_DEFAULT_STRIDE,) * len(shape)
+        else tuple(min(_DEFAULT_STRIDE, s) for s in shape)
     )
 
     chunk_layout = tuple(
@@ -169,7 +169,9 @@ def read_h5_array(
     )
 
     make_chunk = partial(make_dask_chunk, path, elem_name)
-    return da.map_blocks(make_chunk, dtype=dtype, chunks=chunk_layout)
+    return da.map_blocks(
+        make_chunk, dtype=dtype, chunks=chunk_layout, meta=np.array([])
+    )
 
 
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
