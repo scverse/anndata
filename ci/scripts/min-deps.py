@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = [
+#   "tomli; python_version < '3.11'",
+#   "packaging",
+# ]
+# ///
+
 from __future__ import annotations
 
 import argparse
@@ -33,12 +40,14 @@ def min_dep(req: Requirement) -> Requirement:
     if req.extras:
         req_name = f"{req_name}[{','.join(req.extras)}]"
 
-    specs = [spec for spec in req.specifier if spec.operator in {">", ">=", "~=", "=="}]
-    if not specs:
+    filter_specs = [
+        spec for spec in req.specifier if spec.operator in {"==", "~=", ">=", ">"}
+    ]
+    if not filter_specs:
         return Requirement(req_name)
 
     min_version = Version("0.0.0.a1")
-    for spec in specs:
+    for spec in filter_specs:
         if spec.operator in {">", ">=", "~="}:
             min_version = max(min_version, Version(spec.version))
         elif spec.operator == "==":
