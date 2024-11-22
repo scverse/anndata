@@ -74,7 +74,9 @@ def sparse_format(request):
     return request.param
 
 
-def create_dense_store(store: str, *, shape=DEFAULT_SHAPE) -> H5Group | ZarrGroup:
+def create_dense_store(
+    store: str, *, shape: tuple[int, ...] = DEFAULT_SHAPE
+) -> H5Group | ZarrGroup:
     X = np.random.randn(*shape)
 
     write_elem(store, "X", X)
