@@ -1044,7 +1044,9 @@ def gen_list(n):
 
 
 def gen_sparse(n):
-    return sparse.random(np.random.randint(1, 100), np.random.randint(1, 100))
+    return sparse.random(
+        np.random.randint(1, 100), np.random.randint(1, 100), format="csr"
+    )
 
 
 def gen_something(n):
