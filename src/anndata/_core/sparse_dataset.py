@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
+    from ..compat import H5Array
     from .index import Index
 else:
     from scipy.sparse import spmatrix as _cs_matrix
@@ -380,7 +381,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     @property
     def dtype(self) -> np.dtype:
         """The :class:`numpy.dtype` of the `data` attribute of the sparse matrix."""
-        return self.group["data"].dtype
+        return self._data.dtype
 
     @classmethod
     def _check_group_format(cls, group):
@@ -545,15 +546,17 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         indptr[orig_data_size:] = (
             sparse_matrix.indptr[1:].astype(np.int64) + indptr_offset
         )
-        # Clear cached property
-        if hasattr(self, "indptr"):
-            del self._indptr
 
         # indices
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
+
+        # Clear cached property
+        for attr in ["_indptr", "_indices", "_data"]:
+            if hasattr(self, attr):
+                delattr(self, attr)
 
     @cached_property
     def _indptr(self) -> np.ndarray:
@@ -565,11 +568,25 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         arr = self.group["indptr"][...]
         return arr
 
+    @cached_property
+    def _indices(self) -> H5Array | ZarrArray:
+        """\
+        Cache access to the indices to prevent unnecessary reads of the zarray
+        """
+        return self.group["indices"]
+
+    @cached_property
+    def _data(self) -> H5Array | ZarrArray:
+        """\
+        Cache access to the data to prevent unnecessary reads of the zarray
+        """
+        return self.group["data"]
+
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self.group["data"]
-        mtx.indices = self.group["indices"]
+        mtx.data = self._data
+        mtx.indices = self._indices
         mtx.indptr = self._indptr
         return mtx
 
@@ -578,8 +595,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
         mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self.group["data"][...]
-        mtx.indices = self.group["indices"][...]
+        mtx.data = self._data[...]
+        mtx.indices = self._indices[...]
         mtx.indptr = self._indptr
         return mtx
 

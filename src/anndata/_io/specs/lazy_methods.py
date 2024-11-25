@@ -3,25 +3,24 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
 from scipy import sparse
 
 import anndata as ad
+from anndata.abc import CSCDataset, CSRDataset
 
 from ..._core.file_backing import filename, get_elem_name
 from ...compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping, Sequence
+    from collections.abc import Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
-    from ..._core.sparse_dataset import _CSCDataset, _CSRDataset
-    from ..._types import ArrayStorageType, StorageType
-    from ...compat import DaskArray
+    from ...compat import DaskArray, H5File, SpArray
     from .registry import DaskReader
 
     BlockInfo = Mapping[
@@ -31,16 +30,25 @@ if TYPE_CHECKING:
 
     P = ParamSpec("P")
     R = TypeVar("R")
+    D = TypeVar("D")
 
 
+@overload
 @contextmanager
 def maybe_open_h5(
-    path_or_group: Path | ZarrGroup, elem_name: str
-) -> Generator[StorageType, None, None]:
-    if not isinstance(path_or_group, Path):
-        yield path_or_group
+    path_or_other: Path, elem_name: str
+) -> Generator[H5File, None, None]: ...
+@overload
+@contextmanager
+def maybe_open_h5(path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
+@contextmanager
+def maybe_open_h5(
+    path_or_other: H5File | D, elem_name: str
+) -> Generator[H5File | D, None, None]:
+    if not isinstance(path_or_other, Path):
+        yield path_or_other
         return
-    file = h5py.File(path_or_group, "r")
+    file = h5py.File(path_or_other, "r")
     try:
         yield file[elem_name]
     finally:
@@ -61,20 +69,17 @@ def compute_chunk_layout_for_axis_shape(
 
 
 def make_dask_chunk(
-    path_or_group: Path | ZarrGroup,
+    path_or_sparse_dataset: Path | D,
     elem_name: str,
     block_info: BlockInfo | None = None,
-    *,
-    wrap: Callable[[ArrayStorageType], ArrayStorageType]
-    | Callable[[H5Group | ZarrGroup], _CSRDataset | _CSCDataset] = lambda g: g,
-):
+) -> sparse.csr_matrix | sparse.csc_matrix | SpArray:
     if block_info is None:
         msg = "Block info is required"
         raise ValueError(msg)
     # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
     # https://github.com/scverse/anndata/issues/1105
-    with maybe_open_h5(path_or_group, elem_name) as f:
-        mtx = wrap(f)
+    with maybe_open_h5(path_or_sparse_dataset, elem_name) as f:
+        mtx = ad.io.sparse_dataset(f) if isinstance(f, H5Group) else f
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
@@ -94,10 +99,17 @@ def read_sparse_as_dask(
 ) -> DaskArray:
     import dask.array as da
 
-    path_or_group = Path(filename(elem)) if isinstance(elem, H5Group) else elem
+    path_or_sparse_dataset = (
+        Path(filename(elem))
+        if isinstance(elem, H5Group)
+        else ad.io.sparse_dataset(elem)
+    )
     elem_name = get_elem_name(elem)
     shape: tuple[int, int] = tuple(elem.attrs["shape"])
-    dtype = elem["data"].dtype
+    if isinstance(path_or_sparse_dataset, CSRDataset | CSCDataset):
+        dtype = path_or_sparse_dataset.dtype
+    else:
+        dtype = elem["data"].dtype
     is_csc: bool = elem.attrs["encoding-type"] == "csc_matrix"
 
     stride: int = _DEFAULT_STRIDE
@@ -123,9 +135,7 @@ def read_sparse_as_dask(
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
     )
     memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
-    make_chunk = partial(
-        make_dask_chunk, path_or_group, elem_name, wrap=ad.io.sparse_dataset
-    )
+    make_chunk = partial(make_dask_chunk, path_or_sparse_dataset, elem_name)
     da_mtx = da.map_blocks(
         make_chunk,
         dtype=dtype,
