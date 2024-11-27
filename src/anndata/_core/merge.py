@@ -939,21 +939,31 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
     return reindexers
 
 
+def missing_element(
+    n: int,
+    els: Iterable[
+        SpArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray
+    ],
+    axis: Literal[0, 1] = 0,
+) -> np.ndarray:
+    """Generates value to use when there is a missing element."""
+    should_return_dask = any(isinstance(el, DaskArray) for el in els)
+    shape = (0, n) if axis else (n, 0)
+    if should_return_dask:
+        import dask.array as da
+
+        return da.zeros(shape)
+    return np.zeros(shape, dtype=bool)
+
+
 def outer_concat_aligned_mapping(
     mappings, *, reindexers=None, index=None, axis=0, fill_value=None
 ):
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
 
-    def missing_element(n: int, axis: Literal[0, 1] = 0) -> np.ndarray:
-        """Generates value to use when there is a missing element."""
-        if axis == 0:
-            return np.zeros((n, 0), dtype=bool)
-        else:
-            return np.zeros((0, n), dtype=bool)
-
     for k in union_keys(mappings):
-        els = [m.get(k, MissingVal) for m in mappings]
+        els = [m[k] if k in m else MissingVal for m in mappings]
         if reindexers is None:
             cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=axis)
         else:
@@ -963,7 +973,7 @@ def outer_concat_aligned_mapping(
         # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
-                el if not_missing(el) else missing_element(n, axis=axis)
+                el if not_missing(el) else missing_element(n, axis=axis, els=els)
                 for el, n in zip(els, ns)
             ],
             cur_reindexers,

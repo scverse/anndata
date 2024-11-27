@@ -1533,6 +1533,16 @@ def test_concat_different_types_dask(merge_strategy, array_type):
     assert_equal(result2, target2)
 
 
+# Tests how dask plays with other types on concatenation.
+def test_impute_dask():
+    import dask.array as da
+
+    from anndata._core.merge import missing_element
+
+    els = [da.ones((5, 5))]
+    assert isinstance(missing_element(5, els, axis=0), DaskArray)
+
+
 def test_outer_concat_with_missing_value_for_df():
     # https://github.com/scverse/anndata/issues/901
     # TODO: Extend this test to cover all cases of missing values
