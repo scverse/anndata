@@ -947,14 +947,10 @@ def missing_element(
     """Generates value to use when there is a missing element."""
     should_return_dask = any(isinstance(el, DaskArray) for el in els)
     non_missing_elem = next(el for el in els if not_missing(el))
-    shape = (
-        (0 if not should_return_dask else non_missing_elem.shape[(axis + 1) % 1], n)
-        if axis
-        else (
-            n,
-            0 if not should_return_dask else non_missing_elem.shape[(axis + 1) % 1],
-        )
+    off_axis_size = (
+        0 if not should_return_dask else non_missing_elem.shape[(axis + 1) % 1]
     )
+    shape = (off_axis_size, n) if axis else (n, off_axis_size)
     if should_return_dask:
         import dask.array as da
 
