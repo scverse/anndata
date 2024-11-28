@@ -48,6 +48,12 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
 
 
 class CategoricalArray(BackendArray, Generic[K]):
+    """
+    A wrapper class meant to enable working with lazy categorical data.
+    We do not guarantee the stability of this API beyond that guaranteed
+    by :class:`xarray.backends.BackendArray`.
+    """
+
     _codes: ZarrOrHDF5Wrapper[K]
     _categories: ZarrArray | H5Array
     shape: tuple[int, ...]
@@ -97,6 +103,12 @@ class CategoricalArray(BackendArray, Generic[K]):
 
 
 class MaskedArray(BackendArray, Generic[K]):
+    """
+    A wrapper class meant to enable working with lazy masked data.
+    We do not guarantee the stability of this API beyond that guaranteed
+    by :class:`xarray.backends.BackendArray`.
+    """
+
     _mask: ZarrOrHDF5Wrapper[K]
     _values: ZarrOrHDF5Wrapper[K]
     _dtype_str: Literal["nullable-integer", "nullable-boolean"]
