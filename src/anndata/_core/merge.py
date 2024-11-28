@@ -1226,7 +1226,6 @@ def concat_dataset2d_on_annot_axis(
 
     annotations_with_only_dask = list(make_xarray_extension_dtypes_dask(annotations))
     attrs = get_attrs(annotations_with_only_dask)
-    index_name = np.unique([a.index.name for a in annotations])[0]
     [index_name] = {a.index.name for a in annotations}
     return Dataset2D(
         xr.concat(annotations_with_only_dask, join=join, dim=index_name), attrs=attrs
