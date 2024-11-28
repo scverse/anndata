@@ -1096,9 +1096,10 @@ def make_dask_col_from_extension_dtype(
 
     from anndata._io.specs.lazy_methods import (
         compute_chunk_layout_for_axis_size,
+        get_chunksize,
         maybe_open_h5,
     )
-    from anndata.experimental import read_lazy
+    from anndata.experimental import read_elem_lazy
     from anndata.experimental.backed._compat import DataArray
     from anndata.experimental.backed._compat import xarray as xr
 
@@ -1106,10 +1107,17 @@ def make_dask_col_from_extension_dtype(
     elem_name = col.attrs.get("elem_name")
     dims = col.dims
     coords = col.coords.copy()
+    with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
+        maybe_chunk_size = get_chunksize(read_elem_lazy(f))
+        chunk_size = (
+            compute_chunk_layout_for_axis_size(
+                1000 if maybe_chunk_size is None else maybe_chunk_size[0], col.shape[0]
+            ),
+        )
 
     def get_chunk(block_info=None):
         with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
-            v = read_lazy(f)
+            v = read_elem_lazy(f)
             variable = xr.Variable(
                 data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
             )
@@ -1128,10 +1136,9 @@ def make_dask_col_from_extension_dtype(
         dtype = "object"
     else:
         dtype = col.dtype.numpy_dtype
-    # TODO: get good chunk size?
     return da.map_blocks(
         get_chunk,
-        chunks=(compute_chunk_layout_for_axis_size(1000, col.shape[0]),),
+        chunks=chunk_size,
         meta=np.array([], dtype=dtype),
         dtype=dtype,
     )
@@ -1185,7 +1192,7 @@ def get_attrs(annotations: Iterable[Dataset2D]) -> dict:
     """
     index_names = np.unique([a.index.name for a in annotations])
     assert len(index_names) == 1, "All annotations must have the same index name."
-    if any(a.index.dtype == "int64" for a in annotations):
+    if any(np.issubdtype(a.index.dtype, np.integer) for a in annotations):
         msg = "Concatenating with a pandas numeric index among the indices.  Index may likely not be unique."
         warn(msg, UserWarning)
     index_keys = [

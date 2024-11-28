@@ -7,6 +7,7 @@ import pandas as pd
 
 from anndata._core.index import _subset
 from anndata._core.views import as_view
+from anndata._io.specs.lazy_methods import get_chunksize
 from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
@@ -28,6 +29,7 @@ K = TypeVar("K", H5Array, ZarrArray)
 
 class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
     def __init__(self, array: K):
+        self.chunks = array.chunks
         if isinstance(array, ZarrArray):
             return super().__init__(array)
         self._array = array
@@ -152,3 +154,13 @@ def _subset_masked(a: DataArray, subset_idx: Index):
 @as_view.register(DataArray)
 def _view_pd_boolean_array(a: DataArray, view_args):
     return a
+
+
+@get_chunksize.register(MaskedArray)
+def _(a: MaskedArray):
+    return get_chunksize(a._values)
+
+
+@get_chunksize.register(CategoricalArray)
+def _(a: CategoricalArray):
+    return get_chunksize(a._codes)

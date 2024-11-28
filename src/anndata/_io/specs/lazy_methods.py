@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from contextlib import contextmanager
-from functools import partial
+from functools import partial, singledispatch
 from pathlib import Path
 from typing import TYPE_CHECKING, overload
 
@@ -90,6 +90,13 @@ def make_dask_chunk(
         )
         chunk = mtx[idx]
     return chunk
+
+
+@singledispatch
+def get_chunksize(obj) -> tuple[int, ...]:
+    if hasattr(obj, "chunks"):
+        return obj.chunks
+    raise ValueError("object of type {type(obj)} has no recognized chunks")
 
 
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
