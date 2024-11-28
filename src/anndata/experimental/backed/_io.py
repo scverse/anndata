@@ -50,7 +50,7 @@ def read_lazy(
     Preparing example objects
 
     >>> import anndata as ad
-    >>> import httpx
+    >>> from urllib.request import urlretrieve
     >>> import scanpy as sc
     >>> base_url = "https://datasets.cellxgene.cziscience.com"
     >>> def get_cellxgene_data(id_: str):
@@ -59,10 +59,7 @@ def read_lazy(
     ...         return out_path
     ...     file_url = f"{base_url}/{id_}.h5ad"
     ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
-    ...     with httpx.stream("GET", file_url) as r, out_path.open("wb") as f:
-    ...         r.raise_for_status()
-    ...         for data in r.iter_bytes():
-    ...             f.write(data)
+    ...     urlretrieve(file_url, out_path)
     ...     return out_path
     >>> path_b_cells = get_cellxgene_data("a93eab58-3d82-4b61-8a2f-d7666dcdb7c4")
     >>> path_fetal = get_cellxgene_data("d170ff04-6da0-4156-a719-f8e1bbefbf53")
