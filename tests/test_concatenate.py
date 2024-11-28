@@ -1522,7 +1522,7 @@ def test_concat_different_types_dask_merge(merge_strategy, array_type):
 
     ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array})
     ad1_other = ad.AnnData(X=np.ones((5, 5)), varm={"a": array_type(varm_array)})
-    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones((5, 20))})
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)})
 
     result1 = ad.concat([ad1, ad2], merge=merge_strategy)
     target1 = ad.concat([ad1_other, ad2], merge=merge_strategy)
