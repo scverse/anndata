@@ -1512,7 +1512,7 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
 
 
 # Tests how dask plays with other types on concatenation.
-def test_concat_different_types_dask_merge(merge_strategy, array_type):
+def test_concat_different_types_dask(merge_strategy, array_type):
     import dask.array as da
     from scipy import sparse
 
