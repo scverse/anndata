@@ -943,18 +943,19 @@ def missing_element(
     n: int,
     els: list[SpArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray],
     axis: Literal[0, 1] = 0,
+    fill_value: Any | None = None,
 ) -> np.ndarray | DaskArray:
     """Generates value to use when there is a missing element."""
     should_return_dask = any(isinstance(el, DaskArray) for el in els)
     non_missing_elem = next(el for el in els if not_missing(el))
-    off_axis_size = (
-        0 if not should_return_dask else non_missing_elem.shape[(axis + 1) % 1]
-    )
+    off_axis_size = 0 if not should_return_dask else non_missing_elem.shape[axis - 1]
     shape = (off_axis_size, n) if axis else (n, off_axis_size)
     if should_return_dask:
         import dask.array as da
 
-        return da.full(shape, default_fill_value(els))
+        return da.full(
+            shape, default_fill_value(els) if fill_value is None else fill_value
+        )
     return np.zeros(shape, dtype=bool)
 
 
@@ -975,7 +976,9 @@ def outer_concat_aligned_mapping(
         # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
-                el if not_missing(el) else missing_element(n, axis=axis, els=els)
+                el
+                if not_missing(el)
+                else missing_element(n, axis=axis, els=els, fill_value=fill_value)
                 for el, n in zip(els, ns)
             ],
             cur_reindexers,
