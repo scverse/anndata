@@ -1547,7 +1547,6 @@ def test_concat_missing_elem_dask_join(join_type):
     assert_equal(result1, result2)
 
 
-# Tests how dask plays with other types on concatenation.
 def test_impute_dask(axis_name):
     import dask.array as da
 
