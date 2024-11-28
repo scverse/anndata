@@ -941,18 +941,24 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
 
 def missing_element(
     n: int,
-    els: Iterable[
-        SpArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray
-    ],
+    els: list[SpArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray],
     axis: Literal[0, 1] = 0,
-) -> np.ndarray:
+) -> np.ndarray | DaskArray:
     """Generates value to use when there is a missing element."""
     should_return_dask = any(isinstance(el, DaskArray) for el in els)
-    shape = (0, n) if axis else (n, 0)
+    non_missing_elem = next(el for el in els if not_missing(el))
+    shape = (
+        (0 if not should_return_dask else non_missing_elem.shape[(axis + 1) % 1], n)
+        if axis
+        else (
+            n,
+            0 if not should_return_dask else non_missing_elem.shape[(axis + 1) % 1],
+        )
+    )
     if should_return_dask:
         import dask.array as da
 
-        return da.zeros(shape)
+        return da.full(shape, default_fill_value(els))
     return np.zeros(shape, dtype=bool)
 
 

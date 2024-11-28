@@ -1512,7 +1512,7 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
 
 
 # Tests how dask plays with other types on concatenation.
-def test_concat_different_types_dask(merge_strategy, array_type):
+def test_concat_different_types_dask_merge(merge_strategy, array_type):
     import dask.array as da
     from scipy import sparse
 
@@ -1522,7 +1522,7 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array})
     ad1_other = ad.AnnData(X=np.ones((5, 5)), varm={"a": array_type(varm_array)})
-    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)})
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones((5, 20))})
 
     result1 = ad.concat([ad1, ad2], merge=merge_strategy)
     target1 = ad.concat([ad1_other, ad2], merge=merge_strategy)
@@ -1533,14 +1533,33 @@ def test_concat_different_types_dask(merge_strategy, array_type):
     assert_equal(result2, target2)
 
 
-# Tests how dask plays with other types on concatenation.
-def test_impute_dask():
+def test_concat_missing_elem_dask_join(join_type):
     import dask.array as da
 
-    from anndata._core.merge import missing_element
+    import anndata as ad
 
+    ad1 = ad.AnnData(X=np.ones((5, 5)))
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), layers={"a": da.ones((5, 5))})
+    ad_in_memory_with_layers = ad2.to_memory()
+
+    result1 = ad.concat([ad1, ad2], join=join_type)
+    result2 = ad.concat([ad1, ad_in_memory_with_layers], join=join_type)
+    assert_equal(result1, result2)
+
+
+# Tests how dask plays with other types on concatenation.
+def test_impute_dask(axis_name):
+    import dask.array as da
+
+    from anndata._core.merge import _resolve_axis, missing_element
+
+    axis, _ = _resolve_axis(axis_name)
     els = [da.ones((5, 5))]
-    assert isinstance(missing_element(5, els, axis=0), DaskArray)
+    missing = missing_element(6, els, axis=axis)
+    assert isinstance(missing, DaskArray)
+    in_memory = missing.compute()
+    assert np.all(np.isnan(in_memory))
+    assert in_memory.shape[axis] == 6
 
 
 def test_outer_concat_with_missing_value_for_df():
