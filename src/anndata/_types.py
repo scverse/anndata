@@ -30,6 +30,9 @@ __all__ = [
     "ArrayStorageType",
     "GroupStorageType",
     "StorageType",
+    "_ReadInternal",
+    "_ReadLazyInternal",
+    "_WriteInternal",
 ]
 
 ArrayStorageType: TypeAlias = ZarrArray | H5Array
