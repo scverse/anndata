@@ -391,7 +391,11 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    f.create_dataset(k, data=elem, **dataset_kwargs)
+    if elem.shape == ():
+        # extract scalar from array
+        _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
+    else:
+        f.create_dataset(k, data=elem, **dataset_kwargs)
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
@@ -486,8 +490,12 @@ def write_vlen_string_array(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles nativley."""
-    str_dtype = h5py.special_dtype(vlen=str)
-    f.create_dataset(k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs)
+    if elem.shape == ():
+        # extract scalar from array
+        _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
+    else:
+        str_dtype = h5py.special_dtype(vlen=str)
+        f.create_dataset(k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs)
 
 
 @_REGISTRY.register_write(
@@ -506,23 +514,27 @@ def write_vlen_string_array_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    import numcodecs
+    if elem.shape == ():
+        # extract scalar from array
+        _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
+    else:
+        import numcodecs
 
-    if Version(numcodecs.__version__) < Version("0.13"):
-        msg = "Old numcodecs version detected. Please update for improved performance and stability."
-        warnings.warn(msg)
-        # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
-        if hasattr(elem, "flags") and not elem.flags.writeable:
-            elem = elem.copy()
+        if Version(numcodecs.__version__) < Version("0.13"):
+            msg = "Old numcodecs version detected. Please update for improved performance and stability."
+            warnings.warn(msg)
+            # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
+            if hasattr(elem, "flags") and not elem.flags.writeable:
+                elem = elem.copy()
 
-    f.create_dataset(
-        k,
-        shape=elem.shape,
-        dtype=object,
-        object_codec=numcodecs.VLenUTF8(),
-        **dataset_kwargs,
-    )
-    f[k][:] = elem
+        f.create_dataset(
+            k,
+            shape=elem.shape,
+            dtype=object,
+            object_codec=numcodecs.VLenUTF8(),
+            **dataset_kwargs,
+        )
+        f[k][:] = elem
 
 
 ###############
@@ -1134,8 +1146,8 @@ def write_hdf5_scalar(
 ):
     # Can’t compress scalars, error is thrown
     dataset_kwargs = dict(dataset_kwargs)
-    dataset_kwargs.pop("compression", None)
-    dataset_kwargs.pop("compression_opts", None)
+    for arg in ("compression", "compression_opts", "chunks", "shuffle", "fletcher32", "scaleoffset"):
+        dataset_kwargs.pop(arg, None)
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
