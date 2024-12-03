@@ -17,14 +17,13 @@ import h5py
 import numpy as np
 import pandas as pd
 from natsort import natsorted
-from numpy import ma
 from pandas.api.types import infer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 
 from .. import utils
 from .._settings import settings
-from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx
+from ..compat import SpArray, _move_adj_mtx
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -32,19 +31,17 @@ from ..utils import (
     ensure_df_homogeneous,
     raise_value_error_if_multiindex_columns,
 )
-from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
 from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
-from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import coerce_array
 from .views import (
     DataFrameView,
     DictView,
     _resolve_idxs,
-    as_view,
 )
 
 if TYPE_CHECKING:
@@ -72,18 +69,6 @@ def _gen_keys_from_multicol_key(key_multicol, n_keys):
     """Generates single-column keys from multicolumn key."""
     keys = [f"{key_multicol}{i + 1:03}of{n_keys:03}" for i in range(n_keys)]
     return keys
-
-
-def _check_2d_shape(X):
-    """\
-    Check shape of array or sparse matrix.
-
-    Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
-    """
-    if X.dtype.names is None and len(X.shape) != 2:
-        raise ValueError(
-            f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
-        )
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -229,7 +214,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
         raw: Mapping[str, Any] | None = None,
-        dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
         filename: PathLike | None = None,
         filemode: Literal["r", "r+"] | None = None,
@@ -258,7 +242,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 varm=varm,
                 raw=raw,
                 layers=layers,
-                dtype=dtype,
                 shape=shape,
                 obsp=obsp,
                 varp=varp,
@@ -306,10 +289,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._var = DataFrameView(var_sub, view_args=(self, "var"))
         self._uns = uns
 
-        # set data
-        if self.isbacked:
-            self._X = None
-
         # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
@@ -330,7 +309,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obsp=None,
         raw=None,
         layers=None,
-        dtype=None,
         shape=None,
         filename=None,
         filemode=None,
@@ -360,8 +338,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     raise ValueError(
                         "If `X` is a dict no further arguments must be provided."
                     )
-                X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
-                    X._X,
+                obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                     X.obs,
                     X.var,
                     X.uns,
@@ -372,6 +349,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X.layers,
                     X.raw,
                 )
+                X = X.layers.get(None)
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
@@ -395,28 +373,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             X = coerce_array(X, name="X")
             if shape is not None:
                 raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
-            _check_2d_shape(X)
-            # if type doesn’t match, a copy is made, otherwise, use a view
-            if dtype is not None:
-                warnings.warn(
-                    "The dtype argument is deprecated and will be removed in late 2024.",
-                    FutureWarning,
-                )
-                if issparse(X) or isinstance(X, ma.MaskedArray):
-                    # TODO: maybe use view on data attribute of sparse matrix
-                    #       as in readwrite.read_10x_h5
-                    if X.dtype != np.dtype(dtype):
-                        X = X.astype(dtype)
-                elif isinstance(X, ZarrArray | DaskArray):
-                    X = X.astype(dtype)
-                else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                    X = np.asarray(X, dtype)
             # data matrix and shape
-            self._X = X
             n_obs, n_vars = X.shape
             source = "X"
         else:
-            self._X = None
             n_obs, n_vars = (None, None) if shape is None else shape
             source = "shape"
 
@@ -462,13 +422,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         elif isinstance(raw, Mapping):
             self._raw = Raw(self, **raw)
         else:  # is a Raw from another AnnData
-            self._raw = Raw(self, raw._X, raw.var, raw.varm)
+            self._raw = Raw(self, raw.X, raw.var, raw.varm)
 
         # clean up old formats
         self._clean_up_old_format(uns)
 
         # layers
         self.layers = layers
+        self.X = X
 
     def __sizeof__(self, show_stratified=None, with_disk: bool = False) -> int:
         def get_size(X) -> int:
@@ -544,124 +505,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @property
     def X(self) -> ArrayDataStructureType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
-        if self.isbacked:
-            if not self.file.is_open:
-                self.file.open()
-            X = self.file["X"]
-            if isinstance(X, h5py.Group):
-                X = sparse_dataset(X)
-            # This is so that we can index into a backed dense dataset with
-            # indices that aren’t strictly increasing
-            if self.is_view:
-                X = _subset(X, (self._oidx, self._vidx))
-        elif self.is_view and self._adata_ref.X is None:
-            X = None
-        elif self.is_view:
-            X = as_view(
-                _subset(self._adata_ref.X, (self._oidx, self._vidx)),
-                ElementRef(self, "X"),
-            )
-        else:
-            X = self._X
-        return X
-        # if self.n_obs == 1 and self.n_vars == 1:
-        #     return X[0, 0]
-        # elif self.n_obs == 1 or self.n_vars == 1:
-        #     if issparse(X): X = X.toarray()
-        #     return X.flatten()
-        # else:
-        #     return X
+        return self.layers.get(None)
 
     @X.setter
     def X(self, value: np.ndarray | sparse.spmatrix | SpArray | None):
-        if value is None:
-            if self.isbacked:
-                raise NotImplementedError(
-                    "Cannot currently remove data matrix from backed object."
-                )
-            if self.is_view:
-                self._init_as_actual(self.copy())
-            self._X = None
-            return
-        value = coerce_array(value, name="X", allow_array_like=True)
-
-        # If indices are both arrays, we need to modify them
-        # so we don’t set values like coordinates
-        # This can occur if there are successive views
-        if (
-            self.is_view
-            and isinstance(self._oidx, np.ndarray)
-            and isinstance(self._vidx, np.ndarray)
-        ):
-            oidx, vidx = np.ix_(self._oidx, self._vidx)
-        else:
-            oidx, vidx = self._oidx, self._vidx
-        if (
-            np.isscalar(value)
-            or (hasattr(value, "shape") and (self.shape == value.shape))
-            or (self.n_vars == 1 and self.n_obs == len(value))
-            or (self.n_obs == 1 and self.n_vars == len(value))
-        ):
-            if not np.isscalar(value):
-                if self.is_view and any(
-                    isinstance(idx, np.ndarray)
-                    and len(np.unique(idx)) != len(idx.ravel())
-                    for idx in [oidx, vidx]
-                ):
-                    msg = (
-                        "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
-                        "The resulting `adata.X` will likely not equal the value to which you set it. "
-                        "To avoid this potential issue, please make a copy of the data first. "
-                        "In the future, this operation will throw an error."
-                    )
-                    warnings.warn(msg, FutureWarning, stacklevel=1)
-                if self.shape != value.shape:
-                    # For assigning vector of values to 2d array or matrix
-                    # Not necessary for row of 2d array
-                    value = value.reshape(self.shape)
-            if self.isbacked:
-                if self.is_view:
-                    X = self.file["X"]
-                    if isinstance(X, h5py.Group):
-                        X = sparse_dataset(X)
-                    X[oidx, vidx] = value
-                else:
-                    self._set_backed("X", value)
-            else:
-                if self.is_view:
-                    if sparse.issparse(self._adata_ref._X) and isinstance(
-                        value, np.ndarray
-                    ):
-                        if isinstance(self._adata_ref.X, SpArray):
-                            memory_class = sparse.coo_array
-                        else:
-                            memory_class = sparse.coo_matrix
-                        value = memory_class(value)
-                    elif sparse.issparse(value) and isinstance(
-                        self._adata_ref._X, np.ndarray
-                    ):
-                        warnings.warn(
-                            "Trying to set a dense array with a sparse array on a view."
-                            "Densifying the sparse array."
-                            "This may incur excessive memory usage",
-                            stacklevel=2,
-                        )
-                        value = value.toarray()
-                    self._adata_ref._X[oidx, vidx] = value
-                else:
-                    self._X = value
-        else:
-            raise ValueError(
-                f"Data matrix has wrong shape {value.shape}, "
-                f"need to be {self.shape}."
-            )
+        self.layers[None] = value
 
     @X.deleter
-    def X(self):
-        self.X = None
+    def X(self) -> None:
+        del self.layers[None]
 
-    layers: AlignedMappingProperty[Layers | LayersView] = AlignedMappingProperty(
-        "layers", Layers
+    layers: AlignedMappingProperty[str | None, Layers | LayersView] = (
+        AlignedMappingProperty("layers", Layers)
     )
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
@@ -869,8 +724,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def uns(self):
         self.uns = OrderedDict()
 
-    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "obsm", AxisArrays, 0
+    obsm: AlignedMappingProperty[str, AxisArrays | AxisArraysView] = (
+        AlignedMappingProperty("obsm", AxisArrays, 0)
     )
     """\
     Multi-dimensional annotation of observations
@@ -881,8 +736,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "varm", AxisArrays, 1
+    varm: AlignedMappingProperty[str, AxisArrays | AxisArraysView] = (
+        AlignedMappingProperty("varm", AxisArrays, 1)
     )
     """\
     Multi-dimensional annotation of variables/features
@@ -893,7 +748,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
-    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    obsp: AlignedMappingProperty[str, PairwiseArrays | PairwiseArraysView] = (
         AlignedMappingProperty("obsp", PairwiseArrays, 0)
     )
     """\
@@ -905,7 +760,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    varp: AlignedMappingProperty[str, PairwiseArrays | PairwiseArraysView] = (
         AlignedMappingProperty("varp", PairwiseArrays, 1)
     )
     """\
@@ -991,8 +846,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
-            # as the data is stored on disk, we can safely set self._X to None
-            self._X = None
+            # as the data is stored on disk, we can safely set self.X to None
+            del self.X
 
     def _set_backed(self, attr, value):
         from .._io.utils import write_attribute
@@ -1007,7 +862,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
         if not self.isbacked:
-            del self._X[obs, var]
+            del self.X[obs, var]
         else:
             X = self.file["X"]
             del X[obs, var]
@@ -1174,7 +1029,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             raise ValueError("Object is view and cannot be accessed with `[]`.")
         obs, var = self._normalize_indices(index)
         if not self.isbacked:
-            self._X[obs, var] = val
+            self.X[obs, var] = val
         else:
             X = self.file["X"]
             X[obs, var] = val
@@ -1368,10 +1223,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 new[key] = kwargs[key]
             else:
                 new[key] = getattr(self, key).copy()
-        if "X" in kwargs:
-            new["X"] = kwargs["X"]
-        elif self._has_X():
-            new["X"] = self.X.copy()
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
         else:
