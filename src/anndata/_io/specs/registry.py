@@ -132,6 +132,7 @@ class IORegistry(Generic[_R, R]):
             dest_type = h5py.Group
 
         if (dest_type, src_type, modifiers) not in self.write:
+            print(self.write)
             raise IORegistryError._from_write_parts(dest_type, src_type, modifiers)
         internal = self.write[(dest_type, src_type, modifiers)]
         return partial(internal, _writer=writer)
