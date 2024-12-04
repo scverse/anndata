@@ -13,11 +13,11 @@ from ..compat import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
-    from typing import Literal, Any
+    from typing import Any, Literal
 
-    from .specs.registry import Writer
-    from .._types import StorageType, _WriteInternal, ContravariantRWAble
+    from .._types import ContravariantRWAble, StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
+    from .specs.registry import Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
 
@@ -294,7 +294,14 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
     """
 
     @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
-    def func_wrapper(f: StorageType, k: str, elem: ContravariantRWAble, *, _writer: Writer, dataset_kwargs: Mapping[str, Any]):
+    def func_wrapper(
+        f: StorageType,
+        k: str,
+        elem: ContravariantRWAble,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any],
+    ):
         if elem.shape == ():
             _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
         else:
