@@ -21,7 +21,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import H5PY_V3, check_key
+from anndata._io.utils import H5PY_V3, check_key, zero_dim_array
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -382,6 +382,7 @@ def write_list(
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
+@zero_dim_array
 def write_basic(
     f: GroupStorageType,
     k: str,
@@ -391,11 +392,7 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    if elem.shape == ():
-        # extract scalar from array
-        _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
-    else:
-        f.create_dataset(k, data=elem, **dataset_kwargs)
+    f.create_dataset(k, data=elem, **dataset_kwargs)
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
@@ -481,6 +478,7 @@ def read_string_array_partial(d, items=None, indices=slice(None)):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@zero_dim_array
 def write_vlen_string_array(
     f: H5Group,
     k: str,
@@ -490,14 +488,8 @@ def write_vlen_string_array(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles nativley."""
-    if elem.shape == ():
-        # extract scalar from array
-        _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
-    else:
-        str_dtype = h5py.special_dtype(vlen=str)
-        f.create_dataset(
-            k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs
-        )
+    str_dtype = h5py.special_dtype(vlen=str)
+    f.create_dataset(k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs)
 
 
 @_REGISTRY.register_write(
@@ -508,6 +500,7 @@ def write_vlen_string_array(
 )
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@zero_dim_array
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
     k: str,
@@ -516,27 +509,23 @@ def write_vlen_string_array_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    if elem.shape == ():
-        # extract scalar from array
-        _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
-    else:
-        import numcodecs
+    import numcodecs
 
-        if Version(numcodecs.__version__) < Version("0.13"):
-            msg = "Old numcodecs version detected. Please update for improved performance and stability."
-            warnings.warn(msg)
-            # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
-            if hasattr(elem, "flags") and not elem.flags.writeable:
-                elem = elem.copy()
+    if Version(numcodecs.__version__) < Version("0.13"):
+        msg = "Old numcodecs version detected. Please update for improved performance and stability."
+        warnings.warn(msg)
+        # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
+        if hasattr(elem, "flags") and not elem.flags.writeable:
+            elem = elem.copy()
 
-        f.create_dataset(
-            k,
-            shape=elem.shape,
-            dtype=object,
-            object_codec=numcodecs.VLenUTF8(),
-            **dataset_kwargs,
-        )
-        f[k][:] = elem
+    f.create_dataset(
+        k,
+        shape=elem.shape,
+        dtype=object,
+        object_codec=numcodecs.VLenUTF8(),
+        **dataset_kwargs,
+    )
+    f[k][:] = elem
 
 
 ###############
@@ -1148,14 +1137,7 @@ def write_hdf5_scalar(
 ):
     # Can’t compress scalars, error is thrown
     dataset_kwargs = dict(dataset_kwargs)
-    for arg in (
-        "compression",
-        "compression_opts",
-        "chunks",
-        "shuffle",
-        "fletcher32",
-        "scaleoffset",
-    ):
+    for arg in ("compression", "compression_opts", "chunks", "shuffle", "fletcher32", "scaleoffset"):
         dataset_kwargs.pop(arg, None)
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
