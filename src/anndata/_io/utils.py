@@ -12,10 +12,11 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..compat import add_note
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from typing import Literal
+    from collections.abc import Callable, Mapping
+    from typing import Literal, Any
 
-    from .._types import StorageType
+    from .specs.registry import Writer
+    from .._types import StorageType, _WriteInternal, ContravariantRWAble
     from ..compat import H5Group, ZarrGroup
 
     Storage = StorageType | BaseCompressedSparseDataset
@@ -287,13 +288,13 @@ def _read_legacy_raw(
     return raw
 
 
-def zero_dim_array(func):
+def zero_dim_array_as_scalar(func: _WriteInternal):
     """\
     A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
     """
 
     @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
-    def func_wrapper(f, k, elem, *, _writer, dataset_kwargs):
+    def func_wrapper(f: StorageType, k: str, elem: ContravariantRWAble, *, _writer: Writer, dataset_kwargs: Mapping[str, Any]):
         if elem.shape == ():
             _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
         else:

@@ -208,7 +208,6 @@ def test_io_spec(store, value, encoding_type):
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
-
 @pytest.mark.parametrize(
     ("value", "encoding_type"),
     [
@@ -218,17 +217,14 @@ def test_io_spec(store, value, encoding_type):
         pytest.param(np.asarray("test"), "string", id="scalar_string"),
     ],
 )
-def test_io_spec_compressed_scalars(store, value, encoding_type):
+def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: str):
     key = f"key_for_{encoding_type}"
-    write_elem(
-        store, key, value, dataset_kwargs={"compression": "gzip", "compression_opts": 5}
-    )
+    write_elem(store, key, value, dataset_kwargs={"compression": "gzip", "compression_opts": 5})
 
     assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
-
 
 # Can't instantiate cupy types at the top level, so converting them within the test
 @pytest.mark.gpu
