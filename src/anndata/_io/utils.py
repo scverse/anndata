@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import wraps
+from functools import WRAPPER_ASSIGNMENTS, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, cast
 from warnings import warn
@@ -12,11 +12,12 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..compat import add_note
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from typing import Literal
+    from collections.abc import Callable, Mapping
+    from typing import Any, Literal
 
-    from .._types import StorageType
+    from .._types import ContravariantRWAble, StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
+    from .specs.registry import Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
 
@@ -285,3 +286,25 @@ def _read_legacy_raw(
     if "varm" in attrs and "raw.varm" in f:
         raw["varm"] = read_attr(f["raw.varm"])
     return raw
+
+
+def zero_dim_array_as_scalar(func: _WriteInternal):
+    """\
+    A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
+    """
+
+    @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
+    def func_wrapper(
+        f: StorageType,
+        k: str,
+        elem: ContravariantRWAble,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any],
+    ):
+        if elem.shape == ():
+            _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
+        else:
+            func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
+
+    return func_wrapper
