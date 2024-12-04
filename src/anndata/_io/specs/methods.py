@@ -1137,7 +1137,14 @@ def write_hdf5_scalar(
 ):
     # Can’t compress scalars, error is thrown
     dataset_kwargs = dict(dataset_kwargs)
-    for arg in ("compression", "compression_opts", "chunks", "shuffle", "fletcher32", "scaleoffset"):
+    for arg in (
+        "compression",
+        "compression_opts",
+        "chunks",
+        "shuffle",
+        "fletcher32",
+        "scaleoffset",
+    ):
         dataset_kwargs.pop(arg, None)
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 

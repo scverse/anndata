@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import wraps, WRAPPER_ASSIGNMENTS
+from functools import WRAPPER_ASSIGNMENTS, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, cast
 from warnings import warn
@@ -286,10 +286,12 @@ def _read_legacy_raw(
         raw["varm"] = read_attr(f["raw.varm"])
     return raw
 
+
 def zero_dim_array(func):
     """\
     A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
     """
+
     @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
     def func_wrapper(f, k, elem, *, _writer, dataset_kwargs):
         if elem.shape == ():
