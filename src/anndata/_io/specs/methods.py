@@ -531,6 +531,7 @@ def write_vlen_string_array_zarr(
         )
         f[k][:] = elem
     else:
+        from numcodecs import VLenUTF8
         from zarr.codecs import VLenUTF8Codec
 
         f.create_array(
@@ -538,6 +539,7 @@ def write_vlen_string_array_zarr(
             shape=elem.shape,
             dtype=str if ad.settings.zarr_write_format == 3 else object,
             codecs=[VLenUTF8Codec()] if ad.settings.zarr_write_format == 3 else None,
+            filters=[VLenUTF8()] if ad.settings.zarr_write_format == 2 else None,
             **dataset_kwargs,
         )
         f[k][:] = elem
