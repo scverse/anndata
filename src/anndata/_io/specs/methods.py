@@ -1153,7 +1153,7 @@ def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
     return elem[()]
 
 
-def write_scalar(
+def write_scalar_zarr(
     f: GroupStorageType,
     key: str,
     value,
@@ -1161,7 +1161,30 @@ def write_scalar(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
+    import zarr
+
+    if Version(zarr.__version__) < Version("3.0.0b0"):
+        return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
+    else:
+        from numcodecs import VLenUTF8
+        from zarr.codecs import VLenUTF8Codec
+
+        dtype = np.array(value).dtype
+        f.create_array(
+            key,
+            shape=(),
+            dtype=str
+            if ad.settings.zarr_write_format == 3
+            else (object if isinstance(value, str) else dtype),
+            codecs=[VLenUTF8Codec()]
+            if ad.settings.zarr_write_format == 3 and isinstance(value, str)
+            else None,
+            filters=[VLenUTF8()]
+            if ad.settings.zarr_write_format == 2 and isinstance(value, str)
+            else None,
+            data=np.array(value),
+            **dataset_kwargs,
+        )
 
 
 def write_hdf5_scalar(
@@ -1191,10 +1214,12 @@ for numeric_scalar_type in [
     )(write_hdf5_scalar)
     _REGISTRY.register_write(
         ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
-    )(write_scalar)
+    )(write_scalar_zarr)
 
-_REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar)
-_REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_scalar)
+_REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar_zarr)
+_REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(
+    write_scalar_zarr
+)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))
