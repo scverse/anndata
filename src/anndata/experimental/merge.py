@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import csc_matrix, csr_matrix
 
+import anndata as ad
+
 from .._core.file_backing import to_memory
 from .._core.merge import (
     MissingVal,
@@ -114,7 +116,9 @@ def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
         return h5py.File(store, *args, **kwargs)
     import zarr
 
-    return zarr.open_group(store, *args, **kwargs)
+    return zarr.open_group(
+        store, zarr_format=ad.settings.zarr_write_format, *args, **kwargs
+    )
 
 
 @as_group.register(ZarrGroup)
