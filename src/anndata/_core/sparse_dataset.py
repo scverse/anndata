@@ -28,7 +28,7 @@ from scipy.sparse import _sparsetools
 
 from .. import abc
 from .._settings import settings
-from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
+from ..compat import DaskArray, H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
@@ -352,10 +352,17 @@ def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
 
 class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     _group: GroupStorageType
+    _indptr_arr: DaskArray | np.ndarray | None
+    _indices_arr: DaskArray | H5Array | ZarrArray | None
+    _data_arr: DaskArray | H5Array | ZarrArray | None
 
     def __init__(self, group: GroupStorageType):
         type(self)._check_group_format(group)
         self._group = group
+        self._indptr_arr = None
+        self._indices_arr = None
+        self._data_arr = None
+        self._dask_shape = None
 
     @property
     def group(self) -> GroupStorageType:
@@ -396,6 +403,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     @property
     def shape(self) -> tuple[int, int]:
         """Shape of the matrix read off disk."""
+        if isinstance(self._indices_arr, DaskArray):
+            return self._dask_shape
         shape = _read_attr(self.group.attrs, "shape", None)
         if shape is None:
             # TODO warn
@@ -555,32 +564,40 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
         # Clear cached property
         for attr in ["_indptr", "_indices", "_data"]:
+            arr_attr = f"{attr}_arr"
+            if hasattr(self, arr_attr):
+                setattr(self, arr_attr, None)
             if hasattr(self, attr):
                 delattr(self, attr)
 
     @cached_property
-    def _indptr(self) -> np.ndarray:
+    def _indptr(self) -> np.ndarray | DaskArray:
         """\
         Other than `data` and `indices`, this is only as long as the major axis
 
         It should therefore fit into memory, so we cache it for faster access.
         """
-        arr = self.group["indptr"][...]
-        return arr
+        if self._indptr_arr is None:
+            self._indptr_arr = self.group["indptr"][...]
+        return self._indptr_arr
 
     @cached_property
-    def _indices(self) -> H5Array | ZarrArray:
+    def _indices(self) -> H5Array | ZarrArray | DaskArray:
         """\
         Cache access to the indices to prevent unnecessary reads of the zarray
         """
-        return self.group["indices"]
+        if self._indices_arr is None:
+            self._indices_arr = self.group["indices"]
+        return self._indices_arr
 
     @cached_property
-    def _data(self) -> H5Array | ZarrArray:
+    def _data(self) -> H5Array | ZarrArray | DaskArray:
         """\
         Cache access to the data to prevent unnecessary reads of the zarray
         """
-        return self.group["data"]
+        if self._data_arr is None:
+            self._data_arr = self.group["data"]
+        return self._data_arr
 
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)

@@ -653,3 +653,36 @@ def test_append_overflow_check(group_fn, sparse_class, tmpdir):
 
     # Check for any modification
     assert_equal(backed, orig_mtx)
+
+
+@pytest.mark.parametrize(
+    ("sparse_format", "append_method"),
+    [
+        pytest.param(sparse.csr_matrix, sparse.vstack),
+        pytest.param(sparse.csc_matrix, sparse.hstack),
+        pytest.param(sparse.csr_array, sparse.vstack),
+        pytest.param(sparse.csc_array, sparse.hstack),
+    ],
+)
+def test_dataset_concat(
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+):
+    path = tmp_path / "test.zarr"
+    a = sparse_format(sparse.random(100, 100))
+    b = sparse_format(sparse.random(100, 100))
+    f = zarr.open_group(path, "a")
+    ad.io.write_elem(f, "mtx_a", a)
+    ad.io.write_elem(f, "mtx_b", b)
+    diskmtx_a = sparse_dataset(f["mtx_a"])
+    diskmtx_b = sparse_dataset(f["mtx_b"])
+
+    diskmtx = ad.experimental.merge.concat_backed_sparse_with_dask(
+        [diskmtx_a, diskmtx_b]
+    )
+    fromdisk = diskmtx.to_memory()
+
+    frommem = append_method([a, b])
+
+    assert_equal(fromdisk, frommem)

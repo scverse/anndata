@@ -5,11 +5,13 @@ import shutil
 from collections.abc import Mapping
 from functools import singledispatch
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import csc_matrix, csr_matrix
+
+from anndata.abc import CSCDataset, CSRDataset
 
 from .._core.file_backing import to_memory
 from .._core.merge import (
@@ -664,3 +666,76 @@ def concat_on_disk(
             reindexers=m_reindexers,
             fill_value=fill_value,
         )
+
+
+D = TypeVar("D", bound=CSRDataset | CSCDataset)
+
+
+def concat_backed_sparse_with_dask(arrs: Iterable[D]) -> D:
+    import dask.array as da
+
+    def to_dask(arr: D) -> D:
+        for attr in ["indptr", "indices", "data"]:
+            setattr(arr, f"_{attr}_arr", da.from_zarr(arr.group[attr]))
+            arr._dask_shape = arr.shape
+        return arr
+
+    arrs = [to_dask(arr) for arr in arrs]
+    concat_arr = arrs[0]
+    # Clear cached property
+    for attr in ["_indptr", "_indices", "_data"]:
+        if hasattr(concat_arr, attr):
+            delattr(concat_arr, attr)
+    for arr in arrs[1:]:
+        # Clear cached property
+        for attr in ["_indptr", "_indices", "_data"]:
+            if hasattr(arr, attr):
+                delattr(arr, attr)
+        # shape = concat_arr.shape
+        if concat_arr.format not in {"csr", "csc"}:
+            raise NotImplementedError(
+                f"The append method for format {concat_arr.format} "
+                f"is not implemented."
+            )
+        if concat_arr.format != arr.format:
+            raise ValueError(
+                f"Matrices must have same format. Currently are "
+                f"{concat_arr.format!r} and {arr.format!r}"
+            )
+        indptr_offset = concat_arr._indices_arr.shape[0]
+        if concat_arr._indptr_arr.dtype == np.int32:
+            new_nnz = indptr_offset + len(arr._indices_arr)
+            if new_nnz >= np.iinfo(np.int32).max:
+                concat_arr._indptr_arr = concat_arr._indptr_arr.astype(np.int64)
+
+        shape = concat_arr.shape
+        if concat_arr.format == "csr":
+            assert (
+                shape[1] == arr.shape[1]
+            ), "CSR matrices must have same size of dimension 1 to be appended."
+            new_shape = (shape[0] + arr.shape[0], shape[1])
+        elif concat_arr.format == "csc":
+            assert (
+                shape[0] == arr.shape[0]
+            ), "CSC matrices must have same size of dimension 0 to be appended."
+            new_shape = (shape[0], shape[1] + arr.shape[1])
+        else:
+            raise AssertionError("We forgot to update this branching to a new format")
+        if "h5sparse_shape" in concat_arr.group.attrs:
+            del concat_arr.group.attrs["h5sparse_shape"]
+        concat_arr._dask_shape = new_shape
+
+        # data
+        data = concat_arr._data_arr
+        concat_arr._data_arr = da.concatenate([data, arr._data_arr])
+
+        # indptr
+        indptr = concat_arr._indptr_arr
+        concat_arr._indptr_arr = da.concatenate(
+            [indptr, arr._indptr_arr[1:].astype(np.int64) + indptr_offset]
+        )
+
+        # indices
+        indices = concat_arr._indices_arr
+        concat_arr._indices_arr = da.concatenate([indices, arr._indices_arr])
+    return concat_arr
