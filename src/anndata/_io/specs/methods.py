@@ -140,7 +140,7 @@ def read_basic(
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
             return sparse_dataset(elem).to_memory()
-        return {k: _reader.read_elem(v) for k, v in elem.items()}
+        return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
     elif isinstance(elem, h5py.Dataset):
         return h5ad.read_dataset(elem)  # TODO: Handle legacy
 
@@ -162,7 +162,7 @@ def read_basic_zarr(
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
             return sparse_dataset(elem).to_memory()
-        return {k: _reader.read_elem(v) for k, v in elem.items()}
+        return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
     elif isinstance(elem, ZarrArray):
         return zarr.read_dataset(elem)  # TODO: Handle legacy
 
@@ -335,7 +335,7 @@ def write_raw(
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
 def read_mapping(elem: GroupStorageType, *, _reader: Reader) -> dict[str, AxisStorable]:
-    return {k: _reader.read_elem(v) for k, v in elem.items()}
+    return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
 
 
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
@@ -391,7 +391,7 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    f.create_dataset(k, data=elem, **dataset_kwargs)
+    f.create_dataset(k, data=elem, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
@@ -412,8 +412,12 @@ def write_basic_dask_zarr(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     import dask.array as da
+    import zarr
 
-    g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    if Version(zarr.__version__) >= Version("3.0.0b0"):
+        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    else:
+        g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g, lock=GLOBAL_LOCK)
 
 
@@ -506,23 +510,39 @@ def write_vlen_string_array_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    import numcodecs
+    import zarr
 
-    if Version(numcodecs.__version__) < Version("0.13"):
-        msg = "Old numcodecs version detected. Please update for improved performance and stability."
-        warnings.warn(msg)
-        # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
-        if hasattr(elem, "flags") and not elem.flags.writeable:
-            elem = elem.copy()
+    if Version(zarr.__version__) < Version("3.0.0b0"):
+        import numcodecs
 
-    f.create_dataset(
-        k,
-        shape=elem.shape,
-        dtype=object,
-        object_codec=numcodecs.VLenUTF8(),
-        **dataset_kwargs,
-    )
-    f[k][:] = elem
+        if Version(numcodecs.__version__) < Version("0.13"):
+            msg = "Old numcodecs version detected. Please update for improved performance and stability."
+            warnings.warn(msg)
+            # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
+            if hasattr(elem, "flags") and not elem.flags.writeable:
+                elem = elem.copy()
+
+        f.create_dataset(
+            k,
+            shape=elem.shape,
+            dtype=object,
+            object_codec=numcodecs.VLenUTF8(),
+            **dataset_kwargs,
+        )
+        f[k][:] = elem
+    else:
+        from numcodecs import VLenUTF8
+        from zarr.codecs import VLenUTF8Codec
+
+        f.create_array(
+            k,
+            shape=elem.shape,
+            dtype=str if ad.settings.zarr_write_format == 3 else object,
+            codecs=[VLenUTF8Codec()] if ad.settings.zarr_write_format == 3 else None,
+            filters=[VLenUTF8()] if ad.settings.zarr_write_format == 2 else None,
+            **dataset_kwargs,
+        )
+        f[k][:] = elem
 
 
 ###############
@@ -577,7 +597,9 @@ def write_recarray_zarr(
 ):
     from anndata.compat import _to_fixed_length_strings
 
-    f.create_dataset(k, data=_to_fixed_length_strings(elem), **dataset_kwargs)
+    f.create_dataset(
+        k, data=_to_fixed_length_strings(elem), shape=elem.shape, **dataset_kwargs
+    )
 
 
 #################
@@ -603,9 +625,27 @@ def write_sparse_compressed(
     if isinstance(f, H5Group) and "maxshape" not in dataset_kwargs:
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
 
-    g.create_dataset("data", data=value.data, **dataset_kwargs)
-    g.create_dataset("indices", data=value.indices, **dataset_kwargs)
-    g.create_dataset("indptr", data=value.indptr, dtype=indptr_dtype, **dataset_kwargs)
+    g.create_dataset(
+        "data",
+        data=value.data,
+        shape=value.data.shape,
+        dtype=value.data.dtype,
+        **dataset_kwargs,
+    )
+    g.create_dataset(
+        "indices",
+        data=value.indices,
+        shape=value.indices.shape,
+        dtype=value.indices.dtype,
+        **dataset_kwargs,
+    )
+    g.create_dataset(
+        "indptr",
+        data=value.indptr,
+        shape=value.indptr.shape,
+        dtype=indptr_dtype,
+        **dataset_kwargs,
+    )
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
@@ -1113,7 +1153,7 @@ def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
     return elem[()]
 
 
-def write_scalar(
+def write_scalar_zarr(
     f: GroupStorageType,
     key: str,
     value,
@@ -1121,7 +1161,30 @@ def write_scalar(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    return f.create_dataset(key, data=np.array(value), **dataset_kwargs)
+    import zarr
+
+    if Version(zarr.__version__) < Version("3.0.0b0"):
+        return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
+    else:
+        from numcodecs import VLenUTF8
+        from zarr.codecs import VLenUTF8Codec
+
+        dtype = np.array(value).dtype
+        f.create_array(
+            key,
+            shape=(),
+            dtype=str
+            if ad.settings.zarr_write_format == 3
+            else (object if isinstance(value, str) else dtype),
+            codecs=[VLenUTF8Codec()]
+            if ad.settings.zarr_write_format == 3 and isinstance(value, str)
+            else None,
+            filters=[VLenUTF8()]
+            if ad.settings.zarr_write_format == 2 and isinstance(value, str)
+            else None,
+            data=np.array(value),
+            **dataset_kwargs,
+        )
 
 
 def write_hdf5_scalar(
@@ -1151,10 +1214,12 @@ for numeric_scalar_type in [
     )(write_hdf5_scalar)
     _REGISTRY.register_write(
         ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
-    )(write_scalar)
+    )(write_scalar_zarr)
 
-_REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar)
-_REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(write_scalar)
+_REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar_zarr)
+_REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(
+    write_scalar_zarr
+)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))

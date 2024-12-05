@@ -171,9 +171,9 @@ def test_io_dispatched_keys(tmp_path):
         write_dispatched(f, "/", adata, callback=h5ad_writer)
         _ = read_dispatched(f, h5ad_reader)
 
-    with zarr.open_group(zarr_path, "w") as f:
-        write_dispatched(f, "/", adata, callback=zarr_writer)
-        _ = read_dispatched(f, zarr_reader)
+    f = zarr.open_group(zarr_path, "w", zarr_version=ad.settings.zarr_write_format)
+    write_dispatched(f, "/", adata, callback=zarr_writer)
+    _ = read_dispatched(f, zarr_reader)
 
     assert h5ad_write_keys == zarr_write_keys
     assert h5ad_read_keys == zarr_read_keys
