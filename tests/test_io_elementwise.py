@@ -68,6 +68,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
 
 sparse_formats = ["csr", "csc"]
 SIZE = 2500
+DEFAULT_SHAPE = (SIZE, SIZE * 2)
 
 
 @pytest.fixture(params=sparse_formats)
@@ -75,15 +76,17 @@ def sparse_format(request):
     return request.param
 
 
-def create_dense_store(store, n_dims: int = 2):
-    X = np.random.randn(*[SIZE * (i + 1) for i in range(n_dims)])
+def create_dense_store(
+    store: str, *, shape: tuple[int, ...] = DEFAULT_SHAPE
+) -> H5Group | ZarrGroup:
+    X = np.random.randn(*shape)
 
     write_elem(store, "X", X)
     return store
 
 
 def create_sparse_store(
-    sparse_format: Literal["csc", "csr"], store: G, shape=(SIZE, SIZE * 2)
+    sparse_format: Literal["csc", "csr"], store: G, shape=DEFAULT_SHAPE
 ) -> G:
     """Returns a store
 
@@ -291,7 +294,7 @@ def test_read_lazy_2d_dask(sparse_format, store):
     ],
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
-    arr_store = create_dense_store(store, n_dims)
+    arr_store = create_dense_store(store, shape=DEFAULT_SHAPE[:n_dims])
     X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
@@ -319,6 +322,14 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
+def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
+    shape = (3000, 50)
+    arr_store = create_dense_store(store, shape=shape)
+    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape))
+    assert X_dask_from_disk.shape == shape
+
+
 @pytest.mark.parametrize(
     ("arr_type", "chunks", "expected_chunksize"),
     [
@@ -331,10 +342,10 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         ("csc", (-1, 10), (SIZE, 10)),
         ("csr", (10, None), (10, SIZE * 2)),
         ("csc", (None, 10), (SIZE, 10)),
-        ("csc", (None, None), (SIZE, SIZE * 2)),
-        ("csr", (None, None), (SIZE, SIZE * 2)),
-        ("csr", (-1, -1), (SIZE, SIZE * 2)),
-        ("csc", (-1, -1), (SIZE, SIZE * 2)),
+        ("csc", (None, None), DEFAULT_SHAPE),
+        ("csr", (None, None), DEFAULT_SHAPE),
+        ("csr", (-1, -1), DEFAULT_SHAPE),
+        ("csc", (-1, -1), DEFAULT_SHAPE),
     ],
 )
 def test_read_lazy_2d_chunk_kwargs(
