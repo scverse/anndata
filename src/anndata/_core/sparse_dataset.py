@@ -251,11 +251,8 @@ def get_compressed_vectors(
     x: BackedSparseMatrix, row_idxs: Iterable[int]
 ) -> tuple[Sequence, Sequence, Sequence]:
     slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
-    slices_as_int_index = np.hstack(
-        [np.arange(s.start, s.stop) for s in slices]
-    ).ravel()
-    data = x.data[slices_as_int_index]
-    indices = x.indices[slices_as_int_index]
+    data = np.concatenate([x.data[s] for s in slices])
+    indices = np.concatenate([x.indices[s] for s in slices])
     indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
     return data, indices, indptr
 
@@ -264,11 +261,8 @@ def get_compressed_vectors_for_slices(
     x: BackedSparseMatrix, slices: Iterable[slice]
 ) -> tuple[Sequence, Sequence, Sequence]:
     indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
-    slices_as_int_index = np.hstack(
-        [np.arange(s[0], s[-1]) for s in indptr_sels]
-    ).ravel()
-    data = x.data[slices_as_int_index]
-    indices = x.indices[slices_as_int_index]
+    data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_sels])
+    indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_sels])
     # Need to track the size of the gaps in the slices to each indptr subselection
     total = indptr_sels[0][0]
     offsets = [total]
