@@ -250,30 +250,44 @@ def slice_as_int(s: slice, l: int) -> int:
 def get_compressed_vectors(
     x: BackedSparseMatrix, row_idxs: Iterable[int]
 ) -> tuple[Sequence, Sequence, Sequence]:
-    slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
-    data = np.concatenate([x.data[s] for s in slices])
-    indices = np.concatenate([x.indices[s] for s in slices])
-    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
+    indptr_slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
+    # HDF5 cannot handle out-of-order integer indexing
+    if isinstance(x.data, ZarrArray):
+        as_np_indptr = np.concatenate(
+            [np.arange(s.start, s.stop) for s in indptr_slices]
+        )
+        data = x.data[as_np_indptr]
+        indices = x.indices[as_np_indptr]
+    else:
+        data = np.concatenate([x.data[s] for s in indptr_slices])
+        indices = np.concatenate([x.indices[s] for s in indptr_slices])
+    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in indptr_slices))))
     return data, indices, indptr
 
 
 def get_compressed_vectors_for_slices(
     x: BackedSparseMatrix, slices: Iterable[slice]
 ) -> tuple[Sequence, Sequence, Sequence]:
-    indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
-    data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_sels])
-    indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_sels])
+    indptr_list = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    # HDF5 cannot handle out-of-order integer indexing
+    if isinstance(x.data, ZarrArray):
+        indptr_int = np.concatenate([np.arange(s[0], s[-1]) for s in indptr_list])
+        data = x.data[indptr_int]
+        indices = x.indices[indptr_int]
+    else:
+        data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_list])
+        indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_list])
     # Need to track the size of the gaps in the slices to each indptr subselection
-    total = indptr_sels[0][0]
+    total = indptr_list[0][0]
     offsets = [total]
-    for i, sel in enumerate(indptr_sels[1:]):
-        total = (sel[0] - indptr_sels[i][-1]) + total
+    for i, sel in enumerate(indptr_list[1:]):
+        total = (sel[0] - indptr_list[i][-1]) + total
         offsets.append(total)
-    start_indptr = indptr_sels[0] - offsets[0]
+    start_indptr = indptr_list[0] - offsets[0]
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
     end_indptr = np.concatenate(
-        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_sels[1:])]
+        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_list[1:])]
     )
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
