@@ -533,7 +533,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             )
         [indptr_offset] = self.group["indices"].shape
         if self.group["indptr"].dtype == np.int32:
-            new_nnz = indptr_offset + len(sparse_matrix.indices)
+            new_nnz = indptr_offset + sparse_matrix.indices.shape[0]
             if new_nnz >= np.iinfo(np.int32).max:
                 raise OverflowError(
                     "This array was written with a 32 bit intptr, but is now large "
