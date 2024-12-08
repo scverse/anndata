@@ -12,6 +12,7 @@ from scipy import sparse
 from anndata._warnings import OldFormatWarning
 
 from .._core.anndata import AnnData
+from .._settings import settings
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
@@ -38,12 +39,16 @@ def write_zarr(
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
-    f = zarr.open(store, mode="w")
+    f = zarr.open_group(store, mode="w", zarr_version=settings.zarr_write_format)
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
     def callback(func, s, k, elem, dataset_kwargs, iospec):
-        if chunks is not None and not isinstance(elem, sparse.spmatrix) and k == "/X":
+        if (
+            chunks is not None
+            and not isinstance(elem, sparse.spmatrix)
+            and k in {"X", "/X"}
+        ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
@@ -73,7 +78,7 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
             return AnnData(
                 **{
                     k: read_dispatched(v, callback)
-                    for k, v in elem.items()
+                    for k, v in dict(elem).items()
                     if not k.startswith("raw.")
                 }
             )
