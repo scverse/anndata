@@ -6,6 +6,8 @@ AnnData follows the development practices outlined in the [Scanpy contribution g
 .. include:: _key_contributors.rst
 ```
 
+## CI
+
 ### GPU CI
 
 To test GPU specific code we have a paid self-hosted runner to run the gpu specific tests on.
