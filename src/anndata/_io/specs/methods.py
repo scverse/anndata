@@ -391,8 +391,7 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    dtype = dataset_kwargs.get("dtype", elem.dtype)
-    f.create_dataset(k, data=elem, **dataset_kwargs, dtype=dtype)
+    f.create_dataset(k, data=elem, **dataset_kwargs)
 
 
 def _iter_chunks_for_copy(
@@ -433,7 +432,8 @@ def write_chunked_dense_array_to_group(
     zarr since zarr handles this automatically.
     """
     dtype = dataset_kwargs.get("dtype", elem.dtype)
-    dest = f.create_dataset(k, shape=elem.shape, **dataset_kwargs, dtype=dtype)
+    kwargs = {**dataset_kwargs, "dtype": dtype}
+    dest = f.create_dataset(k, shape=elem.shape, **kwargs)
 
     for chunk in _iter_chunks_for_copy(elem, dest):
         dest[chunk] = elem[chunk]
