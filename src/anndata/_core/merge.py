@@ -953,6 +953,7 @@ def missing_element(
         raise ValueError(
             "All elements are missing when attempting to generate missing elements."
         )
+    # 0 sized array for in-memory prevents allocating unnecessary memory while preserving broadcasting.
     off_axis_size = 0 if not should_return_dask else non_missing_elem.shape[axis - 1]
     shape = (n, off_axis_size) if axis == 0 else (off_axis_size, n)
     if should_return_dask:
