@@ -67,25 +67,14 @@ class BackedSparseMatrix(_cs_matrix):
             return sparse_dataset(self.data.parent).to_memory()
         if isinstance(self.data, ZarrArray):
             import zarr
-            from packaging.version import Version
 
-            is_zarr_v2 = Version(zarr.__version__) < Version("3.0.0b0")
-            if is_zarr_v2:
-                sparse_group = zarr.open(
+            return sparse_dataset(
+                zarr.open(
                     store=self.data.store,
                     mode="r",
                     chunk_store=self.data.chunk_store,  # chunk_store is needed, not clear why
                 )[Path(self.data.path).parent]
-            else:
-                anndata_group = zarr.open_group(store=self.data.store, mode="r")
-                sparse_group = anndata_group[
-                    str(
-                        Path(str(self.data.store_path))
-                        .relative_to(str(anndata_group.store_path))
-                        .parent
-                    )
-                ]
-            return sparse_dataset(sparse_group).to_memory()
+            ).to_memory()
         return super().copy()
 
     def _set_many(self, i: Iterable[int], j: Iterable[int], x):
