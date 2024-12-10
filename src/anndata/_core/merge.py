@@ -954,7 +954,7 @@ def missing_element(
             "All elements are missing when attempting to generate missing elements."
         )
     off_axis_size = 0 if not should_return_dask else non_missing_elem.shape[axis - 1]
-    shape = (off_axis_size, n) if axis else (n, off_axis_size)
+    shape = (n, off_axis_size) if axis == 0 else (off_axis_size, n)
     if should_return_dask:
         import dask.array as da
 
