@@ -67,14 +67,25 @@ class BackedSparseMatrix(_cs_matrix):
             return sparse_dataset(self.data.parent).to_memory()
         if isinstance(self.data, ZarrArray):
             import zarr
+            from packaging.version import Version
 
-            return sparse_dataset(
-                zarr.open(
+            is_zarr_v2 = Version(zarr.__version__) < Version("3.0.0b0")
+            if is_zarr_v2:
+                sparse_group = zarr.open(
                     store=self.data.store,
                     mode="r",
                     chunk_store=self.data.chunk_store,  # chunk_store is needed, not clear why
                 )[Path(self.data.path).parent]
-            ).to_memory()
+            else:
+                anndata_group = zarr.open_group(store=self.data.store, mode="r")
+                sparse_group = anndata_group[
+                    str(
+                        Path(str(self.data.store_path))
+                        .relative_to(str(anndata_group.store_path))
+                        .parent
+                    )
+                ]
+            return sparse_dataset(sparse_group).to_memory()
         return super().copy()
 
     def _set_many(self, i: Iterable[int], j: Iterable[int], x):
@@ -268,26 +279,26 @@ def get_compressed_vectors(
 def get_compressed_vectors_for_slices(
     x: BackedSparseMatrix, slices: Iterable[slice]
 ) -> tuple[Sequence, Sequence, Sequence]:
-    indptr_list = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    indptr_indices = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
     # HDF5 cannot handle out-of-order integer indexing
     if isinstance(x.data, ZarrArray):
-        indptr_int = np.concatenate([np.arange(s[0], s[-1]) for s in indptr_list])
+        indptr_int = np.concatenate([np.arange(s[0], s[-1]) for s in indptr_indices])
         data = x.data[indptr_int]
         indices = x.indices[indptr_int]
     else:
-        data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_list])
-        indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_list])
+        data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_indices])
+        indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_indices])
     # Need to track the size of the gaps in the slices to each indptr subselection
-    total = indptr_list[0][0]
+    total = indptr_indices[0][0]
     offsets = [total]
-    for i, sel in enumerate(indptr_list[1:]):
-        total = (sel[0] - indptr_list[i][-1]) + total
+    for i, sel in enumerate(indptr_indices[1:]):
+        total = (sel[0] - indptr_indices[i][-1]) + total
         offsets.append(total)
-    start_indptr = indptr_list[0] - offsets[0]
+    start_indptr = indptr_indices[0] - offsets[0]
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
     end_indptr = np.concatenate(
-        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_list[1:])]
+        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_indices[1:])]
     )
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
@@ -520,9 +531,9 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
                 f"Matrices must have same format. Currently are "
                 f"{self.format!r} and {sparse_matrix.format!r}"
             )
-        indptr_offset = len(self.group["indices"])
+        [indptr_offset] = self.group["indices"].shape
         if self.group["indptr"].dtype == np.int32:
-            new_nnz = indptr_offset + len(sparse_matrix.indices)
+            new_nnz = indptr_offset + sparse_matrix.indices.shape[0]
             if new_nnz >= np.iinfo(np.int32).max:
                 raise OverflowError(
                     "This array was written with a 32 bit intptr, but is now large "
