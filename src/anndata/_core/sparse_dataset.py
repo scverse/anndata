@@ -273,14 +273,14 @@ def get_compressed_vectors_for_slices(
     # HDF5 cannot handle out-of-order integer indexing
     if isinstance(x.data, ZarrArray):
         indptr_int = np.concatenate(
-            [np.arange(start, stop) for (start, stop) in indptr_limits]
+            [np.arange(start, stop) for start, stop in indptr_limits]
         )
         data = x.data[indptr_int]
         indices = x.indices[indptr_int]
     else:
-        data = np.concatenate([x.data[start:stop] for (start, stop) in indptr_limits])
+        data = np.concatenate([x.data[start:stop] for start, stop in indptr_limits])
         indices = np.concatenate(
-            [x.indices[start:stop] for (start, stop) in indptr_limits]
+            [x.indices[start:stop] for start, stop in indptr_limits]
         )
     # Need to track the size of the gaps in the slices to each indptr subselection
     offsets = [indptr_indices[0][0]]
