@@ -972,7 +972,7 @@ def outer_concat_aligned_mapping(
     ns = [m.parent.shape[axis] for m in mappings]
 
     for k in union_keys(mappings):
-        els = [m[k] if k in m else MissingVal for m in mappings]
+        els = [m.get(k, MissingVal) for m in mappings]
         if reindexers is None:
             cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=axis)
         else:
