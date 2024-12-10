@@ -1533,6 +1533,34 @@ def test_concat_different_types_dask(merge_strategy, array_type):
     assert_equal(result2, target2)
 
 
+def test_concat_missing_elem_dask_join(join_type):
+    import dask.array as da
+
+    import anndata as ad
+
+    ad1 = ad.AnnData(X=np.ones((5, 5)))
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), layers={"a": da.ones((5, 5))})
+    ad_in_memory_with_layers = ad2.to_memory()
+
+    result1 = ad.concat([ad1, ad2], join=join_type)
+    result2 = ad.concat([ad1, ad_in_memory_with_layers], join=join_type)
+    assert_equal(result1, result2)
+
+
+def test_impute_dask(axis_name):
+    import dask.array as da
+
+    from anndata._core.merge import _resolve_axis, missing_element
+
+    axis, _ = _resolve_axis(axis_name)
+    els = [da.ones((5, 5))]
+    missing = missing_element(6, els, axis=axis)
+    assert isinstance(missing, DaskArray)
+    in_memory = missing.compute()
+    assert np.all(np.isnan(in_memory))
+    assert in_memory.shape[axis] == 6
+
+
 def test_outer_concat_with_missing_value_for_df():
     # https://github.com/scverse/anndata/issues/901
     # TODO: Extend this test to cover all cases of missing values
