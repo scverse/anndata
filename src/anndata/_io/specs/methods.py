@@ -44,7 +44,7 @@ from ..._settings import settings
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -395,7 +395,9 @@ def write_basic(
     f.create_dataset(k, data=elem, **dataset_kwargs, dtype=dtype)
 
 
-def _iter_chunks_for_copy(elem: ArrayStorageType, dest: ArrayStorageType):
+def _iter_chunks_for_copy(
+    elem: ArrayStorageType, dest: ArrayStorageType
+) -> Iterator[slice | tuple[list[slice]]]:
     """
     Returns an iterator of tuples of slices for copying chunks from `elem` to `dest`.
 
