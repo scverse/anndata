@@ -21,7 +21,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import H5PY_V3, check_key
+from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -381,6 +381,7 @@ def write_list(
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
+@zero_dim_array_as_scalar
 def write_basic(
     f: GroupStorageType,
     k: str,
@@ -519,6 +520,7 @@ def read_string_array_partial(d, items=None, indices=slice(None)):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@zero_dim_array_as_scalar
 def write_vlen_string_array(
     f: H5Group,
     k: str,
@@ -540,6 +542,7 @@ def write_vlen_string_array(
 )
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@zero_dim_array_as_scalar
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
     k: str,
@@ -1180,8 +1183,15 @@ def write_hdf5_scalar(
 ):
     # Can’t compress scalars, error is thrown
     dataset_kwargs = dict(dataset_kwargs)
-    dataset_kwargs.pop("compression", None)
-    dataset_kwargs.pop("compression_opts", None)
+    for arg in (
+        "compression",
+        "compression_opts",
+        "chunks",
+        "shuffle",
+        "fletcher32",
+        "scaleoffset",
+    ):
+        dataset_kwargs.pop(arg, None)
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
