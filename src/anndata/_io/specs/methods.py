@@ -406,10 +406,10 @@ def _iter_chunks_for_copy(elem: ArrayStorageType, dest: ArrayStorageType):
     else:
         itemsize = elem.dtype.itemsize
         shape = elem.shape
-        entry_chunk_size = 100 * 1024 * 1024 // itemsize  # number of elements to write
-        n_rows = max(
-            entry_chunk_size // shape[0], 1000
-        )  # Number of rows that works out to
+        # Number of elements to write
+        entry_chunk_size = 100 * 1024 * 1024 // itemsize
+        # Number of rows that works out to
+        n_rows = max(entry_chunk_size // shape[0], 1000)
         return (slice(i, min(i + n_rows, shape[0])) for i in range(0, shape[0], n_rows))
 
 
