@@ -16,7 +16,7 @@ import warnings
 from abc import ABC
 from collections.abc import Iterable
 from functools import cached_property
-from itertools import accumulate, chain
+from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
@@ -280,20 +280,23 @@ def get_compressed_vectors_for_slices(
     x: BackedSparseMatrix, slices: Iterable[slice]
 ) -> tuple[Sequence, Sequence, Sequence]:
     indptr_indices = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    indptr_limits = [(i[0], i[-1]) for i in indptr_indices]
     # HDF5 cannot handle out-of-order integer indexing
     if isinstance(x.data, ZarrArray):
-        indptr_int = np.concatenate([np.arange(s[0], s[-1]) for s in indptr_indices])
+        indptr_int = np.concatenate(
+            [np.arange(start, stop) for (start, stop) in indptr_limits]
+        )
         data = x.data[indptr_int]
         indices = x.indices[indptr_int]
     else:
-        data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_indices])
-        indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_indices])
+        data = np.concatenate([x.data[start:stop] for (start, stop) in indptr_limits])
+        indices = np.concatenate(
+            [x.indices[start:stop] for (start, stop) in indptr_limits]
+        )
     # Need to track the size of the gaps in the slices to each indptr subselection
-    total = indptr_indices[0][0]
-    offsets = [total]
-    for i, sel in enumerate(indptr_indices[1:]):
-        total = (sel[0] - indptr_indices[i][-1]) + total
-        offsets.append(total)
+    offsets = [indptr_indices[0][0]]
+    for (_, stop0), (start1, _) in pairwise(indptr_limits):
+        offsets.append((start1 - stop0) + offsets[-1])
     start_indptr = indptr_indices[0] - offsets[0]
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
