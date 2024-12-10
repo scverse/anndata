@@ -25,6 +25,15 @@ def coerce_array(
     allow_df: bool = False,
     allow_array_like: bool = False,
 ):
+    try:
+        from anndata.experimental.backed._compat import Dataset2D
+    except ImportError:
+
+        class Dataset2D:
+            @staticmethod
+            def __repr__():
+                return "mock anndata.experimental.backed._xarray."
+
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
     from ..typing import ArrayDataStructureType
 
@@ -33,7 +42,7 @@ def coerce_array(
         return value
     # If value is one of the allowed types, return it
     array_data_structure_types = get_args(ArrayDataStructureType)
-    if isinstance(value, array_data_structure_types):
+    if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warnings.warn(msg, ImplicitModificationWarning)

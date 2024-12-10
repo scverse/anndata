@@ -106,8 +106,6 @@ nitpick_ignore = [
     ("py:class", "anndata.compat.CupyArray"),
     ("py:class", "anndata.compat.CupySparseMatrix"),
     ("py:class", "numpy.ma.core.MaskedArray"),
-    ("py:class", "dask.array.core.Array"),
-    ("py:class", "awkward.highlevel.Array"),
     ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
     ("py:obj", "numpy._typing._array_like._ScalarType_co"),
     # https://github.com/sphinx-doc/sphinx/issues/10974
@@ -134,6 +132,7 @@ intersphinx_mapping = dict(
     zarr=("https://zarr.readthedocs.io/en/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
+    ak=("https://awkward-array.org/doc/stable/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
@@ -144,6 +143,7 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "awkward.highlevel.Array": "ak.Array",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
