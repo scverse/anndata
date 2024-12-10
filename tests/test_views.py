@@ -814,6 +814,22 @@ def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: 
         gen_adata((10, 10))[index]
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(sparse.csr_matrix(np.random.random((1, 10))), id="sparse"),
+        pytest.param([1.2, 3.4], id="list"),
+        *(
+            pytest.param(np.array([1.2, 2.3], dtype=dtype), id=f"ndarray-{dtype}")
+            for dtype in [np.float32, np.float64]
+        ),
+    ],
+)
+def test_index_float_sequence_raises_error(index):
+    with pytest.raises(IndexError, match=r"has floating point values"):
+        gen_adata((10, 10))[index]
+
+
 # @pytest.mark.parametrize("dim", ["obs", "var"])
 # @pytest.mark.parametrize(
 #     ("idx", "pat"),
