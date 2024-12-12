@@ -16,7 +16,7 @@ import warnings
 from abc import ABC
 from collections.abc import Iterable
 from functools import cached_property
-from itertools import accumulate, chain
+from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
+    from ..compat import H5Array
     from .index import Index
 else:
     from scipy.sparse import spmatrix as _cs_matrix
@@ -249,30 +250,42 @@ def slice_as_int(s: slice, l: int) -> int:
 def get_compressed_vectors(
     x: BackedSparseMatrix, row_idxs: Iterable[int]
 ) -> tuple[Sequence, Sequence, Sequence]:
-    slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
-    data = np.concatenate([x.data[s] for s in slices])
-    indices = np.concatenate([x.indices[s] for s in slices])
-    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in slices))))
+    indptr_slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
+    # HDF5 cannot handle out-of-order integer indexing
+    if isinstance(x.data, ZarrArray):
+        as_np_indptr = np.concatenate(
+            [np.arange(s.start, s.stop) for s in indptr_slices]
+        )
+        data = x.data[as_np_indptr]
+        indices = x.indices[as_np_indptr]
+    else:
+        data = np.concatenate([x.data[s] for s in indptr_slices])
+        indices = np.concatenate([x.indices[s] for s in indptr_slices])
+    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in indptr_slices))))
     return data, indices, indptr
 
 
 def get_compressed_vectors_for_slices(
     x: BackedSparseMatrix, slices: Iterable[slice]
 ) -> tuple[Sequence, Sequence, Sequence]:
-    indptr_sels = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
-    data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_sels])
-    indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_sels])
+    indptr_indices = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    indptr_limits = [slice(i[0], i[-1]) for i in indptr_indices]
+    # HDF5 cannot handle out-of-order integer indexing
+    if isinstance(x.data, ZarrArray):
+        indptr_int = np.concatenate([np.arange(s.start, s.stop) for s in indptr_limits])
+        data = x.data[indptr_int]
+        indices = x.indices[indptr_int]
+    else:
+        data = np.concatenate([x.data[s] for s in indptr_limits])
+        indices = np.concatenate([x.indices[s] for s in indptr_limits])
     # Need to track the size of the gaps in the slices to each indptr subselection
-    total = indptr_sels[0][0]
-    offsets = [total]
-    for i, sel in enumerate(indptr_sels[1:]):
-        total = (sel[0] - indptr_sels[i][-1]) + total
-        offsets.append(total)
-    start_indptr = indptr_sels[0] - offsets[0]
+    gaps = (s1.start - s0.stop for s0, s1 in pairwise(indptr_limits))
+    offsets = accumulate(chain([indptr_limits[0].start], gaps))
+    start_indptr = indptr_indices[0] - next(offsets)
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
     end_indptr = np.concatenate(
-        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_sels[1:])]
+        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets)]
     )
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
@@ -380,7 +393,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     @property
     def dtype(self) -> np.dtype:
         """The :class:`numpy.dtype` of the `data` attribute of the sparse matrix."""
-        return self.group["data"].dtype
+        return self._data.dtype
 
     @classmethod
     def _check_group_format(cls, group):
@@ -545,15 +558,17 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         indptr[orig_data_size:] = (
             sparse_matrix.indptr[1:].astype(np.int64) + indptr_offset
         )
-        # Clear cached property
-        if hasattr(self, "indptr"):
-            del self._indptr
 
         # indices
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = sparse_matrix.indices
+
+        # Clear cached property
+        for attr in ["_indptr", "_indices", "_data"]:
+            if hasattr(self, attr):
+                delattr(self, attr)
 
     @cached_property
     def _indptr(self) -> np.ndarray:
@@ -565,11 +580,25 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         arr = self.group["indptr"][...]
         return arr
 
+    @cached_property
+    def _indices(self) -> H5Array | ZarrArray:
+        """\
+        Cache access to the indices to prevent unnecessary reads of the zarray
+        """
+        return self.group["indices"]
+
+    @cached_property
+    def _data(self) -> H5Array | ZarrArray:
+        """\
+        Cache access to the data to prevent unnecessary reads of the zarray
+        """
+        return self.group["data"]
+
     def _to_backed(self) -> BackedSparseMatrix:
         format_class = get_backed_class(self.format)
         mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self.group["data"]
-        mtx.indices = self.group["indices"]
+        mtx.data = self._data
+        mtx.indices = self._indices
         mtx.indptr = self._indptr
         return mtx
 
@@ -578,8 +607,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
         mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self.group["data"][...]
-        mtx.indices = self.group["indices"][...]
+        mtx.data = self._data[...]
+        mtx.indices = self._indices[...]
         mtx.indptr = self._indptr
         return mtx
 
