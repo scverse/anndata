@@ -214,7 +214,7 @@ def test_io_spec(store, value, encoding_type):
     [
         pytest.param(np.asarray(1), "numeric-scalar", id="scalar_int"),
         pytest.param(np.asarray(1.0), "numeric-scalar", id="scalar_float"),
-        pytest.param(np.asarray(True), "numeric-scalar", id="scalar_bool"),
+        pytest.param(np.asarray(True), "numeric-scalar", id="scalar_bool"),  # noqa: FBT003
         pytest.param(np.asarray("test"), "string", id="scalar_string"),
     ],
 )
