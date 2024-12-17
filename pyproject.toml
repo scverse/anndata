@@ -48,6 +48,7 @@ dependencies = [
     "packaging>=20.0",
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
+    "legacy-api-wrap",
 ]
 dynamic = ["version"]
 
@@ -172,6 +173,7 @@ docstring-code-format = true
 select = [
     "E",   # Error detected by Pycodestyle
     "F",   # Errors detected by Pyflakes
+    "FBT", # Boolean positional arguments
     "W",   # Warning detected by Pycodestyle
     "PLW", # Pylint
     "UP",  # pyupgrade
@@ -205,6 +207,7 @@ required-imports = ["from __future__ import annotations"]
 "subprocess.call".msg = "Use `subprocess.run([…])` instead"
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
+"legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = []
 strict = true

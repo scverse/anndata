@@ -32,7 +32,7 @@ def diskfmt(request):
 )
 @pytest.mark.parametrize("nested", [True, False], ids=["nested", "root"])
 def test_key_error(
-    tmp_path, group_fn: Callable[[Path], zarr.Group | h5py.Group], nested: bool
+    *, tmp_path, group_fn: Callable[[Path], zarr.Group | h5py.Group], nested: bool
 ):
     @report_read_key_on_error
     def read_attr(_):

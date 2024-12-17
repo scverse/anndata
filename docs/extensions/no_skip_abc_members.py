@@ -16,7 +16,7 @@ def autodoc_skip_member(
     what: Literal["module", "class", "exception", "function", "method", "attribute"],
     name: str,
     obj: object,
-    skip: bool,
+    skip: bool,  # noqa: FBT001
     options: Options,
 ):
     if what == "method" and getattr(obj, "__isabstractmethod__", False):

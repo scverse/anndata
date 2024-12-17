@@ -943,7 +943,7 @@ def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
             parent = dataset.parent
         categories_dset = parent[_read_attr(dataset.attrs, "categories")]
         categories = read_elem(categories_dset)
-        ordered = bool(_read_attr(categories_dset.attrs, "ordered", False))
+        ordered = bool(_read_attr(categories_dset.attrs, "ordered", default=False))
         return pd.Categorical.from_codes(
             read_elem(dataset), categories, ordered=ordered
         )
