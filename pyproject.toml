@@ -80,9 +80,11 @@ doc = [
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
     # for unreleased changes
-    "anndata[dev-doc]",
+    "anndata[dev-doc,dask]",
+    "awkward>=2.3"
 ]
 dev-doc = ["towncrier>=24.8.0"] # release notes tool
+test-full = ["anndata[test,lazy]"]
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
@@ -107,6 +109,7 @@ gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
 # https://github.com/dask/dask/issues/11290
+lazy = ["xarray>=2024.06.0", "aiohttp", "requests", "zarr<3.0.0a0", "anndata[dask]"]
 dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*"]
 
 [tool.hatch.version]
