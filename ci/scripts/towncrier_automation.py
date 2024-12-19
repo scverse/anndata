@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = [ "towncrier", "packaging" ]
+# ///
 from __future__ import annotations
 
 import argparse
