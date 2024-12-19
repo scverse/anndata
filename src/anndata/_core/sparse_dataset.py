@@ -46,7 +46,7 @@ else:
     from scipy.sparse import spmatrix as _cs_matrix
 
 
-SCIPY_1_5 = Version(scipy.__version__) >= Version("1.5rc0")
+SCIPY_1_15 = Version(scipy.__version__) >= Version("1.15rc0")
 
 
 class BackedFormat(NamedTuple):
@@ -373,7 +373,7 @@ def validate_indices(
     mtx: BackedSparseMatrix, indices: tuple[Index1D, Index1D]
 ) -> tuple[Index1D, Index1D]:
     res = mtx._validate_indices(indices)
-    return res[0] if SCIPY_1_5 else res
+    return res[0] if SCIPY_1_15 else res
 
 
 class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):

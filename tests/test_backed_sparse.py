@@ -7,9 +7,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 import h5py
 import numpy as np
 import pytest
-import scipy
 import zarr
-from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -33,6 +31,7 @@ if TYPE_CHECKING:
     from anndata.compat import ZarrGroup
 
     Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
+
 
 subset_func2 = subset_func
 
@@ -617,8 +616,8 @@ def test_backed_sizeof(
 
 
 sparray_scipy_bug_marks = (
-    [pytest.mark.xfail(reason="scipy bug causes view to be allocated")]
-    if CAN_USE_SPARSE_ARRAY and Version(scipy.__version__) < Version("1.4.1")
+    [pytest.mark.skip(reason="scipy bug causes view to be allocated")]
+    if CAN_USE_SPARSE_ARRAY
     else []
 )
 
