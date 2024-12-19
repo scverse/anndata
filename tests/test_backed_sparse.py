@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Literal, get_args
 import h5py
 import numpy as np
 import pytest
+import scipy
 import zarr
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -31,7 +33,6 @@ if TYPE_CHECKING:
     from anndata.compat import ZarrGroup
 
     Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
-
 
 subset_func2 = subset_func
 
@@ -615,6 +616,13 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
 
 
+sparray_scipy_bug_marks = (
+    [pytest.mark.xfail(reason="scipy bug causes view to be allocated")]
+    if CAN_USE_SPARSE_ARRAY and Version(scipy.__version__) < Version("1.4.1")
+    else []
+)
+
+
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -622,10 +630,14 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
+@pytest.mark.parametrize(
+    "sparse_class",
+    [
+        sparse.csr_matrix,
+        pytest.param(sparse.csr_array, marks=[*sparray_scipy_bug_marks]),
+    ],
+)
 def test_append_overflow_check(group_fn, sparse_class, tmpdir):
-    if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
-        pytest.skip("scipy bug causes view to be allocated")
     group = group_fn(tmpdir)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
