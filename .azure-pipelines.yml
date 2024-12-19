@@ -61,7 +61,7 @@ jobs:
         displayName: "Install minimum dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
 
-      - script: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -c /tmp/constraints.txt
+      - script: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -c ci/constraints.txt
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
