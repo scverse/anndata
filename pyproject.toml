@@ -42,7 +42,7 @@ dependencies = [
     "numpy>=1.23",
     # https://github.com/scverse/anndata/issues/1434
     "scipy >1.8",
-    "h5py>=3.6",
+    "h5py>=3.7",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
     "packaging>=20.0",
@@ -74,7 +74,7 @@ doc = [
     "nbsphinx",
     "scanpydoc[theme,typehints] >=0.14.1",
     "zarr",
-    "awkward>=2.0.7",
+    "awkward>=2.3",
     "IPython",                          # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
@@ -93,7 +93,7 @@ test = [
     "openpyxl",
     "joblib",
     "boltons",
-    "scanpy",
+    "scanpy>=1.9.8",
     "httpx", # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
