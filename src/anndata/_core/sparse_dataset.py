@@ -23,7 +23,9 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import h5py
 import numpy as np
+import scipy
 import scipy.sparse as ss
+from packaging.version import Version
 from scipy.sparse import _sparsetools
 
 from .. import abc
@@ -39,9 +41,12 @@ if TYPE_CHECKING:
 
     from .._types import GroupStorageType
     from ..compat import H5Array
-    from .index import Index
+    from .index import Index, Index1D
 else:
     from scipy.sparse import spmatrix as _cs_matrix
+
+
+SCIPY_1_5 = Version(scipy.__version__) >= Version("1.5rc0")
 
 
 class BackedFormat(NamedTuple):
@@ -353,13 +358,22 @@ def _get_group_format(group: GroupStorageType) -> str:
 
 
 # Check for the overridden few methods above in our BackedSparseMatrix subclasses
-def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
+def is_sparse_indexing_overridden(
+    format: Literal["csr", "csc"], row: Index1D, col: Index1D
+):
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
         (isinstance(major_indexer, int | np.integer))
         or (isinstance(major_indexer, slice))
         or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
     )
+
+
+def validate_indices(
+    mtx: BackedSparseMatrix, indices: tuple[Index1D, Index1D]
+) -> tuple[Index1D, Index1D]:
+    res = mtx._validate_indices(indices)
+    return res[0] if SCIPY_1_5 else res
 
 
 class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
@@ -424,8 +438,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
-        row_sp_matrix_validated, col_sp_matrix_validated = mtx._validate_indices(
-            (row, col)
+        row_sp_matrix_validated, col_sp_matrix_validated = validate_indices(
+            mtx, indices
         )
 
         # Handle masked indexing along major axis
