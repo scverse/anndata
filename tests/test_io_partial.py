@@ -88,7 +88,7 @@ def test_read_partial_adata(tmp_path, accessor):
 
     for key in storage["obsp"].keys():
         part = read_elem_partial(storage["obsp"][key], indices=(obs_idx, obs_idx))
-        part = np.asarray(part)
+        part = part.toarray()
         assert np.all(part == adata_sbs.obsp[key])
 
     # check uns just in case
