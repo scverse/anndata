@@ -64,7 +64,7 @@ body:
         Alternatively, run this in a console:
 
         ```python
-        import session_info2; print(session_info2.session_info(dependencies=True)._repr_mimebundle_()["text/markdown"])
+        >>> import session_info2; print(session_info2.session_info(dependencies=True)._repr_mimebundle_()["text/markdown"])
         ```
       render: python
     validations:
