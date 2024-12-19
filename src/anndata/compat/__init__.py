@@ -47,7 +47,7 @@ class Empty:
     pass
 
 
-Index1D = slice | int | str | np.int64 | np.ndarray
+Index1D = slice | int | str | np.int64 | np.ndarray | pd.Series[bool]
 IndexRest = Index1D | EllipsisType
 Index = (
     IndexRest
