@@ -163,16 +163,16 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     if isinstance(adata_src.raw.X, SpArray):
         assert isinstance(adata.raw.X, sparse.spmatrix)
     else:
-        assert isinstance(adata_src.raw.X, (type(adata.raw.X), DaskArray))
+        assert isinstance(adata_src.raw.X, type(adata.raw.X) | DaskArray)
     assert isinstance(
-        adata_src.uns["uns4"]["c"], (type(adata.uns["uns4"]["c"]), DaskArray)
+        adata_src.uns["uns4"]["c"], type(adata.uns["uns4"]["c"]) | DaskArray
     )
-    assert isinstance(adata_src.varm, (type(adata.varm), DaskArray))
+    assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
 
     assert_equal(adata.raw.X, adata_src.raw.X)
     pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
-    assert isinstance(adata.uns["uns4"]["a"], (int, np.integer))
-    assert isinstance(adata_src.uns["uns4"]["a"], (int, np.integer))
+    assert isinstance(adata.uns["uns4"]["a"], int | np.integer)
+    assert isinstance(adata_src.uns["uns4"]["a"], int | np.integer)
     assert_equal(adata, adata_src)
 
 

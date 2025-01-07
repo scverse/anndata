@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 from copy import deepcopy
 from operator import mul
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
@@ -34,6 +35,9 @@ from anndata.tests.helpers import (
     subset_func,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from types import EllipsisType
 
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(
     "ignore:Changing the sparsity structure:scipy.sparse.SparseEfficiencyWarning"
@@ -784,6 +788,46 @@ def test_dataframe_view_index_setting():
     assert isinstance(a2.obs, pd.DataFrame)
     assert a1.obs.index.values.tolist() == ["aa", "bb"]
     assert a2.obs.index.values.tolist() == ["a", "b"]
+
+
+def test_ellipsis_index(
+    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    equivalent_ellipsis_index: tuple[slice, slice],
+    matrix_type,
+):
+    adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
+    subset_ellipsis = adata[ellipsis_index]
+    subset = adata[equivalent_ellipsis_index]
+    assert_equal(subset_ellipsis, subset)
+
+
+@pytest.mark.parametrize(
+    ("index", "expected_error"),
+    [
+        ((..., 0, ...), r"only have a single ellipsis"),
+        ((0, 0, 0), r"Received a length 3 index"),
+    ],
+    ids=["ellipsis-int-ellipsis", "int-int-int"],
+)
+def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: str):
+    with pytest.raises(IndexError, match=expected_error):
+        gen_adata((10, 10))[index]
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(sparse.csr_matrix(np.random.random((1, 10))), id="sparse"),
+        pytest.param([1.2, 3.4], id="list"),
+        *(
+            pytest.param(np.array([1.2, 2.3], dtype=dtype), id=f"ndarray-{dtype}")
+            for dtype in [np.float32, np.float64]
+        ),
+    ],
+)
+def test_index_float_sequence_raises_error(index):
+    with pytest.raises(IndexError, match=r"has floating point values"):
+        gen_adata((10, 10))[index]
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])
