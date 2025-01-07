@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import os
 
+from .compat import old_positionals
+
 _previous_memory_usage = None
 
 anndata_logger = logging.getLogger("anndata")
@@ -13,7 +15,7 @@ anndata_logger.handlers[-1].setFormatter(logging.Formatter("%(message)s"))
 anndata_logger.handlers[-1].setLevel("INFO")
 
 
-def get_logger(name):
+def get_logger(name: str) -> logging.Logger:
     """\
     Creates a child logger that delegates to anndata_logger
     instead to logging.root
@@ -21,7 +23,7 @@ def get_logger(name):
     return anndata_logger.manager.getLogger(name)
 
 
-def get_memory_usage():
+def get_memory_usage() -> tuple[float, float]:
     import psutil
 
     process = psutil.Process(os.getpid())
@@ -38,15 +40,19 @@ def get_memory_usage():
     return mem, mem_diff
 
 
-def format_memory_usage(mem_usage, msg="", newline=False):
-    newline = "\n" if newline else ""
+@old_positionals("newline")
+def format_memory_usage(
+    mem_usage: tuple[float, float], msg: str = "", *, newline: bool = False
+):
+    nl = "\n" if newline else ""
     more = " \n... " if msg != "" else ""
     mem, diff = mem_usage
     return (
-        f"{newline}{msg}{more}"
+        f"{nl}{msg}{more}"
         f"Memory usage: current {mem:.2f} GB, difference {diff:+.2f} GB"
     )
 
 
-def print_memory_usage(msg="", newline=False):
+@old_positionals("newline")
+def print_memory_usage(msg: str = "", *, newline: bool = False):
     print(format_memory_usage(get_memory_usage(), msg, newline))

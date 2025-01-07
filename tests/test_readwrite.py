@@ -107,11 +107,10 @@ diskfmt2 = diskfmt
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
-    tmpdir = Path(tmp_path)
-    pth1 = tmpdir / f"first.{diskfmt}"
+    pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
     read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
-    pth2 = tmpdir / f"second.{diskfmt2}"
+    pth2 = tmp_path / f"second.{diskfmt2}"
     write2 = lambda x: getattr(x, f"write_{diskfmt2}")(pth2)
     read2 = lambda: getattr(ad, f"read_{diskfmt2}")(pth2)
 
@@ -474,7 +473,7 @@ def test_readloom_deprecations(tmp_path):
 
     # positional -> keyword
     with pytest.warns(FutureWarning, match=r"sparse"):
-        depr_result = ad.io.read_loom(loom_pth, True)
+        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
     actual_result = ad.io.read_loom(loom_pth, sparse=True)
     assert type(depr_result.X) == type(actual_result.X)
 
