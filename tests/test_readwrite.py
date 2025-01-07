@@ -836,11 +836,7 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     [
         pytest.param(dict(base=None), id="dict_val"),
         pytest.param(
-            pd.DataFrame(dict(col_0=["string", None])),
-            id="df",
-            marks=pytest.mark.xfail(
-                reason="Nullable string arrays not yet implemented"
-            ),
+            pd.DataFrame(dict(col_0=["string", None])).convert_dtypes(), id="df"
         ),
     ],
 )
@@ -848,7 +844,8 @@ def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
     pth = tmp_path / f"adata_dtype.{diskfmt}"
 
     orig = ad.AnnData(np.ones((3, 4)), uns=dict(val=uns_val))
-    curr = roundtrip(orig, pth)
+    with ad.settings.override(allow_write_nullable_strings=True):
+        curr = roundtrip(orig, pth)
 
     if isinstance(orig.uns["val"], pd.DataFrame):
         pd.testing.assert_frame_equal(curr.uns["val"], orig.uns["val"])
