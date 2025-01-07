@@ -1446,7 +1446,7 @@ def test_concat_outer_aligned_mapping(elem):
     del b.obsm[elem]
 
     concated = concat({"a": a, "b": b}, join="outer", label="group")
-    result = concated.obsm[elem][concated.obs["group"] == "b"]
+    result = concated[concated.obs["group"] == "b"].obsm[elem]
 
     check_filled_like(result, elem_name=f"obsm/{elem}")
 
