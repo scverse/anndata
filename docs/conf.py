@@ -132,7 +132,7 @@ intersphinx_mapping = dict(
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
-    zarr=("https://zarr.readthedocs.io/en/stable", None),
+    zarr=("https://zarr.readthedocs.io/en/v2.18.4/", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
 )
