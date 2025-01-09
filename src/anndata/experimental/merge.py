@@ -224,7 +224,7 @@ def write_concat_sparse(
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
-    number_non_zero = sum(len(d.group["indices"]) for d in datasets)
+    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
     write_elem(

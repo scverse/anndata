@@ -538,7 +538,9 @@ def write_vlen_string_array_zarr(
             k,
             shape=elem.shape,
             dtype=str if ad.settings.zarr_write_format == 3 else object,
-            codecs=[VLenUTF8Codec()] if ad.settings.zarr_write_format == 3 else None,
+            compressors=[VLenUTF8Codec()]
+            if ad.settings.zarr_write_format == 3
+            else None,
             filters=[VLenUTF8()] if ad.settings.zarr_write_format == 2 else None,
             **dataset_kwargs,
         )
@@ -1170,21 +1172,21 @@ def write_scalar_zarr(
         from zarr.codecs import VLenUTF8Codec
 
         dtype = np.array(value).dtype
-        f.create_array(
+        a = f.create_array(
             key,
             shape=(),
             dtype=str
             if ad.settings.zarr_write_format == 3
             else (object if isinstance(value, str) else dtype),
-            codecs=[VLenUTF8Codec()]
+            compressors=[VLenUTF8Codec()]
             if ad.settings.zarr_write_format == 3 and isinstance(value, str)
             else None,
             filters=[VLenUTF8()]
             if ad.settings.zarr_write_format == 2 and isinstance(value, str)
             else None,
-            data=np.array(value),
             **dataset_kwargs,
         )
+        a[...] = np.array(value)
 
 
 def write_hdf5_scalar(
