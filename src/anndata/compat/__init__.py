@@ -94,7 +94,7 @@ if find_spec("zarr") or TYPE_CHECKING:
     import zarr
 
     if Version(zarr.__version__).major > 2:
-        raise RuntimeError("zarr-python > 2 is not supported")
+        raise RuntimeError("zarr-python major version > 2 is not supported")
 
     from zarr.core import Array as ZarrArray
     from zarr.hierarchy import Group as ZarrGroup
