@@ -41,6 +41,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
 
+    from .._types import ArrayStorageType
+
     DT = TypeVar("DT")
 
 
@@ -525,7 +527,7 @@ def subset_func(request):
 ###################
 
 
-def format_msg(elem_name):
+def format_msg(elem_name: str | None) -> str:
     if elem_name is not None:
         return f"Error raised from element {elem_name!r}."
     else:
@@ -537,7 +539,7 @@ def report_name(func):
     """Report name of element being tested if test fails."""
 
     @wraps(func)
-    def func_wrapper(*args, _elem_name=None, **kwargs):
+    def func_wrapper(*args, _elem_name: str | None = None, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -562,17 +564,23 @@ def _assert_equal(a, b):
 
 
 @singledispatch
-def assert_equal(a, b, exact=False, elem_name=None):
+def assert_equal(
+    a: object, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     _assert_equal(a, b, _elem_name=elem_name)
 
 
 @assert_equal.register(CupyArray)
-def assert_equal_cupy(a, b, exact=False, elem_name=None):
-    assert_equal(b, a.get(), exact, elem_name)
+def assert_equal_cupy(
+    a: CupyArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    assert_equal(b, a.get(), exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(np.ndarray)
-def assert_equal_ndarray(a, b, exact=False, elem_name=None):
+def assert_equal_ndarray(
+    a: np.ndarray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     b = asarray(b)
     if not exact and is_numeric_dtype(a) and is_numeric_dtype(b):
         assert a.shape == b.shape, format_msg(elem_name)
@@ -587,51 +595,72 @@ def assert_equal_ndarray(a, b, exact=False, elem_name=None):
         # Reshaping to allow >2d arrays
         assert a.shape == b.shape, format_msg(elem_name)
         assert_equal(
-            pd.DataFrame(a.reshape(-1)), pd.DataFrame(b.reshape(-1)), exact, elem_name
+            pd.DataFrame(a.reshape(-1)),
+            pd.DataFrame(b.reshape(-1)),
+            exact=exact,
+            elem_name=elem_name,
         )
     else:
         assert np.all(a == b), format_msg(elem_name)
 
 
 @assert_equal.register(ArrayView)
-def assert_equal_arrayview(a, b, exact=False, elem_name=None):
+def assert_equal_arrayview(
+    a: ArrayView, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     assert_equal(asarray(a), asarray(b), exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(BaseCompressedSparseDataset)
 @assert_equal.register(sparse.spmatrix)
-def assert_equal_sparse(a, b, exact=False, elem_name=None):
+def assert_equal_sparse(
+    a: BaseCompressedSparseDataset | sparse.spmatrix,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
+):
     a = asarray(a)
-    assert_equal(b, a, exact, elem_name=elem_name)
+    assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(SpArray)
-def assert_equal_sparse_array(a, b, exact=False, elem_name=None):
-    return assert_equal_sparse(a, b, exact, elem_name)
+def assert_equal_sparse_array(
+    a: SpArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    return assert_equal_sparse(a, b, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)
-def assert_equal_cupy_sparse(a, b, exact=False, elem_name=None):
+def assert_equal_cupy_sparse(
+    a: CupySparseMatrix, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     a = a.toarray()
-    assert_equal(b, a, exact, elem_name=elem_name)
+    assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(h5py.Dataset)
 @assert_equal.register(ZarrArray)
-def assert_equal_h5py_dataset(a, b, exact=False, elem_name=None):
+def assert_equal_h5py_dataset(
+    a: ArrayStorageType, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     a = asarray(a)
-    assert_equal(b, a, exact, elem_name=elem_name)
+    assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(DaskArray)
-def assert_equal_dask_array(a, b, exact=False, elem_name=None):
-    assert_equal(b, a.compute(), exact, elem_name)
+def assert_equal_dask_array(
+    a: DaskArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    assert_equal(b, a.compute(), exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(pd.DataFrame)
-def are_equal_dataframe(a, b, exact=False, elem_name=None):
+def are_equal_dataframe(
+    a: pd.DataFrame, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     if not isinstance(b, pd.DataFrame):
-        assert_equal(b, a, exact, elem_name)  # , a.values maybe?
+        assert_equal(b, a, exact=exact, elem_name=elem_name)  # , a.values maybe?
 
     report_name(pd.testing.assert_frame_equal)(
         a,
@@ -645,25 +674,38 @@ def are_equal_dataframe(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(AwkArray)
-def assert_equal_awkarray(a, b, exact=False, elem_name=None):
+def assert_equal_awkarray(
+    a: AwkArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     import awkward as ak
 
     if exact:
+        assert isinstance(b, AwkArray)
         assert a.type == b.type, f"{a.type} != {b.type}, {format_msg(elem_name)}"
     assert ak.to_list(a) == ak.to_list(b), format_msg(elem_name)
 
 
 @assert_equal.register(Mapping)
-def assert_equal_mapping(a, b, exact=False, elem_name=None):
+def assert_equal_mapping(
+    a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    assert isinstance(b, Mapping)
     assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
     for k in a.keys():
         if elem_name is None:
             elem_name = ""
-        assert_equal(a[k], b[k], exact, f"{elem_name}/{k}")
+        assert_equal(a[k], b[k], exact=exact, elem_name=f"{elem_name}/{k}")
 
 
 @assert_equal.register(AlignedMappingBase)
-def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
+def assert_equal_aligned_mapping(
+    a: AlignedMappingBase,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
+):
+    assert isinstance(b, AlignedMappingBase)
     a_indices = (a.parent.obs_names, a.parent.var_names)
     b_indices = (b.parent.obs_names, b.parent.var_names)
     for axis_idx in a.axes:
@@ -675,17 +717,23 @@ def assert_equal_aligned_mapping(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(pd.Index)
-def assert_equal_index(a, b, exact=False, elem_name=None):
-    if not exact:
-        report_name(pd.testing.assert_index_equal)(
-            a, b, check_names=False, check_categorical=False, _elem_name=elem_name
-        )
-    else:
-        report_name(pd.testing.assert_index_equal)(a, b, _elem_name=elem_name)
+def assert_equal_index(
+    a: pd.Index, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    params = dict(check_categorical=False) if not exact else {}
+    report_name(pd.testing.assert_index_equal)(
+        a, b, check_names=False, **params, _elem_name=elem_name
+    )
 
 
 @assert_equal.register(pd.api.extensions.ExtensionArray)
-def assert_equal_extension_array(a, b, exact=False, elem_name=None):
+def assert_equal_extension_array(
+    a: pd.api.extensions.ExtensionArray,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
+):
     report_name(pd.testing.assert_extension_array_equal)(
         a,
         b,
@@ -696,7 +744,9 @@ def assert_equal_extension_array(a, b, exact=False, elem_name=None):
 
 
 @assert_equal.register(Raw)
-def assert_equal_raw(a, b, exact=False, elem_name=None):
+def assert_equal_raw(
+    a: Raw, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     def assert_is_not_none(x):  # can't put an assert in a lambda
         assert x is not None
 
@@ -712,7 +762,7 @@ def assert_equal_raw(a, b, exact=False, elem_name=None):
 
 @assert_equal.register(AnnData)
 def assert_adata_equal(
-    a: AnnData, b: AnnData, exact: bool = False, elem_name: str | None = None
+    a: AnnData, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     """\
     Check whether two AnnData objects are equivalent,
@@ -733,10 +783,12 @@ def assert_adata_equal(
         else:
             return f"{elem_name}/{x}"
 
+    assert isinstance(b, AnnData)
+
     # There may be issues comparing views, since np.allclose
     # can modify ArrayViews if they contain `nan`s
-    assert_equal(a.obs_names, b.obs_names, exact, elem_name=fmt_name("obs_names"))
-    assert_equal(a.var_names, b.var_names, exact, elem_name=fmt_name("var_names"))
+    assert_equal(a.obs_names, b.obs_names, exact=exact, elem_name=fmt_name("obs_names"))
+    assert_equal(a.var_names, b.var_names, exact=exact, elem_name=fmt_name("var_names"))
     if not exact:
         # Reorder all elements if necessary
         idx = [slice(None), slice(None)]
@@ -765,7 +817,7 @@ def assert_adata_equal(
         assert_equal(
             getattr(a, attr),
             getattr(b, attr),
-            exact,
+            exact=exact,
             elem_name=fmt_name(attr),
         )
 

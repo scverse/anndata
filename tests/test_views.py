@@ -631,7 +631,7 @@ def test_invalid_scalar_index(adata, index):
 
 @pytest.mark.parametrize("obs", [False, True])
 @pytest.mark.parametrize("index", [-100, -50, -1])
-def test_negative_scalar_index(adata, index: int, obs: bool):
+def test_negative_scalar_index(*, adata, index: int, obs: bool):
     pos_index = index + (adata.n_obs if obs else adata.n_vars)
 
     if obs:
@@ -811,6 +811,22 @@ def test_ellipsis_index(
 )
 def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: str):
     with pytest.raises(IndexError, match=expected_error):
+        gen_adata((10, 10))[index]
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(sparse.csr_matrix(np.random.random((1, 10))), id="sparse"),
+        pytest.param([1.2, 3.4], id="list"),
+        *(
+            pytest.param(np.array([1.2, 2.3], dtype=dtype), id=f"ndarray-{dtype}")
+            for dtype in [np.float32, np.float64]
+        ),
+    ],
+)
+def test_index_float_sequence_raises_error(index):
+    with pytest.raises(IndexError, match=r"has floating point values"):
         gen_adata((10, 10))[index]
 
 

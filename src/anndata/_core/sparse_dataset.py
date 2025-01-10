@@ -16,14 +16,16 @@ import warnings
 from abc import ABC
 from collections.abc import Iterable
 from functools import cached_property
-from itertools import accumulate, chain
+from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 import h5py
 import numpy as np
+import scipy
 import scipy.sparse as ss
+from packaging.version import Version
 from scipy.sparse import _sparsetools
 
 from .. import abc
@@ -39,9 +41,12 @@ if TYPE_CHECKING:
 
     from .._types import GroupStorageType
     from ..compat import H5Array
-    from .index import Index
+    from .index import Index, Index1D
 else:
     from scipy.sparse import spmatrix as _cs_matrix
+
+
+SCIPY_1_15 = Version(scipy.__version__) >= Version("1.15rc0")
 
 
 class BackedFormat(NamedTuple):
@@ -279,26 +284,24 @@ def get_compressed_vectors(
 def get_compressed_vectors_for_slices(
     x: BackedSparseMatrix, slices: Iterable[slice]
 ) -> tuple[Sequence, Sequence, Sequence]:
-    indptr_list = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    indptr_indices = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
+    indptr_limits = [slice(i[0], i[-1]) for i in indptr_indices]
     # HDF5 cannot handle out-of-order integer indexing
     if isinstance(x.data, ZarrArray):
-        indptr_int = np.concatenate([np.arange(s[0], s[-1]) for s in indptr_list])
+        indptr_int = np.concatenate([np.arange(s.start, s.stop) for s in indptr_limits])
         data = x.data[indptr_int]
         indices = x.indices[indptr_int]
     else:
-        data = np.concatenate([x.data[s[0] : s[-1]] for s in indptr_list])
-        indices = np.concatenate([x.indices[s[0] : s[-1]] for s in indptr_list])
+        data = np.concatenate([x.data[s] for s in indptr_limits])
+        indices = np.concatenate([x.indices[s] for s in indptr_limits])
     # Need to track the size of the gaps in the slices to each indptr subselection
-    total = indptr_list[0][0]
-    offsets = [total]
-    for i, sel in enumerate(indptr_list[1:]):
-        total = (sel[0] - indptr_list[i][-1]) + total
-        offsets.append(total)
-    start_indptr = indptr_list[0] - offsets[0]
+    gaps = (s1.start - s0.stop for s0, s1 in pairwise(indptr_limits))
+    offsets = accumulate(chain([indptr_limits[0].start], gaps))
+    start_indptr = indptr_indices[0] - next(offsets)
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
     end_indptr = np.concatenate(
-        [s[1:] - offsets[i + 1] for i, s in enumerate(indptr_list[1:])]
+        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets)]
     )
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
@@ -366,13 +369,22 @@ def _get_group_format(group: GroupStorageType) -> str:
 
 
 # Check for the overridden few methods above in our BackedSparseMatrix subclasses
-def is_sparse_indexing_overridden(format: Literal["csr", "csc"], row, col):
+def is_sparse_indexing_overridden(
+    format: Literal["csr", "csc"], row: Index1D, col: Index1D
+):
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
         (isinstance(major_indexer, int | np.integer))
         or (isinstance(major_indexer, slice))
         or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
     )
+
+
+def validate_indices(
+    mtx: BackedSparseMatrix, indices: tuple[Index1D, Index1D]
+) -> tuple[Index1D, Index1D]:
+    res = mtx._validate_indices(indices)
+    return res[0] if SCIPY_1_15 else res
 
 
 class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
@@ -437,8 +449,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
-        row_sp_matrix_validated, col_sp_matrix_validated = mtx._validate_indices(
-            (row, col)
+        row_sp_matrix_validated, col_sp_matrix_validated = validate_indices(
+            mtx, indices
         )
 
         # Handle masked indexing along major axis
@@ -524,7 +536,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             )
         if self.format not in {"csr", "csc"}:
             raise NotImplementedError(
-                f"The append method for format {self.format} " f"is not implemented."
+                f"The append method for format {self.format} is not implemented."
             )
         if self.format != sparse_matrix.format:
             raise ValueError(

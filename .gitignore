@@ -10,6 +10,7 @@ __pycache__/
 
 # Distribution / packaging
 /dist/
+/ci/min-deps.txt
 /src/anndata/_version.py
 /requirements*.lock
 /.python-version
