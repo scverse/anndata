@@ -613,7 +613,7 @@ def write_recarray_zarr(
 def write_sparse_compressed(
     f: GroupStorageType,
     key: str,
-    value: sparse.spmatrix | SpArray,
+    value: sparse.csr_matrix | sparse.csc_matrix | SpArray,
     *,
     _writer: Writer,
     fmt: Literal["csr", "csc"],

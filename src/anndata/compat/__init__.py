@@ -33,14 +33,14 @@ if TYPE_CHECKING:
 
 CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
 
-if not CAN_USE_SPARSE_ARRAY:
+if CAN_USE_SPARSE_ARRAY or TYPE_CHECKING:
+    from scipy.sparse import sparray as SpArray
+else:
 
     class SpArray:
         @staticmethod
         def __repr__():
             return "mock scipy.sparse.sparray"
-else:
-    SpArray = scipy.sparse.sparray
 
 
 class Empty:
