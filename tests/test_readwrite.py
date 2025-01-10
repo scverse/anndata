@@ -256,7 +256,9 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
 @contextmanager
 def store_context(path: Path):
     if path.suffix == ".zarr":
-        store = zarr.open_group(path, "r+", zarr_version=ad.settings.zarr_write_format)
+        store = zarr.open_group(
+            path, mode="r+", zarr_version=ad.settings.zarr_write_format
+        )
     else:
         file = h5py.File(path, "r+")
         store = file["/"]
