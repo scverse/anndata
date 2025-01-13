@@ -525,7 +525,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             )
         if self.format not in {"csr", "csc"}:
             raise NotImplementedError(
-                f"The append method for format {self.format} " f"is not implemented."
+                f"The append method for format {self.format} is not implemented."
             )
         if self.format != sparse_matrix.format:
             raise ValueError(
@@ -544,14 +544,14 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
         # shape
         if self.format == "csr":
-            assert (
-                shape[1] == sparse_matrix.shape[1]
-            ), "CSR matrices must have same size of dimension 1 to be appended."
+            assert shape[1] == sparse_matrix.shape[1], (
+                "CSR matrices must have same size of dimension 1 to be appended."
+            )
             new_shape = (shape[0] + sparse_matrix.shape[0], shape[1])
         elif self.format == "csc":
-            assert (
-                shape[0] == sparse_matrix.shape[0]
-            ), "CSC matrices must have same size of dimension 0 to be appended."
+            assert shape[0] == sparse_matrix.shape[0], (
+                "CSC matrices must have same size of dimension 0 to be appended."
+            )
             new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
         else:
             raise AssertionError("We forgot to update this branching to a new format")

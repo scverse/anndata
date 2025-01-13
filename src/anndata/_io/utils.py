@@ -166,7 +166,7 @@ def _get_display_path(store: Storage) -> str:
     if isinstance(store, BaseCompressedSparseDataset):
         store = store.group
     path = store.name or "??"  # can be None
-    return f'/{path.removeprefix("/")}'
+    return f"/{path.removeprefix('/')}"
 
 
 def add_key_note(

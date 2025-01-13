@@ -463,9 +463,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._check_uniqueness()
 
         if self.filename:
-            assert not isinstance(
-                raw, Raw
-            ), "got raw from other adata but also filename?"
+            assert not isinstance(raw, Raw), (
+                "got raw from other adata but also filename?"
+            )
             if {"raw", "raw.X"} & set(self.file):
                 raw = dict(X=None, **raw)
         if not raw:
@@ -666,8 +666,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     self._X = value
         else:
             raise ValueError(
-                f"Data matrix has wrong shape {value.shape}, "
-                f"need to be {self.shape}."
+                f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             )
 
     @X.deleter

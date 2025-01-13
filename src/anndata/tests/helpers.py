@@ -969,9 +969,9 @@ def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Patter
     import traceback
 
     message = "".join(traceback.format_exception_only(e.type, e.value))
-    assert re.search(
-        pattern, message
-    ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
+    assert re.search(pattern, message), (
+        f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
+    )
 
 
 def resolve_cupy_type(val):
