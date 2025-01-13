@@ -274,7 +274,7 @@ def test_dataset_append_memory(
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
@@ -292,7 +292,7 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format="csr")
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
@@ -332,7 +332,7 @@ def test_read_array(
     obs_idx = subset_func(np.arange(100))
     var_idx = subset_func2(np.arange(100))
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
@@ -363,7 +363,7 @@ def test_dataset_append_disk(
     b = sparse_format(sparse.random(10, 10))
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "a", a)
@@ -387,12 +387,12 @@ def test_lazy_array_cache(
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
-    f = zarr.open_group(path, "a")
+    f = zarr.open_group(path, mode="a")
     ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
-    f = zarr.open_group(store, "a")
+    f = zarr.open_group(store, mode="a")
     a_disk = sparse_dataset(f["X"])
     a_disk[:1]
     a_disk[3:5]
@@ -492,7 +492,7 @@ def test_data_access(
 ):
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
-    f = zarr.open_group(path, "a")
+    f = zarr.open_group(path, mode="a")
     ad.io.write_elem(f, "X", a)
     data = f["X/data"][...]
     del f["X/data"]
@@ -535,7 +535,7 @@ def test_wrong_shape(
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -553,7 +553,7 @@ def test_reset_group(tmp_path: Path):
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -568,7 +568,7 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -597,7 +597,7 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -618,6 +618,13 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
 
 
+sparray_scipy_bug_marks = (
+    [pytest.mark.skip(reason="scipy bug causes view to be allocated")]
+    if CAN_USE_SPARSE_ARRAY
+    else []
+)
+
+
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -625,17 +632,21 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
-def test_append_overflow_check(group_fn, sparse_class, tmpdir):
-    if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
-        pytest.skip("scipy bug causes view to be allocated")
-    group = group_fn(tmpdir)
+@pytest.mark.parametrize(
+    "sparse_class",
+    [
+        sparse.csr_matrix,
+        pytest.param(sparse.csr_array, marks=[*sparray_scipy_bug_marks]),
+    ],
+)
+def test_append_overflow_check(group_fn, sparse_class, tmp_path):
+    group = group_fn(tmp_path)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
     # Minimally allocating new matrix
     new_mtx = sparse_class(
         (
-            np.broadcast_to(True, typemax_int32 - 1),
+            np.broadcast_to(True, typemax_int32 - 1),  # noqa: FBT003
             np.broadcast_to(np.int32(1), typemax_int32 - 1),
             [0, typemax_int32 - 1],
         ),

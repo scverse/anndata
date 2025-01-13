@@ -54,7 +54,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         store = file["/"]
     elif request.param == "zarr":
         store = zarr.open_group(
-            tmp_path / "test.zarr", "w", zarr_version=ad.settings.zarr_write_format
+            tmp_path / "test.zarr", mode="w", zarr_version=ad.settings.zarr_write_format
         )
     else:
         pytest.fail(f"Unknown store type: {request.param}")
@@ -209,6 +209,27 @@ def test_io_spec(store, value, encoding_type):
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+
+
+@pytest.mark.parametrize(
+    ("value", "encoding_type"),
+    [
+        pytest.param(np.asarray(1), "numeric-scalar", id="scalar_int"),
+        pytest.param(np.asarray(1.0), "numeric-scalar", id="scalar_float"),
+        pytest.param(np.asarray(True), "numeric-scalar", id="scalar_bool"),  # noqa: FBT003
+        pytest.param(np.asarray("test"), "string", id="scalar_string"),
+    ],
+)
+def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: str):
+    key = f"key_for_{encoding_type}"
+    write_elem(
+        store, key, value, dataset_kwargs={"compression": "gzip", "compression_opts": 5}
+    )
+
+    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
+
+    from_disk = read_elem(store[key])
+    assert_equal(value, from_disk)
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test
@@ -603,7 +624,7 @@ def test_read_sparse_array(
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
