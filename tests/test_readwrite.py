@@ -324,9 +324,10 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
         f.visititems(check_compressed)
 
     if not_compressed:
+        sep = "\n\t"
         msg = (
-            f"These elements were not compressed correctly:\n\t"
-            f"{'\n\t'.join(not_compressed)}"
+            f"These elements were not compressed correctly:{sep}"
+            f"{sep.join(not_compressed)}"
         )
         raise AssertionError(msg)
 
@@ -353,9 +354,10 @@ def test_zarr_compression(tmp_path):
         f.visititems(check_compressed)
 
     if not_compressed:
+        sep = "\n\t"
         msg = (
-            f"These elements were not compressed correctly:\n\t"
-            f"{'\n\t'.join(not_compressed)}"
+            f"These elements were not compressed correctly:{sep}"
+            f"{sep.join(not_compressed)}"
         )
         raise AssertionError(msg)
 
