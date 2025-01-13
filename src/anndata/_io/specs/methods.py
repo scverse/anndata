@@ -1158,6 +1158,21 @@ def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
     return elem[()]
 
 
+def _remove_scalar_compression_args(dataset_kwargs: Mapping[str, Any]) -> dict:
+    # Can’t compress scalars, error is thrown
+    dataset_kwargs = dict(dataset_kwargs)
+    for arg in (
+        "compression",
+        "compression_opts",
+        "chunks",
+        "shuffle",
+        "fletcher32",
+        "scaleoffset",
+    ):
+        dataset_kwargs.pop(arg, None)
+    return dataset_kwargs
+
+
 def write_scalar_zarr(
     f: GroupStorageType,
     key: str,
@@ -1168,6 +1183,9 @@ def write_scalar_zarr(
 ):
     import zarr
 
+    # these args are ignored in v2: https://zarr.readthedocs.io/en/v2.18.4/api/hierarchy.html#zarr.hierarchy.Group.create_dataset
+    # and error out in v3
+    dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     if Version(zarr.__version__) < Version("3.0.0b0"):
         return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
     else:
@@ -1201,16 +1219,7 @@ def write_hdf5_scalar(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     # Can’t compress scalars, error is thrown
-    dataset_kwargs = dict(dataset_kwargs)
-    for arg in (
-        "compression",
-        "compression_opts",
-        "chunks",
-        "shuffle",
-        "fletcher32",
-        "scaleoffset",
-    ):
-        dataset_kwargs.pop(arg, None)
+    dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 

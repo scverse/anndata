@@ -582,7 +582,9 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
         disk_mtx.append(sparse.random(100, 100, format="coo"))
     with pytest.raises(NotImplementedError):
         disk_mtx.append(np.random.random((100, 100)))
-    disk_dense = f.create_dataset("dense", data=np.random.random((100, 100)))
+    disk_dense = f.create_dataset(
+        "dense", data=np.random.random((100, 100)), shape=(100, 100)
+    )
     with pytest.raises(NotImplementedError):
         disk_mtx.append(disk_dense)
 
