@@ -367,7 +367,7 @@ def _write_concat_sequence(
         )
     else:
         raise NotImplementedError(
-            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays] } with axis={axis}."
+            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
         )
 
 

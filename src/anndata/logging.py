@@ -48,8 +48,7 @@ def format_memory_usage(
     more = " \n... " if msg != "" else ""
     mem, diff = mem_usage
     return (
-        f"{nl}{msg}{more}"
-        f"Memory usage: current {mem:.2f} GB, difference {diff:+.2f} GB"
+        f"{nl}{msg}{more}Memory usage: current {mem:.2f} GB, difference {diff:+.2f} GB"
     )
 
 
