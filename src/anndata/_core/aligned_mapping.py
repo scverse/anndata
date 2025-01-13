@@ -175,7 +175,7 @@ class AlignedView(AlignedMappingBase, Generic[P, I]):
 
     def __delitem__(self, key: str) -> None:
         if key not in self:
-            msg = f"'{key!r}' not found in view of {self.attrname}"
+            msg = f"{key!r} not found in view of {self.attrname}"
             raise KeyError(msg)  # Make sure it exists before bothering with a copy
         warnings.warn(
             f"Removing element `.{self.attrname}['{key}']` of view, "
