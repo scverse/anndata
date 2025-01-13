@@ -172,6 +172,7 @@ docstring-code-format = true
 [tool.ruff.lint]
 select = [
     "E",   # Error detected by Pycodestyle
+    "EM",  # Traceback-friendly error messages
     "F",   # Errors detected by Pyflakes
     "FBT", # Boolean positional arguments
     "W",   # Warning detected by Pycodestyle

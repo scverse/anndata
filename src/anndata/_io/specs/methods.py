@@ -433,9 +433,8 @@ def write_basic_dask_h5(
     import dask.config as dc
 
     if dc.get("scheduler", None) == "dask.distributed":
-        raise ValueError(
-            "Cannot write dask arrays to hdf5 when using distributed scheduler"
-        )
+        msg = "Cannot write dask arrays to hdf5 when using distributed scheduler"
+        raise ValueError(msg)
 
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g)
@@ -725,9 +724,8 @@ def write_dask_sparse(
     elif sparse_format == "csc":
         axis = 1
     else:
-        raise NotImplementedError(
-            f"Cannot write dask sparse arrays with format {sparse_format}"
-        )
+        msg = f"Cannot write dask sparse arrays with format {sparse_format}"
+        raise NotImplementedError(msg)
 
     def chunk_slice(start: int, stop: int) -> tuple[slice | None, slice | None]:
         result = [slice(None), slice(None)]
@@ -838,13 +836,13 @@ def write_dataframe(
     # Check arguments
     for reserved in ("_index",):
         if reserved in df.columns:
-            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
+            msg = f"{reserved!r} is a reserved name for dataframe columns."
+            raise ValueError(msg)
     group = _require_group_write_dataframe(f, key, df)
     if not df.columns.is_unique:
         duplicates = list(df.columns[df.columns.duplicated()])
-        raise ValueError(
-            f"Found repeated column names: {duplicates}. Column names must be unique."
-        )
+        msg = f"Found repeated column names: {duplicates}. Column names must be unique."
+        raise ValueError(msg)
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
@@ -852,11 +850,12 @@ def write_dataframe(
         if df.index.name in col_names and not pd.Series(
             df.index, index=df.index
         ).equals(df[df.index.name]):
-            raise ValueError(
+            msg = (
                 f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
                 "whose values are different. This is not supported. Please make sure "
                 "the values are the same, or use a different name."
             )
+            raise ValueError(msg)
         index_name = df.index.name
     else:
         index_name = "_index"

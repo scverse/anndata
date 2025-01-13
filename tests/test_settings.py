@@ -29,7 +29,8 @@ type_3 = list[int]
 
 def validate_int_list(val) -> bool:
     if not isinstance(val, list) or not [isinstance(type(e), int) for e in val]:
-        raise TypeError(f"{repr(val)} is not a valid int list")
+        msg = f"{val!r} is not a valid int list"
+        raise TypeError(msg)
     return True
 
 

@@ -120,7 +120,8 @@ def check_key(key):
     # elif issubclass(typ, bytes):
     # return key
     else:
-        raise TypeError(f"{key} of type {typ} is an invalid key. Should be str.")
+        msg = f"{key} of type {typ} is an invalid key. Should be str."
+        raise TypeError(msg)
 
 
 # -------------------------------------------------------------------------------
@@ -208,7 +209,8 @@ def report_read_key_on_error(func):
                 store = cast("Storage", arg)
                 break
         else:
-            raise ValueError("No element found in args.")
+            msg = "No element found in args."
+            raise ValueError(msg)
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -244,7 +246,8 @@ def report_write_key_on_error(func):
                 store = cast("Storage", arg)
                 break
         else:
-            raise ValueError("No element found in args.")
+            msg = "No element found in args."
+            raise ValueError(msg)
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -275,7 +278,8 @@ def _read_legacy_raw(
     if modern_raw:
         if any(k.startswith("raw.") for k in f):
             what = f"File {f.filename}" if hasattr(f, "filename") else "Store"
-            raise ValueError(f"{what} has both legacy and current raw formats.")
+            msg = f"{what} has both legacy and current raw formats."
+            raise ValueError(msg)
         return modern_raw
 
     raw = {}

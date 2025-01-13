@@ -101,9 +101,8 @@ class BackedSparseMatrix(_cs_matrix):
             return
 
         else:
-            raise ValueError(
-                "You cannot change the sparsity structure of a SparseDataset."
-            )
+            msg = "You cannot change the sparsity structure of a SparseDataset."
+            raise ValueError(msg)
             # replace where possible
             # mask = offsets > -1
             # # offsets[mask]
@@ -332,7 +331,8 @@ def get_memory_class(
                 return memory_class
             elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
                 return memory_class
-    raise ValueError(f"Format string {format} is not supported.")
+    msg = f"Format string {format} is not supported."
+    raise ValueError(msg)
 
 
 def get_backed_class(
@@ -344,7 +344,8 @@ def get_backed_class(
                 return backed_class
             elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
                 return backed_class
-    raise ValueError(f"Format string {format} is not supported.")
+    msg = f"Format string {format} is not supported."
+    raise ValueError(msg)
 
 
 def _get_group_format(group: GroupStorageType) -> str:
@@ -390,9 +391,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
     @group.setter
     def group(self, val):
-        raise AttributeError(
-            f"Do not reset group on a {type(self)} with {val}.  Instead use `sparse_dataset` to make a new class."
-        )
+        msg = f"Do not reset group on a {type(self)} with {val}.  Instead use `sparse_dataset` to make a new class."
+        raise AttributeError(msg)
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
@@ -402,7 +402,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         elif isinstance(self.group, H5Group):
             return "hdf5"
         else:
-            raise ValueError(f"Unknown group type {type(self.group)}")
+            msg = f"Unknown group type {type(self.group)}"
+            raise ValueError(msg)
 
     @property
     def dtype(self) -> np.dtype:
@@ -519,28 +520,30 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
         # Check input
         if not ss.issparse(sparse_matrix):
-            raise NotImplementedError(
+            msg = (
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
             )
+            raise NotImplementedError(msg)
         if self.format not in {"csr", "csc"}:
-            raise NotImplementedError(
-                f"The append method for format {self.format} is not implemented."
-            )
+            msg = f"The append method for format {self.format} is not implemented."
+            raise NotImplementedError(msg)
         if self.format != sparse_matrix.format:
-            raise ValueError(
+            msg = (
                 f"Matrices must have same format. Currently are "
                 f"{self.format!r} and {sparse_matrix.format!r}"
             )
+            raise ValueError(msg)
         indptr_offset = len(self.group["indices"])
         if self.group["indptr"].dtype == np.int32:
             new_nnz = indptr_offset + len(sparse_matrix.indices)
             if new_nnz >= np.iinfo(np.int32).max:
-                raise OverflowError(
+                msg = (
                     "This array was written with a 32 bit intptr, but is now large "
                     "enough to require 64 bit values. Please recreate the array with "
                     "a 64 bit indptr."
                 )
+                raise OverflowError(msg)
 
         # shape
         if self.format == "csr":
@@ -554,7 +557,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             )
             new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
         else:
-            raise AssertionError("We forgot to update this branching to a new format")
+            msg = "We forgot to update this branching to a new format"
+            raise AssertionError(msg)
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
         self.group.attrs["shape"] = new_shape
@@ -691,7 +695,8 @@ def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
         return _CSRDataset(group)
     elif encoding_type == "csc":
         return _CSCDataset(group)
-    raise ValueError(f"Unknown encoding type {encoding_type}")
+    msg = f"Unknown encoding type {encoding_type}"
+    raise ValueError(msg)
 
 
 @_subset.register(BaseCompressedSparseDataset)

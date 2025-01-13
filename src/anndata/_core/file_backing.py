@@ -94,7 +94,8 @@ class AnnDataFileManager:
         if filemode is not None:
             self._filemode = filemode
         if self.filename is None:
-            raise ValueError("Cannot open backing file if backing not initialized.")
+            msg = "Cannot open backing file if backing not initialized."
+            raise ValueError(msg)
         self._file = h5py.File(self.filename, self._filemode)
 
     def close(self):
@@ -163,7 +164,8 @@ def _(x: AwkArray, *, copy: bool = False):
 
 @singledispatch
 def filename(x):
-    raise NotImplementedError(f"Not implemented for {type(x)}")
+    msg = f"Not implemented for {type(x)}"
+    raise NotImplementedError(msg)
 
 
 @filename.register(h5py.Group)
@@ -180,7 +182,8 @@ def _(x):
 
 @singledispatch
 def get_elem_name(x):
-    raise NotImplementedError(f"Not implemented for {type(x)}")
+    msg = f"Not implemented for {type(x)}"
+    raise NotImplementedError(msg)
 
 
 @get_elem_name.register(h5py.Group)

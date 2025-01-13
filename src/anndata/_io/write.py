@@ -90,7 +90,8 @@ def write_loom(filename: PathLike, adata: AnnData, *, write_obsm_varm: bool = Fa
     col_attrs[col_dim] = col_names.values
 
     if adata.X is None:
-        raise ValueError("loompy does not accept empty matrices as data")
+        msg = "loompy does not accept empty matrices as data"
+        raise ValueError(msg)
 
     if write_obsm_varm:
         for key in adata.obsm.keys():
