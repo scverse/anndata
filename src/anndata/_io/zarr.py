@@ -7,12 +7,12 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 import zarr
+from packaging.version import Version
 from scipy import sparse
-
-from anndata._warnings import OldFormatWarning
 
 from .._core.anndata import AnnData
 from .._settings import settings
+from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
@@ -21,11 +21,14 @@ from .utils import _read_legacy_raw, report_read_key_on_error
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from zarr.core.common import AccessModeLiteral
+    from zarr.storage import StoreLike
+
 T = TypeVar("T")
 
 
 def write_zarr(
-    store: MutableMapping | str | Path,
+    store: StoreLike,
     adata: AnnData,
     *,
     chunks: tuple[int, ...] | None = None,
@@ -39,7 +42,7 @@ def write_zarr(
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
-    f = zarr.open_group(store, mode="w", zarr_version=settings.zarr_write_format)
+    f = open_write_group(store)
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
@@ -145,3 +148,16 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
         return read_dataframe_legacy(group)
     else:
         return read_elem(group)
+
+
+_FMT_PARAM = (
+    "zarr_version" if Version(zarr.__version__) < Version("3.0.0b0") else "zarr_format"
+)
+
+
+def open_write_group(
+    store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
+) -> zarr.Group:
+    return zarr.open_group(
+        store, mode=mode, **{_FMT_PARAM: settings.zarr_write_format}, **kwargs
+    )

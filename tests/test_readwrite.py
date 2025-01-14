@@ -20,6 +20,7 @@ from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
+from anndata._io.zarr import open_write_group
 from anndata.compat import DaskArray, SpArray, _read_attr
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
@@ -255,9 +256,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
 @contextmanager
 def store_context(path: Path):
     if path.suffix == ".zarr":
-        store = zarr.open_group(
-            path, mode="r+", zarr_version=ad.settings.zarr_write_format
-        )
+        store = open_write_group(path, mode="r+")
     else:
         file = h5py.File(path, "r+")
         store = file["/"]

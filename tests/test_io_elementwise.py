@@ -22,6 +22,7 @@ from anndata._io.specs import (
     get_spec,
 )
 from anndata._io.specs.registry import IORegistryError
+from anndata._io.zarr import open_write_group
 from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
 from anndata.experimental import read_elem_as_dask
 from anndata.io import read_elem, write_elem
@@ -53,9 +54,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         file = h5py.File(tmp_path / "test.h5", "w")
         store = file["/"]
     elif request.param == "zarr":
-        store = zarr.open_group(
-            tmp_path / "test.zarr", mode="w", zarr_version=ad.settings.zarr_write_format
-        )
+        store = open_write_group(tmp_path / "test.zarr")
     else:
         pytest.fail(f"Unknown store type: {request.param}")
 
@@ -559,7 +558,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     pth = tmp_path / "test.zarr"
     adata = gen_adata((3, 2))
 
-    z = zarr.open_group(pth, mode="w", zarr_version=ad.settings.zarr_write_format)
+    z = open_write_group(pth)
     write_elem(z, "table/table", adata)
 
     if consolidated:

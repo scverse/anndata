@@ -11,8 +11,6 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import csc_matrix, csr_matrix
 
-import anndata as ad
-
 from .._core.file_backing import to_memory
 from .._core.merge import (
     MissingVal,
@@ -102,28 +100,33 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
+def as_group(store, *, mode: str) -> ZarrGroup | H5Group:
     raise NotImplementedError("This is not yet implemented.")
 
 
 @as_group.register(os.PathLike)
 @as_group.register(str)
-def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
+def _(store: os.PathLike | str, *, mode: str) -> ZarrGroup | H5Group:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
 
-        return h5py.File(store, *args, **kwargs)
-    import zarr
+        return h5py.File(store, mode=mode)
 
-    return zarr.open_group(
-        store, zarr_version=ad.settings.zarr_write_format, *args, **kwargs
-    )
+    if mode == "r":  # others all write: r+, a, w, w-
+        import zarr
+
+        zarr.open_group(store, mode=mode)
+
+    from anndata._io.zarr import open_write_group
+
+    return open_write_group(store, mode=mode)
 
 
 @as_group.register(ZarrGroup)
 @as_group.register(H5Group)
-def _(store, *args, **kwargs):
+def _(store, *, mode: str) -> ZarrGroup | H5Group:
+    del mode
     return store
 
 
