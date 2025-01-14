@@ -393,7 +393,13 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    f.create_dataset(k, data=elem, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    if isinstance(f, H5Group) or is_zarr_v2():
+        f.create_dataset(
+            k, data=elem, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs
+        )
+    else:
+        f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+        f[k][...] = elem
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
@@ -600,9 +606,13 @@ def write_recarray_zarr(
 ):
     from anndata.compat import _to_fixed_length_strings
 
-    f.create_dataset(
-        k, data=_to_fixed_length_strings(elem), shape=elem.shape, **dataset_kwargs
-    )
+    elem = _to_fixed_length_strings(elem)
+    if isinstance(f, H5Group) or is_zarr_v2():
+        f.create_dataset(k, data=elem, shape=elem.shape, **dataset_kwargs)
+    else:
+        # TODO: zarr v3 doesn’t support this dtype
+        f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+        f[k][...] = elem
 
 
 #################
@@ -628,27 +638,16 @@ def write_sparse_compressed(
     if isinstance(f, H5Group) and "maxshape" not in dataset_kwargs:
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
 
-    g.create_dataset(
-        "data",
-        data=value.data,
-        shape=value.data.shape,
-        dtype=value.data.dtype,
-        **dataset_kwargs,
-    )
-    g.create_dataset(
-        "indices",
-        data=value.indices,
-        shape=value.indices.shape,
-        dtype=value.indices.dtype,
-        **dataset_kwargs,
-    )
-    g.create_dataset(
-        "indptr",
-        data=value.indptr,
-        shape=value.indptr.shape,
-        dtype=indptr_dtype,
-        **dataset_kwargs,
-    )
+    for attr_name in ["data", "indices", "indptr"]:
+        attr = getattr(value, attr_name)
+        dtype = indptr_dtype if attr_name == "indptr" else attr.dtype
+        if isinstance(f, H5Group) or is_zarr_v2():
+            g.create_dataset(
+                attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
+            )
+        else:
+            g.create_array(attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs)
+            g[attr_name][:] = attr
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")

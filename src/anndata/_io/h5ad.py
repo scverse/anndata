@@ -21,6 +21,7 @@ from ..compat import (
     _clean_uns,
     _decode_structured_array,
     _from_fixed_length_strings,
+    is_zarr_v2,
 )
 from ..experimental import read_dispatched
 from .specs import read_elem, write_elem
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._core.file_backing import AnnDataFileManager
+    from .._types import GroupStorageType
 
 T = TypeVar("T")
 
@@ -113,7 +115,7 @@ def write_h5ad(
 @report_write_key_on_error
 @write_spec(IOSpec("array", "0.2.0"))
 def write_sparse_as_dense(
-    f: h5py.Group,
+    f: GroupStorageType,
     key: str,
     value: sparse.spmatrix | BaseCompressedSparseDataset,
     *,
@@ -129,7 +131,14 @@ def write_sparse_as_dense(
             key = re.sub(r"(.*)(\w(?!.*/))", r"\1_\2", key.rstrip("/"))
         else:
             del f[key]  # Wipe before write
-    dset = f.create_dataset(key, shape=value.shape, dtype=value.dtype, **dataset_kwargs)
+    if isinstance(f, h5py.Group) or is_zarr_v2():
+        dset = f.create_dataset(
+            key, shape=value.shape, dtype=value.dtype, **dataset_kwargs
+        )
+    else:
+        dset = f.create_array(
+            key, shape=value.shape, dtype=value.dtype, **dataset_kwargs
+        )
     compressed_axis = int(isinstance(value, sparse.csc_matrix))
     for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):
         dset[idx] = value[idx].toarray()
