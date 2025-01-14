@@ -41,6 +41,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
 
+    from zarr.abc.store import ByteRequest
+    from zarr.core.buffer import BufferPrototype
+
     from .._types import ArrayStorageType
 
     DT = TypeVar("DT")
@@ -1097,6 +1100,7 @@ if find_spec("zarr") or TYPE_CHECKING:
         from zarr.storage import DirectoryStore as LocalStore
     else:
         from zarr.storage import LocalStore
+
 else:
 
     class LocalStore:
@@ -1115,12 +1119,17 @@ class AccessTrackingStore(LocalStore):
         self._access_count = Counter()
         self._accessed_keys = {}
 
-    def __getitem__(self, key: str) -> object:
+    async def get(
+        self,
+        key: str,
+        prototype: BufferPrototype | None = None,
+        byte_range: ByteRequest | None = None,
+    ) -> object:
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
                 self._accessed_keys[tracked] += [key]
-        return super().__getitem__(key)
+        return await super().get(key, prototype=prototype, byte_range=byte_range)
 
     def get_access_count(self, key: str) -> int:
         return self._access_count[key]

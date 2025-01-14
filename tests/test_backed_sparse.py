@@ -457,17 +457,17 @@ def width_idx_kinds(
         (
             [0],
             slice(None, None),
-            ["X/data/.zarray", "X/data/0"],
+            ["X/data/zarr.json", "X/data/c/0"],
         ),
         (
             [0],
             slice(None, 3),
-            ["X/data/.zarray", "X/data/0"],
+            ["X/data/zarr.json", "X/data/c/0"],
         ),
         (
             [3, 4, 5],
             slice(None, None),
-            ["X/data/.zarray", "X/data/3", "X/data/4", "X/data/5"],
+            ["X/data/zarr.json", "X/data/c/3", "X/data/c/4", "X/data/c/5"],
         ),
         l=10,
     ),
