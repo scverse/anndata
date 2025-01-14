@@ -132,7 +132,7 @@ intersphinx_mapping = dict(
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
-    zarr=("https://zarr.readthedocs.io/en/v2.18.4/", None),
+    zarr=("https://zarr.readthedocs.io/en/stable/", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
 )
@@ -145,6 +145,8 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "zarr.core.array.Array": "zarr.Array",
+    "zarr.core.group.Group": "zarr.Group",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",

@@ -98,12 +98,12 @@ else:
     class ZarrArray:
         @staticmethod
         def __repr__():
-            return "mock zarr.core.Array"
+            return "mock zarr.Array"
 
     class ZarrGroup:
         @staticmethod
         def __repr__():
-            return "mock zarr.core.Group"
+            return "mock zarr.Group"
 
 
 @cache
