@@ -541,6 +541,9 @@ def write_vlen_string_array_zarr(
         from numcodecs import VLenUTF8
         from zarr.codecs import VLenUTF8Codec
 
+        dataset_kwargs = dataset_kwargs.copy()
+        if "compressor" in dataset_kwargs:
+            dataset_kwargs.pop("compressor")
         f.create_array(
             k,
             shape=elem.shape,
@@ -1165,6 +1168,7 @@ def _remove_scalar_compression_args(dataset_kwargs: Mapping[str, Any]) -> dict:
         "shuffle",
         "fletcher32",
         "scaleoffset",
+        "compressor",
     ):
         dataset_kwargs.pop(arg, None)
     return dataset_kwargs

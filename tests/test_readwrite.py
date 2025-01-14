@@ -342,13 +342,14 @@ def test_zarr_compression(tmp_path):
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
-    def check_compressed(key, value):
-        if isinstance(value, zarr.Array) and value.shape != ():
+    def check_compressed(value, key):
+        if value.shape != ():
             if value.compressor != compressor:
                 not_compressed.append(key)
 
-    with zarr.open(str(pth), "r") as f:
-        f.visititems(check_compressed)
+    f = zarr.open(str(pth), "r")
+    for key in f.array_keys():
+        check_compressed(f[key], key)
 
     if not_compressed:
         msg = "\n\t".join(not_compressed)
