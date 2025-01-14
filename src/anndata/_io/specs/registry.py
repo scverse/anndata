@@ -354,8 +354,12 @@ class Writer:
                 k = str(PurePosixPath(store.name) / k)
 
         if k == "/":
-            if isinstance(store, ZarrGroup):
-                store.store.clear()
+            if isinstance(store, ZarrGroup) and Version(zarr.__version__) >= Version(
+                "3.0.0b0"
+            ):
+                import asyncio
+
+                asyncio.run(store.store.clear())
             else:
                 store.clear()
         elif k in store:
