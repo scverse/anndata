@@ -7,13 +7,12 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 import zarr
-from packaging.version import Version
 from scipy import sparse
 
 from .._core.anndata import AnnData
 from .._settings import settings
 from .._warnings import OldFormatWarning
-from ..compat import _clean_uns, _from_fixed_length_strings
+from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
 from .utils import _read_legacy_raw, report_read_key_on_error
@@ -150,14 +149,13 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
         return read_elem(group)
 
 
-_FMT_PARAM = (
-    "zarr_version" if Version(zarr.__version__) < Version("3.0.0b0") else "zarr_format"
-)
-
-
 def open_write_group(
     store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
 ) -> zarr.Group:
-    return zarr.open_group(
-        store, mode=mode, **{_FMT_PARAM: settings.zarr_write_format}, **kwargs
+    if {"zarr_version", "zarr_format"} & kwargs.keys():
+        msg = "Don’t specify `zarr_version` or `zarr_format` explicitly."
+        raise ValueError(msg)
+    kwargs["zarr_version" if is_zarr_v2() else "zarr_format"] = (
+        settings.zarr_write_format
     )
+    return zarr.open_group(store, mode=mode, **kwargs)

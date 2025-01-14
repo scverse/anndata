@@ -7,11 +7,9 @@ from functools import partial, singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from packaging.version import Version
-
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._types import Read, ReadDask, _ReadDaskInternal, _ReadInternal
-from anndata.compat import DaskArray, ZarrGroup, _read_attr
+from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -342,21 +340,15 @@ class Writer:
             return lambda *_, **__: None
 
         # Normalize k to absolute path
-        is_zarr_group_and_is_zarr_package_v2 = False
-        if isinstance(store, ZarrGroup):
-            import zarr
-
-            if Version(zarr.__version__) < Version("3.0.0b0"):
-                is_zarr_group_and_is_zarr_package_v2 = True
-
-        if is_zarr_group_and_is_zarr_package_v2 or isinstance(store, h5py.Group):
-            if not PurePosixPath(k).is_absolute():
-                k = str(PurePosixPath(store.name) / k)
+        if (
+            (isinstance(store, ZarrGroup) and is_zarr_v2())
+            or isinstance(store, h5py.Group)
+            and not PurePosixPath(k).is_absolute()
+        ):
+            k = str(PurePosixPath(store.name) / k)
 
         if k == "/":
-            if isinstance(store, ZarrGroup) and Version(zarr.__version__) >= Version(
-                "3.0.0b0"
-            ):
+            if isinstance(store, ZarrGroup) and not is_zarr_v2():
                 import asyncio
 
                 asyncio.run(store.store.clear())

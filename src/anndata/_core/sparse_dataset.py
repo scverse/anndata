@@ -30,7 +30,7 @@ from scipy.sparse import _sparsetools
 
 from .. import abc
 from .._settings import settings
-from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
+from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr, is_zarr_v2
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
@@ -72,10 +72,8 @@ class BackedSparseMatrix(_cs_matrix):
             return sparse_dataset(self.data.parent).to_memory()
         if isinstance(self.data, ZarrArray):
             import zarr
-            from packaging.version import Version
 
-            is_zarr_v2 = Version(zarr.__version__) < Version("3.0.0b0")
-            if is_zarr_v2:
+            if is_zarr_v2():
                 sparse_group = zarr.open(
                     store=self.data.store,
                     mode="r",

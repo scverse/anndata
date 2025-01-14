@@ -41,6 +41,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
+from ...compat import is_zarr_v2
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -413,12 +414,11 @@ def write_basic_dask_zarr(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     import dask.array as da
-    import zarr
 
-    if Version(zarr.__version__) >= Version("3.0.0b0"):
-        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    else:
+    if is_zarr_v2():
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    else:
+        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g, lock=GLOBAL_LOCK)
 
 
@@ -513,9 +513,7 @@ def write_vlen_string_array_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    import zarr
-
-    if Version(zarr.__version__) < Version("3.0.0b0"):
+    if is_zarr_v2():
         import numcodecs
 
         if Version(numcodecs.__version__) < Version("0.13"):
@@ -1181,12 +1179,10 @@ def write_scalar_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    import zarr
-
     # these args are ignored in v2: https://zarr.readthedocs.io/en/v2.18.4/api/hierarchy.html#zarr.hierarchy.Group.create_dataset
     # and error out in v3
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
-    if Version(zarr.__version__) < Version("3.0.0b0"):
+    if is_zarr_v2():
         return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
     else:
         from numcodecs import VLenUTF8

@@ -6,7 +6,7 @@ from codecs import decode
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from functools import partial, singledispatch, wraps
+from functools import cache, partial, singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
@@ -104,6 +104,14 @@ else:
         @staticmethod
         def __repr__():
             return "mock zarr.core.Group"
+
+
+@cache
+def is_zarr_v2() -> bool:
+    import zarr
+    from packaging.version import Version
+
+    return Version(zarr.__version__) < Version("3.0.0b0")
 
 
 if find_spec("awkward") or TYPE_CHECKING:
