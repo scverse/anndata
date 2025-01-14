@@ -559,7 +559,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     pth = tmp_path / "test.zarr"
     adata = gen_adata((3, 2))
 
-    z = zarr.open_group(pth, mode="w", zarr_format=ad.settings.zarr_write_format)
+    z = zarr.open_group(pth, mode="w", zarr_version=ad.settings.zarr_write_format)
     write_elem(z, "table/table", adata)
 
     if consolidated:

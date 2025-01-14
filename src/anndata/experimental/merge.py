@@ -117,7 +117,7 @@ def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
     import zarr
 
     return zarr.open_group(
-        store, zarr_format=ad.settings.zarr_write_format, *args, **kwargs
+        store, zarr_version=ad.settings.zarr_write_format, *args, **kwargs
     )
 
 
@@ -371,7 +371,7 @@ def _write_concat_sequence(
         )
     else:
         raise NotImplementedError(
-            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays] } with axis={axis}."
+            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
         )
 
 
