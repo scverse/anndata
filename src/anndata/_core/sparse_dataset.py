@@ -572,7 +572,13 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         data = self.group["data"]
         orig_data_size = data.shape[0]
         data.resize((orig_data_size + sparse_matrix.data.shape[0],))
-        data[orig_data_size:] = sparse_matrix.data
+        # see https://github.com/zarr-developers/zarr-python/discussions/2712 for why we need to read first
+        append_data = sparse_matrix.data
+        append_indices = sparse_matrix.indices
+        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+            append_data = append_data[...]
+            append_indices = append_indices[...]
+        data[orig_data_size:] = append_data
 
         # indptr
         indptr = self.group["indptr"]
@@ -586,7 +592,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
-        indices[orig_data_size:] = sparse_matrix.indices
+        indices[orig_data_size:] = append_indices
 
         # Clear cached property
         for attr in ["_indptr", "_indices", "_data"]:

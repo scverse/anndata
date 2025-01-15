@@ -649,8 +649,11 @@ def write_sparse_compressed(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )
         else:
-            g.create_array(attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs)
-            g[attr_name][:] = attr
+            arr = g.create_array(
+                attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
+            )
+            # see https://github.com/zarr-developers/zarr-python/discussions/2712
+            arr[...] = attr[...]
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
