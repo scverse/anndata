@@ -578,7 +578,7 @@ def concat_on_disk(
     _, alt_axis_name = _resolve_axis(1 - axis)
 
     output_group = as_group(out_file, mode="w")
-    groups = [as_group(f) for f in in_files]
+    groups = [as_group(f, mode="r") for f in in_files]
 
     use_reindexing = False
 
