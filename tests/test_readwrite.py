@@ -142,7 +142,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
         adata_mid.write(tmp_path / "mid.h5ad", **dataset_kwargs)
         adata = ad.read_h5ad(tmp_path / "mid.h5ad")
     else:
-        adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
+        adata_src.write_zarr(tmp_path / "test_zarr_dir")
         adata = ad.read_zarr(tmp_path / "test_zarr_dir")
     assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
     assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
