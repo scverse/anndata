@@ -1158,7 +1158,8 @@ _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
 def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
-    return elem[()]
+    # TODO: `item` ensures the return is in fact a scalar (needed after zarr v3 which now returns a 1 elem array)
+    return elem[()].item()
 
 
 def _remove_scalar_compression_args(dataset_kwargs: Mapping[str, Any]) -> dict:
