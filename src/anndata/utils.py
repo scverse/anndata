@@ -37,7 +37,8 @@ def import_name(name: str) -> Any:
         try:
             obj = getattr(obj, name)
         except AttributeError:
-            raise RuntimeError(f"{parts[:i]}, {parts[i+1:]}, {obj} {name}")
+            msg = f"{parts[:i]}, {parts[i + 1 :]}, {obj} {name}"
+            raise RuntimeError(msg)
     return obj
 
 
@@ -91,10 +92,11 @@ def convert_to_dict_dict(obj: dict):
 @convert_to_dict.register(np.ndarray)
 def convert_to_dict_ndarray(obj: np.ndarray):
     if obj.dtype.fields is None:
-        raise TypeError(
+        msg = (
             "Can only convert np.ndarray with compound dtypes to dict, "
             f"passed array had “{obj.dtype}”."
         )
+        raise TypeError(msg)
     return {k: obj[k] for k in obj.dtype.fields.keys()}
 
 
@@ -127,7 +129,8 @@ try:
                 shape = layout.shape
             numpy_axis = lateral_context["axis"] - depth + 1
             if not (1 <= numpy_axis < len(shape)):
-                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+                msg = f"axis={lateral_context['axis']} is too deep"
+                raise TypeError(msg)
             lateral_context["out"] = shape[numpy_axis]
             return ak.contents.EmptyArray()
 
@@ -136,7 +139,8 @@ try:
                 # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
                 # which results in an extra hierarchy-level that shouldn't show up in dim_len
                 # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
-                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+                msg = f"axis={lateral_context['axis']} is too deep"
+                raise TypeError(msg)
 
             if layout.is_regular:
                 # if it's a regular list, you want the size
@@ -154,9 +158,8 @@ try:
             # currently, we don't recurse into records
             # in theory we could, just not sure how to do it at the moment
             # Would need to consider cases like: scalars, unevenly sized values
-            raise TypeError(
-                f"Cannot recurse into record type found at axis={lateral_context['axis']}"
-            )
+            msg = f"Cannot recurse into record type found at axis={lateral_context['axis']}"
+            raise TypeError(msg)
 
         elif layout.is_union:
             # if it's a union, you could get the result of each union branch
@@ -187,7 +190,8 @@ try:
         Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
         """
         if axis < 0:  # negative axis is another can of worms... maybe later
-            raise NotImplementedError("Does not support negative axis")
+            msg = "Does not support negative axis"
+            raise NotImplementedError(msg)
         elif axis == 0:
             return len(array)
         else:
@@ -318,10 +322,11 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
             for col in source.values()
         ]
     except UnicodeEncodeError:
-        raise ValueError(
+        msg = (
             "Currently only support ascii strings. "
             "Don’t use “ö” etc. for sample annotation."
         )
+        raise ValueError(msg)
 
     # if old_index_key not in source:
     #     names.append(new_index_key)

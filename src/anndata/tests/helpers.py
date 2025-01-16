@@ -221,7 +221,8 @@ def gen_awkward(shape, dtype=np.int32):
     import awkward as ak
 
     if shape[0] is None:
-        raise ValueError("The first dimension must be fixed-length.")
+        msg = "The first dimension must be fixed-length."
+        raise ValueError(msg)
 
     rng = random.Random(123)
     shape = np.array(shape)
@@ -464,9 +465,8 @@ def sparray_bool_subset(index, min_size=2):
 
 def array_subset(index, min_size=2):
     if len(index) < min_size:
-        raise ValueError(
-            f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
-        )
+        msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
+        raise ValueError(msg)
     return np.random.choice(
         index, size=np.random.randint(min_size, len(index), ()), replace=False
     )
@@ -474,9 +474,8 @@ def array_subset(index, min_size=2):
 
 def array_int_subset(index, min_size=2):
     if len(index) < min_size:
-        raise ValueError(
-            f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
-        )
+        msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
+        raise ValueError(msg)
     return np.random.choice(
         np.arange(len(index)),
         size=np.random.randint(min_size, len(index), ()),
@@ -917,9 +916,9 @@ def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Patter
     import traceback
 
     message = "".join(traceback.format_exception_only(e.type, e.value))
-    assert re.search(
-        pattern, message
-    ), f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
+    assert re.search(pattern, message), (
+        f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
+    )
 
 
 def resolve_cupy_type(val):
@@ -935,7 +934,8 @@ def resolve_cupy_type(val):
     elif issubclass(input_typ, sparse.csc_matrix):
         typ = CupyCSCMatrix
     else:
-        raise NotImplementedError(f"No default target type for input type {input_typ}")
+        msg = f"No default target type for input type {input_typ}"
+        raise NotImplementedError(msg)
     return typ
 
 
@@ -972,9 +972,8 @@ def as_cupy(val, typ=None):
         else:
             return cpsparse.csc_matrix(val)
     else:
-        raise NotImplementedError(
-            f"Conversion from {type(val)} to {typ} not implemented"
-        )
+        msg = f"Conversion from {type(val)} to {typ} not implemented"
+        raise NotImplementedError(msg)
 
 
 # TODO: test

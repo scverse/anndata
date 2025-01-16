@@ -144,7 +144,8 @@ class _IterateViewMixin:
             Set to `True` to drop a batch with the length lower than `batch_size`.
         """
         if axis not in {0, 1}:
-            raise ValueError("Axis should be either 0 or 1.")
+            msg = "Axis should be either 0 or 1."
+            raise ValueError(msg)
 
         n = self.shape[axis]
 
@@ -191,7 +192,8 @@ class MapObsView:
 
     def __getitem__(self, key, use_convert=True):
         if self._keys is not None and key not in self._keys:
-            raise KeyError(f"No {key} in {self.attr} view")
+            msg = f"No {key} in {self.attr} view"
+            raise KeyError(msg)
 
         arrs = []
         for i, oidx in enumerate(self.adatas_oidx):
@@ -690,10 +692,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:
-                raise TypeError(
+                msg = (
                     "Cannot specify categories in both mapping keys and using `keys`. "
                     "Only specify this once."
                 )
+                raise TypeError(msg)
             keys, adatas = list(adatas.keys()), list(adatas.values())
         else:
             adatas = list(adatas)
@@ -715,10 +718,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                     self.adatas_vidx.append(adata_vidx)
             self.var_names = var_names
         else:
-            raise ValueError(
+            msg = (
                 "Adatas have different variables. "
                 "Please specify join_vars='inner' for intersection."
             )
+            raise ValueError(msg)
 
         concat_indices = pd.concat(
             [pd.Series(a.obs_names) for a in adatas], ignore_index=True

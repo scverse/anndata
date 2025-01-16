@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 from numba.core.errors import NumbaDeprecationWarning
 
-from anndata import AnnData, ImplicitModificationWarning, read_h5ad, read_loom
+from anndata import AnnData, ImplicitModificationWarning, read_h5ad
+from anndata.io import read_loom
 from anndata.tests.helpers import gen_typed_df_t2_size
 
 X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
