@@ -324,8 +324,12 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
         f.visititems(check_compressed)
 
     if not_compressed:
-        msg = "\n\t".join(not_compressed)
-        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+        sep = "\n\t"
+        msg = (
+            f"These elements were not compressed correctly:{sep}"
+            f"{sep.join(not_compressed)}"
+        )
+        raise AssertionError(msg)
 
     expected = ad.read_h5ad(pth)
     assert_equal(adata, expected)
@@ -350,8 +354,12 @@ def test_zarr_compression(tmp_path):
         f.visititems(check_compressed)
 
     if not_compressed:
-        msg = "\n\t".join(not_compressed)
-        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+        sep = "\n\t"
+        msg = (
+            f"These elements were not compressed correctly:{sep}"
+            f"{sep.join(not_compressed)}"
+        )
+        raise AssertionError(msg)
 
     expected = ad.read_zarr(pth)
     assert_equal(adata, expected)

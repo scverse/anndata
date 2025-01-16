@@ -22,10 +22,12 @@ if find_spec("zarr") or TYPE_CHECKING:
 else:  # pragma: no cover
 
     def read_zarr(*args, **kw):
-        raise ImportError("zarr is not installed")
+        msg = "zarr is not installed"
+        raise ImportError(msg)
 
     def write_zarr(*args, **kw):
-        raise ImportError("zarr is not installed")
+        msg = "zarr is not installed"
+        raise ImportError(msg)
 
 
 __all__ = [

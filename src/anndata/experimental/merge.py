@@ -101,7 +101,8 @@ def _gen_slice_to_append(
 
 @singledispatch
 def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
-    raise NotImplementedError("This is not yet implemented.")
+    msg = "This is not yet implemented."
+    raise NotImplementedError(msg)
 
 
 @as_group.register(os.PathLike)
@@ -284,15 +285,15 @@ def _write_concat_arrays(
     init_elem = arrays[0]
     init_type = type(init_elem)
     if not all(isinstance(a, init_type) for a in arrays):
-        raise NotImplementedError(
-            f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
-        )
+        msg = f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
+        raise NotImplementedError(msg)
 
     if reindexers is None:
         if join == "inner":
             reindexers = gen_inner_reindexers(arrays, new_index=None, axis=axis)
         else:
-            raise NotImplementedError("Cannot reindex arrays with outer join.")
+            msg = "Cannot reindex arrays with outer join."
+            raise NotImplementedError(msg)
 
     if isinstance(init_elem, BaseCompressedSparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
@@ -307,9 +308,8 @@ def _write_concat_arrays(
                 fill_value,
             )
         else:
-            raise NotImplementedError(
-                f"Concat of following not supported: {[a.format for a in arrays]}"
-            )
+            msg = f"Concat of following not supported: {[a.format for a in arrays]}"
+            raise NotImplementedError(msg)
     else:
         write_concat_dense(
             arrays, output_group, output_path, axis, reindexers, fill_value
@@ -335,14 +335,14 @@ def _write_concat_sequence(
             if join == "inner":
                 reindexers = gen_inner_reindexers(arrays, None, axis=axis)
             else:
-                raise NotImplementedError("Cannot reindex dataframes with outer join.")
+                msg = "Cannot reindex dataframes with outer join."
+                raise NotImplementedError(msg)
         if not all(
             isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
             for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate a dataframe with other array types."
-            )
+            msg = "Cannot concatenate a dataframe with other array types."
+            raise NotImplementedError(msg)
         df = concat_arrays(
             arrays=arrays,
             reindexers=reindexers,
@@ -366,9 +366,8 @@ def _write_concat_sequence(
             join,
         )
     else:
-        raise NotImplementedError(
-            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays] } with axis={axis}."
-        )
+        msg = f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
+        raise NotImplementedError(msg)
 
 
 def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
@@ -537,25 +536,29 @@ def concat_on_disk(
     Name: count, dtype: int64
     """
     if len(in_files) == 0:
-        raise ValueError("No objects to concatenate.")
+        msg = "No objects to concatenate."
+        raise ValueError(msg)
 
     # Argument normalization
     if pairwise:
-        raise NotImplementedError("pairwise concatenation not yet implemented")
+        msg = "pairwise concatenation not yet implemented"
+        raise NotImplementedError(msg)
 
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
     out_file = Path(out_file)
     if not out_file.parent.exists():
-        raise FileNotFoundError(f"Parent directory of {out_file} does not exist.")
+        msg = f"Parent directory of {out_file} does not exist."
+        raise FileNotFoundError(msg)
 
     if isinstance(in_files, Mapping):
         if keys is not None:
-            raise TypeError(
+            msg = (
                 "Cannot specify categories in both mapping keys and using `keys`. "
                 "Only specify this once."
             )
+            raise TypeError(msg)
         keys, in_files = list(in_files.keys()), list(in_files.values())
     else:
         in_files = list(in_files)
@@ -582,7 +585,8 @@ def concat_on_disk(
 
     # All groups must be anndata
     if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
-        raise ValueError("All groups must be anndata")
+        msg = "All groups must be anndata"
+        raise ValueError(msg)
 
     # Write metadata
     output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})

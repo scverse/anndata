@@ -235,7 +235,7 @@ class SettingsManager:
         try:
             validate(default_value)
         except (ValueError, TypeError) as e:
-            add_note(e, f"for option {repr(option)}")
+            add_note(e, f"for option {option!r}")
             raise e
         option_type = type(default_value) if option_type is None else option_type
         self._registered_options[option] = RegisteredOption(
@@ -329,7 +329,7 @@ class SettingsManager:
         """
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
-            msg = f"{repr(option)} will be removed in {deprecated.removal_version}. {deprecated.message}"
+            msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
             warnings.warn(msg, DeprecationWarning)
         if option in self._config:
             return self._config[option]
