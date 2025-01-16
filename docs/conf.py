@@ -86,9 +86,10 @@ napoleon_custom_sections = [("Params", "Parameters")]
 typehints_defaults = "braces"
 todo_include_todos = False
 nitpicky = True  # Report broken links
-nitpick_ignore = [  # Things that can’t be fixed using `qualname_overrides`
+nitpick_ignore = [  # APIs without an intersphinx entry
+    # This API isn’t actually documented
     ("py:class", "anndata._core.raw.Raw"),
-    # TODO: remove this, the zappy repo is archived
+    # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
 ]
 
