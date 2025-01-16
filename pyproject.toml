@@ -167,11 +167,12 @@ docstring-code-format = true
 [tool.ruff.lint]
 select = [
     "E",   # Error detected by Pycodestyle
+    "EM",  # Traceback-friendly error messages
     "F",   # Errors detected by Pyflakes
     "W",   # Warning detected by Pycodestyle
     "UP",  # pyupgrade
     "I",   # isort
-    "TCH", # manage type checking blocks
+    "TC",  # manage type checking blocks
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
     "PT",  # Pytest conventions

@@ -107,7 +107,8 @@ def get_array_type(array_type, axis):
         return sparse.csc_matrix
     if array_type == "array":
         return asarray
-    raise NotImplementedError(f"array_type {array_type} not implemented")
+    msg = f"array_type {array_type} not implemented"
+    raise NotImplementedError(msg)
 
 
 @pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])

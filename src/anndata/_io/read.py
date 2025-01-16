@@ -122,10 +122,11 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
         # a view and not a list is returned
         keys = [k for k in f.keys()]
         if key == "":
-            raise ValueError(
+            msg = (
                 f"The file {filename} stores the following sheets:\n{keys}\n"
                 f"Call read/read_hdf5 with one of them."
             )
+            raise ValueError(msg)
         # read array
         X = f[key][()]
         # try to find row and column names
@@ -227,10 +228,11 @@ def read_loom(
             FutureWarning,
         )
         if obsm_mapping != {}:
-            raise ValueError(
+            msg = (
                 "Received values for both `obsm_names` and `obsm_mapping`. This is "
                 "ambiguous, only pass `obsm_mapping`."
             )
+            raise ValueError(msg)
         obsm_mapping = obsm_names
     if varm_names is not None:
         warn(
@@ -239,10 +241,11 @@ def read_loom(
             FutureWarning,
         )
         if varm_mapping != {}:
-            raise ValueError(
+            msg = (
                 "Received values for both `varm_names` and `varm_mapping`. This is "
                 "ambiguous, only pass `varm_mapping`."
             )
+            raise ValueError(msg)
         varm_mapping = varm_names
 
     filename = fspath(filename)  # allow passing pathlib.Path objects
@@ -387,7 +390,8 @@ def _read_text(
                 comments.append(comment)
         else:
             if delimiter is not None and delimiter not in line:
-                raise ValueError(f"Did not find delimiter {delimiter!r} in first line.")
+                msg = f"Did not find delimiter {delimiter!r} in first line."
+                raise ValueError(msg)
             line_list = line.split(delimiter)
             # the first column might be row names, so check the last
             if not is_float(line_list[-1]):
@@ -449,10 +453,11 @@ def _read_text(
     #   in the end, to separate row_names from float data, slicing takes
     #   a lot of memory and CPU time
     if data[0].size != data[-1].size:
-        raise ValueError(
+        msg = (
             f"Length of first line ({data[0].size}) is different "
             f"from length of last line ({data[-1].size})."
         )
+        raise ValueError(msg)
     data = np.array(data, dtype=dtype)
     # logg.msg("    constructed array from list of list", t=True, v=4)
     # transform row_names

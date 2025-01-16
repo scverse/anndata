@@ -100,9 +100,8 @@ class BackedSparseMatrix(_cs_matrix):
             return
 
         else:
-            raise ValueError(
-                "You cannot change the sparsity structure of a SparseDataset."
-            )
+            msg = "You cannot change the sparsity structure of a SparseDataset."
+            raise ValueError(msg)
             # replace where possible
             # mask = offsets > -1
             # # offsets[mask]
@@ -312,21 +311,24 @@ def get_format(data: ss.spmatrix) -> str:
     for fmt, _, memory_class in FORMATS:
         if isinstance(data, memory_class):
             return fmt
-    raise ValueError(f"Data type {type(data)} is not supported.")
+    msg = f"Data type {type(data)} is not supported."
+    raise ValueError(msg)
 
 
 def get_memory_class(format: Literal["csr", "csc"]) -> type[_cs_matrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
             return memory_class
-    raise ValueError(f"Format string {format} is not supported.")
+    msg = f"Format string {format} is not supported."
+    raise ValueError(msg)
 
 
 def get_backed_class(format: Literal["csr", "csc"]) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
             return backed_class
-    raise ValueError(f"Format string {format} is not supported.")
+    msg = f"Format string {format} is not supported."
+    raise ValueError(msg)
 
 
 def _get_group_format(group: GroupStorageType) -> str:
@@ -369,9 +371,8 @@ class BaseCompressedSparseDataset(ABC):
 
     @group.setter
     def group(self, val):
-        raise AttributeError(
-            f"Do not reset group on a {type(self)} with {val}.  Instead use `sparse_dataset` to make a new class."
-        )
+        msg = f"Do not reset group on a {type(self)} with {val}.  Instead use `sparse_dataset` to make a new class."
+        raise AttributeError(msg)
 
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
@@ -380,7 +381,8 @@ class BaseCompressedSparseDataset(ABC):
         elif isinstance(self.group, H5Group):
             return "hdf5"
         else:
-            raise ValueError(f"Unknown group type {type(self.group)}")
+            msg = f"Unknown group type {type(self.group)}"
+            raise ValueError(msg)
 
     @property
     def dtype(self) -> np.dtype:
@@ -488,42 +490,45 @@ class BaseCompressedSparseDataset(ABC):
 
         # Check input
         if not ss.isspmatrix(sparse_matrix):
-            raise NotImplementedError(
+            msg = (
                 "Currently, only sparse matrices of equivalent format can be "
                 "appended to a SparseDataset."
             )
+            raise NotImplementedError(msg)
         if self.format not in {"csr", "csc"}:
-            raise NotImplementedError(
-                f"The append method for format {self.format} " f"is not implemented."
-            )
+            msg = f"The append method for format {self.format} is not implemented."
+            raise NotImplementedError(msg)
         if self.format != get_format(sparse_matrix):
-            raise ValueError(
+            msg = (
                 f"Matrices must have same format. Currently are "
                 f"{self.format!r} and {get_format(sparse_matrix)!r}"
             )
+            raise ValueError(msg)
         indptr_offset = len(self.group["indices"])
         if self.group["indptr"].dtype == np.int32:
             new_nnz = indptr_offset + len(sparse_matrix.indices)
             if new_nnz >= np.iinfo(np.int32).max:
-                raise OverflowError(
+                msg = (
                     "This array was written with a 32 bit intptr, but is now large "
                     "enough to require 64 bit values. Please recreate the array with "
                     "a 64 bit indptr."
                 )
+                raise OverflowError(msg)
 
         # shape
         if self.format == "csr":
-            assert (
-                shape[1] == sparse_matrix.shape[1]
-            ), "CSR matrices must have same size of dimension 1 to be appended."
+            assert shape[1] == sparse_matrix.shape[1], (
+                "CSR matrices must have same size of dimension 1 to be appended."
+            )
             new_shape = (shape[0] + sparse_matrix.shape[0], shape[1])
         elif self.format == "csc":
-            assert (
-                shape[0] == sparse_matrix.shape[0]
-            ), "CSC matrices must have same size of dimension 0 to be appended."
+            assert shape[0] == sparse_matrix.shape[0], (
+                "CSC matrices must have same size of dimension 0 to be appended."
+            )
             new_shape = (shape[0], shape[1] + sparse_matrix.shape[1])
         else:
-            raise AssertionError("We forgot to update this branching to a new format")
+            msg = "We forgot to update this branching to a new format"
+            raise AssertionError(msg)
         if "h5sparse_shape" in self.group.attrs:
             del self.group.attrs["h5sparse_shape"]
         self.group.attrs["shape"] = new_shape

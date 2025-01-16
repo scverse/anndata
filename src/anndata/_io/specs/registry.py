@@ -101,10 +101,11 @@ class IORegistry:
         if src_type in self.write_specs and (spec != self.write_specs[src_type]):
             # First check for consistency
             current_spec = self.write_specs[src_type]
-            raise TypeError(
+            msg = (
                 "Cannot overwrite IO specifications. Attempted to overwrite encoding "
                 f"for {src_type} from {current_spec} to {spec}"
             )
+            raise TypeError(msg)
         else:
             self.write_specs[src_type] = spec
 
@@ -165,7 +166,10 @@ class IORegistry:
     ) -> Read:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts(
-                "read", _REGISTRY.read, src_type, spec
+                "read",  # noqa: EM101
+                _REGISTRY.read,
+                src_type,
+                spec,
             )
         internal = self.read[(src_type, spec, modifiers)]
         return partial(internal, _reader=reader)
@@ -195,10 +199,10 @@ class IORegistry:
     ):
         if (src_type, spec, modifiers) in self.read_partial:
             return self.read_partial[(src_type, spec, modifiers)]
-        else:
-            raise IORegistryError._from_read_parts(
-                "read_partial", _REGISTRY.read_partial, src_type, spec
-            )
+        name = "read_partial"
+        raise IORegistryError._from_read_parts(
+            name, _REGISTRY.read_partial, src_type, spec
+        )
 
     def get_spec(self, elem: Any) -> IOSpec:
         if hasattr(elem, "dtype"):
@@ -213,7 +217,8 @@ _REGISTRY = IORegistry()
 
 @singledispatch
 def proc_spec(spec) -> IOSpec:
-    raise NotImplementedError(f"proc_spec not defined for type: {type(spec)}.")
+    msg = f"proc_spec not defined for type: {type(spec)}."
+    raise NotImplementedError(msg)
 
 
 @proc_spec.register(IOSpec)

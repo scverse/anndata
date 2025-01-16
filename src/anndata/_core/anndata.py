@@ -84,9 +84,8 @@ def _check_2d_shape(X):
     Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
     """
     if X.dtype.names is None and len(X.shape) != 2:
-        raise ValueError(
-            f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
-        )
+        msg = f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
+        raise ValueError(msg)
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -249,7 +248,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 raise_value_error_if_multiindex_columns(attr, key)
         if asview:
             if not isinstance(X, AnnData):
-                raise ValueError("`X` has to be an AnnData object.")
+                msg = "`X` has to be an AnnData object."
+                raise ValueError(msg)
             self._init_as_view(X, oidx, vidx)
         else:
             self._init_as_actual(
@@ -271,19 +271,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _init_as_view(self, adata_ref: AnnData, oidx: Index, vidx: Index):
         if adata_ref.isbacked and adata_ref.is_view:
-            raise ValueError(
+            msg = (
                 "Currently, you cannot index repeatedly into a backed AnnData, "
                 "that is, you cannot make a view of a view."
             )
+            raise ValueError(msg)
         self._is_view = True
         if isinstance(oidx, (int, np.integer)):
             if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
-                raise IndexError(f"Observation index `{oidx}` is out of range.")
+                msg = f"Observation index `{oidx}` is out of range."
+                raise IndexError(msg)
             oidx += adata_ref.n_obs * (oidx < 0)
             oidx = slice(oidx, oidx + 1, 1)
         if isinstance(vidx, (int, np.integer)):
             if not (-adata_ref.n_vars <= vidx < adata_ref.n_vars):
-                raise IndexError(f"Variable index `{vidx}` is out of range.")
+                msg = f"Variable index `{vidx}` is out of range."
+                raise IndexError(msg)
             vidx += adata_ref.n_vars * (vidx < 0)
             vidx = slice(vidx, vidx + 1, 1)
         if adata_ref.is_view:
@@ -359,9 +362,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             # init from AnnData
             if isinstance(X, AnnData):
                 if any((obs, var, uns, obsm, varm, obsp, varp)):
-                    raise ValueError(
-                        "If `X` is a dict no further arguments must be provided."
-                    )
+                    msg = "If `X` is a dict no further arguments must be provided."
+                    raise ValueError(msg)
                 X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                     X._X,
                     X.obs,
@@ -396,7 +398,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if X is not None:
             X = coerce_array(X, name="X")
             if shape is not None:
-                raise ValueError("`shape` needs to be `None` if `X` is not `None`.")
+                msg = "`shape` needs to be `None` if `X` is not `None`."
+                raise ValueError(msg)
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
             if dtype is not None:
@@ -436,7 +439,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if isinstance(attr.index, pd.RangeIndex):
                 attr.index = idx
             elif not idx.equals(attr.index):
-                raise ValueError(f"Index of {attr_name} must match {x_name} of X.")
+                msg = f"Index of {attr_name} must match {x_name} of X."
+                raise ValueError(msg)
 
         # unstructured annotations
         self.uns = uns or OrderedDict()
@@ -454,9 +458,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._check_uniqueness()
 
         if self.filename:
-            assert not isinstance(
-                raw, Raw
-            ), "got raw from other adata but also filename?"
+            assert not isinstance(raw, Raw), (
+                "got raw from other adata but also filename?"
+            )
             if {"raw", "raw.X"} & set(self.file):
                 raw = dict(X=None, **raw)
         if not raw:
@@ -533,10 +537,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def __eq__(self, other):
         """Equality testing"""
-        raise NotImplementedError(
+        msg = (
             "Equality comparisons are not supported for AnnData objects, "
             "instead compare the desired attributes."
         )
+        raise NotImplementedError(msg)
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -578,9 +583,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def X(self, value: np.ndarray | sparse.spmatrix | None):
         if value is None:
             if self.isbacked:
-                raise NotImplementedError(
-                    "Cannot currently remove data matrix from backed object."
-                )
+                msg = "Cannot currently remove data matrix from backed object."
+                raise NotImplementedError(msg)
             if self.is_view:
                 self._init_as_actual(self.copy())
             self._X = None
@@ -649,10 +653,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 else:
                     self._X = value
         else:
-            raise ValueError(
-                f"Data matrix has wrong shape {value.shape}, "
-                f"need to be {self.shape}."
-            )
+            msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
+            raise ValueError(msg)
 
     @X.deleter
     def X(self):
@@ -719,7 +721,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if value is None:
             del self.raw
         elif not isinstance(value, AnnData):
-            raise ValueError("Can only init raw attribute with an AnnData object.")
+            msg = "Can only init raw attribute with an AnnData object."
+            raise ValueError(msg)
         else:
             if self.is_view:
                 self._init_as_actual(self.copy())
@@ -743,7 +746,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _set_dim_df(self, value: pd.DataFrame, attr: Literal["obs", "var"]):
         if not isinstance(value, pd.DataFrame):
-            raise ValueError(f"Can only assign pd.DataFrame to {attr}.")
+            msg = f"Can only assign pd.DataFrame to {attr}."
+            raise ValueError(msg)
         raise_value_error_if_multiindex_columns(value, attr)
         value_idx = self._prep_dim_index(value.index, attr)
         if self.is_view:
@@ -759,16 +763,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         If a pd.Index is passed, this will use a reference, otherwise a new index object is created.
         """
         if self.shape[attr == "var"] != len(value):
-            raise ValueError(
-                f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
-            )
+            msg = f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
+            raise ValueError(msg)
         if isinstance(value, pd.Index) and not isinstance(
             value.name, (str, type(None))
         ):
-            raise ValueError(
+            msg = (
                 f"AnnData expects .{attr}.index.name to be a string or None, "
                 f"but you passed a name of type {type(value.name).__name__!r}"
             )
+            raise ValueError(msg)
         else:
             value = pd.Index(value)
             if not isinstance(value.name, (str, type(None))):
@@ -856,9 +860,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     @uns.setter
     def uns(self, value: MutableMapping):
         if not isinstance(value, MutableMapping):
-            raise ValueError(
-                "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
-            )
+            msg = "Only mutable mapping types (e.g. dict) are allowed for `.uns`."
+            raise ValueError(msg)
         if isinstance(value, DictView):
             value = value.copy()
         if self.is_view:
@@ -1065,7 +1068,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
              New categories, the same number as the old categories.
         """
         if isinstance(categories, Mapping):
-            raise ValueError("Only list-like `categories` is supported.")
+            msg = "Only list-like `categories` is supported."
+            raise ValueError(msg)
         if key in self.obs:
             old_categories = self.obs[key].cat.categories.tolist()
             self.obs[key] = self.obs[key].cat.rename_categories(categories)
@@ -1073,7 +1077,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             old_categories = self.var[key].cat.categories.tolist()
             self.var[key] = self.var[key].cat.rename_categories(categories)
         else:
-            raise ValueError(f"{key} is neither in `.obs` nor in `.var`.")
+            msg = f"{key} is neither in `.obs` nor in `.var`."
+            raise ValueError(msg)
         # this is not a good solution
         # but depends on the scanpy conventions for storing the categorical key
         # as `groupby` in the `params` slot
@@ -1138,11 +1143,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 if not np.array_equal(c.categories, sorted_categories):
                     c = c.reorder_categories(sorted_categories)
                 if dont_modify:
-                    raise RuntimeError(
+                    msg = (
                         "Please call `.strings_to_categoricals()` on full "
                         "AnnData, not on this view. You might encounter this"
                         "error message while copying or writing to disk."
                     )
+                    raise RuntimeError(msg)
                 df[key] = c
                 logger.info(f"... storing {key!r} as categorical")
 
@@ -1173,7 +1179,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self, index: Index, val: int | float | np.ndarray | sparse.spmatrix
     ):
         if self.is_view:
-            raise ValueError("Object is view and cannot be accessed with `[]`.")
+            msg = "Object is view and cannot be accessed with `[]`."
+            raise ValueError(msg)
         obs, var = self._normalize_indices(index)
         if not self.isbacked:
             self._X[obs, var] = val
@@ -1199,10 +1206,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             X = self.file["X"]
         if self.is_view:
-            raise ValueError(
+            msg = (
                 "You’re trying to transpose a view of an `AnnData`, "
                 "which is currently not implemented. Call `.copy()` before transposing."
             )
+            raise ValueError(msg)
 
         return AnnData(
             X=_safe_transpose(X) if X is not None else None,
@@ -1242,7 +1250,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         if layer is not None:
             X = self.layers[layer]
         elif not self._has_X():
-            raise ValueError("X is None, cannot convert to dataframe.")
+            msg = "X is None, cannot convert to dataframe."
+            raise ValueError(msg)
         else:
             X = self.X
         if issparse(X):
@@ -1256,15 +1265,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         is_layer = layer is not None
         if use_raw and is_layer:
-            raise ValueError(
+            msg = (
                 "Cannot use expression from both layer and raw. You provided:"
                 f"`use_raw={use_raw}` and `layer={layer}`"
             )
+            raise ValueError(msg)
         if is_layer:
             return self.layers[layer]
         elif use_raw:
             if self.raw is None:
-                raise ValueError("This AnnData doesn’t have a value in `.raw`.")
+                msg = "This AnnData doesn’t have a value in `.raw`."
+                raise ValueError(msg)
             return self.raw.X
         else:
             return self.X
@@ -1359,10 +1370,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Creating AnnData with attributes optionally specified via kwargs."""
         if self.isbacked:
             if "X" not in kwargs or (self.raw is not None and "raw" not in kwargs):
-                raise NotImplementedError(
+                msg = (
                     "This function does not currently handle backed objects "
                     "internally, this should be dealt with before."
                 )
+                raise NotImplementedError(msg)
         new = {}
 
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
@@ -1446,11 +1458,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             from .._io import read_h5ad, write_h5ad
 
             if filename is None:
-                raise ValueError(
+                msg = (
                     "To copy an AnnData object in backed mode, "
                     "pass a filename: `.copy(filename='myfilename.h5ad')`. "
                     "To load the object into memory, use `.to_memory()`."
                 )
+                raise ValueError(msg)
             mode = self.file._filemode
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
@@ -1686,7 +1699,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         from .merge import concat, merge_dataframes, merge_outer, merge_same
 
         if self.isbacked:
-            raise ValueError("Currently, concatenate only works in memory mode.")
+            msg = "Currently, concatenate only works in memory mode."
+            raise ValueError(msg)
 
         if len(adatas) == 0:
             return self.copy()
@@ -1757,9 +1771,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: Any):
-        raise AttributeError(
-            "AnnData has no attribute __contains__, don’t check `in adata`."
-        )
+        msg = "AnnData has no attribute __contains__, don’t check `in adata`."
+        raise AttributeError(msg)
 
     def _check_dimensions(self, key=None):
         if key is None:
@@ -1771,19 +1784,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 not all([dim_len(o, 0) == self.n_obs for o in self.obsm.values()])
                 and len(self.obsm.dim_names) != self.n_obs
             ):
-                raise ValueError(
+                msg = (
                     "Observations annot. `obsm` must have number of rows of `X`"
                     f" ({self.n_obs}), but has {len(self.obsm)} rows."
                 )
+                raise ValueError(msg)
         if "varm" in key:
             if (
                 not all([dim_len(v, 0) == self.n_vars for v in self.varm.values()])
                 and len(self.varm.dim_names) != self.n_vars
             ):
-                raise ValueError(
+                msg = (
                     "Variables annot. `varm` must have number of columns of `X`"
                     f" ({self.n_vars}), but has {len(self.varm)} rows."
                 )
+                raise ValueError(msg)
 
     def write_h5ad(
         self,
@@ -1857,7 +1872,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         from .._io import write_h5ad
 
         if filename is None and not self.isbacked:
-            raise ValueError("Provide a filename!")
+            msg = "Provide a filename!"
+            raise ValueError(msg)
         if filename is None:
             filename = self.filename
 
@@ -1975,7 +1991,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         elif isinstance(select, (np.ndarray, Sequence)):
             choice = np.asarray(select)
         else:
-            raise ValueError("select should be int or array")
+            msg = "select should be int or array"
+            raise ValueError(msg)
 
         reverse = None
         if self.isbacked:

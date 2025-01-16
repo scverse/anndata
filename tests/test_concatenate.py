@@ -1222,9 +1222,9 @@ def test_concat_categories_maintain_dtype():
 
     result = concat({"a": a, "b": b, "c": c}, join="outer")
 
-    assert isinstance(
-        result.obs["cat"].dtype, pd.CategoricalDtype
-    ), f"Was {result.obs['cat'].dtype}"
+    assert isinstance(result.obs["cat"].dtype, pd.CategoricalDtype), (
+        f"Was {result.obs['cat'].dtype}"
+    )
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
 

@@ -166,7 +166,8 @@ class AnnLoader(DataLoader):
         elif isinstance(adatas, _ConcatViewMixin):
             dataset = copy(adatas)
         else:
-            raise ValueError("adata should be of type AnnData or AnnCollection.")
+            msg = "adata should be of type AnnData or AnnCollection."
+            raise ValueError(msg)
 
         if use_default_converter:
             pin_memory = kwargs.pop("pin_memory", False)
