@@ -15,9 +15,8 @@ except (ImportError, LookupError):
     try:
         from ._version import __version__
     except ModuleNotFoundError:
-        raise RuntimeError(
-            "anndata is not correctly installed. Please install it, e.g. with pip."
-        )
+        msg = "anndata is not correctly installed. Please install it, e.g. with pip."
+        raise RuntimeError(msg)
 
 # Allowing notes to be added to exceptions. See: https://github.com/scverse/anndata/issues/868
 import sys

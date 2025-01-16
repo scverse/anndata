@@ -107,7 +107,8 @@ def test_gen_random_column(dtype):
 # Does this work for every warning?
 def test_report_name():
     def raise_error():
-        raise Exception("an error occurred!")
+        msg = "an error occurred!"
+        raise Exception(msg)
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))

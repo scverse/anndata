@@ -94,7 +94,8 @@ if find_spec("zarr") or TYPE_CHECKING:
     import zarr
 
     if Version(zarr.__version__).major > 2:
-        raise ImportError("zarr-python major version > 2 is not supported")
+        msg = "zarr-python major version > 2 is not supported"
+        raise ImportError(msg)
 
     from zarr.core import Array as ZarrArray
     from zarr.hierarchy import Group as ZarrGroup
