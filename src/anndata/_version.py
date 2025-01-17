@@ -10,7 +10,7 @@ from pathlib import Path
 __all__ = ["__version__"]
 
 
-def _get_version_from_vcs() -> str:
+def _get_version_from_vcs() -> str:  # pragma: no cover
     from hatchling.metadata.core import ProjectMetadata
     from hatchling.plugin.exceptions import UnknownPluginError
     from hatchling.plugin.manager import PluginManager
@@ -21,8 +21,8 @@ def _get_version_from_vcs() -> str:
         raise LookupError(msg)
     root = Path(pyproject_toml).parent
     metadata = ProjectMetadata(root=str(root), plugin_manager=PluginManager())
-    # Version can be either statically set in pyproject.toml or computed dynamically:
     try:
+        # Version can be either statically set in pyproject.toml or computed dynamically:
         return metadata.core.version or metadata.hatch.version.cached
     except UnknownPluginError:
         msg = "Unable to import hatch plugin."
