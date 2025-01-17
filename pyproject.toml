@@ -112,7 +112,6 @@ dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*"]
 
 [tool.hatch.version]
 source = "vcs"
-[tool.hatch.build.hooks.vcs]
 raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
 packages = ["src/anndata", "src/testing"]
