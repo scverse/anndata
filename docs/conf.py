@@ -86,35 +86,11 @@ napoleon_custom_sections = [("Params", "Parameters")]
 typehints_defaults = "braces"
 todo_include_todos = False
 nitpicky = True  # Report broken links
-nitpick_ignore = [
-    ("py:class", "scipy.sparse.base.spmatrix"),
-    ("py:meth", "pandas.DataFrame.iloc"),
-    ("py:meth", "pandas.DataFrame.loc"),
-    ("py:class", "anndata._core.views.ArrayView"),
+nitpick_ignore = [  # APIs without an intersphinx entry
+    # This API isn’t actually documented
     ("py:class", "anndata._core.raw.Raw"),
-    *[
-        ("py:class", f"anndata._core.aligned_mapping.{cls}{kind}")
-        for cls in "Layers AxisArrays PairwiseArrays".split()
-        for kind in ["", "View"]
-    ],
-    # TODO: sphinx’ builtin autodoc.typehints extension isn’t handled by `qualname_overrides` yet
-    # https://github.com/theislab/scanpydoc/issues/140
-    ("py:class", "h5py._hl.group.Group"),
-    ("py:class", "h5py._hl.dataset.Dataset"),
-    # for experimental callback exports
+    # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
-    ("py:class", "anndata.compat.DaskArray"),
-    ("py:class", "anndata.compat.CupyArray"),
-    ("py:class", "anndata.compat.CupySparseMatrix"),
-    ("py:class", "numpy.ma.core.MaskedArray"),
-    ("py:class", "dask.array.core.Array"),
-    ("py:class", "awkward.highlevel.Array"),
-    ("py:class", "anndata._core.sparse_dataset.BaseCompressedSparseDataset"),
-    ("py:obj", "numpy._typing._array_like._ScalarType_co"),
-    # https://github.com/sphinx-doc/sphinx/issues/10974
-    ("py:class", "numpy.int64"),
-    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/498
-    ("py:class", "types.EllipsisType"),
 ]
 
 
@@ -124,6 +100,9 @@ def setup(app: Sphinx):
 
 
 intersphinx_mapping = dict(
+    awkward=("https://awkward-array.org/doc/stable", None),
+    cupy=("https://docs.cupy.dev/en/stable", None),
+    dask=("https://docs.dask.org/en/stable", None),
     h5py=("https://docs.h5py.org/en/latest", None),
     hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest", None),
     loompy=("https://linnarssonlab.org/loompy", None),
@@ -132,19 +111,32 @@ intersphinx_mapping = dict(
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
-    zarr=("https://zarr.readthedocs.io/en/v2.18.4/", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
-    dask=("https://docs.dask.org/en/stable", None),
+    zarr=("https://zarr.readthedocs.io/en/v2.18.4/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
     "h5py._hl.dataset.Dataset": "h5py.Dataset",
     "anndata._core.anndata.AnnData": "anndata.AnnData",
+    **{
+        f"anndata._core.aligned_mapping.{cls}{kind}": "collections.abc.Mapping"
+        for cls in "Layers AxisArrays PairwiseArrays".split()
+        for kind in ["", "View"]
+    },
     "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata.compat.DaskArray": "dask.array.Array",
+    "anndata.compat.CupyArray": "cupy.ndarray",
+    "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
+    "awkward.highlevel.Array": "ak.Array",
+    "numpy.int64": ("py:attr", "numpy.int64"),
+    "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
+    "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
+    # should be fixed soon: https://github.com/tox-dev/sphinx-autodoc-typehints/pull/516
+    "types.EllipsisType": ("py:data", "types.EllipsisType"),
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
