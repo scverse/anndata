@@ -25,8 +25,6 @@ def _get_version_from_vcs() -> str:
 
 
 try:
-    from ._version import _get_version_from_vcs
-
     __version__ = _get_version_from_vcs()
 except (ImportError, LookupError):
     import importlib.metadata
