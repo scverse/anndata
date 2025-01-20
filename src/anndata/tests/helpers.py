@@ -1109,7 +1109,7 @@ else:
             raise ImportError(msg)
 
 
-class AccessTrackingStore(LocalStore):
+class AccessTrackingStoreBase(LocalStore):
     _access_count: Counter[str]
     _accessed_keys: dict[str, list[str]]
 
@@ -1118,17 +1118,11 @@ class AccessTrackingStore(LocalStore):
         self._access_count = Counter()
         self._accessed_keys = {}
 
-    async def get(
-        self,
-        key: str,
-        prototype: BufferPrototype | None = None,
-        byte_range: ByteRequest | None = None,
-    ) -> object:
+    def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
                 self._accessed_keys[tracked] += [key]
-        return await super().get(key, prototype=prototype, byte_range=byte_range)
 
     def get_access_count(self, key: str) -> int:
         return self._access_count[key]
@@ -1143,6 +1137,26 @@ class AccessTrackingStore(LocalStore):
 
     def reset_key_trackers(self) -> None:
         self.initialize_key_trackers(self._access_count.keys())
+
+
+if is_zarr_v2():
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        def __getitem__(self, key: str) -> bytes:
+            self._check_and_track_key(key)
+            return super().__getitem__(key)
+
+else:
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        async def get(
+            self,
+            key: str,
+            prototype: BufferPrototype | None = None,
+            byte_range: ByteRequest | None = None,
+        ) -> object:
+            self._check_and_track_key(key)
+            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:

@@ -14,7 +14,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
-from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray
+from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray, is_zarr_v2
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -450,6 +450,9 @@ def width_idx_kinds(
         yield pytest.param(idx_maj, idx_min, exp, id=id_)
 
 
+metadata_key = ".zarray" if is_zarr_v2() else "zarr.json"
+
+
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize(
     ("idx_maj", "idx_min", "exp"),
@@ -457,17 +460,22 @@ def width_idx_kinds(
         (
             [0],
             slice(None, None),
-            ["X/data/zarr.json", "X/data/c/0"],
+            [f"X/data/{metadata_key}", f"X/data{'' if is_zarr_v2() else '/c'}/0"],
         ),
         (
             [0],
             slice(None, 3),
-            ["X/data/zarr.json", "X/data/c/0"],
+            [f"X/data/{metadata_key}", f"X/data{'' if is_zarr_v2() else '/c'}/0"],
         ),
         (
             [3, 4, 5],
             slice(None, None),
-            ["X/data/zarr.json", "X/data/c/3", "X/data/c/4", "X/data/c/5"],
+            [
+                f"X/data/{metadata_key}",
+                f"X/data{'' if is_zarr_v2() else '/c'}/3",
+                f"X/data{'' if is_zarr_v2() else '/c'}/4",
+                f"X/data{'' if is_zarr_v2() else '/c'}/5",
+            ],
         ),
         l=10,
     ),
