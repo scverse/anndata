@@ -89,10 +89,22 @@ else:
 #############################
 # Optional deps
 #############################
+@cache
+def is_zarr_v2() -> bool:
+    import zarr
+    from packaging.version import Version
+
+    return Version(zarr.__version__) < Version("3.0.0")
+
 
 if find_spec("zarr") or TYPE_CHECKING:
     from zarr import Array as ZarrArray
     from zarr import Group as ZarrGroup
+
+    if is_zarr_v2():
+        msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
+        warn(msg, FutureWarning)
+
 else:
 
     class ZarrArray:
@@ -104,14 +116,6 @@ else:
         @staticmethod
         def __repr__():
             return "mock zarr.Group"
-
-
-@cache
-def is_zarr_v2() -> bool:
-    import zarr
-    from packaging.version import Version
-
-    return Version(zarr.__version__) < Version("3.0.0b0")
 
 
 if find_spec("awkward") or TYPE_CHECKING:
