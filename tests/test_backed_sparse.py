@@ -451,6 +451,7 @@ def width_idx_kinds(
 
 
 metadata_key = ".zarray" if is_zarr_v2() else "zarr.json"
+separator = "" if is_zarr_v2() else "/c"
 
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
@@ -460,21 +461,21 @@ metadata_key = ".zarray" if is_zarr_v2() else "zarr.json"
         (
             [0],
             slice(None, None),
-            [f"X/data/{metadata_key}", f"X/data{'' if is_zarr_v2() else '/c'}/0"],
+            [f"X/data/{metadata_key}", f"X/data{separator}/0"],
         ),
         (
             [0],
             slice(None, 3),
-            [f"X/data/{metadata_key}", f"X/data{'' if is_zarr_v2() else '/c'}/0"],
+            [f"X/data/{metadata_key}", f"X/data{separator}/0"],
         ),
         (
             [3, 4, 5],
             slice(None, None),
             [
                 f"X/data/{metadata_key}",
-                f"X/data{'' if is_zarr_v2() else '/c'}/3",
-                f"X/data{'' if is_zarr_v2() else '/c'}/4",
-                f"X/data{'' if is_zarr_v2() else '/c'}/5",
+                f"X/data{separator}/3",
+                f"X/data{separator}/4",
+                f"X/data{separator}/5",
             ],
         ),
         l=10,
