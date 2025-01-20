@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from anndata.compat import SpArray
+
 from .._warnings import ImplicitModificationWarning
 from ..utils import (
     ensure_df_homogeneous,
@@ -39,14 +41,16 @@ def coerce_array(
             warnings.warn(msg, ImplicitModificationWarning)
             value = value.A
         return value
-    elif isinstance(value, sparse.spmatrix):
-        msg = (
-            f"AnnData previously had undefined behavior around matrices of type {type(value)}."
-            "In 0.12, passing in this type will throw an error. Please convert to a supported type."
-            "Continue using for this minor version at your own risk."
-        )
-        warnings.warn(msg, FutureWarning)
-        return value
+    is_non_csc_r_array_or_matrix = (
+        (isinstance(value, base) and not isinstance(value, csr_c_format))
+        for base, csr_c_format in [
+            (sparse.spmatrix, sparse.csr_matrix | sparse.csc_matrix),
+            (SpArray, sparse.csr_array | sparse.csc_array),
+        ]
+    )
+    if any(is_non_csc_r_array_or_matrix):
+        msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
+        raise ValueError(msg)
     if isinstance(value, pd.DataFrame):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)

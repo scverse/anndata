@@ -45,7 +45,7 @@ dependencies = [
     "h5py>=3.7",
     "exceptiongroup; python_version<'3.11'",
     "natsort",
-    "packaging>=20.0",
+    "packaging>=24.2",
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
     "legacy-api-wrap",
@@ -60,8 +60,8 @@ Home-page = "https://github.com/scverse/anndata"
 
 [project.optional-dependencies]
 dev = [
-    # dev version generation
-    "setuptools-scm",
+    # runtime dev version generation
+    "hatch-vcs",
     "anndata[dev-doc,dev-test]",
 ]
 doc = [
@@ -73,7 +73,7 @@ doc = [
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "nbsphinx",
-    "scanpydoc[theme,typehints] >=0.15",
+    "scanpydoc[theme,typehints] >=0.15.1",
     "zarr",
     "awkward>=2.3",
     "IPython",                          # For syntax highlighting in notebooks
@@ -112,8 +112,6 @@ dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*"]
 
 [tool.hatch.version]
 source = "vcs"
-[tool.hatch.build.hooks.vcs]
-version-file = "src/anndata/_version.py"
 raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
 packages = ["src/anndata", "src/testing"]

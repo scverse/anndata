@@ -184,10 +184,10 @@ def test_set_dense_x_view_from_sparse():
     assert_equal(orig.X[30:], x[30:])  # change propagates through
 
 
-def test_warn_on_non_csr_csc_matrix():
-    X = sparse.eye(100)
-    with pytest.warns(
-        FutureWarning,
-        match=rf"AnnData previously had undefined behavior around matrices of type {type(X)}.*",
+def test_fail_on_non_csr_csc_matrix():
+    X = sparse.eye(100, format="coo")
+    with pytest.raises(
+        ValueError,
+        match=r"Only CSR and CSC.*",
     ):
         ad.AnnData(X=X)
