@@ -22,6 +22,7 @@ from anndata._io.specs import (
     get_spec,
 )
 from anndata._io.specs.registry import IORegistryError
+from anndata._io.zarr import open_write_group
 from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
 from anndata.experimental import read_elem_as_dask
 from anndata.io import read_elem, write_elem
@@ -53,7 +54,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         file = h5py.File(tmp_path / "test.h5", "w")
         store = file["/"]
     elif request.param == "zarr":
-        store = zarr.open(tmp_path / "test.zarr", "w")
+        store = open_write_group(tmp_path / "test.zarr")
     else:
         pytest.fail(f"Unknown store type: {request.param}")
 
@@ -557,19 +558,19 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     pth = tmp_path / "test.zarr"
     adata = gen_adata((3, 2))
 
-    with zarr.open(pth, mode="w") as z:
-        write_elem(z, "table/table", adata)
+    z = open_write_group(pth)
+    write_elem(z, "table/table", adata)
 
-        if consolidated:
-            zarr.convenience.consolidate_metadata(z.store)
+    if consolidated:
+        zarr.consolidate_metadata(z.store)
 
     if consolidated:
         read_func = zarr.open_consolidated
     else:
         read_func = zarr.open
 
-    with read_func(pth) as z:
-        expected = ad.read_zarr(z["table/table"])
+    z = read_func(pth)
+    expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
 
 
@@ -622,7 +623,7 @@ def test_read_sparse_array(
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = zarr.open_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)

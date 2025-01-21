@@ -1944,7 +1944,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def write_zarr(
         self,
         store: MutableMapping | PathLike,
-        chunks: bool | int | tuple[int, ...] | None = None,
+        chunks: tuple[int, ...] | None = None,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1958,6 +1958,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         from ..io import write_zarr
 
+        # TODO: What is a bool for chunks supposed to do?
+        if isinstance(chunks, bool):
+            msg = (
+                "Passing `write_zarr(adata, chunks=True)` is no longer supported. "
+                "Please pass `write_zarr(adata)` instead."
+            )
+            raise ValueError(msg)
         write_zarr(store, self, chunks=chunks)
 
     def chunked_X(self, chunk_size: int | None = None):

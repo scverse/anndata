@@ -7,6 +7,7 @@ import zarr
 from scipy import sparse
 
 import anndata as ad
+from anndata._io.zarr import open_write_group
 from anndata.compat import SpArray
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -171,9 +172,9 @@ def test_io_dispatched_keys(tmp_path):
         write_dispatched(f, "/", adata, callback=h5ad_writer)
         _ = read_dispatched(f, h5ad_reader)
 
-    with zarr.open_group(zarr_path, "w") as f:
-        write_dispatched(f, "/", adata, callback=zarr_writer)
-        _ = read_dispatched(f, zarr_reader)
+    f = open_write_group(zarr_path)
+    write_dispatched(f, "/", adata, callback=zarr_writer)
+    _ = read_dispatched(f, zarr_reader)
 
     assert h5ad_write_keys == zarr_write_keys
     assert h5ad_read_keys == zarr_read_keys
