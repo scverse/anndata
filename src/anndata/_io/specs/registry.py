@@ -336,9 +336,6 @@ class Writer:
 
         dest_type = type(store)
 
-        if elem is None:
-            return lambda *_, **__: None
-
         # Normalize k to absolute path
         if not PurePosixPath(k).is_absolute():
             k = str(PurePosixPath(store.name) / k)

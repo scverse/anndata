@@ -119,6 +119,7 @@ def create_sparse_store(
 @pytest.mark.parametrize(
     ("value", "encoding_type"),
     [
+        pytest.param(None, "null", id="none"),
         pytest.param("hello world", "string", id="py_str"),
         pytest.param(np.str_("hello world"), "string", id="np_str"),
         pytest.param(np.array([1, 2, 3]), "array", id="np_arr_int"),
