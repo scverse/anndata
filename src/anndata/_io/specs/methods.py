@@ -345,10 +345,16 @@ def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_write(ZarrGroup, type(None), IOSpec("null", "0.1.0"))
 def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
-    import zarr
-
     # zarr has no first-class null dataset
-    f.create_dataset(k, data=zarr.empty(()), **dataset_kwargs)
+    if is_zarr_v2():
+        import zarr
+
+        # zarr has no first-class null dataset
+        f.create_dataset(k, data=zarr.empty(()), **dataset_kwargs)
+    else:
+        # TODO: why is this not actually storing the empty info with a f.empty call?
+        # It fails complaining that k doesn't exist when updating the attributes.
+        f.create_array(k, shape=(), dtype="bool")
 
 
 ############
