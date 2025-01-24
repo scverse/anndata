@@ -44,6 +44,8 @@ def diskfmt(request):
 M = 50
 N = 50
 
+zarr_metadata_key = ".zarray" if is_zarr_v2() else "zarr.json"
+zarr_separator = "" if is_zarr_v2() else "/c"
 
 @pytest.fixture
 def ondisk_equivalent_adata(
@@ -403,7 +405,7 @@ def test_lazy_array_cache(
     for elem_not_indptr in elems - {"indptr"}:
         assert (
             sum(
-                ".zarray" in key_accessed
+                zarr_metadata_key in key_accessed
                 for key_accessed in store.get_accessed_keys(f"X/{elem_not_indptr}")
             )
             == 1
@@ -450,10 +452,6 @@ def width_idx_kinds(
         yield pytest.param(idx_maj, idx_min, exp, id=id_)
 
 
-metadata_key = ".zarray" if is_zarr_v2() else "zarr.json"
-separator = "" if is_zarr_v2() else "/c"
-
-
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize(
     ("idx_maj", "idx_min", "exp"),
@@ -461,21 +459,21 @@ separator = "" if is_zarr_v2() else "/c"
         (
             [0],
             slice(None, None),
-            [f"X/data/{metadata_key}", f"X/data{separator}/0"],
+            [f"X/data/{zarr_metadata_key}", f"X/data{zarr_separator}/0"],
         ),
         (
             [0],
             slice(None, 3),
-            [f"X/data/{metadata_key}", f"X/data{separator}/0"],
+            [f"X/data/{zarr_metadata_key}", f"X/data{zarr_separator}/0"],
         ),
         (
             [3, 4, 5],
             slice(None, None),
             [
-                f"X/data/{metadata_key}",
-                f"X/data{separator}/3",
-                f"X/data{separator}/4",
-                f"X/data{separator}/5",
+                f"X/data/{zarr_metadata_key}",
+                f"X/data{zarr_separator}/3",
+                f"X/data{zarr_separator}/4",
+                f"X/data{zarr_separator}/5",
             ],
         ),
         l=10,
