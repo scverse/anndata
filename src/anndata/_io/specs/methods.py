@@ -327,6 +327,30 @@ def write_raw(
     _writer.write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
 
 
+########
+# Null #
+########
+
+
+@_REGISTRY.register_read(H5Array, IOSpec("null", "0.1.0"))
+@_REGISTRY.register_read(ZarrArray, IOSpec("null", "0.1.0"))
+def read_null(_elem, _reader) -> None:
+    return None
+
+
+@_REGISTRY.register_write(H5Group, type(None), IOSpec("null", "0.1.0"))
+def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+    f.create_dataset(k, data=h5py.Empty("f"), **dataset_kwargs)
+
+
+@_REGISTRY.register_write(ZarrGroup, type(None), IOSpec("null", "0.1.0"))
+def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+    import zarr
+
+    # zarr has no first-class null dataset
+    f.create_dataset(k, data=zarr.empty(()), **dataset_kwargs)
+
+
 ############
 # Mappings #
 ############

@@ -336,9 +336,6 @@ class Writer:
 
         dest_type = type(store)
 
-        if elem is None:
-            return lambda *_, **__: None
-
         # Normalize k to absolute path
         if (
             (isinstance(store, ZarrGroup) and is_zarr_v2())
