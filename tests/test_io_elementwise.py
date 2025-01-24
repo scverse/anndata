@@ -23,7 +23,13 @@ from anndata._io.specs import (
 )
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
+from anndata.compat import (
+    CAN_USE_SPARSE_ARRAY,
+    SpArray,
+    ZarrGroup,
+    _read_attr,
+    is_zarr_v2,
+)
 from anndata.experimental import read_elem_as_dask
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -547,6 +553,9 @@ def test_write_to_root(store, value):
     Test that elements which are written as groups can we written to the root group.
     """
     write_elem(store, "/", value)
+    # See: https://github.com/zarr-developers/zarr-python/issues/2716
+    if isinstance(store, ZarrGroup) and not is_zarr_v2():
+        store = zarr.open(store.store)
     result = read_elem(store)
 
     assert_equal(result, value)
