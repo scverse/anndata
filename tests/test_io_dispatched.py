@@ -8,7 +8,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
-from anndata.compat import SpArray
+from anndata.compat import SpArray, is_zarr_v2, ZarrGroup
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import assert_equal, gen_adata
 
@@ -26,6 +26,9 @@ def test_read_dispatched_w_regex():
     z = zarr.group()
 
     ad.io.write_elem(z, "/", adata)
+    # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
+    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+        z = zarr.open(z.store)
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
     actual = read_dispatched(z, read_only_axis_dfs)
@@ -53,6 +56,9 @@ def test_read_dispatched_dask():
     adata = gen_adata((1000, 100))
     z = zarr.group()
     ad.io.write_elem(z, "/", adata)
+    # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
+    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+        z = zarr.open(z.store)
 
     dask_adata = read_dispatched(z, read_as_dask_array)
 
@@ -70,7 +76,9 @@ def test_read_dispatched_null_case():
     adata = gen_adata((100, 100))
     z = zarr.group()
     ad.io.write_elem(z, "/", adata)
-
+    # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
+    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+        z = zarr.open(z.store)
     expected = ad.io.read_elem(z)
     actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
 

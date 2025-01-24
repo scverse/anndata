@@ -438,6 +438,9 @@ def test_write_anndata_to_root(store):
     adata = gen_adata((3, 2))
 
     write_elem(store, "/", adata)
+    # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
+    if not is_zarr_v2() and isinstance(store, ZarrGroup):
+        store = zarr.open(store.store)
     from_disk = read_elem(store)
 
     assert "anndata" == _read_attr(store.attrs, "encoding-type")
