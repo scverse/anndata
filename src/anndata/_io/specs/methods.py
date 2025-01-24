@@ -158,8 +158,7 @@ def read_basic_zarr(
         OldFormatWarning,
         stacklevel=3,
     )
-
-    if isinstance(elem, Mapping):
+    if isinstance(elem, ZarrGroup):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
             return sparse_dataset(elem).to_memory()
@@ -981,8 +980,8 @@ def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
         if isinstance(dataset, ZarrArray):
             import zarr
 
-            parent_name = dataset.name.rstrip(dataset.basename)
-            parent = zarr.open(dataset.store)[parent_name]
+            parent_name = dataset.name.rstrip(dataset.basename).strip("/")
+            parent = zarr.open(dataset.store, mode="r")[parent_name]
         else:
             parent = dataset.parent
         categories_dset = parent[_read_attr(dataset.attrs, "categories")]
