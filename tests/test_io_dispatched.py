@@ -8,7 +8,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
-from anndata.compat import SpArray, is_zarr_v2, ZarrGroup
+from anndata.compat import SpArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import assert_equal, gen_adata
 
@@ -163,7 +163,7 @@ def test_io_dispatched_keys(tmp_path):
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
-        zarr_write_keys.append(f"{store.name.strip("/")}/{k.strip("/")}".strip("/"))
+        zarr_write_keys.append(f"{store.name.strip('/')}/{k.strip('/')}".strip("/"))
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     def h5ad_reader(func, elem_name: str, elem, iospec):

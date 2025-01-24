@@ -47,6 +47,7 @@ N = 50
 zarr_metadata_key = ".zarray" if is_zarr_v2() else "zarr.json"
 zarr_separator = "" if is_zarr_v2() else "/c"
 
+
 @pytest.fixture
 def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
