@@ -85,30 +85,40 @@ def _normalize_index(
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
+        if isinstance(indexer, np.ndarray) and np.issubdtype(
+            indexer.dtype, np.floating
+        ):
+            indexer_int = indexer.astype(int)
+            if np.all((indexer - indexer_int) != 0):
+                msg = f"Indexer {indexer!r} has floating point values."
+                raise IndexError(msg)
         if issubclass(indexer.dtype.type, np.integer | np.floating):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
             if indexer.shape != index.shape:
-                raise IndexError(
+                msg = (
                     f"Boolean index does not match AnnData’s shape along this "
                     f"dimension. Boolean index has shape {indexer.shape} while "
                     f"AnnData index has shape {index.shape}."
                 )
+                raise IndexError(msg)
             return indexer
         else:  # indexer should be string array
             positions = index.get_indexer(indexer)
             if np.any(positions < 0):
                 not_found = indexer[positions < 0]
-                raise KeyError(
+                msg = (
                     f"Values {list(not_found)}, from {list(indexer)}, "
                     "are not valid obs/ var names or indices."
                 )
+                raise KeyError(msg)
             return positions  # np.ndarray[int]
     elif isinstance(indexer, DataArray):
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
         return indexer.data
-    raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
+    msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
+    raise IndexError()
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
@@ -137,11 +147,13 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
         return index, slice(None)
     num_ellipsis = sum(i is Ellipsis for i in index)
     if num_ellipsis > 1:
-        raise IndexError("an index can only have a single ellipsis ('...')")
+        msg = "an index can only have a single ellipsis ('...')"
+        raise IndexError(msg)
     # If index has Ellipsis, filter it out (and if not, error)
     if len(index) > 2:
         if not num_ellipsis:
-            raise IndexError("Received a length 3 index without an ellipsis")
+            msg = "Received a length 3 index without an ellipsis"
+            raise IndexError(msg)
         index = tuple(i for i in index if i is not Ellipsis)
         return index
     # If index has Ellipsis, replace it with slice
@@ -153,7 +165,8 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
         if index is Ellipsis:
             index = slice(None)
         return index, slice(None)
-    raise IndexError("invalid number of indices")
+    msg = "invalid number of indices"
+    raise IndexError(msg)
 
 
 @singledispatch
@@ -232,13 +245,11 @@ def get_vector(adata, k, coldim, idxdim, layer=None):
     in_idx = k in idx
 
     if (in_col + in_idx) == 2:
-        raise ValueError(
-            f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
-        )
+        msg = f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
+        raise ValueError(msg)
     elif (in_col + in_idx) == 0:
-        raise KeyError(
-            f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
-        )
+        msg = f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
+        raise KeyError(msg)
     elif in_col:
         return getattr(adata, coldim)[k].values
     elif in_idx:

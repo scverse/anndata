@@ -108,11 +108,13 @@ def get_array_type(array_type, axis):
         return sparse.csr_array if axis == 0 else sparse.csc_array
     if array_type == "array":
         return asarray
-    raise NotImplementedError(f"array_type {array_type} not implemented")
+    msg = f"array_type {array_type} not implemented"
+    raise NotImplementedError(msg)
 
 
 @pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
 def test_anndatas(
+    *,
     axis: Literal[0, 1],
     array_type: Literal["array", "sparse", "sparse_array"],
     join_type: Literal["inner", "outer"],

@@ -24,7 +24,8 @@ def _gen_dataframe(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ) -> pd.DataFrame:  # pragma: no cover
-    raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
+    msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
+    raise ValueError(msg)
 
 
 @_gen_dataframe.register(Mapping)
@@ -96,7 +97,8 @@ def _gen_dataframe_1d(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ):
-    raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
+    msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
+    raise ValueError(msg)
 
 
 def _mk_df_error(

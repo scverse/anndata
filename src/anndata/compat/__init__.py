@@ -6,7 +6,7 @@ from codecs import decode
 from collections.abc import Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from functools import singledispatch, wraps
+from functools import partial, singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
 from pathlib import Path
@@ -47,7 +47,7 @@ class Empty:
     pass
 
 
-Index1D = slice | int | str | np.int64 | np.ndarray
+Index1D = slice | int | str | np.int64 | np.ndarray | pd.Series
 IndexRest = Index1D | EllipsisType
 Index = (
     IndexRest
@@ -91,6 +91,12 @@ else:
 #############################
 
 if find_spec("zarr") or TYPE_CHECKING:
+    import zarr
+
+    if Version(zarr.__version__).major > 2:
+        msg = "zarr-python major version > 2 is not supported"
+        raise ImportError(msg)
+
     from zarr.core import Array as ZarrArray
     from zarr.hierarchy import Group as ZarrGroup
 else:
@@ -185,6 +191,16 @@ else:
             return "mock cupy.ndarray"
 
 
+if find_spec("legacy_api_wrap") or TYPE_CHECKING:
+    from legacy_api_wrap import legacy_api  # noqa: TID251
+
+    old_positionals = partial(legacy_api, category=FutureWarning)
+else:
+
+    def old_positionals(*old_positionals):
+        return lambda func: func
+
+
 #############################
 # IO helpers
 #############################
@@ -251,7 +267,7 @@ def _from_fixed_length_strings(value):
 
 
 def _decode_structured_array(
-    arr: np.ndarray, dtype: np.dtype | None = None, copy: bool = False
+    arr: np.ndarray, *, dtype: np.dtype | None = None, copy: bool = False
 ) -> np.ndarray:
     """
     h5py 3.0 now reads all strings as bytes. There is a helper method which can convert these to strings,

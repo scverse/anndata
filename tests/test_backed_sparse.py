@@ -615,6 +615,13 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
 
 
+sparray_scipy_bug_marks = (
+    [pytest.mark.skip(reason="scipy bug causes view to be allocated")]
+    if CAN_USE_SPARSE_ARRAY
+    else []
+)
+
+
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -622,17 +629,21 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
-def test_append_overflow_check(group_fn, sparse_class, tmpdir):
-    if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
-        pytest.skip("scipy bug causes view to be allocated")
-    group = group_fn(tmpdir)
+@pytest.mark.parametrize(
+    "sparse_class",
+    [
+        sparse.csr_matrix,
+        pytest.param(sparse.csr_array, marks=[*sparray_scipy_bug_marks]),
+    ],
+)
+def test_append_overflow_check(group_fn, sparse_class, tmp_path):
+    group = group_fn(tmp_path)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
     # Minimally allocating new matrix
     new_mtx = sparse_class(
         (
-            np.broadcast_to(True, typemax_int32 - 1),
+            np.broadcast_to(True, typemax_int32 - 1),  # noqa: FBT003
             np.broadcast_to(np.int32(1), typemax_int32 - 1),
             [0, typemax_int32 - 1],
         ),

@@ -96,7 +96,8 @@ def make_dask_chunk(
 def get_chunksize(obj) -> tuple[int, ...]:
     if hasattr(obj, "chunks"):
         return obj.chunks
-    raise ValueError("object of type {type(obj)} has no recognized chunks")
+    msg = "object of type {type(obj)} has no recognized chunks"
+    raise ValueError(msg)
 
 
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -128,12 +129,14 @@ def read_sparse_as_dask(
     major_dim, minor_dim = (1, 0) if is_csc else (0, 1)
     if chunks is not None:
         if len(chunks) != 2:
-            raise ValueError("`chunks` must be a tuple of two integers")
+            msg = "`chunks` must be a tuple of two integers"
+            raise ValueError(msg)
         if chunks[minor_dim] not in {shape[minor_dim], -1, None}:
-            raise ValueError(
+            msg = (
                 "Only the major axis can be chunked. "
                 f"Try setting chunks to {((-1, _DEFAULT_STRIDE) if is_csc else (_DEFAULT_STRIDE, -1))}"
             )
+            raise ValueError(msg)
         stride = (
             chunks[major_dim]
             if chunks[major_dim] not in {None, -1}
@@ -251,7 +254,8 @@ def _gen_xarray_dict_iterator_from_elems(
             )
             data_array_name = index_label
         else:
-            raise ValueError(f"Could not read {k}: {v} from into xarray Dataset2D")
+            msg = f"Could not read {k}: {v} from into xarray Dataset2D"
+            raise ValueError(msg)
         yield data_array_name, data_array
     if index_key == DUMMY_RANGE_INDEX_KEY:
         yield (

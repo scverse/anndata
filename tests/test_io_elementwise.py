@@ -119,6 +119,7 @@ def create_sparse_store(
 @pytest.mark.parametrize(
     ("value", "encoding_type"),
     [
+        pytest.param(None, "null", id="none"),
         pytest.param("hello world", "string", id="py_str"),
         pytest.param(np.str_("hello world"), "string", id="np_str"),
         pytest.param(np.array([1, 2, 3]), "array", id="np_arr_int"),
@@ -207,6 +208,27 @@ def test_io_spec(store, value, encoding_type):
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+
+
+@pytest.mark.parametrize(
+    ("value", "encoding_type"),
+    [
+        pytest.param(np.asarray(1), "numeric-scalar", id="scalar_int"),
+        pytest.param(np.asarray(1.0), "numeric-scalar", id="scalar_float"),
+        pytest.param(np.asarray(True), "numeric-scalar", id="scalar_bool"),  # noqa: FBT003
+        pytest.param(np.asarray("test"), "string", id="scalar_string"),
+    ],
+)
+def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: str):
+    key = f"key_for_{encoding_type}"
+    write_elem(
+        store, key, value, dataset_kwargs={"compression": "gzip", "compression_opts": 5}
+    )
+
+    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
+
+    from_disk = read_elem(store[key])
+    assert_equal(value, from_disk)
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test

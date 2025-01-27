@@ -208,7 +208,7 @@ def equal_awkward(a, b) -> bool:
     return ak.almost_equal(a, b)
 
 
-def as_sparse(x, use_sparse_array=False):
+def as_sparse(x, *, use_sparse_array: bool = False):
     if isinstance(x, DaskArray):
         x = x.compute()
     if not isinstance(x, sparse.spmatrix | SpArray):
@@ -325,11 +325,12 @@ def check_combinable_cols(cols: list[pd.Index], join: Join_T):
 
     if len(problem_cols) > 0:
         problem_cols = list(problem_cols)
-        raise pd.errors.InvalidIndexError(
+        msg = (
             f"Cannot combine dataframes as some contained duplicated column names - "
             "causing ambiguity.\n\n"
             f"The problem columns are: {problem_cols}"
         )
+        raise pd.errors.InvalidIndexError(msg)
 
 
 # TODO: open PR or feature request to cupy
@@ -706,7 +707,8 @@ class Reindexer:
                 return el[self.new_idx]
             else:  # outer join
                 # TODO: this code isn't actually hit, we should refactor
-                raise Exception("This should be unreachable, please open an issue.")
+                msg = "This should be unreachable, please open an issue."
+                raise Exception(msg)
         else:
             if len(self.new_idx) > len(self.old_idx):
                 el = ak.pad_none(el, 1, axis=axis)  # axis == 0
@@ -790,9 +792,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
             for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate a dataframe with other array types."
-            )
+            msg = "Cannot concatenate a dataframe with other array types."
+            raise NotImplementedError(msg)
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
             unify_dtypes(f(x) for f, x in zip(reindexers, arrays)),
@@ -807,9 +808,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         if not all(
             isinstance(a, AwkArray) or a is MissingVal or 0 in a.shape for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate an AwkwardArray with other array types."
-            )
+            msg = "Cannot concatenate an AwkwardArray with other array types."
+            raise NotImplementedError(msg)
 
         return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)], axis=axis)
     elif any(isinstance(a, CupySparseMatrix) for a in arrays):
@@ -818,9 +818,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         if not all(
             isinstance(a, CupySparseMatrix | CupyArray) or 0 in a.shape for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate a cupy array with other array types."
-            )
+            msg = "Cannot concatenate a cupy array with other array types."
+            raise NotImplementedError(msg)
         sparse_stack = (cpsparse.vstack, cpsparse.hstack)[axis]
         return sparse_stack(
             [
@@ -833,9 +832,8 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         import cupy as cp
 
         if not all(isinstance(a, CupyArray) or 0 in a.shape for a in arrays):
-            raise NotImplementedError(
-                "Cannot concatenate a cupy array with other array types."
-            )
+            msg = "Cannot concatenate a cupy array with other array types."
+            raise NotImplementedError(msg)
         return cp.concatenate(
             [
                 f(cp.asarray(x), fill_value=fill_value, axis=1 - axis)
@@ -895,9 +893,8 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
         reindexers = [Reindexer(df_indices(el), common_ind) for el in els]
     elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
-            raise NotImplementedError(
-                "Cannot concatenate an AwkwardArray with other array types."
-            )
+            msg = "Cannot concatenate an AwkwardArray with other array types."
+            raise NotImplementedError(msg)
         common_keys = intersect_keys(el.fields for el in els)
         reindexers = [
             Reindexer(pd.Index(el.fields), pd.Index(list(common_keys))) for el in els
@@ -923,9 +920,8 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         import awkward as ak
 
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
-            raise NotImplementedError(
-                "Cannot concatenate an AwkwardArray with other array types."
-            )
+            msg = "Cannot concatenate an AwkwardArray with other array types."
+            raise NotImplementedError(msg)
         warn_once(
             "Outer joins on awkward.Arrays will have different return values in the future. "
             "For details, and to offer input, please see:\n\n\t"
@@ -954,18 +950,36 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
     return reindexers
 
 
+def missing_element(
+    n: int,
+    els: list[SpArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray],
+    axis: Literal[0, 1] = 0,
+    fill_value: Any | None = None,
+) -> np.ndarray | DaskArray:
+    """Generates value to use when there is a missing element."""
+    should_return_dask = any(isinstance(el, DaskArray) for el in els)
+    try:
+        non_missing_elem = next(el for el in els if not_missing(el))
+    except StopIteration:  # pragma: no cover
+        msg = "All elements are missing when attempting to generate missing elements."
+        raise ValueError(msg)
+    # 0 sized array for in-memory prevents allocating unnecessary memory while preserving broadcasting.
+    off_axis_size = 0 if not should_return_dask else non_missing_elem.shape[axis - 1]
+    shape = (n, off_axis_size) if axis == 0 else (off_axis_size, n)
+    if should_return_dask:
+        import dask.array as da
+
+        return da.full(
+            shape, default_fill_value(els) if fill_value is None else fill_value
+        )
+    return np.zeros(shape, dtype=bool)
+
+
 def outer_concat_aligned_mapping(
     mappings, *, reindexers=None, index=None, axis=0, fill_value=None
 ):
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
-
-    def missing_element(n: int, axis: Literal[0, 1] = 0) -> np.ndarray:
-        """Generates value to use when there is a missing element."""
-        if axis == 0:
-            return np.zeros((n, 0), dtype=bool)
-        else:
-            return np.zeros((0, n), dtype=bool)
 
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
@@ -978,7 +992,9 @@ def outer_concat_aligned_mapping(
         # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
             [
-                el if not_missing(el) else missing_element(n, axis=axis)
+                el
+                if not_missing(el)
+                else missing_element(n, axis=axis, els=els, fill_value=fill_value)
                 for el, n in zip(els, ns)
             ],
             cur_reindexers,
@@ -1043,7 +1059,8 @@ def _resolve_axis(
         return (0, "obs")
     if axis in {1, "var"}:
         return (1, "var")
-    raise ValueError(f"`axis` must be either 0, 1, 'obs', or 'var', was {axis}")
+    msg = f"`axis` must be either 0, 1, 'obs', or 'var', was {axis}"
+    raise ValueError(msg)
 
 
 def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
@@ -1066,17 +1083,18 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
     if all(X is None for X in Xs):
         return None
     elif any(X is None for X in Xs):
-        raise NotImplementedError(
+        msg = (
             "Some (but not all) of the AnnData's to be concatenated had no .X value. "
             "Concatenation is currently only implemented for cases where all or none of"
             " the AnnData's have .X assigned."
         )
+        raise NotImplementedError(msg)
     else:
         return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
 
 
 def make_dask_col_from_extension_dtype(
-    col: DataArray, use_only_object_dtype: bool = False
+    col: DataArray, *, use_only_object_dtype: bool = False
 ) -> DaskArray:
     """
     Creates dask arrays from :class:`pandas.api.extensions.ExtensionArray` dtype :class:`xarray.DataArray`s.
@@ -1145,7 +1163,7 @@ def make_dask_col_from_extension_dtype(
 
 
 def make_xarray_extension_dtypes_dask(
-    annotations: Iterable[Dataset2D], use_only_object_dtype: bool = False
+    annotations: Iterable[Dataset2D], *, use_only_object_dtype: bool = False
 ) -> Generator[Dataset2D, None, None]:
     """
     Creates a generator of Dataset2D objects with dask arrays in place of :class:`pandas.api.extensions.ExtensionArray` dtype columns.
@@ -1169,7 +1187,9 @@ def make_xarray_extension_dtypes_dask(
         yield a.copy(
             data={
                 name: (
-                    make_dask_col_from_extension_dtype(col, use_only_object_dtype)
+                    make_dask_col_from_extension_dtype(
+                        col, use_only_object_dtype=use_only_object_dtype
+                    )
                     if name in extension_cols
                     else col
                 )
@@ -1445,10 +1465,11 @@ def concat(
 
     if isinstance(adatas, Mapping):
         if keys is not None:
-            raise TypeError(
+            msg = (
                 "Cannot specify categories in both mapping keys and using `keys`. "
                 "Only specify this once."
             )
+            raise TypeError(msg)
         keys, adatas = list(adatas.keys()), list(adatas.values())
     else:
         adatas = list(adatas)
@@ -1539,7 +1560,8 @@ def concat(
         )
         join_keys = union_keys
     else:
-        raise AssertionError(f"{join=} should have been validated above by pd.concat")
+        msg = f"{join=} should have been validated above by pd.concat"
+        raise AssertionError(msg)
 
     layers = concat_aligned_mapping(
         [a.layers for a in adatas], axis=axis, reindexers=reindexers
