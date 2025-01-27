@@ -90,14 +90,17 @@ def _infer_shape_for_axis(
     xxxm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
     layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
     xxxp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-):
+) -> int | None:
     for elem in [xxx, xxxm, xxxp]:
         if elem is not None and hasattr(elem, "shape"):
             return elem.shape[0]
     for elem in [layers, xxxm, xxxp]:
         if elem is not None:
             elem = cast(Mapping, elem)
-            return next(iter(elem.values())).shape[0]
+            next_elem = next(iter(elem.values()))
+            if hasattr(next_elem, "shape"):
+                size = cast(int, next_elem.shape[0])
+                return size
     return None
 
 
