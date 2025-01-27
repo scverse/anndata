@@ -11,7 +11,7 @@ from copy import copy, deepcopy
 from functools import partial
 from pathlib import Path
 from textwrap import dedent
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -83,6 +83,37 @@ def _check_2d_shape(X):
     if X.dtype.names is None and len(X.shape) != 2:
         msg = f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
         raise ValueError(msg)
+
+
+def _infer_shape_for_axis(
+    xxx: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+    xxxm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
+    xxxp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+):
+    for elem in [xxx, xxxm, xxxp]:
+        if elem is not None and hasattr(elem, "shape"):
+            return elem.shape[0]
+    for elem in [layers, xxxm, xxxp]:
+        if elem is not None:
+            elem = cast(Mapping, elem)
+            return next(iter(elem.values())).shape[0]
+    return None
+
+
+def _infer_shape(
+    obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+    var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+    obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
+    obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+):
+    return (
+        _infer_shape_for_axis(obs, obsm, layers, obsp),
+        _infer_shape_for_axis(var, varm, layers, varp),
+    )
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -431,7 +462,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             source = "X"
         else:
             self._X = None
-            n_obs, n_vars = (None, None) if shape is None else shape
+            n_obs, n_vars = (
+                shape
+                if shape is not None
+                else _infer_shape(obs, var, obsm, varm, layers, obsp, varp)
+            )
             source = "shape"
 
         # annotations
