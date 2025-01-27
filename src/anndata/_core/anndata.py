@@ -97,10 +97,10 @@ def _infer_shape_for_axis(
     for elem in [layers, xxxm, xxxp]:
         if elem is not None:
             elem = cast(Mapping, elem)
-            next_elem = next(iter(elem.values()))
-            if hasattr(next_elem, "shape"):
-                size = cast(int, next_elem.shape[0])
-                return size
+            for sub_elem in elem.values():
+                if hasattr(sub_elem, "shape"):
+                    size = cast(int, sub_elem.shape[0])
+                    return size
     return None
 
 
