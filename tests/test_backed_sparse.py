@@ -14,6 +14,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
+from anndata._io.zarr import open_write_group
 from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray, is_zarr_v2
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
@@ -44,8 +45,8 @@ def diskfmt(request):
 M = 50
 N = 50
 
-zarr_metadata_key = ".zarray" if is_zarr_v2() else "zarr.json"
-zarr_separator = "" if is_zarr_v2() else "/c"
+zarr_metadata_key = ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
+zarr_separator = "" if ad.settings.zarr_write_format == 2 else "/c"
 
 @pytest.fixture
 def ondisk_equivalent_adata(
@@ -276,7 +277,7 @@ def test_dataset_append_memory(
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
@@ -294,7 +295,7 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format="csr")
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
@@ -334,7 +335,7 @@ def test_read_array(
     obs_idx = subset_func(np.arange(100))
     var_idx = subset_func2(np.arange(100))
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
@@ -365,7 +366,7 @@ def test_dataset_append_disk(
     b = sparse_format(sparse.random(10, 10))
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "a", a)
@@ -389,19 +390,20 @@ def test_lazy_array_cache(
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
-    f = zarr.open_group(path, mode="a")
+    f = open_write_group(path, mode="a")
     ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
-    f = zarr.open_group(store, mode="a")
+    f = open_write_group(store, mode="a")
     a_disk = sparse_dataset(f["X"])
     a_disk[:1]
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
     # one each for .zarray and actual access
-    assert store.get_access_count("X/indptr") == 2
+    # see https://github.com/zarr-developers/zarr-python/discussions/2760 for why 4
+    assert store.get_access_count("X/indptr") == 2 if is_zarr_v2() else 4
     for elem_not_indptr in elems - {"indptr"}:
         assert (
             sum(
@@ -494,17 +496,17 @@ def test_data_access(
     sparse_format: Callable[[ArrayLike], sparse.spmatrix],
     idx_maj: Idx,
     idx_min: Idx,
-    exp: Sequence[str],
+    exp: list[str],
     open_func: Callable[[ZarrGroup], CSRDataset | CSCDataset | DaskArray],
 ):
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
-    f = zarr.open_group(path, mode="a")
+    f = open_write_group(path, mode="a")
     ad.io.write_elem(f, "X", a)
     data = f["X/data"][...]
     del f["X/data"]
     # chunk one at a time to count properly
-    zarr.array(data, store=path / "X" / "data", chunks=(1,))
+    zarr.array(data, store=path / "X" / "data", chunks=(1,), zarr_format=ad.settings.zarr_write_format)
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store)
@@ -515,6 +517,10 @@ def test_data_access(
         subset = a_disk[idx_min, idx_maj]
     if isinstance(subset.X, DaskArray):
         subset.X.compute(scheduler="single-threaded")
+    # zarr v2 fetches all and not just metadata for that node
+    # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
+    if ad.settings.zarr_write_format == 2:
+        exp = exp + [ "X/data/.zgroup", "X/data/.zattrs" ]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
         "X/data"
@@ -542,7 +548,7 @@ def test_wrong_shape(
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -560,7 +566,7 @@ def test_reset_group(tmp_path: Path):
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -575,7 +581,7 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
@@ -606,7 +612,7 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 

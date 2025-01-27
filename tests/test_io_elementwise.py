@@ -636,7 +636,7 @@ def test_read_sparse_array(
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
     if diskfmt == "zarr":
-        f = zarr.open_group(path, mode="a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
