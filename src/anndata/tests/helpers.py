@@ -32,6 +32,7 @@ from anndata.compat import (
     CupySparseMatrix,
     DaskArray,
     SpArray,
+    SpMatrix,
     ZarrArray,
 )
 from anndata.utils import asarray
@@ -836,7 +837,7 @@ def as_dense_dask_array(a):
     return da.asarray(a, chunks=_half_chunk_size(a.shape))
 
 
-@as_dense_dask_array.register(sparse.spmatrix)
+@as_dense_dask_array.register(SpMatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
 
@@ -853,7 +854,7 @@ def as_sparse_dask_array(a) -> DaskArray:
     return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(sparse.spmatrix)
+@as_sparse_dask_array.register(SpMatrix)
 def _(a):
     import dask.array as da
 
@@ -1004,7 +1005,7 @@ def as_cupy(val, typ=None):
     if issubclass(typ, CupyArray):
         import cupy as cp
 
-        if isinstance(val, sparse.spmatrix):
+        if isinstance(val, SpMatrix):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
@@ -1041,7 +1042,7 @@ def shares_memory(x, y) -> bool:
     return np.shares_memory(x, y)
 
 
-@shares_memory.register(sparse.spmatrix)
+@shares_memory.register(SpMatrix)
 def shares_memory_sparse(x, y):
     return (
         np.shares_memory(x.data, y.data)

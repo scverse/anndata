@@ -10,16 +10,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tomllib
 from collections import deque
 from contextlib import ExitStack
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 from packaging.requirements import Requirement
 from packaging.version import Version

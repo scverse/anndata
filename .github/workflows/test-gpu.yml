@@ -64,7 +64,8 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.max_python_version }}
+          # https://github.com/cupy/cupy/issues/8651 cupy does not support python3.13 yet
+          python-version: "3.12"
 
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
