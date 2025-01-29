@@ -131,7 +131,8 @@ Low level methods for reading and writing elements of an {class}`AnnData` object
 .. autosummary::
    :toctree: generated/
 
-   experimental.read_elem_as_dask
+   experimental.read_elem_lazy
+   experimental.read_lazy
 ```
 
 Utilities for customizing the IO process:
@@ -156,6 +157,9 @@ Types used by the former:
    experimental.ReadCallback
    experimental.WriteCallback
    experimental.StorageType
+   experimental.backed._lazy_arrays.MaskedArray
+   experimental.backed._lazy_arrays.CategoricalArray
+   experimental.backed._xarray.Dataset2D
 ```
 
 ## Errors and warnings

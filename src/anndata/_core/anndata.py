@@ -8,7 +8,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
-from functools import partial
+from functools import partial, singledispatch
 from pathlib import Path
 from textwrap import dedent
 from typing import TYPE_CHECKING
@@ -41,7 +41,6 @@ from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
 from .views import (
-    DataFrameView,
     DictView,
     _resolve_idxs,
     as_view,
@@ -53,7 +52,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from ..compat import Index1D
-    from ..typing import ArrayDataStructureType
+    from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
 
@@ -316,8 +315,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
-        self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
-        self._var = DataFrameView(var_sub, view_args=(self, "var"))
+        self._obs = as_view(obs_sub, view_args=(self, "obs"))
+        self._var = as_view(var_sub, view_args=(self, "var"))
         self._uns = uns
 
         # set data
@@ -561,7 +560,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> ArrayDataStructureType | None:
+    def X(self) -> XDataType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -1039,8 +1038,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
+    @staticmethod
+    @singledispatch
     def _remove_unused_categories(
-        self, df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
+        df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
     ):
         for k in df_full:
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
