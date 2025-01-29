@@ -9,7 +9,6 @@ import h5py
 from packaging.version import Version
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from ..compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -181,7 +180,7 @@ def add_key_note(
 
     dir = "to" if op == "writ" else "from"
     msg = f"Error raised while {op}ing key {key!r} of {type(store)} {dir} {path}"
-    add_note(e, msg)
+    e.add_note(msg)
 
 
 def report_read_key_on_error(func):

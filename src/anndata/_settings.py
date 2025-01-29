@@ -14,7 +14,6 @@ from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
 from anndata.compat import CAN_USE_SPARSE_ARRAY
-from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -221,7 +220,7 @@ class SettingsManager:
         try:
             validate(default_value)
         except (ValueError, TypeError) as e:
-            add_note(e, f"for option {option!r}")
+            e.add_note(f"for option {option!r}")
             raise e
         option_type = type(default_value) if option_type is None else option_type
         self._registered_options[option] = RegisteredOption(
