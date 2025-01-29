@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 def read_lazy(
     store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
+    *,
     load_annotation_index: bool = True,
 ) -> AnnData:
     """
@@ -91,9 +92,10 @@ def read_lazy(
     try:
         import xarray  # noqa: F401
     except ImportError:
-        raise ImportError(
+        msg = (
             "xarray is required to use the `read_lazy` function. Please install xarray."
         )
+        raise ImportError(msg)
     is_h5_store = isinstance(store, h5py.Dataset | h5py.File | h5py.Group)
     is_h5 = (
         isinstance(store, Path | str) and Path(store).suffix == ".h5ad"

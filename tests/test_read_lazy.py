@@ -107,7 +107,7 @@ def adata_remote_orig_with_path(
 
 @pytest.fixture
 def adata_remote(
-    adata_remote_orig_with_path: tuple[Path, AnnData], load_annotation_index: bool
+    adata_remote_orig_with_path: tuple[Path, AnnData], *, load_annotation_index: bool
 ) -> AnnData:
     orig_path, _ = adata_remote_orig_with_path
     return read_lazy(orig_path, load_annotation_index=load_annotation_index)
@@ -144,7 +144,7 @@ def adata_remote_with_store_tall_skinny_path(
 
 @pytest.fixture(scope="session")
 def adatas_paths_var_indices_for_concatenation(
-    tmp_path_factory, are_vars_different: bool, worker_id: str = "serial"
+    tmp_path_factory, *, are_vars_different: bool, worker_id: str = "serial"
 ) -> tuple[list[AnnData], list[Path], list[pd.Index]]:
     adatas = []
     var_indices = []
@@ -506,8 +506,9 @@ def test_concat_to_memory_var(
     stores_for_concat: list[AccessTrackingStore],
     lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
-    are_vars_different: bool,
     simple_subset_func: Callable[[AnnData], AnnData],
+    *,
+    are_vars_different: bool,
 ):
     concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
     var_keys_to_track = get_key_trackers_for_columns_on_axis(
@@ -547,7 +548,7 @@ def test_concat_to_memory_var(
 
 
 def test_concat_data_with_cluster_to_memory(
-    adata_remote: AnnData, join: Join_T, load_annotation_index: bool
+    adata_remote: AnnData, join: Join_T, *, load_annotation_index: bool
 ):
     import dask.distributed as dd
 
@@ -592,6 +593,7 @@ def test_concat_data(
     adata_orig: AnnData,
     join: Join_T,
     index: slice | NDArray | Literal["a"] | None,
+    *,
     load_annotation_index: bool,
 ):
     from anndata.experimental.backed._compat import Dataset2D
@@ -632,10 +634,11 @@ def test_concat_data(
 def test_concat_df_ds_mixed_types(
     adata_remote: AnnData,
     adata_orig: AnnData,
-    load_annotation_index: bool,
     join: Join_T,
     attr: str,
     key: str | None,
+    *,
+    load_annotation_index: bool,
 ):
     def with_elem_in_memory(adata: AnnData, attr: str, key: str | None) -> AnnData:
         parent_elem = getattr(adata, attr)

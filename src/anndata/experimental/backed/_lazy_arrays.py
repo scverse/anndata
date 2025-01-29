@@ -64,10 +64,10 @@ class CategoricalArray(BackendArray, Generic[K]):
         self,
         codes: K,
         categories: ZarrArray | H5Array,
-        ordered: bool,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,
         *args,
+        ordered: bool,
         **kwargs,
     ):
         self._categories = categories
@@ -143,7 +143,8 @@ class MaskedArray(BackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         else:
-            raise RuntimeError(f"Invalid dtype_str {self._dtype_str}")
+            msg = f"Invalid dtype_str {self._dtype_str}"
+            raise RuntimeError(msg)
         return xr.core.extension_array.PandasExtensionArray(extension_array)
 
     @cached_property
@@ -155,7 +156,8 @@ class MaskedArray(BackendArray, Generic[K]):
             ).dtype
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
-        raise RuntimeError(f"Invalid dtype_str {self._dtype_str}")
+        msg = f"Invalid dtype_str {self._dtype_str}"
+        raise RuntimeError(msg)
 
 
 @_subset.register(DataArray)

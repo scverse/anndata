@@ -128,7 +128,7 @@ def _remove_unused_categories_xr(
 
 
 @to_memory.register(Dataset2D)
-def to_memory(ds: Dataset2D, copy=False):
+def to_memory(ds: Dataset2D, *, copy=False):
     df = ds.to_dataframe()
     index_key = ds.attrs.get("indexing_key", None)
     if df.index.name != index_key and index_key is not None:
