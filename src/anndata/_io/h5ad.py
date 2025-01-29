@@ -58,11 +58,11 @@ def write_h5ad(
         as_dense = list(as_dense)
         as_dense[as_dense.index("raw.X")] = "raw/X"
     if any(val not in {"X", "raw/X"} for val in as_dense):
-        raise NotImplementedError(
-            "Currently, only `X` and `raw/X` are supported values in `as_dense`"
-        )
+        msg = "Currently, only `X` and `raw/X` are supported values in `as_dense`"
+        raise NotImplementedError(msg)
     if "raw/X" in as_dense and adata.raw is None:
-        raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
+        msg = "Cannot specify writing `raw/X` to dense if it doesn’t exist."
+        raise ValueError(msg)
 
     if convert_strings_to_categoricals:
         adata.strings_to_categoricals()
@@ -215,9 +215,8 @@ def read_h5ad(
         return read_h5ad_backed(filename, mode)
 
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):
-        raise NotImplementedError(
-            "Dense formats can only be read to CSR or CSC matrices at this time."
-        )
+        msg = "Dense formats can only be read to CSR or CSC matrices at this time."
+        raise NotImplementedError(msg)
     if isinstance(as_sparse, str):
         as_sparse = [as_sparse]
     else:
@@ -226,9 +225,8 @@ def read_h5ad(
         if as_sparse[i] in {("raw", "X"), "raw.X"}:
             as_sparse[i] = "raw/X"
         elif as_sparse[i] not in {"raw/X", "X"}:
-            raise NotImplementedError(
-                "Currently only `X` and `raw/X` can be read as sparse."
-            )
+            msg = "Currently only `X` and `raw/X` can be read as sparse."
+            raise NotImplementedError(msg)
 
     rdasp = partial(
         read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size
@@ -356,7 +354,8 @@ def read_dense_as_sparse(
     elif sparse_format == sparse.csc_matrix:
         return read_dense_as_csc(dataset, axis_chunk)
     else:
-        raise ValueError(f"Cannot read dense array as type: {sparse_format}")
+        msg = f"Cannot read dense array as type: {sparse_format}"
+        raise ValueError(msg)
 
 
 def read_dense_as_csr(dataset: h5py.Dataset, axis_chunk: int = 6000):

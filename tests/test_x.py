@@ -184,10 +184,10 @@ def test_set_dense_x_view_from_sparse():
     assert_equal(orig.X[30:], x[30:])  # change propagates through
 
 
-def test_warn_on_non_csr_csc_matrix():
-    X = sparse.eye(100)
+def test_fail_on_non_csr_csc_matrix():
+    X = sparse.eye(100, format="coo")
     with pytest.raises(
         ValueError,
-        match=r"X needs to be of one of",
+        match=r"Only CSR and CSC.*",
     ):
         ad.AnnData(X=X)

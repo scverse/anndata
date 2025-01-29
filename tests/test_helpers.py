@@ -12,8 +12,8 @@ from anndata.compat import (
     CupyArray,
     CupyCSRMatrix,
     DaskArray,
-    add_note,
 )
+from anndata.compat.exceptiongroups import add_note
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -107,7 +107,8 @@ def test_gen_random_column(dtype):
 # Does this work for every warning?
 def test_report_name():
     def raise_error():
-        raise Exception("an error occurred!")
+        msg = "an error occurred!"
+        raise Exception(msg)
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))

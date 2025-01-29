@@ -125,7 +125,9 @@ def merge_strategy(request):
     return request.param
 
 
-def fix_known_differences(orig, result, backwards_compat=True):
+def fix_known_differences(
+    orig: AnnData, result: AnnData, *, backwards_compat: bool = True
+):
     """
     Helper function for reducing anndata's to only the elements we expect to be
     equivalent after concatenation.
@@ -1251,9 +1253,9 @@ def test_concat_categories_maintain_dtype():
 
     result = concat({"a": a, "b": b, "c": c}, join="outer")
 
-    assert isinstance(
-        result.obs["cat"].dtype, pd.CategoricalDtype
-    ), f"Was {result.obs['cat'].dtype}"
+    assert isinstance(result.obs["cat"].dtype, pd.CategoricalDtype), (
+        f"Was {result.obs['cat'].dtype}"
+    )
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
 
@@ -1444,7 +1446,7 @@ def test_concat_outer_aligned_mapping(elem):
     del b.obsm[elem]
 
     concated = concat({"a": a, "b": b}, join="outer", label="group")
-    result = concated.obsm[elem][concated.obs["group"] == "b"]
+    result = concated[concated.obs["group"] == "b"].obsm[elem]
 
     check_filled_like(result, elem_name=f"obsm/{elem}")
 
@@ -1531,6 +1533,34 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     assert_equal(result1, target1)
     assert_equal(result2, target2)
+
+
+def test_concat_missing_elem_dask_join(join_type):
+    import dask.array as da
+
+    import anndata as ad
+
+    ad1 = ad.AnnData(X=np.ones((5, 5)))
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), layers={"a": da.ones((5, 5))})
+    ad_in_memory_with_layers = ad2.to_memory()
+
+    result1 = ad.concat([ad1, ad2], join=join_type)
+    result2 = ad.concat([ad1, ad_in_memory_with_layers], join=join_type)
+    assert_equal(result1, result2)
+
+
+def test_impute_dask(axis_name):
+    import dask.array as da
+
+    from anndata._core.merge import _resolve_axis, missing_element
+
+    axis, _ = _resolve_axis(axis_name)
+    els = [da.ones((5, 5))]
+    missing = missing_element(6, els, axis=axis)
+    assert isinstance(missing, DaskArray)
+    in_memory = missing.compute()
+    assert np.all(np.isnan(in_memory))
+    assert in_memory.shape[axis] == 6
 
 
 def test_outer_concat_with_missing_value_for_df():
@@ -1645,7 +1675,7 @@ def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
     X = sparse.random(50, 20, density=0.5, format="csr")
     X_dask = da.from_array(X, chunks=(5, 20))
     var_names_1 = [f"gene_{i}" for i in range(20)]
-    var_names_2 = [f"gene_{i}{'_foo' if (i%2) else ''}" for i in range(20, 40)]
+    var_names_2 = [f"gene_{i}{'_foo' if (i % 2) else ''}" for i in range(20, 40)]
 
     ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
     ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))

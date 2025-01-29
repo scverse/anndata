@@ -72,7 +72,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install AnnData
-        run: uv pip install --system -e ".[dev,test,cu12]" llvmlite>=0.43
+        run: uv pip install --system -e ".[dev,test,cu12]" -c ci/constraints.txt
 
       - name: Env list
         run: pip list

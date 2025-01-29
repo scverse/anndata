@@ -57,7 +57,8 @@ class Raw:
             self._var = adata.var.copy()
             self.varm = adata.varm.copy()
         elif adata.isbacked:
-            raise ValueError("Cannot specify X if adata is backed")
+            msg = "Cannot specify X if adata is backed"
+            raise ValueError(msg)
 
     def _get_X(self, layer=None):
         if layer is not None:
@@ -77,10 +78,11 @@ class Raw:
         elif "raw.X" in self._adata.file:
             X = self._adata.file["raw.X"]  # Backwards compat
         else:
-            raise AttributeError(
+            msg = (
                 f"Could not find dataset for raw X in file: "
                 f"{self._adata.file.filename}."
             )
+            raise AttributeError(msg)
         if isinstance(X, h5py.Group):
             X = sparse_dataset(X)
         # Check if we need to subset

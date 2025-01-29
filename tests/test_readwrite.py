@@ -21,7 +21,6 @@ import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import DaskArray, SpArray, SpMatrix, _read_attr
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
-from testing.anndata._helpers import xfail_if_numpy2_loompy
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -106,11 +105,10 @@ diskfmt2 = diskfmt
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
-    tmpdir = Path(tmp_path)
-    pth1 = tmpdir / f"first.{diskfmt}"
+    pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
     read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
-    pth2 = tmpdir / f"second.{diskfmt2}"
+    pth2 = tmp_path / f"second.{diskfmt2}"
     write2 = lambda x: getattr(x, f"write_{diskfmt2}")(pth2)
     read2 = lambda: getattr(ad, f"read_{diskfmt2}")(pth2)
 
@@ -325,8 +323,12 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
         f.visititems(check_compressed)
 
     if not_compressed:
-        msg = "\n\t".join(not_compressed)
-        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+        sep = "\n\t"
+        msg = (
+            f"These elements were not compressed correctly:{sep}"
+            f"{sep.join(not_compressed)}"
+        )
+        raise AssertionError(msg)
 
     expected = ad.read_h5ad(pth)
     assert_equal(adata, expected)
@@ -351,8 +353,12 @@ def test_zarr_compression(tmp_path):
         f.visititems(check_compressed)
 
     if not_compressed:
-        msg = "\n\t".join(not_compressed)
-        raise AssertionError(f"These elements were not compressed correctly:\n\t{msg}")
+        sep = "\n\t"
+        msg = (
+            f"These elements were not compressed correctly:{sep}"
+            f"{sep.join(not_compressed)}"
+        )
+        raise AssertionError(msg)
 
     expected = ad.read_zarr(pth)
     assert_equal(adata, expected)
@@ -380,7 +386,6 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
-@xfail_if_numpy2_loompy
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
 @pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
@@ -438,7 +443,6 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     assert adata.var_names.name == var_dim
 
 
-@xfail_if_numpy2_loompy
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 def test_readloom_deprecations(tmp_path):
     loom_pth = tmp_path / "test.loom"
@@ -473,7 +477,7 @@ def test_readloom_deprecations(tmp_path):
 
     # positional -> keyword
     with pytest.warns(FutureWarning, match=r"sparse"):
-        depr_result = ad.io.read_loom(loom_pth, True)
+        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
     actual_result = ad.io.read_loom(loom_pth, sparse=True)
     assert type(depr_result.X) == type(actual_result.X)
 
@@ -828,6 +832,28 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     curr = roundtrip(orig, pth)
 
     assert_equal(orig, curr)
+
+
+@pytest.mark.parametrize(
+    "uns_val",
+    [
+        pytest.param(dict(base=None), id="dict_val"),
+        pytest.param(
+            pd.DataFrame(dict(col_0=["string", None])).convert_dtypes(), id="df"
+        ),
+    ],
+)
+def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
+    pth = tmp_path / f"adata_dtype.{diskfmt}"
+
+    orig = ad.AnnData(np.ones((3, 4)), uns=dict(val=uns_val))
+    with ad.settings.override(allow_write_nullable_strings=True):
+        curr = roundtrip(orig, pth)
+
+    if isinstance(orig.uns["val"], pd.DataFrame):
+        pd.testing.assert_frame_equal(curr.uns["val"], orig.uns["val"])
+    else:
+        assert curr.uns["val"] == orig.uns["val"]
 
 
 def test_io_dtype(tmp_path, diskfmt, dtype, roundtrip):

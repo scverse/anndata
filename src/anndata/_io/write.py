@@ -11,6 +11,7 @@ import pandas as pd
 from scipy.sparse import issparse
 
 from .._warnings import WriteWarning
+from ..compat import old_positionals
 from ..logging import get_logger
 
 if TYPE_CHECKING:
@@ -21,8 +22,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@old_positionals("skip_data", "sep")
 def write_csvs(
-    dirname: PathLike, adata: AnnData, skip_data: bool = True, sep: str = ","
+    dirname: PathLike, adata: AnnData, *, skip_data: bool = True, sep: str = ","
 ):
     """See :meth:`~anndata.AnnData.write_csvs`."""
     dirname = Path(dirname)
@@ -75,7 +77,8 @@ def write_csvs(
         )
 
 
-def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False):
+@old_positionals("write_obsm_varm")
+def write_loom(filename: PathLike, adata: AnnData, *, write_obsm_varm: bool = False):
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
     row_names = adata.var_names
@@ -87,7 +90,8 @@ def write_loom(filename: PathLike, adata: AnnData, write_obsm_varm: bool = False
     col_attrs[col_dim] = col_names.values
 
     if adata.X is None:
-        raise ValueError("loompy does not accept empty matrices as data")
+        msg = "loompy does not accept empty matrices as data"
+        raise ValueError(msg)
 
     if write_obsm_varm:
         for key in adata.obsm.keys():

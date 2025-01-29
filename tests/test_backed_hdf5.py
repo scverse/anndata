@@ -270,6 +270,8 @@ def test_return_to_memory_mode(adata, backing_h5ad):
     adata.filename = None
     assert not adata.isbacked
 
+    assert adata.X is not None
+
     # make sure the previous file had been properly closed
     # when setting `adata.filename = None`
     # if it hadn’t the following line would throw an error

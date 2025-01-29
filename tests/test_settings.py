@@ -29,7 +29,8 @@ type_3 = list[int]
 
 def validate_int_list(val) -> bool:
     if not isinstance(val, list) or not [isinstance(type(e), int) for e in val]:
-        raise TypeError(f"{repr(val)} is not a valid int list")
+        msg = f"{val!r} is not a valid int list"
+        raise TypeError(msg)
     return True
 
 
@@ -241,7 +242,7 @@ def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
         ),
     ],
 )
-def test_describe(as_rst: bool, expected: str, settings: SettingsManager):
+def test_describe(*, as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
 
 
