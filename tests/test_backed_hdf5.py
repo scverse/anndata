@@ -85,6 +85,8 @@ def as_dense(request):
 # -------------------------------------------------------------------------------
 
 
+# h5py internally calls `product` on min-versions
+@pytest.mark.filterwarnings("ignore:`product` is deprecated as of NumPy 1.25.0")
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 @pytest.mark.filterwarnings("error")
 def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
