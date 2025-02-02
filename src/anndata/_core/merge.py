@@ -15,7 +15,9 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
+import scipy
 from natsort import natsorted
+from packaging.version import Version
 from scipy import sparse
 
 from anndata._warnings import ExperimentalFeatureWarning
@@ -826,7 +828,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
     elif any(isinstance(a, SpMatrix | SpArray) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         use_sparse_array = any(issubclass(type(a), SpArray) for a in arrays)
-        return sparse_stack(
+        mat = sparse_stack(
             [
                 f(
                     as_sparse(a, use_sparse_array=use_sparse_array),
@@ -837,6 +839,13 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             format="csr",
         )
+        scipy_version = Version(scipy.__version__)
+        # Bug where xstack produces a matrix not an array in 1.11.*
+        if use_sparse_array and (scipy_version.major, scipy_version.minor) == (1, 11):
+            if mat.format == "csc":
+                return sparse.csc_array(mat)
+            return sparse.csr_array(mat)
+        return mat
     else:
         return np.concatenate(
             [

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+import scipy
 from boltons.iterutils import default_exit, remap, research
 from numpy import ma
 from packaging.version import Version
@@ -1497,13 +1498,18 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
     assert result.raw.X.dtype == np.float64
     if sparse.issparse(result.X):
         # See https://github.com/scipy/scipy/issues/20389 for why this doesn't work with csc
-        if sparse_indexer_type == np.int64 and (
-            issubclass(cpu_array_type, SpMatrix) or adata.X.format == "csc"
+        if (
+            sparse_indexer_type == np.int64
+            and (
+                issubclass(cpu_array_type, SpMatrix | SpArray)
+                or adata.X.format == "csc"
+            )
+            and Version(scipy.__version__) < Version("1.15.0")
         ):
             pytest.xfail(
                 "Data type int64 is not maintained for sparse matrices or csc array"
             )
-        assert result.X.indptr.dtype == sparse_indexer_type
+        assert result.X.indptr.dtype == sparse_indexer_type, result.X
         assert result.X.indices.dtype == sparse_indexer_type
 
 
