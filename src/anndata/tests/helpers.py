@@ -1053,8 +1053,8 @@ def shares_memory_sparse(x, y):
 
 BASE_MATRIX_PARAMS = [
     pytest.param(asarray, id="np_array"),
-    pytest.param(sparse.csr_matrix, id="scipy_csr"),
-    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr_matrix"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc_matrix"),
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
 ]

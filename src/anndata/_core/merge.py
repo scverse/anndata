@@ -212,8 +212,7 @@ def as_sparse(x, *, use_sparse_array=False):
         if CAN_USE_SPARSE_ARRAY and use_sparse_array:
             return sparse.csr_array(x)
         return sparse.csr_matrix(x)
-    else:
-        return x
+    return x
 
 
 def as_cp_sparse(x) -> CupySparseMatrix:

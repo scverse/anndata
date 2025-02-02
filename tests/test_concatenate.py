@@ -1497,14 +1497,13 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
     assert result.X.dtype == np.int8
     assert result.raw.X.dtype == np.float64
     if sparse.issparse(result.X):
-        # See https://github.com/scipy/scipy/issues/20389 for why this doesn't work with csc
-        if (
-            sparse_indexer_type == np.int64
-            and (
-                issubclass(cpu_array_type, SpMatrix | SpArray)
-                or adata.X.format == "csc"
+        # https://github.com/scipy/scipy/issues/20389 was merged in 1.15 but is still an issue with matrix
+        if sparse_indexer_type == np.int64 and (
+            (
+                (issubclass(cpu_array_type, SpArray) or adata.X.format == "csc")
+                and Version(scipy.__version__) < Version("1.15.0")
             )
-            and Version(scipy.__version__) < Version("1.15.0")
+            or issubclass(cpu_array_type, SpMatrix)
         ):
             pytest.xfail(
                 "Data type int64 is not maintained for sparse matrices or csc array"
