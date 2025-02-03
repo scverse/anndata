@@ -14,7 +14,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
-from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray, SpMatrix
+from anndata.compat import DaskArray, SpArray, SpMatrix
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -334,8 +334,6 @@ def test_read_array(
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
-    if not CAN_USE_SPARSE_ARRAY:
-        pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
     assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
     ad.settings.use_sparse_array_on_read = False
@@ -615,13 +613,6 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
 
 
-sparray_scipy_bug_marks = (
-    [pytest.mark.skip(reason="scipy bug causes view to be allocated")]
-    if CAN_USE_SPARSE_ARRAY
-    else []
-)
-
-
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -633,7 +624,7 @@ sparray_scipy_bug_marks = (
     "sparse_class",
     [
         sparse.csr_matrix,
-        pytest.param(sparse.csr_array, marks=[*sparray_scipy_bug_marks]),
+        sparse.csr_array,
     ],
 )
 def test_append_overflow_check(group_fn, sparse_class, tmp_path):

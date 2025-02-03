@@ -23,7 +23,6 @@ from anndata._io.specs import (
 )
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import (
-    CAN_USE_SPARSE_ARRAY,
     SpArray,
     SpMatrix,
     ZarrGroup,
@@ -633,8 +632,6 @@ def test_read_sparse_array(
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
-    if not CAN_USE_SPARSE_ARRAY:
-        pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
     assert issubclass(type(mtx), SpArray)

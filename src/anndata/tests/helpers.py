@@ -24,7 +24,6 @@ from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
-    CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
@@ -62,21 +61,21 @@ GEN_ADATA_DASK_ARGS = dict(
         np.ndarray,
         pd.DataFrame,
         DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        sparse.csr_array,
     ),
     varm_types=(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        sparse.csr_array,
     ),
     layers_types=(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        sparse.csr_array,
     ),
 )
 
@@ -85,7 +84,7 @@ DEFAULT_KEY_TYPES = (
     sparse.csr_matrix,
     np.ndarray,
     pd.DataFrame,
-    *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+    sparse.csr_array,
 )
 
 
@@ -272,11 +271,10 @@ def maybe_add_sparse_array(
     random_state: np.random.Generator,
     shape: tuple[int, int],
 ):
-    if CAN_USE_SPARSE_ARRAY:
-        if sparse.csr_array in types or sparse.csr_matrix in types:
-            mapping["sparse_array"] = sparse.csr_array(
-                sparse.random(*shape, format=format, random_state=random_state)
-            )
+    if sparse.csr_array in types or sparse.csr_matrix in types:
+        mapping["sparse_array"] = sparse.csr_array(
+            sparse.random(*shape, format=format, random_state=random_state)
+        )
     return mapping
 
 
@@ -390,18 +388,16 @@ def gen_adata(
         array=np.random.random((M, M)),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
-    if CAN_USE_SPARSE_ARRAY:
-        obsp["sparse_array"] = sparse.csr_array(
-            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
-        )
+    obsp["sparse_array"] = sparse.csr_array(
+        sparse.random(M, M, format=sparse_fmt, random_state=random_state)
+    )
     varp = dict(
         array=np.random.random((N, N)),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
-    if CAN_USE_SPARSE_ARRAY:
-        varp["sparse_array"] = sparse.csr_array(
-            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
-        )
+    varp["sparse_array"] = sparse.csr_array(
+        sparse.random(N, N, format=sparse_fmt, random_state=random_state)
+    )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
         nested=dict(

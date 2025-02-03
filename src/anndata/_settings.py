@@ -13,8 +13,6 @@ from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
-from anndata.compat import CAN_USE_SPARSE_ARRAY
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from typing import Any, TypeGuard
@@ -417,12 +415,6 @@ settings.register(
 
 def validate_sparse_settings(val: Any) -> None:
     validate_bool(val)
-    if not CAN_USE_SPARSE_ARRAY and cast(bool, val):
-        msg = (
-            "scipy.sparse.cs{r,c}array is not available in current scipy version. "
-            "Falling back to scipy.sparse.cs{r,c}_matrix for reading."
-        )
-        raise ValueError(msg)
 
 
 settings.register(

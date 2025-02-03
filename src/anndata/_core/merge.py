@@ -23,7 +23,6 @@ from scipy import sparse
 from anndata._warnings import ExperimentalFeatureWarning
 
 from ..compat import (
-    CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CupyArray,
     CupyCSRMatrix,
@@ -209,7 +208,7 @@ def equal_awkward(a, b) -> bool:
 
 def as_sparse(x, *, use_sparse_array=False):
     if not isinstance(x, SpMatrix | SpArray):
-        if CAN_USE_SPARSE_ARRAY and use_sparse_array:
+        if use_sparse_array:
             return sparse.csr_array(x)
         return sparse.csr_matrix(x)
     return x
