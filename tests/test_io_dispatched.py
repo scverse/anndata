@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import h5py
 import zarr
@@ -11,6 +12,9 @@ from anndata._io.zarr import open_write_group
 from anndata.compat import SpArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import assert_equal, gen_adata
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def test_read_dispatched_w_regex():
@@ -134,7 +138,7 @@ def test_write_dispatched_chunks():
 
     write_dispatched(z, "/", adata, callback=write_chunked)
 
-    def check_chunking(k, v):
+    def check_chunking(k: str, v: ZarrGroup | zarr.Array):
         if (
             not isinstance(v, zarr.Array)
             or v.shape == ()
@@ -146,7 +150,21 @@ def test_write_dispatched_chunks():
         elif re.match(r"var[mp]?/\w+", k):
             assert v.chunks[0] == 42
 
-    z.visititems(check_chunking)
+    if is_zarr_v2():
+        z.visititems(check_chunking)
+    else:
+
+        def visititems(
+            z: ZarrGroup, visitor: Callable[[str, ZarrGroup | zarr.Array], None]
+        ) -> None:
+            for key in z:
+                maybe_group = z[key]
+                if isinstance(maybe_group, ZarrGroup):
+                    visititems(maybe_group, visitor)
+                else:
+                    visitor(key, maybe_group)
+
+        visititems(z, check_chunking)
 
 
 def test_io_dispatched_keys(tmp_path):
