@@ -49,6 +49,7 @@ dependencies = [
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
     "legacy-api-wrap",
+    'zarr @ git+https://github.com/zarr-developers/zarr-python.git#main',
 ]
 dynamic = ["version"]
 
@@ -74,7 +75,6 @@ doc = [
     "sphinxext.opengraph",
     "nbsphinx",
     "scanpydoc[theme,typehints] >=0.15.1",
-    "zarr",
     "awkward>=2.3",
     "IPython",                          # For syntax highlighting in notebooks
     "myst_parser",
@@ -88,7 +88,6 @@ test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov>=2.10",
-    "zarr",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
@@ -231,3 +230,7 @@ fragment.misc.name = "Miscellaneous improvements"
 fragment.performance.name = "Performance"
 fragment.breaking.name = "Breaking changes"
 fragment.dev.name = "Development Process"
+
+
+[tool.hatch.metadata]
+allow-direct-references = true
