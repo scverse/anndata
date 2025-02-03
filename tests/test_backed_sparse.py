@@ -624,7 +624,10 @@ def test_backed_sizeof(
     "sparse_class",
     [
         sparse.csr_matrix,
-        sparse.csr_array,
+        pytest.param(
+            sparse.csr_array,
+            marks=[pytest.mark.skip(reason="scipy bug causes view to be allocated")],
+        ),
     ],
 )
 def test_append_overflow_check(group_fn, sparse_class, tmp_path):
