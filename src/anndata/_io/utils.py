@@ -191,11 +191,12 @@ def report_read_key_on_error(func):
     Example
     -------
     >>> import zarr
+    >>> import numpy as np
     >>> @report_read_key_on_error
     ... def read_arr(group):
     ...     raise NotImplementedError()
     >>> z = zarr.open("tmp.zarr", mode="w")
-    >>> z["X"] = [1, 2, 3]
+    >>> z["X"] = np.array([1, 2, 3])
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
 
