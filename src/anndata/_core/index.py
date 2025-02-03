@@ -163,7 +163,35 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 
 @singledispatch
-def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
+def _subset(a, subset_idx: Index):
+    if not hasattr(a, "__array_namespace__"):
+        msg = f"Cannot subset {type(a)} as it is not array-api compliant"
+        raise ValueError(msg)
+    xp_a = a.__array_namespace__()
+    if isinstance(subset_idx, tuple):
+        if sum(isinstance(x, Iterable) for x in subset_idx) > 1:
+            if all(
+                (hasattr(idx, "__array_namespace__") and idx.dtype == "bool")
+                or (isinstance(idx, slice) and idx.start is idx.stop is None)
+                or isinstance(idx, type(None))
+                for idx in subset_idx
+            ):
+                res = a
+                for axis, idx in enumerate(subset_idx):
+                    res = xp_a.take(res, indices=idx, axis=axis)
+                return res
+        # if any(hasattr(idx, "__array_namespace__") for idx in subset_idx):
+        #     axis, idx = next((i, idx) for i, idx in enumerate(subset_idx) if getattr(idx, "__array_namespace__", False))
+        #     if "int" in idx.dtype:
+        #         return xp_a.take(a, indices=idx, axis=axis)
+        #     elif "bool" not in idx.dtype:
+        #         raise ValueError("Cannot handle non-integer, non-boolean indexers")
+    return a[subset_idx]
+
+
+@_subset.register(np.ndarray)
+@_subset.register(pd.DataFrame)
+def _subset_np_pd(a: np.ndarray | pd.DataFrame, subset_idx: Index):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, Iterable) for x in subset_idx):

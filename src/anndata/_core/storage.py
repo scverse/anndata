@@ -30,6 +30,10 @@ def coerce_array(
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
     from ..typing import ArrayDataStructureType
 
+    if hasattr(value, "__array_namespace__"):
+        value.__array_namespace__()
+        return value
+
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value

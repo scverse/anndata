@@ -102,6 +102,7 @@ test = [
     "pytest_memray",
     "pytest-mock",
     "anndata[dask]",
+    "finch-tensor"
 ]
 dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]

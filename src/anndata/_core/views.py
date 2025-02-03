@@ -290,6 +290,8 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 @singledispatch
 def as_view(obj, view_args):
+    if hasattr(obj, "__array_namespace__"):
+        return obj
     msg = f"No view type has been registered for {type(obj)}"
     raise NotImplementedError(msg)
 

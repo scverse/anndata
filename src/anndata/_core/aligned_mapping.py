@@ -118,9 +118,17 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
         return self._parent
 
     def copy(self) -> dict[str, Value]:
-        # Shallow copy for awkward array since their buffers are immutable
+        # Shallow copy for awkward array and array-api since their buffers are immutable
         return {
-            k: copy(v) if isinstance(v, AwkArray) else v.copy() for k, v in self.items()
+            k: (
+                copy(v)
+                if (
+                    isinstance(v, AwkArray)
+                    or (not hasattr(v, "copy") and hasattr(v, "__array_namespace__"))
+                )
+                else v.copy()
+            )
+            for k, v in self.items()
         }
 
     def _view(self, parent: AnnData, subset_idx: I) -> AlignedView[Self, I]:

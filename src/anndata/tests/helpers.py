@@ -16,6 +16,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+from finch import Tensor
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -62,6 +63,7 @@ GEN_ADATA_DASK_ARGS = dict(
         pd.DataFrame,
         DaskArray,
         *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        Tensor,
     ),
     varm_types=(
         sparse.csr_matrix,
@@ -69,6 +71,7 @@ GEN_ADATA_DASK_ARGS = dict(
         pd.DataFrame,
         DaskArray,
         *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        Tensor,
     ),
     layers_types=(
         sparse.csr_matrix,
@@ -76,6 +79,7 @@ GEN_ADATA_DASK_ARGS = dict(
         pd.DataFrame,
         DaskArray,
         *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        Tensor,
     ),
 )
 
@@ -349,6 +353,7 @@ def gen_adata(
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
+    obsm["finch"] = Tensor.from_scipy_sparse(obsm["sparse"])
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(
         mapping=obsm,
@@ -364,6 +369,7 @@ def gen_adata(
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
     )
+    varm["finch"] = Tensor.from_scipy_sparse(varm["sparse"])
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
         mapping=varm,
@@ -377,6 +383,7 @@ def gen_adata(
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
+    layers["finch"] = Tensor.from_scipy_sparse(layers["sparse"])
     layers = maybe_add_sparse_array(
         mapping=layers,
         types=layers_types,
@@ -389,6 +396,7 @@ def gen_adata(
         array=np.random.random((M, M)),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
+    obsp["finch"] = Tensor.from_scipy_sparse(obsp["sparse"])
     if CAN_USE_SPARSE_ARRAY:
         obsp["sparse_array"] = sparse.csr_array(
             sparse.random(M, M, format=sparse_fmt, random_state=random_state)
@@ -397,6 +405,7 @@ def gen_adata(
         array=np.random.random((N, N)),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
+    varp["finch"] = Tensor.from_scipy_sparse(varp["sparse"])
     if CAN_USE_SPARSE_ARRAY:
         varp["sparse_array"] = sparse.csr_array(
             sparse.random(N, N, format=sparse_fmt, random_state=random_state)
