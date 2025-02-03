@@ -23,7 +23,7 @@ def test_read_dispatched_w_regex():
             return None
 
     adata = gen_adata((1000, 100))
-    z = zarr.group()
+    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
 
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
@@ -54,7 +54,7 @@ def test_read_dispatched_dask():
             return func(elem)
 
     adata = gen_adata((1000, 100))
-    z = zarr.group()
+    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
@@ -74,7 +74,7 @@ def test_read_dispatched_dask():
 
 def test_read_dispatched_null_case():
     adata = gen_adata((100, 100))
-    z = zarr.group()
+    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
@@ -130,7 +130,7 @@ def test_write_dispatched_chunks():
         else:
             func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    z = zarr.group()
+    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
 
     write_dispatched(z, "/", adata, callback=write_chunked)
 
