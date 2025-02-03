@@ -567,7 +567,6 @@ def write_vlen_string_array_zarr(
         f[k][:] = elem
     else:
         from numcodecs import VLenUTF8
-        from zarr.codecs import VLenUTF8Codec
 
         dataset_kwargs = dataset_kwargs.copy()
         if "compressor" in dataset_kwargs:
@@ -576,9 +575,6 @@ def write_vlen_string_array_zarr(
             k,
             shape=elem.shape,
             dtype=str if ad.settings.zarr_write_format == 3 else object,
-            compressors=[VLenUTF8Codec()]
-            if ad.settings.zarr_write_format == 3
-            else None,
             filters=[VLenUTF8()] if ad.settings.zarr_write_format == 2 else None,
             **dataset_kwargs,
         )
@@ -1222,7 +1218,6 @@ def write_scalar_zarr(
         return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
     else:
         from numcodecs import VLenUTF8
-        from zarr.codecs import VLenUTF8Codec
 
         dtype = np.array(value).dtype
         a = f.create_array(
@@ -1231,9 +1226,6 @@ def write_scalar_zarr(
             dtype=str
             if ad.settings.zarr_write_format == 3
             else (object if isinstance(value, str) else dtype),
-            compressors=[VLenUTF8Codec()]
-            if ad.settings.zarr_write_format == 3 and isinstance(value, str)
-            else None,
             filters=[VLenUTF8()]
             if ad.settings.zarr_write_format == 2 and isinstance(value, str)
             else None,
