@@ -351,7 +351,7 @@ def test_zarr_compression(tmp_path):
             if value.compressor != compressor:
                 not_compressed.append(key)
 
-    f = zarr.open(str(pth), "r")
+    f = zarr.open(str(pth), mode="r")
     for key in f.array_keys():
         check_compressed(f[key], key)
 
