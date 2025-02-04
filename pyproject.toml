@@ -49,7 +49,7 @@ dependencies = [
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
     "legacy-api-wrap",
-    'zarr @ git+https://github.com/zarr-developers/zarr-python.git#main',
+    "zarr",
 ]
 dynamic = ["version"]
 
@@ -230,7 +230,3 @@ fragment.misc.name = "Miscellaneous improvements"
 fragment.performance.name = "Performance"
 fragment.breaking.name = "Breaking changes"
 fragment.dev.name = "Development Process"
-
-
-[tool.hatch.metadata]
-allow-direct-references = true
