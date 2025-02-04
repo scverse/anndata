@@ -177,19 +177,21 @@ def test_io_dispatched_keys(tmp_path):
     zarr_path = tmp_path / "test.zarr"
 
     def h5ad_writer(func, store, k, elem, dataset_kwargs, iospec):
-        h5ad_write_keys.append(k.strip("/"))
+        h5ad_write_keys.append(k if is_zarr_v2() else k.strip("/"))
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
-        zarr_write_keys.append(f"{store.name.strip('/')}/{k.strip('/')}".strip("/"))
+        zarr_write_keys.append(
+            k if is_zarr_v2() else f"{store.name.strip('/')}/{k.strip('/')}".strip("/")
+        )
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     def h5ad_reader(func, elem_name: str, elem, iospec):
-        h5ad_read_keys.append(elem_name.strip("/"))
+        h5ad_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
         return func(elem)
 
     def zarr_reader(func, elem_name: str, elem, iospec):
-        zarr_read_keys.append(elem_name.strip("/"))
+        zarr_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
         return func(elem)
 
     adata = gen_adata((50, 100))
