@@ -79,7 +79,7 @@
         "natsort": [""],
         "pandas": [""],
         "memory_profiler": [""],
-        "zarr": [""],
+        "zarr": ["2.18.4"],
         "pytoml": [""],
         "pytest": [""],
         "pooch": [""],
