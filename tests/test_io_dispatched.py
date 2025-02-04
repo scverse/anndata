@@ -15,9 +15,10 @@ from anndata.tests.helpers import assert_equal, gen_adata
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
 
-def test_read_dispatched_w_regex():
+def test_read_dispatched_w_regex(tmp_path: Path):
     def read_only_axis_dfs(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata":
             return func(elem)
@@ -27,7 +28,7 @@ def test_read_dispatched_w_regex():
             return None
 
     adata = gen_adata((1000, 100))
-    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
+    z = open_write_group(tmp_path)
 
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
@@ -40,7 +41,7 @@ def test_read_dispatched_w_regex():
     assert_equal(expected, actual)
 
 
-def test_read_dispatched_dask():
+def test_read_dispatched_dask(tmp_path: Path):
     import dask.array as da
 
     def read_as_dask_array(func, elem_name: str, elem, iospec):
@@ -58,7 +59,7 @@ def test_read_dispatched_dask():
             return func(elem)
 
     adata = gen_adata((1000, 100))
-    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
+    z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
@@ -76,9 +77,9 @@ def test_read_dispatched_dask():
     assert_equal(expected, actual)
 
 
-def test_read_dispatched_null_case():
+def test_read_dispatched_null_case(tmp_path: Path):
     adata = gen_adata((100, 100))
-    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
+    z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
@@ -89,7 +90,7 @@ def test_read_dispatched_null_case():
     assert_equal(expected, actual)
 
 
-def test_write_dispatched_chunks():
+def test_write_dispatched_chunks(tmp_path: Path):
     from itertools import chain, repeat
 
     def determine_chunks(elem_shape, specified_chunks):
@@ -134,7 +135,7 @@ def test_write_dispatched_chunks():
         else:
             func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    z = zarr.group(zarr_format=ad.settings.zarr_write_format)
+    z = open_write_group(tmp_path)
 
     write_dispatched(z, "/", adata, callback=write_chunked)
 
@@ -167,7 +168,7 @@ def test_write_dispatched_chunks():
         visititems(z, check_chunking)
 
 
-def test_io_dispatched_keys(tmp_path):
+def test_io_dispatched_keys(tmp_path: Path):
     h5ad_write_keys = []
     zarr_write_keys = []
     h5ad_read_keys = []
