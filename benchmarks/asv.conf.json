@@ -30,7 +30,7 @@
 
     // List of branches to benchmark. If not provided, defaults to "master"
     // (for git) or "default" (for mercurial).
-    "branches": ["main"], // for git
+    "branches": ["ig/zarr_v3"], // for git
     // "branches": ["default"],    // for mercurial
 
     // The DVCS being used.  If not set, it will be automatically
@@ -79,7 +79,7 @@
         "natsort": [""],
         "pandas": [""],
         "memory_profiler": [""],
-        "zarr": ["2.18.4"],
+        "zarr": [""],
         "pytoml": [""],
         "pytest": [""],
         "pooch": [""],
