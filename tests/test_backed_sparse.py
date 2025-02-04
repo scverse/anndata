@@ -15,7 +15,13 @@ from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
 from anndata._io.zarr import open_write_group
-from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray, is_zarr_v2
+from anndata.compat import (
+    CAN_USE_SPARSE_ARRAY,
+    DaskArray,
+    SpArray,
+    ZarrGroup,
+    is_zarr_v2,
+)
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -29,7 +35,6 @@ if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
     from anndata.abc import CSCDataset, CSRDataset
-    from anndata.compat import ZarrGroup
 
     Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
 
@@ -601,9 +606,14 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
         disk_mtx.append(sparse.random(100, 100, format="coo"))
     with pytest.raises(NotImplementedError):
         disk_mtx.append(np.random.random((100, 100)))
-    disk_dense = f.create_dataset(
-        "dense", data=np.random.random((100, 100)), shape=(100, 100)
-    )
+    if isinstance(f, ZarrGroup) and not is_zarr_v2():
+        data = np.random.random((100, 100))
+        disk_dense = f.create_array("dense", shape=(100, 100), dtype=data.dtype)
+        disk_dense[...] = data
+    else:
+        disk_dense = f.create_dataset(
+            "dense", data=np.random.random((100, 100)), shape=(100, 100)
+        )
     with pytest.raises(NotImplementedError):
         disk_mtx.append(disk_dense)
 
