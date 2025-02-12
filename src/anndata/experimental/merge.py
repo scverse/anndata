@@ -640,7 +640,7 @@ def concat_on_disk(
 
     # Write uns
     _write_uns(groups, output_group, uns_merge)
-    
+
     # Write X
 
     _write_concat_arrays(
