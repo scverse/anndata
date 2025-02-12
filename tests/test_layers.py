@@ -12,8 +12,8 @@ from anndata import AnnData, ImplicitModificationWarning, read_h5ad
 from anndata.io import read_loom
 from anndata.tests.helpers import gen_typed_df_t2_size
 
-X_ = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
+X_ = np.arange(12).reshape((3, 4))
+L = np.arange(12).reshape((3, 4)) + 12
 
 
 @pytest.fixture(params=[X_, None])
@@ -126,7 +126,7 @@ def test_shape_error():
         match=(
             r"Value passed for key 'L' is of incorrect shape\. "
             r"Values of layers must match dimensions \('obs', 'var'\) of parent\. "
-            r"Value had shape \(4, 3\) while it should have had \(3, 3\)\."
+            r"Value had shape \(4, 4\) while it should have had \(3, 4\)\."
         ),
     ):
         adata.layers["L"] = np.zeros((X_.shape[0] + 1, X_.shape[1]))

@@ -86,20 +86,21 @@ def _check_2d_shape(X):
 
 
 def _infer_shape_for_axis(
-    xxx: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
-    xxxm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
-    xxxp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    xxx: pd.DataFrame | Mapping[str, Iterable[Any]] | None,
+    xxxm: np.ndarray | Mapping[str, Sequence[Any]] | None,
+    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None,
+    xxxp: np.ndarray | Mapping[str, Sequence[Any]] | None,
+    axis: Literal[0, 1],
 ) -> int | None:
     for elem in [xxx, xxxm, xxxp]:
         if elem is not None and hasattr(elem, "shape"):
             return elem.shape[0]
-    for elem in [layers, xxxm, xxxp]:
+    for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"]):
         if elem is not None:
             elem = cast(Mapping, elem)
             for sub_elem in elem.values():
                 if hasattr(sub_elem, "shape"):
-                    size = cast(int, sub_elem.shape[0])
+                    size = cast(int, sub_elem.shape[axis if id == "layers" else 0])
                     return size
     return None
 
@@ -114,8 +115,8 @@ def _infer_shape(
     varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
 ):
     return (
-        _infer_shape_for_axis(obs, obsm, layers, obsp),
-        _infer_shape_for_axis(var, varm, layers, varp),
+        _infer_shape_for_axis(obs, obsm, layers, obsp, 0),
+        _infer_shape_for_axis(var, varm, layers, varp, 1),
     )
 
 
