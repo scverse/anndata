@@ -371,13 +371,13 @@ def _write_concat_sequence(
 
 
 def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
-    alt_mapping = merge([read_as_backed(g[alt_axis_name]) for g in groups])
+    alt_mapping = merge([read_as_backed(g[f"{alt_axis_name}m"]) for g in groups])
     # If its empty, we need to write an empty dataframe with the correct index
     if not alt_mapping:
         alt_df = pd.DataFrame(index=alt_indices)
-        write_elem(output_group, alt_axis_name, alt_df)
+        write_elem(output_group, f"{alt_axis_name}m", alt_df)
     else:
-        write_elem(output_group, alt_axis_name, alt_mapping)
+        write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
 
 
 def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
@@ -400,6 +400,11 @@ def _write_axis_annot(
     if label is not None:
         concat_annot[label] = label_col
     write_elem(output_group, axis_name, concat_annot)
+
+
+def _write_uns(groups, output_group, merge):
+    uns = merge([read_elem(g["uns"]) for g in groups])
+    write_elem(output_group, "uns", uns)
 
 
 def concat_on_disk(
@@ -633,6 +638,9 @@ def concat_on_disk(
     # Write {alt_axis_name}m
     _write_alt_mapping(groups, output_group, alt_axis_name, alt_index, merge)
 
+    # Write uns
+    _write_uns(groups, output_group, uns_merge)
+    
     # Write X
 
     _write_concat_arrays(
