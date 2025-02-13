@@ -9,6 +9,7 @@ It lives outside of the anndata package in order to avoid importing anndata too 
 
 from __future__ import annotations
 
+import importlib
 import re
 import warnings
 from typing import TYPE_CHECKING, cast
@@ -55,6 +56,9 @@ def _doctest_env(
     from anndata.utils import import_name
 
     assert isinstance(request.node.parent, pytest.Module)
+    if "experimental/backed" in str(request.node.path):
+        if importlib.util.find_spec("xarray") is None:
+            pytest.skip("xarray not installed")
     # request.node.parent is either a DoctestModule or a DoctestTextFile.
     # Only DoctestModule has a .obj attribute (the imported module).
     if request.node.parent.obj:
@@ -63,7 +67,6 @@ def _doctest_env(
         if warning_detail := getattr(func, "__deprecated", None):
             cat, msg, _ = warning_detail
             warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
-
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield

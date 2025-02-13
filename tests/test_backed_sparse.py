@@ -13,7 +13,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata._io.specs.registry import read_elem_as_dask
+from anndata._io.specs.registry import read_elem_lazy
 from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
@@ -473,11 +473,11 @@ def width_idx_kinds(
     "open_func",
     [
         sparse_dataset,
-        lambda x: read_elem_as_dask(
+        lambda x: read_elem_lazy(
             x, chunks=(1, -1) if x.attrs["encoding-type"] == "csr_matrix" else (-1, 1)
         ),
     ],
-    ids=["sparse_dataset", "read_elem_as_dask"],
+    ids=["sparse_dataset", "read_elem_lazy"],
 )
 def test_data_access(
     tmp_path: Path,
