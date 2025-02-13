@@ -14,7 +14,7 @@ import pytest
 from scipy import sparse
 
 import anndata.experimental
-from anndata import AnnData, read
+from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 
 
@@ -115,16 +115,6 @@ def test_deprecated_write_attribute(tmp_path):
 
         assert_equal(elem_A, attribute_A)
         assert_equal(A, attribute_A)
-
-
-def test_deprecated_read(tmp_path):
-    memory = AnnData(np.random.randn(20, 10))
-    memory.write_h5ad(tmp_path / "file.h5ad")
-
-    with pytest.warns(FutureWarning, match=r"`anndata.read` is deprecated"):
-        from_disk = read(tmp_path / "file.h5ad")
-
-    assert_equal(memory, from_disk)
 
 
 @pytest.mark.parametrize(
