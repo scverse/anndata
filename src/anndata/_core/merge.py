@@ -975,7 +975,7 @@ def outer_concat_aligned_mapping(
         # Dask needs to create a full array and can't do the size-0 trick
         off_axis_size = 0
         if any(isinstance(e, DaskArray) for e in els):
-            if not isinstance(cur_reindexers[0], Reindexer):
+            if not isinstance(cur_reindexers[0], Reindexer): # pragma: no cover
                 msg = "Cannot re-index a dask array without a Reindexer"
                 raise ValueError(msg)
             off_axis_size = cur_reindexers[0].idx.shape[0]
