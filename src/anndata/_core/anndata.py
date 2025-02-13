@@ -22,6 +22,8 @@ from pandas.api.types import infer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 
+from anndata._warnings import ImplicitModificationWarning
+
 from .. import utils
 from .._settings import settings
 from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx, old_positionals
@@ -665,6 +667,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                             stacklevel=2,
                         )
                         value = value.toarray()
+                    warnings.warn(
+                        "Modifying `X` on a view results in data being overridden",
+                        ImplicitModificationWarning,
+                        stacklevel=2,
+                    )
                     self._adata_ref._X[oidx, vidx] = value
                 else:
                     self._X = value
