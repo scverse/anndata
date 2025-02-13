@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -177,25 +175,16 @@ def test_set_dense_x_view_from_sparse():
     x1 = np.ones((100, 30))
     orig = ad.AnnData(x)
     view = orig[:30]
-    with pytest.warns(Warning) as warninfo:
+    with (
+        pytest.warns(
+            UserWarning,
+            match=r"Trying to set a dense array with a sparse array on a view",
+        ),
+        pytest.warns(
+            ImplicitModificationWarning, match=r"Modifying `X` on a view results"
+        ),
+    ):
         view.X = sparse.csr_matrix(x1[:30])
-    assert len(warninfo) == 2
-    for w in warninfo:
-        if w.category is UserWarning:
-            assert (
-                re.match(
-                    r"Trying to set a dense array with a sparse array on a view",
-                    w.message.args[0],
-                )
-                is not None
-            )
-        elif w.category is ImplicitModificationWarning:
-            assert (
-                re.match(r"Modifying `X` on a view results", w.message.args[0])
-                is not None
-            )
-        else:
-            pytest.fail(f"Encountered unexpected warning {w.category}")
     assert_equal(view.X, x1[:30])
     assert_equal(orig.X[:30], x1[:30])  # change propagates through
     assert_equal(orig.X[30:], x[30:])  # change propagates through
