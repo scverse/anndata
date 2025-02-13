@@ -97,7 +97,7 @@ def assert_eq_concat_on_disk(
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
     concat_on_disk(paths, out_name, *args, **kwargs)
-    res2 = read_elem(as_group(out_name))
+    res2 = read_elem(as_group(out_name, mode="r"))
     assert_equal(res1, res2, exact=False)
 
 
