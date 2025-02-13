@@ -15,20 +15,21 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
+import scipy
 from natsort import natsorted
+from packaging.version import Version
 from scipy import sparse
-from scipy.sparse import spmatrix
 
 from anndata._warnings import ExperimentalFeatureWarning
 
 from ..compat import (
-    CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CupyArray,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
     SpArray,
+    SpMatrix,
     _map_cat_to_str,
 )
 from ..utils import asarray, axis_len, warn_once
@@ -135,7 +136,7 @@ def equal_dask_array(a, b) -> bool:
     if isinstance(b, DaskArray):
         if tokenize(a) == tokenize(b):
             return True
-    if isinstance(a._meta, spmatrix):
+    if isinstance(a._meta, SpMatrix):
         # TODO: Maybe also do this in the other case?
         return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
     else:
@@ -165,7 +166,7 @@ def equal_series(a, b) -> bool:
     return a.equals(b)
 
 
-@equal.register(sparse.spmatrix)
+@equal.register(SpMatrix)
 @equal.register(SpArray)
 @equal.register(CupySparseMatrix)
 def equal_sparse(a, b) -> bool:
@@ -174,7 +175,7 @@ def equal_sparse(a, b) -> bool:
 
     xp = array_api_compat.array_namespace(a.data)
 
-    if isinstance(b, CupySparseMatrix | sparse.spmatrix | SpArray):
+    if isinstance(b, CupySparseMatrix | SpMatrix | SpArray):
         if isinstance(a, CupySparseMatrix):
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
@@ -205,13 +206,12 @@ def equal_awkward(a, b) -> bool:
     return ak.almost_equal(a, b)
 
 
-def as_sparse(x, *, use_sparse_array: bool = False):
-    if not isinstance(x, sparse.spmatrix | SpArray):
-        if CAN_USE_SPARSE_ARRAY and use_sparse_array:
+def as_sparse(x, *, use_sparse_array=False):
+    if not isinstance(x, SpMatrix | SpArray):
+        if use_sparse_array:
             return sparse.csr_array(x)
         return sparse.csr_matrix(x)
-    else:
-        return x
+    return x
 
 
 def as_cp_sparse(x) -> CupySparseMatrix:
@@ -537,7 +537,7 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, sparse.spmatrix | SpArray | CupySparseMatrix):
+        elif isinstance(el, SpMatrix | SpArray | CupySparseMatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -615,8 +615,8 @@ class Reindexer:
         )
 
     def _apply_to_sparse(
-        self, el: sparse.spmatrix | SpArray, *, axis, fill_value=None
-    ) -> spmatrix:
+        self, el: SpMatrix | SpArray, *, axis, fill_value=None
+    ) -> SpMatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
         else:
@@ -730,11 +730,8 @@ def default_fill_value(els):
     This is largely due to backwards compat, and might not be the ideal solution.
     """
     if any(
-        isinstance(el, sparse.spmatrix | SpArray)
-        or (
-            isinstance(el, DaskArray)
-            and isinstance(el._meta, sparse.spmatrix | SpArray)
-        )
+        isinstance(el, SpMatrix | SpArray)
+        or (isinstance(el, DaskArray) and isinstance(el._meta, SpMatrix | SpArray))
         for el in els
     ):
         return 0
@@ -830,10 +827,10 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             axis=axis,
         )
-    elif any(isinstance(a, sparse.spmatrix | SpArray) for a in arrays):
+    elif any(isinstance(a, SpMatrix | SpArray) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         use_sparse_array = any(issubclass(type(a), SpArray) for a in arrays)
-        return sparse_stack(
+        mat = sparse_stack(
             [
                 f(
                     as_sparse(a, use_sparse_array=use_sparse_array),
@@ -844,6 +841,13 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             format="csr",
         )
+        scipy_version = Version(scipy.__version__)
+        # Bug where xstack produces a matrix not an array in 1.11.*
+        if use_sparse_array and (scipy_version.major, scipy_version.minor) == (1, 11):
+            if mat.format == "csc":
+                return sparse.csc_array(mat)
+            return sparse.csr_array(mat)
+        return mat
     else:
         return np.concatenate(
             [

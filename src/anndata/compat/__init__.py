@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import os
-import sys
 from codecs import decode
 from collections.abc import Mapping
-from contextlib import AbstractContextManager
-from dataclasses import dataclass, field
 from functools import partial, singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
-from pathlib import Path
 from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
@@ -18,10 +13,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy
-import scipy.sparse
 from packaging.version import Version
-
-from .exceptiongroups import add_note  # noqa: F401
 
 if TYPE_CHECKING:
     from typing import Any
@@ -31,16 +23,8 @@ if TYPE_CHECKING:
 #############################
 
 
-CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
-
-if not CAN_USE_SPARSE_ARRAY:
-
-    class SpArray:
-        @staticmethod
-        def __repr__():
-            return "mock scipy.sparse.sparray"
-else:
-    SpArray = scipy.sparse.sparray
+SpMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
+SpArray = scipy.sparse.csr_array | scipy.sparse.csc_array
 
 
 class Empty:
@@ -56,7 +40,7 @@ Index = (
     | tuple[Index1D, Index1D, EllipsisType]
     | tuple[EllipsisType, Index1D, Index1D]
     | tuple[Index1D, EllipsisType, Index1D]
-    | scipy.sparse.spmatrix
+    | SpMatrix
     | SpArray
 )
 H5Group = h5py.Group
@@ -67,23 +51,6 @@ H5File = h5py.File
 #############################
 # stdlib
 #############################
-
-
-if sys.version_info >= (3, 11):
-    from contextlib import chdir
-else:
-
-    @dataclass
-    class chdir(AbstractContextManager):
-        path: Path
-        _old_cwd: list[Path] = field(default_factory=list)
-
-        def __enter__(self) -> None:
-            self._old_cwd.append(Path())
-            os.chdir(self.path)
-
-        def __exit__(self, *_exc_info) -> None:
-            os.chdir(self._old_cwd.pop())
 
 
 #############################

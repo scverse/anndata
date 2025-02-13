@@ -137,6 +137,7 @@ qualname_overrides = {
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
     # should be fixed soon: https://github.com/tox-dev/sphinx-autodoc-typehints/pull/516
     "types.EllipsisType": ("py:data", "types.EllipsisType"),
+    "pathlib._local.Path": "pathlib.Path",
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
