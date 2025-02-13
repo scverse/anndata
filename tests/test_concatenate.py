@@ -1538,7 +1538,7 @@ def test_concat_missing_elem_dask_join(join_type):
 
     import anndata as ad
 
-    ad1 = ad.AnnData(X=np.ones((5, 5)))
+    ad1 = ad.AnnData(X=np.ones((5, 10)))
     ad2 = ad.AnnData(X=np.zeros((5, 5)), layers={"a": da.ones((5, 5))})
     ad_in_memory_with_layers = ad2.to_memory()
 
@@ -1554,11 +1554,12 @@ def test_impute_dask(axis_name):
 
     axis, _ = _resolve_axis(axis_name)
     els = [da.ones((5, 5))]
-    missing = missing_element(6, els, axis=axis)
+    missing = missing_element(6, els, axis=axis, off_axis_size=17)
     assert isinstance(missing, DaskArray)
     in_memory = missing.compute()
     assert np.all(np.isnan(in_memory))
     assert in_memory.shape[axis] == 6
+    assert in_memory.shape[axis - 1] == 17
 
 
 def test_outer_concat_with_missing_value_for_df():
