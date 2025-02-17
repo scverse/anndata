@@ -35,6 +35,8 @@ def min_dep(req: Requirement) -> Requirement:
 
     >>> min_dep(Requirement("numpy>=1.0"))
     <Requirement('numpy==1.0.*')>
+    >>> min_dep(Requirement("numpy<3.0"))
+    <Requirement('numpy<3.0')>
     """
     req_name = req.name
     if req.extras:
@@ -44,8 +46,7 @@ def min_dep(req: Requirement) -> Requirement:
         spec for spec in req.specifier if spec.operator in {"==", "~=", ">=", ">"}
     ]
     if not filter_specs:
-        return Requirement(req_name)
-
+        return req
     min_version = Version("0.0.0.a1")
     for spec in filter_specs:
         if spec.operator in {">", ">=", "~="}:
