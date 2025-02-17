@@ -248,7 +248,7 @@ def get_key_trackers_for_columns_on_axis(
 
     Yields
     ------
-        Keys for tracking
+    Keys for tracking
     """
     for col in getattr(adata, axis).columns:
         yield f"{axis}/{col}" if "cat" not in col else f"{axis}/{col}/codes"
@@ -398,7 +398,7 @@ def unify_extension_dtypes(
 
     Returns
     -------
-        The two dataframes unified
+    The two dataframes unified
     """
     for col in memory.columns:
         dtype = memory[col].dtype
