@@ -11,7 +11,7 @@ from copy import copy, deepcopy
 from functools import partial, singledispatch
 from pathlib import Path
 from textwrap import dedent
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -21,6 +21,8 @@ from numpy import ma
 from pandas.api.types import infer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
+
+from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
 from .._settings import settings
@@ -55,33 +57,6 @@ if TYPE_CHECKING:
     from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
-
-
-# for backwards compat
-def _find_corresponding_multicol_key(key, keys_multicol):
-    """Find the corresponding multicolumn key."""
-    for mk in keys_multicol:
-        if key.startswith(mk) and "of" in key:
-            return mk
-    return None
-
-
-# for backwards compat
-def _gen_keys_from_multicol_key(key_multicol, n_keys):
-    """Generates single-column keys from multicolumn key."""
-    keys = [f"{key_multicol}{i + 1:03}of{n_keys:03}" for i in range(n_keys)]
-    return keys
-
-
-def _check_2d_shape(X):
-    """\
-    Check shape of array or sparse matrix.
-
-    Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
-    """
-    if X.dtype.names is None and len(X.shape) != 2:
-        msg = f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
-        raise ValueError(msg)
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):
@@ -430,7 +405,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             source = "X"
         else:
             self._X = None
-            n_obs, n_vars = (None, None) if shape is None else shape
+            n_obs, n_vars = (
+                shape
+                if shape is not None
+                else _infer_shape(obs, var, obsm, varm, layers, obsp, varp)
+            )
             source = "shape"
 
         # annotations
@@ -664,6 +643,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                             stacklevel=2,
                         )
                         value = value.toarray()
+                    warnings.warn(
+                        "Modifying `X` on a view results in data being overridden",
+                        ImplicitModificationWarning,
+                        stacklevel=2,
+                    )
                     self._adata_ref._X[oidx, vidx] = value
                 else:
                     self._X = value
@@ -2075,3 +2059,49 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
+
+
+def _check_2d_shape(X):
+    """\
+    Check shape of array or sparse matrix.
+
+    Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
+    """
+    if X.dtype.names is None and len(X.shape) != 2:
+        msg = f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
+        raise ValueError(msg)
+
+
+def _infer_shape_for_axis(
+    xxx: pd.DataFrame | Mapping[str, Iterable[Any]] | None,
+    xxxm: np.ndarray | Mapping[str, Sequence[Any]] | None,
+    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None,
+    xxxp: np.ndarray | Mapping[str, Sequence[Any]] | None,
+    axis: Literal[0, 1],
+) -> int | None:
+    for elem in [xxx, xxxm, xxxp]:
+        if elem is not None and hasattr(elem, "shape"):
+            return elem.shape[0]
+    for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"]):
+        if elem is not None:
+            elem = cast(Mapping, elem)
+            for sub_elem in elem.values():
+                if hasattr(sub_elem, "shape"):
+                    size = cast(int, sub_elem.shape[axis if id == "layers" else 0])
+                    return size
+    return None
+
+
+def _infer_shape(
+    obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+    var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+    obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
+    obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+):
+    return (
+        _infer_shape_for_axis(obs, obsm, layers, obsp, 0),
+        _infer_shape_for_axis(var, varm, layers, varp, 1),
+    )

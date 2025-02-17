@@ -571,7 +571,7 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             return da.broadcast_to(fill_value, tuple(shape))
 
-        indexer = self.get_new_idx_from_old_idx()
+        indexer = self.idx
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
         if any(indexer == -1):
@@ -614,7 +614,7 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             return np.broadcast_to(fill_value, tuple(shape))
 
-        indexer = self.get_new_idx_from_old_idx()
+        indexer = self.idx
 
         # Indexes real fast, and does outer indexing
         return pd.api.extensions.take(
@@ -712,9 +712,10 @@ class Reindexer:
         else:
             if len(self.new_idx) > len(self.old_idx):
                 el = ak.pad_none(el, 1, axis=axis)  # axis == 0
-            return el[self.get_new_idx_from_old_idx()]
+            return el[self.idx]
 
-    def get_new_idx_from_old_idx(self):
+    @property
+    def idx(self):
         return self.old_idx.get_indexer(self.new_idx)
 
 
@@ -989,10 +990,10 @@ def outer_concat_aligned_mapping(
         # Dask needs to create a full array and can't do the size-0 trick
         off_axis_size = 0
         if any(isinstance(e, DaskArray) for e in els):
-            if not isinstance(cur_reindexers[0], Reindexer):
+            if not isinstance(cur_reindexers[0], Reindexer):  # pragma: no cover
                 msg = "Cannot re-index a dask array without a Reindexer"
                 raise ValueError(msg)
-            off_axis_size = cur_reindexers[0].get_new_idx_from_old_idx().shape[0]
+            off_axis_size = cur_reindexers[0].idx.shape[0]
         # Handling of missing values here is hacky for dataframes
         # We should probably just handle missing elements for all types
         result[k] = concat_arrays(
