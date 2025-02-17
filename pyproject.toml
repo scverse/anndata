@@ -36,7 +36,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    # pandas <1.4 has pandas/issues/35446
     # pandas 2.1.0rc0 has pandas/issues/54622
     "pandas >=2.0.0, !=2.1.0rc0, !=2.1.2",
     "numpy>=1.25",
