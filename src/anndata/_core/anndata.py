@@ -1189,7 +1189,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: ArrayDataStructureType):
+    def __setitem__(self, index: Index, val: float | ArrayDataStructureType):
         if self.is_view:
             msg = "Object is view and cannot be accessed with `[]`."
             raise ValueError(msg)
