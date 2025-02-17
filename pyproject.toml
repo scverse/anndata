@@ -82,7 +82,7 @@ doc = [
     "readthedocs-sphinx-search",
     # for unreleased changes
     "anndata[dev-doc,dask]",
-    "awkward>=2.3"
+    "awkward>=2.3",
 ]
 dev-doc = ["towncrier>=24.8.0"] # release notes tool
 test-full = ["anndata[test,lazy]"]

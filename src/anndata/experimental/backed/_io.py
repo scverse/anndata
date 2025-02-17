@@ -43,7 +43,7 @@ def read_lazy(
 
     Returns
     -------
-        A lazily read-in :class:`~anndata.AnnData` object.
+    A lazily read-in :class:`~anndata.AnnData` object.
 
     Examples
     --------
