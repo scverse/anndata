@@ -428,14 +428,22 @@ def test_concat_access_count(
     sub_key: str,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
-    # track all elems except codes because they must be read in for concatenation
+    # track all elems except categories from categoricals because they must be read in for concatenation
+    # due to the dtype check on the elements (which causes `categories` to be read in)
     non_categorical_columns = (
         f"{elem}/{col}" if "cat" not in col else f"{elem}/{col}/codes"
         for elem in ["obs", "var"]
         for col in adatas_for_concat[0].obs.columns
     )
+    category_columns = (
+        f"{elem}/{col}/categories"
+        for elem in ["obs", "var"]
+        for col in adatas_for_concat[0].obs.columns
+        if "cat" in col
+    )
     non_obs_var_keys = filter(lambda e: e not in {"obs", "var"}, ANNDATA_ELEMS)
-    keys_to_track = [*non_categorical_columns, *non_obs_var_keys]
+    zero_access_count_keys = [*non_categorical_columns, *non_obs_var_keys]
+    keys_to_track = [*zero_access_count_keys, *category_columns]
     for store in stores_for_concat:
         store.initialize_key_trackers(keys_to_track)
     concated_remote = ad.concat(lazy_adatas_for_concat, join=join)
@@ -444,8 +452,11 @@ def test_concat_access_count(
     if sub_key is not None:
         getattr(elem, sub_key)
     for store in stores_for_concat:
-        for elem in keys_to_track:
+        for elem in zero_access_count_keys:
             store.assert_access_count(elem, 0)
+        for elem in category_columns:
+            # once for .zarray, once for the actual data
+            store.assert_access_count(elem, 2)
 
 
 def test_concat_to_memory_obs_access_count(
