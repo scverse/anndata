@@ -114,8 +114,6 @@ source = "vcs"
 raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
 packages = ["src/anndata", "src/testing"]
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.coverage.run]
 data_file = "test-data/coverage"
