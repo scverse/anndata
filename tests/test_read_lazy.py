@@ -455,6 +455,7 @@ def test_concat_to_memory_obs_access_count(
     join: Join_T,
     simple_subset_func: Callable[[AnnData], AnnData],
 ):
+    """This test ensures that only the necessary chunks are accessed in `to_memory` call after a subsetting operation"""
     concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
     concated_remote_subset = simple_subset_func(concated_remote)
     n_datasets = len(adatas_for_concat)
