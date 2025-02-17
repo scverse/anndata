@@ -1193,9 +1193,7 @@ def make_xarray_extension_dtypes_dask(
     """
     for a in annotations:
         extension_cols = {
-            col
-            for col in a.columns
-            if pd.api.types.is_extension_array_dtype(a[col])
+            col for col in a.columns if pd.api.types.is_extension_array_dtype(a[col])
         }
 
         yield a.copy(
