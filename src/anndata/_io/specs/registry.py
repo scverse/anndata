@@ -413,7 +413,7 @@ def read_elem_lazy(
 
     Returns
     -------
-        DaskArray
+        A "lazy" elem
 
     Examples
     --------
