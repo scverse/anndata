@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray, CSMatrix
+from ..compat import AwkArray, CSArray, CSMatrix
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | CSMatrix | np.ndarray
+Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
 
 P = TypeVar("P", bound="AlignedMappingBase")
 """Parent mapping an AlignedView is based on."""
