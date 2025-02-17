@@ -5,7 +5,7 @@ requires = ["hatchling", "hatch-vcs"]
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = "BSD-3-Clause"
 authors = [
     { name = "Philipp Angerer" },
@@ -29,19 +29,21 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
+    # pandas <1.4 has pandas/issues/35446
     # pandas 2.1.0rc0 has pandas/issues/54622
-    "pandas >=2.0.0, !=2.1.0rc0, !=2.1.2",
-    "numpy>=1.25",
+    "pandas >=1.4, !=2.1.0rc0, !=2.1.2",
+    "numpy>=1.23",
     # https://github.com/scverse/anndata/issues/1434
-    "scipy >1.11",
-    "h5py>=3.8",
+    "scipy >1.8",
+    "h5py>=3.7",
+    "exceptiongroup; python_version<'3.11'",
     "natsort",
     "packaging>=24.2",
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
