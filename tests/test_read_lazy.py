@@ -594,7 +594,7 @@ def test_concat_data_with_cluster_to_memory(
         pytest.param(None, id="No index"),
     ],
 )
-def test_concat_data(
+def test_concat_data_subsetting(
     adata_remote: AnnData,
     adata_orig: AnnData,
     join: Join_T,
