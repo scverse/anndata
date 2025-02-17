@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from itertools import product
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -11,9 +12,14 @@ from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
+import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
 from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Literal
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
@@ -733,3 +739,18 @@ def test_to_memory_no_copy():
         assert mem.obsp[key] is adata.obsp[key]
     for key in adata.varp:
         assert mem.varp[key] is adata.varp[key]
+
+
+@pytest.mark.parametrize("axis", ["obs", "var"])
+@pytest.mark.parametrize("elem_type", ["p", "m"])
+def test_create_adata_from_single_axis_elem(
+    axis: Literal["obs", "var"], elem_type: Literal["m", "p"], tmp_path: Path
+):
+    d = dict(
+        a=np.zeros((10, 10)),
+    )
+    in_memory = AnnData(**{f"{axis}{elem_type}": d})
+    assert in_memory.shape == (10, 0) if axis == "obs" else (0, 10)
+    in_memory.write_h5ad(tmp_path / "adata.h5ad")
+    from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
+    ad.tests.helpers.assert_equal(from_disk, in_memory)
