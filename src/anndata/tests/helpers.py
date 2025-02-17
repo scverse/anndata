@@ -25,13 +25,13 @@ from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    SpArray,
-    SpMatrix,
     ZarrArray,
 )
 from anndata.utils import asarray
@@ -619,9 +619,9 @@ def assert_equal_sparse(
     assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
-@assert_equal.register(SpArray)
+@assert_equal.register(CSArray)
 def assert_equal_sparse_array(
-    a: SpArray, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: CSArray, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     return assert_equal_sparse(a, b, exact=exact, elem_name=elem_name)
 
@@ -833,7 +833,7 @@ def as_dense_dask_array(a):
     return da.asarray(a, chunks=_half_chunk_size(a.shape))
 
 
-@as_dense_dask_array.register(SpMatrix)
+@as_dense_dask_array.register(CSMatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
 
@@ -850,14 +850,14 @@ def as_sparse_dask_array(a) -> DaskArray:
     return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(SpMatrix)
+@as_sparse_dask_array.register(CSMatrix)
 def _(a):
     import dask.array as da
 
     return da.from_array(a, _half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(SpArray)
+@as_sparse_dask_array.register(CSArray)
 def _(a):
     import dask.array as da
 
@@ -1001,7 +1001,7 @@ def as_cupy(val, typ=None):
     if issubclass(typ, CupyArray):
         import cupy as cp
 
-        if isinstance(val, SpMatrix):
+        if isinstance(val, CSMatrix):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
@@ -1038,7 +1038,7 @@ def shares_memory(x, y) -> bool:
     return np.shares_memory(x, y)
 
 
-@shares_memory.register(SpMatrix)
+@shares_memory.register(CSMatrix)
 def shares_memory_sparse(x, y):
     return (
         np.shares_memory(x.data, y.data)

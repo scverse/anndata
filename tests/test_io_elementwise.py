@@ -23,8 +23,8 @@ from anndata._io.specs import (
 )
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import (
-    SpArray,
-    SpMatrix,
+    CSArray,
+    CSMatrix,
     ZarrGroup,
     _read_attr,
 )
@@ -250,7 +250,7 @@ def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: 
 @pytest.mark.parametrize("as_dask", [False, True])
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
     if as_dask:
-        if isinstance(value, SpMatrix):
+        if isinstance(value, CSMatrix):
             value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
         else:
             value = as_dense_cupy_dask_array(value)
@@ -634,4 +634,4 @@ def test_read_sparse_array(
     ad.io.write_elem(f, "mtx", a)
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
-    assert issubclass(type(mtx), SpArray)
+    assert issubclass(type(mtx), CSArray)

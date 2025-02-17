@@ -24,7 +24,7 @@ from scipy.sparse import issparse
 
 from .. import utils
 from .._settings import settings
-from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx, old_positionals
+from ..compat import CSArray, DaskArray, ZarrArray, _move_adj_mtx, old_positionals
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -650,7 +650,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     if sparse.issparse(self._adata_ref._X) and isinstance(
                         value, np.ndarray
                     ):
-                        if isinstance(self._adata_ref.X, SpArray):
+                        if isinstance(self._adata_ref.X, CSArray):
                             memory_class = sparse.coo_array
                         else:
                             memory_class = sparse.coo_matrix
@@ -1736,7 +1736,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
         sparse_class = sparse.csr_matrix
-        if any(isinstance(a.X, SpArray) for a in all_adatas):
+        if any(isinstance(a.X, CSArray) for a in all_adatas):
             sparse_class = sparse.csr_array
         out.obs = concat(
             [AnnData(sparse_class(a.shape), obs=a.obs) for a in all_adatas],

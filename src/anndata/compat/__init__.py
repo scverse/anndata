@@ -23,8 +23,8 @@ if TYPE_CHECKING:
 #############################
 
 
-SpMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
-SpArray = scipy.sparse.csr_array | scipy.sparse.csc_array
+CSMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
+CSArray = scipy.sparse.csr_array | scipy.sparse.csc_array
 
 
 class Empty:
@@ -40,8 +40,8 @@ Index = (
     | tuple[Index1D, Index1D, EllipsisType]
     | tuple[EllipsisType, Index1D, Index1D]
     | tuple[Index1D, EllipsisType, Index1D]
-    | SpMatrix
-    | SpArray
+    | CSMatrix
+    | CSArray
 )
 H5Group = h5py.Group
 H5Array = h5py.Dataset

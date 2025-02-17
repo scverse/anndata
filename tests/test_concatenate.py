@@ -21,7 +21,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, CupySparseMatrix, DaskArray, SpArray, SpMatrix
+from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -62,7 +62,7 @@ def _filled_array(a, fill_value=None):
     return as_dense_dask_array(_filled_array_np(a, fill_value))
 
 
-@filled_like.register(SpMatrix)
+@filled_like.register(CSMatrix)
 def _filled_sparse(a, fill_value=None):
     if fill_value is None:
         return sparse.csr_matrix(a.shape)
@@ -70,7 +70,7 @@ def _filled_sparse(a, fill_value=None):
         return sparse.csr_matrix(np.broadcast_to(fill_value, a.shape))
 
 
-@filled_like.register(SpArray)
+@filled_like.register(CSArray)
 def _filled_sparse_array(a, fill_value=None):
     return sparse.csr_array(filled_like(sparse.csr_matrix(a)))
 
@@ -200,10 +200,10 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
     assert_equal(result[orig.obs_names].copy(), orig)
     base_type = type(orig.X)
     if sparse.issparse(orig.X):
-        if isinstance(orig.X, SpArray):
-            base_type = SpArray
+        if isinstance(orig.X, CSArray):
+            base_type = CSArray
         else:
-            base_type = SpMatrix
+            base_type = CSMatrix
     if isinstance(orig.X, CupySparseMatrix):
         base_type = CupySparseMatrix
     assert isinstance(result.X, base_type)
@@ -407,7 +407,7 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
         ),
     )
 
-    assert isinstance(outer.obsm["sparse"], SpMatrix)
+    assert isinstance(outer.obsm["sparse"], CSMatrix)
     np.testing.assert_equal(
         outer.obsm["sparse"].toarray(),
         np.array(
@@ -1500,10 +1500,10 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
         # https://github.com/scipy/scipy/issues/20389 was merged in 1.15 but is still an issue with matrix
         if sparse_indexer_type == np.int64 and (
             (
-                (issubclass(cpu_array_type, SpArray) or adata.X.format == "csc")
+                (issubclass(cpu_array_type, CSArray) or adata.X.format == "csc")
                 and Version(scipy.__version__) < Version("1.15.0")
             )
-            or issubclass(cpu_array_type, SpMatrix)
+            or issubclass(cpu_array_type, CSMatrix)
         ):
             pytest.xfail(
                 "Data type int64 is not maintained for sparse matrices or csc array"

@@ -10,12 +10,12 @@ from . import abc
 from ._core.anndata import AnnData
 from .compat import (
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
     H5Array,
-    SpArray,
-    SpMatrix,
     ZappyArray,
     ZarrArray,
 )
@@ -34,8 +34,8 @@ Index = _Index
 ArrayDataStructureType: TypeAlias = (
     np.ndarray
     | ma.MaskedArray
-    | SpMatrix
-    | SpArray
+    | CSMatrix
+    | CSArray
     | AwkArray
     | H5Array
     | ZarrArray

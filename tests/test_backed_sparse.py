@@ -14,7 +14,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
-from anndata.compat import DaskArray, SpArray, SpMatrix
+from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -263,8 +263,8 @@ def test_consecutive_bool(
 )
 def test_dataset_append_memory(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], SpMatrix],
-    append_method: Callable[[list[SpMatrix]], SpMatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -319,7 +319,7 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
 )
 def test_read_array(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], SpMatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
@@ -335,9 +335,9 @@ def test_read_array(
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
     ad.settings.use_sparse_array_on_read = True
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpMatrix)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSMatrix)
 
 
 @pytest.mark.parametrize(
@@ -349,8 +349,8 @@ def test_read_array(
 )
 def test_dataset_append_disk(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], SpMatrix],
-    append_method: Callable[[list[SpMatrix]], SpMatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -377,7 +377,7 @@ def test_dataset_append_disk(
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 def test_lazy_array_cache(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], SpMatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
 ):
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
@@ -479,7 +479,7 @@ def width_idx_kinds(
 )
 def test_data_access(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], SpMatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     idx_maj: Idx,
     idx_min: Idx,
     exp: Sequence[str],

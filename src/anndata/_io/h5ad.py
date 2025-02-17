@@ -18,7 +18,7 @@ from .._core.anndata import AnnData
 from .._core.file_backing import filename
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..compat import (
-    SpMatrix,
+    CSMatrix,
     _clean_uns,
     _decode_structured_array,
     _from_fixed_length_strings,
@@ -83,14 +83,14 @@ def write_h5ad(
         f.attrs.setdefault("encoding-version", "0.1.0")
 
         if "X" in as_dense and isinstance(
-            adata.X, SpMatrix | BaseCompressedSparseDataset
+            adata.X, CSMatrix | BaseCompressedSparseDataset
         ):
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
             write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
-            adata.raw.X, SpMatrix | BaseCompressedSparseDataset
+            adata.raw.X, CSMatrix | BaseCompressedSparseDataset
         ):
             write_sparse_as_dense(
                 f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
@@ -116,7 +116,7 @@ def write_h5ad(
 def write_sparse_as_dense(
     f: h5py.Group,
     key: str,
-    value: SpMatrix | BaseCompressedSparseDataset,
+    value: CSMatrix | BaseCompressedSparseDataset,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
@@ -173,7 +173,7 @@ def read_h5ad(
     backed: Literal["r", "r+"] | bool | None = None,
     *,
     as_sparse: Sequence[str] = (),
-    as_sparse_fmt: type[SpMatrix] = sparse.csr_matrix,
+    as_sparse_fmt: type[CSMatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
     """\
@@ -274,7 +274,7 @@ def read_h5ad(
 def _read_raw(
     f: h5py.File | AnnDataFileManager,
     as_sparse: Collection[str] = (),
-    rdasp: Callable[[h5py.Dataset], SpMatrix] | None = None,
+    rdasp: Callable[[h5py.Dataset], CSMatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
 ) -> dict:
@@ -347,7 +347,7 @@ def read_dataset(dataset: h5py.Dataset):
 
 @report_read_key_on_error
 def read_dense_as_sparse(
-    dataset: h5py.Dataset, sparse_format: SpMatrix, axis_chunk: int
+    dataset: h5py.Dataset, sparse_format: CSMatrix, axis_chunk: int
 ):
     if sparse_format == sparse.csr_matrix:
         return read_dense_as_csr(dataset, axis_chunk)
