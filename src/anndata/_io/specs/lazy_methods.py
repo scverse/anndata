@@ -330,7 +330,9 @@ def read_categorical(
 def read_nullable(
     elem: H5Group | ZarrGroup,
     *,
-    encoding_type: Literal["nullable-integer", "nullable-boolean"],
+    encoding_type: Literal[
+        "nullable-integer", "nullable-boolean", "nullable-string-array"
+    ],
     _reader: LazyReader,
 ) -> MaskedArray:
     from anndata.experimental.backed._lazy_arrays import MaskedArray
@@ -348,15 +350,8 @@ def read_nullable(
     )
 
 
-_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))(
-    partial(read_nullable, encoding_type="nullable-integer")
-)
-_LAZY_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
-    partial(read_nullable, encoding_type="nullable-integer")
-)
-_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
-    partial(read_nullable, encoding_type="nullable-boolean")
-)
-_LAZY_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))(
-    partial(read_nullable, encoding_type="nullable-boolean")
-)
+for dtype in ["integer", "boolean", "string-array"]:
+    for group_type in [ZarrGroup, H5Group]:
+        _LAZY_REGISTRY.register_read(group_type, IOSpec(f"nullable-{dtype}", "0.1.0"))(
+            partial(read_nullable, encoding_type=f"nullable-{dtype}")
+        )

@@ -111,7 +111,7 @@ class MaskedArray(BackendArray, Generic[K]):
 
     _mask: ZarrOrHDF5Wrapper[K]
     _values: ZarrOrHDF5Wrapper[K]
-    _dtype_str: Literal["nullable-integer", "nullable-boolean"]
+    _dtype_str: Literal["nullable-integer", "nullable-boolean", "nullable-string-array"]
     shape: tuple[int, ...]
     base_path_or_zarr_group: Path | ZarrGroup
     elem_name: str
@@ -119,7 +119,9 @@ class MaskedArray(BackendArray, Generic[K]):
     def __init__(
         self,
         values: ZarrArray | H5Array,
-        dtype_str: Literal["nullable-integer", "nullable-boolean"],
+        dtype_str: Literal[
+            "nullable-integer", "nullable-boolean", "nullable-string-array"
+        ],
         mask: ZarrArray | H5Array,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,

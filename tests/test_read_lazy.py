@@ -17,6 +17,7 @@ from anndata._types import AnnDataElem
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
+    DEFAULT_COL_TYPES,
     AccessTrackingStore,
     as_dense_dask_array,
     assert_equal,
@@ -99,7 +100,12 @@ def adata_remote_orig_with_path(
         orig_path = tmp_path_factory.mktemp("h5ad_file_dir") / file_name
     else:
         orig_path = tmp_path_factory.mktemp(file_name)
-    orig = gen_adata((1000, 1100), mtx_format)
+    orig = gen_adata(
+        (1000, 1100),
+        mtx_format,
+        obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype()),
+        var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype()),
+    )
     orig.raw = orig.copy()
     getattr(orig, f"write_{diskfmt}")(orig_path)
     return orig_path, orig
