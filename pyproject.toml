@@ -42,7 +42,6 @@ dependencies = [
     # https://github.com/scverse/anndata/issues/1434
     "scipy >1.11",
     "h5py>=3.8",
-    "exceptiongroup; python_version<'3.11'",
     "natsort",
     "packaging>=24.2",
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
