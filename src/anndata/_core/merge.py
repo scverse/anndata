@@ -1146,6 +1146,7 @@ def make_dask_col_from_extension_dtype(
         )
 
     def get_chunk(block_info=None):
+        # reopening is important to get around h5py's unserializable lock in processes
         with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
             v = read_elem_lazy(f)
             variable = xr.Variable(
@@ -1193,9 +1194,7 @@ def make_xarray_extension_dtypes_dask(
     """
     for a in annotations:
         extension_cols = {
-            col
-            for col in a.columns
-            if pd.api.types.is_extension_array_dtype(a[col])
+            col for col in a.columns if pd.api.types.is_extension_array_dtype(a[col])
         }
 
         yield a.copy(
