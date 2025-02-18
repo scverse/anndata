@@ -152,7 +152,7 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
 def open_write_group(
     store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
 ) -> zarr.Group:
-    if {"zarr_version", "zarr_format"} & kwargs.keys():
+    if len({"zarr_version", "zarr_format"}.intersection(kwargs.keys())):
         msg = "Don’t specify `zarr_version` or `zarr_format` explicitly."
         raise ValueError(msg)
     kwargs["zarr_version" if is_zarr_v2() else "zarr_format"] = (
