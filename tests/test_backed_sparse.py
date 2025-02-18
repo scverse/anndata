@@ -16,9 +16,9 @@ from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
 from anndata._io.zarr import open_write_group
 from anndata.compat import (
-    CAN_USE_SPARSE_ARRAY,
+    CSArray,
+    CSMatrix,
     DaskArray,
-    SpArray,
     ZarrGroup,
     is_zarr_v2,
 )
@@ -275,8 +275,8 @@ def test_consecutive_bool(
 )
 def test_dataset_append_memory(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -331,7 +331,7 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
 )
 def test_read_array(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
@@ -346,12 +346,10 @@ def test_read_array(
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
-    if not CAN_USE_SPARSE_ARRAY:
-        pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSMatrix)
 
 
 @pytest.mark.parametrize(
@@ -363,8 +361,8 @@ def test_read_array(
 )
 def test_dataset_append_disk(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -391,7 +389,7 @@ def test_dataset_append_disk(
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 def test_lazy_array_cache(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
 ):
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
@@ -499,7 +497,7 @@ def width_idx_kinds(
 )
 def test_data_access(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     idx_maj: Idx,
     idx_min: Idx,
     exp: list[str],
@@ -649,13 +647,6 @@ def test_backed_sizeof(
     assert csr_mem.__sizeof__() > csc_disk.__sizeof__()
 
 
-sparray_scipy_bug_marks = (
-    [pytest.mark.skip(reason="scipy bug causes view to be allocated")]
-    if CAN_USE_SPARSE_ARRAY
-    else []
-)
-
-
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -667,7 +658,10 @@ sparray_scipy_bug_marks = (
     "sparse_class",
     [
         sparse.csr_matrix,
-        pytest.param(sparse.csr_array, marks=[*sparray_scipy_bug_marks]),
+        pytest.param(
+            sparse.csr_array,
+            marks=[pytest.mark.skip(reason="scipy bug causes view to be allocated")],
+        ),
     ],
 )
 def test_append_overflow_check(group_fn, sparse_class, tmp_path):

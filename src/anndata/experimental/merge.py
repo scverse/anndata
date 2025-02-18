@@ -117,7 +117,7 @@ def _(store: os.PathLike | str, *, mode: str) -> ZarrGroup | H5Group:
     if mode == "r":  # others all write: r+, a, w, w-
         import zarr
 
-        zarr.open_group(store, mode=mode)
+        return zarr.open_group(store, mode=mode)
 
     from anndata._io.zarr import open_write_group
 

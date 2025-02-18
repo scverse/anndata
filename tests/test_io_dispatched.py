@@ -5,11 +5,10 @@ from typing import TYPE_CHECKING
 
 import h5py
 import zarr
-from scipy import sparse
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
-from anndata.compat import SpArray, ZarrGroup, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import assert_equal, gen_adata
 
@@ -110,7 +109,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
         # TODO: Should the passed path be absolute?
         path = "/" + store.path + "/" + k
         if hasattr(elem, "shape") and not isinstance(
-            elem, sparse.spmatrix | SpArray | ad.AnnData
+            elem, CSMatrix | CSArray | ad.AnnData
         ):
             if re.match(r"^/((X)|(layers)).*", path):
                 chunks = (M, N)

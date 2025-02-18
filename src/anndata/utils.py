@@ -13,7 +13,7 @@ from scipy import sparse
 import anndata
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
-from .compat import CupyArray, CupySparseMatrix, DaskArray, SpArray
+from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -48,7 +48,7 @@ def asarray(x):
     return np.asarray(x)
 
 
-@asarray.register(SpArray)
+@asarray.register(CSArray)
 @asarray.register(sparse.spmatrix)
 def asarray_sparse(x):
     return x.toarray()

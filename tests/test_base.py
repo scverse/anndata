@@ -15,7 +15,6 @@ from scipy.sparse import csr_matrix, issparse
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
-from anndata.compat import CAN_USE_SPARSE_ARRAY
 from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
 
 if TYPE_CHECKING:
@@ -37,8 +36,7 @@ def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]), {}, {})
     AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
     AnnData(sp.eye(2, format="csr"))
-    if CAN_USE_SPARSE_ARRAY:
-        AnnData(sp.eye_array(2))
+    AnnData(sp.csr_array([[1, 0], [0, 1]]))
     X = np.array([[1, 2, 3], [4, 5, 6]])
     adata = AnnData(
         X=X,

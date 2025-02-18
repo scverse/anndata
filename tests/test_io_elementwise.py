@@ -24,8 +24,8 @@ from anndata._io.specs import (
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
 from anndata.compat import (
-    CAN_USE_SPARSE_ARRAY,
-    SpArray,
+    CSArray,
+    CSMatrix,
     ZarrGroup,
     _read_attr,
     is_zarr_v2,
@@ -252,7 +252,7 @@ def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: 
 @pytest.mark.parametrize("as_dask", [False, True])
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
     if as_dask:
-        if isinstance(value, sparse.spmatrix):
+        if isinstance(value, CSMatrix):
             value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
         else:
             value = as_dense_cupy_dask_array(value)
@@ -640,8 +640,6 @@ def test_read_sparse_array(
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
-    if not CAN_USE_SPARSE_ARRAY:
-        pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
-    assert issubclass(type(mtx), SpArray)
+    assert issubclass(type(mtx), CSArray)
