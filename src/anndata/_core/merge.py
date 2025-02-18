@@ -15,20 +15,21 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
+import scipy
 from natsort import natsorted
+from packaging.version import Version
 from scipy import sparse
-from scipy.sparse import spmatrix
 
 from anndata._warnings import ExperimentalFeatureWarning
 
 from ..compat import (
-    CAN_USE_SPARSE_ARRAY,
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    SpArray,
     _map_cat_to_str,
 )
 from ..utils import asarray, axis_len, warn_once
@@ -135,7 +136,7 @@ def equal_dask_array(a, b) -> bool:
     if isinstance(b, DaskArray):
         if tokenize(a) == tokenize(b):
             return True
-    if isinstance(a._meta, spmatrix):
+    if isinstance(a._meta, CSMatrix):
         # TODO: Maybe also do this in the other case?
         return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
     else:
@@ -165,8 +166,8 @@ def equal_series(a, b) -> bool:
     return a.equals(b)
 
 
-@equal.register(sparse.spmatrix)
-@equal.register(SpArray)
+@equal.register(CSMatrix)
+@equal.register(CSArray)
 @equal.register(CupySparseMatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me
@@ -174,7 +175,7 @@ def equal_sparse(a, b) -> bool:
 
     xp = array_api_compat.array_namespace(a.data)
 
-    if isinstance(b, CupySparseMatrix | sparse.spmatrix | SpArray):
+    if isinstance(b, CupySparseMatrix | CSMatrix | CSArray):
         if isinstance(a, CupySparseMatrix):
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
@@ -205,13 +206,12 @@ def equal_awkward(a, b) -> bool:
     return ak.almost_equal(a, b)
 
 
-def as_sparse(x, *, use_sparse_array: bool = False):
-    if not isinstance(x, sparse.spmatrix | SpArray):
-        if CAN_USE_SPARSE_ARRAY and use_sparse_array:
+def as_sparse(x, *, use_sparse_array=False):
+    if not isinstance(x, CSMatrix | CSArray):
+        if use_sparse_array:
             return sparse.csr_array(x)
         return sparse.csr_matrix(x)
-    else:
-        return x
+    return x
 
 
 def as_cp_sparse(x) -> CupySparseMatrix:
@@ -537,7 +537,7 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, sparse.spmatrix | SpArray | CupySparseMatrix):
+        elif isinstance(el, CSMatrix | CSArray | CupySparseMatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -615,8 +615,8 @@ class Reindexer:
         )
 
     def _apply_to_sparse(
-        self, el: sparse.spmatrix | SpArray, *, axis, fill_value=None
-    ) -> spmatrix:
+        self, el: CSMatrix | CSArray, *, axis, fill_value=None
+    ) -> CSMatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
         else:
@@ -638,7 +638,7 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             shape = tuple(shape)
             if fill_value == 0:
-                if isinstance(el, SpArray):
+                if isinstance(el, CSArray):
                     memory_class = sparse.csr_array
                 else:
                     memory_class = sparse.csr_matrix
@@ -652,7 +652,7 @@ class Reindexer:
             idxmtx_dtype = xp.promote_types(el.dtype, xp.array(fill_value).dtype)
         else:
             idxmtx_dtype = bool
-        if isinstance(el, SpArray):
+        if isinstance(el, CSArray):
             memory_class = sparse.coo_array
         else:
             memory_class = sparse.coo_matrix
@@ -730,11 +730,8 @@ def default_fill_value(els):
     This is largely due to backwards compat, and might not be the ideal solution.
     """
     if any(
-        isinstance(el, sparse.spmatrix | SpArray)
-        or (
-            isinstance(el, DaskArray)
-            and isinstance(el._meta, sparse.spmatrix | SpArray)
-        )
+        isinstance(el, CSMatrix | CSArray)
+        or (isinstance(el, DaskArray) and isinstance(el._meta, CSMatrix | CSArray))
         for el in els
     ):
         return 0
@@ -830,10 +827,10 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             axis=axis,
         )
-    elif any(isinstance(a, sparse.spmatrix | SpArray) for a in arrays):
+    elif any(isinstance(a, CSMatrix | CSArray) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
-        use_sparse_array = any(issubclass(type(a), SpArray) for a in arrays)
-        return sparse_stack(
+        use_sparse_array = any(issubclass(type(a), CSArray) for a in arrays)
+        mat = sparse_stack(
             [
                 f(
                     as_sparse(a, use_sparse_array=use_sparse_array),
@@ -844,6 +841,13 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             format="csr",
         )
+        scipy_version = Version(scipy.__version__)
+        # Bug where xstack produces a matrix not an array in 1.11.*
+        if use_sparse_array and (scipy_version.major, scipy_version.minor) == (1, 11):
+            if mat.format == "csc":
+                return sparse.csc_array(mat)
+            return sparse.csr_array(mat)
+        return mat
     else:
         return np.concatenate(
             [
@@ -941,7 +945,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
 
 def missing_element(
     n: int,
-    els: list[SpArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray],
+    els: list[CSArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray],
     axis: Literal[0, 1] = 0,
     fill_value: Any | None = None,
     off_axis_size: int = 0,
@@ -1006,7 +1010,7 @@ def concat_pairwise_mapping(
     mappings: Collection[Mapping], shapes: Collection[int], join_keys=intersect_keys
 ):
     result = {}
-    if any(any(isinstance(v, SpArray) for v in m.values()) for m in mappings):
+    if any(any(isinstance(v, CSArray) for v in m.values()) for m in mappings):
         sparse_class = sparse.csr_array
     else:
         sparse_class = sparse.csr_matrix

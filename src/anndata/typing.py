@@ -5,17 +5,17 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from numpy import ma
-from scipy import sparse
 
 from . import abc
 from ._core.anndata import AnnData
 from .compat import (
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
     H5Array,
-    SpArray,
     ZappyArray,
     ZarrArray,
 )
@@ -31,13 +31,11 @@ __all__ = ["Index", "RWAble", "AxisStorable"]
 Index = _Index
 """1D or 2D index an :class:`~anndata.AnnData` object can be sliced with."""
 
-
 ArrayDataStructureType: TypeAlias = (
     np.ndarray
     | ma.MaskedArray
-    | sparse.csr_matrix
-    | sparse.csc_matrix
-    | SpArray
+    | CSMatrix
+    | CSArray
     | AwkArray
     | H5Array
     | ZarrArray

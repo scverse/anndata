@@ -2,24 +2,17 @@
 
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Any
 
 
-from ._version import __version__
-
-# Allowing notes to be added to exceptions. See: https://github.com/scverse/anndata/issues/868
-if sys.version_info < (3, 11):
-    # Backport package for exception groups
-    import exceptiongroup  # noqa: F401
-
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
 from ._settings import settings
+from ._version import __version__
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
