@@ -109,9 +109,10 @@ dev-test = ["pytest-xdist"] # local test speedups
 gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
-# https://github.com/dask/dask/issues/11290
 lazy = ["xarray>=2024.06.0", "aiohttp", "requests", "zarr<3.0.0a0", "anndata[dask]"]
-dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*"]
+# https://github.com/dask/dask/issues/11290
+# https://github.com/dask/dask/issues/11752
+dask = ["dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0"]
 
 [tool.hatch.version]
 source = "vcs"
