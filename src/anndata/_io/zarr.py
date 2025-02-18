@@ -45,11 +45,11 @@ def write_zarr(
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(func, s, k, elem, dataset_kwargs, iospec):
+    def callback(func, s, k: str, elem, dataset_kwargs, iospec):
         if (
             chunks is not None
             and not isinstance(elem, sparse.spmatrix)
-            and k in {"X", "/X"}
+            and k.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         func(s, k, elem, dataset_kwargs=dataset_kwargs)
