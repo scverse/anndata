@@ -24,14 +24,14 @@ from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
-    CAN_USE_SPARSE_ARRAY,
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    SpArray,
     ZarrArray,
 )
 from anndata.utils import asarray
@@ -61,21 +61,21 @@ GEN_ADATA_DASK_ARGS = dict(
         np.ndarray,
         pd.DataFrame,
         DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        sparse.csr_array,
     ),
     varm_types=(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        sparse.csr_array,
     ),
     layers_types=(
         sparse.csr_matrix,
         np.ndarray,
         pd.DataFrame,
         DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+        sparse.csr_array,
     ),
 )
 
@@ -84,7 +84,7 @@ DEFAULT_KEY_TYPES = (
     sparse.csr_matrix,
     np.ndarray,
     pd.DataFrame,
-    *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+    sparse.csr_array,
 )
 
 
@@ -271,11 +271,10 @@ def maybe_add_sparse_array(
     random_state: np.random.Generator,
     shape: tuple[int, int],
 ):
-    if CAN_USE_SPARSE_ARRAY:
-        if sparse.csr_array in types or sparse.csr_matrix in types:
-            mapping["sparse_array"] = sparse.csr_array(
-                sparse.random(*shape, format=format, random_state=random_state)
-            )
+    if sparse.csr_array in types or sparse.csr_matrix in types:
+        mapping["sparse_array"] = sparse.csr_array(
+            sparse.random(*shape, format=format, random_state=random_state)
+        )
     return mapping
 
 
@@ -389,18 +388,16 @@ def gen_adata(
         array=np.random.random((M, M)),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
-    if CAN_USE_SPARSE_ARRAY:
-        obsp["sparse_array"] = sparse.csr_array(
-            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
-        )
+    obsp["sparse_array"] = sparse.csr_array(
+        sparse.random(M, M, format=sparse_fmt, random_state=random_state)
+    )
     varp = dict(
         array=np.random.random((N, N)),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
-    if CAN_USE_SPARSE_ARRAY:
-        varp["sparse_array"] = sparse.csr_array(
-            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
-        )
+    varp["sparse_array"] = sparse.csr_array(
+        sparse.random(N, N, format=sparse_fmt, random_state=random_state)
+    )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
         nested=dict(
@@ -622,9 +619,9 @@ def assert_equal_sparse(
     assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
-@assert_equal.register(SpArray)
+@assert_equal.register(CSArray)
 def assert_equal_sparse_array(
-    a: SpArray, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: CSArray, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     return assert_equal_sparse(a, b, exact=exact, elem_name=elem_name)
 
@@ -836,7 +833,7 @@ def as_dense_dask_array(a):
     return da.asarray(a, chunks=_half_chunk_size(a.shape))
 
 
-@as_dense_dask_array.register(sparse.spmatrix)
+@as_dense_dask_array.register(CSMatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
 
@@ -853,14 +850,14 @@ def as_sparse_dask_array(a) -> DaskArray:
     return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(sparse.spmatrix)
+@as_sparse_dask_array.register(CSMatrix)
 def _(a):
     import dask.array as da
 
     return da.from_array(a, _half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(SpArray)
+@as_sparse_dask_array.register(CSArray)
 def _(a):
     import dask.array as da
 
@@ -1004,7 +1001,7 @@ def as_cupy(val, typ=None):
     if issubclass(typ, CupyArray):
         import cupy as cp
 
-        if isinstance(val, sparse.spmatrix):
+        if isinstance(val, CSMatrix):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
@@ -1041,7 +1038,7 @@ def shares_memory(x, y) -> bool:
     return np.shares_memory(x, y)
 
 
-@shares_memory.register(sparse.spmatrix)
+@shares_memory.register(CSMatrix)
 def shares_memory_sparse(x, y):
     return (
         np.shares_memory(x.data, y.data)
@@ -1052,8 +1049,8 @@ def shares_memory_sparse(x, y):
 
 BASE_MATRIX_PARAMS = [
     pytest.param(asarray, id="np_array"),
-    pytest.param(sparse.csr_matrix, id="scipy_csr"),
-    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr_matrix"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc_matrix"),
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
 ]

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._compat import DataArray, Dataset2D
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
-    from ...compat import H5File, SpArray
+    from ...compat import CSArray, H5File
     from .registry import DaskReader, LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
@@ -77,7 +77,7 @@ def make_dask_chunk(
     path_or_sparse_dataset: Path | D,
     elem_name: str,
     block_info: BlockInfo | None = None,
-) -> sparse.csr_matrix | sparse.csc_matrix | SpArray:
+) -> sparse.csr_matrix | sparse.csc_matrix | CSArray:
     if block_info is None:
         msg = "Block info is required"
         raise ValueError(msg)

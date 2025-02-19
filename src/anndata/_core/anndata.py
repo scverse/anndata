@@ -26,7 +26,7 @@ from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
 from .._settings import settings
-from ..compat import DaskArray, SpArray, ZarrArray, _move_adj_mtx, old_positionals
+from ..compat import CSArray, DaskArray, ZarrArray, _move_adj_mtx, old_positionals
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -205,14 +205,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     )
     def __init__(
         self,
-        X: np.ndarray | sparse.spmatrix | pd.DataFrame | None = None,
+        X: XDataType | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
+        layers: Mapping[str, XDataType] | None = None,
         raw: Mapping[str, Any] | None = None,
         dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
@@ -570,7 +570,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X
 
     @X.setter
-    def X(self, value: np.ndarray | sparse.spmatrix | SpArray | None):
+    def X(self, value: XDataType | None):
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -628,7 +628,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     if sparse.issparse(self._adata_ref._X) and isinstance(
                         value, np.ndarray
                     ):
-                        if isinstance(self._adata_ref.X, SpArray):
+                        if isinstance(self._adata_ref.X, CSArray):
                             memory_class = sparse.coo_array
                         else:
                             memory_class = sparse.coo_matrix
@@ -1174,7 +1174,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: float | np.ndarray | sparse.spmatrix):
+    def __setitem__(self, index: Index, val: float | XDataType):
         if self.is_view:
             msg = "Object is view and cannot be accessed with `[]`."
             raise ValueError(msg)
@@ -1721,7 +1721,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         # Backwards compat (some of this could be more efficient)
         # obs used to always be an outer join
         sparse_class = sparse.csr_matrix
-        if any(isinstance(a.X, SpArray) for a in all_adatas):
+        if any(isinstance(a.X, CSArray) for a in all_adatas):
             sparse_class = sparse.csr_array
         out.obs = concat(
             [AnnData(sparse_class(a.shape), obs=a.obs) for a in all_adatas],

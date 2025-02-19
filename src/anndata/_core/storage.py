@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from anndata.compat import SpArray
+from anndata.compat import CSArray
 
 from .._warnings import ImplicitModificationWarning
 from ..utils import (
@@ -37,13 +37,13 @@ def coerce_array(
                 return "mock anndata.experimental.backed._xarray."
 
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
-    from ..typing import ArrayDataStructureType
+    from ..typing import XDataType
 
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
-    array_data_structure_types = get_args(ArrayDataStructureType)
+    array_data_structure_types = get_args(XDataType)
     if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
@@ -54,7 +54,7 @@ def coerce_array(
         (isinstance(value, base) and not isinstance(value, csr_c_format))
         for base, csr_c_format in [
             (sparse.spmatrix, sparse.csr_matrix | sparse.csc_matrix),
-            (SpArray, sparse.csr_array | sparse.csc_array),
+            (CSArray, sparse.csr_array | sparse.csc_array),
         ]
     )
     if any(is_non_csc_r_array_or_matrix):

@@ -5,17 +5,17 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from numpy import ma
-from scipy import sparse
 
 from . import abc
 from ._core.anndata import AnnData
 from .compat import (
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
     H5Array,
-    SpArray,
     ZappyArray,
     ZarrArray,
 )
@@ -34,9 +34,8 @@ Index = _Index
 XDataType: TypeAlias = (
     np.ndarray
     | ma.MaskedArray
-    | sparse.csr_matrix
-    | sparse.csc_matrix
-    | SpArray
+    | CSMatrix
+    | CSArray
     | H5Array
     | ZarrArray
     | ZappyArray
@@ -46,11 +45,11 @@ XDataType: TypeAlias = (
     | CupyArray
     | CupySparseMatrix
 )
-ArrayDataStructureType: TypeAlias = XDataType | AwkArray
+ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray
 
 
 InMemoryArrayOrScalarType: TypeAlias = (
-    pd.DataFrame | np.number | str | ArrayDataStructureType
+    pd.DataFrame | np.number | str | ArrayDataStructureTypes
 )
 
 
