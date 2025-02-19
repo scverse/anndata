@@ -211,6 +211,8 @@ def equal_awkward(a, b) -> bool:
 
 def as_sparse(x, *, use_sparse_array=False):
     if not isinstance(x, CSMatrix | CSArray):
+        if isinstance(x, DaskArray):
+            x = x.compute()
         if use_sparse_array:
             return sparse.csr_array(x)
         return sparse.csr_matrix(x)
@@ -1165,7 +1167,7 @@ def make_dask_col_from_extension_dtype(
             chunk = np.array(data_array.data[idx].array)
         return chunk
 
-    if col.dtype == "category" or use_only_object_dtype:
+    if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:
         dtype = "object"
     else:
         dtype = col.dtype.numpy_dtype
