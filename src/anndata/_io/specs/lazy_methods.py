@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from contextlib import contextmanager
 from functools import partial, singledispatch
 from pathlib import Path
@@ -217,13 +216,9 @@ def read_zarr_array(
     return da.from_zarr(elem, chunks=chunks)
 
 
-DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
-
-
 def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
-    index_label: str,
-    index_key: str,
+    dim_name: str,
     index: np.NDArray,
 ) -> Generator[tuple[str, DataArray], None, None]:
     from anndata.experimental.backed._compat import DataArray
@@ -231,37 +226,33 @@ def _gen_xarray_dict_iterator_from_elems(
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     for k, v in elem_dict.items():
-        data_array_name = k
-        if isinstance(v, DaskArray) and k != index_key:
-            data_array = DataArray(v, coords=[index], dims=[index_label], name=k)
-        elif isinstance(v, CategoricalArray | MaskedArray) and k != index_key:
+        if isinstance(v, DaskArray) and k != dim_name:
+            data_array = DataArray(v, coords=[index], dims=[dim_name], name=k)
+        elif isinstance(v, CategoricalArray | MaskedArray) and k != dim_name:
             variable = xr.Variable(
-                data=xr.core.indexing.LazilyIndexedArray(v), dims=[index_label]
+                data=xr.core.indexing.LazilyIndexedArray(v), dims=[dim_name]
             )
             data_array = DataArray(
                 variable,
                 coords=[index],
-                dims=[index_label],
+                dims=[dim_name],
                 name=k,
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
                 },
             )
-        elif k == index_key:
+        elif k == dim_name:
             data_array = DataArray(
-                index, coords=[index], dims=[index_label], name=index_label
+                index, coords=[index], dims=[dim_name], name=dim_name
             )
-            data_array_name = index_label
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)
-        yield data_array_name, data_array
-    if index_key == DUMMY_RANGE_INDEX_KEY:
-        yield (
-            index_label,
-            DataArray(index, coords=[index], dims=[index_label], name=index_label),
-        )
+        yield k, data_array
+
+
+DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
 
 
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
@@ -272,36 +263,34 @@ def read_dataframe(
     _reader: LazyReader,
     use_range_index: bool = False,
 ) -> Dataset2D:
-    from anndata.experimental.backed._compat import Dataset2D
+    from anndata.experimental.backed._compat import DataArray, Dataset2D
 
     elem_dict = {
         k: _reader.read_elem(elem[k])
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
-    elem_name = get_elem_name(elem)
-    # Determine whether we can use label based indexing i.e., is the elem `obs` or `var`
-    obs_var_matches = re.findall(r"(obs|var)", elem_name)
-    if not len(obs_var_matches) == 1:
-        label_based_indexing_key = "index"
-    else:
-        label_based_indexing_key = f"{obs_var_matches[0]}_names"
-    # If we are not using a range index, the underlying on disk label for the index
-    # could be different than {obs,var}_names - otherwise we use a dummy value.
+    # If we use a range index, the coord axis needs to have the special dim name
+    # which is used below as well.
     if not use_range_index:
-        index_label = label_based_indexing_key
-        index_key = elem.attrs["_index"]
+        dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times
-        index = elem_dict[index_key].compute()
+        index = elem_dict[dim_name].compute()
     else:
-        index_label = DUMMY_RANGE_INDEX_KEY
-        index_key = DUMMY_RANGE_INDEX_KEY
+        dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]]))
     elem_xarray_dict = dict(
-        _gen_xarray_dict_iterator_from_elems(elem_dict, index_label, index_key, index)
+        _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
-    ds = Dataset2D(elem_xarray_dict, attrs={"indexing_key": label_based_indexing_key})
     if use_range_index:
-        return ds.rename_vars({elem.attrs["_index"]: label_based_indexing_key})
+        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = DataArray(
+            index,
+            coords=[index],
+            dims=[DUMMY_RANGE_INDEX_KEY],
+            name=DUMMY_RANGE_INDEX_KEY,
+        )
+    # We ensure the indexing_key attr always points to the true index
+    # so that the roundtrip works even for the `use_range_index` `True` case
+    ds = Dataset2D(elem_xarray_dict, attrs={"indexing_key": elem.attrs["_index"]})
     return ds
 
 

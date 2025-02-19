@@ -134,13 +134,8 @@ def test_concat_to_memory_obs(
 ):
     concatenated_memory = simple_subset_func(ad.concat(adatas_for_concat, join=join))
     concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
-    # TODO: name is lost normally, should fix
-    obs_memory = concatenated_memory.obs
-    obs_memory.index.name = "obs_names"
     assert_equal(
-        *unify_extension_dtypes(
-            concated_remote.obs.to_pandas(), concatenated_memory.obs
-        )
+        *unify_extension_dtypes(to_memory(concated_remote.obs), concatenated_memory.obs)
     )
 
 
@@ -188,8 +183,7 @@ def test_concat_to_memory_var(
         var_df_only_ds_0 = adatas_for_concat[0][:, pd_index_only_ds_0].var.copy()
         test_cases.append((pd_index_only_ds_0, var_df_only_ds_0, 0))
     for pd_index, var_df, store_idx in test_cases:
-        var_df.index.name = "var_names"
-        remote_df = concated_remote[:, pd_index].var.to_pandas()
+        remote_df = to_memory(concated_remote[:, pd_index].var)
         remote_df_corrected, _ = unify_extension_dtypes(remote_df, var_df)
         #  TODO:xr.merge always upcasts to float due to NA and you can't downcast?
         for col in remote_df_corrected.columns:
