@@ -37,7 +37,7 @@ from anndata.compat import (
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
 
     from .._types import ArrayStorageType
@@ -155,7 +155,7 @@ def gen_random_column(
         )
     if issubdtype(dtype, pd.StringDtype):
         letters = np.fromiter(iter(ascii_letters), "U1")
-        array = np.array(np.random.choice(letters, n), dtype=dtype)
+        array = pd.array(np.random.choice(letters, n), dtype=dtype)
         array[np.random.randint(0, 2, size=n, dtype=bool)] = pd.NA
         return "string", array
     # if issubdtype(dtype, pd.DatetimeTZDtype):
@@ -1137,7 +1137,7 @@ class AccessTrackingStore(DirectoryStore):
             raise KeyError(msg)
         return self._accessed_keys[key]
 
-    def initialize_key_trackers(self, keys_to_track: Collection[str]) -> None:
+    def initialize_key_trackers(self, keys_to_track: Iterable[str]) -> None:
         for k in keys_to_track:
             self._access_count[k] = 0
             self._accessed_keys[k] = []
