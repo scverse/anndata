@@ -211,11 +211,16 @@ def equal_awkward(a, b) -> bool:
 
 def as_sparse(x, *, use_sparse_array=False):
     if not isinstance(x, CSMatrix | CSArray):
+        in_memory_array_class = (
+            sparse.csr_array if use_sparse_array else sparse.csr_matrix
+        )
         if isinstance(x, DaskArray):
-            x = x.compute()
-        if use_sparse_array:
-            return sparse.csr_array(x)
-        return sparse.csr_matrix(x)
+            x = x.map_blocks(
+                sparse.csr_matrix,
+                meta=sparse.csr_matrix(x._meta),
+                dtype=x.dtype,
+            ).compute()
+        return in_memory_array_class(x)
     return x
 
 
