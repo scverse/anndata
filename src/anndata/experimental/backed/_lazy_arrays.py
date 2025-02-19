@@ -145,8 +145,8 @@ class MaskedArray(BackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
-            values[mask] = None
-            extension_array = pd.array(values, dtype="string")
+            values[mask] = pd.NA
+            extension_array = pd.array(values, dtype=pd.StringDtype())
         else:
             msg = f"Invalid dtype_str {self._dtype_str}"
             raise RuntimeError(msg)
