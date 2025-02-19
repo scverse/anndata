@@ -63,9 +63,7 @@ dev = [
     "anndata[dev-doc,dev-test]",
 ]
 doc = [
-    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/523
-    # means autodoc-typehints is incompatible with sphinx 8.2.0
-    "sphinx>=7.4.6,<8.2.0",
+    "sphinx>=7.4.6",
     "sphinx-book-theme>=1.1.0",
     "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",
