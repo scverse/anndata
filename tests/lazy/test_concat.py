@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from functools import reduce
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -163,6 +164,19 @@ def test_concat_to_memory_var(
     *,
     are_vars_different: bool,
 ):
+    """\
+    The goal of this test to ensure that the various `join` operations work as expected
+    under various scenarios.
+
+    We test two things here: first, we take all the overlapping indices for var.
+    Then if the underlying vars are different and this is an outer join
+    (i.e., there are non-overlapping indices), we take the unique indices from one of the dataframes.
+    We then check if the var dataframe subsetted from lazily-concatenated object and put into memory
+    is the same as the underlying anndata object that created it, up to some corrections.
+
+    We also test for key access counts to ensure that data was not taken from the var df of other
+    on-disk anndata objects that might be different i.e., in the case of an outer join.
+    """
     concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
     var_keys_to_track = get_key_trackers_for_columns_on_axis(
         adatas_for_concat[0], "var"
@@ -170,9 +184,7 @@ def test_concat_to_memory_var(
     for store in stores_for_concat:
         store.initialize_key_trackers(var_keys_to_track)
     # check non-different variables, taken from first annotation.
-    pd_index_overlapping = pd.Index(
-        filter(lambda x: not x.endswith("ds"), var_indices_for_concat[0])
-    )
+    pd_index_overlapping = reduce(pd.Index.intersection, var_indices_for_concat)
     var_df_overlapping = adatas_for_concat[0][:, pd_index_overlapping].var.copy()
     test_cases = [(pd_index_overlapping, var_df_overlapping, 0)]
     if are_vars_different and join == "outer":
@@ -185,7 +197,7 @@ def test_concat_to_memory_var(
     for pd_index, var_df, store_idx in test_cases:
         remote_df = to_memory(concated_remote[:, pd_index].var)
         remote_df_corrected, _ = unify_extension_dtypes(remote_df, var_df)
-        #  TODO:xr.merge always upcasts to float due to NA and you can't downcast?
+        # NOTE: xr.merge always upcasts to float due to NA and you can't downcast?
         for col in remote_df_corrected.columns:
             dtype = remote_df_corrected[col].dtype
             if dtype in [np.float64, np.float32]:
