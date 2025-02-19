@@ -13,7 +13,8 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray
+from anndata._io.specs.registry import read_elem_as_dask
+from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -25,6 +26,9 @@ if TYPE_CHECKING:
     from _pytest.mark import ParameterSet
     from numpy.typing import ArrayLike, NDArray
     from pytest_mock import MockerFixture
+
+    from anndata.abc import CSCDataset, CSRDataset
+    from anndata.compat import ZarrGroup
 
     Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
 
@@ -259,8 +263,8 @@ def test_consecutive_bool(
 )
 def test_dataset_append_memory(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -281,6 +285,25 @@ def test_dataset_append_memory(
     assert_equal(fromdisk, frommem)
 
 
+def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    a = sparse.random(100, 100, format="csr")
+    if diskfmt == "zarr":
+        f = zarr.open_group(path, "a")
+    else:
+        f = h5py.File(path, "a")
+    ad.io.write_elem(f, "mtx", a)
+    ad.io.write_elem(f, "mtx_2", a)
+    diskmtx = sparse_dataset(f["mtx"])
+    old_array_shapes = {}
+    array_names = ["indptr", "indices", "data"]
+    for name in array_names:
+        old_array_shapes[name] = getattr(diskmtx, f"_{name}").shape
+    diskmtx.append(sparse_dataset(f["mtx_2"]))
+    for name in array_names:
+        assert old_array_shapes[name] != getattr(diskmtx, f"_{name}").shape
+
+
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize(
     ("subset_func", "subset_func2"),
@@ -296,7 +319,7 @@ def test_dataset_append_memory(
 )
 def test_read_array(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
@@ -311,12 +334,10 @@ def test_read_array(
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
-    if not CAN_USE_SPARSE_ARRAY:
-        pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSMatrix)
 
 
 @pytest.mark.parametrize(
@@ -328,8 +349,8 @@ def test_read_array(
 )
 def test_dataset_append_disk(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -354,16 +375,18 @@ def test_dataset_append_disk(
 
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
-def test_indptr_cache(
+def test_lazy_array_cache(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
 ):
+    elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
     f = zarr.open_group(path, "a")
     ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
-    store.initialize_key_trackers(["X/indptr"])
+    for elem in elems:
+        store.initialize_key_trackers([f"X/{elem}"])
     f = zarr.open_group(store, "a")
     a_disk = sparse_dataset(f["X"])
     a_disk[:1]
@@ -372,6 +395,14 @@ def test_indptr_cache(
     a_disk[8:9]
     # one each for .zarray and actual access
     assert store.get_access_count("X/indptr") == 2
+    for elem_not_indptr in elems - {"indptr"}:
+        assert (
+            sum(
+                ".zarray" in key_accessed
+                for key_accessed in store.get_accessed_keys(f"X/{elem_not_indptr}")
+            )
+            == 1
+        )
 
 
 Kind = Literal["slice", "int", "array", "mask"]
@@ -421,27 +452,38 @@ def width_idx_kinds(
         (
             [0],
             slice(None, None),
-            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+            ["X/data/.zarray", "X/data/0"],
         ),
         (
             [0],
             slice(None, 3),
-            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+            ["X/data/.zarray", "X/data/0"],
         ),
         (
             [3, 4, 5],
             slice(None, None),
-            ["X/data/.zarray", "X/data/.zarray", "X/data/3", "X/data/4", "X/data/5"],
+            ["X/data/.zarray", "X/data/3", "X/data/4", "X/data/5"],
         ),
         l=10,
     ),
 )
+@pytest.mark.parametrize(
+    "open_func",
+    [
+        sparse_dataset,
+        lambda x: read_elem_as_dask(
+            x, chunks=(1, -1) if x.attrs["encoding-type"] == "csr_matrix" else (-1, 1)
+        ),
+    ],
+    ids=["sparse_dataset", "read_elem_as_dask"],
+)
 def test_data_access(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     idx_maj: Idx,
     idx_min: Idx,
     exp: Sequence[str],
+    open_func: Callable[[ZarrGroup], CSRDataset | CSCDataset | DaskArray],
 ):
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
@@ -454,19 +496,19 @@ def test_data_access(
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store)
-    a_disk = sparse_dataset(f["X"])
-
-    # Do the slicing with idx
-    store.reset_key_trackers()
-    if a_disk.format == "csr":
-        a_disk[idx_maj, idx_min]
+    a_disk = AnnData(X=open_func(f["X"]))
+    if a.format == "csr":
+        subset = a_disk[idx_maj, idx_min]
     else:
-        a_disk[idx_min, idx_maj]
+        subset = a_disk[idx_min, idx_maj]
+    if isinstance(subset.X, DaskArray):
+        subset.X.compute(scheduler="single-threaded")
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
         "X/data"
     )
-    assert store.get_accessed_keys("X/data") == exp
+    # dask access order is not guaranteed so need to sort
+    assert sorted(store.get_accessed_keys("X/data")) == sorted(exp)
 
 
 @pytest.mark.parametrize(
@@ -578,17 +620,24 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
-def test_append_overflow_check(group_fn, sparse_class, tmpdir):
-    if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
-        pytest.skip("scipy bug causes view to be allocated")
-    group = group_fn(tmpdir)
+@pytest.mark.parametrize(
+    "sparse_class",
+    [
+        sparse.csr_matrix,
+        pytest.param(
+            sparse.csr_array,
+            marks=[pytest.mark.skip(reason="scipy bug causes view to be allocated")],
+        ),
+    ],
+)
+def test_append_overflow_check(group_fn, sparse_class, tmp_path):
+    group = group_fn(tmp_path)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
     # Minimally allocating new matrix
     new_mtx = sparse_class(
         (
-            np.broadcast_to(True, typemax_int32 - 1),
+            np.broadcast_to(True, typemax_int32 - 1),  # noqa: FBT003
             np.broadcast_to(np.int32(1), typemax_int32 - 1),
             [0, typemax_int32 - 1],
         ),

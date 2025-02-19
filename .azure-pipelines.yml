@@ -14,18 +14,18 @@ jobs:
       vmImage: "ubuntu-22.04"
     strategy:
       matrix:
-        Python3.12:
-          python.version: "3.12"
+        Python3.13:
+          python.version: "3.13"
           RUN_COVERAGE: yes
           TEST_TYPE: "coverage"
-        Python3.10:
-          python.version: "3.10"
+        Python3.11:
+          python.version: "3.11"
         PreRelease:
-          python.version: "3.12"
+          python.version: "3.13"
           DEPENDENCIES_VERSION: "pre-release"
           TEST_TYPE: "strict-warning"
         minimum_versions:
-          python.version: "3.10"
+          python.version: "3.11"
           DEPENDENCIES_VERSION: "minimum"
           TEST_TYPE: "coverage"
     steps:
@@ -49,11 +49,7 @@ jobs:
           path: $(uv_cache_dir)
         displayName: Cache pip packages
 
-      # This prevents broken and slow back-tracking in dependency resolution
-      - script: printf "llvmlite>=0.43\nscanpy>=1.10.0rc1" | tee /tmp/constraints.txt
-        displayName: "Create constraints file for `pre-release` and `latest` jobs"
-
-      - script: uv pip install --system --compile "anndata[dev,test] @ ." -c /tmp/constraints.txt
+      - script: uv pip install --system --compile "anndata[dev,test] @ ." -c ci/constraints.txt
         displayName: "Install dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'latest')
 
@@ -65,7 +61,7 @@ jobs:
         displayName: "Install minimum dependencies"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'minimum')
 
-      - script: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -c /tmp/constraints.txt
+      - script: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -c ci/constraints.txt
         displayName: "Install dependencies release candidates"
         condition: eq(variables['DEPENDENCIES_VERSION'], 'pre-release')
 
@@ -108,8 +104,8 @@ jobs:
     steps:
       - task: UsePythonVersion@0
         inputs:
-          versionSpec: "3.12"
-        displayName: "Use Python 3.12"
+          versionSpec: "3.13"
+        displayName: "Use Python 3.13"
 
       - script: |
           set -e

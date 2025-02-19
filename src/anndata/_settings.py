@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import os
-import sys
 import textwrap
 import warnings
 from collections.abc import Iterable
@@ -13,9 +12,6 @@ from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
-
-from anndata.compat import CAN_USE_SPARSE_ARRAY
-from anndata.compat.exceptiongroups import add_note
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -53,27 +49,14 @@ def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     return textwrap.dedent(doc)
 
 
-if sys.version_info >= (3, 11):
+class RegisteredOption(NamedTuple, Generic[T]):
+    option: str
+    default_value: T
+    description: str
+    validate: Callable[[T], None]
+    type: object
 
-    class RegisteredOption(NamedTuple, Generic[T]):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
-
-else:
-
-    class RegisteredOption(NamedTuple):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
+    describe = describe
 
 
 def check_and_get_environ_var(
@@ -235,7 +218,7 @@ class SettingsManager:
         try:
             validate(default_value)
         except (ValueError, TypeError) as e:
-            add_note(e, f"for option {repr(option)}")
+            e.add_note(f"for option {option!r}")
             raise e
         option_type = type(default_value) if option_type is None else option_type
         self._registered_options[option] = RegisteredOption(
@@ -329,7 +312,7 @@ class SettingsManager:
         """
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
-            msg = f"{repr(option)} will be removed in {deprecated.removal_version}. {deprecated.message}"
+            msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
             warnings.warn(msg, DeprecationWarning)
         if option in self._config:
             return self._config[option]
@@ -432,12 +415,6 @@ settings.register(
 
 def validate_sparse_settings(val: Any) -> None:
     validate_bool(val)
-    if not CAN_USE_SPARSE_ARRAY and cast(bool, val):
-        msg = (
-            "scipy.sparse.cs{r,c}array is not available in current scipy version. "
-            "Falling back to scipy.sparse.cs{r,c}_matrix for reading."
-        )
-        raise ValueError(msg)
 
 
 settings.register(

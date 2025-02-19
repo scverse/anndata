@@ -21,7 +21,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import H5PY_V3, check_key
+from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from anndata._types import ArrayStorageType, GroupStorageType
-    from anndata.compat import SpArray
+    from anndata.compat import CSArray, CSMatrix
     from anndata.typing import AxisStorable, InMemoryArrayOrScalarType
 
     from .registry import Reader, Writer
@@ -127,7 +127,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
     elem: H5File | H5Group | H5Array, *, _reader: Reader
-) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io import h5ad
 
     warn(
@@ -149,7 +149,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
     elem: ZarrGroup | ZarrArray, *, _reader: Reader
-) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io import zarr
 
     warn(
@@ -327,6 +327,30 @@ def write_raw(
     _writer.write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
 
 
+########
+# Null #
+########
+
+
+@_REGISTRY.register_read(H5Array, IOSpec("null", "0.1.0"))
+@_REGISTRY.register_read(ZarrArray, IOSpec("null", "0.1.0"))
+def read_null(_elem, _reader) -> None:
+    return None
+
+
+@_REGISTRY.register_write(H5Group, type(None), IOSpec("null", "0.1.0"))
+def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+    f.create_dataset(k, data=h5py.Empty("f"), **dataset_kwargs)
+
+
+@_REGISTRY.register_write(ZarrGroup, type(None), IOSpec("null", "0.1.0"))
+def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+    import zarr
+
+    # zarr has no first-class null dataset
+    f.create_dataset(k, data=zarr.empty(()), **dataset_kwargs)
+
+
 ############
 # Mappings #
 ############
@@ -382,6 +406,7 @@ def write_list(
 @_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
+@zero_dim_array_as_scalar
 def write_basic(
     f: GroupStorageType,
     k: str,
@@ -432,9 +457,8 @@ def write_basic_dask_h5(
     import dask.config as dc
 
     if dc.get("scheduler", None) == "dask.distributed":
-        raise ValueError(
-            "Cannot write dask arrays to hdf5 when using distributed scheduler"
-        )
+        msg = "Cannot write dask arrays to hdf5 when using distributed scheduler"
+        raise ValueError(msg)
 
     g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g)
@@ -477,6 +501,7 @@ def read_string_array_partial(d, items=None, indices=slice(None)):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@zero_dim_array_as_scalar
 def write_vlen_string_array(
     f: H5Group,
     k: str,
@@ -498,6 +523,7 @@ def write_vlen_string_array(
 )
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@zero_dim_array_as_scalar
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
     k: str,
@@ -588,7 +614,7 @@ def write_recarray_zarr(
 def write_sparse_compressed(
     f: GroupStorageType,
     key: str,
-    value: sparse.spmatrix | SpArray,
+    value: CSMatrix | CSArray,
     *,
     _writer: Writer,
     fmt: Literal["csr", "csc"],
@@ -600,7 +626,7 @@ def write_sparse_compressed(
     indptr_dtype = dataset_kwargs.pop("indptr_dtype", value.indptr.dtype)
 
     # Allow resizing for hdf5
-    if isinstance(f, H5Group) and "maxshape" not in dataset_kwargs:
+    if isinstance(f, H5Group):
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
 
     g.create_dataset("data", data=value.data, **dataset_kwargs)
@@ -722,9 +748,8 @@ def write_dask_sparse(
     elif sparse_format == "csc":
         axis = 1
     else:
-        raise NotImplementedError(
-            f"Cannot write dask sparse arrays with format {sparse_format}"
-        )
+        msg = f"Cannot write dask sparse arrays with format {sparse_format}"
+        raise NotImplementedError(msg)
 
     def chunk_slice(start: int, stop: int) -> tuple[slice | None, slice | None]:
         result = [slice(None), slice(None)]
@@ -755,9 +780,7 @@ def write_dask_sparse(
 @_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse(
-    elem: GroupStorageType, *, _reader: Reader
-) -> sparse.spmatrix | SpArray:
+def read_sparse(elem: GroupStorageType, *, _reader: Reader) -> CSMatrix | CSArray:
     return sparse_dataset(elem).to_memory()
 
 
@@ -835,13 +858,13 @@ def write_dataframe(
     # Check arguments
     for reserved in ("_index",):
         if reserved in df.columns:
-            raise ValueError(f"{reserved!r} is a reserved name for dataframe columns.")
+            msg = f"{reserved!r} is a reserved name for dataframe columns."
+            raise ValueError(msg)
     group = _require_group_write_dataframe(f, key, df)
     if not df.columns.is_unique:
         duplicates = list(df.columns[df.columns.duplicated()])
-        raise ValueError(
-            f"Found repeated column names: {duplicates}. Column names must be unique."
-        )
+        msg = f"Found repeated column names: {duplicates}. Column names must be unique."
+        raise ValueError(msg)
     col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
@@ -849,11 +872,12 @@ def write_dataframe(
         if df.index.name in col_names and not pd.Series(
             df.index, index=df.index
         ).equals(df[df.index.name]):
-            raise ValueError(
+            msg = (
                 f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
                 "whose values are different. This is not supported. Please make sure "
                 "the values are the same, or use a different name."
             )
+            raise ValueError(msg)
         index_name = df.index.name
     else:
         index_name = "_index"
@@ -940,7 +964,7 @@ def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
             parent = dataset.parent
         categories_dset = parent[_read_attr(dataset.attrs, "categories")]
         categories = read_elem(categories_dset)
-        ordered = bool(_read_attr(categories_dset.attrs, "ordered", False))
+        ordered = bool(_read_attr(categories_dset.attrs, "ordered", default=False))
         return pd.Categorical.from_codes(
             read_elem(dataset), categories, ordered=ordered
         )
@@ -1134,8 +1158,15 @@ def write_hdf5_scalar(
 ):
     # Can’t compress scalars, error is thrown
     dataset_kwargs = dict(dataset_kwargs)
-    dataset_kwargs.pop("compression", None)
-    dataset_kwargs.pop("compression_opts", None)
+    for arg in (
+        "compression",
+        "compression_opts",
+        "chunks",
+        "shuffle",
+        "fletcher32",
+        "scaleoffset",
+    ):
+        dataset_kwargs.pop(arg, None)
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 

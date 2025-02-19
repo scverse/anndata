@@ -63,9 +63,8 @@ def gen_indexer(adata, dim, index_kind, ratio):
     index_kinds = {"slice", "intarray", "boolarray", "strarray"}
 
     if index_kind not in index_kinds:
-        raise ValueError(
-            f"Argument 'index_kind' must be one of {index_kinds}. Was {index_kind}."
-        )
+        msg = f"Argument 'index_kind' must be one of {index_kinds}. Was {index_kind}."
+        raise ValueError(msg)
 
     axis = dimnames.index(dim)
     subset = [slice(None), slice(None)]
