@@ -28,7 +28,6 @@ __pycache__/
 
 # IDEs
 /.idea/
-/.vscode/
 
 # Benchmark
 .asv
