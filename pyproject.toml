@@ -47,8 +47,7 @@ dependencies = [
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
     "legacy-api-wrap",
-    # TODO: there is something wrong with 3.0.3 usdg;khasdflkjdsakjfhads
-    "zarr<3.0.3",
+    "zarr",
 ]
 dynamic = ["version"]
 
