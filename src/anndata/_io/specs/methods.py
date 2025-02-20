@@ -430,12 +430,12 @@ def _iter_chunks_for_copy(
     if dest.chunks and hasattr(dest, "iter_chunks"):
         return dest.iter_chunks()
     else:
-        itemsize = elem.dtype.itemsize
         shape = elem.shape
-        # Number of elements to write
-        entry_chunk_size = 100 * 1024 * 1024 // itemsize
         # Number of rows that works out to
-        n_rows = max(entry_chunk_size // shape[0], 1000)
+        n_rows = max(
+            ad.settings.min_rows_for_chunked_h5_copy,
+            elem.chunks[0] if elem.chunks is not None else 1,
+        )
         return (slice(i, min(i + n_rows, shape[0])) for i in range(0, shape[0], n_rows))
 
 
