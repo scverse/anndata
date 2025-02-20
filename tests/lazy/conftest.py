@@ -26,11 +26,6 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
-
-pytestmark = pytest.mark.skipif(
-    not find_spec("xarray"), reason="Xarray is not installed"
-)
-
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
 
 
@@ -263,3 +258,12 @@ def get_key_trackers_for_columns_on_axis(
 
 
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        item.add_marker(
+            pytest.mark.skipif(
+                not find_spec("xarray"), reason="Xarray is not installed"
+            )
+        )
