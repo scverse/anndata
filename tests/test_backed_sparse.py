@@ -14,7 +14,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
-from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray
+from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -263,8 +263,8 @@ def test_consecutive_bool(
 )
 def test_dataset_append_memory(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -319,7 +319,7 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
 )
 def test_read_array(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
@@ -334,12 +334,10 @@ def test_read_array(
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
-    if not CAN_USE_SPARSE_ARRAY:
-        pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSMatrix)
 
 
 @pytest.mark.parametrize(
@@ -351,8 +349,8 @@ def test_read_array(
 )
 def test_dataset_append_disk(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -379,7 +377,7 @@ def test_dataset_append_disk(
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 def test_lazy_array_cache(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
 ):
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
@@ -481,7 +479,7 @@ def width_idx_kinds(
 )
 def test_data_access(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     idx_maj: Idx,
     idx_min: Idx,
     exp: Sequence[str],
@@ -622,17 +620,24 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
-def test_append_overflow_check(group_fn, sparse_class, tmpdir):
-    if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
-        pytest.skip("scipy bug causes view to be allocated")
-    group = group_fn(tmpdir)
+@pytest.mark.parametrize(
+    "sparse_class",
+    [
+        sparse.csr_matrix,
+        pytest.param(
+            sparse.csr_array,
+            marks=[pytest.mark.skip(reason="scipy bug causes view to be allocated")],
+        ),
+    ],
+)
+def test_append_overflow_check(group_fn, sparse_class, tmp_path):
+    group = group_fn(tmp_path)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
     # Minimally allocating new matrix
     new_mtx = sparse_class(
         (
-            np.broadcast_to(True, typemax_int32 - 1),
+            np.broadcast_to(True, typemax_int32 - 1),  # noqa: FBT003
             np.broadcast_to(np.int32(1), typemax_int32 - 1),
             [0, typemax_int32 - 1],
         ),

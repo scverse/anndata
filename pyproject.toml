@@ -5,7 +5,7 @@ requires = ["hatchling", "hatch-vcs"]
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "BSD-3-Clause"
 authors = [
     { name = "Philipp Angerer" },
@@ -29,25 +29,24 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    # pandas <1.4 has pandas/issues/35446
     # pandas 2.1.0rc0 has pandas/issues/54622
-    "pandas >=1.4, !=2.1.0rc0, !=2.1.2",
-    "numpy>=1.23",
+    "pandas >=2.0.0, !=2.1.0rc0, !=2.1.2",
+    "numpy>=1.25",
     # https://github.com/scverse/anndata/issues/1434
-    "scipy >1.8",
-    "h5py>=3.6",
-    "exceptiongroup; python_version<'3.11'",
+    "scipy >1.11",
+    "h5py>=3.8",
     "natsort",
-    "packaging>=20.0",
+    "packaging>=24.2",
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
+    "legacy-api-wrap",
 ]
 dynamic = ["version"]
 
@@ -59,12 +58,14 @@ Home-page = "https://github.com/scverse/anndata"
 
 [project.optional-dependencies]
 dev = [
-    # dev version generation
-    "setuptools-scm",
+    # runtime dev version generation
+    "hatch-vcs",
     "anndata[dev-doc,dev-test]",
 ]
 doc = [
-    "sphinx>=7.4.6",
+    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/523
+    # means autodoc-typehints is incompatible with sphinx 8.2.0
+    "sphinx>=7.4.6,<8.2.0",
     "sphinx-book-theme>=1.1.0",
     "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",
@@ -72,9 +73,9 @@ doc = [
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "nbsphinx",
-    "scanpydoc[theme,typehints] >=0.14.1",
-    "zarr",
-    "awkward>=2.0.7",
+    "scanpydoc[theme,typehints] >=0.15.1",
+    "zarr<3",
+    "awkward>=2.3",
     "IPython",                          # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
@@ -87,13 +88,13 @@ test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov>=2.10",
-    "zarr<3.0.0a0",
+    "zarr<3",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
-    "scanpy",
+    "scanpy>=1.9.8",
     "httpx", # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
@@ -107,12 +108,11 @@ gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
 # https://github.com/dask/dask/issues/11290
-dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*"]
+# https://github.com/dask/dask/issues/11752
+dask = ["dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0"]
 
 [tool.hatch.version]
 source = "vcs"
-[tool.hatch.build.hooks.vcs]
-version-file = "src/anndata/_version.py"
 raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
 packages = ["src/anndata", "src/testing"]
@@ -171,12 +171,14 @@ docstring-code-format = true
 [tool.ruff.lint]
 select = [
     "E",   # Error detected by Pycodestyle
+    "EM",  # Traceback-friendly error messages
     "F",   # Errors detected by Pyflakes
+    "FBT", # Boolean positional arguments
     "W",   # Warning detected by Pycodestyle
     "PLW", # Pylint
     "UP",  # pyupgrade
     "I",   # isort
-    "TCH", # manage type checking blocks
+    "TC",  # manage type checking blocks
     "TID", # Banned imports
     "ICN", # Follow import conventions
     "PTH", # Pathlib instead of os.path
@@ -205,6 +207,7 @@ required-imports = ["from __future__ import annotations"]
 "subprocess.call".msg = "Use `subprocess.run([…])` instead"
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
+"legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = []
 strict = true

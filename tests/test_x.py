@@ -9,6 +9,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
+from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
 
@@ -174,9 +175,14 @@ def test_set_dense_x_view_from_sparse():
     x1 = np.ones((100, 30))
     orig = ad.AnnData(x)
     view = orig[:30]
-    with pytest.warns(
-        UserWarning,
-        match=r"Trying to set a dense array with a sparse array on a view",
+    with (
+        pytest.warns(
+            UserWarning,
+            match=r"Trying to set a dense array with a sparse array on a view",
+        ),
+        pytest.warns(
+            ImplicitModificationWarning, match=r"Modifying `X` on a view results"
+        ),
     ):
         view.X = sparse.csr_matrix(x1[:30])
     assert_equal(view.X, x1[:30])
@@ -184,10 +190,10 @@ def test_set_dense_x_view_from_sparse():
     assert_equal(orig.X[30:], x[30:])  # change propagates through
 
 
-def test_warn_on_non_csr_csc_matrix():
-    X = sparse.eye(100)
-    with pytest.warns(
-        FutureWarning,
-        match=rf"AnnData previously had undefined behavior around matrices of type {type(X)}.*",
+def test_fail_on_non_csr_csc_matrix():
+    X = sparse.eye(100, format="coo")
+    with pytest.raises(
+        ValueError,
+        match=r"Only CSR and CSC.*",
     ):
         ad.AnnData(X=X)

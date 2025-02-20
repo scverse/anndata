@@ -12,7 +12,6 @@ from anndata.compat import (
     CupyArray,
     CupyCSRMatrix,
     DaskArray,
-    add_note,
 )
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -107,7 +106,8 @@ def test_gen_random_column(dtype):
 # Does this work for every warning?
 def test_report_name():
     def raise_error():
-        raise Exception("an error occurred!")
+        msg = "an error occurred!"
+        raise Exception(msg)
 
     letters = np.array(list(ascii_letters))
     tag = "".join(np.random.permutation(letters))
@@ -276,33 +276,6 @@ def test_assert_equal_dask_sparse_arrays():
 
     assert_equal(x, y)
     assert_equal(y, x)
-
-
-@pytest.mark.parametrize(
-    ("error", "match"),
-    [
-        (Exception("test"), "test"),
-        (add_note(AssertionError("foo"), "bar"), "bar"),
-        (add_note(add_note(AssertionError("foo"), "bar"), "baz"), "bar"),
-        (add_note(add_note(AssertionError("foo"), "bar"), "baz"), "baz"),
-    ],
-)
-def test_check_error_notes_success(error, match):
-    with pytest.raises(Exception, match=match):
-        raise error
-
-
-@pytest.mark.parametrize(
-    ("error", "match"),
-    [
-        (Exception("test"), "foo"),
-        (add_note(AssertionError("foo"), "bar"), "baz"),
-    ],
-)
-def test_check_error_notes_failure(error, match):
-    with pytest.raises(AssertionError):
-        with pytest.raises(Exception, match=match):
-            raise error
 
 
 @pytest.mark.parametrize(

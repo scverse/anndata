@@ -4,10 +4,9 @@ import re
 
 import h5py
 import zarr
-from scipy import sparse
 
 import anndata as ad
-from anndata.compat import SpArray
+from anndata.compat import CSArray, CSMatrix
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import assert_equal, gen_adata
 
@@ -96,7 +95,7 @@ def test_write_dispatched_chunks():
         # TODO: Should the passed path be absolute?
         path = "/" + store.path + "/" + k
         if hasattr(elem, "shape") and not isinstance(
-            elem, sparse.spmatrix | SpArray | ad.AnnData
+            elem, CSMatrix | CSArray | ad.AnnData
         ):
             if re.match(r"^/((X)|(layers)).*", path):
                 chunks = (M, N)

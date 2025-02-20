@@ -105,10 +105,11 @@ class IORegistry(Generic[_R, R]):
         if src_type in self.write_specs and (spec != self.write_specs[src_type]):
             # First check for consistency
             current_spec = self.write_specs[src_type]
-            raise TypeError(
+            msg = (
                 "Cannot overwrite IO specifications. Attempted to overwrite encoding "
                 f"for {src_type} from {current_spec} to {spec}"
             )
+            raise TypeError(msg)
         else:
             self.write_specs[src_type] = spec
 
@@ -167,7 +168,7 @@ class IORegistry(Generic[_R, R]):
         reader: Reader,
     ) -> R:
         if (src_type, spec, modifiers) not in self.read:
-            raise IORegistryError._from_read_parts("read", self.read, src_type, spec)
+            raise IORegistryError._from_read_parts("read", self.read, src_type, spec)  # noqa: EM101
         internal = self.read[(src_type, spec, modifiers)]
         return partial(internal, _reader=reader)
 
@@ -196,10 +197,8 @@ class IORegistry(Generic[_R, R]):
     ):
         if (src_type, spec, modifiers) in self.read_partial:
             return self.read_partial[(src_type, spec, modifiers)]
-        else:
-            raise IORegistryError._from_read_parts(
-                "read_partial", self.read_partial, src_type, spec
-            )
+        name = "read_partial"
+        raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
     def get_spec(self, elem: Any) -> IOSpec:
         if isinstance(elem, DaskArray):
@@ -217,7 +216,8 @@ _LAZY_REGISTRY: IORegistry[_ReadDaskInternal, ReadDask] = IORegistry()
 
 @singledispatch
 def proc_spec(spec) -> IOSpec:
-    raise NotImplementedError(f"proc_spec not defined for type: {type(spec)}.")
+    msg = f"proc_spec not defined for type: {type(spec)}."
+    raise NotImplementedError(msg)
 
 
 @proc_spec.register(IOSpec)
@@ -335,9 +335,6 @@ class Writer:
             store = store["/"]
 
         dest_type = type(store)
-
-        if elem is None:
-            return lambda *_, **__: None
 
         # Normalize k to absolute path
         if not PurePosixPath(k).is_absolute():

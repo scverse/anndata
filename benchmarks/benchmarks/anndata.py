@@ -15,8 +15,14 @@ class GarbargeCollectionSuite:
         def display_top(snapshot, key_type="lineno"):
             snapshot = snapshot.filter_traces(
                 (
-                    tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
-                    tracemalloc.Filter(False, "<unknown>"),
+                    tracemalloc.Filter(
+                        inclusive=False,
+                        filename_pattern="<frozen importlib._bootstrap>",
+                    ),
+                    tracemalloc.Filter(
+                        inclusive=False,
+                        filename_pattern="<unknown>",
+                    ),
                 )
             )
             top_stats = snapshot.statistics(key_type)

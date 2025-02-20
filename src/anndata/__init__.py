@@ -7,29 +7,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
-try:  # See https://github.com/maresb/hatch-vcs-footgun-example
-    from setuptools_scm import get_version
-
-    __version__ = get_version(root="../..", relative_to=__file__)
-except (ImportError, LookupError):
-    try:
-        from ._version import __version__
-    except ModuleNotFoundError:
-        raise RuntimeError(
-            "anndata is not correctly installed. Please install it, e.g. with pip."
-        )
-
-# Allowing notes to be added to exceptions. See: https://github.com/scverse/anndata/issues/868
-import sys
-
-if sys.version_info < (3, 11):
-    # Backport package for exception groups
-    import exceptiongroup  # noqa: F401
 
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
 from ._settings import settings
+from ._version import __version__
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,

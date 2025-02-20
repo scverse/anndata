@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
-    from ...compat import DaskArray, H5File, SpArray
+    from ...compat import CSArray, DaskArray, H5File
     from .registry import DaskReader
 
     BlockInfo = Mapping[
@@ -72,7 +72,7 @@ def make_dask_chunk(
     path_or_sparse_dataset: Path | D,
     elem_name: str,
     block_info: BlockInfo | None = None,
-) -> sparse.csr_matrix | sparse.csc_matrix | SpArray:
+) -> sparse.csr_matrix | sparse.csc_matrix | CSArray:
     if block_info is None:
         msg = "Block info is required"
         raise ValueError(msg)
@@ -116,12 +116,14 @@ def read_sparse_as_dask(
     major_dim, minor_dim = (1, 0) if is_csc else (0, 1)
     if chunks is not None:
         if len(chunks) != 2:
-            raise ValueError("`chunks` must be a tuple of two integers")
+            msg = "`chunks` must be a tuple of two integers"
+            raise ValueError(msg)
         if chunks[minor_dim] not in {shape[minor_dim], -1, None}:
-            raise ValueError(
+            msg = (
                 "Only the major axis can be chunked. "
                 f"Try setting chunks to {((-1, _DEFAULT_STRIDE) if is_csc else (_DEFAULT_STRIDE, -1))}"
             )
+            raise ValueError(msg)
         stride = (
             chunks[major_dim]
             if chunks[major_dim] not in {None, -1}

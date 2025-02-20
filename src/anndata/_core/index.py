@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse, spmatrix
+from scipy.sparse import issparse
 
-from ..compat import AwkArray, DaskArray, SpArray
+from ..compat import AwkArray, CSArray, CSMatrix, DaskArray
 
 if TYPE_CHECKING:
     from ..compat import Index, Index1D
@@ -69,13 +69,13 @@ def _normalize_index(
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | spmatrix | np.matrix | SpArray
+        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
     ):
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
-            if isinstance(indexer, spmatrix | SpArray):
+            if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
         if not isinstance(indexer, np.ndarray | pd.Index):
@@ -87,27 +87,31 @@ def _normalize_index(
         ):
             indexer_int = indexer.astype(int)
             if np.all((indexer - indexer_int) != 0):
-                raise IndexError(f"Indexer {indexer!r} has floating point values.")
+                msg = f"Indexer {indexer!r} has floating point values."
+                raise IndexError(msg)
         if issubclass(indexer.dtype.type, np.integer | np.floating):
             return indexer  # Might not work for range indexes
         elif issubclass(indexer.dtype.type, np.bool_):
             if indexer.shape != index.shape:
-                raise IndexError(
+                msg = (
                     f"Boolean index does not match AnnData’s shape along this "
                     f"dimension. Boolean index has shape {indexer.shape} while "
                     f"AnnData index has shape {index.shape}."
                 )
+                raise IndexError(msg)
             return indexer
         else:  # indexer should be string array
             positions = index.get_indexer(indexer)
             if np.any(positions < 0):
                 not_found = indexer[positions < 0]
-                raise KeyError(
+                msg = (
                     f"Values {list(not_found)}, from {list(indexer)}, "
                     "are not valid obs/ var names or indices."
                 )
+                raise KeyError(msg)
             return positions  # np.ndarray[int]
-    raise IndexError(f"Unknown indexer {indexer!r} of type {type(indexer)}")
+    msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
+    raise IndexError(msg)
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
@@ -136,11 +140,13 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
         return index, slice(None)
     num_ellipsis = sum(i is Ellipsis for i in index)
     if num_ellipsis > 1:
-        raise IndexError("an index can only have a single ellipsis ('...')")
+        msg = "an index can only have a single ellipsis ('...')"
+        raise IndexError(msg)
     # If index has Ellipsis, filter it out (and if not, error)
     if len(index) > 2:
         if not num_ellipsis:
-            raise IndexError("Received a length 3 index without an ellipsis")
+            msg = "Received a length 3 index without an ellipsis"
+            raise IndexError(msg)
         index = tuple(i for i in index if i is not Ellipsis)
         return index
     # If index has Ellipsis, replace it with slice
@@ -152,7 +158,8 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
         if index is Ellipsis:
             index = slice(None)
         return index, slice(None)
-    raise IndexError("invalid number of indices")
+    msg = "invalid number of indices"
+    raise IndexError(msg)
 
 
 @singledispatch
@@ -173,9 +180,9 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
     return a[subset_idx]
 
 
-@_subset.register(spmatrix)
-@_subset.register(SpArray)
-def _subset_sparse(a: spmatrix | SpArray, subset_idx: Index):
+@_subset.register(CSMatrix)
+@_subset.register(CSArray)
+def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
@@ -231,13 +238,11 @@ def get_vector(adata, k, coldim, idxdim, layer=None):
     in_idx = k in idx
 
     if (in_col + in_idx) == 2:
-        raise ValueError(
-            f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
-        )
+        msg = f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
+        raise ValueError(msg)
     elif (in_col + in_idx) == 0:
-        raise KeyError(
-            f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
-        )
+        msg = f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
+        raise KeyError(msg)
     elif in_col:
         return getattr(adata, coldim)[k].values
     elif in_idx:

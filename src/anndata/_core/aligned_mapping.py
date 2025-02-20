@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray
+from ..compat import AwkArray, CSArray, CSMatrix
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -36,7 +35,7 @@ if TYPE_CHECKING:
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | spmatrix | np.ndarray
+Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
 
 P = TypeVar("P", bound="AlignedMappingBase")
 """Parent mapping an AlignedView is based on."""
@@ -175,9 +174,8 @@ class AlignedView(AlignedMappingBase, Generic[P, I]):
 
     def __delitem__(self, key: str) -> None:
         if key not in self:
-            raise KeyError(
-                "'{key!r}' not found in view of {self.attrname}"
-            )  # Make sure it exists before bothering with a copy
+            msg = f"{key!r} not found in view of {self.attrname}"
+            raise KeyError(msg)  # Make sure it exists before bothering with a copy
         warnings.warn(
             f"Removing element `.{self.attrname}['{key}']` of view, "
             "initializing view as actual.",

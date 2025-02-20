@@ -64,7 +64,8 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.max_python_version }}
+          # https://github.com/cupy/cupy/issues/8651 cupy does not support python3.13 yet
+          python-version: "3.12"
 
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
@@ -72,9 +73,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install AnnData
-        run: |
-          printf "llvmlite>=0.43\nscanpy>=1.10.0rc1" | tee /tmp/constraints.txt
-          uv pip install --system -e ".[dev,test,cu12]" -c /tmp/constraints.txt
+        run: uv pip install --system -e ".[dev,test,cu12]" -c ci/constraints.txt
 
       - name: Env list
         run: pip list

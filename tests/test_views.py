@@ -22,7 +22,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata.compat import CAN_USE_SPARSE_ARRAY, CupyCSCMatrix, DaskArray
+from anndata.compat import CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -179,7 +179,7 @@ def test_modify_view_component(matrix_type, mapping_name, request):
 
     assert init_hash == hash_func(adata)
 
-    if "sparse_array_dask_array" in request.node.callspec.id and CAN_USE_SPARSE_ARRAY:
+    if "sparse_array_dask_array" in request.node.callspec.id:
         msg = "sparse arrays in dask are generally expected to fail but in this case they do not"
         pytest.fail(msg)
 
@@ -631,7 +631,7 @@ def test_invalid_scalar_index(adata, index):
 
 @pytest.mark.parametrize("obs", [False, True])
 @pytest.mark.parametrize("index", [-100, -50, -1])
-def test_negative_scalar_index(adata, index: int, obs: bool):
+def test_negative_scalar_index(*, adata, index: int, obs: bool):
     pos_index = index + (adata.n_obs if obs else adata.n_vars)
 
     if obs:
@@ -673,9 +673,7 @@ def test_viewness_propagation_allclose(adata):
     assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
 
 
-spmat = [sparse.csr_matrix, sparse.csc_matrix]
-if CAN_USE_SPARSE_ARRAY:
-    spmat += [sparse.csr_array, sparse.csc_array]
+spmat = [sparse.csr_matrix, sparse.csc_matrix, sparse.csr_array, sparse.csc_array]
 
 
 @pytest.mark.parametrize("spmat", spmat)
@@ -693,10 +691,7 @@ def test_deepcopy_subset(adata, spmat: type):
     view_type = (
         SparseCSRMatrixView if spmat is sparse.csr_matrix else SparseCSCMatrixView
     )
-    if CAN_USE_SPARSE_ARRAY:
-        view_type = (
-            SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
-        )
+    view_type = SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
     assert not isinstance(
         adata.obsp["spmat"],
         view_type,
@@ -704,9 +699,13 @@ def test_deepcopy_subset(adata, spmat: type):
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
 
 
-array_type = [asarray, sparse.csr_matrix, sparse.csc_matrix]
-if CAN_USE_SPARSE_ARRAY:
-    array_type += [sparse.csr_array, sparse.csc_array]
+array_type = [
+    asarray,
+    sparse.csr_matrix,
+    sparse.csc_matrix,
+    sparse.csr_array,
+    sparse.csc_array,
+]
 
 
 # https://github.com/scverse/anndata/issues/680

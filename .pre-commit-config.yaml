@@ -1,12 +1,10 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.2
+    rev: v0.9.6
     hooks:
       - id: ruff
-        types_or: [python, pyi, jupyter]
         args: ["--fix"]
       - id: ruff-format
-        types_or: [python, pyi, jupyter]
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v4.0.0-alpha.8
     hooks:
@@ -27,7 +25,7 @@ repos:
       - id: no-commit-to-branch
         args: ["--branch=main"]
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0
+    rev: v2.4.1
     hooks:
       - id: codespell
         additional_dependencies:
