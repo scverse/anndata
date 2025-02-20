@@ -1533,7 +1533,7 @@ def concat(
     )
     if are_any_annotations_dataframes:
         annotations_in_memory = (
-            a.to_pandas() if isinstance(a, Dataset2D) else a for a in annotations
+            to_memory(a) if isinstance(a, Dataset2D) else a for a in annotations
         )
         concat_annot = pd.concat(
             unify_dtypes(annotations_in_memory),
@@ -1553,7 +1553,7 @@ def concat(
     )
     if are_any_alt_annotations_dataframes:
         alt_annotations_in_memory = [
-            a.to_pandas() if isinstance(a, Dataset2D) else a for a in alt_annotations
+            to_memory(a) if isinstance(a, Dataset2D) else a for a in alt_annotations
         ]
         alt_annot = merge_dataframes(alt_annotations_in_memory, alt_indices, merge)
     else:
@@ -1565,10 +1565,13 @@ def concat(
                 alt_annotations, use_only_object_dtype=True
             )
         )
-        attrs = get_attrs(annotations_with_only_dask)
+        annotations_with_only_dask = [
+            a.rename({a.attrs["indexing_key"]: "merge_index"})
+            for a in annotations_with_only_dask
+        ]
         alt_annot = Dataset2D(
             xr.merge(annotations_with_only_dask, join=join, compat="override"),
-            attrs=attrs,
+            attrs={"indexing_key": "merge_index"},
         )
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
