@@ -1220,37 +1220,13 @@ def make_xarray_extension_dtypes_dask(
         )
 
 
-def get_attrs(annotations: Iterable[Dataset2D]) -> dict:
-    """Generate the `attrs` from `annotations`.
-
-    Parameters
-    ----------
-    annotations
-        The datasets with `attrs`.
-
-    Returns
-    -------
-    `attrs`.
-    """
-    index_names = np.unique([a.index.name for a in annotations])
-    assert len(index_names) == 1, "All annotations must have the same index name."
-    if any(np.issubdtype(a.index.dtype, np.integer) for a in annotations):
-        msg = "Concatenating with a pandas numeric index among the indices.  Index may likely not be unique."
-        warn(msg, UserWarning)
-    index_keys = [
-        a.attrs["indexing_key"] for a in annotations if "indexing_key" in a.attrs
-    ]
-    attrs = {}
-    if len(np.unique(index_keys)) == 1:
-        attrs["indexing_key"] = index_keys[0]
-    return attrs
-
-
 def concat_dataset2d_on_annot_axis(
     annotations: Iterable[Dataset2D],
     join: Join_T,
 ) -> Dataset2D:
     """Create a concatenate dataset from a list of :class:`~anndata.experimental.backed._xarray.Dataset2D` objects.
+    The goal of this function is to mimic `pd.concat(..., ignore_index=True)` so has some complicated logic
+    for handling the "index" to ensure (a) nothing is loaded into memory and (b) the true index is always tracked.
 
     Parameters
     ----------
@@ -1263,15 +1239,43 @@ def concat_dataset2d_on_annot_axis(
     -------
     Concatenated :class:`~anndata.experimental.backed._xarray.Dataset2D`
     """
+    from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
     from anndata.experimental.backed._compat import Dataset2D
     from anndata.experimental.backed._compat import xarray as xr
 
-    annotations_with_only_dask = list(make_xarray_extension_dtypes_dask(annotations))
-    attrs = get_attrs(annotations_with_only_dask)
-    [index_name] = {a.index.name for a in annotations}
-    return Dataset2D(
-        xr.concat(annotations_with_only_dask, join=join, dim=index_name), attrs=attrs
+    annotations_re_indexed = []
+    for a in make_xarray_extension_dtypes_dask(annotations):
+        old_key = list(a.coords.keys())[0]
+        # First create a dummy index
+        a.coords["concat_index"] = (
+            old_key,
+            pd.RangeIndex(a[a.attrs["indexing_key"]].shape[0]),
+        )
+        # Set all the dimensions to this new dummy index
+        a = a.swap_dims({old_key: "concat_index"})
+        # Move the old coordinate into a variable
+        old_coord = a.coords[old_key]
+        del a.coords[old_key]
+        a[old_key] = old_coord
+        annotations_re_indexed.append(a)
+    # Concat along the dummy index
+    ds = Dataset2D(
+        xr.concat(annotations_re_indexed, join=join, dim="concat_index"),
+        attrs={"indexing_key": "true_concat_index"},
     )
+    # Drop any lingering dimensions (swap doesn't delete)
+    ds = ds.drop_dims(d for d in ds.dims if d != "concat_index")
+    # Create a new true index and then delete the columns resulting from the concatenation for each index.
+    # This includes the dummy column (which is neither a dimension nor a true indexing column)
+    index = xr.concat(
+        [a[a.attrs["indexing_key"]] for a in annotations_re_indexed], dim="concat_index"
+    )
+    ds["true_concat_index"] = index
+    for key in set(a.attrs["indexing_key"] for a in annotations_re_indexed):
+        del ds[key]
+    if DUMMY_RANGE_INDEX_KEY in ds:
+        del ds[DUMMY_RANGE_INDEX_KEY]
+    return ds
 
 
 def concat(
@@ -1542,6 +1546,7 @@ def concat(
         )
     else:
         concat_annot = concat_dataset2d_on_annot_axis(annotations, join)
+        concat_indices.name = "concat_index"
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col

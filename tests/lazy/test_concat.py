@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
 from functools import reduce
 from typing import TYPE_CHECKING
 
@@ -220,12 +219,7 @@ def test_concat_data_with_cluster_to_memory(
         dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
         dd.Client(cluster),
     ):
-        with (
-            pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric")
-            if not load_annotation_index
-            else nullcontext()
-        ):
-            ad.concat([adata_remote, adata_remote], join=join).to_memory()
+        ad.concat([adata_remote, adata_remote], join=join).to_memory()
 
 
 @pytest.mark.parametrize(
@@ -262,12 +256,7 @@ def test_concat_data_subsetting(
 ):
     from anndata.experimental.backed._compat import Dataset2D
 
-    with (
-        pytest.warns(UserWarning, match=r"Concatenating with a pandas numeric")
-        if not load_annotation_index
-        else nullcontext()
-    ):
-        remote_concatenated = ad.concat([adata_remote, adata_remote], join=join)
+    remote_concatenated = ad.concat([adata_remote, adata_remote], join=join)
     if index is not None:
         if np.isscalar(index) and index == "a":
             index = remote_concatenated.obs["obs_cat"] == "a"

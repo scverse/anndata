@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def get_index_dim(ds: xr.DataArray) -> Hashable:
     if len(ds.sizes) != 1:
-        msg = f"xarray Dataset should not have more than 1 dims, found {len(ds)}"
+        msg = f"xarray Dataset should not have more than 1 dims, found {len(ds.sizes)} {ds.sizes}, {ds}"
         raise ValueError(msg)
     return list(ds.indexes.keys())[0]
 
@@ -96,7 +96,7 @@ class Dataset2D(Dataset):
 
 @_subset.register(Dataset2D)
 def _(a: Dataset2D, subset_idx: Index):
-    key = a.attrs["indexing_key"]
+    key = get_index_dim(a)
     # xarray seems to have some code looking for a second entry in tuples
     if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
         subset_idx = subset_idx[0]
