@@ -155,7 +155,7 @@ def gen_random_column(
         )
     if issubdtype(dtype, pd.StringDtype):
         letters = np.fromiter(iter(ascii_letters), "U1")
-        array = pd.array(np.random.choice(letters, n), dtype=dtype)
+        array = pd.array(np.random.choice(letters, n), dtype=pd.StringDtype())
         array[np.random.randint(0, 2, size=n, dtype=bool)] = pd.NA
         return "string", array
     # if issubdtype(dtype, pd.DatetimeTZDtype):
