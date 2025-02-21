@@ -56,7 +56,7 @@ NS = TypeVar("NS")
 
 
 # Currently, there are no reserved namespaces internally, but if there ever are,
-# we can use this to not allow them to be overridden.
+# this will not allow them to be overridden.
 _reserved_namespaces: set[str] = set.union(*(cls._accessors for cls in (AnnData,)))
 
 
@@ -114,7 +114,7 @@ def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
     >>> import numpy as np
     >>>
     >>>
-    >>> @ad.extensions.register_anndata_namespace("transforms")
+    >>> @ad.register_anndata_namespace("transforms")
     ... class TransformX:
     ...     def __init__(self, adata: ad.AnnData):
     ...         self._adata = adata
