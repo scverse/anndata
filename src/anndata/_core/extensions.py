@@ -118,10 +118,13 @@ def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
     ... class TransformX:
     ...     def __init__(self, adata: ad.AnnData):
     ...         self._adata = adata
-    >>>     def arcsinh_cofactor(
+    ...
+    ...     def arcsinh_cofactor(
     ...         self, shift: float, scale: float, layer: str, inplace: bool = False
     ...     ) -> ad.AnnData:
-    ...         self._adata.layers[layer] = np.arcsinh(self._adata.X.toarray() / scale) + shift
+    ...         self._adata.layers[layer] = (
+    ...             np.arcsinh(self._adata.X.toarray() / scale) + shift
+    ...         )
     ...         return None if inplace else self._adata
     >>>
     >>> rng = default_rng(42)
