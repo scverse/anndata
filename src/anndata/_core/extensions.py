@@ -127,7 +127,7 @@ def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
     ...         )
     ...         return None if inplace else self._adata
     >>>
-    >>> rng = default_rng(42)
+    >>> rng = np.random.default_rng(42)
     >>> adata = ad.AnnData(
     ...     X=csr_matrix(rng.poisson(1, size=(100, 2000)), dtype=np.float32),
     ... )
