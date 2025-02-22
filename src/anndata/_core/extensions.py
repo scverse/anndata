@@ -134,6 +134,6 @@ def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
     >>> adata.transforms.arcsinh_cofactor(1, 1, "arcsinh", inplace=True)
     >>> adata
     AnnData object with n_obs × n_vars = 100 × 2000
-         layers: 'arcsinh'
+        layers: 'arcsinh'
     """
     return _create_namespace(name, AnnData)
