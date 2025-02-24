@@ -588,10 +588,11 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         append_data = sparse_matrix.data
         append_indices = sparse_matrix.indices
         if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
-            append_data = append_data[...]
-            append_indices = append_indices[...]
-        data[orig_data_size:] = append_data
-
+            append_data_in_memory = append_data[...]
+            data[orig_data_size:] = append_data_in_memory
+            del append_data_in_memory
+        else:
+            data[orig_data_size:] = append_data
         # indptr
         indptr = self.group["indptr"]
         orig_data_size = indptr.shape[0]
@@ -601,6 +602,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         )
 
         # indices
+        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+            append_indices = append_indices[...]
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
