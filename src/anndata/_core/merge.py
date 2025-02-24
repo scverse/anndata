@@ -1220,6 +1220,9 @@ def make_xarray_extension_dtypes_dask(
         )
 
 
+DS_CONCAT_DUMMY_INDEX_NAME = "concat_index"
+
+
 def concat_dataset2d_on_annot_axis(
     annotations: Iterable[Dataset2D],
     join: Join_T,
@@ -1247,12 +1250,12 @@ def concat_dataset2d_on_annot_axis(
     for a in make_xarray_extension_dtypes_dask(annotations):
         old_key = list(a.coords.keys())[0]
         # First create a dummy index
-        a.coords["concat_index"] = (
+        a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
-            pd.RangeIndex(a[a.attrs["indexing_key"]].shape[0]),
+            pd.RangeIndex(a[a.attrs["indexing_key"]].shape[0]).astype("str"),
         )
         # Set all the dimensions to this new dummy index
-        a = a.swap_dims({old_key: "concat_index"})
+        a = a.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
         # Move the old coordinate into a variable
         old_coord = a.coords[old_key]
         del a.coords[old_key]
@@ -1260,17 +1263,23 @@ def concat_dataset2d_on_annot_axis(
         annotations_re_indexed.append(a)
     # Concat along the dummy index
     ds = Dataset2D(
-        xr.concat(annotations_re_indexed, join=join, dim="concat_index"),
-        attrs={"indexing_key": "true_concat_index"},
+        xr.concat(annotations_re_indexed, join=join, dim=DS_CONCAT_DUMMY_INDEX_NAME),
+        attrs={"indexing_key": f"true_{DS_CONCAT_DUMMY_INDEX_NAME}"},
     )
+    ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = pd.RangeIndex(
+        ds.coords[DS_CONCAT_DUMMY_INDEX_NAME].shape[0]
+    ).astype("str")
     # Drop any lingering dimensions (swap doesn't delete)
-    ds = ds.drop_dims(d for d in ds.dims if d != "concat_index")
+    ds = ds.drop_dims(d for d in ds.dims if d != DS_CONCAT_DUMMY_INDEX_NAME)
     # Create a new true index and then delete the columns resulting from the concatenation for each index.
     # This includes the dummy column (which is neither a dimension nor a true indexing column)
     index = xr.concat(
-        [a[a.attrs["indexing_key"]] for a in annotations_re_indexed], dim="concat_index"
+        [a[a.attrs["indexing_key"]] for a in annotations_re_indexed],
+        dim=DS_CONCAT_DUMMY_INDEX_NAME,
     )
-    ds["true_concat_index"] = index
+    # prevent duplicate values
+    index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
+    ds[f"true_{DS_CONCAT_DUMMY_INDEX_NAME}"] = index
     for key in set(a.attrs["indexing_key"] for a in annotations_re_indexed):
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
@@ -1544,10 +1553,10 @@ def concat(
             join=join,
             ignore_index=True,
         )
+        concat_annot.index = concat_indices
     else:
         concat_annot = concat_dataset2d_on_annot_axis(annotations, join)
-        concat_indices.name = "concat_index"
-    concat_annot.index = concat_indices
+        concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
     if label is not None:
         concat_annot[label] = label_col
 
