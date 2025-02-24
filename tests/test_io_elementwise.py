@@ -194,6 +194,18 @@ def create_sparse_store(
         pytest.param(
             pd.array([True, False, True, True]), "nullable-boolean", id="pd_arr_bool"
         ),
+        pytest.param(
+            zarr.ones((100, 100), chunks=(10, 10)),
+            "array",
+            id="zarr_dense_array",
+        ),
+        pytest.param(
+            create_dense_store(
+                h5py.File("test1.h5", mode="w", driver="core", backing_store=False)
+            )["X"],
+            "array",
+            id="h5_dense_array",
+        ),
         # pytest.param(bytes, b"some bytes", "bytes", id="py_bytes"), # Does not work for zarr
         # TODO consider how specific encodings should be. Should we be fully describing the written type?
         # Currently the info we add is: "what you wouldn't be able to figure out yourself"
