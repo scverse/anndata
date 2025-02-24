@@ -158,6 +158,15 @@ Types used by the former:
    experimental.StorageType
 ```
 
+## Extensions
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   register_anndata_namespace
+```
+
 ## Errors and warnings
 
 ```{eval-rst}

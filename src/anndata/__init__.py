@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 from ._core.anndata import AnnData
+from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
 from ._core.raw import Raw
 from ._settings import settings
@@ -78,4 +79,5 @@ __all__ = [
     "WriteWarning",
     "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
+    "register_anndata_namespace",
 ]
