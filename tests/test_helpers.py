@@ -8,11 +8,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import (
-    CupyArray,
-    CupyCSRMatrix,
-    DaskArray,
-)
+from anndata.compat import CupyArray, CupyCSRMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
