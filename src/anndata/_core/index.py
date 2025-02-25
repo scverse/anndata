@@ -51,7 +51,7 @@ def _normalize_index(
         index.dtype == float or index.dtype == int
     ):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
-        raise ValueError(msg)
+        raise TypeError(msg)
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
