@@ -16,11 +16,8 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable
+    from collections.abc import Generator, Iterable
     from pathlib import Path
-    from typing import TypeVar
-
-    F = TypeVar("F", bound=Callable)
 
 
 # TODO: Should be done in pyproject.toml eventually
@@ -42,16 +39,6 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
         request.getfixturevalue("_doctest_env")
 
     anndata.settings.reset(anndata.settings._registered_options.keys())
-
-
-def doctest_needs(mod: str) -> Callable[[F], F]:
-    """Mark function with doctest dependency."""
-
-    def decorator(func: F) -> F:
-        func._doctest_needs = mod
-        return func
-
-    return decorator
 
 
 @pytest.fixture

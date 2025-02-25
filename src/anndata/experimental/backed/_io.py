@@ -9,7 +9,7 @@ import h5py
 
 from anndata._io.specs.registry import read_elem_lazy
 from anndata._types import AnnDataElem
-from testing.anndata._pytest import doctest_needs
+from testing.anndata._doctest import doctest_needs
 
 from ..._core.anndata import AnnData
 from ..._settings import settings
