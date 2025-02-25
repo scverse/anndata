@@ -98,6 +98,31 @@ class AccessorNameSpace(Generic[NS]):
 
 
 def _check_namespace_signature(ns_class: type) -> None:
+    """Validate the signature of a namespace class for AnnData extensions.
+
+    This function ensures that any class used to extend AnnData functionality
+    has an `__init__` method that accepts an AnnData instance as its second
+    parameter (after `self`), properly named 'adata' and with the correct
+    type annotation.
+
+    Parameters
+    ----------
+    ns_class : type
+        The namespace class to validate.
+
+    Raises
+    ------
+    TypeError
+        If the `__init__` method has fewer than 2 parameters (missing the AnnData parameter).
+    AttributeError
+        If the second parameter of `__init__` lacks a type annotation.
+    TypeError
+        If the second parameter of `__init__` is not named 'adata'.
+    TypeError
+        If the second parameter of `__init__` is not annotated as the 'AnnData' class.
+    TypeError
+        If both the name and type annotation of the second parameter are incorrect.
+    """
     sig = inspect.signature(ns_class.__init__)
     params = list(sig.parameters.values())
 
