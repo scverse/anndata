@@ -9,6 +9,7 @@ import h5py
 
 from anndata._io.specs.registry import read_elem_lazy
 from anndata._types import AnnDataElem
+from testing.anndata._pytest import doctest_needs
 
 from ..._core.anndata import AnnData
 from ..._settings import settings
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from ...compat import ZarrGroup
 
 
+@doctest_needs("xarray")
 def read_lazy(
     store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
     *,

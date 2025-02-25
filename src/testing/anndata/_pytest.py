@@ -9,7 +9,6 @@ It lives outside of the anndata package in order to avoid importing anndata too 
 
 from __future__ import annotations
 
-import importlib
 import re
 import warnings
 from typing import TYPE_CHECKING, cast
@@ -17,8 +16,11 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Callable, Generator, Iterable
     from pathlib import Path
+    from typing import TypeVar
+
+    F = TypeVar("F", bound=Callable)
 
 
 # TODO: Should be done in pyproject.toml eventually
@@ -42,6 +44,16 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
     anndata.settings.reset(anndata.settings._registered_options.keys())
 
 
+def doctest_needs(mod: str) -> Callable[[F], F]:
+    """Mark function with doctest dependency."""
+
+    def decorator(func: F) -> F:
+        func._doctest_needs = mod
+        return func
+
+    return decorator
+
+
 @pytest.fixture
 def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
@@ -57,9 +69,6 @@ def _doctest_env(
     from anndata.utils import import_name
 
     assert isinstance(request.node.parent, pytest.Module)
-    if "experimental/backed" in str(request.node.path):
-        if importlib.util.find_spec("xarray") is None:
-            pytest.skip("xarray not installed")
     # request.node.parent is either a DoctestModule or a DoctestTextFile.
     # Only DoctestModule has a .obj attribute (the imported module).
     if request.node.parent.obj:
@@ -68,6 +77,8 @@ def _doctest_env(
         if warning_detail := getattr(func, "__deprecated", None):
             cat, msg, _ = warning_detail
             warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
+        if mod := getattr(func, "_doctest_needs", None) is not None:
+            pytest.skip(reason=f"doctest needs {mod} to run")
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield
