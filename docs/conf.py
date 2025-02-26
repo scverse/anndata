@@ -22,7 +22,7 @@ sys.path[:0] = [str(_extension_dir)]
 # General information
 project = "anndata"
 author = f"{project} developers"
-copyright = f"{datetime.now():%Y}, {author}"
+copyright = f"{datetime.now():%Y}, scverse"
 release = version = metadata.version("anndata")
 
 # default settings
