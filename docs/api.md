@@ -164,8 +164,17 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   ExtensionNamespace
    register_anndata_namespace
+
+```
+
+Types used by the former:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   ExtensionNamespace
 ```
 
 ## Errors and warnings

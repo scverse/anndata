@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import inspect
-
-# from collections.abc import Callable
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -60,20 +58,24 @@ def find_stacklevel() -> int:
     return n
 
 
+NS = TypeVar("NS")
+
+
 @runtime_checkable
-class ExtensionNamespace(Protocol):
+class ExtensionNamespace(Protocol[NS]):
     """Protocol for extension namespaces.
 
-    Enforces that the namespace initializer accepts a class with the `__init__` method.
-    Does not (and cannot) enforce that the `__init__` accepts the correct signature.
-    See `_check_namespace_signature` for that.
-    This is mainly useful for static type checking with mypy and IDEs.
+    Enforces that the namespace initializer accepts a class with the proper `__init__` method.
+    Protocol's can't enforce that the `__init__` accepts the correct types. See
+    `_check_namespace_signature` for that. This is mainly useful for static type
+    checking with mypy and IDEs.
     """
 
-    def __init__(self, adata: AnnData) -> None: ...
-
-
-NS = TypeVar("NS", bound=ExtensionNamespace)
+    def __init__(self, adata: AnnData) -> None:
+        """
+        Used to enforce the correct signature for extension namespaces.
+        """
+        ...
 
 
 # Reserved namespaces include accessors built into AnnData (currently there are none)
