@@ -23,7 +23,7 @@ import anndata as ad
 # Based off of the extension framework in Polars
 # https://github.com/pola-rs/polars/blob/main/py-polars/polars/api.py
 
-__all__ = ["register_anndata_namespace"]
+__all__ = ["register_anndata_namespace", "ExtensionNamespace"]
 
 
 def find_stacklevel() -> int:
@@ -100,14 +100,19 @@ class AccessorNameSpace(Generic[NS]):
 def _check_namespace_signature(ns_class: type) -> None:
     """Validate the signature of a namespace class for AnnData extensions.
 
-    This function ensures that any class used to extend AnnData functionality
-    has an `__init__` method that accepts an AnnData instance as its second
-    parameter (after `self`), properly named 'adata' and with the correct
-    type annotation.
+    This function ensures that any class intended to be used as an extension namespace
+    has a properly formatted `__init__` method such that:
+
+    1. Accepts at least two parameters (self and adata)
+    2. Has 'adata' as the name of the second parameter
+    3. Has the second parameter properly type-annotated as 'AnnData' or any equivalent import alias
+
+    The function performs runtime validation of these requirements before a namespace
+    can be registered through the `register_anndata_namespace` decorator.
 
     Parameters
     ----------
-    ns_class : type
+    ns_class
         The namespace class to validate.
 
     Raises
@@ -122,6 +127,7 @@ def _check_namespace_signature(ns_class: type) -> None:
         If the second parameter of `__init__` is not annotated as the 'AnnData' class.
     TypeError
         If both the name and type annotation of the second parameter are incorrect.
+
     """
     sig = inspect.signature(ns_class.__init__)
     params = list(sig.parameters.values())
@@ -139,7 +145,7 @@ def _check_namespace_signature(ns_class: type) -> None:
 
     name_ok = param.name == "adata"
 
-    # Resolve the annotation—using get_type_hints to handle forward references and aliases.
+    # Resolve the annotation using get_type_hints to handle forward references and aliases.
     try:
         type_hints = get_type_hints(ns_class.__init__)
         resolved_type = type_hints.get(param.name, param.annotation)
@@ -148,7 +154,6 @@ def _check_namespace_signature(ns_class: type) -> None:
 
     type_ok = resolved_type is ad.AnnData
 
-    # Use match-case to dispatch based on the correctness of the name and type.
     match (name_ok, type_ok):
         case (True, True):
             return  # Signature is correct.
@@ -192,44 +197,71 @@ def _create_namespace(name: str, cls: type[AnnData]) -> Callable[[type], type]:
 def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
     """Decorator for registering custom functionality with an :class:`~anndata.AnnData` object.
 
+    This decorator allows you to extend AnnData objects with custom methods and properties
+    organized under a namespace. The namespace becomes accessible as an attribute on AnnData
+    instances, providing a clean way to you to add domain-specific functionality without modifying
+    the AnnData class itself, or extending the class with additional methods as you see fit in your workflow.
+
     Parameters
     ----------
     name
-        Name under which the accessor should be registered. A warning is issued
-        if this name conflicts with a preexisting attribute.
+        Name under which the accessor should be registered. This will be the attribute name
+        used to access your namespace's functionality on AnnData objects (e.g., `adata.{name}`).
+        Cannot conflict with existing AnnData attributes like `obs`, `var`, `X`, etc. The list of reserved
+        attributes includes everything outputted by `dir(AnnData)`.
+
+    Returns
+    -------
+        A decorator that registers the decorated class as a custom namespace.
 
     Notes
     -----
-    The namespace initializer must accept a single parameter, which must be named
-    ``adata`` and must be annotated with :class:`~anndata.AnnData`.
+    Implementation requirements:
+
+    1. The decorated class must have an `__init__` method that accepts exactly one parameter
+       (besides `self`) named `adata` and annotated with type :class:`~anndata.AnnData`.
+    2. The namespace will be initialized with the AnnData object on first access and then
+       cached on the instance.
+    3. If the namespace name conflicts with an existing namespace, a warning is issued.
+    4. If the namespace name conflicts with a built-in AnnData attribute, an AttributeError is raised.
 
     Examples
     --------
+    Simple transformation namespace:
+
     >>> import anndata as ad
-    >>> from scipy.sparse import csr_matrix
     >>> import numpy as np
-    >>>
     >>>
     >>> @ad.register_anndata_namespace("transforms")
     ... class TransformX:
     ...     def __init__(self, adata: ad.AnnData):
     ...         self._adata = adata
     ...
-    ...     def arcsinh_cofactor(
-    ...         self, shift: float, scale: float, layer: str, inplace: bool = False
-    ...     ) -> ad.AnnData:
-    ...         self._adata.layers[layer] = (
-    ...             np.arcsinh(self._adata.X.toarray() / scale) + shift
-    ...         )
-    ...         return None if inplace else self._adata
+    ...     def log1p(
+    ...         self, layer: str = None, inplace: bool = False
+    ...     ) -> ad.AnnData | None:
+    ...         '''Log1p transform the data.'''
+    ...         data = self._adata.layers[layer] if layer else self._adata.X
+    ...         log1p_data = np.log1p(data)
+    ...
+    ...         if layer:
+    ...             layer_name = f"{layer}_log1p" if not inplace else layer
+    ...         else:
+    ...             layer_name = "log1p"
+    ...
+    ...         self._adata.layers[layer_name] = log1p_data
+    ...
+    ...         if not inplace:
+    ...             return self._adata
     >>>
+    >>> # Create an AnnData object
     >>> rng = np.random.default_rng(42)
-    >>> adata = ad.AnnData(
-    ...     X=csr_matrix(rng.poisson(1, size=(100, 2000)), dtype=np.float32),
-    ... )
-    >>> adata.transforms.arcsinh_cofactor(1, 1, "arcsinh", inplace=True)
-    >>> adata
+    >>> adata = ad.AnnData(X=rng.poisson(1, size=(100, 2000)))
+    >>>
+    >>> # Use the registered namespace
+    >>> adata.transforms.log1p()  # Transforms X and returns the AnnData object
     AnnData object with n_obs × n_vars = 100 × 2000
-        layers: 'arcsinh'
+        layers: 'log1p'
+
     """
     return _create_namespace(name, ad.AnnData)

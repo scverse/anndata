@@ -164,6 +164,7 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
+   ExtensionNamespace
    register_anndata_namespace
 ```
 
