@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import h5py
 
-from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
+from ..compat import AwkArray, DaskArray, DaskDataFrame, ZarrArray, ZarrGroup
 from .sparse_dataset import BaseCompressedSparseDataset
 
 if TYPE_CHECKING:
@@ -143,7 +143,8 @@ def _(x: BaseCompressedSparseDataset, *, copy: bool = False):
 
 
 @to_memory.register(DaskArray)
-def _(x: DaskArray, *, copy: bool = False):
+@to_memory.register(DaskDataFrame)
+def _(x: DaskArray | DaskDataFrame, *, copy: bool = False):
     return x.compute()
 
 

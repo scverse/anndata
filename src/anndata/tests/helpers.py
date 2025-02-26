@@ -32,6 +32,7 @@ from anndata.compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    DaskDataFrame,
     ZarrArray,
 )
 from anndata.utils import asarray
@@ -644,8 +645,13 @@ def assert_equal_h5py_dataset(
 
 
 @assert_equal.register(DaskArray)
+@assert_equal.register(DaskDataFrame)
 def assert_equal_dask_array(
-    a: DaskArray, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: DaskArray | DaskDataFrame,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
 ):
     assert_equal(b, a.compute(), exact=exact, elem_name=elem_name)
 
