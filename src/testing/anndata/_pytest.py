@@ -65,12 +65,10 @@ def _doctest_env(
         if warning_detail := getattr(func, "__deprecated", None):
             cat, msg, _ = warning_detail
             warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
-        if mod := getattr(func, "_doctest_needs", None) is not None:
-            request.applymarker(
-                pytest.mark.skipif(
-                    not find_spec(mod), reason=f"doctest needs {mod} to run"
-                )
-            )
+        if (mod := getattr(func, "_doctest_needs", None)) is not None and not find_spec(
+            mod
+        ):
+            request.applymarker(pytest.skip(reason=f"doctest needs {mod} to run"))
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield

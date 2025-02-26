@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing
-from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -258,12 +257,3 @@ def get_key_trackers_for_columns_on_axis(
 
 
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
-
-
-def pytest_collection_modifyitems(items):
-    for item in items:
-        item.add_marker(
-            pytest.mark.skipif(
-                not find_spec("xarray"), reason="Xarray is not installed"
-            )
-        )
