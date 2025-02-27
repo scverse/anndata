@@ -15,7 +15,7 @@
     "[json][jsonc]": {
         "editor.defaultFormatter": "biomejs.biome",
     },
-    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.typeCheckingMode": "basic",
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
         "--color=yes",

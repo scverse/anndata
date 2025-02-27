@@ -174,7 +174,7 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   ExtensionNamespace
+   _types.ExtensionNamespace
 ```
 
 ## Errors and warnings

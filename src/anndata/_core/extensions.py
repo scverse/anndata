@@ -4,15 +4,12 @@ import inspect
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
-    Generic,
-    Protocol,
-    TypeVar,
     get_type_hints,
-    runtime_checkable,
 )
 from warnings import warn
 
 from anndata import AnnData
+from anndata._types import ExtensionNamespace
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,7 +18,7 @@ import anndata as ad
 # Based off of the extension framework in Polars
 # https://github.com/pola-rs/polars/blob/main/py-polars/polars/api.py
 
-__all__ = ["register_anndata_namespace", "ExtensionNamespace"]
+__all__ = ["register_anndata_namespace"]
 
 
 def find_stacklevel() -> int:
@@ -58,39 +55,21 @@ def find_stacklevel() -> int:
     return n
 
 
-NS = TypeVar("NS")
-
-
-@runtime_checkable
-class ExtensionNamespace(Protocol[NS]):
-    """Protocol for extension namespaces.
-
-    Enforces that the namespace initializer accepts a class with the proper `__init__` method.
-    Protocol's can't enforce that the `__init__` accepts the correct types. See
-    `_check_namespace_signature` for that. This is mainly useful for static type
-    checking with mypy and IDEs.
-    """
-
-    def __init__(self, adata: AnnData) -> None:
-        """
-        Used to enforce the correct signature for extension namespaces.
-        """
-        ...
-
-
 # Reserved namespaces include accessors built into AnnData (currently there are none)
 # and all current attributes of AnnData
 _reserved_namespaces: set[str] = set(AnnData._accessors) | set(dir(ad.AnnData))
 
 
-class AccessorNameSpace(Generic[NS]):
+class AccessorNameSpace(ExtensionNamespace):
     """Establish property-like namespace object for user-defined functionality."""
 
-    def __init__(self, name: str, namespace: type[NS]) -> None:
+    def __init__(self, name: str, namespace: type[ExtensionNamespace]) -> None:
         self._accessor = name
         self._ns = namespace
 
-    def __get__(self, instance: NS | None, cls: type[NS]) -> NS | type[NS]:
+    def __get__(
+        self, instance: ExtensionNamespace | None, cls: type[ExtensionNamespace]
+    ) -> ExtensionNamespace | type[ExtensionNamespace]:
         if instance is None:
             return self._ns
 
@@ -196,7 +175,9 @@ def _create_namespace(name: str, cls: type[AnnData]) -> Callable[[type], type]:
     return namespace
 
 
-def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
+def register_anndata_namespace(
+    name: str,
+) -> Callable[[type[ExtensionNamespace]], type[ExtensionNamespace]]:
     """Decorator for registering custom functionality with an :class:`~anndata.AnnData` object.
 
     This decorator allows you to extend AnnData objects with custom methods and properties
@@ -229,12 +210,12 @@ def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
 
     Examples
     --------
-    Simple transformation namespace:
+    Simple transformation namespace with two methods:
 
     >>> import anndata as ad
     >>> import numpy as np
     >>>
-    >>> @ad.register_anndata_namespace("transforms")
+    >>> @ad.register_anndata_namespace("transform")
     ... class TransformX:
     ...     def __init__(self, adata: ad.AnnData):
     ...         self._adata = adata
@@ -255,15 +236,34 @@ def register_anndata_namespace(name: str) -> Callable[[type[NS]], type[NS]]:
     ...
     ...         if not inplace:
     ...             return self._adata
+    ...
+    ...     def arcsinh(
+    ...         self, layer: str = None, scale: float = 1.0, inplace: bool = False
+    ...     ) -> ad.AnnData | None:
+    ...         '''Arcsinh transform the data with optional scaling.'''
+    ...         data = self._adata.layers[layer] if layer else self._adata.X
+    ...         asinh_data = np.arcsinh(data / scale)
+    ...
+    ...         if layer:
+    ...             layer_name = f"{layer}_asinh" if not inplace else layer
+    ...         else:
+    ...             layer_name = "asinh"
+    ...
+    ...         self._adata.layers[layer_name] = asinh_data
+    ...
+    ...         if not inplace:
+    ...             return self._adata
     >>>
     >>> # Create an AnnData object
     >>> rng = np.random.default_rng(42)
     >>> adata = ad.AnnData(X=rng.poisson(1, size=(100, 2000)))
     >>>
     >>> # Use the registered namespace
-    >>> adata.transforms.log1p()  # Transforms X and returns the AnnData object
+    >>> adata.transform.log1p()  # Transforms X and returns the AnnData object
     AnnData object with n_obs × n_vars = 100 × 2000
         layers: 'log1p'
-
+    >>> adata.transform.arcsinh()  # Transforms X and returns the AnnData object
+    AnnData object with n_obs × n_vars = 100 × 2000
+        layers: 'log1p', 'arcsinh'
     """
     return _create_namespace(name, ad.AnnData)
