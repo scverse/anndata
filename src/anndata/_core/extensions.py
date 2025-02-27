@@ -245,9 +245,9 @@ def register_anndata_namespace(
     ...         asinh_data = np.arcsinh(data / scale)
     ...
     ...         if layer:
-    ...             layer_name = f"{layer}_asinh" if not inplace else layer
+    ...             layer_name = f"{layer}_arcsinh" if not inplace else layer
     ...         else:
-    ...             layer_name = "asinh"
+    ...             layer_name = "arcsinh"
     ...
     ...         self._adata.layers[layer_name] = asinh_data
     ...
