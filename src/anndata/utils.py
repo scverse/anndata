@@ -359,14 +359,14 @@ def warn_once(msg: str, category: type[Warning], stacklevel: int = 1):
 
 def deprecated(
     new_name: str,
-    category: type[Warning] = DeprecationWarning,
+    category: type[Warning] = FutureWarning,
     add_msg: str = "",
     *,
     hide: bool = True,
 ):
     """\
     This is a decorator which can be used to mark functions
-    as deprecated. It will result in a warning being emitted
+    as deprecated with a FutureWarning. It will result in a warning being emitted
     when the function is used.
     """
 

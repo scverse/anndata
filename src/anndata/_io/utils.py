@@ -133,7 +133,7 @@ def read_attribute(*args, **kwargs):
 
     warn(
         "This internal function has been deprecated, please use read_elem instead",
-        DeprecationWarning,
+        FutureWarning,
     )
     return read_elem(*args, **kwargs)
 
@@ -143,7 +143,7 @@ def write_attribute(*args, **kwargs):
 
     warn(
         "This internal function has been deprecated, please use write_elem instead",
-        DeprecationWarning,
+        FutureWarning,
     )
     return write_elem(*args, **kwargs)
 
