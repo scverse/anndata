@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from anndata.compat import CSArray
+from anndata.compat import CSArray, DaskDataFrame
 
 from .._warnings import ImplicitModificationWarning
 from ..utils import (
@@ -51,7 +51,7 @@ def coerce_array(
     if any(is_non_csc_r_array_or_matrix):
         msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
         raise ValueError(msg)
-    if isinstance(value, pd.DataFrame):
+    if isinstance(value, pd.DataFrame | DaskDataFrame):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)
         return value if allow_df else ensure_df_homogeneous(value, name)

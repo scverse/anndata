@@ -29,6 +29,7 @@ from anndata.compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
+    DaskDataFrame,
     H5Array,
     H5File,
     H5Group,
@@ -896,6 +897,19 @@ def write_dataframe(
         )
 
 
+@_REGISTRY.register_write(H5Group, DaskDataFrame, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, DaskDataFrame, IOSpec("dataframe", "0.2.0"))
+def write_dask_dataframe(
+    f: GroupStorageType,
+    key: str,
+    df: DaskDataFrame,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    _writer.write_elem(f, key, df.compute(), dataset_kwargs=dataset_kwargs)
+
+
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
 def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
@@ -1051,6 +1065,12 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
 )
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.ArrowStringArray, IOSpec("nullable-string-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.ArrowStringArray, IOSpec("nullable-string-array", "0.1.0")
+)
 def write_nullable(
     f: GroupStorageType,
     k: str,
@@ -1073,7 +1093,7 @@ def write_nullable(
     g = f.require_group(k)
     values = (
         v.to_numpy(na_value="")
-        if isinstance(v, pd.arrays.StringArray)
+        if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray)
         else v.to_numpy(na_value=0, dtype=v.dtype.numpy_dtype)
     )
     _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)

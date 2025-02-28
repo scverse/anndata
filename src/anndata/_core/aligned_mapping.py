@@ -264,7 +264,16 @@ class AxisArraysBase(AlignedMappingBase):
     def _validate_value(self, val: Value, key: str) -> Value:
         if isinstance(val, pd.DataFrame):
             raise_value_error_if_multiindex_columns(val, f"{self.attrname}[{key!r}]")
-            if not val.index.equals(self.dim_names):
+            if (
+                not val.index.equals(self.dim_names)
+                and (
+                    val.index.dtype != "string"
+                    and self.dim_names.dtype != "O"
+                    or val.index.dtype != "O"
+                    and self.dim_names.dtype != "string"
+                )
+                and (val.index != self.dim_names).any()
+            ):
                 # Could probably also re-order index if it’s contained
                 try:
                     pd.testing.assert_index_equal(val.index, self.dim_names)

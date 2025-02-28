@@ -11,7 +11,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
-from anndata.compat import CupyArray, DaskArray
+from anndata.compat import CupyArray, DaskArray, DaskDataFrame
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
@@ -74,6 +74,7 @@ def test_dask_X_view():
 
 def test_dask_write(adata, tmp_path, diskfmt):
     import dask.array as da
+    import dask.dataframe as ddf
     import numpy as np
 
     pth = tmp_path / f"test_write.{diskfmt}"
@@ -84,6 +85,12 @@ def test_dask_write(adata, tmp_path, diskfmt):
     adata.obsm["a"] = da.random.random((M, 10))
     adata.obsm["b"] = da.random.random((M, 10))
     adata.varm["a"] = da.random.random((N, 10))
+    adata.varm["b"] = ddf.from_pandas(
+        pd.DataFrame(
+            {"A": np.arange(N), "B": np.random.randint(1e6, size=N)},
+            index=adata.var_names,
+        )
+    )
 
     orig = adata
     write(orig, pth)
@@ -93,6 +100,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(orig.varm["b"], orig.varm["b"])
     assert_equal(curr.obsm["a"], orig.obsm["a"])
 
     assert isinstance(curr.X, np.ndarray)
@@ -105,6 +113,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
 
 def test_dask_distributed_write(adata, tmp_path, diskfmt):
     import dask.array as da
+    import dask.dataframe as ddf
     import dask.distributed as dd
     import numpy as np
 
@@ -119,6 +128,12 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
         adata.obsm["a"] = da.random.random((M, 10))
         adata.obsm["b"] = da.random.random((M, 10))
         adata.varm["a"] = da.random.random((N, 10))
+        adata.varm["b"] = ddf.from_pandas(
+            pd.DataFrame(
+                {"A": np.arange(N), "B": np.random.randint(1e6, size=N)},
+                index=adata.var_names,
+            )
+        )
         orig = adata
         if diskfmt == "h5ad":
             with pytest.raises(ValueError, match=r"Cannot write dask arrays to hdf5"):
@@ -131,6 +146,7 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(orig.varm["b"], curr.varm["b"])
     assert_equal(curr.obsm["a"], orig.obsm["a"])
 
     assert isinstance(curr.X, np.ndarray)
@@ -143,6 +159,7 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
 
 def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     import dask.array as da
+    import dask.dataframe as ddf
     import numpy as np
 
     pth = tmp_path / f"test_write.{diskfmt}"
@@ -153,6 +170,12 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     adata.obsm["a"] = da.random.random((M, 10))
     adata.obsm["b"] = da.random.random((M, 10))
     adata.varm["a"] = da.random.random((N, 10))
+    adata.varm["b"] = ddf.from_pandas(
+        pd.DataFrame(
+            {"A": np.arange(N), "B": np.random.randint(1e6, size=N)},
+            index=adata.var_names,
+        )
+    )
 
     orig = adata
     write(orig, pth)
@@ -161,6 +184,7 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["a"], DaskArray)
     assert isinstance(orig.varm["a"], DaskArray)
+    assert isinstance(orig.varm["b"], DaskDataFrame)
 
     mem = orig.to_memory()
 
@@ -171,20 +195,25 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     assert_equal(curr.obsm["a"], orig.obsm["a"])
     assert_equal(mem.obsm["a"], orig.obsm["a"])
     assert_equal(mem.varm["a"], orig.varm["a"])
+    assert_equal(orig.varm["b"], mem.varm["b"])
 
     assert isinstance(curr.X, np.ndarray)
     assert isinstance(curr.obsm["a"], np.ndarray)
     assert isinstance(curr.varm["a"], np.ndarray)
+    assert isinstance(curr.varm["b"], pd.DataFrame)
     assert isinstance(mem.X, np.ndarray)
     assert isinstance(mem.obsm["a"], np.ndarray)
     assert isinstance(mem.varm["a"], np.ndarray)
+    assert isinstance(mem.varm["b"], pd.DataFrame)
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["a"], DaskArray)
     assert isinstance(orig.varm["a"], DaskArray)
+    assert isinstance(orig.varm["b"], DaskDataFrame)
 
 
 def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
     import dask.array as da
+    import dask.dataframe as ddf
     import numpy as np
 
     pth = tmp_path / f"test_write.{diskfmt}"
@@ -195,6 +224,12 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
     adata.obsm["a"] = da.random.random((M, 10))
     adata.obsm["b"] = da.random.random((M, 10))
     adata.varm["a"] = da.random.random((N, 10))
+    adata.varm["b"] = ddf.from_pandas(
+        pd.DataFrame(
+            {"A": np.arange(N), "B": np.random.randint(1e6, size=N)},
+            index=adata.var_names,
+        )
+    )
 
     orig = adata
     write(orig, pth)
@@ -209,25 +244,36 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
     assert_equal(curr.obsm["a"], orig.obsm["a"])
     assert_equal(mem.obsm["a"], orig.obsm["a"])
     assert_equal(mem.varm["a"], orig.varm["a"])
+    assert_equal(orig.varm["b"], mem.varm["b"])
 
     assert isinstance(curr.X, np.ndarray)
     assert isinstance(curr.obsm["a"], np.ndarray)
     assert isinstance(curr.varm["a"], np.ndarray)
+    assert isinstance(curr.varm["b"], pd.DataFrame)
     assert isinstance(mem.X, np.ndarray)
     assert isinstance(mem.obsm["a"], np.ndarray)
     assert isinstance(mem.varm["a"], np.ndarray)
+    assert isinstance(mem.varm["b"], pd.DataFrame)
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["a"], DaskArray)
     assert isinstance(orig.varm["a"], DaskArray)
+    assert isinstance(orig.varm["b"], DaskDataFrame)
 
 
 def test_dask_copy_check_array_types(adata):
     import dask.array as da
+    import dask.dataframe as ddf
 
     M, N = adata.X.shape
     adata.obsm["a"] = da.random.random((M, 10))
     adata.obsm["b"] = da.random.random((M, 10))
     adata.varm["a"] = da.random.random((N, 10))
+    adata.varm["b"] = ddf.from_pandas(
+        pd.DataFrame(
+            {"A": np.arange(N), "B": np.random.randint(1e6, size=N)},
+            index=adata.var_names,
+        )
+    )
 
     orig = adata
     curr = adata.copy()
@@ -236,14 +282,17 @@ def test_dask_copy_check_array_types(adata):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(orig.varm["b"], curr.varm["b"])
     assert_equal(curr.obsm["a"], orig.obsm["a"])
 
     assert isinstance(curr.X, DaskArray)
     assert isinstance(curr.obsm["a"], DaskArray)
     assert isinstance(curr.varm["a"], DaskArray)
+    assert isinstance(curr.varm["b"], DaskDataFrame)
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["a"], DaskArray)
     assert isinstance(orig.varm["a"], DaskArray)
+    assert isinstance(orig.varm["b"], DaskDataFrame)
 
 
 def test_assign_X(adata):

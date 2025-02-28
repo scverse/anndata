@@ -13,7 +13,7 @@ from scipy import sparse
 import anndata
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
-from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
+from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray, DaskDataFrame
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -113,6 +113,11 @@ def axis_len(x, axis: Literal[0, 1]) -> int | None:
     Returns None if `x` is an awkward array with variable length in the requested dimension.
     """
     return x.shape[axis]
+
+
+@axis_len.register(DaskDataFrame)
+def axis_len_dask_df(df, axis: Literal[0, 1]) -> int | None:
+    return df.shape[axis].compute()
 
 
 try:
