@@ -1467,8 +1467,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     @deprecated(
         "anndata.concat",
-        FutureWarning,
-        "See the tutorial for concat at: "
+        add_msg="See the tutorial for concat at: "
         "https://anndata.readthedocs.io/en/latest/concatenation.html",
         hide=False,
     )

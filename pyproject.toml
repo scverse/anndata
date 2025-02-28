@@ -16,7 +16,7 @@ authors = [
 maintainers = [
     { name = "Isaac Virshup", email = "ivirshup@gmail.com" },
     { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
-    { name = "Alex Wolf", email = "f.alex.wolf@gmx.de" },
+    { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
 ]
 readme = "README.md"
 classifiers = [
@@ -63,7 +63,7 @@ dev = [
     "anndata[dev-doc,dev-test]",
 ]
 doc = [
-    "sphinx>=7.4.6",
+    "sphinx>=8.2.1",
     "sphinx-book-theme>=1.1.0",
     "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues",

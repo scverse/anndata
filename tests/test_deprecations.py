@@ -33,13 +33,13 @@ def adata():
 
 
 def test_get_obsvar_array_warn(adata):
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         adata._get_obs_array("a")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         adata._get_var_array("s1")
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_get_obsvar_array(adata):
     assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
     assert np.allclose(
@@ -105,12 +105,12 @@ def test_deprecated_write_attribute(tmp_path):
     from anndata.io import read_elem
 
     with h5py.File(pth, "w") as f:
-        with pytest.warns(DeprecationWarning, match=r"write_elem"):
+        with pytest.warns(FutureWarning, match=r"write_elem"):
             write_attribute(f, "written_attribute", A)
 
     with h5py.File(pth, "r") as f:
         elem_A = read_elem(f["written_attribute"])
-        with pytest.warns(DeprecationWarning, match=r"read_elem"):
+        with pytest.warns(FutureWarning, match=r"read_elem"):
             attribute_A = read_attribute(f["written_attribute"])
 
         assert_equal(elem_A, attribute_A)
