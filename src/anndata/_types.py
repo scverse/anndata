@@ -4,7 +4,7 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 from .compat import (
     H5Array,
@@ -17,6 +17,8 @@ from .typing import RWAble
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
+
+    from anndata._core.anndata import AnnData
 
     from ._io.specs.registry import DaskReader, IOSpec, Reader, Writer
     from .compat import DaskArray
@@ -184,5 +186,25 @@ class WriteCallback(Protocol[InvariantRWAble]):
             Internal AnnData encoding specification for the element.
         dataset_kwargs
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+        """
+        ...
+
+
+NS = TypeVar("NS", covariant=True)
+
+
+@runtime_checkable
+class ExtensionNamespace(Protocol[NS]):
+    """Protocol for extension namespaces.
+
+    Enforces that the namespace initializer accepts a class with the proper `__init__` method.
+    Protocol's can't enforce that the `__init__` accepts the correct types. See
+    `_check_namespace_signature` for that. This is mainly useful for static type
+    checking with mypy and IDEs.
+    """
+
+    def __init__(self, adata: AnnData) -> None:
+        """
+        Used to enforce the correct signature for extension namespaces.
         """
         ...
