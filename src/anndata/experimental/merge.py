@@ -100,27 +100,34 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
+def as_group(store, *, mode: str) -> ZarrGroup | H5Group:
     msg = "This is not yet implemented."
     raise NotImplementedError(msg)
 
 
 @as_group.register(os.PathLike)
 @as_group.register(str)
-def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
+def _(store: os.PathLike | str, *, mode: str) -> ZarrGroup | H5Group:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
 
-        return h5py.File(store, *args, **kwargs)
-    import zarr
+        return h5py.File(store, mode=mode)
 
-    return zarr.open_group(store, *args, **kwargs)
+    if mode == "r":  # others all write: r+, a, w, w-
+        import zarr
+
+        return zarr.open_group(store, mode=mode)
+
+    from anndata._io.zarr import open_write_group
+
+    return open_write_group(store, mode=mode)
 
 
 @as_group.register(ZarrGroup)
 @as_group.register(H5Group)
-def _(store, *args, **kwargs):
+def _(store, *, mode: str) -> ZarrGroup | H5Group:
+    del mode
     return store
 
 
@@ -143,7 +150,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in elem.items()}
+            return {k: read_as_backed(v) for k, v in dict(elem).items()}
         else:
             return func(elem)
 
@@ -221,7 +228,7 @@ def write_concat_sparse(
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
-    number_non_zero = sum(len(d.group["indices"]) for d in datasets)
+    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
     write_elem(
@@ -574,7 +581,7 @@ def concat_on_disk(
     _, alt_axis_name = _resolve_axis(1 - axis)
 
     output_group = as_group(out_file, mode="w")
-    groups = [as_group(f) for f in in_files]
+    groups = [as_group(f, mode="r") for f in in_files]
 
     use_reindexing = False
 
