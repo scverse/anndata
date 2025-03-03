@@ -322,7 +322,7 @@ class SettingsManager:
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
             msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
-            warnings.warn(msg, DeprecationWarning)
+            warnings.warn(msg, FutureWarning)
         if option in self._config:
             return self._config[option]
         msg = f"{option} not found."
