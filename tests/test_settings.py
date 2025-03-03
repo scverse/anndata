@@ -158,7 +158,7 @@ def test_deprecation(settings: SettingsManager):
     )
     assert described_option.endswith(warning)
     with pytest.warns(
-        DeprecationWarning,
+        FutureWarning,
         match=r"'test_var' will be removed in 0\.1\.0\. This is a deprecation warning!",
     ):
         assert getattr(settings, option) == default_val

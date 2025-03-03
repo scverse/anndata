@@ -16,7 +16,7 @@ authors = [
 maintainers = [
     { name = "Isaac Virshup", email = "ivirshup@gmail.com" },
     { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
-    { name = "Alex Wolf", email = "f.alex.wolf@gmx.de" },
+    { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
 ]
 readme = "README.md"
 classifiers = [
