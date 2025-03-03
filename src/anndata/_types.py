@@ -190,11 +190,8 @@ class WriteCallback(Protocol[InvariantRWAble]):
         ...
 
 
-NS = TypeVar("NS", covariant=True)
-
-
 @runtime_checkable
-class ExtensionNamespace(Protocol[NS]):
+class ExtensionNamespace(Protocol):
     """Protocol for extension namespaces.
 
     Enforces that the namespace initializer accepts a class with the proper `__init__` method.

@@ -8,7 +8,6 @@ from typing import (
 )
 from warnings import warn
 
-from anndata import AnnData
 from anndata._types import ExtensionNamespace
 
 if TYPE_CHECKING:
@@ -57,7 +56,7 @@ def find_stacklevel() -> int:
 
 # Reserved namespaces include accessors built into AnnData (currently there are none)
 # and all current attributes of AnnData
-_reserved_namespaces: set[str] = set(AnnData._accessors) | set(dir(ad.AnnData))
+_reserved_namespaces: set[str] = set(dir(ad.AnnData))
 
 
 class AccessorNameSpace(ExtensionNamespace):
@@ -121,8 +120,8 @@ def _check_namespace_signature(ns_class: type) -> None:
     # Get the second parameter (expected to be 'adata')
     param = params[1]
     if param.annotation is inspect._empty:
-        error_msg = "Namespace initializer's second parameter must be annotated as the 'AnnData' class."
-        raise AttributeError(error_msg)
+        err_msg = "Namespace initializer's second parameter must be annotated as the 'AnnData' class, got empty annotation."
+        raise AttributeError(err_msg)
 
     name_ok = param.name == "adata"
 
@@ -130,8 +129,9 @@ def _check_namespace_signature(ns_class: type) -> None:
     try:
         type_hints = get_type_hints(ns_class.__init__)
         resolved_type = type_hints.get(param.name, param.annotation)
-    except Exception:
-        resolved_type = param.annotation
+    except NameError as e:
+        err_msg = f"Namespace initializer's second parameter must be named 'adata', got '{param.name}'."
+        raise NameError(err_msg) from e
 
     type_ok = resolved_type is ad.AnnData
 
@@ -154,15 +154,17 @@ def _check_namespace_signature(ns_class: type) -> None:
             raise TypeError(msg)
 
 
-def _create_namespace(name: str, cls: type[AnnData]) -> Callable[[type], type]:
+def _create_namespace(
+    name: str, cls: type[ad.AnnData]
+) -> Callable[[type[ExtensionNamespace]], type[ExtensionNamespace]]:
     """Register custom namespace against the underlying AnnData class."""
 
-    def namespace(ns_class: type) -> type:
+    def namespace(ns_class: type[ExtensionNamespace]) -> type[ExtensionNamespace]:
         _check_namespace_signature(ns_class)  # Perform the runtime signature check
         if name in _reserved_namespaces:
             msg = f"cannot override reserved attribute {name!r}"
             raise AttributeError(msg)
-        elif hasattr(cls, name):
+        elif name in cls._accessors:
             warn(
                 f"Overriding existing custom namespace {name!r} (on {cls.__name__!r})",
                 UserWarning,
