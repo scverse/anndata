@@ -65,7 +65,7 @@ if find_spec("zarr") or TYPE_CHECKING:
 
     if is_zarr_v2():
         msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-        warn(msg, FutureWarning)
+        warn(msg, DeprecationWarning)
 
 else:
 
