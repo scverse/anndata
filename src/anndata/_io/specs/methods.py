@@ -1207,7 +1207,7 @@ def _remove_scalar_compression_args(dataset_kwargs: Mapping[str, Any]) -> dict:
 
 
 def write_scalar_zarr(
-    f: GroupStorageType,
+    f: ZarrGroup,
     key: str,
     value,
     *,
