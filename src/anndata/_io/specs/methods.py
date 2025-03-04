@@ -642,7 +642,7 @@ def write_recarray_zarr(
     if isinstance(f, H5Group) or is_zarr_v2():
         f.create_dataset(k, data=elem, shape=elem.shape, **dataset_kwargs)
     else:
-        # TODO: zarr on-disk v3 doesn’t support this dtype
+        # TODO: zarr’s on-disk format v3 doesn’t support this dtype
         f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
         f[k][...] = elem
 
