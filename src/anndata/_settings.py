@@ -420,15 +420,23 @@ settings.register(
     get_from_env=check_and_get_bool,
 )
 
+
+def validate_zarr_write_format(format: int):
+    validate_int(format)
+    if format != 2:
+        msg = f"zarr_write_format must be one of 2 or 3, got {format}"
+        raise ValueError(msg)
+
+
 settings.register(
     "zarr_write_format",
     default_value=2,
     description="Which version of zarr to write to.",
-    validate=validate_int,
+    validate=validate_zarr_write_format,
     get_from_env=lambda name, default: check_and_get_environ_var(
         f"ANNDATA_{name.upper()}",
         str(default),
-        ["2", "3"],
+        ["2"],
         lambda x: int(x),
     ),
 )
