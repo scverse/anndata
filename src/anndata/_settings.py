@@ -424,7 +424,7 @@ settings.register(
 def validate_zarr_write_format(format: int):
     validate_int(format)
     if format != 2:
-        msg = f"zarr_write_format must be one of 2 or 3, got {format}"
+        msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
 
 
