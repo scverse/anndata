@@ -571,11 +571,16 @@ def write_vlen_string_array_zarr(
         dataset_kwargs = dataset_kwargs.copy()
         if "compressor" in dataset_kwargs:
             dataset_kwargs.pop("compressor")
+        filters, dtype = (
+            ([VLenUTF8()], object)
+            if ad.settings.zarr_write_format == 2
+            else (None, str)
+        )
         f.create_array(
             k,
             shape=elem.shape,
-            dtype=str if ad.settings.zarr_write_format == 3 else object,
-            filters=[VLenUTF8()] if ad.settings.zarr_write_format == 2 else None,
+            dtype=dtype,
+            filters=filters,
             **dataset_kwargs,
         )
         f[k][:] = elem
