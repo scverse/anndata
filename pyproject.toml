@@ -91,7 +91,7 @@ test = [
     "openpyxl",
     "joblib",
     "boltons",
-    "scanpy>=1.9.8",
+    "scanpy>=1.10",
     "httpx", # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
