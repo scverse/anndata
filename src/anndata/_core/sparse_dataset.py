@@ -588,9 +588,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         append_data = sparse_matrix.data
         append_indices = sparse_matrix.indices
         if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
-            append_data_in_memory = append_data[...]
-            data[orig_data_size:] = append_data_in_memory
-            del append_data_in_memory
+            data[orig_data_size:] = append_data[...]
         else:
             data[orig_data_size:] = append_data
         # indptr
