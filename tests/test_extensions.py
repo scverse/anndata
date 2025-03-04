@@ -7,6 +7,41 @@ import anndata as ad
 from anndata._core import extensions
 
 
+@pytest.fixture(autouse=True)
+def cleanup_dummy():
+    """Automatically cleanup dummy namespace after each test."""
+    original = getattr(ad.AnnData, "dummy", None)
+    yield
+    if original is not None:
+        setattr(ad.AnnData, "dummy", original)
+    else:
+        if hasattr(ad.AnnData, "dummy"):
+            delattr(ad.AnnData, "dummy")
+
+
+@pytest.fixture
+def dummy_namespace():
+    """Create a basic dummy namespace class."""
+    ad.AnnData._accessors = set()
+
+    @ad.register_anndata_namespace("dummy")
+    class DummyNamespace:
+        def __init__(self, adata: ad.AnnData):
+            self._adata = adata
+
+        def greet(self) -> str:
+            return "hello"
+
+    return DummyNamespace
+
+
+@pytest.fixture
+def adata():
+    """Create a basic AnnData object for testing."""
+    rng = np.random.default_rng(42)
+    return ad.AnnData(X=rng.poisson(1, size=(10, 10)))
+
+
 def test_find_stacklevel():
     """Test that find_stacklevel returns a positive integer.
 
@@ -59,77 +94,19 @@ def test_accessor_namespace():
     assert getattr(dummy_obj, "dummy") is ns_instance
 
 
-def test_register_namespace_basic():
-    """Test the basic behavior of the register_anndata_namespace decorator.
-
-    This test verifies that:
-    - A new namespace can be registered successfully.
-    - The accessor is available on AnnData instances.
-    """
-    original_dummy = getattr(ad.AnnData, "dummy", None)
-
-    # Register a new namespace called 'dummy'.
-    @ad.register_anndata_namespace("dummy")
-    class DummyNamespace:
-        def __init__(self, adata: ad.AnnData):
-            self._adata = adata
-
-        def greet(self) -> str:
-            return "hello"
-
-    # Create an AnnData instance with minimal data.
-    rng = np.random.default_rng(42)
-    adata = ad.AnnData(X=rng.poisson(1, size=(10, 10)))
-
-    # The accessor should now be available.
+def test_descriptor_instance_caching(cleanup_dummy, dummy_namespace, adata):
+    """Test that namespace instances are cached on individual AnnData objects."""
+    # First access creates the instance
     ns_instance = adata.dummy
-    assert ns_instance._adata is adata
-    assert ns_instance.greet() == "hello"
-
-    # Clean up
-    if original_dummy is not None:
-        setattr(ad.AnnData, "dummy", original_dummy)
-    else:
-        if hasattr(ad.AnnData, "dummy"):
-            delattr(ad.AnnData, "dummy")
-
-
-def test_register_namespace_caching():
-    """Test that the namespace accessor is cached on the AnnData instance."""
-    original_dummy = getattr(ad.AnnData, "dummy", None)
-
-    # Register a new namespace
-    @ad.register_anndata_namespace("dummy")
-    class DummyNamespace:
-        def __init__(self, adata: ad.AnnData):
-            self._adata = adata
-
-        def greet(self) -> str:
-            return "hello"
-
-    # Create an AnnData instance
-    rng = np.random.default_rng(42)
-    adata = ad.AnnData(X=rng.poisson(1, size=(10, 10)))
-
-    # Access the namespace to trigger caching
-    ns_instance = adata.dummy
-
-    # Verify caching behavior on the AnnData instance.
+    # Subsequent accesses should return the same instance
     assert adata.dummy is ns_instance
 
-    # Clean up
-    if original_dummy is not None:
-        setattr(ad.AnnData, "dummy", original_dummy)
-    else:
-        if hasattr(ad.AnnData, "dummy"):
-            delattr(ad.AnnData, "dummy")
 
+def test_register_namespace_override(cleanup_dummy):
+    """Test namespace registration and override behavior."""
+    ad.AnnData._accessors = set()
 
-def test_register_namespace_override():
-    """Test that a warning is raised when overriding an existing namespace."""
-    original_dummy = getattr(ad.AnnData, "dummy", None)
-
-    # Register a namespace first
+    # First registration
     @ad.register_anndata_namespace("dummy")
     class DummyNamespace:
         def __init__(self, adata: ad.AnnData):
@@ -138,7 +115,9 @@ def test_register_namespace_override():
         def greet(self) -> str:
             return "hello"
 
-    # Now, override the same namespace and check that a warning is emitted.
+    assert "dummy" in ad.AnnData._accessors
+
+    # Override should warn and update the namespace
     with pytest.warns(
         UserWarning, match="Overriding existing custom namespace 'dummy'"
     ):
@@ -149,20 +128,11 @@ def test_register_namespace_override():
                 self._adata = adata
 
             def greet(self) -> str:
-                # Return a different string to confirm the override.
                 return "world"
 
-    # A new AnnData instance should now use the overridden accessor.
-    rng = np.random.default_rng(42)
-    adata = ad.AnnData(X=rng.poisson(1, size=(10, 10)))
+    # Verify the override worked
+    adata = ad.AnnData(X=np.random.poisson(1, size=(10, 10)))
     assert adata.dummy.greet() == "world"
-
-    # Clean up
-    if original_dummy is not None:
-        setattr(ad.AnnData, "dummy", original_dummy)
-    else:
-        if hasattr(ad.AnnData, "dummy"):
-            delattr(ad.AnnData, "dummy")
 
 
 def test_register_existing_attributes():
@@ -196,77 +166,76 @@ def test_register_existing_attributes():
                     self._adata = adata
 
 
-def test_check_namespace_signature_valid():
-    """Test that a namespace with valid signature is accepted."""
+class TestNamespaceSignatureValidation:
+    def test_valid_signature(self):
+        """Test that a namespace with valid signature is accepted."""
 
-    # Valid namespace: correct signature.
-    # should not raise any error.
-    @ad.register_anndata_namespace("valid")
-    class ValidNamespace:
-        def __init__(self, adata: ad.AnnData) -> None:
-            self.adata = adata
-
-
-def test_check_namespace_signature_missing_param():
-    """Test that a namespace missing the second parameter is rejected."""
-    with pytest.raises(
-        TypeError,
-        match="Namespace initializer must accept an AnnData instance as the second parameter.",
-    ):
-
-        @ad.register_anndata_namespace("missing_param")
-        class MissingParamNamespace:
-            def __init__(self) -> None:
-                pass
-
-
-def test_check_namespace_signature_wrong_name():
-    """Test that a namespace with wrong parameter name is rejected."""
-    with pytest.raises(
-        TypeError,
-        match="Namespace initializer's second parameter must be named 'adata', got 'notadata'.",
-    ):
-
-        @ad.register_anndata_namespace("wrong_name")
-        class WrongNameNamespace:
-            def __init__(self, notadata: ad.AnnData) -> None:
-                self.notadata = notadata
-
-
-def test_check_namespace_signature_wrong_annotation():
-    """Test that a namespace with wrong parameter annotation is rejected."""
-    with pytest.raises(
-        TypeError,
-        match="Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'.",
-    ):
-
-        @ad.register_anndata_namespace("wrong_annotation")
-        class WrongAnnotationNamespace:
-            def __init__(self, adata: int) -> None:
+        @ad.register_anndata_namespace("valid")
+        class ValidNamespace:
+            def __init__(self, adata: ad.AnnData) -> None:
                 self.adata = adata
 
+    def test_missing_param(self):
+        """Test that a namespace missing the second parameter is rejected."""
+        with pytest.raises(
+            TypeError,
+            match="Namespace initializer must accept an AnnData instance as the second parameter.",
+        ):
 
-def test_check_namespace_signature_missing_annotation():
-    """Test that a namespace with missing parameter annotation is rejected."""
-    with pytest.raises(AttributeError):
+            @ad.register_anndata_namespace("missing_param")
+            class MissingParamNamespace:
+                def __init__(self) -> None:
+                    pass
 
-        @ad.register_anndata_namespace("missing_annotation")
-        class MissingAnnotationNamespace:
-            def __init__(self, adata) -> None:
-                self.adata = adata
+    def test_wrong_name(self):
+        """Test that a namespace with wrong parameter name is rejected."""
+        with pytest.raises(
+            TypeError,
+            match="Namespace initializer's second parameter must be named 'adata', got 'notadata'.",
+        ):
+
+            @ad.register_anndata_namespace("wrong_name")
+            class WrongNameNamespace:
+                def __init__(self, notadata: ad.AnnData) -> None:
+                    self.notadata = notadata
+
+    def test_wrong_annotation(self):
+        """Test that a namespace with wrong parameter annotation is rejected."""
+        with pytest.raises(
+            TypeError,
+            match="Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'.",
+        ):
+
+            @ad.register_anndata_namespace("wrong_annotation")
+            class WrongAnnotationNamespace:
+                def __init__(self, adata: int) -> None:
+                    self.adata = adata
+
+    def test_missing_annotation(self):
+        """Test that a namespace with missing parameter annotation is rejected."""
+        with pytest.raises(AttributeError):
+
+            @ad.register_anndata_namespace("missing_annotation")
+            class MissingAnnotationNamespace:
+                def __init__(self, adata) -> None:
+                    self.adata = adata
+
+    def test_both_wrong(self):
+        """Test that a namespace with both wrong name and annotation is rejected."""
+        with pytest.raises(
+            TypeError,
+            match=(
+                r"Namespace initializer's second parameter must be named 'adata', got 'info'\. "
+                r"And must be annotated as 'AnnData', got 'str'\."
+            ),
+        ):
+
+            @ad.register_anndata_namespace("both_wrong")
+            class BothWrongNamespace:
+                def __init__(self, info: str) -> None:
+                    self.info = info
 
 
-def test_check_namespace_signature_both_wrong():
-    """Test that a namespace with both wrong name and annotation is rejected."""
-    with pytest.raises(
-        TypeError,
-        match=(
-            r"Namespace initializer's second parameter must be named 'adata', got 'info'\. "
-            r"And must be annotated as 'AnnData', got 'str'\."
-        ),
-    ):
-
-        @ad.register_anndata_namespace("both_wrong")
-        class BothWrongNamespace:
-            def __init__(self, info: str) -> None:
-                self.info = info
+def test_register_namespace_basic(cleanup_dummy, dummy_namespace, adata):
+    """Test basic namespace registration and access."""
+    assert adata.dummy.greet() == "hello"
