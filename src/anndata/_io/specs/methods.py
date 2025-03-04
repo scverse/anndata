@@ -1222,16 +1222,18 @@ def write_scalar_zarr(
     else:
         from numcodecs import VLenUTF8
 
-        dtype = np.array(value).dtype
+        match ad.settings.zarr_write_format, value:
+            case 2, str():
+                filters, dtype = [VLenUTF8()], object
+            case 2, _:
+                filters, dtype = None, np.array(value).dtype
+            case 3, _:
+                filters, dtype = None, str
         a = f.create_array(
             key,
             shape=(),
-            dtype=str
-            if ad.settings.zarr_write_format == 3
-            else (object if isinstance(value, str) else dtype),
-            filters=[VLenUTF8()]
-            if ad.settings.zarr_write_format == 2 and isinstance(value, str)
-            else None,
+            dtype=dtype,
+            filters=filters,
             **dataset_kwargs,
         )
         a[...] = np.array(value)
