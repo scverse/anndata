@@ -318,7 +318,12 @@ def no_write_dataset_2d(write):
         from anndata.experimental.backed._compat import has_dataset_2d
 
         if has_dataset_2d(adata):
-            msg = "Writing AnnData objects with a Dataset2D not supported"
+            msg = (
+                "Writing AnnData objects with a Dataset2D not supported. "
+                "Please use `ds.to_memory` to bring the dataset into memory. "
+                "Note that if you have generated this object by concatenating several `AnnData` objects"
+                "the original types may be lost."
+            )
             raise NotImplementedError(msg)
         return write(store, adata, *args, **kwargs)
 
