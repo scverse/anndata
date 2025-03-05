@@ -99,7 +99,7 @@ class CategoricalArray(BackendArray, Generic[K]):
 
     @cached_property
     def dtype(self):
-        return pd.CategoricalDtype(categories=self._categories, ordered=self._ordered)
+        return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
 class MaskedArray(BackendArray, Generic[K]):

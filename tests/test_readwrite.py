@@ -20,7 +20,14 @@ from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
+from anndata.compat import (
+    CSArray,
+    CSMatrix,
+    DaskArray,
+    ZarrGroup,
+    _read_attr,
+    is_zarr_v2,
+)
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
 if TYPE_CHECKING:
@@ -276,7 +283,16 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        store["obs"].attrs["encoding-type"] = "invalid"
+        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+            # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
+            # with re-opening without syncing attributes explicitly
+            store["obs"].update_attributes(
+                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
+            )
+            zarr.consolidate_metadata(store.store)
+        else:
+            store["obs"].attrs["encoding-type"] = "invalid"
+
     with pytest.raises(
         IORegistryError,
         match=r"raised while reading key 'obs'.*from /$",

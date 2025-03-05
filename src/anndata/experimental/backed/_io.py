@@ -13,6 +13,7 @@ from testing.anndata._doctest import doctest_needs
 
 from ..._core.anndata import AnnData
 from ..._settings import settings
+from ...compat import ZarrGroup, is_zarr_v2
 from .. import read_dispatched
 
 if TYPE_CHECKING:
@@ -20,8 +21,6 @@ if TYPE_CHECKING:
 
     from anndata._io.specs.registry import IOSpec
     from anndata._types import Read, StorageType
-
-    from ...compat import ZarrGroup
 
 
 @doctest_needs("xarray")
@@ -97,14 +96,16 @@ def read_lazy(
     if not is_h5:
         import zarr
 
-        if not isinstance(store, zarr.hierarchy.Group):
+        if not isinstance(store, ZarrGroup):
             try:
                 f = zarr.open_consolidated(store, mode="r")
-            except KeyError:
+            except (
+                KeyError if is_zarr_v2() else ValueError
+            ):  # v3 returns a ValueError for consolidated metadata not found
                 msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
                 warnings.warn(msg)
                 has_keys = False
-                f = zarr.open(store, mode="r")
+                f = zarr.open_group(store, mode="r")
         else:
             f = store
     else:
@@ -116,9 +117,16 @@ def read_lazy(
     def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
         if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):
             iter_object = (
-                elem.items()
+                dict(elem).items()
                 if has_keys
-                else [(k, elem[k]) for k in typing.get_args(AnnDataElem) if k in elem]
+                else (
+                    (k, v)
+                    for k, v in (
+                        (k, elem.get(k, None)) for k in typing.get_args(AnnDataElem)
+                    )
+                    if v
+                    is not None  # need to do this instead of `k in elem` to prevent unnecessary metadata accesses
+                )
             )
             return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
         elif (
@@ -139,7 +147,9 @@ def read_lazy(
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         elif iospec.encoding_type == "dict":
-            return {k: read_dispatched(v, callback=callback) for k, v in elem.items()}
+            return {
+                k: read_dispatched(v, callback=callback) for k, v in dict(elem).items()
+            }
         return func(elem)
 
     with settings.override(check_uniqueness=load_annotation_index):
