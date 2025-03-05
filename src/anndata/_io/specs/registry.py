@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata.compat import DaskArray, _read_attr
+from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -352,11 +352,20 @@ class Writer:
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if not PurePosixPath(k).is_absolute():
+        if (
+            (isinstance(store, ZarrGroup) and is_zarr_v2())
+            or isinstance(store, h5py.Group)
+            and not PurePosixPath(k).is_absolute()
+        ):
             k = str(PurePosixPath(store.name) / k)
 
         if k == "/":
-            store.clear()
+            if isinstance(store, ZarrGroup) and not is_zarr_v2():
+                import asyncio
+
+                asyncio.run(store.store.clear())
+            else:
+                store.clear()
         elif k in store:
             del store[k]
 
