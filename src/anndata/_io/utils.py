@@ -311,3 +311,15 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
             func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
 
     return func_wrapper
+
+
+def no_write_dataset_2d(write):
+    def raise_error_if_dataset_2d_present(store, adata, *args, **kwargs):
+        from anndata.experimental.backed._compat import has_dataset_2d
+
+        if has_dataset_2d(adata):
+            msg = "Writing AnnData objects with a Dataset2D not supported"
+            raise NotImplementedError(msg)
+        return write(store, adata, *args, **kwargs)
+
+    return raise_error_if_dataset_2d_present
