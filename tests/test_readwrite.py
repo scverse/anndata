@@ -286,6 +286,8 @@ def test_read_full_io_error(tmp_path, name, read, write):
         if not is_zarr_v2() and isinstance(store, ZarrGroup):
             # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
             # with re-opening without syncing attributes explicitly
+            # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
+            # See https://github.com/zarr-developers/zarr-python/pull/2870
             store["obs"].update_attributes(
                 {**dict(store["obs"].attrs), "encoding-type": "invalid"}
             )
