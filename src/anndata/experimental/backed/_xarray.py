@@ -34,6 +34,14 @@ def get_index_dim(ds: xr.DataArray) -> Hashable:
 
 
 class Dataset2D(Dataset):
+    """
+    A wrapper class meant to enable working with lazy dataframe data.
+    We do not guarantee the stability of this API beyond that guaranteed
+    by :class:`xarray.Dataset` and the `to_memory` function, a thin wrapper
+    around :meth:`xarray.Dataset.to_dataframe` to ensure roundtrip
+    compatibility here.
+    """
+
     __slots__ = ()
 
     @property
