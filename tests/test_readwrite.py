@@ -77,11 +77,6 @@ def dataset_kwargs(request):
     return request.param
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.fixture
 def rw(backing_h5ad):
     M, N = 100, 101
@@ -94,9 +89,6 @@ def rw(backing_h5ad):
 @pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
 def dtype(request):
     return request.param
-
-
-diskfmt2 = diskfmt
 
 
 # ------------------------------------------------------------------------------
@@ -335,35 +327,42 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     assert_equal(adata, expected)
 
 
-def test_zarr_compression(tmp_path):
-    from numcodecs import Blosc
+@pytest.mark.parametrize("zarr_write_format", [2, 3])
+def test_zarr_compression(tmp_path, zarr_write_format):
+    with ad.settings.override(zarr_write_format=zarr_write_format):
+        pth = str(Path(tmp_path) / "adata.zarr")
+        adata = gen_adata((10, 8))
+        if zarr_write_format == 2:
+            from numcodecs import Blosc
 
-    pth = str(Path(tmp_path) / "adata.zarr")
-    adata = gen_adata((10, 8))
-    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
-    not_compressed = []
+            compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+        else:
+            from zarr.codecs import BloscCodec
 
-    ad.io.write_zarr(pth, adata, compressor=compressor)
+            compressor = BloscCodec(cname="zstd", clevel=3, shuffle="bitshuffle")
+        not_compressed = []
 
-    def check_compressed(value, key):
-        if value.shape != ():
-            if value.compressor != compressor:
-                not_compressed.append(key)
+        ad.io.write_zarr(pth, adata, compressor=compressor)
 
-    f = zarr.open(str(pth), mode="r")
-    for key in f.array_keys():
-        check_compressed(f[key], key)
+        def check_compressed(value, key):
+            if value.shape != ():
+                if value.compressor != compressor:
+                    not_compressed.append(key)
 
-    if not_compressed:
-        sep = "\n\t"
-        msg = (
-            f"These elements were not compressed correctly:{sep}"
-            f"{sep.join(not_compressed)}"
-        )
-        raise AssertionError(msg)
+        f = zarr.open(str(pth), mode="r")
+        for key in f.array_keys():
+            check_compressed(f[key], key)
 
-    expected = ad.read_zarr(pth)
-    assert_equal(adata, expected)
+        if not_compressed:
+            sep = "\n\t"
+            msg = (
+                f"These elements were not compressed correctly:{sep}"
+                f"{sep.join(not_compressed)}"
+            )
+            raise AssertionError(msg)
+
+        expected = ad.read_zarr(pth)
+        assert_equal(adata, expected)
 
 
 def test_changed_obs_var_names(tmp_path, diskfmt):
@@ -758,6 +757,11 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
         pbmc = sc.datasets.pbmc68k_reduced()
+        # zarr v3 can't write recarray
+        # https://github.com/zarr-developers/zarr-python/issues/2134
+        if ad.settings.zarr_write_format == 3:
+            del pbmc.uns["rank_genes_groups"]["names"]
+            del pbmc.uns["rank_genes_groups"]["scores"]
 
     from_disk1 = roundtrip(pbmc, filepth1)  # Do we read okay
     from_disk2 = roundtrip2(from_disk1, filepth2)  # Can we round trip

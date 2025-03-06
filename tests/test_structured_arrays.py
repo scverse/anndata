@@ -10,14 +10,6 @@ from anndata import AnnData
 from anndata.tests.helpers import gen_vstr_recarray
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
-diskfmt2 = diskfmt
-
-
 def assert_str_contents_equal(A, B):
     lA = [
         [str(el) if not isinstance(el, bytes) else el.decode("utf-8") for el in a]
@@ -31,6 +23,8 @@ def assert_str_contents_equal(A, B):
 
 
 def test_io(tmp_path, diskfmt, diskfmt2):
+    if ad.settings.zarr_write_format == 3:
+        pytest.xfail("zarr v3-on-disk cannot handle recarrays")
     read1 = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
     write1 = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
     read2 = lambda pth: getattr(ad, f"read_{diskfmt2}")(pth)

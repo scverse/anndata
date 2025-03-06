@@ -49,25 +49,20 @@ if TYPE_CHECKING:
     G = TypeVar("G", H5Group, ZarrGroup)
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
-@pytest.fixture(params=["h5", "zarr"])
-def store(request, tmp_path) -> H5Group | ZarrGroup:
-    if request.param == "h5":
-        file = h5py.File(tmp_path / "test.h5", "w")
+@pytest.fixture
+def store(diskfmt, tmp_path) -> H5Group | ZarrGroup:
+    if diskfmt == "h5ad":
+        file = h5py.File(tmp_path / "test.h5ad", "w")
         store = file["/"]
-    elif request.param == "zarr":
+    elif diskfmt == "zarr":
         store = open_write_group(tmp_path / "test.zarr")
     else:
-        pytest.fail(f"Unknown store type: {request.param}")
+        pytest.fail(f"Unknown store type: {diskfmt}")
 
     try:
         yield store
     finally:
-        if request.param == "h5":
+        if diskfmt == "h5ad":
             file.close()
 
 
@@ -205,6 +200,14 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
+    # zarr v3 can't write recarray
+    # https://github.com/zarr-developers/zarr-python/issues/2134
+    if (
+        ad.settings.zarr_write_format == 3
+        and encoding_type == "anndata"
+        and "O_recarray" in value.uns
+    ):
+        del value.uns["O_recarray"]
     ad.settings.allow_write_nullable_strings = True
 
     key = f"key_for_{encoding_type}"
@@ -556,6 +559,10 @@ def test_write_to_root(store, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
+    # zarr v3 can't write recarray
+    # https://github.com/zarr-developers/zarr-python/issues/2134
+    if ad.settings.zarr_write_format == 3 and isinstance(value, ad.AnnData):
+        del value.uns["O_recarray"]
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(store, ZarrGroup) and not is_zarr_v2():
