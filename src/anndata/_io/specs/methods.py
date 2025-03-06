@@ -423,7 +423,6 @@ def write_basic(
 ):
     """Write methods which underlying library handles natively."""
     if isinstance(f, H5Group) or is_zarr_v2():
-        print(elem, type(elem), elem.dtype)
         f.create_dataset(
             k, data=elem, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs
         )
