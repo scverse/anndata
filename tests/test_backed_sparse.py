@@ -334,9 +334,7 @@ def test_read_array(
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
-    assert isinstance(
-        diskmtx, CSCDataset if sparse_format.format == "csc" else CSRDataset
-    )
+    assert isinstance(diskmtx, CSCDataset if a.format == "csc" else CSRDataset)
     ad.settings.use_sparse_array_on_read = True
     assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False
