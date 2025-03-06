@@ -56,7 +56,7 @@ class _AbstractCSDataset(ABC):
 _sparse_dataset_doc = """\
 On disk {format} sparse matrix.
 
-Analogous to :class:`h5py.Dataset` or :class:`zarr.core.Array`, but for sparse matrices.
+Analogous to :class:`h5py.Dataset` or :class:`zarr.Array`, but for sparse matrices.
 """
 
 
